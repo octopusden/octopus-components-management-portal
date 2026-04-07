@@ -92,9 +92,9 @@ springBoot {
 
 node {
     nodeProjectDir.set(project.rootDir.resolve("frontend"))
-    version.set("20.11.1")
+    version.set("22.22.2")
     download.set(true)
-    npmVersion.set("10.2.4")
+    npmVersion.set("10.9.7")
 }
 
 val npmCi = tasks.register<NpmTask>("npmCi") {
