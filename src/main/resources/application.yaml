@@ -1,0 +1,24 @@
+server:
+  port: 8090
+
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: components-registry-api
+          uri: ${COMPONENTS_REGISTRY_SERVICE_URL:http://localhost:4567}
+          predicates:
+            - Path=/rest/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+  server:
+    port: 8080

@@ -1,0 +1,20 @@
+name: Security Reports
+
+on:
+  schedule:
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  security:
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v2.2.0
+    with:
+      java-version: '21'
+      codeql-languages: java-kotlin,javascript-typescript
+      codeql-category: /language:java-kotlin
+      codeql-continue-on-error: true
+      trivy-continue-on-error: true

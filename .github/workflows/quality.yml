@@ -1,0 +1,18 @@
+name: Quality Gates
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  quality:
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v2.2.0
+    with:
+      java-version: '21'
+      static-reports-path: |
+        frontend/build/reports/eslint/**
+      coverage-reports-path: |
+        frontend/build/reports/coverage/**
+        frontend/build/test-results/**

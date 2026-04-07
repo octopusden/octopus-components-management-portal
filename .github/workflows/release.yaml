@@ -1,0 +1,16 @@
+name: Gradle Release
+
+on:
+  repository_dispatch:
+    types: release
+
+jobs:
+  build:
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-release.yml@v2.2.0
+    with:
+      flow-type: hybrid
+      java-version: '21'
+      commit-hash: ${{ github.event.client_payload.commit }}
+      build-version: ${{ github.event.client_payload.project_version }}
+      docker-image: components-management-portal
+    secrets: inherit
