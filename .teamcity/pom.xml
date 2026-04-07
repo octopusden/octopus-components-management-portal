@@ -11,6 +11,7 @@
 
     <properties>
         <teamcity-version>2025.03</teamcity-version>
+        <kotlin.version>1.9.25</kotlin.version>
     </properties>
 
     <dependencies>

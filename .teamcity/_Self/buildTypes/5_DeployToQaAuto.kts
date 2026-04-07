@@ -18,6 +18,7 @@ object id50DeployToOkdQaAuto : BuildType({
         finishBuildTrigger {
             id = "TRIGGER_1596"
             buildType = "${id50ReleasePostProcessingAuto.id}"
+            successfulOnly = true
         }
     }
 
@@ -27,5 +28,6 @@ object id50DeployToOkdQaAuto : BuildType({
         }
     }
 
+    // Disables the VCS labeling feature (BUILD_EXT_1740) defined in the RnDProcessesAutomation_IdpComponentOkdDeploy template — not needed for QA deployments
     disableSettings("BUILD_EXT_1740")
 })

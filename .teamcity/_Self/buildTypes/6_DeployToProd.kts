@@ -65,6 +65,7 @@ object id70DeployToOkdProdManual : BuildType({
 
     dependencies {
         snapshot(id50DeployToOkdQaAuto) {
+            onDependencyFailure = FailureAction.FAIL_TO_START
         }
     }
 })
