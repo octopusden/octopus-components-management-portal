@@ -97,23 +97,27 @@ node {
     npmVersion.set("10.2.4")
 }
 
+val npmCi = tasks.register<NpmTask>("npmCi") {
+    npmCommand.set(listOf("ci"))
+}
+
 val npmBuild = tasks.register<NpmTask>("npmBuild") {
-    dependsOn("npmInstall")
+    dependsOn(npmCi)
     npmCommand.set(listOf("run", "build"))
 }
 
 val npmLint = tasks.register<NpmTask>("npmLint") {
-    dependsOn("npmInstall")
+    dependsOn(npmCi)
     npmCommand.set(listOf("run", "lint"))
 }
 
 val npmTypecheck = tasks.register<NpmTask>("npmTypecheck") {
-    dependsOn("npmInstall")
+    dependsOn(npmCi)
     npmCommand.set(listOf("run", "typecheck"))
 }
 
 val npmTestCoverage = tasks.register<NpmTask>("npmTestCoverage") {
-    dependsOn("npmInstall")
+    dependsOn(npmCi)
     npmCommand.set(listOf("run", "test:coverage"))
 }
 
