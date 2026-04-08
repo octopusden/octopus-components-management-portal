@@ -12,7 +12,7 @@ project {
         param("OCTOPUS_MODULE_NAME", "octopus-components-management-portal")
         param("OKD_IMAGE_NAME", "components-management-portal")
         param("LAST_RELEASE_VERSION", "0.0.1")
-        param("PROJECT_VERSION", "")
+        param("PROJECT_VERSION", "0.0.1")
     }
 
     buildType(id10CompileUtAuto)
