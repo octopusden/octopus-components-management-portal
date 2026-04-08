@@ -15,7 +15,7 @@
   <repositories>
     <repository>
       <id>teamcity-server</id>
-      <url>https://teamcity.spb.openwaygroup.com/app/dsl-plugins-repository</url>
+      <url>${teamcity.serverUrl}/app/dsl-plugins-repository</url>
     </repository>
   </repositories>
 
