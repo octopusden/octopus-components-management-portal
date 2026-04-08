@@ -5,7 +5,7 @@ import jetbrains.buildServer.configs.kotlin.vcs.GitVcsRoot
 version = "2025.03"
 
 project {
-    name = "Octopus Components Management Portal"
+    name = "[h] octopus-components-management-portal"
 
     vcsRoot(OctopusComponentsManagementPortalVcs)
 
