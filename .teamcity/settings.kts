@@ -55,11 +55,10 @@ object id10CompileUtAuto : BuildType({
 
     params {
         param("env.JAVA_HOME", "%env.JDK_ZULU_21_x64%")
-        // Set in TC project parameters (not in source):
-        //   node.dist.base.url — e.g. https://<artifactory>/artifactory/nodejs-remote
-        //   npm.registry.url   — e.g. https://<artifactory>/artifactory/api/npm/npm-remote
+        // node.dist.base.url must be set in TC project parameters (not in source).
+        // npm-virtual is the standard Artifactory virtual npm registry endpoint.
         param("GRADLE_EXTRA_PARAMETERS", "-Pnode.dist.base.url=%node.dist.base.url%")
-        param("env.NPM_CONFIG_REGISTRY", "%npm.registry.url%")
+        param("env.NPM_CONFIG_REGISTRY", "%ARTIFACTORY_URL%/artifactory/api/npm/npm-virtual/")
         param("ARTIFACT_PATH", """
             build/reports/tests/** => reports/kotlin-tests
             build/reports/jacoco/** => reports/kotlin-coverage
