@@ -55,6 +55,9 @@ object id10CompileUtAuto : BuildType({
 
     params {
         param("env.JAVA_HOME", "%env.JDK_ZULU_21_x64%")
+        // node.dist.base.url must be set in the TC project parameters (not in source).
+        // Example value: https://<artifactory-host>/artifactory/nodejs-remote
+        param("GRADLE_EXTRA_PARAMETERS", "-Pnode.dist.base.url=%node.dist.base.url%")
         param("ARTIFACT_PATH", """
             build/reports/tests/** => reports/kotlin-tests
             build/reports/jacoco/** => reports/kotlin-coverage
