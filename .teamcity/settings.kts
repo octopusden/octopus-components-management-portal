@@ -15,6 +15,9 @@ project {
         param("OKD_IMAGE_NAME", "components-management-portal")
         param("LAST_RELEASE_VERSION", "0.0.1")
         param("PROJECT_VERSION", "0.0.1")
+        // Override with Artifactory nodejs mirror URL to avoid downloading from nodejs.org.
+        // Empty = fallback to nodejs.org (see build.gradle.kts node.dist.base.url handling).
+        param("node.dist.base.url", "")
     }
 
     buildType(id10CompileUtAuto)
