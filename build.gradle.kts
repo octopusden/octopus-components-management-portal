@@ -96,11 +96,6 @@ node {
     nodeProjectDir.set(project.rootDir.resolve("frontend"))
     version.set("22.22.2")
     download.set(true)
-    // Override download mirror in CI: -Pnode.dist.base.url=https://<artifactory>/nodejs
-    // Leave unset for local dev — plugin falls back to https://nodejs.org/dist
-    providers.gradleProperty("node.dist.base.url").orNull
-        ?.takeIf { it.isNotBlank() }
-        ?.let { distBaseUrl.set(it) }
 }
 
 val npmCi = tasks.register<NpmTask>("npmCi") {
