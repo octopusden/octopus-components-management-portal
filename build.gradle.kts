@@ -11,6 +11,7 @@ plugins {
     signing
     idea
     `maven-publish`
+    jacoco
 }
 
 group = "org.octopusden.octopus.components.portal"
@@ -146,6 +147,15 @@ tasks.getByName<Delete>("clean") {
 
 tasks.test {
     useJUnitPlatform()
+    finalizedBy(tasks.jacocoTestReport)
+}
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+    reports {
+        xml.required = true
+        html.required = true
+    }
 }
 
 nexusPublishing {

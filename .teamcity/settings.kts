@@ -53,8 +53,13 @@ object id10CompileUtAuto : BuildType({
 
     params {
         param("env.JAVA_HOME", "%env.JDK_ZULU_21_x64%")
-        param("ARTIFACT_PATH", "")
-        param("GRADLE_TASK", "clean build publishToMavenLocal dockerPushImage -info")
+        param("ARTIFACT_PATH", """
+            build/reports/tests/** => reports/kotlin-tests
+            build/reports/jacoco/** => reports/kotlin-coverage
+            frontend/build/reports/coverage/** => reports/frontend-coverage
+            frontend/build/test-results/** => test-results/frontend
+        """.trimIndent())
+        param("GRADLE_TASK", "clean build qualityStatic qualityCoverage publishToMavenLocal dockerPushImage -info")
     }
 
     steps {
