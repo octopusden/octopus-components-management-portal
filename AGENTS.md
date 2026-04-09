@@ -40,6 +40,11 @@ then fix the production code until the test passes.
 
 ## Tech Debt
 
+- **BFF layer:** Portal currently proxies `/rest/**` transparently to CRS. As the portal grows
+  to aggregate multiple data sources and add business logic, introduce dedicated Spring Boot
+  controllers (`/api/**`) that call CRS and other services server-to-server. The transparent
+  proxy can be removed once all UI calls go through the portal's own API.
+
 - **Artifactory mirror for Node.js and npm:** Node.js binary and npm packages are downloaded
   directly from nodejs.org/npmjs.org. Requires Artifactory admin to create `nodejs-remote`
   (proxy for nodejs.org/dist) and ensure `npm-virtual` contains the `npm` package.
