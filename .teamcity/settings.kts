@@ -59,7 +59,7 @@ object id10CompileUtAuto : BuildType({
             frontend/build/reports/coverage/** => reports/frontend-coverage
             frontend/build/test-results/** => test-results/frontend
         """.trimIndent())
-        param("GRADLE_TASK", "clean build qualityStatic qualityCoverage publishToMavenLocal dockerPushImage -info")
+        param("GRADLE_TASK", "clean build publishToMavenLocal dockerPushImage -info")
     }
 
     steps {

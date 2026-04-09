@@ -131,6 +131,10 @@ tasks.register("qualityCoverage") {
     dependsOn(npmTestCoverage)
 }
 
+tasks.named("check") {
+    dependsOn("qualityStatic", "qualityCoverage")
+}
+
 val copyFrontendDist = tasks.register<Sync>("copyFrontendDist") {
     dependsOn(npmBuild)
     from(project.rootDir.resolve("frontend/dist"))
