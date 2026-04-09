@@ -68,16 +68,6 @@ object id10CompileUtAuto : BuildType({
         param("GRADLE_TASK", "clean build publishToMavenLocal dockerPushImage -info")
     }
 
-    steps {
-        step {
-            name = "Install nodejs"
-            id = "Install_nodejs"
-            type = "jonnyzzz.nvm"
-            param("version", "22.22.2")
-        }
-        stepsOrder = arrayListOf("RUNNER_1720", "Install_nodejs", "RUNNER_1768")
-    }
-
     features {
         // Gradle runner auto-discovers build/test-results/ for Kotlin tests.
         // Frontend JUnit XML lands in frontend/build/test-results/ — needs explicit processing.
