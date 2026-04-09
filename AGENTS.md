@@ -37,3 +37,11 @@ Spring Cloud Gateway (WebFlux) + React SPA bundled as static resources.
 
 When writing tests, always write a failing test first that reproduces the bug,
 then fix the production code until the test passes.
+
+## Tech Debt
+
+- **Artifactory mirror for Node.js and npm:** Node.js binary and npm packages are downloaded
+  directly from nodejs.org/npmjs.org. Requires Artifactory admin to create `nodejs-remote`
+  (proxy for nodejs.org/dist) and ensure `npm-virtual` contains the `npm` package.
+  See `.teamcity/settings.kts` — placeholders for `node.dist.base.url` and `NPM_CONFIG_REGISTRY`
+  are ready, just need to be re-enabled once repos are configured.
