@@ -10,6 +10,26 @@ Spring Cloud Gateway (WebFlux) + React SPA bundled as static resources.
 - **Frontend:** React + Vite, built into `src/main/resources/static/` via Gradle `copyFrontendDist` task
 - **Config:** Spring Cloud Config client — fetches config from config-server at startup using `VAULT_TOKEN`
 
+### Request flow
+
+```
+Browser
+  │  /components-management-portal/**
+  ▼
+f1-api-gateway                          (RewritePath strips prefix)
+  │  /rest/**  →  proxy
+  │  /*        →  SPA (index.html)
+  ▼
+components-management-portal
+  │  /rest/**
+  ▼
+components-registry-service
+```
+
+The portal uses a **transparent proxy** pattern (same as `octopus-dms-ui`): browser JS calls
+`/rest/api/4/...` on the same origin — no CORS — and the portal's internal Gateway forwards
+to `components-registry-service`. There is no dedicated backend API layer (BFF) at this stage.
+
 ## Build Commands
 
 ```bash
