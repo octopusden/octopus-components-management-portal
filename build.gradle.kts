@@ -52,6 +52,7 @@ dependencies {
     implementation("io.micrometer:micrometer-registry-prometheus")
 
     testImplementation(kotlin("test"))
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
 
 ext {
