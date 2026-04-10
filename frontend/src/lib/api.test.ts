@@ -15,7 +15,7 @@ describe('api — URL construction', () => {
     await api.get('/components')
 
     const calledUrl = mockFetch.mock.calls[0]![0] as string
-    expect(calledUrl).toBe('/rest/api/4/components')
+    expect(calledUrl).toBe(`${import.meta.env.BASE_URL}rest/api/4/components`)
   })
 
   it('throws ApiError with status on non-ok response', async () => {

@@ -1,4 +1,4 @@
-const API_BASE = '/rest/api/4'
+const API_BASE = `${import.meta.env.BASE_URL}rest/api/4`
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
