@@ -19,7 +19,7 @@ const queryClient = new QueryClient({
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+      <BrowserRouter basename="/components-management-portal">
         <Routes>
           <Route path="/" element={<Navigate to="/components" replace />} />
           <Route path="/components" element={<ComponentListPage />} />
