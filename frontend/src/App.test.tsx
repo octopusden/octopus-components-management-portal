@@ -29,3 +29,29 @@ describe('App routing', () => {
     expect(screen.getByText('Components Registry')).toBeDefined()
   })
 })
+
+describe('App routing with custom BASE_URL', () => {
+  it('renders correctly when deployed under a sub-path', () => {
+    const base = '/components-management-portal/'
+    vi.stubEnv('BASE_URL', base)
+    window.history.pushState({}, '', `${base}components`)
+
+    render(<App />)
+
+    expect(screen.getByText('Components Registry')).toBeDefined()
+
+    vi.unstubAllEnvs()
+  })
+
+  it('redirects from base root to /components under sub-path', () => {
+    const base = '/components-management-portal/'
+    vi.stubEnv('BASE_URL', base)
+    window.history.pushState({}, '', base)
+
+    render(<App />)
+
+    expect(screen.getByText('Components Registry')).toBeDefined()
+
+    vi.unstubAllEnvs()
+  })
+})

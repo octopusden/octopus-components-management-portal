@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 
 export default defineConfig({
-  base: '/components-management-portal/',
+  base: process.env.VITE_APP_BASE_URL ?? '/',
   plugins: [react(), tailwindcss()],
   test: {
     environment: 'jsdom',
