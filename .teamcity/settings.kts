@@ -15,6 +15,9 @@ project {
         param("OKD_IMAGE_NAME", "components-management-portal")
         param("LAST_RELEASE_VERSION", "0.0.1")
         param("PROJECT_VERSION", "0.0.1")
+        // Base URL for Vite build — set to sub-path (e.g. /components-management-portal/)
+        // when serving via API gateway prefix, or "/" when serving from a dedicated domain.
+        param("env.VITE_APP_BASE_URL", "/")
     }
 
     buildType(id10CompileUtAuto)

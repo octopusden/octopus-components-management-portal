@@ -105,7 +105,7 @@ val npmCi = tasks.register<NpmTask>("npmCi") {
 val npmBuild = tasks.register<NpmTask>("npmBuild") {
     dependsOn(npmCi)
     npmCommand.set(listOf("run", "build"))
-    environment.put("VITE_APP_BASE_URL", System.getenv().getOrDefault("VITE_APP_BASE_URL", "/components-management-portal/"))
+    environment.put("VITE_APP_BASE_URL", System.getenv().getOrDefault("VITE_APP_BASE_URL", "/"))
 }
 
 val npmLint = tasks.register<NpmTask>("npmLint") {
