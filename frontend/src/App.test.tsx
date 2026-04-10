@@ -54,4 +54,18 @@ describe('App routing with custom BASE_URL', () => {
 
     vi.unstubAllEnvs()
   })
+
+  it('renders when URL has no trailing slash on sub-path', () => {
+    // Regression: BASE_URL ends with '/' but React Router basename must not,
+    // otherwise URL '/components-management-portal' (no trailing slash) won't match
+    // basename '/components-management-portal/' and Router renders nothing.
+    vi.stubEnv('BASE_URL', '/components-management-portal/')
+    window.history.pushState({}, '', '/components-management-portal')
+
+    render(<App />)
+
+    expect(screen.getByText('Components Registry')).toBeDefined()
+
+    vi.unstubAllEnvs()
+  })
 })
