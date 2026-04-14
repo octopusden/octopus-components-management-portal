@@ -113,7 +113,7 @@ object id25DeployToOkdProdManualTemp : BuildType({
         text("OKD_SERVER_URL", "%OKD_SERVER_PROD_URL%", allowEmpty = false)
         param("BUILD_NUMBER", "${id10CompileUtAuto.depParamRefs.buildNumber}")
         param("DEPLOYMENT_ENVIRONMENT", "production")
-        param("HELM_EXTRA_SERVICES_SET", "--set image.name=octopusden/%OKD_IMAGE_NAME% --set replicas=1")
+        param("HELM_EXTRA_SERVICES_SET", "--set image.name=octopusden/%OKD_IMAGE_NAME%")
         text("OKD_SA_TOKEN", "%OKD_SA_PROD_TOKEN%", display = ParameterDisplay.HIDDEN, allowEmpty = true)
     }
 
@@ -196,7 +196,7 @@ object id70DeployToOkdProdManual : BuildType({
         param("TEAMCITY_UPDATE_PARAMETER_NAME", "COMPONENTS_MANAGEMENT_PORTAL_VERSION")
         param("BUILD_NUMBER", "${id50DeployToOkdQaAuto.depParamRefs.buildNumber}")
         param("DEPLOYMENT_ENVIRONMENT", "production")
-        param("HELM_EXTRA_SERVICES_SET", "--set image.name=octopusden/%OKD_IMAGE_NAME% --set replicas=1")
+        param("HELM_EXTRA_SERVICES_SET", "--set image.name=octopusden/%OKD_IMAGE_NAME%")
         param("TEAMCITY_UPDATE_PARAMETER_VALUE", "%BUILD_NUMBER%")
         text("OKD_SA_TOKEN", "%OKD_SA_PROD_TOKEN%", display = ParameterDisplay.HIDDEN, allowEmpty = true)
     }
