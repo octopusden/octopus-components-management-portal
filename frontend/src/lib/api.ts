@@ -9,12 +9,25 @@ export class ApiError extends Error {
 
 async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...options?.headers,
     },
     ...options,
   })
+  if (response.status === 401) {
+    // Session may be valid but the registry rejected the bearer (e.g. TokenRelay
+    // couldn't refresh an expired access_token). Reloading / would hit the SPA
+    // which issues /rest/... again → loop. Instead, explicitly trigger the
+    // OAuth2 authorization entry point so the gateway starts a fresh login.
+    // Anti-loop guard: skip if we're already in the OIDC flow.
+    const pathname = window.location.pathname
+    if (!pathname.startsWith('/login') && !pathname.startsWith('/oauth2')) {
+      window.location.assign('/oauth2/authorization/keycloak')
+    }
+    throw new ApiError(401, 'Unauthenticated')
+  }
   if (!response.ok) {
     const errorBody = await response.text()
     throw new ApiError(response.status, errorBody || response.statusText)

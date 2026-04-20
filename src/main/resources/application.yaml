@@ -2,13 +2,44 @@ server:
   port: 8090
 
 spring:
+  security:
+    oauth2:
+      client:
+        provider:
+          keycloak:
+            issuer-uri: ${auth-server.url}/realms/${auth-server.realm}
+            user-name-attribute: preferred_username
+        registration:
+          keycloak:
+            provider: keycloak
+            client-id: ${auth-server.client-id}
+            client-secret: ${auth-server.client-secret}
+            authorization-grant-type: authorization_code
+            scope: openid,profile,email
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
   cloud:
     gateway:
+      default-filters:
+        - TokenRelay
       routes:
         - id: components-registry-api
           uri: ${COMPONENTS_REGISTRY_SERVICE_URL:http://localhost:4567}
           predicates:
             - Path=/rest/**
+        - id: components-registry-auth
+          uri: ${COMPONENTS_REGISTRY_SERVICE_URL:http://localhost:4567}
+          predicates:
+            - Path=/auth/**
+
+# auth-server.* bind from AUTH_SERVER_URL, AUTH_SERVER_REALM, AUTH_SERVER_CLIENT_ID,
+# AUTH_SERVER_CLIENT_SECRET env vars via Spring Boot's relaxed binding. All four are
+# required at startup: with any missing, spring-boot-starter-oauth2-client will fail
+# OIDC issuer discovery and the app will refuse to boot (intentional fail-fast).
+auth-server:
+  url:
+  realm:
+  client-id:
+  client-secret:
 
 management:
   endpoints:
