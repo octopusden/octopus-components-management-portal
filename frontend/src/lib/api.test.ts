@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach, beforeEach, afterAll } from 'vitest'
 import { api, ApiError } from './api'
+import { OIDC_AUTHORIZE_PATH } from './auth'
 
 // jsdom's default window.location.assign cannot be re-spied across tests, so swap the
 // whole location object once with a plain object that exposes a fake assign and a
@@ -86,7 +87,7 @@ describe('api — 401 handling', () => {
     expect(err).toBeInstanceOf(ApiError)
     expect(err.status).toBe(401)
     expect(assignSpy).toHaveBeenCalledOnce()
-    expect(assignSpy).toHaveBeenCalledWith('/oauth2/authorization/keycloak')
+    expect(assignSpy).toHaveBeenCalledWith(OIDC_AUTHORIZE_PATH)
   })
 
   it('does NOT redirect when already inside the OIDC flow (anti-loop: /oauth2)', async () => {

@@ -1,3 +1,5 @@
+import { OIDC_AUTHORIZE_PATH } from './auth'
+
 const API_BASE = '/rest/api/4'
 
 export class ApiError extends Error {
@@ -28,7 +30,7 @@ async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
     // Anti-loop guard: skip if we're already in the OIDC flow.
     const pathname = window.location.pathname
     if (!pathname.startsWith('/login') && !pathname.startsWith('/oauth2')) {
-      window.location.assign('/oauth2/authorization/keycloak')
+      window.location.assign(OIDC_AUTHORIZE_PATH)
     }
     throw new ApiError(401, 'Unauthenticated')
   }

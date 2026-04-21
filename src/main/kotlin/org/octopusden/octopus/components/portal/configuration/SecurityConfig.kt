@@ -22,13 +22,15 @@ import org.springframework.security.web.server.util.matcher.ServerWebExchangeMat
 // TokenRelay default-filter forwards it as `Authorization: Bearer <token>` when
 // proxying to the registry service.
 //
-// Auth entry points are split so XHR / API callers get a JSON-shaped 401 instead of
-// the OAuth2 302 redirect that browsers need for SPA navigation:
-//   - /rest, /auth, and any AJAX (X-Requested-With: XMLHttpRequest) get HTTP 401 so
-//     `frontend/src/lib/api.ts` 401-handler fires cleanly.
+// Auth entry points are split so API callers get a JSON-shaped 401 instead of the
+// OAuth2 302 redirect that browsers need for SPA navigation:
+//   - /rest/** and /auth/** -> HTTP 401 so `frontend/src/lib/api.ts` 401-handler
+//     fires cleanly. The frontend additionally sets
+//     X-Requested-With: XMLHttpRequest as belt-and-braces; the server-side gate
+//     is path-based and does not require that header.
 //   - Everything else (typed URL, link, SPA navigation) redirects to
-//     /oauth2/authorization/keycloak, which Spring Security intercepts to start
-//     the OIDC authorization code flow.
+//     /oauth2/authorization/<REGISTRATION_ID>, which Spring Security intercepts
+//     to start the OIDC authorization code flow.
 @Configuration
 @EnableWebFluxSecurity
 open class SecurityConfig(
@@ -38,7 +40,8 @@ open class SecurityConfig(
     open fun securityFilterChain(http: ServerHttpSecurity): SecurityWebFilterChain {
         val apiMatcher = pathMatchers("/rest/**", "/auth/**")
         val apiEntryPoint = HttpStatusServerEntryPoint(HttpStatus.UNAUTHORIZED)
-        val browserEntryPoint = RedirectServerAuthenticationEntryPoint("/oauth2/authorization/keycloak")
+        val browserEntryPoint =
+            RedirectServerAuthenticationEntryPoint("/oauth2/authorization/$OIDC_REGISTRATION_ID")
         val delegatingEntryPoint =
             DelegatingServerAuthenticationEntryPoint(
                 DelegateEntry(apiMatcher, apiEntryPoint),
@@ -60,7 +63,7 @@ open class SecurityConfig(
             .oauth2Login(Customizer.withDefaults())
             // Override the entry point AFTER oauth2Login registers its default so the
             // delegating one wins: it keeps browser OIDC redirect for navigations but
-            // returns 401 for API/XHR callers.
+            // returns 401 for API callers.
             .exceptionHandling { it.authenticationEntryPoint(delegatingEntryPoint) }
             .logout { it.logoutSuccessHandler(oidcLogoutSuccessHandler()) }
             .oidcLogout { it.backChannel(Customizer.withDefaults()) }
@@ -71,4 +74,11 @@ open class SecurityConfig(
     private fun oidcLogoutSuccessHandler(): ServerLogoutSuccessHandler =
         OidcClientInitiatedServerLogoutSuccessHandler(clientRegistrationRepository)
             .apply { setPostLogoutRedirectUri("{baseUrl}") }
+
+    companion object {
+        // Matches spring.security.oauth2.client.registration.<id> in application.yaml.
+        // Kept in one place so the redirect URL in browserEntryPoint and the
+        // matching constant in frontend/src/lib/auth.ts stay in sync.
+        const val OIDC_REGISTRATION_ID = "keycloak"
+    }
 }

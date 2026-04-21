@@ -17,6 +17,12 @@ export const PERMISSIONS = {
   ACCESS_AUDIT: 'ACCESS_AUDIT',
 } as const
 
+// Must match Spring Security's registration id on the portal gateway:
+// spring.security.oauth2.client.registration.<ID> in application.yaml, also
+// referenced by SecurityConfig.OIDC_REGISTRATION_ID on the server.
+export const OIDC_REGISTRATION_ID = 'keycloak'
+export const OIDC_AUTHORIZE_PATH = `/oauth2/authorization/${OIDC_REGISTRATION_ID}`
+
 export async function fetchCurrentUser(): Promise<User | null> {
   const res = await fetch('/auth/me', {
     credentials: 'include',
