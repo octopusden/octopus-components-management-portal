@@ -18,7 +18,13 @@ export const PERMISSIONS = {
 } as const
 
 export async function fetchCurrentUser(): Promise<User | null> {
-  const res = await fetch('/auth/me', { credentials: 'include' })
+  const res = await fetch('/auth/me', {
+    credentials: 'include',
+    // Match the API auth entry point: the portal's SecurityConfig returns a JSON 401
+    // for XHR/API callers. Without this, unauthenticated GETs would 302-redirect to
+    // Keycloak and `res.ok` would lie (the browser would follow silently).
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+  })
   if (res.status === 401) return null
   if (!res.ok) throw new Error(`auth/me ${res.status}`)
   return res.json()

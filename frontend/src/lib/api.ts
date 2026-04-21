@@ -12,6 +12,10 @@ async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
+      // Signals the portal gateway to route this through the API auth entry point
+      // (HTTP 401) instead of the browser OIDC redirect (302). The path-matcher in
+      // SecurityConfig already covers /rest/**, so this header is belt-and-braces.
+      'X-Requested-With': 'XMLHttpRequest',
       ...options?.headers,
     },
     ...options,
