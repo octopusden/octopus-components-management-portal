@@ -14,8 +14,13 @@ import org.springframework.security.web.server.SecurityWebFilterChain
 import org.springframework.security.web.server.authentication.HttpStatusServerEntryPoint
 import org.springframework.security.web.server.authentication.RedirectServerAuthenticationEntryPoint
 import org.springframework.security.web.server.authentication.logout.ServerLogoutSuccessHandler
+import org.springframework.security.web.server.csrf.CookieServerCsrfTokenRepository
+import org.springframework.security.web.server.csrf.CsrfToken
+import org.springframework.security.web.server.csrf.ServerCsrfTokenRequestAttributeHandler
 import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatchers
 import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatchers.pathMatchers
+import org.springframework.web.server.WebFilter
+import reactor.core.publisher.Mono
 
 // BFF pattern: the portal authenticates the browser via OIDC (authorization code flow),
 // stores the access token in the server-side session, and the Spring Cloud Gateway
@@ -31,6 +36,13 @@ import org.springframework.security.web.server.util.matcher.ServerWebExchangeMat
 //   - Everything else (typed URL, link, SPA navigation) redirects to
 //     /oauth2/authorization/<REGISTRATION_ID>, which Spring Security intercepts
 //     to start the OIDC authorization code flow.
+//
+// CSRF: because authentication is a session cookie (BFF), cross-origin mutating calls
+// could ride an authenticated user's session without a double-submit token. We use
+// Spring Security's cookie-based CSRF token repository, with the cookie readable by the
+// SPA (HttpOnly=false); the frontend must echo the token in the X-XSRF-TOKEN header on
+// every non-safe request. The Login/OIDC redirect dance itself remains exempt via the
+// OIDC `state` parameter.
 @Configuration
 @EnableWebFluxSecurity
 open class SecurityConfig(
@@ -67,9 +79,28 @@ open class SecurityConfig(
             .exceptionHandling { it.authenticationEntryPoint(delegatingEntryPoint) }
             .logout { it.logoutSuccessHandler(oidcLogoutSuccessHandler()) }
             .oidcLogout { it.backChannel(Customizer.withDefaults()) }
-            .csrf { it.disable() }
+            .csrf { csrf ->
+                // withHttpOnlyFalse() so the SPA can read XSRF-TOKEN and echo it in
+                // X-XSRF-TOKEN (default header). BearerTokenServerCsrfTokenRequestHandler
+                // plugs into the standard Spring Security handling — no customisation
+                // beyond giving the SPA access to the token.
+                csrf.csrfTokenRepository(CookieServerCsrfTokenRepository.withHttpOnlyFalse())
+                csrf.csrfTokenRequestHandler(ServerCsrfTokenRequestAttributeHandler())
+            }
         return http.build()
     }
+
+    /**
+     * Forces the CSRF token to be materialised on every request so Spring Security writes
+     * the XSRF-TOKEN cookie. Without this, the cookie is only set when a handler actually
+     * reads the token; the SPA would have no way to pick it up on first load.
+     */
+    @Bean
+    open fun csrfCookieWebFilter(): WebFilter =
+        WebFilter { exchange, chain ->
+            val csrfToken = exchange.getAttribute<Mono<CsrfToken>>(CsrfToken::class.java.name)
+            csrfToken?.doOnSuccess { }?.then(chain.filter(exchange)) ?: chain.filter(exchange)
+        }
 
     private fun oidcLogoutSuccessHandler(): ServerLogoutSuccessHandler =
         OidcClientInitiatedServerLogoutSuccessHandler(clientRegistrationRepository)

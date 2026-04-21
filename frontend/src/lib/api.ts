@@ -9,18 +9,40 @@ export class ApiError extends Error {
   }
 }
 
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'TRACE'])
+
+function readCookie(name: string): string | null {
+  const needle = `${name}=`
+  const pairs = document.cookie ? document.cookie.split('; ') : []
+  for (const pair of pairs) {
+    if (pair.startsWith(needle)) return decodeURIComponent(pair.substring(needle.length))
+  }
+  return null
+}
+
 async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
+  const method = (options?.method ?? 'GET').toUpperCase()
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    // Signals the portal gateway to route this through the API auth entry point
+    // (HTTP 401) instead of the browser OIDC redirect (302). The path-matcher in
+    // SecurityConfig already covers /rest/**, so this header is belt-and-braces.
+    'X-Requested-With': 'XMLHttpRequest',
+    ...(options?.headers as Record<string, string> | undefined),
+  }
+
+  // Double-submit the CSRF token on state-changing requests. The portal's
+  // WebFlux SecurityConfig uses CookieServerCsrfTokenRepository.withHttpOnlyFalse()
+  // so the SPA can read the cookie and echo it here.
+  if (!SAFE_METHODS.has(method)) {
+    const token = readCookie('XSRF-TOKEN')
+    if (token) headers['X-XSRF-TOKEN'] = token
+  }
+
   const response = await fetch(`${API_BASE}${path}`, {
     credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      // Signals the portal gateway to route this through the API auth entry point
-      // (HTTP 401) instead of the browser OIDC redirect (302). The path-matcher in
-      // SecurityConfig already covers /rest/**, so this header is belt-and-braces.
-      'X-Requested-With': 'XMLHttpRequest',
-      ...options?.headers,
-    },
     ...options,
+    headers,
   })
   if (response.status === 401) {
     // Session may be valid but the registry rejected the bearer (e.g. TokenRelay

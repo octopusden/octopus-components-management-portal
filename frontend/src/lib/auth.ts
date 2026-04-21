@@ -44,6 +44,29 @@ export function logout(): void {
   const form = document.createElement('form')
   form.method = 'POST'
   form.action = '/logout'
+
+  // Echo the CSRF token on the /logout POST. The cookie is written by Spring
+  // Security's CookieServerCsrfTokenRepository (HttpOnly=false), and the
+  // server-side handler accepts either the `_csrf` form field or the
+  // X-XSRF-TOKEN header. Forms cannot set custom headers, so we use the field.
+  const token = readXsrfCookie()
+  if (token) {
+    const input = document.createElement('input')
+    input.type = 'hidden'
+    input.name = '_csrf'
+    input.value = token
+    form.appendChild(input)
+  }
+
   document.body.appendChild(form)
   form.submit()
+}
+
+function readXsrfCookie(): string | null {
+  const needle = 'XSRF-TOKEN='
+  const pairs = document.cookie ? document.cookie.split('; ') : []
+  for (const pair of pairs) {
+    if (pair.startsWith(needle)) return decodeURIComponent(pair.substring(needle.length))
+  }
+  return null
 }
