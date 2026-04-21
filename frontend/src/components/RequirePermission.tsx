@@ -1,6 +1,7 @@
 import { Navigate } from 'react-router'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { hasPermission } from '@/lib/auth'
+import { Layout } from './Layout'
 
 interface RequirePermissionProps {
   permission: string
@@ -9,10 +10,11 @@ interface RequirePermissionProps {
 }
 
 /**
- * Gate a route by a permission check. Distinguishes three states so a transient backend
+ * Gate a route by a permission check. Distinguishes four states so a transient backend
  * error doesn't get mistaken for "forbidden":
  *   - loading           → render nothing (initial /auth/me roundtrip)
- *   - error             → render an error banner with a retry, NOT a redirect
+ *   - error             → render an error banner with a retry, NOT a redirect. Kept inside
+ *                         Layout so the user still has header nav to escape.
  *   - data === null     → user is unauthenticated; redirect to the fallback (gateway will
  *                         bounce to Keycloak on the next navigation)
  *   - data present      → grant or deny by permission
@@ -24,18 +26,20 @@ export function RequirePermission({ permission, fallback = '/components', childr
 
   if (isError) {
     return (
-      <div className="max-w-xl mx-auto mt-12 p-4 border border-destructive/40 rounded-md bg-destructive/5 text-sm">
-        <div className="font-semibold mb-2">Auth check failed</div>
-        <div className="text-muted-foreground mb-3">
-          Could not verify your permissions: {error instanceof Error ? error.message : 'unknown error'}
+      <Layout>
+        <div className="max-w-xl mx-auto mt-12 p-4 border border-destructive/40 rounded-md bg-destructive/5 text-sm">
+          <div className="font-semibold mb-2">Auth check failed</div>
+          <div className="text-muted-foreground mb-3">
+            Could not verify your permissions: {error instanceof Error ? error.message : 'unknown error'}
+          </div>
+          <button
+            onClick={() => refetch()}
+            className="px-3 py-1.5 rounded-md border text-sm hover:bg-accent"
+          >
+            Retry
+          </button>
         </div>
-        <button
-          onClick={() => refetch()}
-          className="px-3 py-1.5 rounded-md border text-sm hover:bg-accent"
-        >
-          Retry
-        </button>
-      </div>
+      </Layout>
     )
   }
 

@@ -23,13 +23,15 @@ class SpaFallbackFilter : WebFilter {
         }
 
         // Let API, actuator, auth-me, and Spring Security OIDC endpoints pass through.
-        // startsWith("/logout") covers both /logout and /logout/connect/back-channel/**.
+        // Match exact prefixes with a trailing slash so future SPA routes like
+        // /login-help, /logout-confirm, /oauth2-settings don't accidentally get
+        // routed away from index.html.
         if (path.startsWith("/rest/") ||
             path.startsWith("/auth/") ||
             path.startsWith("/actuator/") ||
-            path.startsWith("/login") ||
-            path.startsWith("/oauth2") ||
-            path.startsWith("/logout")
+            path == "/login" || path.startsWith("/login/") ||
+            path == "/oauth2" || path.startsWith("/oauth2/") ||
+            path == "/logout" || path.startsWith("/logout/")
         ) {
             return chain.filter(exchange)
         }

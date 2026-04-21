@@ -76,6 +76,7 @@ export default defineConfig({
       '/logout': {
         target: 'http://localhost:8090',
         changeOrigin: true,
+        cookieDomainRewrite: 'localhost',
       },
     },
   },
