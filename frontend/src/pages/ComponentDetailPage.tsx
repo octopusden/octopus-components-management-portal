@@ -59,6 +59,11 @@ export function ComponentDetailPage() {
       ? values.system.split(',').map((s) => s.trim()).filter(Boolean)
       : []
 
+    // `archived` is gated server-side by ARCHIVE_COMPONENTS (a permission
+    // ROLE_REGISTRY_EDITOR does not hold). Send it only when the user actually
+    // toggled it — otherwise a plain rename/owner/system edit from a non-admin
+    // would trip the archive guard with 403.
+    const archivedChanged = values.archived !== component.archived
     try {
       await updateMutation.mutateAsync({
         version: component.version,
@@ -68,7 +73,7 @@ export function ComponentDetailPage() {
         system: systemArray,
         clientCode: values.clientCode || undefined,
         solution: values.solution,
-        archived: values.archived,
+        archived: archivedChanged ? values.archived : undefined,
       })
       toast({ title: 'Component saved', description: 'Changes have been saved successfully.' })
     } catch (err) {
