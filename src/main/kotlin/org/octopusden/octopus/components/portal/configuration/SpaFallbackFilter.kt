@@ -22,8 +22,17 @@ class SpaFallbackFilter : WebFilter {
             return chain.filter(exchange)
         }
 
-        // Let API and actuator calls pass through
-        if (path.startsWith("/rest/") || path.startsWith("/actuator/")) {
+        // Let API, actuator, auth-me, and Spring Security OIDC endpoints pass through.
+        // Match exact prefixes with a trailing slash so future SPA routes like
+        // /login-help, /logout-confirm, /oauth2-settings don't accidentally get
+        // routed away from index.html.
+        if (path.startsWith("/rest/") ||
+            path.startsWith("/auth/") ||
+            path.startsWith("/actuator/") ||
+            path == "/login" || path.startsWith("/login/") ||
+            path == "/oauth2" || path.startsWith("/oauth2/") ||
+            path == "/logout" || path.startsWith("/logout/")
+        ) {
             return chain.filter(exchange)
         }
 

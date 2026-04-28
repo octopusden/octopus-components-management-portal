@@ -1,3 +1,6 @@
+import { OIDC_AUTHORIZE_PATH, rememberContinuePath } from './auth'
+import { readCookie } from './cookies'
+
 const API_BASE = `${import.meta.env.BASE_URL}rest/api/4`
 
 export class ApiError extends Error {
@@ -7,14 +10,63 @@ export class ApiError extends Error {
   }
 }
 
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'TRACE'])
+
+/**
+ * True when the current document URL is part of the OIDC redirect dance and we
+ * should NOT bounce again on a 401 (would loop). We match exact paths plus a
+ * trailing-slash prefix so unrelated SPA routes like /login-help, /logout-confirm
+ * or /oauth2-settings do not get treated as in-flow.
+ */
+function isInsideOidcFlow(pathname: string): boolean {
+  return (
+    pathname === '/login' ||
+    pathname.startsWith('/login/') ||
+    pathname === '/oauth2' ||
+    pathname.startsWith('/oauth2/')
+  )
+}
+
 async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
+  const method = (options?.method ?? 'GET').toUpperCase()
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    // Signals the portal gateway to route this through the API auth entry point
+    // (HTTP 401) instead of the browser OIDC redirect (302). The path-matcher in
+    // SecurityConfig already covers /rest/**, so this header is belt-and-braces.
+    'X-Requested-With': 'XMLHttpRequest',
+    ...(options?.headers as Record<string, string> | undefined),
+  }
+
+  // Double-submit the CSRF token on state-changing requests. The portal's
+  // WebFlux SecurityConfig uses CookieServerCsrfTokenRepository.withHttpOnlyFalse()
+  // so the SPA can read the cookie and echo it here.
+  if (!SAFE_METHODS.has(method)) {
+    const token = readCookie('XSRF-TOKEN')
+    if (token) headers['X-XSRF-TOKEN'] = token
+  }
+
   const response = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
+    credentials: 'include',
     ...options,
+    headers,
   })
+  if (response.status === 401) {
+    // Session may be valid but the registry rejected the bearer (e.g. TokenRelay
+    // couldn't refresh an expired access_token). Reloading / would hit the SPA
+    // which issues /rest/... again → loop. Instead, explicitly trigger the
+    // OAuth2 authorization entry point so the gateway starts a fresh login.
+    // We stash the deep link in sessionStorage first so the post-login bootstrap
+    // can put the user back where they were (the OIDC redirect chain strips any
+    // custom query params we might attach here, so a query-param scheme would
+    // not survive the round-trip).
+    const pathname = window.location.pathname
+    if (!isInsideOidcFlow(pathname)) {
+      rememberContinuePath(pathname + window.location.search)
+      window.location.assign(OIDC_AUTHORIZE_PATH)
+    }
+    throw new ApiError(401, 'Unauthenticated')
+  }
   if (!response.ok) {
     const errorBody = await response.text()
     throw new ApiError(response.status, errorBody || response.statusText)

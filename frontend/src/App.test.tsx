@@ -7,6 +7,17 @@ vi.mock('./hooks/useComponents', () => ({
   useComponents: vi.fn(() => ({ data: undefined, isLoading: true, error: null })),
 }))
 
+// Mock /auth/me so Layout exercises the happy path, not the isError fallback.
+vi.mock('./hooks/useCurrentUser', () => ({
+  useCurrentUser: vi.fn(() => ({
+    data: { username: 'alice', roles: [], groups: [] },
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  })),
+}))
+
 beforeEach(() => {
   vi.clearAllMocks()
 })

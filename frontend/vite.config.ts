@@ -47,12 +47,36 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  // Dev proxy targets the portal gateway on :8090 (not the registry directly),
+  // so that OAuth2 login / TokenRelay / session cookie flows work end-to-end.
+  // cookieDomainRewrite makes the session cookie valid across the Vite dev host.
   server: {
     port: 5173,
     proxy: {
       '/rest': {
-        target: 'http://localhost:4567',
+        target: 'http://localhost:8090',
         changeOrigin: true,
+        cookieDomainRewrite: 'localhost',
+      },
+      '/auth': {
+        target: 'http://localhost:8090',
+        changeOrigin: true,
+        cookieDomainRewrite: 'localhost',
+      },
+      '/login': {
+        target: 'http://localhost:8090',
+        changeOrigin: true,
+        cookieDomainRewrite: 'localhost',
+      },
+      '/oauth2': {
+        target: 'http://localhost:8090',
+        changeOrigin: true,
+        cookieDomainRewrite: 'localhost',
+      },
+      '/logout': {
+        target: 'http://localhost:8090',
+        changeOrigin: true,
+        cookieDomainRewrite: 'localhost',
       },
     },
   },
