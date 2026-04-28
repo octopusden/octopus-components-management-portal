@@ -25,10 +25,21 @@ open class WebConfig {
             ServerResponse.notFound().build()
         }
 
-        // SPA fallback: serve index.html for any client-side route (not API, not actuator, not assets).
+        // SPA fallback: serve index.html for any client-side route, but NOT for paths
+        // owned by Spring Cloud Gateway / Spring Security. The RouterFunction wins over
+        // the Gateway's RoutePredicateHandlerMapping, so any path that should be proxied
+        // (/auth/** to the backend AuthController) or handled by the OIDC filter chain
+        // (/oauth2/**, /login/**, /logout) must be excluded explicitly. Forgetting
+        // /auth/** is the canonical mistake — the SPA's /auth/me call would silently get
+        // index.html and useCurrentUser would fail validation in the SPA, leading to a
+        // "auth check failed" banner without any backend trace.
         val spaRouter = route(
             GET("/**")
                 .and(GET("/rest/**").negate())
+                .and(GET("/auth/**").negate())
+                .and(GET("/oauth2/**").negate())
+                .and(GET("/login/**").negate())
+                .and(GET("/logout").negate())
                 .and(GET("/actuator/**").negate())
         ) {
             ServerResponse.ok()
