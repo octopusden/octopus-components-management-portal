@@ -67,7 +67,13 @@ open class SecurityConfig(
                         "/assets/**",
                         "/favicon.ico",
                         "/vite.svg",
-                        "/actuator/**",
+                        // Only health probes are anonymous. application.yaml exposes
+                        // health,info,metrics and sets health.show-details: always —
+                        // anything beyond /actuator/health would leak operational
+                        // details (jvm metrics, info bean contents) to anyone who can
+                        // reach the route. Keep richer endpoints behind auth.
+                        "/actuator/health",
+                        "/actuator/health/**",
                         "/logout/connect/back-channel/**",
                     ).permitAll()
                     .anyExchange().authenticated()
