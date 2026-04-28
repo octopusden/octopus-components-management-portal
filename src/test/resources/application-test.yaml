@@ -1,0 +1,47 @@
+# Disable Spring Cloud Config bootstrap so tests do not try to reach the
+# config-server. All other settings come from defaults / TestSecurityConfig.
+spring:
+  cloud:
+    config:
+      enabled: false
+      import-check:
+        enabled: false
+    bootstrap:
+      enabled: false
+  config:
+    import: ""
+  # Provide a fully-specified OAuth2 client registration so the OAuth2 client
+  # autoconfig (a) does not blow up on "Client id must not be empty" while
+  # binding properties from main application.yaml, and (b) does NOT try to do
+  # OIDC issuer discovery against an unreachable Keycloak. We intentionally
+  # omit `issuer-uri` and `provider` here and inline the endpoints, so the
+  # autoconfig builds the registration purely from properties — no HTTP call.
+  # TestSecurityConfig still wins via @Primary and supplies the actual
+  # ReactiveClientRegistrationRepository the security filter chain consumes.
+  security:
+    oauth2:
+      client:
+        registration:
+          keycloak:
+            client-id: test-client
+            client-secret: test-secret
+            authorization-grant-type: authorization_code
+            scope: openid,profile,email
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+        provider:
+          keycloak:
+            authorization-uri: http://localhost:0/auth
+            token-uri: http://localhost:0/token
+            user-info-uri: http://localhost:0/userinfo
+            user-name-attribute: preferred_username
+            jwk-set-uri: http://localhost:0/jwks
+
+# Same idea: prevent ${auth-server.*} placeholders from main application.yaml
+# resolving to empty strings. The actual OAuth2 client values used by the
+# autoconfig are the ones above; these only exist to keep placeholder
+# resolution happy if main application.yaml is on the classpath.
+auth-server:
+  url: http://localhost:0
+  realm: test
+  client-id: test-client
+  client-secret: test-secret

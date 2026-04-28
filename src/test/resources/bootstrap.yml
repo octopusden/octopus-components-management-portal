@@ -1,0 +1,15 @@
+# Override main bootstrap.yml during tests so we never try to reach a
+# config-server / Vault. Spring Boot still loads bootstrap.yml from the
+# (test) classpath when spring-cloud-starter-bootstrap is present, and
+# bootstrap.yml on the main classpath sets fail-fast: true plus a
+# ${VAULT_TOKEN} placeholder that would otherwise cause the test to
+# explode at boot.
+spring:
+  application:
+    name: components-management-portal
+  cloud:
+    config:
+      enabled: false
+      fail-fast: false
+    bootstrap:
+      enabled: false
