@@ -1,4 +1,5 @@
-import { OIDC_AUTHORIZE_PATH } from './auth'
+import { OIDC_AUTHORIZE_PATH, rememberContinuePath } from './auth'
+import { readCookie } from './cookies'
 
 const API_BASE = '/rest/api/4'
 
@@ -11,13 +12,19 @@ export class ApiError extends Error {
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'TRACE'])
 
-function readCookie(name: string): string | null {
-  const needle = `${name}=`
-  const pairs = document.cookie ? document.cookie.split('; ') : []
-  for (const pair of pairs) {
-    if (pair.startsWith(needle)) return decodeURIComponent(pair.substring(needle.length))
-  }
-  return null
+/**
+ * True when the current document URL is part of the OIDC redirect dance and we
+ * should NOT bounce again on a 401 (would loop). We match exact paths plus a
+ * trailing-slash prefix so unrelated SPA routes like /login-help, /logout-confirm
+ * or /oauth2-settings do not get treated as in-flow.
+ */
+function isInsideOidcFlow(pathname: string): boolean {
+  return (
+    pathname === '/login' ||
+    pathname.startsWith('/login/') ||
+    pathname === '/oauth2' ||
+    pathname.startsWith('/oauth2/')
+  )
 }
 
 async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
@@ -49,9 +56,13 @@ async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
     // couldn't refresh an expired access_token). Reloading / would hit the SPA
     // which issues /rest/... again → loop. Instead, explicitly trigger the
     // OAuth2 authorization entry point so the gateway starts a fresh login.
-    // Anti-loop guard: skip if we're already in the OIDC flow.
+    // We stash the deep link in sessionStorage first so the post-login bootstrap
+    // can put the user back where they were (the OIDC redirect chain strips any
+    // custom query params we might attach here, so a query-param scheme would
+    // not survive the round-trip).
     const pathname = window.location.pathname
-    if (!pathname.startsWith('/login') && !pathname.startsWith('/oauth2')) {
+    if (!isInsideOidcFlow(pathname)) {
+      rememberContinuePath(pathname + window.location.search)
       window.location.assign(OIDC_AUTHORIZE_PATH)
     }
     throw new ApiError(401, 'Unauthenticated')

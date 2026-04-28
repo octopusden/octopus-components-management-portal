@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router'
 import { RequirePermission } from './RequirePermission'
-import type { User } from '../lib/auth'
+import { CONTINUE_PATH_STORAGE_KEY, OIDC_AUTHORIZE_PATH, type User } from '../lib/auth'
 
 const refetchMock = vi.fn()
 
@@ -12,6 +12,17 @@ vi.mock('@/hooks/useCurrentUser', () => ({
 
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 const mockedUseCurrentUser = vi.mocked(useCurrentUser)
+
+// Same location-faking approach as api.test.ts: jsdom's location.assign cannot be
+// re-spied across tests, so swap the whole object once and restore at end-of-file.
+const assignSpy = vi.fn()
+const originalLocation = window.location
+const fakeLocation = {
+  ...originalLocation,
+  assign: (url: string | URL) => assignSpy(String(url)),
+  pathname: '/admin',
+  search: '',
+} as unknown as Location
 
 function renderAt(initial: string) {
   return render(
@@ -33,6 +44,25 @@ function renderAt(initial: string) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  assignSpy.mockReset()
+  Object.defineProperty(window, 'location', {
+    configurable: true,
+    writable: true,
+    value: { ...fakeLocation, pathname: '/admin', search: '' },
+  })
+  sessionStorage.clear()
+})
+
+afterEach(() => {
+  sessionStorage.clear()
+})
+
+afterAll(() => {
+  Object.defineProperty(window, 'location', {
+    configurable: true,
+    writable: true,
+    value: originalLocation,
+  })
 })
 
 describe('RequirePermission', () => {
@@ -70,7 +100,7 @@ describe('RequirePermission', () => {
     expect(refetchMock).toHaveBeenCalledOnce()
   })
 
-  it('redirects to fallback when user is null (unauthenticated)', () => {
+  it('triggers OIDC entry point directly (single navigation) when user is null', () => {
     mockedUseCurrentUser.mockReturnValue({
       data: null,
       isLoading: false,
@@ -80,8 +110,16 @@ describe('RequirePermission', () => {
     } as unknown as ReturnType<typeof useCurrentUser>)
 
     renderAt('/admin')
-    expect(screen.getByText('COMPONENTS LIST')).toBeDefined()
+
+    // Should NOT bounce through the in-SPA fallback (would issue an extra /rest/ call → 401);
+    // instead jumps straight to the OAuth2 authorization endpoint.
+    expect(assignSpy).toHaveBeenCalledOnce()
+    expect(assignSpy).toHaveBeenCalledWith(OIDC_AUTHORIZE_PATH)
+    // And stashes the deep-link path so the post-login bootstrap can restore it.
+    expect(sessionStorage.getItem(CONTINUE_PATH_STORAGE_KEY)).toBe('/admin')
+    // No content rendered while the browser tears down the SPA.
     expect(screen.queryByText('ADMIN PAGE CONTENT')).toBeNull()
+    expect(screen.queryByText('COMPONENTS LIST')).toBeNull()
   })
 
   it('redirects to fallback when user lacks the required permission', () => {

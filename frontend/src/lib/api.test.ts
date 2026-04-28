@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach, beforeEach, afterAll } from 'vitest'
 import { api, ApiError } from './api'
-import { OIDC_AUTHORIZE_PATH } from './auth'
+import { CONTINUE_PATH_STORAGE_KEY, OIDC_AUTHORIZE_PATH } from './auth'
 
 // jsdom's default window.location.assign cannot be re-spied across tests, so swap the
 // whole location object once with a plain object that exposes a fake assign and a
@@ -18,12 +18,14 @@ beforeEach(() => {
   Object.defineProperty(window, 'location', {
     configurable: true,
     writable: true,
-    value: { ...fakeLocation, pathname: '/components' },
+    value: { ...fakeLocation, pathname: '/components', search: '' },
   })
+  sessionStorage.clear()
 })
 
 afterEach(() => {
   vi.restoreAllMocks()
+  sessionStorage.clear()
 })
 
 afterAll(() => {
@@ -136,6 +138,19 @@ describe('api — 401 handling', () => {
     expect(assignSpy).toHaveBeenCalledWith(OIDC_AUTHORIZE_PATH)
   })
 
+  it('on 401 stashes the deep-link path so it can be restored after login', async () => {
+    ;(window.location as unknown as { pathname: string; search: string }).pathname = '/components/foo'
+    ;(window.location as unknown as { pathname: string; search: string }).search = '?tab=releases'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response('nope', { status: 401 })),
+    )
+
+    await api.get('/components').catch(() => {})
+
+    expect(sessionStorage.getItem(CONTINUE_PATH_STORAGE_KEY)).toBe('/components/foo?tab=releases')
+  })
+
   it('does NOT redirect when already inside the OIDC flow (anti-loop: /oauth2)', async () => {
     setPathname('/oauth2/authorization/keycloak')
     vi.stubGlobal(
@@ -158,5 +173,33 @@ describe('api — 401 handling', () => {
     await api.get('/components').catch(() => {})
 
     expect(assignSpy).not.toHaveBeenCalled()
+  })
+
+  it('DOES redirect for SPA paths that merely share a prefix (e.g. /login-help)', async () => {
+    // Anti-loop guard must be exact-prefix: /login-help is a hypothetical SPA route,
+    // not the OIDC flow, so a 401 there should still trigger the OIDC entry point.
+    setPathname('/login-help')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response('nope', { status: 401 })),
+    )
+
+    await api.get('/components').catch(() => {})
+
+    expect(assignSpy).toHaveBeenCalledOnce()
+    expect(assignSpy).toHaveBeenCalledWith(OIDC_AUTHORIZE_PATH)
+  })
+
+  it('DOES redirect from /oauth2-settings (not the OIDC namespace)', async () => {
+    setPathname('/oauth2-settings')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response('nope', { status: 401 })),
+    )
+
+    await api.get('/components').catch(() => {})
+
+    expect(assignSpy).toHaveBeenCalledOnce()
+    expect(assignSpy).toHaveBeenCalledWith(OIDC_AUTHORIZE_PATH)
   })
 })

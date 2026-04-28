@@ -5,8 +5,15 @@ import { ComponentDetailPage } from './pages/ComponentDetailPage'
 import { AuditLogPage } from './pages/AuditLogPage'
 import { AdminSettingsPage } from './pages/AdminSettingsPage'
 import { RequirePermission } from './components/RequirePermission'
-import { PERMISSIONS } from './lib/auth'
+import { PERMISSIONS, restoreContinuePath } from './lib/auth'
 import { Toaster } from './components/ui/toaster'
+
+// If the user was deep-linked into a protected route, hit a 401, and was bounced
+// through the OIDC flow, the post-login redirect lands them at "/". Replace history
+// with the stashed deep-link path BEFORE the BrowserRouter mounts so React Router
+// reads the corrected URL and renders the right page on first paint. No-op when
+// there is nothing stashed.
+restoreContinuePath()
 
 const queryClient = new QueryClient({
   defaultOptions: {

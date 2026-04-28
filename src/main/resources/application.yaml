@@ -19,6 +19,11 @@ spring:
             redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
   cloud:
     gateway:
+      # TokenRelay is intentionally a default-filter (applied to every route): this is the
+      # core of the BFF pattern. Spring Security stores the OAuth2 access_token in the
+      # server-side session and TokenRelay copies it onto the proxied request as
+      # `Authorization: Bearer <token>` so downstream services (registry, auth) see an
+      # authenticated request without the SPA ever handling the token directly.
       default-filters:
         - TokenRelay
       routes:

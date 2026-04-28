@@ -81,9 +81,13 @@ open class SecurityConfig(
             .oidcLogout { it.backChannel(Customizer.withDefaults()) }
             .csrf { csrf ->
                 // withHttpOnlyFalse() so the SPA can read XSRF-TOKEN and echo it in
-                // X-XSRF-TOKEN (default header). BearerTokenServerCsrfTokenRequestHandler
-                // plugs into the standard Spring Security handling — no customisation
-                // beyond giving the SPA access to the token.
+                // X-XSRF-TOKEN (default header). ServerCsrfTokenRequestAttributeHandler
+                // is the plain double-submit handler — it does NOT run the BREACH-mitigation
+                // XOR step that the default-since-5.8 XorServerCsrfTokenRequestAttributeHandler
+                // applies. We pick the plain handler because the SPA reads the token raw
+                // from the cookie and echoes it raw on the X-XSRF-TOKEN header; with the
+                // XOR variant the token in the cookie does not match what the handler
+                // expects to see in the header and every non-safe request would 403.
                 csrf.csrfTokenRepository(CookieServerCsrfTokenRepository.withHttpOnlyFalse())
                 csrf.csrfTokenRequestHandler(ServerCsrfTokenRequestAttributeHandler())
             }
@@ -94,12 +98,15 @@ open class SecurityConfig(
      * Forces the CSRF token to be materialised on every request so Spring Security writes
      * the XSRF-TOKEN cookie. Without this, the cookie is only set when a handler actually
      * reads the token; the SPA would have no way to pick it up on first load.
+     *
+     * The Mono is chained in front of the filter chain so the token is subscribed to
+     * (and therefore the cookie is written) before downstream processing runs.
      */
     @Bean
     open fun csrfCookieWebFilter(): WebFilter =
         WebFilter { exchange, chain ->
             val csrfToken = exchange.getAttribute<Mono<CsrfToken>>(CsrfToken::class.java.name)
-            csrfToken?.doOnSuccess { }?.then(chain.filter(exchange)) ?: chain.filter(exchange)
+            csrfToken?.then(chain.filter(exchange)) ?: chain.filter(exchange)
         }
 
     private fun oidcLogoutSuccessHandler(): ServerLogoutSuccessHandler =

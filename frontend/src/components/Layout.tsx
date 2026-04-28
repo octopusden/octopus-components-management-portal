@@ -77,6 +77,7 @@ export function Layout({ children }: LayoutProps) {
               </span>
             )}
             <button
+              type="button"
               onClick={logout}
               className="flex items-center gap-1 text-muted-foreground hover:text-foreground"
             >
