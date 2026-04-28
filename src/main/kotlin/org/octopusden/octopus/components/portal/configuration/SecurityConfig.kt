@@ -75,6 +75,14 @@ open class SecurityConfig(
                         "/actuator/health",
                         "/actuator/health/**",
                         "/logout/connect/back-channel/**",
+                        // Footer build-info: portal version (served by PortalInfoController)
+                        // and CRS service version (proxied to /rest/api/4/info, which is
+                        // permitAll on the CRS side). The portal must let anonymous
+                        // requests through both so the footer renders before login —
+                        // otherwise the portal gateway answers 401 before TokenRelay
+                        // ever forwards the call to CRS.
+                        "/portal/info",
+                        "/rest/api/4/info",
                     ).permitAll()
                     .anyExchange().authenticated()
             }

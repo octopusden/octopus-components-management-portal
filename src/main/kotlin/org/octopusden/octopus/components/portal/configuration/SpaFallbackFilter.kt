@@ -28,6 +28,7 @@ class SpaFallbackFilter : WebFilter {
         // routed away from index.html.
         if (path.startsWith("/rest/") ||
             path.startsWith("/auth/") ||
+            path.startsWith("/portal/") ||
             path.startsWith("/actuator/") ||
             path == "/login" || path.startsWith("/login/") ||
             path == "/oauth2" || path.startsWith("/oauth2/") ||
