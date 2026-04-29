@@ -237,4 +237,135 @@ describe('MigrationPanel — mutation error', () => {
     // trap the operator on a permanently-broken page.
     expect(screen.getByRole('button', { name: /run migration/i })).not.toBeDisabled()
   })
+
+  it('strips raw HTML from the error body so the destructive block stays readable', () => {
+    // The portal gateway returns text/html for many backend errors (504 default
+    // page, sometimes 502/503 too). The mutation's ApiError.message ends up
+    // holding the whole "<html><body><h1>504 Gateway Time-out</h1>..." string.
+    // Rendering that verbatim leaks markup into the panel — the screenshot
+    // that prompted this guard showed the literal "<html><body>" tags
+    // displayed to the operator. The panel must extract a short status
+    // string from such payloads instead.
+    mockUseMigrationStatus.mockReturnValue(statusReturn())
+    const { base } = buildMutation()
+    mockUseRunMigration.mockReturnValue({
+      ...base,
+      isError: true,
+      error: new ApiError(
+        502,
+        '<html><body><h1>502 Bad Gateway</h1>The proxy did not get a valid response.</body></html>',
+      ),
+      isIdle: false,
+      status: 'error',
+    } as unknown as ReturnType<typeof useRunMigration>)
+    useAdminMode.setState({ enabled: true })
+
+    render(<MigrationPanel />)
+
+    // Block must mention the status and not the raw markup.
+    expect(screen.queryByText(/<html>/)).toBeNull()
+    expect(screen.queryByText(/<\/body>/)).toBeNull()
+    expect(screen.getByText(/502/)).toBeDefined()
+  })
+})
+
+describe('MigrationPanel — gateway-timeout / still-running banner', () => {
+  it('on 504 shows a neutral "still running" banner with current status counters, not the destructive block', () => {
+    // 936-component runs blow past the gateway timeout while CRS keeps
+    // working — the POST returns 504 even though the migration is mid-flight.
+    // Treating that as a hard failure (destructive block + retry CTA) is
+    // misleading; the right read is "we lost the response, status endpoint
+    // is the source of truth from here". Status counters from the polling
+    // hook tell the operator how far the run has progressed.
+    mockUseMigrationStatus.mockReturnValue(
+      statusReturn({ git: 700, db: 236, total: 936 }),
+    )
+    const { base } = buildMutation()
+    mockUseRunMigration.mockReturnValue({
+      ...base,
+      isError: true,
+      error: new ApiError(504, '<html><body><h1>504 Gateway Time-out</h1></body></html>'),
+      isIdle: false,
+      status: 'error',
+    } as unknown as ReturnType<typeof useRunMigration>)
+    useAdminMode.setState({ enabled: true })
+
+    const { container } = render(<MigrationPanel />)
+
+    // Neutral copy referencing the gateway timeout + an in-flight run.
+    expect(screen.getByText(/still running/i)).toBeDefined()
+    // Counters from the live status hook should be visible. The 236 value
+    // is unique to the gateway-banner data set.
+    expect(screen.getByText('236')).toBeDefined()
+    // No destructive styling on this banner — destructive is for actual
+    // operator-action-required errors (auth, permission, validation).
+    const banner = container.querySelector('[data-testid="migration-still-running"]')
+    expect(banner).not.toBeNull()
+    expect(banner!.className).not.toMatch(/text-destructive|bg-destructive/)
+  })
+})
+
+describe('MigrationPanel — running progress indicator', () => {
+  it('marks the Run-migration button busy while mutation is pending', () => {
+    mockUseMigrationStatus.mockReturnValue(statusReturn())
+    const { base } = buildMutation()
+    mockUseRunMigration.mockReturnValue({
+      ...base,
+      isPending: true,
+      isIdle: false,
+      status: 'pending',
+    } as unknown as ReturnType<typeof useRunMigration>)
+    useAdminMode.setState({ enabled: true })
+
+    render(<MigrationPanel />)
+
+    const button = screen.getByRole('button', { name: /running|run migration/i })
+    expect(button.getAttribute('aria-busy')).toBe('true')
+    expect(button).toBeDisabled()
+  })
+
+  it('subscribes to live status while pending — live counters reflect partial progress', () => {
+    // While the mutation is pending, useMigrationStatus is expected to be
+    // called with refetchInterval set so the panel renders fresh git/db
+    // counters every few seconds. The hook owns the actual setInterval —
+    // this test only pins the contract that the panel asks for polling
+    // (refetchInterval > 0) when isPending is true and not otherwise.
+    mockUseMigrationStatus.mockReturnValue(statusReturn({ git: 700, db: 236, total: 936 }))
+    const { base } = buildMutation()
+    mockUseRunMigration.mockReturnValue({
+      ...base,
+      isPending: true,
+      isIdle: false,
+      status: 'pending',
+    } as unknown as ReturnType<typeof useRunMigration>)
+    useAdminMode.setState({ enabled: true })
+
+    render(<MigrationPanel />)
+
+    const calls = mockUseMigrationStatus.mock.calls
+    const lastCall = calls[calls.length - 1]
+    const opts = lastCall?.[0] as { refetchInterval?: number | false } | undefined
+    expect(typeof opts?.refetchInterval).toBe('number')
+    expect((opts!.refetchInterval as number)).toBeGreaterThan(0)
+
+    // And the live counters made it into the DOM.
+    expect(screen.getByText('236')).toBeDefined()
+  })
+
+  it('does not poll when mutation is idle', () => {
+    mockUseMigrationStatus.mockReturnValue(statusReturn())
+    mockUseRunMigration.mockReturnValue(buildMutation().base)
+    useAdminMode.setState({ enabled: true })
+
+    render(<MigrationPanel />)
+
+    const calls = mockUseMigrationStatus.mock.calls
+    const lastCall = calls[calls.length - 1]
+    const opts = lastCall?.[0] as { refetchInterval?: number | false } | undefined
+    // Either undefined or false — the polling hook should NOT be armed when
+    // there's nothing to poll for. A constant interval would be wasteful
+    // background traffic against /admin/migration-status for every admin who
+    // happens to land on the tab.
+    expect(opts?.refetchInterval ?? false).toBeFalsy()
+  })
 })
