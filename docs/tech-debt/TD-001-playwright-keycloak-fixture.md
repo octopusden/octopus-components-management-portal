@@ -27,7 +27,7 @@ The `/admin` Migration tab introduced on `feature/admin-migration-ui`
    tab + the Admin-mode switch in the footer + the version line
    `(portal X · service Y)`.
 2. Admin toggles Admin mode → "Run migration" button enables → click →
-   confirm dialog → mutation completes → 4 result cards render.
+   confirm dialog → mutation completes → 4 result tiles render.
 3. Admin without Admin mode toggled sees the disabled button + helper
    text "Enable Admin mode in the footer to run migration."
 4. Non-admin user has no AdminPane in footer; navigating to `/admin`

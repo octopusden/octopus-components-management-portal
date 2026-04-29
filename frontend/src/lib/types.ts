@@ -174,6 +174,29 @@ export interface BatchMigrationResult {
   results: MigrationResult[]
 }
 
+export type JobState = 'RUNNING' | 'COMPLETED' | 'FAILED'
+
+/**
+ * Wire shape of `POST /admin/migrate` (202 / 409) and `GET /admin/migrate/job` (200 / 404).
+ * `result` is populated only after `state === 'COMPLETED'`. While RUNNING, the SPA
+ * leans on `currentComponent` + `migrated/total/failed/skipped` to render a
+ * progress bar; once COMPLETED, it switches to rendering the full result tiles +
+ * failure list.
+ */
+export interface MigrationJobResponse {
+  id: string
+  state: JobState
+  startedAt: string
+  finishedAt: string | null
+  total: number
+  migrated: number
+  failed: number
+  skipped: number
+  currentComponent: string | null
+  errorMessage: string | null
+  result: FullMigrationResult | null
+}
+
 export interface FullMigrationResult {
   defaults: Record<string, unknown>
   components: BatchMigrationResult
