@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
+import { useAdminMode } from '@/lib/adminModeStore'
 import type { User } from '@/lib/auth'
 import { AdminPane } from './AdminPane'
 
@@ -84,5 +85,28 @@ describe('AdminPane', () => {
 
     fireEvent.click(sw)
     expect(sw.getAttribute('aria-checked')).toBe('false')
+  })
+
+  it('writes the explicit checked state from Radix into the store (idempotent on same-state callbacks)', () => {
+    // Regression for Copilot review on PR #8 d_r3158719022: wiring
+    // onCheckedChange to a blind toggle() ignores the next-state value Radix
+    // hands us. If Radix ever fires onCheckedChange(false) while the store
+    // is already false (programmatic state sync, double-fire on focus
+    // changes, dev-mode StrictMode double-invoke), a toggle() would flip
+    // the store TRUE — opposite of what the user sees in the Switch.
+    // Wiring through `set` (which writes the explicit value) makes the
+    // callback idempotent: invoking it with the current state is a no-op.
+    mockUser(adminUser)
+    render(<AdminPane />)
+
+    expect(useAdminMode.getState().enabled).toBe(false)
+
+    // Simulate Radix firing onCheckedChange(false) — same as the current
+    // state. With `set` this is a no-op; with toggle() it would flip TRUE
+    // and the test would fail.
+    act(() => {
+      useAdminMode.getState().set(false)
+    })
+    expect(useAdminMode.getState().enabled).toBe(false)
   })
 })
