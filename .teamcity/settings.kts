@@ -21,6 +21,7 @@ project {
     }
 
     buildType(id10CompileUtAuto)
+    buildType(id15E2eAuto)
     buildType(id20DeployToOkdQaManual)
     buildType(id40ReleaseManual)
     buildType(id50ReleasePostProcessingAuto)
@@ -31,6 +32,7 @@ project {
 
     buildTypesOrder = arrayListOf(
         id10CompileUtAuto,
+        id15E2eAuto,
         id20DeployToOkdQaManual,
         id25DeployToOkdProdManualTemp,
         id40ReleaseManual,
@@ -80,6 +82,65 @@ object id10CompileUtAuto : BuildType({
 
     requirements {
         doesNotContain("teamcity.agent.jvm.os.name", "Windows", "RQ_2816")
+    }
+})
+
+// E2E build runs after id10CompileUtAuto — chained snapshot dependency.
+// Spins up Postgres, Keycloak, CRS, the portal, and Playwright as
+// containers on a shared docker network. No host-side prerequisites
+// beyond Docker — agents stay universal.
+//
+// Agent prerequisites:
+//   - Docker daemon (any modern version).
+//   - Network access to the Dev Artifactory used to pull the CRS image.
+//
+// Why chained, not parallel: the bootJar produced by id10CompileUtAuto
+// is the same artifact the portal container runs, so building it once
+// and consuming it here keeps the e2e run honest about what was
+// actually compiled. A failing Compile&UT also makes the e2e run moot,
+// so failing fast saves agent minutes.
+object id15E2eAuto : BuildType({
+    templates(AbsoluteId("Octopus_OctopusGradleBuild"))
+    id("15E2eAuto")
+    name = "[1.5] E2E [AUTO]"
+
+    params {
+        param("env.JAVA_HOME", "%env.JDK_ZULU_21_x64%")
+        param("ARTIFACT_PATH", """
+            build/reports/tests/e2eTest/** => reports/e2e
+            build/test-results/e2eTest/** => test-results/e2e
+            frontend/playwright-report/** => reports/playwright
+            frontend/test-results/** => test-results/playwright
+        """.trimIndent())
+        // No clean — the daemon cache speeds up warm runs and the test
+        // task itself sets outputs.upToDateWhen { false } so nothing
+        // legitimately rots from skipping clean.
+        param("GRADLE_TASK", "e2eTest -info")
+    }
+
+    features {
+        // The Kotlin/JUnit driver writes JUnit XML to build/test-results/e2eTest;
+        // Playwright writes JUnit-shaped output to frontend/test-results/.
+        xmlReport {
+            reportType = XmlReport.XmlReportType.JUNIT
+            rules = """
+                +:build/test-results/e2eTest/**/*.xml
+                +:frontend/test-results/**/*.xml
+            """.trimIndent()
+        }
+    }
+
+    dependencies {
+        snapshot(id10CompileUtAuto) {
+            onDependencyFailure = FailureAction.FAIL_TO_START
+        }
+    }
+
+    requirements {
+        doesNotContain("teamcity.agent.jvm.os.name", "Windows", "RQ_E2E_OS")
+        // Restrict to agents that have Docker available. Adjust to match
+        // the actual capability tag on the runner pool.
+        exists("dockerVersion", "RQ_E2E_DOCKER")
     }
 })
 

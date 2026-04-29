@@ -1,0 +1,229 @@
+{
+  "realm": "portal",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": false,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": false,
+  "roles": {
+    "realm": [
+      {
+        "name": "ADMIN",
+        "description": "Super-admin. Bare name; UserInfoGrantedAuthoritiesConverter prefixes ROLE_."
+      },
+      {
+        "name": "REGISTRY_VIEWER",
+        "description": "Read-only access to components. Bare name; converter prefixes ROLE_."
+      },
+      {
+        "name": "REGISTRY_EDITOR",
+        "description": "Read/write access to components. Bare name; converter prefixes ROLE_."
+      }
+    ]
+  },
+  "groups": [
+    {
+      "name": "e2e-admins",
+      "path": "/e2e-admins"
+    },
+    {
+      "name": "e2e-viewers",
+      "path": "/e2e-viewers"
+    }
+  ],
+  "users": [
+    {
+      "username": "e2e-admin",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "E2E",
+      "lastName": "Admin",
+      "email": "e2e-admin@example.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "__E2E_ADMIN_PASSWORD__",
+          "temporary": false
+        }
+      ],
+      "groups": [
+        "/e2e-admins"
+      ],
+      "realmRoles": [
+        "ADMIN"
+      ]
+    },
+    {
+      "username": "e2e-viewer",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "E2E",
+      "lastName": "Viewer",
+      "email": "e2e-viewer@example.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "__E2E_VIEWER_PASSWORD__",
+          "temporary": false
+        }
+      ],
+      "groups": [
+        "/e2e-viewers"
+      ],
+      "realmRoles": [
+        "REGISTRY_VIEWER"
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "portal-bff",
+      "name": "Components Management Portal BFF",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "__PORTAL_BFF_SECRET__",
+      "redirectUris": [
+        "http://portal:18090/login/oauth2/code/keycloak",
+        "http://localhost:18090/login/oauth2/code/keycloak",
+        "http://localhost:*/login/oauth2/code/keycloak"
+      ],
+      "webOrigins": [
+        "http://portal:18090",
+        "http://localhost:18090"
+      ],
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "publicClient": false,
+      "frontchannelLogout": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "post.logout.redirect.uris": "http://portal:18090/*##http://localhost:18090/*",
+        "backchannel.logout.url": "http://portal:18090/logout/connect/back-channel/keycloak",
+        "backchannel.logout.session.required": "true"
+      },
+      "fullScopeAllowed": true,
+      "nodeReRegistrationTimeout": -1,
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "full.path": "true",
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "lightweight.claim": "false",
+            "access.token.claim": "true",
+            "multivalued": "true",
+            "claim.name": "groups"
+          }
+        },
+        {
+          "name": "roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "introspection.token.claim": "true",
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "lightweight.claim": "false",
+            "access.token.claim": "true",
+            "claim.name": "roles",
+            "jsonType.label": "String"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "roles",
+        "profile",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access",
+        "microprofile-jwt"
+      ]
+    },
+    {
+      "clientId": "portal-e2e-direct",
+      "name": "E2E direct-grants sanity client",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "__PORTAL_E2E_DIRECT_SECRET__",
+      "redirectUris": [],
+      "webOrigins": [],
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "publicClient": false,
+      "frontchannelLogout": false,
+      "protocol": "openid-connect",
+      "fullScopeAllowed": true,
+      "nodeReRegistrationTimeout": -1,
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "full.path": "true",
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "lightweight.claim": "false",
+            "access.token.claim": "true",
+            "multivalued": "true",
+            "claim.name": "groups"
+          }
+        },
+        {
+          "name": "roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "introspection.token.claim": "true",
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "lightweight.claim": "false",
+            "access.token.claim": "true",
+            "claim.name": "roles",
+            "jsonType.label": "String"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "roles",
+        "profile",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access",
+        "microprofile-jwt"
+      ]
+    }
+  ]
+}

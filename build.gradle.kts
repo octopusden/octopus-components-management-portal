@@ -57,6 +57,16 @@ dependencies {
     testImplementation(kotlin("test"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
+
+    // E2E driver only (JUnit @Tag("e2e")). The default `test` task excludes
+    // the tag, so these jars are never pulled onto the unit-test classpath at
+    // runtime — they're declared as testImplementation only because they share
+    // the same source-set (src/test/kotlin) as the unit tests.
+    testImplementation(platform("org.testcontainers:testcontainers-bom:${project.property("testcontainers.version")}"))
+    testImplementation("org.testcontainers:testcontainers")
+    testImplementation("org.testcontainers:junit-jupiter")
+    testImplementation("org.testcontainers:postgresql")
+    testImplementation("org.postgresql:postgresql")
 }
 
 ext {
@@ -153,8 +163,84 @@ tasks.getByName<Delete>("clean") {
 }
 
 tasks.test {
-    useJUnitPlatform()
+    // Exclude the @Tag("e2e") class so the default test task — and therefore
+    // `check` and `build` — never spin up the Testcontainers stack. JUnit
+    // tag filtering only kicks in when a task opts into either includeTags
+    // or excludeTags; without this line the e2e driver class would be
+    // discovered and run by every `gradlew test` invocation.
+    useJUnitPlatform {
+        excludeTags("e2e")
+    }
     finalizedBy(tasks.jacocoTestReport)
+}
+
+// Standalone task — NOT wired into `check` or `build`. Opt-in via
+// `./gradlew e2eTest`. Spins up Postgres + Keycloak + CRS via
+// Testcontainers, then (E-5) launches the portal bootJar subprocess
+// and (E-7) shells out to Playwright.
+val e2eTest = tasks.register<Test>("e2eTest") {
+    description = "Runs the end-to-end Testcontainers + Playwright stack."
+    group = "verification"
+    // bootJar must exist on disk before the driver looks for it under
+    // build/libs — the portal container bind-mounts it. Playwright runs
+    // inside its own container (mcr.microsoft.com/playwright) and does
+    // its own npm ci on the host's package.json, so we don't need any
+    // host-side npm install here.
+    val bootJarTask = tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar")
+    dependsOn(bootJarTask)
+    // Pass the exact bootJar path through to the driver — avoids the
+    // brittle "first .jar in build/libs" fallback when the workspace
+    // accumulates artefacts from previous builds (TC reuses workdir
+    // across runs unless `clean` is forced). CommandLineArgumentProvider
+    // defers Provider resolution to execution time so we don't hit
+    // "Querying the mapped value before task has completed".
+    jvmArgumentProviders.add(CommandLineArgumentProvider {
+        listOf("-Dportal.bootJar=${bootJarTask.get().archiveFile.get().asFile.absolutePath}")
+    })
+    useJUnitPlatform {
+        includeTags("e2e")
+    }
+    // Prevent Gradle from caching a green run — the stack is expensive but
+    // idempotent, and a cached result hides infra rot (image disappears,
+    // realm drifts) that the e2e gate exists to catch.
+    outputs.upToDateWhen { false }
+    // Re-use the unit-test source set / classpath so we don't have to
+    // duplicate `testImplementation` declarations.
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    // Pass the realm-JSON path through so test classes don't depend on
+    // the Gradle working directory.
+    systemProperty(
+        "e2e.realmJson",
+        project.layout.projectDirectory.file("infra/dev/keycloak/portal-realm.json")
+            .asFile.absolutePath,
+    )
+    systemProperty("crs.version", project.property("crs.version") as String)
+    // Pass the registry knobs through verbatim — the driver resolves
+    // priority. We deliberately do NOT bake a default here so the
+    // registry hostname stays out of source; if neither env nor -P sets
+    // anything, the driver fails fast with a clear error message.
+    val crsRegistry = (project.findProperty("crs.docker.registry") as String?)?.takeIf { it.isNotBlank() }
+    if (crsRegistry != null) systemProperty("crs.docker.registry", crsRegistry)
+    val dockerRegistry = (project.findProperty("docker.registry") as String?)?.takeIf { it.isNotBlank() }
+    if (dockerRegistry != null) systemProperty("docker.registry", dockerRegistry)
+    val ghcrRegistry = "octopusGithubDockerRegistry".getExt().takeIf { it.isNotBlank() }
+    if (ghcrRegistry != null) systemProperty("octopus.github.docker.registry", ghcrRegistry)
+    // Ryuk (Testcontainers' resource reaper) needs to bind-mount
+    // /var/run/docker.sock into itself; Podman rootless on CI refuses
+    // that, and on some macOS Docker setups Ryuk fails to come up at
+    // all. CRS disables it the same way; we lean on JVM shutdown hooks
+    // (PortalProcess) and explicit @AfterAll teardown to clean up.
+    environment("TESTCONTAINERS_RYUK_DISABLED", "true")
+
+    // Surface DOCKER_REGISTRY so the test JVM can pick a mirror for
+    // Docker Hub / Quay images if one is configured (mitigates
+    // anonymous Hub rate limits on shared runners). No-op when unset.
+    val dockerRegistryMirror = System.getenv("DOCKER_REGISTRY")
+        ?: (project.findProperty("docker.registry") as String?)
+    if (!dockerRegistryMirror.isNullOrBlank()) {
+        environment("DOCKER_REGISTRY", dockerRegistryMirror)
+    }
 }
 
 tasks.jacocoTestReport {
