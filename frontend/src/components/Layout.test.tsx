@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import React from 'react'
 import { Layout } from './Layout'
 import type { User } from '../lib/auth'
 
@@ -12,17 +14,31 @@ import { useCurrentUser } from '@/hooks/useCurrentUser'
 const mockedUseCurrentUser = vi.mocked(useCurrentUser)
 
 function renderLayout() {
+  // AppFooter mounts inside Layout and uses useQuery via @tanstack/react-query.
+  // Without a QueryClient in the tree, those hooks throw — failing the
+  // existing nav-visibility tests. Stub fetch as well so the footer's info
+  // queries don't reach the network in jsdom.
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => Promise.resolve(new Response('{}', { status: 200 }))),
+  )
   return render(
-    <MemoryRouter initialEntries={['/components']}>
-      <Layout>
-        <div>child content</div>
-      </Layout>
-    </MemoryRouter>
+    React.createElement(
+      QueryClientProvider,
+      { client },
+      <MemoryRouter initialEntries={['/components']}>
+        <Layout>
+          <div>child content</div>
+        </Layout>
+      </MemoryRouter>,
+    ),
   )
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.unstubAllGlobals()
 })
 
 describe('Layout nav visibility', () => {
@@ -70,6 +86,57 @@ describe('Layout nav visibility', () => {
     expect(screen.getByRole('link', { name: /Audit/i })).toBeDefined()
     expect(screen.getByRole('link', { name: /Admin/i })).toBeDefined()
     expect(screen.getByText('alice')).toBeDefined()
+  })
+
+  it('renders a <footer> region with the brand line so the version label has a host', () => {
+    const viewer: User = {
+      username: 'carol',
+      roles: [{ name: 'ROLE_REGISTRY_VIEWER', permissions: ['ACCESS_COMPONENTS'] }],
+      groups: [],
+    }
+    mockedUseCurrentUser.mockReturnValue({
+      data: viewer,
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useCurrentUser>)
+
+    renderLayout()
+    // The footer must be in the DOM as a <footer> region. Before this change,
+    // Layout had no footer at all — adding one is part of the DMS-style
+    // migration UI work (build versions + Admin-mode toggle).
+    expect(screen.getByRole('contentinfo')).toBeDefined()
+    expect(screen.getByText(/Components Registry by F1 team/i)).toBeDefined()
+  })
+
+  it('uses a vertical flex column so AppFooter can stick to the bottom (mt-auto)', () => {
+    const viewer: User = {
+      username: 'carol',
+      roles: [{ name: 'ROLE_REGISTRY_VIEWER', permissions: ['ACCESS_COMPONENTS'] }],
+      groups: [],
+    }
+    mockedUseCurrentUser.mockReturnValue({
+      data: viewer,
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useCurrentUser>)
+
+    const { container } = renderLayout()
+
+    // Root must be min-h-screen + flex flex-col so AppFooter's mt-auto pushes
+    // the footer to the bottom of viewports taller than the content. Without
+    // flex-col on the root, the footer just sits flush under <main>.
+    const root = container.firstChild as HTMLElement
+    expect(root.className).toContain('min-h-screen')
+    expect(root.className).toContain('flex')
+    expect(root.className).toContain('flex-col')
+
+    // <main> must be flex-1 so it fills the space between header and footer.
+    const main = container.querySelector('main') as HTMLElement
+    expect(main.className).toContain('flex-1')
   })
 
   it('fails open on auth backend error — shows all nav items and an auth-failed indicator', () => {

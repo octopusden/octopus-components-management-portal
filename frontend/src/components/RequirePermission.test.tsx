@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import React from 'react'
 import { RequirePermission } from './RequirePermission'
 import { CONTINUE_PATH_STORAGE_KEY, OIDC_AUTHORIZE_PATH, type User } from '../lib/auth'
 
@@ -25,20 +27,33 @@ const fakeLocation = {
 } as unknown as Location
 
 function renderAt(initial: string) {
+  // The error branch of RequirePermission renders <Layout>, which now includes
+  // <AppFooter> — and AppFooter calls useQuery. Without a QueryClient in the
+  // tree, that branch throws "No QueryClient set". Stub fetch as well so the
+  // footer's anonymous info queries don't reach the network in jsdom.
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => Promise.resolve(new Response('{}', { status: 200 }))),
+  )
   return render(
-    <MemoryRouter initialEntries={[initial]}>
-      <Routes>
-        <Route
-          path="/admin"
-          element={
-            <RequirePermission permission="IMPORT_DATA" fallback="/components">
-              <div>ADMIN PAGE CONTENT</div>
-            </RequirePermission>
-          }
-        />
-        <Route path="/components" element={<div>COMPONENTS LIST</div>} />
-      </Routes>
-    </MemoryRouter>
+    React.createElement(
+      QueryClientProvider,
+      { client },
+      <MemoryRouter initialEntries={[initial]}>
+        <Routes>
+          <Route
+            path="/admin"
+            element={
+              <RequirePermission permission="IMPORT_DATA" fallback="/components">
+                <div>ADMIN PAGE CONTENT</div>
+              </RequirePermission>
+            }
+          />
+          <Route path="/components" element={<div>COMPONENTS LIST</div>} />
+        </Routes>
+      </MemoryRouter>,
+    ),
   )
 }
 
@@ -55,6 +70,7 @@ beforeEach(() => {
 
 afterEach(() => {
   sessionStorage.clear()
+  vi.unstubAllGlobals()
 })
 
 afterAll(() => {
