@@ -8,6 +8,7 @@ import { Separator } from '../ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs'
 import { EnumSelect } from '../ui/EnumSelect'
 import { useComponentDefaults, useUpdateComponentDefaults, useMigrateDefaults } from '../../hooks/useAdminConfig'
+import { useAdminMode } from '../../lib/adminModeStore'
 
 interface DefaultsData {
   // General
@@ -51,6 +52,12 @@ export function ComponentDefaultsForm() {
   const { data, isLoading, error } = useComponentDefaults()
   const updateMutation = useUpdateComponentDefaults()
   const migrateMutation = useMigrateDefaults()
+  // Same UX gate as MigrationPanel: "Import from Git" rewrites every default
+  // from the on-disk DSL — same destructive class as a full migration. When
+  // Admin mode is OFF the button stays disabled with a helper pointing at
+  // the footer toggle. The Save button is the regular write path of this
+  // editor and is intentionally NOT gated.
+  const adminMode = useAdminMode((s) => s.enabled)
 
   const [defaults, setDefaults] = useState<DefaultsData>({})
   const [showRawJson, setShowRawJson] = useState(false)
@@ -136,7 +143,17 @@ export function ComponentDefaultsForm() {
           </Button>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => migrateMutation.mutate()} disabled={migrateMutation.isPending || updateMutation.isPending} title="Import defaults from Git DSL">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => migrateMutation.mutate()}
+            disabled={!adminMode || migrateMutation.isPending || updateMutation.isPending}
+            title={
+              adminMode
+                ? 'Import defaults from Git DSL'
+                : 'Enable Admin mode in the footer to import from Git'
+            }
+          >
             <Download className="h-4 w-4" />
             {migrateMutation.isPending ? 'Importing...' : 'Import from Git'}
           </Button>
@@ -150,6 +167,12 @@ export function ComponentDefaultsForm() {
           </Button>
         </div>
       </div>
+
+      {!adminMode && (
+        <p className="text-xs text-muted-foreground">
+          Enable Admin mode in the footer to use Import from Git. (Saving regular edits is unaffected.)
+        </p>
+      )}
 
       {parseError && (
         <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive font-mono">

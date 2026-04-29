@@ -2,6 +2,7 @@ import { Layout } from '../components/Layout'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { FieldConfigEditor } from '../components/admin/FieldConfigEditor'
 import { ComponentDefaultsForm } from '../components/admin/ComponentDefaultsForm'
+import { MigrationPanel } from '../components/admin/MigrationPanel'
 
 export function AdminSettingsPage() {
   return (
@@ -15,6 +16,7 @@ export function AdminSettingsPage() {
           <TabsList>
             <TabsTrigger value="field-config">Field Configuration</TabsTrigger>
             <TabsTrigger value="component-defaults">Component Defaults</TabsTrigger>
+            <TabsTrigger value="migration">Migration</TabsTrigger>
           </TabsList>
 
           <TabsContent value="field-config" className="mt-4">
@@ -37,6 +39,19 @@ export function AdminSettingsPage() {
               </p>
               <div className="pt-2">
                 <ComponentDefaultsForm />
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="migration" className="mt-4">
+            <div className="rounded-lg border p-6 space-y-2">
+              <h2 className="text-lg font-semibold">Migration</h2>
+              <p className="text-sm text-muted-foreground">
+                Migrate Groovy DSL components into the database. Defaults are rewritten in
+                the same step. Enable Admin mode in the footer to arm the Run button.
+              </p>
+              <div className="pt-2">
+                <MigrationPanel />
               </div>
             </div>
           </TabsContent>

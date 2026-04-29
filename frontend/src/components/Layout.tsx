@@ -3,6 +3,7 @@ import { Package, History, Settings, LogOut, User as UserIcon, AlertTriangle } f
 import { cn } from '../lib/utils'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { hasPermission, logout, PERMISSIONS } from '@/lib/auth'
+import { AppFooter } from './AppFooter'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -34,7 +35,7 @@ export function Layout({ children }: LayoutProps) {
     : navItems.filter((it) => !it.requires || hasPermission(user, it.requires))
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen flex flex-col bg-background">
       <header className="border-b bg-card sticky top-0 z-50">
         <div className="max-w-screen-xl mx-auto px-4 flex items-center h-14 gap-6">
           <span className="font-semibold text-foreground text-base tracking-tight mr-2">
@@ -87,7 +88,8 @@ export function Layout({ children }: LayoutProps) {
           </div>
         </div>
       </header>
-      <main className="max-w-screen-xl mx-auto px-4 py-6">{children}</main>
+      <main className="flex-1 max-w-screen-xl w-full mx-auto px-4 py-6">{children}</main>
+      <AppFooter />
     </div>
   )
 }

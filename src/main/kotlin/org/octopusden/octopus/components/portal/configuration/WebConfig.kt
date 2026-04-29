@@ -37,6 +37,7 @@ open class WebConfig {
             GET("/**")
                 .and(GET("/rest/**").negate())
                 .and(GET("/auth/**").negate())
+                .and(GET("/portal/**").negate())
                 .and(GET("/oauth2/**").negate())
                 .and(GET("/login/**").negate())
                 .and(GET("/logout").negate())
