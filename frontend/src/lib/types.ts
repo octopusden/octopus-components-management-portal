@@ -195,6 +195,17 @@ export interface MigrationJobResponse {
   currentComponent: string | null
   errorMessage: string | null
   result: FullMigrationResult | null
+  /**
+   * Sub-phase within RUNNING: 'DEFAULTS' while migrateDefaults is in flight,
+   * 'COMPONENTS' once the per-component loop has started. Cleared (null) on
+   * COMPLETED / FAILED.
+   *
+   * Optional rather than just nullable: older CRS deployments simply omit the
+   * field from the JSON, so JSON.parse yields `undefined`, not `null`. Callers
+   * that switch on this should treat both `undefined` and `null` as "no phase
+   * info — render fallback".
+   */
+  phase?: 'DEFAULTS' | 'COMPONENTS' | null
 }
 
 export interface FullMigrationResult {

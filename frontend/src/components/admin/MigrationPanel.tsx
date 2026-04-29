@@ -53,6 +53,37 @@ function formatStartError(error: unknown): string {
 // run while keeping load on /admin/migration-status modest.
 const STATUS_POLL_INTERVAL_MS = 3_000
 
+/**
+ * Human-readable label for the current migration phase. Keeps the early
+ * window (defaults loading, lazy git resolve) informative — a frozen
+ * "Running…" with no movement was the original UX complaint that motivated
+ * the phase field. Falls back to "Running…" only when the backend doesn't
+ * report a phase (older CRS, omitted field).
+ */
+function phaseLabel(job: { phase?: 'DEFAULTS' | 'COMPONENTS' | null; currentComponent: string | null }): string {
+  switch (job.phase) {
+    case 'DEFAULTS':
+      return 'Loading defaults from Git…'
+    case 'COMPONENTS':
+      return job.currentComponent ? `Migrating ${job.currentComponent}` : 'Resolving components from Git…'
+    default:
+      return 'Running…'
+  }
+}
+
+/**
+ * The progress bar must be indeterminate (animated, full-width) when there is
+ * nothing measurable to show. Two cases produce that: the DEFAULTS phase
+ * (where total is 0 by design — migrateDefaults doesn't count anything), and
+ * the *start* of the COMPONENTS phase before gitResolver.getComponents() has
+ * returned and the first per-component event has fired (also total=0). A
+ * missing phase field (older CRS) likewise lacks the information to render
+ * a determinate bar, so we default to indeterminate there too.
+ */
+function indeterminate(job: { phase?: 'DEFAULTS' | 'COMPONENTS' | null; total: number }): boolean {
+  return !job.phase || job.total === 0
+}
+
 export function MigrationPanel() {
   const job = useMigrationJob()
   const jobData = job.data ?? null
@@ -131,25 +162,30 @@ export function MigrationPanel() {
         <div
           data-testid="migration-progress"
           className="rounded-md border bg-card p-3 space-y-2 text-sm"
+          aria-busy={indeterminate(jobData) ? 'true' : 'false'}
         >
           <div className="flex items-center justify-between font-medium">
-            <span>Migrating…</span>
+            <span>{phaseLabel(jobData)}</span>
             <span className="tabular-nums">
               {processed} / {jobData.total}
             </span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-            <div
-              className="h-full bg-primary transition-all"
-              style={{ width: `${progressPct}%` }}
-            />
+          <div className="h-2 overflow-hidden rounded-full bg-muted">
+            {indeterminate(jobData) ? (
+              // While total === 0 (DEFAULTS phase, or COMPONENTS phase before
+              // the first per-component event) there is no determinate progress
+              // to render. The animated full-width bar signals "work is
+              // happening, just not yet measurable". Without this branch the
+              // bar would stay frozen at 0/0 width — visually identical to a
+              // hung process — defeating the whole purpose of the phase label.
+              <div className="h-full bg-primary/60 animate-pulse" />
+            ) : (
+              <div
+                className="h-full bg-primary transition-all"
+                style={{ width: `${progressPct}%` }}
+              />
+            )}
           </div>
-          {jobData.currentComponent && (
-            <div className="text-xs text-muted-foreground">
-              Current:{' '}
-              <span className="font-mono text-foreground">{jobData.currentComponent}</span>
-            </div>
-          )}
         </div>
       )}
 

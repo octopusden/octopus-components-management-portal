@@ -50,6 +50,10 @@ const RUNNING_JOB: MigrationJobResponse = {
   currentComponent: 'comp-7',
   errorMessage: null,
   result: null,
+  // Mid-flight in the COMPONENTS phase: matches the existing fixtures'
+  // currentComponent='comp-7' + non-zero counters. Tests that need a
+  // different phase override this field explicitly.
+  phase: 'COMPONENTS',
 }
 
 const COMPLETED_JOB: MigrationJobResponse = {
@@ -341,5 +345,137 @@ describe('MigrationPanel — status polling while RUNNING', () => {
     const lastCall = mockUseMigrationStatus.mock.calls[mockUseMigrationStatus.mock.calls.length - 1]
     const opts = lastCall?.[0] as { refetchInterval?: number | false } | undefined
     expect(opts?.refetchInterval ?? false).toBeFalsy()
+  })
+})
+
+// Phase indicator: the early window between POST and the first per-component
+// progress event used to render a frozen "Running…" with no movement (total=0,
+// no currentComponent). The phase field lets the SPA show what's actually
+// happening — defaults loading, components resolving — and switches the bar
+// to indeterminate when there's nothing measurable to render.
+describe('MigrationPanel — phase indicator', () => {
+  it('renders "Loading defaults from Git…" with indeterminate bar when phase=DEFAULTS', () => {
+    mockUseMigrationJob.mockReturnValue(
+      jobReturn({
+        ...RUNNING_JOB,
+        phase: 'DEFAULTS',
+        total: 0,
+        migrated: 0,
+        failed: 0,
+        skipped: 0,
+        currentComponent: null,
+      }),
+    )
+    useAdminMode.setState({ enabled: true })
+
+    const { container } = renderPanel()
+    const progress = container.querySelector('[data-testid="migration-progress"]') as HTMLElement
+    expect(progress).not.toBeNull()
+    expect(progress.textContent).toMatch(/Loading defaults from Git/)
+    expect(progress.getAttribute('aria-busy')).toBe('true')
+  })
+
+  it('renders "Resolving components from Git…" with indeterminate bar when phase=COMPONENTS but total still 0', () => {
+    // gitResolver.getComponents() hasn't returned yet; total=0 means we don't
+    // know the upper bound and a determinate 0/0 bar would visually freeze.
+    mockUseMigrationJob.mockReturnValue(
+      jobReturn({
+        ...RUNNING_JOB,
+        phase: 'COMPONENTS',
+        total: 0,
+        migrated: 0,
+        failed: 0,
+        skipped: 0,
+        currentComponent: null,
+      }),
+    )
+    useAdminMode.setState({ enabled: true })
+
+    const { container } = renderPanel()
+    const progress = container.querySelector('[data-testid="migration-progress"]') as HTMLElement
+    expect(progress.textContent).toMatch(/Resolving components from Git/)
+    expect(progress.getAttribute('aria-busy')).toBe('true')
+  })
+
+  it('renders "Resolving components from Git…" with determinate bar when phase=COMPONENTS, total>0, no currentComponent', () => {
+    // Brief moment between getComponents() returning and the first
+    // per-component event firing — total is known but we haven't started
+    // any component yet.
+    mockUseMigrationJob.mockReturnValue(
+      jobReturn({
+        ...RUNNING_JOB,
+        phase: 'COMPONENTS',
+        total: 15,
+        migrated: 0,
+        failed: 0,
+        skipped: 0,
+        currentComponent: null,
+      }),
+    )
+    useAdminMode.setState({ enabled: true })
+
+    const { container } = renderPanel()
+    const progress = container.querySelector('[data-testid="migration-progress"]') as HTMLElement
+    expect(progress.textContent).toMatch(/Resolving components from Git/)
+    expect(progress.getAttribute('aria-busy')).toBe('false')
+  })
+
+  it('renders "Migrating <name>" with determinate bar when phase=COMPONENTS, total>0, currentComponent set', () => {
+    mockUseMigrationJob.mockReturnValue(jobReturn(RUNNING_JOB))
+    useAdminMode.setState({ enabled: true })
+
+    const { container } = renderPanel()
+    const progress = container.querySelector('[data-testid="migration-progress"]') as HTMLElement
+    expect(progress.textContent).toMatch(/Migrating comp-7/)
+    expect(progress.getAttribute('aria-busy')).toBe('false')
+  })
+
+  it('falls back to "Running…" + indeterminate when phase field is OMITTED (older CRS)', () => {
+    // Older CRS that hasn't deployed the phase field at all. JSON.parse yields
+    // `undefined` here, NOT `null`. The fallback must accept both — keeping
+    // the SPA backward-compatible was the whole point of merging the phase
+    // indicator before the CRS PR.
+    const { phase: _omit, ...withoutPhase } = RUNNING_JOB
+    void _omit
+    mockUseMigrationJob.mockReturnValue(
+      jobReturn({
+        ...withoutPhase,
+        total: 0,
+        migrated: 0,
+        failed: 0,
+        skipped: 0,
+        currentComponent: null,
+      } as MigrationJobResponse),
+    )
+    useAdminMode.setState({ enabled: true })
+
+    const { container } = renderPanel()
+    const progress = container.querySelector('[data-testid="migration-progress"]') as HTMLElement
+    expect(progress.textContent).toMatch(/Running…/)
+    expect(progress.getAttribute('aria-busy')).toBe('true')
+  })
+
+  it('falls back to "Running…" + indeterminate when phase is explicitly null', () => {
+    // Distinct from the omitted case — covers a backend that decides to send
+    // `phase: null` rather than omit the field. Same fallback either way; the
+    // separate test is a behaviour pin so a future change accidentally
+    // distinguishing the two would surface here.
+    mockUseMigrationJob.mockReturnValue(
+      jobReturn({
+        ...RUNNING_JOB,
+        phase: null,
+        total: 0,
+        migrated: 0,
+        failed: 0,
+        skipped: 0,
+        currentComponent: null,
+      }),
+    )
+    useAdminMode.setState({ enabled: true })
+
+    const { container } = renderPanel()
+    const progress = container.querySelector('[data-testid="migration-progress"]') as HTMLElement
+    expect(progress.textContent).toMatch(/Running…/)
+    expect(progress.getAttribute('aria-busy')).toBe('true')
   })
 })
