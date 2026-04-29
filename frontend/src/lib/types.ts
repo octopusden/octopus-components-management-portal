@@ -141,3 +141,13 @@ export interface FieldOverride {
   createdAt: string | null
   updatedAt: string | null
 }
+
+export interface PortalInfo {
+  name: string
+  version: string
+}
+
+export interface CrsInfo {
+  name: string
+  version: string
+}
