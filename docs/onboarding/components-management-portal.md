@@ -15,4 +15,4 @@
 | 5 | TeamCity CI/CD | ⏭️ skipped | Already configured in .teamcity/settings.kts (id70DeployToOkdProdManual) |
 | 6 | First deploy & verify | ✅ | Pod running, Spring Boot started OK |
 | 7 | API Gateway route | ⏭️ skipped | Not needed — using custom domain |
-| 8 | Custom domain | ✅ | Ingress `f1-components-management-portal-test` (`secretName: openwaygroup-wildcard`); auto-rotates with the wildcard Secret |
+| 8 | Custom domain | ✅ | Ingress `f1-components-management-portal-test` referencing the shared wildcard TLS Secret; auto-rotates with the Secret |
