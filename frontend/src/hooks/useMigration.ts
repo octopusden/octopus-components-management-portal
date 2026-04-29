@@ -2,10 +2,19 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import type { FullMigrationResult, MigrationStatus } from '../lib/types'
 
-export function useMigrationStatus() {
+interface MigrationStatusOptions {
+  // Pass a positive number (ms) to enable react-query polling. Use sparingly:
+  // every armed consumer adds load to /admin/migration-status. The intended
+  // caller is MigrationPanel during an in-flight run, so the operator sees
+  // git/db counters updating live as ImportService chews through components.
+  refetchInterval?: number | false
+}
+
+export function useMigrationStatus(options: MigrationStatusOptions = {}) {
   return useQuery<MigrationStatus>({
     queryKey: ['migration', 'status'],
     queryFn: () => api.get<MigrationStatus>('/admin/migration-status'),
+    refetchInterval: options.refetchInterval ?? false,
   })
 }
 
