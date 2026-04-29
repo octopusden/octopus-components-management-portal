@@ -2,7 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAdminMode } from '@/lib/adminModeStore'
-import { useMigrationJob, useMigrationStatus, useRunMigration } from '@/hooks/useMigration'
+import {
+  useHistoryMigrationJob,
+  useMigrationJob,
+  useMigrationStatus,
+  useRunMigration,
+} from '@/hooks/useMigration'
 import { toast } from '@/hooks/use-toast'
 import { ApiError } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -15,15 +20,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import type { JobState } from '@/lib/types'
-
-function StatCard({ label, value }: { label: string; value: number | string }) {
-  return (
-    <div className="rounded-md border bg-card px-4 py-3">
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="text-2xl font-semibold tabular-nums">{value}</div>
-    </div>
-  )
-}
+import { StatCard } from './StatCard'
 
 function formatStartError(error: unknown): string {
   if (error instanceof ApiError) {
@@ -98,6 +95,14 @@ export function MigrationPanel() {
   const queryClient = useQueryClient()
   const [confirmOpen, setConfirmOpen] = useState(false)
 
+  // Cross-disable against the history-migration card. The backend's
+  // MigrationLifecycleGate would 409 a cross-kind start anyway, but the SPA
+  // also disables the button so the user never sees that error path. React
+  // Query dedupes the GET, so calling the hook here doesn't cost an extra
+  // request — it's reading the same cache entry the history panel uses.
+  const historyJob = useHistoryMigrationJob()
+  const historyRunning = historyJob.data?.state === 'RUNNING'
+
   const isFailed = jobData?.state === 'FAILED'
   const isCompleted = jobData?.state === 'COMPLETED'
   const result = jobData?.result ?? null
@@ -131,7 +136,7 @@ export function MigrationPanel() {
     await startMigration.mutateAsync().catch(() => undefined)
   }
 
-  const buttonDisabled = !adminMode || isRunning || startMigration.isPending
+  const buttonDisabled = !adminMode || isRunning || startMigration.isPending || historyRunning
 
   return (
     <div className="space-y-4">
@@ -154,6 +159,11 @@ export function MigrationPanel() {
         {!adminMode && (
           <span className="text-xs text-muted-foreground">
             Enable Admin mode in the footer to run migration.
+          </span>
+        )}
+        {adminMode && historyRunning && !isRunning && (
+          <span className="text-xs text-muted-foreground">
+            History migration is running — wait for it to finish.
           </span>
         )}
       </div>

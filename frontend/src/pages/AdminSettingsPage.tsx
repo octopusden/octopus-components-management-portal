@@ -2,6 +2,7 @@ import { Layout } from '../components/Layout'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { FieldConfigEditor } from '../components/admin/FieldConfigEditor'
 import { ComponentDefaultsForm } from '../components/admin/ComponentDefaultsForm'
+import { MigrationHistoryPanel } from '../components/admin/MigrationHistoryPanel'
 import { MigrationPanel } from '../components/admin/MigrationPanel'
 
 export function AdminSettingsPage() {
@@ -44,14 +45,28 @@ export function AdminSettingsPage() {
           </TabsContent>
 
           <TabsContent value="migration" className="mt-4">
-            <div className="rounded-lg border p-6 space-y-2">
-              <h2 className="text-lg font-semibold">Migration</h2>
-              <p className="text-sm text-muted-foreground">
-                Migrate Groovy DSL components into the database. Defaults are rewritten in
-                the same step. Enable Admin mode in the footer to arm the Run button.
-              </p>
-              <div className="pt-2">
-                <MigrationPanel />
+            <div className="rounded-lg border p-6 space-y-6">
+              <div className="space-y-2">
+                <h2 className="text-lg font-semibold">Components</h2>
+                <p className="text-sm text-muted-foreground">
+                  Migrate Groovy DSL components into the database. Defaults are rewritten in
+                  the same step. Enable Admin mode in the footer to arm the Run button.
+                </p>
+                <div className="pt-2">
+                  <MigrationPanel />
+                </div>
+              </div>
+
+              <div className="border-t pt-6 space-y-2">
+                <h2 className="text-lg font-semibold">History</h2>
+                <p className="text-sm text-muted-foreground">
+                  Backfill component-history into audit_log from the git tag chain. Runs
+                  separately from the components migration; only one of the two can run at a
+                  time.
+                </p>
+                <div className="pt-2">
+                  <MigrationHistoryPanel />
+                </div>
               </div>
             </div>
           </TabsContent>

@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '../lib/api'
-import type { MigrationJobResponse, MigrationStatus } from '../lib/types'
+import type { HistoryMigrationJobResponse, MigrationJobResponse, MigrationStatus } from '../lib/types'
 
 const JOB_KEY = ['migration', 'job'] as const
+const HISTORY_JOB_KEY = ['migration-history', 'job'] as const
 const JOB_POLL_INTERVAL_MS = 1_000
 
 interface MigrationStatusOptions {
@@ -94,5 +95,111 @@ export function useMigrationJob() {
     },
     refetchInterval: (query) =>
       query.state.data?.state === 'RUNNING' ? JOB_POLL_INTERVAL_MS : false,
+  })
+}
+
+/**
+ * Mirror of [useMigrationJob] for the history-migration card. 404 → null
+ * (idle), polling every second while RUNNING.
+ *
+ * Note: unlike the components flow, the backend's `current()` falls back to a
+ * state synthesized from the persisted `git_history_import_state` row when no
+ * in-memory job exists (post-restart). So this hook may return COMPLETED or
+ * FAILED state shortly after a fresh page load even though no job is "active"
+ * in the strict sense — that's expected, and the panel uses `errorMessage`
+ * markers to decide between Retry and Force-reset paths.
+ */
+export function useHistoryMigrationJob() {
+  return useQuery<HistoryMigrationJobResponse | null>({
+    queryKey: HISTORY_JOB_KEY,
+    queryFn: async () => {
+      try {
+        return await api.get<HistoryMigrationJobResponse>('/admin/migrate-history/job')
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) return null
+        throw err
+      }
+    },
+    refetchInterval: (query) =>
+      query.state.data?.state === 'RUNNING' ? JOB_POLL_INTERVAL_MS : false,
+  })
+}
+
+/**
+ * Start (or attach to) the async history migration job.
+ *
+ * `reset=true` is required to re-run on top of a terminal
+ * `git_history_import_state` row — the backend's `resetIfNotInProgress()`
+ * gate refuses to stomp on IN_PROGRESS, but happily clears COMPLETED or
+ * FAILED rows when reset is set. The MigrationHistoryPanel chooses the
+ * value based on the current job state (idle → false, FAILED/COMPLETED →
+ * true), and the user's confirm-dialog spells out the destructive scope.
+ *
+ * 409 handling matches [useRunMigration]: a same-kind 409 (history POST
+ * while history is already RUNNING) carries the existing job in the body
+ * and we resolve as success so the panel attaches. A cross-kind 409
+ * (history POST while components is RUNNING) carries a `code` field
+ * instead — that one is surfaced as a mutation error so the destructive
+ * block in the panel renders the right message.
+ */
+export function useRunHistoryMigration() {
+  const queryClient = useQueryClient()
+  return useMutation<HistoryMigrationJobResponse, Error, { reset: boolean }>({
+    mutationFn: async ({ reset }) => {
+      try {
+        return await api.post<HistoryMigrationJobResponse>(`/admin/migrate-history?reset=${reset}`)
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 409) {
+          // The body carries either a same-kind job-response (`{id, state, ...}`)
+          // OR a cross-kind conflict envelope (`{code, message, activeKind, ...}`).
+          // Same-kind: resolve as success — the SPA attaches. Cross-kind: rethrow
+          // so the panel's destructive block renders the message.
+          const parsed = (() => {
+            try {
+              return JSON.parse(err.message) as Record<string, unknown>
+            } catch {
+              return null
+            }
+          })()
+          if (parsed && 'code' in parsed) throw err
+          if (parsed && 'state' in parsed) return parsed as unknown as HistoryMigrationJobResponse
+          throw err
+        }
+        throw err
+      }
+    },
+    onSuccess: (job) => {
+      queryClient.setQueryData(HISTORY_JOB_KEY, job)
+      // Same fast-path as useRunMigration: SyncTaskExecutor in tests can return
+      // COMPLETED directly, the production thread can win the race on small
+      // imports — invalidate downstream caches so they pick up the new state
+      // without waiting on the next poll tick.
+      if (job.state === 'COMPLETED' && job.result) {
+        queryClient.invalidateQueries({ queryKey: HISTORY_JOB_KEY })
+      }
+    },
+  })
+}
+
+/**
+ * POST /admin/migrate-history/force-reset — destructive: wipes the import
+ * claim row AND all audit_log rows with source='git-history'. The backend
+ * refuses with 409 if a history job is RUNNING in the current pod
+ * (defense-in-depth against curl-races); the panel hides the button in that
+ * state too, but the API guard remains.
+ *
+ * On success (204) we explicitly invalidate the history-job query so the
+ * UI re-fetches: GET /job will return 404 (no in-memory state, no DB row)
+ * and the panel re-renders idle with the normal Run button.
+ */
+export function useForceResetHistory() {
+  const queryClient = useQueryClient()
+  return useMutation<void, Error, void>({
+    mutationFn: async () => {
+      await api.post<void>('/admin/migrate-history/force-reset')
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: HISTORY_JOB_KEY })
+    },
   })
 }
