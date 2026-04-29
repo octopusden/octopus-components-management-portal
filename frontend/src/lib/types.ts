@@ -151,3 +151,30 @@ export interface CrsInfo {
   name: string
   version: string
 }
+
+export interface MigrationStatus {
+  git: number
+  db: number
+  total: number
+}
+
+export interface MigrationResult {
+  componentName: string
+  success: boolean
+  dryRun: boolean
+  message: string
+  discrepancies: string[]
+}
+
+export interface BatchMigrationResult {
+  total: number
+  migrated: number
+  failed: number
+  skipped: number
+  results: MigrationResult[]
+}
+
+export interface FullMigrationResult {
+  defaults: Record<string, unknown>
+  components: BatchMigrationResult
+}
