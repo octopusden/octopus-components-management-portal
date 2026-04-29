@@ -19,7 +19,7 @@ Triggers a full Git → DB migration of the legacy components-registry DSL (Groo
 |---|---|---|---|
 | `POST` | `/rest/api/4/admin/migrate` | `202 Accepted` (newly-started) **or** `409 Conflict` (existing `RUNNING` job — re-run guard) | `MigrationJobResponse` |
 | `GET` | `/rest/api/4/admin/migrate/job` | `200 OK` (running / completed / failed) **or** `404 Not Found` (no job since pod boot) | `MigrationJobResponse \| null` |
-| `GET` | `/rest/api/4/admin/migration-status` | `200 OK` | `MigrationStatus { dbCount, gitCount, total }` |
+| `GET` | `/rest/api/4/admin/migration-status` | `200 OK` | `MigrationStatus { git, db, total }` |
 
 Wire shape (`MigrationJobResponse`, see CRS `dto/v4/MigrationJobResponse.kt`):
 
@@ -70,7 +70,7 @@ GET /admin/migrate/job          POST /admin/migrate
 
 UX details to preserve:
 
-- **Fast path on 202:** if CRS hands back `state === 'COMPLETED'` directly (executor finished before the response was built — backend tests force this via `SyncTaskExecutor`, but a real production thread can win the race on small migrations), `useRunMigration.onSuccess` invalidates the `migration-status` and `component-defaults` caches. The polling listener never sees the RUNNING → COMPLETED transition in that case, so this short-circuit is necessary.
+- **Fast path on 202:** if CRS hands back `state === 'COMPLETED'` directly (executor finished before the response was built — backend tests force this via `SyncTaskExecutor`, but a real production thread can win the race on small migrations), `useRunMigration.onSuccess` invalidates the `['migration', 'status']` and `['config', 'component-defaults']` query caches. The polling listener never sees the RUNNING → COMPLETED transition in that case, so this short-circuit is necessary.
 - **Pod restart during RUNNING:** the next `GET /admin/migrate/job` returns 404 (state was in-memory). The SPA falls back to IDLE. The user must re-run. Tracked in CRS [MIG-028](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/db-migration/requirements-migration.md).
 - **Re-run after COMPLETED / FAILED:** allowed. CRS replaces the slot; the previous result is no longer reachable via `GET /admin/migrate/job`. The SPA never rendered a "history" of jobs, only the current one.
 

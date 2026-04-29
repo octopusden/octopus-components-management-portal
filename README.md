@@ -42,7 +42,9 @@ The recommended dev loop is Vite HMR with a proxy to a local CRS backend. No Gra
 # 3) start the SPA dev server with proxy to the gateway
 cd frontend
 npm install
-npm run dev   # → http://localhost:5173, proxies /rest/**, /auth/**, /portal/** to :8090
+npm run dev   # → http://localhost:5173, proxies /rest/**, /auth/**, /login, /oauth2, /logout to :8090
+              # NB: /portal is NOT in the Vite proxy today; the footer's portal-side
+              # build label only renders against the bundled JAR (./gradlew bootRun).
 ```
 
 For a one-shot full build that mirrors CI:

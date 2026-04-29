@@ -2,7 +2,7 @@
 
 ## Status
 
-Open. Mirror of CRS `TD-004` ("OpenAPI v4 spec generation + share with Portal"). Either side can drive — the practical work needs both.
+Open. Mirror of CRS `TD-003` ("OpenAPI v4 spec generation + share with Portal"). Either side can drive — the practical work needs both.
 
 ## Context
 
@@ -59,5 +59,5 @@ This is the "atomic API+UI change" cost we accepted when extracting the Portal i
 ## References
 
 - CRS [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/db-migration/adr/012-portal-architecture.md) — Portal architecture; OpenAPI generation listed as a mitigation for separate-repo drift.
-- CRS `TD-004` (to be created in the docs/v3-actualization branch) — the matching tech-debt entry on the CRS side.
+- CRS `TD-003` (`docs/db-migration/tech-debt/003-openapi-v4-spec-generation.md` in `octopus-components-registry-service`) — the matching tech-debt entry on the CRS side.
 - Hand-written types today: [`frontend/src/lib/types.ts`](../../frontend/src/lib/types.ts).
