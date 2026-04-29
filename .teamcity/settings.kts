@@ -116,6 +116,12 @@ object id15E2eAuto : BuildType({
         // task itself sets outputs.upToDateWhen { false } so nothing
         // legitimately rots from skipping clean.
         param("GRADLE_TASK", "e2eTest -info")
+        // Inherit the build number from Compile&UT — same propagation
+        // pattern id20DeployToOkdQaManual uses. Without this, TC shows
+        // an autoincrementing 0.0.1-N counter that doesn't line up with
+        // the upstream build, making it harder to correlate an e2e fail
+        // with the artefact it tested.
+        param("BUILD_NUMBER", "${id10CompileUtAuto.depParamRefs.buildNumber}")
     }
 
     features {
