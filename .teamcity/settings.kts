@@ -138,9 +138,11 @@ object id15E2eAuto : BuildType({
 
     requirements {
         doesNotContain("teamcity.agent.jvm.os.name", "Windows", "RQ_E2E_OS")
-        // Restrict to agents that have Docker available. Adjust to match
-        // the actual capability tag on the runner pool.
-        exists("dockerVersion", "RQ_E2E_DOCKER")
+        // Docker availability is not gated by an explicit capability —
+        // agents in the default pool are universal and the e2eTest task
+        // will surface a clear error early if no docker daemon is
+        // reachable. Re-introduce a capability filter only if the org
+        // adds non-Docker agents to the pool.
     }
 })
 
