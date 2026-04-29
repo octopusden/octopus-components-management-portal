@@ -20,7 +20,7 @@ The Components Registry domain is split across two repositories. This file is th
 | **Portal-side ADR summary** | [`docs/adr/001-spring-cloud-gateway-bff.md`](docs/adr/001-spring-cloud-gateway-bff.md) | Short Portal-side summary linking to canonical CRS ADR-012. Captures only what's specific to this repo. |
 | **Frontend feature docs** | [`docs/features/`](docs/features/) | UX flows for admin-migration, admin-mode, app-footer. |
 | **OKD onboarding checklist** | [`docs/onboarding/components-management-portal.md`](docs/onboarding/components-management-portal.md) | Vault, Spring Cloud Config, OKD secrets, TeamCity wiring. |
-| **Frontend tech-debt** | [`docs/tech-debt/`](docs/tech-debt/) (`TD-NNN`) | Playwright Keycloak fixture, OpenAPI types, persisted session store, TLS Ingress migration. |
+| **Portal-side tech-debt (frontend + ops)** | [`docs/tech-debt/`](docs/tech-debt/) (`TD-NNN`) | Playwright Keycloak fixture (frontend), OpenAPI types (frontend), persisted session store (BFF), TLS Ingress migration (ops/infra). |
 | **Agent / build commands** | [`AGENTS.md`](AGENTS.md) | Build, test, quality gates. Read before touching code. |
 
 ### CRS repo owns
@@ -34,7 +34,7 @@ Read these in [`octopus-components-registry-service`](https://github.com/octopus
 | **Non-functional spec** | `docs/db-migration/non-functional-spec.md` | Performance budgets, async-job SLAs, observability. |
 | **Technical design** | `docs/db-migration/technical-design.md` | Architecture, DB schema, JPA entities, API contracts, security. |
 | **Architecture decisions** | `docs/db-migration/adr/` | All ADRs — backend, data, security. Includes `ADR-012` (canonical decision for the Portal-CRS boundary). |
-| **Numbered requirements** | `docs/db-migration/requirements-{common,migration}.md` (`SYS-NNN`, `MIG-NNN`) | Acceptance criteria + test pointers. |
+| **Numbered requirements** | `docs/db-migration/requirements-{common,migration,resolver}.md` (`SYS-NNN`, `MIG-NNN`, `RES-NNN`) | Acceptance criteria + test pointers. RES-NNN pin parity between the DB resolver and the legacy Git resolver — relevant when Portal features depend on resolver behaviour. |
 | **Implementation status** | `docs/db-migration/implementation-progress.md` | Backend phases + what shipped when. |
 | **Backend tech-debt** | `docs/db-migration/tech-debt/` | Flyway rollout, OpenAPI spec generation. |
 
@@ -60,7 +60,7 @@ When you write a new doc, pick **one** repo as the owner using these rules:
 2. **Backend behavior, data, contracts** → CRS.
 3. **Cross-cutting concern** → write in the repo that has more of the implementation; link from the other repo.
 4. **Never duplicate content.** If you find yourself copy-pasting between repos, replace one side with a link.
-5. **Cross-repo links should target a stable ref** (a release tag or a merge commit SHA), not `blob/<branch>/...`. Branches move; permalinks don't rot.
+5. **Cross-repo links to code should target a stable ref** (a release tag or a merge commit SHA), not `blob/<branch>/...` — branches move and permalinks don't rot. Cross-repo links between **living indexes** (this `DOCS.md`, `AGENTS.md`, top-level READMEs) may use the active branch (`v3` for CRS, `develop` for Portal) — they're meant to track the head, not freeze with it.
 
 ## How to update this map
 
