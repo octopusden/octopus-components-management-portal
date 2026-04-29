@@ -7,7 +7,7 @@ import React from 'react'
 import { AdminSettingsPage } from './AdminSettingsPage'
 import type { User } from '@/lib/auth'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
-import { useMigrationStatus, useRunMigration } from '@/hooks/useMigration'
+import { useMigrationJob, useMigrationStatus, useRunMigration } from '@/hooks/useMigration'
 import { useFieldConfig, useComponentDefaults } from '@/hooks/useAdminConfig'
 
 // AdminSettingsPage is the only mount point for the Migration tab; the plan
@@ -22,6 +22,7 @@ import { useFieldConfig, useComponentDefaults } from '@/hooks/useAdminConfig'
 vi.mock('@/hooks/useCurrentUser', () => ({ useCurrentUser: vi.fn() }))
 vi.mock('@/hooks/useMigration', () => ({
   useMigrationStatus: vi.fn(),
+  useMigrationJob: vi.fn(),
   useRunMigration: vi.fn(),
 }))
 // Default-tab editors (FieldConfigEditor / ComponentDefaultsForm) read from
@@ -53,6 +54,7 @@ vi.mock('@/hooks/useAdminConfig', () => ({
 
 const mockUseCurrentUser = vi.mocked(useCurrentUser)
 const mockUseMigrationStatus = vi.mocked(useMigrationStatus)
+const mockUseMigrationJob = vi.mocked(useMigrationJob)
 const mockUseRunMigration = vi.mocked(useRunMigration)
 const mockUseFieldConfig = vi.mocked(useFieldConfig)
 const mockUseComponentDefaults = vi.mocked(useComponentDefaults)
@@ -98,6 +100,14 @@ beforeEach(() => {
     error: null,
     refetch: vi.fn(),
   } as unknown as ReturnType<typeof useMigrationStatus>)
+  mockUseMigrationJob.mockReturnValue({
+    data: null,
+    isLoading: false,
+    isError: false,
+    isSuccess: true,
+    error: null,
+    refetch: vi.fn(),
+  } as unknown as ReturnType<typeof useMigrationJob>)
   mockUseRunMigration.mockReturnValue({
     mutate: vi.fn(),
     mutateAsync: vi.fn(),

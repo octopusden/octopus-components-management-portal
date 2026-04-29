@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAdminMode } from '@/lib/adminModeStore'
-import { useMigrationStatus, useRunMigration } from '@/hooks/useMigration'
+import { useMigrationJob, useMigrationStatus, useRunMigration } from '@/hooks/useMigration'
 import { toast } from '@/hooks/use-toast'
 import { ApiError } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -13,24 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-
-// Migrations against ~1k components routinely outlive the portal gateway's
-// HTTP read timeout, so the synchronous POST returns 504 even though
-// ImportService keeps working server-side. Treating that as a hard failure
-// hides the truth — that the run is still in flight — and offers retry as
-// the only escape, which would just kick a second migration on top of the
-// first. We branch on the status code instead and surface a neutral
-// "still running" banner whose authoritative counters come from the polling
-// status endpoint.
-const GATEWAY_TIMEOUT_STATUSES = new Set([502, 503, 504])
-
-// While the mutation is pending, MigrationPanel polls /admin/migration-status
-// every 3s so the operator sees DB counter increment as components are
-// migrated. Three seconds is the slowest interval that still feels "live"
-// for a multi-minute run; ImportService writes one row per component and
-// large runs land 10–100 rows per 3s window in practice, so each tick
-// surfaces meaningful change.
-const STATUS_POLL_INTERVAL_MS = 3_000
+import type { JobState } from '@/lib/types'
 
 function StatCard({ label, value }: { label: string; value: number | string }) {
   return (
@@ -41,14 +25,21 @@ function StatCard({ label, value }: { label: string; value: number | string }) {
   )
 }
 
-function formatErrorMessage(error: unknown): string {
+function formatStartError(error: unknown): string {
   if (error instanceof ApiError) {
-    // Gateway pages reach us as text/html; chopping out the marker text
-    // keeps the destructive block readable and short. The status itself is
-    // the load-bearing fact for the operator.
+    // Defense-in-depth: an upstream proxy / gateway / WAF can answer the
+    // POST with a text/html error page (504, 502, 503, ...) and the api
+    // wrapper stuffs that whole document into ApiError.message. Rendering
+    // verbatim leaks "<html><body><h1>504 Gateway Time-out</h1>..." into
+    // the destructive block — the operator sees markup and panics.
+    // Apache/nginx default error pages embed the status in the <h1>
+    // (`<h1>504 Gateway Time-out</h1>`); use that as the readable label
+    // when present, otherwise fall back to "<status> <name>".
     if (/^\s*<(?:!doctype|html)/i.test(error.message)) {
       const h1 = error.message.match(/<h1[^>]*>([^<]+)<\/h1>/i)?.[1]?.trim()
-      return h1 ? `${error.status} ${h1}` : `${error.status} ${error.name}`
+      if (!h1) return `${error.status} ${error.name}`
+      // Don't double-prefix when the h1 already starts with the status code.
+      return new RegExp(`^${error.status}\\b`).test(h1) ? h1 : `${error.status} ${h1}`
     }
     return `${error.status} ${error.message}`
   }
@@ -56,42 +47,60 @@ function formatErrorMessage(error: unknown): string {
   return String(error)
 }
 
-function isGatewayTimeoutError(error: unknown): error is ApiError {
-  return error instanceof ApiError && GATEWAY_TIMEOUT_STATUSES.has(error.status)
-}
+// Status counters poll every 3s while RUNNING — slower than the per-job
+// poll (1s) because the DB row count moves at commit pace, not at component
+// pace; 3s is the slowest cadence that still feels "live" for a multi-minute
+// run while keeping load on /admin/migration-status modest.
+const STATUS_POLL_INTERVAL_MS = 3_000
 
 export function MigrationPanel() {
-  const mutation = useRunMigration()
-  // Polling is armed only while the mutation is pending OR the last attempt
-  // ended in a gateway-class error (the run is presumably still in flight on
-  // CRS — keep refreshing counters so the operator can watch it finish).
-  const stillRunningOnBackend = mutation.isPending || isGatewayTimeoutError(mutation.error)
+  const job = useMigrationJob()
+  const jobData = job.data ?? null
+  const isRunning = jobData?.state === 'RUNNING'
+  // Poll status only while the job is RUNNING; otherwise the top tiles are
+  // a cheap one-shot read on mount + invalidations on terminal transitions.
   const status = useMigrationStatus({
-    refetchInterval: stillRunningOnBackend ? STATUS_POLL_INTERVAL_MS : false,
+    refetchInterval: isRunning ? STATUS_POLL_INTERVAL_MS : false,
   })
+  const startMigration = useRunMigration()
   const adminMode = useAdminMode((s) => s.enabled)
+  const queryClient = useQueryClient()
   const [confirmOpen, setConfirmOpen] = useState(false)
 
-  const result = mutation.data
+  const isFailed = jobData?.state === 'FAILED'
+  const isCompleted = jobData?.state === 'COMPLETED'
+  const result = jobData?.result ?? null
   const failures = result?.components.results.filter((r) => !r.success) ?? []
-  const gatewayTimedOut = isGatewayTimeoutError(mutation.error)
+  const processed = jobData ? jobData.migrated + jobData.failed + jobData.skipped : 0
+  const progressPct =
+    jobData && jobData.total > 0 ? Math.min(100, Math.round((processed * 100) / jobData.total)) : 0
 
-  async function runMigration() {
-    setConfirmOpen(false)
-    try {
-      const res = await mutation.mutateAsync()
-      const c = res.components
+  // Detect RUNNING → COMPLETED transition: toast + invalidate downstream queries.
+  // status counters change after migration; component-defaults were rewritten by
+  // ImportService.migrate() so any consumer (other admin tabs) needs a fresh read.
+  const previousState = useRef<JobState | null>(null)
+  useEffect(() => {
+    const prev = previousState.current
+    const curr = jobData?.state ?? null
+    previousState.current = curr
+    if (prev === 'RUNNING' && curr === 'COMPLETED' && result) {
+      const c = result.components
       toast({
         title: 'Migration completed',
         description: `${c.migrated}/${c.total} migrated, ${c.failed} failed`,
       })
-    } catch {
-      // Error state surfaces in the mutation hook → renders the destructive
-      // block (or, for gateway-class errors, the neutral "still running"
-      // banner) below. No toast — the inline notice is more visible and
-      // sticks until the operator acts.
+      queryClient.invalidateQueries({ queryKey: ['migration', 'status'] })
+      queryClient.invalidateQueries({ queryKey: ['config', 'component-defaults'] })
     }
+  }, [jobData?.state, result, queryClient])
+
+  async function runMigration() {
+    setConfirmOpen(false)
+    // Errors surface through mutation.error → destructive block below.
+    await startMigration.mutateAsync().catch(() => undefined)
   }
+
+  const buttonDisabled = !adminMode || isRunning || startMigration.isPending
 
   return (
     <div className="space-y-4">
@@ -105,11 +114,11 @@ export function MigrationPanel() {
         <Button
           type="button"
           onClick={() => setConfirmOpen(true)}
-          disabled={!adminMode || mutation.isPending}
-          aria-busy={mutation.isPending}
+          disabled={buttonDisabled}
+          aria-busy={isRunning || startMigration.isPending}
         >
-          {mutation.isPending && <Loader2 className="animate-spin" aria-hidden="true" />}
-          {mutation.isPending ? 'Running…' : 'Run migration'}
+          {(isRunning || startMigration.isPending) && <Loader2 className="animate-spin" aria-hidden="true" />}
+          {isRunning ? 'Running…' : startMigration.isPending ? 'Starting…' : 'Run migration'}
         </Button>
         {!adminMode && (
           <span className="text-xs text-muted-foreground">
@@ -118,29 +127,45 @@ export function MigrationPanel() {
         )}
       </div>
 
-      {gatewayTimedOut && (
+      {isRunning && jobData && (
         <div
-          data-testid="migration-still-running"
-          className="rounded-md border border-amber-300/60 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-300/30 dark:bg-amber-950/40 dark:text-amber-100"
+          data-testid="migration-progress"
+          className="rounded-md border bg-card p-3 space-y-2 text-sm"
         >
-          <div className="font-medium">Migration still running on the server</div>
-          <div className="mt-1">
-            The gateway timed out waiting for a response ({formatErrorMessage(mutation.error)}),
-            but the migration job is still in flight on CRS. Counters above refresh every few
-            seconds — they will keep advancing until the run finishes. Avoid clicking
-            <span className="font-semibold"> Run migration</span> a second time, that would
-            start a duplicate job.
+          <div className="flex items-center justify-between font-medium">
+            <span>Migrating…</span>
+            <span className="tabular-nums">
+              {processed} / {jobData.total}
+            </span>
           </div>
+          <div className="h-2 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+            <div
+              className="h-full bg-primary transition-all"
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+          {jobData.currentComponent && (
+            <div className="text-xs text-muted-foreground">
+              Current:{' '}
+              <span className="font-mono text-foreground">{jobData.currentComponent}</span>
+            </div>
+          )}
         </div>
       )}
 
-      {mutation.isError && !gatewayTimedOut && (
+      {isFailed && jobData?.errorMessage && (
         <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-          {formatErrorMessage(mutation.error)}
+          Migration failed: {jobData.errorMessage}
         </div>
       )}
 
-      {result && (
+      {startMigration.isError && (
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+          {formatStartError(startMigration.error)}
+        </div>
+      )}
+
+      {isCompleted && result && (
         <div className="space-y-3">
           <div className="grid grid-cols-4 gap-3">
             <StatCard label="Total" value={result.components.total} />
@@ -172,8 +197,8 @@ export function MigrationPanel() {
           <DialogHeader>
             <DialogTitle>Run full migration?</DialogTitle>
             <DialogDescription>
-              This rewrites component defaults and migrates every git-sourced component
-              to the database. The operation can take several minutes.
+              This rewrites component defaults and migrates every git-sourced component to the
+              database. The operation can take several minutes; progress will appear in this tab.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
