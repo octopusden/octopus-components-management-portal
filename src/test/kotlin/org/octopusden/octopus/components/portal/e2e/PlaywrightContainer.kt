@@ -62,8 +62,15 @@ object PlaywrightContainer {
         // would shadow nothing and the artefacts would be lost on exit.
         val testResultsDir = frontendDir.resolve("test-results")
         val playwrightReportDir = frontendDir.resolve("playwright-report")
+        // playwright/.auth/<role>.json is written by globalSetup at
+        // /work/playwright/.auth/<role>.json (cwd-relative inside the
+        // container). Bind-mounting frontend/playwright back to the host
+        // makes those storageState files survive container exit so a
+        // debugging engineer can inspect what was captured.
+        val playwrightStateDir = frontendDir.resolve("playwright")
         java.nio.file.Files.createDirectories(testResultsDir)
         java.nio.file.Files.createDirectories(playwrightReportDir)
+        java.nio.file.Files.createDirectories(playwrightStateDir.resolve(".auth"))
 
         return GenericContainer(image)
             .withNetwork(network)
@@ -88,6 +95,11 @@ object PlaywrightContainer {
             .withFileSystemBind(
                 playwrightReportDir.toAbsolutePath().toString(),
                 "/work/playwright-report",
+                org.testcontainers.containers.BindMode.READ_WRITE,
+            )
+            .withFileSystemBind(
+                playwrightStateDir.toAbsolutePath().toString(),
+                "/work/playwright",
                 org.testcontainers.containers.BindMode.READ_WRITE,
             )
             .withCopyFileToContainer(

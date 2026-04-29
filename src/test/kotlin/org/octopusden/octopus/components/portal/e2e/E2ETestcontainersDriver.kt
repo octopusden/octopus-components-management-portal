@@ -107,6 +107,28 @@ open class E2ETestcontainersDriver {
         private fun crsFixtureDir(): Path = fixturePath("Aggregator.groovy").parent
 
         /**
+         * Image versions come from gradle.properties via system properties
+         * (forwarded by the e2eTest task). A bump there is the single
+         * source of truth — drift between the property and the driver
+         * is the kind of thing reviewers shouldn't have to spot.
+         */
+        private fun postgresImageName(): DockerImageName {
+            val version = firstNonBlank(
+                System.getProperty("postgres.version"),
+                System.getenv("POSTGRES_VERSION"),
+            ) ?: error("postgres.version not set — pass -Ppostgres.version=... or env POSTGRES_VERSION")
+            return DockerImageName.parse("postgres:$version")
+        }
+
+        private fun keycloakImageName(): DockerImageName {
+            val version = firstNonBlank(
+                System.getProperty("keycloak.version"),
+                System.getenv("KEYCLOAK_VERSION"),
+            ) ?: error("keycloak.version not set — pass -Pkeycloak.version=... or env KEYCLOAK_VERSION")
+            return DockerImageName.parse("quay.io/keycloak/keycloak:$version")
+        }
+
+        /**
          * Realm JSON lives outside src/test/resources. Resolve relative to
          * the project dir, with `-De2e.realmJson=...` override hook.
          */
@@ -225,9 +247,22 @@ open class E2ETestcontainersDriver {
         @JvmStatic
         @BeforeAll
         fun startStack() {
+            // JUnit5 skips @AfterAll when @BeforeAll fails part-way (and
+            // Ryuk is disabled — see e2eTest task). Without explicit
+            // cleanup, a partial start leaks containers + the docker
+            // network onto the agent. Wrap and rethrow.
+            try {
+                doStartStack()
+            } catch (t: Throwable) {
+                runCatching { stopStack() }
+                throw t
+            }
+        }
+
+        private fun doStartStack() {
             network = Network.newNetwork()
 
-            postgres = PostgreSQLContainer(DockerImageName.parse("postgres:16"))
+            postgres = PostgreSQLContainer(postgresImageName())
                 .withDatabaseName(POSTGRES_DB)
                 .withUsername(POSTGRES_USER)
                 .withPassword(POSTGRES_PASSWORD)
@@ -236,7 +271,7 @@ open class E2ETestcontainersDriver {
                 .withLogConsumer(Slf4jLogConsumer(LoggerFactory.getLogger("crs-postgres")))
             postgres.start()
 
-            keycloak = GenericContainer(DockerImageName.parse("quay.io/keycloak/keycloak:24.0.3"))
+            keycloak = GenericContainer(keycloakImageName())
                 .withExposedPorts(KEYCLOAK_INTERNAL_PORT)
                 .withCommand("start-dev", "--import-realm")
                 .withEnv(
