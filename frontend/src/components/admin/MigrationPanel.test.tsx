@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
-import { useMigrationJob, useMigrationStatus, useRunMigration } from '@/hooks/useMigration'
+import {
+  useHistoryMigrationJob,
+  useMigrationJob,
+  useMigrationStatus,
+  useRunMigration,
+} from '@/hooks/useMigration'
 import { toast } from '@/hooks/use-toast'
 import { useAdminMode } from '@/lib/adminModeStore'
 import { ApiError } from '@/lib/api'
@@ -26,6 +31,10 @@ vi.mock('@/hooks/useMigration', () => ({
   useMigrationStatus: vi.fn(),
   useMigrationJob: vi.fn(),
   useRunMigration: vi.fn(),
+  // History-job hook is consumed by MigrationPanel for the cross-disable
+  // (don't run components while history is RUNNING). Default-mocked to
+  // null/idle so existing tests behave as before.
+  useHistoryMigrationJob: vi.fn(),
 }))
 vi.mock('@/hooks/use-toast', () => ({
   toast: vi.fn(),
@@ -34,6 +43,7 @@ vi.mock('@/hooks/use-toast', () => ({
 const mockUseMigrationStatus = vi.mocked(useMigrationStatus)
 const mockUseMigrationJob = vi.mocked(useMigrationJob)
 const mockUseRunMigration = vi.mocked(useRunMigration)
+const mockUseHistoryMigrationJob = vi.mocked(useHistoryMigrationJob)
 const mockToast = vi.mocked(toast)
 
 const STATUS: MigrationStatus = { git: 12, db: 3, total: 15 }
@@ -149,6 +159,16 @@ beforeEach(() => {
   mockUseMigrationStatus.mockReturnValue(statusReturn())
   mockUseMigrationJob.mockReturnValue(jobReturn(null))
   mockUseRunMigration.mockReturnValue(buildMutation().base)
+  // History job idle by default; cross-disable tests override with a
+  // RUNNING fixture to assert the components button gets blocked.
+  mockUseHistoryMigrationJob.mockReturnValue({
+    data: null,
+    isLoading: false,
+    isError: false,
+    isSuccess: true,
+    error: null,
+    refetch: vi.fn(),
+  } as unknown as ReturnType<typeof useHistoryMigrationJob>)
 })
 
 afterEach(() => {
@@ -345,6 +365,44 @@ describe('MigrationPanel — status polling while RUNNING', () => {
     const lastCall = mockUseMigrationStatus.mock.calls[mockUseMigrationStatus.mock.calls.length - 1]
     const opts = lastCall?.[0] as { refetchInterval?: number | false } | undefined
     expect(opts?.refetchInterval ?? false).toBeFalsy()
+  })
+})
+
+// Cross-disable: the backend's MigrationLifecycleGate would 409 a components-POST
+// while history is RUNNING, but the SPA also disables the button so the user
+// never has to see the destructive block. This is the components-side mirror of
+// the test in MigrationHistoryPanel.test.tsx.
+describe('MigrationPanel — cross-disable when history migration is RUNNING', () => {
+  it('disables Run migration when history-job is RUNNING and shows a helper hint', () => {
+    useAdminMode.setState({ enabled: true })
+    mockUseHistoryMigrationJob.mockReturnValue({
+      data: {
+        id: 'history-1',
+        state: 'RUNNING',
+        startedAt: '2026-04-29T10:00:00Z',
+        finishedAt: null,
+        totalCommits: 100,
+        processedCommits: 5,
+        auditRecords: 12,
+        skippedNoGroovy: 0,
+        skippedParseError: 0,
+        skippedUnknownNames: 0,
+        currentSha: 'abc1234',
+        targetRef: 'refs/tags/test',
+        errorMessage: null,
+        result: null,
+      },
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useHistoryMigrationJob>)
+
+    renderPanel()
+
+    expect(screen.getByRole('button', { name: /run migration/i })).toBeDisabled()
+    expect(screen.getByText(/History migration is running/i)).toBeDefined()
   })
 })
 

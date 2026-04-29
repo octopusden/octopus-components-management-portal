@@ -20,11 +20,45 @@ import { useFieldConfig, useComponentDefaults } from '@/hooks/useAdminConfig'
 //      silently renders nothing in that case).
 
 vi.mock('@/hooks/useCurrentUser', () => ({ useCurrentUser: vi.fn() }))
-vi.mock('@/hooks/useMigration', () => ({
-  useMigrationStatus: vi.fn(),
-  useMigrationJob: vi.fn(),
-  useRunMigration: vi.fn(),
-}))
+vi.mock('@/hooks/useMigration', () => {
+  // idleMutation is declared below in the test file but vi.mock hoists this
+  // factory, so the closure can't capture it directly. Inline the same
+  // shape here — duplicated, but the factory has to be self-contained.
+  const idle = {
+    mutate: () => undefined,
+    mutateAsync: () => Promise.resolve(),
+    reset: () => undefined,
+    isPending: false,
+    isSuccess: false,
+    isError: false,
+    isIdle: true,
+    data: undefined,
+    error: null,
+    status: 'idle',
+    variables: undefined,
+    submittedAt: 0,
+    failureCount: 0,
+    failureReason: null,
+    isPaused: false,
+  }
+  return {
+    useMigrationStatus: vi.fn(),
+    useMigrationJob: vi.fn(),
+    useRunMigration: vi.fn(),
+    // Mounted by MigrationPanel (cross-disable) and MigrationHistoryPanel.
+    // Defaulted to idle so the tab-mount tests don't have to think about it.
+    useHistoryMigrationJob: vi.fn(() => ({
+      data: null,
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      error: null,
+      refetch: () => undefined,
+    })),
+    useRunHistoryMigration: vi.fn(() => idle),
+    useForceResetHistory: vi.fn(() => idle),
+  }
+})
 // Default-tab editors (FieldConfigEditor / ComponentDefaultsForm) read from
 // these hooks; without proper mutation shapes the page crashes during render.
 const idleMutation = {

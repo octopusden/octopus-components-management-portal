@@ -212,3 +212,57 @@ export interface FullMigrationResult {
   defaults: Record<string, unknown>
   components: BatchMigrationResult
 }
+
+/**
+ * Result body produced by GitHistoryImportService once a `/migrate-history` job
+ * reaches COMPLETED. Counters mirror the backend's `ImportStats`.
+ */
+export interface HistoryImportResult {
+  targetRef: string
+  targetSha: string
+  processedCommits: number
+  skippedNoGroovy: number
+  skippedParseError: number
+  skippedUnknownNames: number
+  auditRecords: number
+  durationMs: number
+}
+
+/**
+ * Wire shape of `POST /admin/migrate-history` (202 / 409 same-kind attach) and
+ * `GET /admin/migrate-history/job` (200 / 404). Mirrors [MigrationJobResponse]
+ * for the components flow with history-specific counters.
+ *
+ * After a pod restart, `current()` on the backend synthesizes this from the
+ * persisted `git_history_import_state` row, so the SPA may see this shape with
+ * `id` like `restored-<timestamp>` and zero counters — that's expected, the
+ * SPA still uses `state` and `errorMessage` to drive the action buttons.
+ */
+export interface HistoryMigrationJobResponse {
+  id: string
+  state: JobState
+  startedAt: string
+  finishedAt: string | null
+  totalCommits: number
+  processedCommits: number
+  auditRecords: number
+  skippedNoGroovy: number
+  skippedParseError: number
+  skippedUnknownNames: number
+  currentSha: string | null
+  targetRef: string | null
+  errorMessage: string | null
+  result: HistoryImportResult | null
+}
+
+/**
+ * 409 body returned for cross-kind conflicts — components POST while history
+ * is RUNNING, force-reset while history is RUNNING, etc. Distinct from the
+ * same-kind attach 409 that returns a full job-response body.
+ */
+export interface MigrationConflictResponse {
+  code: 'components-migration-running' | 'history-migration-running'
+  message: string
+  activeKind: 'COMPONENTS' | 'HISTORY'
+  activeJobId: string
+}
