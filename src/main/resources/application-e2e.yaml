@@ -1,0 +1,24 @@
+# Spring profile activated by the e2e Testcontainers driver when launching the
+# portal bootJar subprocess. Mirrors the bootstrap-bypass shape of
+# src/test/resources/{bootstrap.yml,application-test.yaml}: no config-server,
+# no Vault, OAuth2 client values come from AUTH_SERVER_* env vars (relaxed
+# binding) — same env vars production uses. The portal still talks to a real
+# Keycloak (Testcontainers); only the cloud-config / bootstrap layer is
+# neutralised.
+#
+# Prod-realm-shape parity note: the e2e realm fixture under
+# infra/dev/keycloak/portal-realm.json mirrors the dms-ui reference for the
+# protocol-mapper claim shape (`roles`, `groups`). Concrete prod-realm bits
+# from the F1 keycloak-configuration repo that are NOT mirrored: federation,
+# password policy, token lifetimes, theme — all out of scope for e2e.
+spring:
+  cloud:
+    config:
+      enabled: false
+      fail-fast: false
+      import-check:
+        enabled: false
+    bootstrap:
+      enabled: false
+  config:
+    import: ""
