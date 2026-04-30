@@ -1,17 +1,27 @@
 import { useState } from 'react'
 import { Layout } from '../components/Layout'
 import { AuditLogTable } from '../components/AuditLogTable'
+import { AuditLogFilters, type AuditFilter } from '../components/AuditLogFilters'
 import { Pagination } from '../components/Pagination'
 import { useRecentAuditLog } from '../hooks/useAuditLog'
 
 export function AuditLogPage() {
   const [page, setPage] = useState(0)
   const [size, setSize] = useState(20)
+  const [filter, setFilter] = useState<AuditFilter>({})
 
-  const { data, isLoading, error } = useRecentAuditLog({ page, size })
+  const { data, isLoading, error } = useRecentAuditLog({ page, size, filter })
 
   const handleSizeChange = (newSize: number) => {
     setSize(newSize)
+    setPage(0)
+  }
+
+  // Reset to page 0 whenever the filter shape changes — staying on the
+  // current page after a filter shrinks the result set lands the user on
+  // an empty / out-of-bounds page.
+  const handleFilterChange = (next: AuditFilter) => {
+    setFilter(next)
     setPage(0)
   }
 
@@ -26,6 +36,8 @@ export function AuditLogPage() {
             </span>
           )}
         </div>
+
+        <AuditLogFilters filter={filter} onChange={handleFilterChange} />
 
         {error && (
           <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
