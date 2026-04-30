@@ -297,5 +297,5 @@ export interface MigrationConflictResponse {
     | 'history-import-likely-live-elsewhere'
   message: string
   activeKind: 'COMPONENTS' | 'HISTORY'
-  activeJobId: string
+  activeJobId: string | null
 }
