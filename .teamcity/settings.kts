@@ -1,5 +1,6 @@
 import jetbrains.buildServer.configs.kotlin.*
 import jetbrains.buildServer.configs.kotlin.buildFeatures.XmlReport
+import jetbrains.buildServer.configs.kotlin.buildFeatures.freeDiskSpace
 import jetbrains.buildServer.configs.kotlin.buildFeatures.xmlReport
 import jetbrains.buildServer.configs.kotlin.triggers.finishBuildTrigger
 import jetbrains.buildServer.configs.kotlin.vcs.GitVcsRoot
@@ -104,14 +105,14 @@ object id15E2eAuto : BuildType({
     id("15E2eAuto")
     name = "[1.5] E2E [AUTO]"
 
-    // Inherit the displayed build number from Compile&UT — without this
-    // TC shows an autoincrementing 0.0.1-N counter that doesn't line up
-    // with the upstream build, making it harder to correlate an e2e fail
-    // with the artefact it tested. `param("BUILD_NUMBER", ...)` only
-    // sets a custom param (that's id20DeployToOkdQaManual's pattern,
-    // consumed by the deploy template); to change the visible build
-    // number we need buildNumberPattern.
-    buildNumberPattern = "${id10CompileUtAuto.depParamRefs.buildNumber}"
+    // Pattern follows id20ftAuto in other Octopus projects: BUILD_VERSION
+    // pulls the upstream Compile&UT number, buildNumberPattern renders
+    // it. One named param, one place to read.
+    buildNumberPattern = "%BUILD_VERSION%"
+    // Cap parallel runs — each spins up Postgres/Keycloak/CRS/portal/
+    // playwright, so unbounded concurrency would saturate any single
+    // agent's docker daemon and disk.
+    maxRunningBuilds = 2
 
     params {
         param("env.JAVA_HOME", "%env.JDK_ZULU_21_x64%")
@@ -125,10 +126,28 @@ object id15E2eAuto : BuildType({
         // task itself sets outputs.upToDateWhen { false } so nothing
         // legitimately rots from skipping clean.
         param("GRADLE_TASK", "e2eTest -info")
-        // Mirror id20's BUILD_NUMBER param too — the gradle template
-        // reads it for tagging artefacts and for the build/version
-        // gradle property.
-        param("BUILD_NUMBER", "${id10CompileUtAuto.depParamRefs.buildNumber}")
+        // Inherit upstream build number — used by buildNumberPattern
+        // and available to the gradle template if it needs to tag
+        // artefacts.
+        param("BUILD_VERSION", "${id10CompileUtAuto.depParamRefs.buildNumber}")
+    }
+
+    triggers {
+        // Auto-run E2E after every successful Compile&UT, every branch.
+        // Mirrors id20ftAuto's pattern.
+        finishBuildTrigger {
+            id = "TRIGGER_E2E_AFTER_COMPILE_UT"
+            buildType = "${id10CompileUtAuto.id}"
+            successfulOnly = true
+            branchFilter = "+:*"
+        }
+    }
+
+    failureConditions {
+        // Cold first-run is ~15 min (Playwright base image pull); warm
+        // runs are ~3-4 min. 60 min is well past any healthy run while
+        // catching genuinely runaway containers.
+        executionTimeoutMin = 60
     }
 
     features {
@@ -140,6 +159,16 @@ object id15E2eAuto : BuildType({
                 +:build/test-results/e2eTest/**/*.xml
                 +:frontend/test-results/**/*.xml
             """.trimIndent()
+        }
+        // Refuse to start on agents that can't fit the stack: the
+        // Playwright base image alone is ~2 GB, plus CRS/Keycloak/
+        // Postgres/temurin + Gradle caches + bootJar + npm modules.
+        // Containerd blob writes corrupt silently on a full disk —
+        // pre-flighting here avoids the failure mode entirely.
+        freeDiskSpace {
+            id = "BUILD_EXT_E2E_DISK"
+            requiredSpace = "10gb"
+            failBuild = true
         }
     }
 
