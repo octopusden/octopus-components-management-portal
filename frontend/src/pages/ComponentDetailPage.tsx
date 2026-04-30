@@ -21,10 +21,12 @@ import { DistributionTab } from '../components/editor/DistributionTab'
 import { JiraTab } from '../components/editor/JiraTab'
 import { EscrowTab } from '../components/editor/EscrowTab'
 import { FieldOverrides } from '../components/editor/FieldOverrides'
+import { ComponentHistoryTab } from '../components/editor/ComponentHistoryTab'
 import { useComponent, useUpdateComponent, useDeleteComponent, type ComponentUpdateRequest } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
 import { ApiError } from '../lib/api'
-import type { UseMutationResult } from '@tanstack/react-query'
+import { describeOptimisticConflict } from '../lib/conflict'
+import { useQueryClient, type UseMutationResult } from '@tanstack/react-query'
 import type { ComponentDetail } from '../lib/types'
 
 export type UpdateMutation = UseMutationResult<ComponentDetail, Error, ComponentUpdateRequest>
@@ -33,6 +35,7 @@ export function ComponentDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { toast } = useToast()
+  const queryClient = useQueryClient()
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 
   const { data: component, isLoading, error } = useComponent(id ?? '')
@@ -41,6 +44,7 @@ export function ComponentDetailPage() {
 
   const form = useForm<GeneralFormValues>({
     defaultValues: {
+      name: '',
       displayName: '',
       componentOwner: '',
       productType: '',
@@ -48,6 +52,7 @@ export function ComponentDetailPage() {
       clientCode: '',
       solution: false,
       archived: false,
+      parentComponentName: '',
     },
   })
 
@@ -64,9 +69,32 @@ export function ComponentDetailPage() {
     // toggled it — otherwise a plain rename/owner/system edit from a non-admin
     // would trip the archive guard with 403.
     const archivedChanged = values.archived !== component.archived
+
+    // `name` is gated server-side by RENAME_COMPONENTS (same role gap as
+    // archive). The Name input is disabled in the UI for users without it
+    // (GeneralTab.tsx), but defence in depth: only send `name` when it
+    // actually changed, regardless of permission. A trimmed-blank or
+    // whitespace-only name would 400, and "unchanged" carries no semantic
+    // meaning so undefined is the right wire shape.
+    const trimmedName = values.name.trim()
+    const nameChanged = trimmedName !== '' && trimmedName !== component.name
+    const renameField = nameChanged ? trimmedName : undefined
+
+    // parentComponentName: blank input clears the field (JSON Merge Patch null);
+    // an unchanged value means "don't touch" (undefined). Anything else sets it.
+    const trimmedParent = values.parentComponentName.trim()
+    const currentParent = component.parentComponentName ?? ''
+    const parentComponentName: string | null | undefined =
+      trimmedParent === currentParent
+        ? undefined
+        : trimmedParent === ''
+          ? null
+          : trimmedParent
+
     try {
       await updateMutation.mutateAsync({
         version: component.version,
+        name: renameField,
         displayName: values.displayName || undefined,
         componentOwner: values.componentOwner || undefined,
         productType: values.productType || undefined,
@@ -74,16 +102,27 @@ export function ComponentDetailPage() {
         clientCode: values.clientCode || undefined,
         solution: values.solution,
         archived: archivedChanged ? values.archived : undefined,
+        parentComponentName,
       })
       toast({ title: 'Component saved', description: 'Changes have been saved successfully.' })
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        toast({
-          title: 'Conflict',
-          description:
-            'Someone else updated this component. Please refresh the page and try again.',
-          variant: 'destructive',
-        })
+        // Optimistic-locking conflict (B7.1.6). Two things matter for UX:
+        //   1) The cached ComponentDetail is stale — refetch so the next
+        //      render shows the actual server state. Without this the user could
+        //      keep clicking Save against the same stale @Version and keep getting
+        //      409s.
+        //   2) The toast message names *what* and *when*, where "when" is the
+        //      server's post-conflict updatedAt — i.e. the timestamp of the OTHER
+        //      person's commit. We use refetchQueries here (not invalidateQueries)
+        //      because invalidate only marks the cache stale and resolves once
+        //      the next observer re-subscribes — getQueryData would still see the
+        //      old snapshot. refetchQueries waits for the actual network round-trip
+        //      so getQueryData below sees the new value.
+        await queryClient.refetchQueries({ queryKey: ['component', id ?? ''], type: 'active' })
+        const latest = queryClient.getQueryData<ComponentDetail>(['component', id ?? ''])
+        const { title, description } = describeOptimisticConflict(latest)
+        toast({ title, description, variant: 'destructive' })
         return
       }
       toast({
@@ -235,11 +274,18 @@ export function ComponentDetailPage() {
               )}
             </TabsTrigger>
             <TabsTrigger value="overrides">Overrides</TabsTrigger>
+            <TabsTrigger value="history">History</TabsTrigger>
           </TabsList>
 
           <div className="mt-4">
             <TabsContent value="general">
-              <GeneralTab component={component} form={form} />
+              {/* key={component.id} forces a remount when the user navigates
+                  between component detail pages without unmounting the route
+                  (react-router can reuse the page instance). Without it the
+                  internal state of ComponentSelect / PeopleInput would carry
+                  the previous component's typed-but-unblurred input over to
+                  the next component's form. */}
+              <GeneralTab key={component.id} component={component} form={form} />
             </TabsContent>
 
             <TabsContent value="build">
@@ -264,6 +310,10 @@ export function ComponentDetailPage() {
 
             <TabsContent value="overrides">
               <FieldOverrides componentId={component.id} />
+            </TabsContent>
+
+            <TabsContent value="history">
+              <ComponentHistoryTab componentId={component.id} />
             </TabsContent>
           </div>
         </Tabs>
