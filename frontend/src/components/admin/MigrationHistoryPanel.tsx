@@ -9,7 +9,7 @@ import {
   useRunHistoryMigration,
 } from '@/hooks/useMigration'
 import { toast } from '@/hooks/use-toast'
-import { ApiError } from '@/lib/api'
+import { formatMigrationError } from '@/lib/migrationErrors'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -24,28 +24,18 @@ import { StatCard } from './StatCard'
 
 const HISTORY_JOB_KEY = ['migration-history', 'job'] as const
 
-function formatStartError(error: unknown): string {
-  if (error instanceof ApiError) {
-    if (/^\s*<(?:!doctype|html)/i.test(error.message)) {
-      const h1 = error.message.match(/<h1[^>]*>([^<]+)<\/h1>/i)?.[1]?.trim()
-      if (!h1) return `${error.status} ${error.name}`
-      return new RegExp(`^${error.status}\\b`).test(h1) ? h1 : `${error.status} ${h1}`
-    }
-    return `${error.status} ${error.message}`
-  }
-  if (error instanceof Error) return error.message
-  return String(error)
-}
-
 /**
  * History migration card. Sibling of MigrationPanel under the same Migration tab.
  *
- * Branches between three button modes based on the current job state:
+ * Branches between three button modes based on the current job state and the
+ * backend's `recoveryAction` discriminator:
  *  - idle (no job, no DB row) → "Run history migration" with reset=false
- *  - state=COMPLETED or normal FAILED → "Retry (reset state)" with reset=true
- *  - synthesized FAILED-from-stuck-IN_PROGRESS (errorMessage carries the
- *    `marked IN_PROGRESS` marker from the backend's A7.1 path) → "Force reset"
- *    plus disabled "Retry" until the operator clears the stale claim.
+ *  - recoveryAction === 'RETRY' (terminal-but-recoverable, COMPLETED or normal
+ *    FAILED) → "Retry (reset state)" with reset=true
+ *  - recoveryAction === 'FORCE_RESET' (synthesized FAILED-from-stuck-IN_PROGRESS,
+ *    a previous pod crashed mid-import) → "Force reset" plus disabled "Retry"
+ *  - recoveryAction === 'UNKNOWN' or any unrecognised value (defensive against
+ *    contract drift) → message rendered, both action buttons disabled
  */
 export function MigrationHistoryPanel() {
   const job = useHistoryMigrationJob()
@@ -76,8 +66,18 @@ export function MigrationHistoryPanel() {
   // backend's positive `recoveryAction` discriminator. FORCE_RESET → stuck
   // claim from a previous pod; RETRY → terminal-but-recoverable.
   const isStuck = jobData?.recoveryAction === 'FORCE_RESET'
-  const isFailed = jobData?.state === 'FAILED' && !isStuck
-  const isCompleted = jobData?.state === 'COMPLETED'
+  // P3 review fix: defensive against future / typo'd recoveryAction values.
+  // A non-RUNNING job with anything other than 'RETRY' / 'FORCE_RESET' / null
+  // means the SPA is older than the backend (contract drift). Don't
+  // confidently route the user to either action button — show the message
+  // and disable both. Excludes recoveryAction=null which is the legitimate
+  // "no recovery needed" sentinel for COMPLETED-just-finished or RUNNING.
+  const isUnrecognisedRecovery =
+    jobData?.recoveryAction != null &&
+    jobData.recoveryAction !== 'RETRY' &&
+    jobData.recoveryAction !== 'FORCE_RESET'
+  const isFailed = jobData?.state === 'FAILED' && !isStuck && !isUnrecognisedRecovery
+  const isCompleted = jobData?.state === 'COMPLETED' && !isUnrecognisedRecovery
   const result = jobData?.result ?? null
 
   const previousState = useRef<JobState | null>(null)
@@ -94,9 +94,32 @@ export function MigrationHistoryPanel() {
     }
   }, [jobData?.state, result, queryClient])
 
+  // P1 review fix: close the Run/Retry confirm dialog if a poll tick reveals
+  // a stuck-IN_PROGRESS row (recoveryAction=FORCE_RESET). Without this the
+  // user could click Confirm on a now-stale "Run history migration?" dialog
+  // and fire mutation with reset=false — which the backend would 409 on the
+  // stuck row. The backend gate keeps data safe but the SPA had promised to
+  // hide the destructive path.
+  //
+  // Note this only handles confirmOpen; the actual run button is also
+  // disabled by `runButtonDisabled` once isStuck flips, so the only
+  // window left to close is an already-open dialog.
+  useEffect(() => {
+    if (isStuck && confirmOpen) setConfirmOpen(false)
+  }, [isStuck, confirmOpen])
+
   async function runHistoryMigration() {
     // Re-derive `reset` from the LIVE state at confirm time (not snapshot at
     // button-click time). See useState comment above.
+    //
+    // Belt-and-braces with the auto-close effect: if a stuck-IN_PROGRESS row
+    // arrived between dialog open and confirm AND the auto-close effect
+    // hadn't run yet, refuse to fire the mutation against a stuck row. The
+    // backend would 409 anyway but the user shouldn't see that path.
+    if (isStuck) {
+      setConfirmOpen(false)
+      return
+    }
     const reset = isCompleted || isFailed
     setConfirmOpen(false)
     await startHistory.mutateAsync({ reset }).catch(() => undefined)
@@ -117,7 +140,12 @@ export function MigrationHistoryPanel() {
       ? 'Retry (reset state)'
       : 'Run history migration'
   const runButtonDisabled =
-    !adminMode || isRunning || startHistory.isPending || componentsRunning || isStuck
+    !adminMode ||
+    isRunning ||
+    startHistory.isPending ||
+    componentsRunning ||
+    isStuck ||
+    isUnrecognisedRecovery
   const showForceReset = isStuck && adminMode
 
   const processedPct =
@@ -215,15 +243,31 @@ export function MigrationHistoryPanel() {
         </div>
       )}
 
+      {isUnrecognisedRecovery && (
+        <div
+          data-testid="history-unknown-recovery-banner"
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
+        >
+          Unknown recovery action ({String(jobData?.recoveryAction)}). The
+          backend reported a state this SPA build cannot classify. Both action
+          buttons have been disabled. Contact operations and check whether
+          this portal version is current.
+          {jobData?.errorMessage && (
+            <div className="mt-2 text-xs">Backend message: {jobData.errorMessage}</div>
+          )}
+        </div>
+      )}
+
       {startHistory.isError && (
         <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-          {formatStartError(startHistory.error)}
+          {formatMigrationError(startHistory.error)}
         </div>
       )}
 
       {forceReset.isError && (
         <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-          Force reset failed: {formatStartError(forceReset.error)}
+          Force reset failed: {formatMigrationError(forceReset.error)}
         </div>
       )}
 

@@ -31,26 +31,29 @@ function parseSameKindAttach<T>(err: ApiError): T | null {
   if (err.status !== 409) return null
   const parsed = (() => {
     try {
-      return JSON.parse(err.message) as Record<string, unknown>
+      return JSON.parse(err.message) as unknown
     } catch {
       return null
     }
   })()
-  if (!parsed) return null
+  // Guard against primitives, arrays, null, undefined: only plain objects
+  // can carry the discriminator + JobResponse shape. typeof null === 'object',
+  // hence the explicit null check; Array.isArray catches the array case
+  // (arrays would also pass the typeof check otherwise).
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  const obj = parsed as Record<string, unknown>
   // Explicit cross-kind → not an attach.
-  if (parsed['kind'] === 'conflict') return null
-  // Explicit job → attach. The kind field is optional (older CRS omits it),
-  // so fall through to the JobState heuristic for backward compat.
-  if (parsed['kind'] === 'job') return parsed as unknown as T
-  // Heuristic: presence of a JobState-like `state` value is the same-kind
-  // signal for older CRS that doesn't yet send the `kind` discriminator.
-  // Reject when state is unrecognised — better to surface the 409 as an
-  // error than to attach to a bogus shape.
-  const state = parsed['state']
-  if (state === 'RUNNING' || state === 'COMPLETED' || state === 'FAILED') {
-    return parsed as unknown as T
-  }
-  return null
+  if (obj['kind'] === 'conflict') return null
+  const looksLikeKnownState = obj['state'] === 'RUNNING' || obj['state'] === 'COMPLETED' || obj['state'] === 'FAILED'
+  // Explicit job (new CRS) OR known-state heuristic (old CRS without the
+  // discriminator). Either way, validate the job-shape minimum: `id` +
+  // `state` must both be present so the panel doesn't bind undefined into
+  // its progress label / cache key. Without this, a buggy 409 with just
+  // `{"state":"RUNNING"}` (no id) would render as "undefined / NaN%".
+  const isJobShape = obj['kind'] === 'job' || looksLikeKnownState
+  if (!isJobShape) return null
+  if (typeof obj['id'] !== 'string' || !looksLikeKnownState) return null
+  return obj as unknown as T
 }
 
 interface MigrationStatusOptions {
@@ -211,13 +214,18 @@ export function useRunHistoryMigration() {
     },
     onSuccess: (job) => {
       queryClient.setQueryData(HISTORY_JOB_KEY, job)
-      // Same fast-path as useRunMigration: SyncTaskExecutor in tests can return
-      // COMPLETED directly, the production thread can win the race on small
-      // imports — invalidate downstream caches so they pick up the new state
-      // without waiting on the next poll tick.
-      if (job.state === 'COMPLETED' && job.result) {
-        queryClient.invalidateQueries({ queryKey: HISTORY_JOB_KEY })
-      }
+      // P1 review fix: was invalidating HISTORY_JOB_KEY on COMPLETED — same
+      // key we just primed. That immediately triggered a refetch which could
+      // race with the backend's `current()` synthesizer (e.g. FAILED row
+      // showing up between in-memory cleared and the GET landing) and
+      // overwrite the fresh COMPLETED data the user just got. The components
+      // hook invalidates DOWNSTREAM caches (status, defaults), but history
+      // has no analogous downstream cache — there is nothing to invalidate
+      // here. Just prime and stop.
+      //
+      // The next 1s poll tick will refresh anyway via the query's own
+      // refetchInterval (until state !== RUNNING — which is already the
+      // case here since we only got here on COMPLETED).
     },
   })
 }

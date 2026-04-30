@@ -263,12 +263,18 @@ export interface HistoryMigrationJobResponse {
    *    "Retry (reset state)" button, POST with reset=true.
    *  - 'FORCE_RESET' → stuck IN_PROGRESS row from a previous pod that
    *    crashed. Show "Force reset" + disabled "Retry".
+   *  - 'UNKNOWN' → backend can't classify the state (contract drift / future
+   *    DB status). SPA renders message but disables both action buttons.
    *  - null → no action (RUNNING, or idle).
    *
    * Replaces the previous brittle `errorMessage.includes('marked IN_PROGRESS')`
    * substring contract.
+   *
+   * Type is intentionally narrow + nullable; the panel additionally checks
+   * for any unrecognised value at runtime (defensive against contract drift
+   * where the backend ships a new variant before the SPA is updated).
    */
-  recoveryAction?: 'RETRY' | 'FORCE_RESET' | null
+  recoveryAction?: 'RETRY' | 'FORCE_RESET' | 'UNKNOWN' | null
 }
 
 /**
