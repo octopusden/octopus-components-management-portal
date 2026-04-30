@@ -108,16 +108,18 @@ export function ComponentDetailPage() {
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         // Optimistic-locking conflict (B7.1.6). Two things matter for UX:
-        //   1) The cached ComponentDetail is now stale — invalidate so the next
+        //   1) The cached ComponentDetail is stale — refetch so the next
         //      render shows the actual server state. Without this the user could
         //      keep clicking Save against the same stale @Version and keep getting
         //      409s.
-        //   2) The toast message names *what* and *when* (using the freshly-loaded
-        //      updatedAt from the cache once the refetch lands) so the user can
-        //      decide whether to re-apply or abandon. The user clicked Save with
-        //      an in-flight conflict — a stock "please refresh" message buries
-        //      that signal.
-        await queryClient.invalidateQueries({ queryKey: ['component', id ?? ''] })
+        //   2) The toast message names *what* and *when*, where "when" is the
+        //      server's post-conflict updatedAt — i.e. the timestamp of the OTHER
+        //      person's commit. We use refetchQueries here (not invalidateQueries)
+        //      because invalidate only marks the cache stale and resolves once
+        //      the next observer re-subscribes — getQueryData would still see the
+        //      old snapshot. refetchQueries waits for the actual network round-trip
+        //      so getQueryData below sees the new value.
+        await queryClient.refetchQueries({ queryKey: ['component', id ?? ''], type: 'active' })
         const latest = queryClient.getQueryData<ComponentDetail>(['component', id ?? ''])
         const { title, description } = describeOptimisticConflict(latest)
         toast({ title, description, variant: 'destructive' })
@@ -277,7 +279,13 @@ export function ComponentDetailPage() {
 
           <div className="mt-4">
             <TabsContent value="general">
-              <GeneralTab component={component} form={form} />
+              {/* key={component.id} forces a remount when the user navigates
+                  between component detail pages without unmounting the route
+                  (react-router can reuse the page instance). Without it the
+                  internal state of ComponentSelect / PeopleInput would carry
+                  the previous component's typed-but-unblurred input over to
+                  the next component's form. */}
+              <GeneralTab key={component.id} component={component} form={form} />
             </TabsContent>
 
             <TabsContent value="build">
