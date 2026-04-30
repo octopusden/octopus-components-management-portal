@@ -104,6 +104,15 @@ object id15E2eAuto : BuildType({
     id("15E2eAuto")
     name = "[1.5] E2E [AUTO]"
 
+    // Inherit the displayed build number from Compile&UT — without this
+    // TC shows an autoincrementing 0.0.1-N counter that doesn't line up
+    // with the upstream build, making it harder to correlate an e2e fail
+    // with the artefact it tested. `param("BUILD_NUMBER", ...)` only
+    // sets a custom param (that's id20DeployToOkdQaManual's pattern,
+    // consumed by the deploy template); to change the visible build
+    // number we need buildNumberPattern.
+    buildNumberPattern = "${id10CompileUtAuto.depParamRefs.buildNumber}"
+
     params {
         param("env.JAVA_HOME", "%env.JDK_ZULU_21_x64%")
         param("ARTIFACT_PATH", """
@@ -116,11 +125,9 @@ object id15E2eAuto : BuildType({
         // task itself sets outputs.upToDateWhen { false } so nothing
         // legitimately rots from skipping clean.
         param("GRADLE_TASK", "e2eTest -info")
-        // Inherit the build number from Compile&UT — same propagation
-        // pattern id20DeployToOkdQaManual uses. Without this, TC shows
-        // an autoincrementing 0.0.1-N counter that doesn't line up with
-        // the upstream build, making it harder to correlate an e2e fail
-        // with the artefact it tested.
+        // Mirror id20's BUILD_NUMBER param too — the gradle template
+        // reads it for tagging artefacts and for the build/version
+        // gradle property.
         param("BUILD_NUMBER", "${id10CompileUtAuto.depParamRefs.buildNumber}")
     }
 
