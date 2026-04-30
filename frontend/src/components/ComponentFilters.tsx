@@ -10,6 +10,7 @@ import {
 } from './ui/select'
 import { Button } from './ui/button'
 import type { ComponentFilter } from '../lib/types'
+import { useOwners } from '../hooks/useOwners'
 
 interface ComponentFiltersProps {
   filter: ComponentFilter
@@ -52,6 +53,10 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
     onFilterChange({ ...filter, productType: value === ALL_VALUE ? undefined : value })
   }
 
+  const handleOwnerChange = (value: string) => {
+    onFilterChange({ ...filter, owner: value === ALL_VALUE ? undefined : value })
+  }
+
   const handleArchivedToggle = () => {
     if (filter.archived === undefined) {
       onFilterChange({ ...filter, archived: true })
@@ -68,7 +73,18 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
   }
 
   const hasActiveFilters =
-    !!filter.search || !!filter.system || !!filter.productType || filter.archived !== undefined
+    !!filter.search ||
+    !!filter.system ||
+    !!filter.productType ||
+    !!filter.owner ||
+    filter.archived !== undefined
+
+  // Owner list comes from /components/meta/owners (B7.1.1, SYS-035 backend).
+  // Cached for 5 minutes by useOwners; the list is small so we render every
+  // value flat — no virtualization, no search-as-you-type. If/when the list
+  // grows beyond a few hundred we can switch to a typeahead picker matching
+  // PeopleInput's pattern.
+  const { data: owners = [] } = useOwners()
 
   const archivedLabel =
     filter.archived === undefined
@@ -112,6 +128,20 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
           {PRODUCT_TYPE_OPTIONS.map((pt) => (
             <SelectItem key={pt} value={pt}>
               {pt}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select value={filter.owner ?? ALL_VALUE} onValueChange={handleOwnerChange}>
+        <SelectTrigger className="w-[180px]" aria-label="Owner">
+          <SelectValue placeholder="All owners" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={ALL_VALUE}>All owners</SelectItem>
+          {owners.map((owner) => (
+            <SelectItem key={owner} value={owner}>
+              {owner}
             </SelectItem>
           ))}
         </SelectContent>
