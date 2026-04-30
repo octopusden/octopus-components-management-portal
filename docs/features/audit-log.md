@@ -75,4 +75,4 @@ Both endpoints sit under `/rest/**` and are proxied through the portal gateway w
 
 - CRS `SYS-036` — `/audit/recent` filter params contract.
 - CRS `MIG-026` — `/admin/migrate-history` (the writer behind `source = 'git-history'` rows).
-- CRS technical-design `§6.4` — `CurrentUserResolver` (the writer behind `source = 'api'` rows' `changedBy`).
+- CRS technical-design `§6.4` — `SecurityService` (the writer behind `source = 'api'` rows' `changedBy`).
