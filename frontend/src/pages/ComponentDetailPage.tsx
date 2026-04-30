@@ -41,6 +41,7 @@ export function ComponentDetailPage() {
 
   const form = useForm<GeneralFormValues>({
     defaultValues: {
+      name: '',
       displayName: '',
       componentOwner: '',
       productType: '',
@@ -66,6 +67,16 @@ export function ComponentDetailPage() {
     // would trip the archive guard with 403.
     const archivedChanged = values.archived !== component.archived
 
+    // `name` is gated server-side by RENAME_COMPONENTS (same role gap as
+    // archive). The Name input is disabled in the UI for users without it
+    // (GeneralTab.tsx), but defence in depth: only send `name` when it
+    // actually changed, regardless of permission. A trimmed-blank or
+    // whitespace-only name would 400, and "unchanged" carries no semantic
+    // meaning so undefined is the right wire shape.
+    const trimmedName = values.name.trim()
+    const nameChanged = trimmedName !== '' && trimmedName !== component.name
+    const renameField = nameChanged ? trimmedName : undefined
+
     // parentComponentName: blank input clears the field (JSON Merge Patch null);
     // an unchanged value means "don't touch" (undefined). Anything else sets it.
     const trimmedParent = values.parentComponentName.trim()
@@ -80,6 +91,7 @@ export function ComponentDetailPage() {
     try {
       await updateMutation.mutateAsync({
         version: component.version,
+        name: renameField,
         displayName: values.displayName || undefined,
         componentOwner: values.componentOwner || undefined,
         productType: values.productType || undefined,
