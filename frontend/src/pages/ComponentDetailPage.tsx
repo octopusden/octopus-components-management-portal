@@ -48,6 +48,7 @@ export function ComponentDetailPage() {
       clientCode: '',
       solution: false,
       archived: false,
+      parentComponentName: '',
     },
   })
 
@@ -64,6 +65,18 @@ export function ComponentDetailPage() {
     // toggled it — otherwise a plain rename/owner/system edit from a non-admin
     // would trip the archive guard with 403.
     const archivedChanged = values.archived !== component.archived
+
+    // parentComponentName: blank input clears the field (JSON Merge Patch null);
+    // an unchanged value means "don't touch" (undefined). Anything else sets it.
+    const trimmedParent = values.parentComponentName.trim()
+    const currentParent = component.parentComponentName ?? ''
+    const parentComponentName: string | null | undefined =
+      trimmedParent === currentParent
+        ? undefined
+        : trimmedParent === ''
+          ? null
+          : trimmedParent
+
     try {
       await updateMutation.mutateAsync({
         version: component.version,
@@ -74,6 +87,7 @@ export function ComponentDetailPage() {
         clientCode: values.clientCode || undefined,
         solution: values.solution,
         archived: archivedChanged ? values.archived : undefined,
+        parentComponentName,
       })
       toast({ title: 'Component saved', description: 'Changes have been saved successfully.' })
     } catch (err) {

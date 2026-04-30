@@ -83,6 +83,13 @@ export interface ComponentUpdateRequest {
   system?: string[]
   clientCode?: string
   solution?: boolean
+  /**
+   * Component name reference of the parent. `string` sets the parent;
+   * `null` clears it (JSON Merge Patch — see FS §1.4); `undefined`
+   * means "leave unchanged". Backend: `ComponentUpdateRequest.parentComponentName`
+   * (Kotlin nullable String).
+   */
+  parentComponentName?: string | null
   archived?: boolean
   metadata?: Record<string, unknown>
   buildConfiguration?: BuildConfigurationUpdate

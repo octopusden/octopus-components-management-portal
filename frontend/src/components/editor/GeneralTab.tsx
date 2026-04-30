@@ -5,6 +5,7 @@ import { Input } from '../ui/input'
 import { Switch } from '../ui/switch'
 import { EnumSelect } from '../ui/EnumSelect'
 import { PeopleInput } from '../ui/PeopleInput'
+import { ComponentSelect } from '../ui/ComponentSelect'
 import { FieldOverrideInline } from './FieldOverrideInline'
 import type { ComponentDetail } from '../../lib/types'
 
@@ -16,6 +17,7 @@ export interface GeneralFormValues {
   clientCode: string
   solution: boolean
   archived: boolean
+  parentComponentName: string
 }
 
 interface GeneralTabProps {
@@ -36,6 +38,7 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
   const archived = watch('archived')
   const productType = watch('productType')
   const componentOwner = watch('componentOwner')
+  const parentComponentName = watch('parentComponentName')
 
   useEffect(() => {
     setValue('displayName', component.displayName ?? '')
@@ -45,6 +48,7 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
     setValue('clientCode', component.clientCode ?? '')
     setValue('solution', component.solution ?? false)
     setValue('archived', component.archived)
+    setValue('parentComponentName', component.parentComponentName ?? '')
   }, [component, setValue])
 
   return (
@@ -143,13 +147,23 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
         </div>
       </div>
 
-      {/* Metadata info */}
-      {component.parentComponentName && (
-        <div className="rounded-md bg-muted px-4 py-3 text-sm">
-          <span className="font-medium">Parent Component:</span>{' '}
-          <span className="text-muted-foreground">{component.parentComponentName}</span>
-        </div>
-      )}
+      {/* Parent Component — editable autocomplete (7.1.5). Backend stores the
+          canonical `name`, so the picker writes the same. Empty string maps to
+          "no parent" at save time (ComponentDetailPage hands the wire layer a
+          `null`, see useComponent.ts ComponentUpdateRequest). */}
+      <div className="space-y-1.5 sm:max-w-md">
+        <Label htmlFor="parentComponentName">Parent Component</Label>
+        <ComponentSelect
+          id="parentComponentName"
+          value={parentComponentName ?? ''}
+          excludeName={component.name}
+          onChange={(val) => setValue('parentComponentName', val, { shouldDirty: true })}
+          placeholder="No parent (top-level component)"
+        />
+        <p className="text-xs text-muted-foreground">
+          Reference another component by name. Leave blank for a top-level component.
+        </p>
+      </div>
 
       {component.createdAt && (
         <div className="flex gap-6 text-xs text-muted-foreground">
