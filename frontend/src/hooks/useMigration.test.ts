@@ -392,6 +392,56 @@ describe('useRunHistoryMigration', () => {
 
     expect(client.getQueryData(['migration-history', 'job'])).toEqual(HISTORY_RUNNING)
   })
+
+  it('does NOT invalidate [migration-history, job] when COMPLETED — it primed that cache directly', async () => {
+    // P1 review fix: was invalidating HISTORY_JOB_KEY on COMPLETED — same
+    // key it just primed. The immediate refetch could clobber the fresh
+    // COMPLETED data with whatever the synthesized DB-fallback path
+    // returned (in tests, a fresh GET would re-fire mockApi.get; in
+    // production, race with backend in-memory state cleanup). Asserting
+    // no invalidate calls happen is the simplest pin.
+    mockApi.post.mockResolvedValue(HISTORY_COMPLETED)
+    const { wrapper, client } = makeWrapper()
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useRunHistoryMigration(), { wrapper })
+    await result.current.mutateAsync({ reset: false })
+
+    expect(invalidateSpy).not.toHaveBeenCalled()
+    // Cache must still hold the COMPLETED data we just primed.
+    expect(client.getQueryData(['migration-history', 'job'])).toEqual(HISTORY_COMPLETED)
+  })
+
+  it('rejects 409 with malformed body (HTML page) as a mutation error', async () => {
+    // parseSameKindAttach returns null on JSON.parse failure → rethrow.
+    mockApi.post.mockRejectedValue(new ApiError(409, '<html>...</html>'))
+    const { wrapper } = makeWrapper()
+    const { result } = renderHook(() => useRunHistoryMigration(), { wrapper })
+    await result.current.mutateAsync({ reset: false }).catch(() => undefined)
+    await waitFor(() => expect(result.current.isError).toBe(true))
+  })
+
+  it('rejects 409 with primitive body (number/string/array) as a mutation error', async () => {
+    // Defense against typeof null === 'object' and array-as-object: parsed
+    // must be a real object before we even check fields. Without these
+    // guards the helper would crash on `'kind' in 42` etc.
+    mockApi.post.mockRejectedValue(new ApiError(409, '"just a string"'))
+    const { wrapper } = makeWrapper()
+    const { result } = renderHook(() => useRunHistoryMigration(), { wrapper })
+    await result.current.mutateAsync({ reset: false }).catch(() => undefined)
+    await waitFor(() => expect(result.current.isError).toBe(true))
+  })
+
+  it('rejects 409 with job-shape missing `id` as a mutation error (validation)', async () => {
+    // P2 review fix: the shared helper used to cast as T without checking
+    // required fields. A backend bug shipping `{state: "RUNNING"}` (no id)
+    // would have rendered as "undefined / NaN%" in the panel.
+    mockApi.post.mockRejectedValue(new ApiError(409, '{"kind":"job","state":"RUNNING"}'))
+    const { wrapper } = makeWrapper()
+    const { result } = renderHook(() => useRunHistoryMigration(), { wrapper })
+    await result.current.mutateAsync({ reset: false }).catch(() => undefined)
+    await waitFor(() => expect(result.current.isError).toBe(true))
+  })
 })
 
 describe('useHistoryMigrationJob', () => {

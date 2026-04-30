@@ -9,7 +9,7 @@ import {
   useRunMigration,
 } from '@/hooks/useMigration'
 import { toast } from '@/hooks/use-toast'
-import { ApiError } from '@/lib/api'
+import { formatMigrationError } from '@/lib/migrationErrors'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -21,28 +21,6 @@ import {
 } from '@/components/ui/dialog'
 import type { JobState } from '@/lib/types'
 import { StatCard } from './StatCard'
-
-function formatStartError(error: unknown): string {
-  if (error instanceof ApiError) {
-    // Defense-in-depth: an upstream proxy / gateway / WAF can answer the
-    // POST with a text/html error page (504, 502, 503, ...) and the api
-    // wrapper stuffs that whole document into ApiError.message. Rendering
-    // verbatim leaks "<html><body><h1>504 Gateway Time-out</h1>..." into
-    // the destructive block — the operator sees markup and panics.
-    // Apache/nginx default error pages embed the status in the <h1>
-    // (`<h1>504 Gateway Time-out</h1>`); use that as the readable label
-    // when present, otherwise fall back to "<status> <name>".
-    if (/^\s*<(?:!doctype|html)/i.test(error.message)) {
-      const h1 = error.message.match(/<h1[^>]*>([^<]+)<\/h1>/i)?.[1]?.trim()
-      if (!h1) return `${error.status} ${error.name}`
-      // Don't double-prefix when the h1 already starts with the status code.
-      return new RegExp(`^${error.status}\\b`).test(h1) ? h1 : `${error.status} ${h1}`
-    }
-    return `${error.status} ${error.message}`
-  }
-  if (error instanceof Error) return error.message
-  return String(error)
-}
 
 // Status counters poll every 3s while RUNNING — slower than the per-job
 // poll (1s) because the DB row count moves at commit pace, not at component
@@ -214,7 +192,7 @@ export function MigrationPanel() {
 
       {startMigration.isError && (
         <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-          {formatStartError(startMigration.error)}
+          {formatMigrationError(startMigration.error)}
         </div>
       )}
 
