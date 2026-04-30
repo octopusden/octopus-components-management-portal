@@ -126,6 +126,41 @@ describe('useRunMigration', () => {
     expect(assignSpy).not.toHaveBeenCalled()
   })
 
+  it('surfaces cross-kind 409 (kind=conflict) as a mutation error so panel destructive block renders', async () => {
+    // P1 review fix: useRunMigration previously had ZERO 409 branching — would
+    // JSON.parse the conflict envelope and hand it to the panel as a "successful
+    // attached job" with no `id/state`. Now it uses the same parseSameKindAttach
+    // helper as the history hook and rethrows on cross-kind.
+    const conflictBody = JSON.stringify({
+      kind: 'conflict',
+      code: 'history-migration-running',
+      message: 'History migration is currently running.',
+      activeKind: 'HISTORY',
+      activeJobId: 'history-1',
+    })
+    mockApi.post.mockRejectedValue(new ApiError(409, conflictBody))
+    const { wrapper } = makeWrapper()
+
+    const { result } = renderHook(() => useRunMigration(), { wrapper })
+    await result.current.mutateAsync().catch(() => undefined)
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect((result.current.error as ApiError).status).toBe(409)
+  })
+
+  it('surfaces 409 with malformed body as a mutation error (does not silently swallow)', async () => {
+    // P1 review fix: parseSameKindAttach returns null on JSON.parse failure;
+    // the hook then rethrows. Without this, a corrupted 409 body would have
+    // been blindly cast and stuffed into the cache as a "job".
+    mockApi.post.mockRejectedValue(new ApiError(409, '<html><body>504 from gateway</body></html>'))
+    const { wrapper } = makeWrapper()
+
+    const { result } = renderHook(() => useRunMigration(), { wrapper })
+    await result.current.mutateAsync().catch(() => undefined)
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+  })
+
   it('surfaces ApiError(403) as isError and does NOT redirect to OIDC', async () => {
     mockApi.post.mockRejectedValue(new ApiError(403, 'Forbidden'))
     const { wrapper } = makeWrapper()
@@ -326,12 +361,13 @@ describe('useRunHistoryMigration', () => {
     expect(result.current.isError).toBe(false)
   })
 
-  it('surfaces cross-kind 409 (body has `code` field) as a mutation error so the panel renders destructive block', async () => {
-    // The backend's MigrationConflictResponse carries `{code, message,
-    // activeKind, activeJobId}` — distinguishable from the same-kind body
-    // by the `code` field. SPA must NOT swallow this — the user needs to
-    // see "Components migration is currently running".
+  it('surfaces cross-kind 409 (kind=conflict) as a mutation error so the panel renders destructive block', async () => {
+    // The backend's MigrationConflictResponse carries `{kind:'conflict', code,
+    // message, activeKind, activeJobId}` — distinguishable from the same-kind
+    // body by the `kind` discriminator. SPA must NOT swallow this — the user
+    // needs to see "Components migration is currently running".
     const conflictBody = JSON.stringify({
+      kind: 'conflict',
       code: 'components-migration-running',
       message: 'Components migration is currently running.',
       activeKind: 'COMPONENTS',
