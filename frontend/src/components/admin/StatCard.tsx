@@ -1,6 +1,6 @@
 /**
  * Shared stat-tile presentation used by both MigrationPanel and
- * MigrationHistoryPanel. Extracted so the two cards visually match without
+ * MigrationHistoryPanel. Extracted so the two tiles visually match without
  * duplicating the styling.
  */
 export function StatCard({ label, value }: { label: string; value: number | string }) {

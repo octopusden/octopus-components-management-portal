@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
-import { useQueryClient } from '@tanstack/react-query'
 import { useAdminMode } from '@/lib/adminModeStore'
 import {
   useForceResetHistory,
@@ -22,8 +21,6 @@ import {
 import type { HistoryMigrationJobResponse, JobState } from '@/lib/types'
 import { StatCard } from './StatCard'
 
-const HISTORY_JOB_KEY = ['migration-history', 'job'] as const
-
 /**
  * History migration card. Sibling of MigrationPanel under the same Migration tab.
  *
@@ -44,7 +41,6 @@ export function MigrationHistoryPanel() {
   const startHistory = useRunHistoryMigration()
   const forceReset = useForceResetHistory()
   const adminMode = useAdminMode((s) => s.enabled)
-  const queryClient = useQueryClient()
   // P2 review fix: was `useState<{ reset: boolean } | null>` — snapshotted
   // the reset value at button-click time. If a poll tick changed jobData.state
   // between opening the dialog and confirming, the snapshot was stale (e.g.
@@ -90,9 +86,8 @@ export function MigrationHistoryPanel() {
         title: 'History migration completed',
         description: `${result.processedCommits} commits processed, ${result.auditRecords} audit rows`,
       })
-      queryClient.invalidateQueries({ queryKey: HISTORY_JOB_KEY })
     }
-  }, [jobData?.state, result, queryClient])
+  }, [jobData?.state, result])
 
   // P1 review fix: close the Run/Retry confirm dialog if a poll tick reveals
   // a stuck-IN_PROGRESS row (recoveryAction=FORCE_RESET). Without this the
@@ -214,7 +209,14 @@ export function MigrationHistoryPanel() {
               {jobData.processedCommits} / {jobData.totalCommits || '—'}
             </span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-2 overflow-hidden rounded-full bg-muted"
+            role="progressbar"
+            aria-label="History migration progress"
+            aria-valuenow={jobData.totalCommits > 0 ? processedPct : undefined}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
             {jobData.totalCommits === 0 ? (
               <div className="h-full bg-primary/60 animate-pulse" />
             ) : (
@@ -224,6 +226,17 @@ export function MigrationHistoryPanel() {
               />
             )}
           </div>
+          {jobData.currentSha && (
+            <div className="text-xs text-muted-foreground font-mono">
+              last: {jobData.currentSha}
+            </div>
+          )}
+        </div>
+      )}
+
+      {job.isError && (
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+          Failed to fetch history migration status. {formatMigrationError(job.error)}
         </div>
       )}
 
@@ -332,6 +345,5 @@ export function MigrationHistoryPanel() {
 
 function historyPhaseLabel(job: HistoryMigrationJobResponse): string {
   if (job.totalCommits === 0) return 'Walking history…'
-  if (job.currentSha) return `Processing commit ${job.currentSha}`
   return 'Processing commits…'
 }

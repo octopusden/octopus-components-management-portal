@@ -296,7 +296,12 @@ describe('MigrationHistoryPanel — RUNNING progress card', () => {
     const progress = container.querySelector('[data-testid="history-migration-progress"]') as HTMLElement
     expect(progress).not.toBeNull()
     expect(progress.textContent).toMatch(/42\s*\/\s*100/)
-    expect(progress.textContent).toMatch(/abc1234/)
+    // Label is now "Processing commits…" (SHA is shown as a supplementary sub-line)
+    expect(progress.textContent).toMatch(/Processing commits…/)
+    // SHA appears in the font-mono sub-line as "last: <sha>"
+    const shaLine = container.querySelector('.font-mono') as HTMLElement
+    expect(shaLine).not.toBeNull()
+    expect(shaLine.textContent).toMatch(/last: abc1234/)
   })
 
   it('shows "Walking history…" with indeterminate bar when totalCommits=0', () => {
@@ -403,6 +408,24 @@ describe('MigrationHistoryPanel — start mutation errors', () => {
 
     renderPanel()
     expect(screen.getByText(/force reset failed/i)).toBeDefined()
+  })
+})
+
+describe('MigrationHistoryPanel — poll-failure banner (job.isError)', () => {
+  it('renders a destructive banner when useHistoryMigrationJob surfaces a non-404 error', () => {
+    mockUseHistoryMigrationJob.mockReturnValue({
+      data: null,
+      isLoading: false,
+      isError: true,
+      isSuccess: false,
+      error: new Error('network failure'),
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useHistoryMigrationJob>)
+    useAdminMode.setState({ enabled: true })
+
+    renderPanel()
+    expect(screen.getByText(/Failed to fetch history migration status/i)).toBeDefined()
+    expect(screen.getByText(/network failure/i)).toBeDefined()
   })
 })
 
