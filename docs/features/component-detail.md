@@ -2,7 +2,7 @@
 
 > Target users: `ACCESS_COMPONENTS` for read; per-tab gates for writes (see "Auth gating" below).
 
-The detail page at `/components/<UUID>` is the editor surface. It renders [`pages/ComponentDetailPage.tsx`](../../frontend/src/pages/ComponentDetailPage.tsx) and decomposes into seven tabs (General, Build, VCS, Distribution, Jira, Escrow, Overrides, History). The page-level form lives once and tabs share its state via `react-hook-form`.
+The detail page at `/components/<UUID>` is the editor surface. It renders [`pages/ComponentDetailPage.tsx`](../../frontend/src/pages/ComponentDetailPage.tsx) and decomposes into eight tabs (General, Build, VCS, Distribution, Jira, Escrow, Overrides, History). The page-level form lives once and tabs share its state via `react-hook-form`.
 
 ## URL stability
 

@@ -45,17 +45,18 @@ interface AuditLogEntry {
   entityType: string         // 'Component' (today only)
   entityId: string           // UUID for components
   action: 'CREATE' | 'UPDATE' | 'DELETE' | 'RENAME' | 'ARCHIVE' | string
-  changedBy: string | null   // username from `audit_log.changed_by` (CurrentUserResolver)
+  changedBy: string | null   // username from `audit_log.changed_by`
   changedAt: string          // ISO instant
   oldValue: Record<string, unknown> | null
   newValue: Record<string, unknown> | null
   changeDiff: Record<string, unknown> | null
   correlationId: string | null
-  source: 'api' | 'git-history' | string
+  // Note: `source` ('api' | 'git-history') is present in CRS response but not yet
+  // typed in the frontend interface — tracked as part of TD-002.
 }
 ```
 
-Note that `changedBy` is non-null for runtime API events as of CRS `CurrentUserResolver` wiring (shipped in PR #158). The fallback is `'system'` for background contexts. Older audit rows written before that wiring may have `null` — the table renders that as italic *system*. Git-history rows carry the original git author signature ("Name <email>") rather than a Keycloak username.
+`changedBy` is populated via `SecurityService.getCurrentUser().username` (cloud-commons) for authenticated API events (see CRS technical-design §6.4), with a fallback of `'system'` for background contexts such as `/admin/migrate-history`. Audit rows written before the Keycloak auth wiring (commit `b97fad2`) may have `null` — the table renders that as italic *system*. Git-history rows carry the original git author signature ("Name \<email\>") rather than a Keycloak username.
 
 ## CSRF / auth
 
