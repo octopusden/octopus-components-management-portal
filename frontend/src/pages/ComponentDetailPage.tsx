@@ -24,7 +24,8 @@ import { FieldOverrides } from '../components/editor/FieldOverrides'
 import { useComponent, useUpdateComponent, useDeleteComponent, type ComponentUpdateRequest } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
 import { ApiError } from '../lib/api'
-import type { UseMutationResult } from '@tanstack/react-query'
+import { describeOptimisticConflict } from '../lib/conflict'
+import { useQueryClient, type UseMutationResult } from '@tanstack/react-query'
 import type { ComponentDetail } from '../lib/types'
 
 export type UpdateMutation = UseMutationResult<ComponentDetail, Error, ComponentUpdateRequest>
@@ -33,6 +34,7 @@ export function ComponentDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { toast } = useToast()
+  const queryClient = useQueryClient()
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 
   const { data: component, isLoading, error } = useComponent(id ?? '')
@@ -104,12 +106,20 @@ export function ComponentDetailPage() {
       toast({ title: 'Component saved', description: 'Changes have been saved successfully.' })
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        toast({
-          title: 'Conflict',
-          description:
-            'Someone else updated this component. Please refresh the page and try again.',
-          variant: 'destructive',
-        })
+        // Optimistic-locking conflict (B7.1.6). Two things matter for UX:
+        //   1) The cached ComponentDetail is now stale — invalidate so the next
+        //      render shows the actual server state. Without this the user could
+        //      keep clicking Save against the same stale @Version and keep getting
+        //      409s.
+        //   2) The toast message names *what* and *when* (using the freshly-loaded
+        //      updatedAt from the cache once the refetch lands) so the user can
+        //      decide whether to re-apply or abandon. The user clicked Save with
+        //      an in-flight conflict — a stock "please refresh" message buries
+        //      that signal.
+        await queryClient.invalidateQueries({ queryKey: ['component', id ?? ''] })
+        const latest = queryClient.getQueryData<ComponentDetail>(['component', id ?? ''])
+        const { title, description } = describeOptimisticConflict(latest)
+        toast({ title, description, variant: 'destructive' })
         return
       }
       toast({
