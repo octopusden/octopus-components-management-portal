@@ -108,6 +108,11 @@ export interface ComponentFilter {
   productType?: string
   archived?: boolean
   search?: string
+  /**
+   * Server-side exact-match filter on `componentOwner`. Sourced from
+   * `/components/meta/owners` for the autocomplete picker. SYS-035.
+   */
+  owner?: string
 }
 
 export interface Page<T> {

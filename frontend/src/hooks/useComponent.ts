@@ -77,12 +77,26 @@ export interface EscrowConfigurationUpdate {
 
 export interface ComponentUpdateRequest {
   version: number
+  /**
+   * Rename. Only send when actually changing — the server gates on
+   * RENAME_COMPONENTS via canRenameComponent (per ComponentControllerV4
+   * PATCH SpEL) and would 403 a non-admin's plain edit if `name` were
+   * always present.
+   */
+  name?: string
   displayName?: string
   componentOwner?: string
   productType?: string
   system?: string[]
   clientCode?: string
   solution?: boolean
+  /**
+   * Component name reference of the parent. `string` sets the parent;
+   * `null` clears it (JSON Merge Patch — see FS §1.4); `undefined`
+   * means "leave unchanged". Backend: `ComponentUpdateRequest.parentComponentName`
+   * (Kotlin nullable String).
+   */
+  parentComponentName?: string | null
   archived?: boolean
   metadata?: Record<string, unknown>
   buildConfiguration?: BuildConfigurationUpdate
