@@ -2,9 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAdminMode } from '@/lib/adminModeStore'
-import { useMigrationJob, useMigrationStatus, useRunMigration } from '@/hooks/useMigration'
+import {
+  useHistoryMigrationJob,
+  useMigrationJob,
+  useMigrationStatus,
+  useRunMigration,
+} from '@/hooks/useMigration'
 import { toast } from '@/hooks/use-toast'
-import { ApiError } from '@/lib/api'
+import { formatMigrationError } from '@/lib/migrationErrors'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -15,43 +20,50 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import type { JobState } from '@/lib/types'
-
-function StatCard({ label, value }: { label: string; value: number | string }) {
-  return (
-    <div className="rounded-md border bg-card px-4 py-3">
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="text-2xl font-semibold tabular-nums">{value}</div>
-    </div>
-  )
-}
-
-function formatStartError(error: unknown): string {
-  if (error instanceof ApiError) {
-    // Defense-in-depth: an upstream proxy / gateway / WAF can answer the
-    // POST with a text/html error page (504, 502, 503, ...) and the api
-    // wrapper stuffs that whole document into ApiError.message. Rendering
-    // verbatim leaks "<html><body><h1>504 Gateway Time-out</h1>..." into
-    // the destructive block — the operator sees markup and panics.
-    // Apache/nginx default error pages embed the status in the <h1>
-    // (`<h1>504 Gateway Time-out</h1>`); use that as the readable label
-    // when present, otherwise fall back to "<status> <name>".
-    if (/^\s*<(?:!doctype|html)/i.test(error.message)) {
-      const h1 = error.message.match(/<h1[^>]*>([^<]+)<\/h1>/i)?.[1]?.trim()
-      if (!h1) return `${error.status} ${error.name}`
-      // Don't double-prefix when the h1 already starts with the status code.
-      return new RegExp(`^${error.status}\\b`).test(h1) ? h1 : `${error.status} ${h1}`
-    }
-    return `${error.status} ${error.message}`
-  }
-  if (error instanceof Error) return error.message
-  return String(error)
-}
+import { StatCard } from './StatCard'
 
 // Status counters poll every 3s while RUNNING — slower than the per-job
 // poll (1s) because the DB row count moves at commit pace, not at component
 // pace; 3s is the slowest cadence that still feels "live" for a multi-minute
 // run while keeping load on /admin/migration-status modest.
 const STATUS_POLL_INTERVAL_MS = 3_000
+
+/**
+ * Human-readable label for the current migration phase. Keeps the early
+ * window (defaults loading, lazy git resolve) informative — a frozen
+ * "Running…" with no movement was the original UX complaint that motivated
+ * the phase field. Falls back to "Running…" only when the backend doesn't
+ * report a phase (older CRS, omitted field).
+ */
+function phaseLabel(job: { phase?: 'DEFAULTS' | 'COMPONENTS' | null; currentComponent: string | null }): string {
+  switch (job.phase) {
+    case 'DEFAULTS':
+      return 'Loading defaults from Git…'
+    case 'COMPONENTS':
+      return job.currentComponent ? `Migrating ${job.currentComponent}` : 'Resolving components from Git…'
+    default:
+      return 'Running…'
+  }
+}
+
+/**
+ * The progress bar must be indeterminate (animated, full-width) when there is
+ * nothing measurable to show. Indeterminate when EITHER:
+ *  - the phase is unknown / missing (older CRS, contract drift)
+ *  - total === 0 (DEFAULTS phase, or COMPONENTS phase before
+ *    gitResolver.getComponents() returned).
+ *
+ * P3 review fix: previously `!job.phase || job.total === 0` would treat an
+ * unknown future phase string (e.g. backend ships 'WALKING' or a typo'd
+ * 'COMPONNTS') as "phase known" because `!job.phase` is falsy on any
+ * non-empty string — even though we don't know what label to render. Check
+ * the union explicitly so unknown values fall back to indeterminate +
+ * "Running…", matching the missing-field path.
+ */
+function indeterminate(job: { phase?: 'DEFAULTS' | 'COMPONENTS' | null; total: number }): boolean {
+  const phaseKnown = job.phase === 'DEFAULTS' || job.phase === 'COMPONENTS'
+  return !phaseKnown || job.total === 0
+}
 
 export function MigrationPanel() {
   const job = useMigrationJob()
@@ -66,6 +78,14 @@ export function MigrationPanel() {
   const adminMode = useAdminMode((s) => s.enabled)
   const queryClient = useQueryClient()
   const [confirmOpen, setConfirmOpen] = useState(false)
+
+  // Cross-disable against the history-migration card. The backend's
+  // MigrationLifecycleGate would 409 a cross-kind start anyway, but the SPA
+  // also disables the button so the user never sees that error path. React
+  // Query dedupes the GET, so calling the hook here doesn't cost an extra
+  // request — it's reading the same cache entry the history panel uses.
+  const historyJob = useHistoryMigrationJob()
+  const historyRunning = historyJob.data?.state === 'RUNNING'
 
   const isFailed = jobData?.state === 'FAILED'
   const isCompleted = jobData?.state === 'COMPLETED'
@@ -100,7 +120,7 @@ export function MigrationPanel() {
     await startMigration.mutateAsync().catch(() => undefined)
   }
 
-  const buttonDisabled = !adminMode || isRunning || startMigration.isPending
+  const buttonDisabled = !adminMode || isRunning || startMigration.isPending || historyRunning
 
   return (
     <div className="space-y-4">
@@ -125,31 +145,42 @@ export function MigrationPanel() {
             Enable Admin mode in the footer to run migration.
           </span>
         )}
+        {adminMode && historyRunning && !isRunning && (
+          <span className="text-xs text-muted-foreground">
+            History migration is running — wait for it to finish.
+          </span>
+        )}
       </div>
 
       {isRunning && jobData && (
         <div
           data-testid="migration-progress"
           className="rounded-md border bg-card p-3 space-y-2 text-sm"
+          aria-busy={indeterminate(jobData) ? 'true' : 'false'}
+          aria-live="polite"
         >
           <div className="flex items-center justify-between font-medium">
-            <span>Migrating…</span>
+            <span>{phaseLabel(jobData)}</span>
             <span className="tabular-nums">
               {processed} / {jobData.total}
             </span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-            <div
-              className="h-full bg-primary transition-all"
-              style={{ width: `${progressPct}%` }}
-            />
+          <div className="h-2 overflow-hidden rounded-full bg-muted">
+            {indeterminate(jobData) ? (
+              // While total === 0 (DEFAULTS phase, or COMPONENTS phase before
+              // the first per-component event) there is no determinate progress
+              // to render. The animated full-width bar signals "work is
+              // happening, just not yet measurable". Without this branch the
+              // bar would stay frozen at 0/0 width — visually identical to a
+              // hung process — defeating the whole purpose of the phase label.
+              <div className="h-full bg-primary/60 animate-pulse" />
+            ) : (
+              <div
+                className="h-full bg-primary transition-all"
+                style={{ width: `${progressPct}%` }}
+              />
+            )}
           </div>
-          {jobData.currentComponent && (
-            <div className="text-xs text-muted-foreground">
-              Current:{' '}
-              <span className="font-mono text-foreground">{jobData.currentComponent}</span>
-            </div>
-          )}
         </div>
       )}
 
@@ -161,7 +192,7 @@ export function MigrationPanel() {
 
       {startMigration.isError && (
         <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-          {formatStartError(startMigration.error)}
+          {formatMigrationError(startMigration.error)}
         </div>
       )}
 

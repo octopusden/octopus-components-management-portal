@@ -184,6 +184,8 @@ export type JobState = 'RUNNING' | 'COMPLETED' | 'FAILED'
  * failure list.
  */
 export interface MigrationJobResponse {
+  /** Discriminator — always 'job' for this shape (vs 'conflict' on cross-kind 409). Optional for backward compat with older CRS that omitted the field. */
+  kind?: 'job'
   id: string
   state: JobState
   startedAt: string
@@ -195,9 +197,100 @@ export interface MigrationJobResponse {
   currentComponent: string | null
   errorMessage: string | null
   result: FullMigrationResult | null
+  /**
+   * Sub-phase within RUNNING: 'DEFAULTS' while migrateDefaults is in flight,
+   * 'COMPONENTS' once the per-component loop has started. Cleared (null) on
+   * COMPLETED / FAILED.
+   *
+   * Optional rather than just nullable: older CRS deployments simply omit the
+   * field from the JSON, so JSON.parse yields `undefined`, not `null`. Callers
+   * that switch on this should treat both `undefined` and `null` as "no phase
+   * info — render fallback".
+   */
+  phase?: 'DEFAULTS' | 'COMPONENTS' | null
 }
 
 export interface FullMigrationResult {
   defaults: Record<string, unknown>
   components: BatchMigrationResult
+}
+
+/**
+ * Result body produced by GitHistoryImportService once a `/migrate-history` job
+ * reaches COMPLETED. Counters mirror the backend's `ImportStats`.
+ */
+export interface HistoryImportResult {
+  targetRef: string
+  targetSha: string
+  processedCommits: number
+  skippedNoGroovy: number
+  skippedParseError: number
+  skippedUnknownNames: number
+  auditRecords: number
+  durationMs: number
+}
+
+/**
+ * Wire shape of `POST /admin/migrate-history` (202 / 409 same-kind attach) and
+ * `GET /admin/migrate-history/job` (200 / 404). Mirrors [MigrationJobResponse]
+ * for the components flow with history-specific counters.
+ *
+ * After a pod restart, `current()` on the backend synthesizes this from the
+ * persisted `git_history_import_state` row, so the SPA may see this shape with
+ * `id` like `restored-<timestamp>` and zero counters — that's expected, the
+ * SPA still uses `state` and `errorMessage` to drive the action buttons.
+ */
+export interface HistoryMigrationJobResponse {
+  /** Discriminator — always 'job' for this shape. Optional for backward compat. */
+  kind?: 'job'
+  id: string
+  state: JobState
+  startedAt: string
+  finishedAt: string | null
+  totalCommits: number
+  processedCommits: number
+  auditRecords: number
+  skippedNoGroovy: number
+  skippedParseError: number
+  skippedUnknownNames: number
+  currentSha: string | null
+  targetRef: string | null
+  errorMessage: string | null
+  result: HistoryImportResult | null
+  /**
+   * SPA action hint:
+   *  - 'RETRY' → terminal+recoverable (COMPLETED or normal FAILED). Show
+   *    "Retry (reset state)" button, POST with reset=true.
+   *  - 'FORCE_RESET' → stuck IN_PROGRESS row from a previous pod that
+   *    crashed. Show "Force reset" + disabled "Retry".
+   *  - 'UNKNOWN' → backend can't classify the state (contract drift / future
+   *    DB status). SPA renders message but disables both action buttons.
+   *  - null → no action (RUNNING, or idle).
+   *
+   * Replaces the previous brittle `errorMessage.includes('marked IN_PROGRESS')`
+   * substring contract.
+   *
+   * Type is intentionally narrow + nullable; the panel additionally checks
+   * for any unrecognised value at runtime (defensive against contract drift
+   * where the backend ships a new variant before the SPA is updated).
+   */
+  recoveryAction?: 'RETRY' | 'FORCE_RESET' | 'UNKNOWN' | null
+}
+
+/**
+ * 409 body returned for cross-kind conflicts — components POST while history
+ * is RUNNING, force-reset while history is RUNNING, etc. Distinct from the
+ * same-kind attach 409 that returns a full job-response body — distinguished
+ * by the `kind` discriminator (always 'conflict' here).
+ */
+export interface MigrationConflictResponse {
+  /** Discriminator — always 'conflict' for this shape. Mutually exclusive with the 'job' shape. */
+  kind: 'conflict'
+  code:
+    | 'components-migration-running'
+    | 'history-migration-running'
+    | 'history-import-likely-live-elsewhere'
+  message: string
+  activeKind: 'COMPONENTS' | 'HISTORY'
+  activeJobId: string
 }
