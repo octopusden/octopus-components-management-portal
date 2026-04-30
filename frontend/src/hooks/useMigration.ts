@@ -6,6 +6,53 @@ const JOB_KEY = ['migration', 'job'] as const
 const HISTORY_JOB_KEY = ['migration-history', 'job'] as const
 const JOB_POLL_INTERVAL_MS = 1_000
 
+/**
+ * Branch a 409 response body between the two shapes the backend can return:
+ *  - same-kind 409 (a second start while one is RUNNING) → MigrationJobResponse
+ *    or HistoryMigrationJobResponse with `kind === 'job'`. Caller should resolve
+ *    as success (the SPA "attaches" to the in-flight job).
+ *  - cross-kind 409 (the OTHER migration kind owns the gate; or the
+ *    likely-live-elsewhere check refusing force-reset) → MigrationConflictResponse
+ *    with `kind === 'conflict'`. Caller should rethrow so the destructive
+ *    block renders the message.
+ *
+ * Returns the parsed attach-job body on same-kind 409, or null when:
+ *  - the body is malformed JSON,
+ *  - the body has `kind === 'conflict'` (cross-kind, caller must rethrow),
+ *  - the body has neither discriminator AND lacks a recognisable JobState
+ *    (treat as cross-kind / unknown — safer to surface as error).
+ *
+ * Hoisted out of the individual hooks so both useRunMigration and
+ * useRunHistoryMigration use the same branching logic. The previous
+ * useRunMigration had no cross-kind handling at all and would crash on a
+ * cross-kind 409 (per review P1).
+ */
+function parseSameKindAttach<T>(err: ApiError): T | null {
+  if (err.status !== 409) return null
+  const parsed = (() => {
+    try {
+      return JSON.parse(err.message) as Record<string, unknown>
+    } catch {
+      return null
+    }
+  })()
+  if (!parsed) return null
+  // Explicit cross-kind → not an attach.
+  if (parsed['kind'] === 'conflict') return null
+  // Explicit job → attach. The kind field is optional (older CRS omits it),
+  // so fall through to the JobState heuristic for backward compat.
+  if (parsed['kind'] === 'job') return parsed as unknown as T
+  // Heuristic: presence of a JobState-like `state` value is the same-kind
+  // signal for older CRS that doesn't yet send the `kind` discriminator.
+  // Reject when state is unrecognised — better to surface the 409 as an
+  // error than to attach to a bogus shape.
+  const state = parsed['state']
+  if (state === 'RUNNING' || state === 'COMPLETED' || state === 'FAILED') {
+    return parsed as unknown as T
+  }
+  return null
+}
+
 interface MigrationStatusOptions {
   /**
    * Pass a positive number (ms) to enable polling. Intended caller is
@@ -47,8 +94,14 @@ export function useRunMigration() {
       try {
         return await api.post<MigrationJobResponse>('/admin/migrate')
       } catch (err) {
-        if (err instanceof ApiError && err.status === 409) {
-          return JSON.parse(err.message) as MigrationJobResponse
+        if (err instanceof ApiError) {
+          // Same-kind 409 → attach to the existing job. Cross-kind 409 (history
+          // is currently RUNNING) → rethrow so the panel destructive block
+          // renders the message. Without this branch (the original impl),
+          // a cross-kind 409 would JSON.parse a body without `id/state` and
+          // hand it to the panel as a successful job — visibly broken.
+          const attach = parseSameKindAttach<MigrationJobResponse>(err)
+          if (attach) return attach
         }
         throw err
       }
@@ -149,21 +202,9 @@ export function useRunHistoryMigration() {
       try {
         return await api.post<HistoryMigrationJobResponse>(`/admin/migrate-history?reset=${reset}`)
       } catch (err) {
-        if (err instanceof ApiError && err.status === 409) {
-          // The body carries either a same-kind job-response (`{id, state, ...}`)
-          // OR a cross-kind conflict envelope (`{code, message, activeKind, ...}`).
-          // Same-kind: resolve as success — the SPA attaches. Cross-kind: rethrow
-          // so the panel's destructive block renders the message.
-          const parsed = (() => {
-            try {
-              return JSON.parse(err.message) as Record<string, unknown>
-            } catch {
-              return null
-            }
-          })()
-          if (parsed && 'code' in parsed) throw err
-          if (parsed && 'state' in parsed) return parsed as unknown as HistoryMigrationJobResponse
-          throw err
+        if (err instanceof ApiError) {
+          const attach = parseSameKindAttach<HistoryMigrationJobResponse>(err)
+          if (attach) return attach
         }
         throw err
       }
@@ -199,6 +240,15 @@ export function useForceResetHistory() {
       await api.post<void>('/admin/migrate-history/force-reset')
     },
     onSuccess: () => {
+      // P1 review fix: previously only invalidated the query, but invalidate
+      // does NOT clear the existing data — it triggers a refetch and keeps
+      // the stale data visible until it resolves. On slow networks the panel
+      // would render the stuck-banner for a flicker between "force-reset
+      // success" and "GET /job → 404 → null". Setting the cache to null
+      // first removes the stale data immediately; the subsequent invalidate
+      // covers the case where a synthesized DB-fallback state appears (it
+      // shouldn't post-reset, but defense-in-depth).
+      queryClient.setQueryData(HISTORY_JOB_KEY, null)
       queryClient.invalidateQueries({ queryKey: HISTORY_JOB_KEY })
     },
   })

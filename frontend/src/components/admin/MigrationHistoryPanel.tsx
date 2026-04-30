@@ -24,9 +24,6 @@ import { StatCard } from './StatCard'
 
 const HISTORY_JOB_KEY = ['migration-history', 'job'] as const
 
-/** Marker substring inserted by the backend's A7.1 IN_PROGRESS-row synthesis. */
-const STUCK_MARKER = 'marked IN_PROGRESS'
-
 function formatStartError(error: unknown): string {
   if (error instanceof ApiError) {
     if (/^\s*<(?:!doctype|html)/i.test(error.message)) {
@@ -58,7 +55,14 @@ export function MigrationHistoryPanel() {
   const forceReset = useForceResetHistory()
   const adminMode = useAdminMode((s) => s.enabled)
   const queryClient = useQueryClient()
-  const [confirmOpen, setConfirmOpen] = useState<null | { reset: boolean }>(null)
+  // P2 review fix: was `useState<{ reset: boolean } | null>` — snapshotted
+  // the reset value at button-click time. If a poll tick changed jobData.state
+  // between opening the dialog and confirming, the snapshot was stale (e.g.
+  // dialog opened on idle with reset=false, then a stuck-job arrived from a
+  // poll, user clicks Confirm, mutation fires with the wrong reset). Now the
+  // dialog stores only "is open?" and re-derives reset at confirm time from
+  // the live jobData.
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const [forceResetOpen, setForceResetOpen] = useState(false)
 
   // Cross-disable: don't let the user start a history job while components
@@ -67,7 +71,11 @@ export function MigrationHistoryPanel() {
   const componentsJob = useMigrationJob()
   const componentsRunning = componentsJob.data?.state === 'RUNNING'
 
-  const isStuck = jobData?.state === 'FAILED' && jobData.errorMessage?.includes(STUCK_MARKER) === true
+  // P1 review fix: was matching on errorMessage.includes('marked IN_PROGRESS')
+  // — a brittle string contract spread across two repos. Now branches on the
+  // backend's positive `recoveryAction` discriminator. FORCE_RESET → stuck
+  // claim from a previous pod; RETRY → terminal-but-recoverable.
+  const isStuck = jobData?.recoveryAction === 'FORCE_RESET'
   const isFailed = jobData?.state === 'FAILED' && !isStuck
   const isCompleted = jobData?.state === 'COMPLETED'
   const result = jobData?.result ?? null
@@ -86,8 +94,11 @@ export function MigrationHistoryPanel() {
     }
   }, [jobData?.state, result, queryClient])
 
-  async function runHistoryMigration(reset: boolean) {
-    setConfirmOpen(null)
+  async function runHistoryMigration() {
+    // Re-derive `reset` from the LIVE state at confirm time (not snapshot at
+    // button-click time). See useState comment above.
+    const reset = isCompleted || isFailed
+    setConfirmOpen(false)
     await startHistory.mutateAsync({ reset }).catch(() => undefined)
   }
 
@@ -127,7 +138,7 @@ export function MigrationHistoryPanel() {
       <div className="flex flex-wrap items-center gap-3">
         <Button
           type="button"
-          onClick={() => setConfirmOpen({ reset: runButtonReset })}
+          onClick={() => setConfirmOpen(true)}
           disabled={runButtonDisabled}
           aria-busy={isRunning || startHistory.isPending}
         >
@@ -167,6 +178,7 @@ export function MigrationHistoryPanel() {
           data-testid="history-migration-progress"
           className="rounded-md border bg-card p-3 space-y-2 text-sm"
           aria-busy={jobData.totalCommits === 0 ? 'true' : 'false'}
+          aria-live="polite"
         >
           <div className="flex items-center justify-between font-medium">
             <span>{historyPhaseLabel(jobData)}</span>
@@ -196,6 +208,7 @@ export function MigrationHistoryPanel() {
       {isStuck && jobData?.errorMessage && (
         <div
           data-testid="history-stuck-banner"
+          role="alert"
           className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
         >
           {jobData.errorMessage}
@@ -226,23 +239,23 @@ export function MigrationHistoryPanel() {
         </div>
       )}
 
-      <Dialog open={confirmOpen !== null} onOpenChange={(open) => !open && setConfirmOpen(null)}>
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {confirmOpen?.reset ? 'Retry history migration with reset?' : 'Run history migration?'}
+              {runButtonReset ? 'Retry history migration with reset?' : 'Run history migration?'}
             </DialogTitle>
             <DialogDescription>
-              {confirmOpen?.reset
+              {runButtonReset
                 ? 'This will delete previously-imported git history rows from audit log and re-import from the resolved tag. The operation can take several minutes.'
                 : 'Backfills git history into audit_log starting from the resolved tag. The operation can take several minutes.'}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setConfirmOpen(null)}>
+            <Button type="button" variant="outline" onClick={() => setConfirmOpen(false)}>
               Cancel
             </Button>
-            <Button type="button" onClick={() => confirmOpen && runHistoryMigration(confirmOpen.reset)}>
+            <Button type="button" onClick={() => runHistoryMigration()}>
               Confirm
             </Button>
           </DialogFooter>

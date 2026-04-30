@@ -70,15 +70,21 @@ function phaseLabel(job: { phase?: 'DEFAULTS' | 'COMPONENTS' | null; currentComp
 
 /**
  * The progress bar must be indeterminate (animated, full-width) when there is
- * nothing measurable to show. Two cases produce that: the DEFAULTS phase
- * (where total is 0 by design — migrateDefaults doesn't count anything), and
- * the *start* of the COMPONENTS phase before gitResolver.getComponents() has
- * returned and the first per-component event has fired (also total=0). A
- * missing phase field (older CRS) likewise lacks the information to render
- * a determinate bar, so we default to indeterminate there too.
+ * nothing measurable to show. Indeterminate when EITHER:
+ *  - the phase is unknown / missing (older CRS, contract drift)
+ *  - total === 0 (DEFAULTS phase, or COMPONENTS phase before
+ *    gitResolver.getComponents() returned).
+ *
+ * P3 review fix: previously `!job.phase || job.total === 0` would treat an
+ * unknown future phase string (e.g. backend ships 'WALKING' or a typo'd
+ * 'COMPONNTS') as "phase known" because `!job.phase` is falsy on any
+ * non-empty string — even though we don't know what label to render. Check
+ * the union explicitly so unknown values fall back to indeterminate +
+ * "Running…", matching the missing-field path.
  */
 function indeterminate(job: { phase?: 'DEFAULTS' | 'COMPONENTS' | null; total: number }): boolean {
-  return !job.phase || job.total === 0
+  const phaseKnown = job.phase === 'DEFAULTS' || job.phase === 'COMPONENTS'
+  return !phaseKnown || job.total === 0
 }
 
 export function MigrationPanel() {
@@ -173,6 +179,7 @@ export function MigrationPanel() {
           data-testid="migration-progress"
           className="rounded-md border bg-card p-3 space-y-2 text-sm"
           aria-busy={indeterminate(jobData) ? 'true' : 'false'}
+          aria-live="polite"
         >
           <div className="flex items-center justify-between font-medium">
             <span>{phaseLabel(jobData)}</span>

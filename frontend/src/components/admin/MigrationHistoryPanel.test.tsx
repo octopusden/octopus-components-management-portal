@@ -59,6 +59,7 @@ const COMPLETED_JOB: HistoryMigrationJobResponse = {
   processedCommits: 100,
   auditRecords: 250,
   currentSha: null,
+  recoveryAction: 'RETRY',
   result: {
     targetRef: 'refs/tags/test-1.0',
     targetSha: 'abc1234567890',
@@ -76,19 +77,21 @@ const FAILED_JOB: HistoryMigrationJobResponse = {
   state: 'FAILED',
   finishedAt: '2026-04-29T10:00:30Z',
   errorMessage: 'git refused clone',
+  recoveryAction: 'RETRY',
 }
 
 const STUCK_JOB: HistoryMigrationJobResponse = {
   ...RUNNING_JOB,
   state: 'FAILED',
   finishedAt: '2026-04-29T10:00:30Z',
-  // Verbatim from HistoryMigrationJobServiceImpl.synthesizeFromDb for an
-  // IN_PROGRESS row with no in-memory job — the SPA matches on the
-  // "marked IN_PROGRESS" substring to switch into the Force-reset path.
+  // Backend's synthesized state for an IN_PROGRESS DB row with no in-memory
+  // job — see HistoryMigrationJobServiceImpl.synthesizeFromDb. The SPA used
+  // to match on errorMessage.includes('marked IN_PROGRESS'), now branches
+  // on the recoveryAction discriminator.
+  recoveryAction: 'FORCE_RESET',
   errorMessage:
-    'Previous run is marked IN_PROGRESS but no job is active in this pod ' +
-    '(probably interrupted by pod restart). Use Force reset to clear the claim, ' +
-    'then Retry.',
+    'Previous run is stuck in IN_PROGRESS state with no active job in this pod ' +
+    '(probably interrupted by a pod restart). Use Force reset to clear the claim, then Retry.',
 }
 
 function historyJobReturn(data: HistoryMigrationJobResponse | null) {
@@ -380,6 +383,82 @@ describe('MigrationHistoryPanel — start mutation errors', () => {
     renderPanel()
     expect(screen.getByText(/Forbidden/i)).toBeDefined()
     expect(screen.getByText(/403/i)).toBeDefined()
+  })
+
+  it('renders a destructive block when useForceResetHistory surfaces 409', () => {
+    // P3 review fix: was only covered at the hook layer. Pin the user-visible
+    // path: a force-reset 409 (e.g. likely-live-elsewhere) renders the
+    // destructive block with the prefix "Force reset failed:" so the operator
+    // understands which action failed.
+    const { base } = buildForceResetMutation()
+    mockUseForceResetHistory.mockReturnValue({
+      ...base,
+      isError: true,
+      isIdle: false,
+      error: new ApiError(409, '{"code":"history-import-likely-live-elsewhere","message":"Refusing"}'),
+      status: 'error',
+    } as unknown as ReturnType<typeof useForceResetHistory>)
+    mockUseHistoryMigrationJob.mockReturnValue(historyJobReturn(STUCK_JOB))
+    useAdminMode.setState({ enabled: true })
+
+    renderPanel()
+    expect(screen.getByText(/force reset failed/i)).toBeDefined()
+  })
+})
+
+describe('MigrationHistoryPanel — confirm dialog re-derives reset at confirm time (no stale snapshot)', () => {
+  it('opens dialog on idle (Run), then a poll arrives with stuck-job — confirm sends reset=false (live state)', async () => {
+    // P2 review fix: the previous impl snapshotted reset=false at button-click
+    // time. If a poll tick changed jobData between open and confirm, the
+    // snapshot was stale. Now reset is re-derived from live jobData on confirm.
+    //
+    // Simulate the race: render in idle state, click Run (dialog opens with
+    // "Run history migration" wording), then re-render with STUCK_JOB
+    // (stuck-IN_PROGRESS row from a poll). The dialog now reflects the
+    // FORCE_RESET path — the run button itself disables — so user can't
+    // accidentally fire reset=false against a stuck DB row. The button label
+    // change in the dialog is the visible signal.
+    const { base, mutateAsync } = buildHistoryMutation()
+    mockUseRunHistoryMigration.mockReturnValue(base)
+    mockUseHistoryMigrationJob.mockReturnValue(historyJobReturn(null))
+    useAdminMode.setState({ enabled: true })
+
+    const { rerender, client } = renderPanel()
+    fireEvent.click(screen.getByRole('button', { name: /run history migration/i }))
+    await screen.findByRole('dialog')
+    // Confirm dialog title reflects idle state — no reset.
+    expect(screen.getByText(/run history migration\?/i)).toBeDefined()
+
+    // Poll arrives with a COMPLETED job — re-render with new state.
+    mockUseHistoryMigrationJob.mockReturnValue(historyJobReturn(COMPLETED_JOB))
+    rerender(React.createElement(QueryClientProvider, { client }, <MigrationHistoryPanel />))
+
+    // Dialog stays open but title / wording now reflects retry-with-reset path.
+    expect(screen.getByText(/retry history migration with reset\?/i)).toBeDefined()
+
+    // Confirm clicks → mutation fires with reset=true (re-derived from live state).
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /confirm/i }))
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith({ reset: true }))
+  })
+})
+
+describe('MigrationHistoryPanel — accessibility', () => {
+  it('progress card has aria-live=polite so screen readers announce phase / commit transitions', () => {
+    mockUseHistoryMigrationJob.mockReturnValue(historyJobReturn(RUNNING_JOB))
+    useAdminMode.setState({ enabled: true })
+
+    const { container } = renderPanel()
+    const progress = container.querySelector('[data-testid="history-migration-progress"]') as HTMLElement
+    expect(progress.getAttribute('aria-live')).toBe('polite')
+  })
+
+  it('stuck banner has role=alert so screen readers announce the recovery requirement on first render', () => {
+    mockUseHistoryMigrationJob.mockReturnValue(historyJobReturn(STUCK_JOB))
+    useAdminMode.setState({ enabled: true })
+
+    const { container } = renderPanel()
+    const banner = container.querySelector('[data-testid="history-stuck-banner"]') as HTMLElement
+    expect(banner.getAttribute('role')).toBe('alert')
   })
 })
 

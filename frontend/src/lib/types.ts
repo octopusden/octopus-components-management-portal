@@ -184,6 +184,8 @@ export type JobState = 'RUNNING' | 'COMPLETED' | 'FAILED'
  * failure list.
  */
 export interface MigrationJobResponse {
+  /** Discriminator — always 'job' for this shape (vs 'conflict' on cross-kind 409). Optional for backward compat with older CRS that omitted the field. */
+  kind?: 'job'
   id: string
   state: JobState
   startedAt: string
@@ -239,6 +241,8 @@ export interface HistoryImportResult {
  * SPA still uses `state` and `errorMessage` to drive the action buttons.
  */
 export interface HistoryMigrationJobResponse {
+  /** Discriminator — always 'job' for this shape. Optional for backward compat. */
+  kind?: 'job'
   id: string
   state: JobState
   startedAt: string
@@ -253,15 +257,33 @@ export interface HistoryMigrationJobResponse {
   targetRef: string | null
   errorMessage: string | null
   result: HistoryImportResult | null
+  /**
+   * SPA action hint:
+   *  - 'RETRY' → terminal+recoverable (COMPLETED or normal FAILED). Show
+   *    "Retry (reset state)" button, POST with reset=true.
+   *  - 'FORCE_RESET' → stuck IN_PROGRESS row from a previous pod that
+   *    crashed. Show "Force reset" + disabled "Retry".
+   *  - null → no action (RUNNING, or idle).
+   *
+   * Replaces the previous brittle `errorMessage.includes('marked IN_PROGRESS')`
+   * substring contract.
+   */
+  recoveryAction?: 'RETRY' | 'FORCE_RESET' | null
 }
 
 /**
  * 409 body returned for cross-kind conflicts — components POST while history
  * is RUNNING, force-reset while history is RUNNING, etc. Distinct from the
- * same-kind attach 409 that returns a full job-response body.
+ * same-kind attach 409 that returns a full job-response body — distinguished
+ * by the `kind` discriminator (always 'conflict' here).
  */
 export interface MigrationConflictResponse {
-  code: 'components-migration-running' | 'history-migration-running'
+  /** Discriminator — always 'conflict' for this shape. Mutually exclusive with the 'job' shape. */
+  kind: 'conflict'
+  code:
+    | 'components-migration-running'
+    | 'history-migration-running'
+    | 'history-import-likely-live-elsewhere'
   message: string
   activeKind: 'COMPONENTS' | 'HISTORY'
   activeJobId: string
