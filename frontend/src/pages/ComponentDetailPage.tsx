@@ -21,6 +21,7 @@ import { DistributionTab } from '../components/editor/DistributionTab'
 import { JiraTab } from '../components/editor/JiraTab'
 import { EscrowTab } from '../components/editor/EscrowTab'
 import { FieldOverrides } from '../components/editor/FieldOverrides'
+import { ComponentHistoryTab } from '../components/editor/ComponentHistoryTab'
 import { useComponent, useUpdateComponent, useDeleteComponent, type ComponentUpdateRequest } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
 import { ApiError } from '../lib/api'
@@ -271,6 +272,7 @@ export function ComponentDetailPage() {
               )}
             </TabsTrigger>
             <TabsTrigger value="overrides">Overrides</TabsTrigger>
+            <TabsTrigger value="history">History</TabsTrigger>
           </TabsList>
 
           <div className="mt-4">
@@ -300,6 +302,10 @@ export function ComponentDetailPage() {
 
             <TabsContent value="overrides">
               <FieldOverrides componentId={component.id} />
+            </TabsContent>
+
+            <TabsContent value="history">
+              <ComponentHistoryTab componentId={component.id} />
             </TabsContent>
           </div>
         </Tabs>
