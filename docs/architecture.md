@@ -116,6 +116,22 @@ SpaFallbackFilter excludes (passes through to backend, not to SPA):
 
 Anonymous endpoints are deliberate on both sides — see CRS ADR-012 §"Boundary contract" and `WebSecurityConfig.kt` on the CRS side.
 
+### Specific endpoints consumed by the SPA (B7.1)
+
+The P1 UI features rely on these CRS endpoints (all behind the `/rest/**` proxy except `/auth/me` which sits under `/auth/**`):
+
+| Endpoint | Used by | CRS contract |
+|---|---|---|
+| `GET /components?owner=…&search=…&productType=…&archived=…` | List page filter sidebar (B7.1.1), parent autocomplete (B7.1.5) | `SYS-035` for `owner` |
+| `GET /components/meta/owners` | Owner picker on the list page (B7.1.1), people input on detail | existing |
+| `GET /components/{idOrName}` | Detail page fetch (UUID first, name fallback) | existing |
+| `PATCH /components/{id}` with `name` | Rename (B7.1.4) | `canRenameComponent` SpEL |
+| `PATCH /components/{id}` with `parentComponentName` | Parent autocomplete save (B7.1.5) | `canEditComponent` |
+| `GET /audit/Component/{id}` | Per-component History tab (B7.1.2) | existing |
+| `GET /audit/recent?changedBy=&source=&action=&from=&to=` | Audit-log filter sidebar (B7.1.3) | `SYS-036` |
+
+When a new endpoint is consumed, **add a row here** so the boundary stays reviewable. Cross-repo links between living indexes (this `architecture.md` and CRS docs) may use the active branch (`v3` for CRS, `develop` for Portal) per [`DOCS.md`](../DOCS.md) authoring rule #5.
+
 ## Limits and known gaps
 
 - **Session store is in-memory.** Pod restart logs every browser user out. Tracked as [`TD-003`](tech-debt/TD-003-persisted-session-store.md).
