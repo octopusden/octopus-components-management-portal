@@ -2,9 +2,16 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
-import { useMigrationJob, useMigrationStatus, useRunMigration } from './useMigration'
+import {
+  useForceResetHistory,
+  useHistoryMigrationJob,
+  useMigrationJob,
+  useMigrationStatus,
+  useRunHistoryMigration,
+  useRunMigration,
+} from './useMigration'
 import { api, ApiError } from '../lib/api'
-import type { MigrationJobResponse, MigrationStatus } from '../lib/types'
+import type { HistoryMigrationJobResponse, MigrationJobResponse, MigrationStatus } from '../lib/types'
 
 vi.mock('../lib/api', async () => {
   const actual = await vi.importActual<typeof import('../lib/api')>('../lib/api')
@@ -117,6 +124,41 @@ describe('useRunMigration', () => {
     expect(data).toEqual(RUNNING_JOB)
     expect(result.current.isError).toBe(false)
     expect(assignSpy).not.toHaveBeenCalled()
+  })
+
+  it('surfaces cross-kind 409 (kind=conflict) as a mutation error so panel destructive block renders', async () => {
+    // P1 review fix: useRunMigration previously had ZERO 409 branching — would
+    // JSON.parse the conflict envelope and hand it to the panel as a "successful
+    // attached job" with no `id/state`. Now it uses the same parseSameKindAttach
+    // helper as the history hook and rethrows on cross-kind.
+    const conflictBody = JSON.stringify({
+      kind: 'conflict',
+      code: 'history-migration-running',
+      message: 'History migration is currently running.',
+      activeKind: 'HISTORY',
+      activeJobId: 'history-1',
+    })
+    mockApi.post.mockRejectedValue(new ApiError(409, conflictBody))
+    const { wrapper } = makeWrapper()
+
+    const { result } = renderHook(() => useRunMigration(), { wrapper })
+    await result.current.mutateAsync().catch(() => undefined)
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect((result.current.error as ApiError).status).toBe(409)
+  })
+
+  it('surfaces 409 with malformed body as a mutation error (does not silently swallow)', async () => {
+    // P1 review fix: parseSameKindAttach returns null on JSON.parse failure;
+    // the hook then rethrows. Without this, a corrupted 409 body would have
+    // been blindly cast and stuffed into the cache as a "job".
+    mockApi.post.mockRejectedValue(new ApiError(409, '<html><body>504 from gateway</body></html>'))
+    const { wrapper } = makeWrapper()
+
+    const { result } = renderHook(() => useRunMigration(), { wrapper })
+    await result.current.mutateAsync().catch(() => undefined)
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
   })
 
   it('surfaces ApiError(403) as isError and does NOT redirect to OIDC', async () => {
@@ -239,5 +281,258 @@ describe('useMigrationJob', () => {
     // No further polls — the interval should disarm now that state !== RUNNING.
     await vi.advanceTimersByTimeAsync(3000)
     expect(mockApi.get).toHaveBeenCalledTimes(callCountAfterComplete)
+  })
+})
+
+// History-migration hooks: mirror of the components-side tests above. The
+// fixtures live in this file rather than a shared helper because each test
+// only needs a couple of fields and inlining keeps the test bodies readable.
+const HISTORY_RUNNING: HistoryMigrationJobResponse = {
+  id: 'history-1',
+  state: 'RUNNING',
+  startedAt: '2026-04-29T10:00:00Z',
+  finishedAt: null,
+  totalCommits: 0,
+  processedCommits: 0,
+  auditRecords: 0,
+  skippedNoGroovy: 0,
+  skippedParseError: 0,
+  skippedUnknownNames: 0,
+  currentSha: null,
+  targetRef: null,
+  errorMessage: null,
+  result: null,
+}
+
+const HISTORY_COMPLETED: HistoryMigrationJobResponse = {
+  ...HISTORY_RUNNING,
+  state: 'COMPLETED',
+  finishedAt: '2026-04-29T10:00:30Z',
+  totalCommits: 100,
+  processedCommits: 100,
+  auditRecords: 250,
+  result: {
+    targetRef: 'refs/tags/test-1.0',
+    targetSha: 'abc1234567890',
+    processedCommits: 100,
+    skippedNoGroovy: 0,
+    skippedParseError: 0,
+    skippedUnknownNames: 0,
+    auditRecords: 250,
+    durationMs: 30_000,
+  },
+}
+
+describe('useRunHistoryMigration', () => {
+  it('POSTs /admin/migrate-history?reset=false when called with reset=false', async () => {
+    mockApi.post.mockResolvedValue(HISTORY_RUNNING)
+    const { wrapper } = makeWrapper()
+
+    const { result } = renderHook(() => useRunHistoryMigration(), { wrapper })
+    await result.current.mutateAsync({ reset: false })
+
+    expect(mockApi.post).toHaveBeenCalledWith('/admin/migrate-history?reset=false')
+  })
+
+  it('POSTs /admin/migrate-history?reset=true when called with reset=true', async () => {
+    // Critical: this is the path that recovers from a terminal
+    // git_history_import_state row. Without reset=true the backend's preflight
+    // 409s on the existing row, and the panel's "Retry (reset state)" button
+    // would do nothing useful.
+    mockApi.post.mockResolvedValue(HISTORY_RUNNING)
+    const { wrapper } = makeWrapper()
+
+    const { result } = renderHook(() => useRunHistoryMigration(), { wrapper })
+    await result.current.mutateAsync({ reset: true })
+
+    expect(mockApi.post).toHaveBeenCalledWith('/admin/migrate-history?reset=true')
+  })
+
+  it('treats same-kind 409 (body is full job-response) as success and resolves with the existing job', async () => {
+    // Same shape as 202 — backend uses 409 for the "you already started one"
+    // attach case. SPA should resolve as success and let the panel poll.
+    mockApi.post.mockRejectedValue(new ApiError(409, JSON.stringify(HISTORY_RUNNING)))
+    const { wrapper } = makeWrapper()
+
+    const { result } = renderHook(() => useRunHistoryMigration(), { wrapper })
+    const data = await result.current.mutateAsync({ reset: false })
+
+    expect(data).toEqual(HISTORY_RUNNING)
+    expect(result.current.isError).toBe(false)
+  })
+
+  it('surfaces cross-kind 409 (kind=conflict) as a mutation error so the panel renders destructive block', async () => {
+    // The backend's MigrationConflictResponse carries `{kind:'conflict', code,
+    // message, activeKind, activeJobId}` — distinguishable from the same-kind
+    // body by the `kind` discriminator. SPA must NOT swallow this — the user
+    // needs to see "Components migration is currently running".
+    const conflictBody = JSON.stringify({
+      kind: 'conflict',
+      code: 'components-migration-running',
+      message: 'Components migration is currently running.',
+      activeKind: 'COMPONENTS',
+      activeJobId: 'comp-1',
+    })
+    mockApi.post.mockRejectedValue(new ApiError(409, conflictBody))
+    const { wrapper } = makeWrapper()
+
+    const { result } = renderHook(() => useRunHistoryMigration(), { wrapper })
+    await result.current.mutateAsync({ reset: false }).catch(() => undefined)
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect((result.current.error as ApiError).status).toBe(409)
+  })
+
+  it('primes the [migration-history, job] cache on success', async () => {
+    mockApi.post.mockResolvedValue(HISTORY_RUNNING)
+    const { wrapper, client } = makeWrapper()
+
+    const { result } = renderHook(() => useRunHistoryMigration(), { wrapper })
+    await result.current.mutateAsync({ reset: false })
+
+    expect(client.getQueryData(['migration-history', 'job'])).toEqual(HISTORY_RUNNING)
+  })
+
+  it('does NOT invalidate [migration-history, job] when COMPLETED — it primed that cache directly', async () => {
+    // P1 review fix: was invalidating HISTORY_JOB_KEY on COMPLETED — same
+    // key it just primed. The immediate refetch could clobber the fresh
+    // COMPLETED data with whatever the synthesized DB-fallback path
+    // returned (in tests, a fresh GET would re-fire mockApi.get; in
+    // production, race with backend in-memory state cleanup). Asserting
+    // no invalidate calls happen is the simplest pin.
+    mockApi.post.mockResolvedValue(HISTORY_COMPLETED)
+    const { wrapper, client } = makeWrapper()
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useRunHistoryMigration(), { wrapper })
+    await result.current.mutateAsync({ reset: false })
+
+    expect(invalidateSpy).not.toHaveBeenCalled()
+    // Cache must still hold the COMPLETED data we just primed.
+    expect(client.getQueryData(['migration-history', 'job'])).toEqual(HISTORY_COMPLETED)
+  })
+
+  it('rejects 409 with malformed body (HTML page) as a mutation error', async () => {
+    // parseSameKindAttach returns null on JSON.parse failure → rethrow.
+    mockApi.post.mockRejectedValue(new ApiError(409, '<html>...</html>'))
+    const { wrapper } = makeWrapper()
+    const { result } = renderHook(() => useRunHistoryMigration(), { wrapper })
+    await result.current.mutateAsync({ reset: false }).catch(() => undefined)
+    await waitFor(() => expect(result.current.isError).toBe(true))
+  })
+
+  it('rejects 409 with primitive body (number/string/array) as a mutation error', async () => {
+    // Defense against typeof null === 'object' and array-as-object: parsed
+    // must be a real object before we even check fields. Without these
+    // guards the helper would crash on `'kind' in 42` etc.
+    mockApi.post.mockRejectedValue(new ApiError(409, '"just a string"'))
+    const { wrapper } = makeWrapper()
+    const { result } = renderHook(() => useRunHistoryMigration(), { wrapper })
+    await result.current.mutateAsync({ reset: false }).catch(() => undefined)
+    await waitFor(() => expect(result.current.isError).toBe(true))
+  })
+
+  it('rejects 409 with job-shape missing `id` as a mutation error (validation)', async () => {
+    // P2 review fix: the shared helper used to cast as T without checking
+    // required fields. A backend bug shipping `{state: "RUNNING"}` (no id)
+    // would have rendered as "undefined / NaN%" in the panel.
+    mockApi.post.mockRejectedValue(new ApiError(409, '{"kind":"job","state":"RUNNING"}'))
+    const { wrapper } = makeWrapper()
+    const { result } = renderHook(() => useRunHistoryMigration(), { wrapper })
+    await result.current.mutateAsync({ reset: false }).catch(() => undefined)
+    await waitFor(() => expect(result.current.isError).toBe(true))
+  })
+})
+
+describe('useHistoryMigrationJob', () => {
+  it('GETs /admin/migrate-history/job and returns the parsed body', async () => {
+    mockApi.get.mockResolvedValue(HISTORY_RUNNING)
+    const { wrapper } = makeWrapper()
+
+    const { result } = renderHook(() => useHistoryMigrationJob(), { wrapper })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(mockApi.get).toHaveBeenCalledWith('/admin/migrate-history/job')
+    expect(result.current.data).toEqual(HISTORY_RUNNING)
+  })
+
+  it('treats 404 as null (idle, no DB row, no in-memory job)', async () => {
+    mockApi.get.mockRejectedValue(new ApiError(404, 'Not Found'))
+    const { wrapper } = makeWrapper()
+
+    const { result } = renderHook(() => useHistoryMigrationJob(), { wrapper })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(result.current.data).toBeNull()
+    expect(result.current.isError).toBe(false)
+  })
+
+  it('polls every second while state is RUNNING', async () => {
+    vi.useFakeTimers()
+    mockApi.get.mockResolvedValue(HISTORY_RUNNING)
+    const { wrapper } = makeWrapper()
+
+    const { result } = renderHook(() => useHistoryMigrationJob(), { wrapper })
+    await vi.waitFor(() => expect(result.current.data).toEqual(HISTORY_RUNNING))
+
+    expect(mockApi.get).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1100)
+    expect(mockApi.get).toHaveBeenCalledTimes(2)
+  })
+
+  it('stops polling once state transitions to COMPLETED', async () => {
+    vi.useFakeTimers()
+    mockApi.get.mockResolvedValueOnce(HISTORY_RUNNING).mockResolvedValueOnce(HISTORY_COMPLETED)
+    const { wrapper } = makeWrapper()
+
+    const { result } = renderHook(() => useHistoryMigrationJob(), { wrapper })
+    await vi.waitFor(() => expect(result.current.data?.state).toBe('RUNNING'))
+
+    await vi.advanceTimersByTimeAsync(1100)
+    await vi.waitFor(() => expect(result.current.data?.state).toBe('COMPLETED'))
+
+    const callCountAfterComplete = mockApi.get.mock.calls.length
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(mockApi.get).toHaveBeenCalledTimes(callCountAfterComplete)
+  })
+})
+
+describe('useForceResetHistory', () => {
+  it('POSTs /admin/migrate-history/force-reset', async () => {
+    mockApi.post.mockResolvedValue(undefined)
+    const { wrapper } = makeWrapper()
+
+    const { result } = renderHook(() => useForceResetHistory(), { wrapper })
+    await result.current.mutateAsync()
+
+    expect(mockApi.post).toHaveBeenCalledWith('/admin/migrate-history/force-reset')
+  })
+
+  it('invalidates [migration-history, job] on success so the panel re-fetches and renders idle', async () => {
+    mockApi.post.mockResolvedValue(undefined)
+    const { wrapper, client } = makeWrapper()
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useForceResetHistory(), { wrapper })
+    await result.current.mutateAsync()
+
+    const invalidatedKeys = invalidateSpy.mock.calls.map(
+      (call) => (call[0] as { queryKey?: readonly unknown[] } | undefined)?.queryKey,
+    )
+    expect(invalidatedKeys).toContainEqual(['migration-history', 'job'])
+  })
+
+  it('surfaces 409 (force-reset refused while RUNNING) as a mutation error', async () => {
+    // Backend refuses force-reset while a history job is RUNNING in this pod
+    // (defense-in-depth against curl-races). The SPA already hides the button
+    // in that state, but the network path needs to remain a normal error so
+    // an unexpected race doesn't get swallowed.
+    mockApi.post.mockRejectedValue(new ApiError(409, '{"code":"history-migration-running"}'))
+    const { wrapper } = makeWrapper()
+
+    const { result } = renderHook(() => useForceResetHistory(), { wrapper })
+    await result.current.mutateAsync().catch(() => undefined)
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect((result.current.error as ApiError).status).toBe(409)
   })
 })
