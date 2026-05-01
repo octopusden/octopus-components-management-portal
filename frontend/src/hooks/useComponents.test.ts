@@ -103,4 +103,37 @@ describe('useComponents — URL params', () => {
     expect(calledUrl).toContain('page=3')
     expect(calledUrl).toContain('size=50')
   })
+
+  it('passes productType filter when set', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result } = renderHook(
+      () => useComponents({ filter: { productType: 'LIBRARY' } }),
+      { wrapper: makeWrapper() },
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const calledUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    expect(calledUrl).toContain('productType=LIBRARY')
+  })
+
+  it('passes search filter when set', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result } = renderHook(
+      () => useComponents({ filter: { search: 'my-lib' } }),
+      { wrapper: makeWrapper() },
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const calledUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    expect(calledUrl).toContain('search=my-lib')
+  })
+
+  it('passes owner filter when set', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result } = renderHook(
+      () => useComponents({ filter: { owner: 'alice@example.com' } }),
+      { wrapper: makeWrapper() },
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const calledUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    expect(calledUrl).toContain('owner=alice%40example.com')
+  })
 })

@@ -105,4 +105,55 @@ describe('AuditLogFilters (B7.1.3)', () => {
     render(<AuditLogFilters filter={{}} onChange={onChange} />)
     expect(screen.queryByRole('button', { name: /clear filters/i })).toBeNull()
   })
+
+  it('propagates the to field as an ISO instant', () => {
+    render(<AuditLogFilters filter={{}} onChange={onChange} />)
+    const to = screen.getByLabelText(/^to$/i)
+    fireEvent.change(to, { target: { value: '2026-05-01T18:00' } })
+    expect(onChange).toHaveBeenCalled()
+    const calledFilter = onChange.mock.calls.at(-1)![0] as AuditFilter
+    expect(calledFilter.to).toMatch(/^2026-05-01T/)
+    expect(calledFilter.to?.endsWith('Z')).toBe(true)
+  })
+
+  it('renders empty value in the to input when the filter carries an unparseable instant', () => {
+    // instantToLocal: new Date('garbage') → NaN → returns ''
+    render(<AuditLogFilters filter={{ to: 'garbage-date-string' }} onChange={onChange} />)
+    const to = screen.getByLabelText(/^to$/i) as HTMLInputElement
+    expect(to.value).toBe('')
+  })
+
+  it('reflects an existing from filter value in the input', () => {
+    const instant = new Date('2026-04-28T12:00:00Z').toISOString()
+    render(<AuditLogFilters filter={{ from: instant }} onChange={onChange} />)
+    const from = screen.getByLabelText(/^from$/i) as HTMLInputElement
+    expect(from.value).toMatch(/^2026-04-28T/)
+  })
+
+  it('calls onChange with action when an action is selected', async () => {
+    render(<AuditLogFilters filter={{}} onChange={onChange} />)
+    await userEvent.click(screen.getByRole('combobox', { name: /action/i }))
+    await userEvent.click(screen.getByRole('option', { name: 'CREATE' }))
+    expect(onChange).toHaveBeenCalledWith({ action: 'CREATE' })
+  })
+
+  it('clears action when All actions is selected', async () => {
+    render(<AuditLogFilters filter={{ action: 'CREATE' }} onChange={onChange} />)
+    await userEvent.click(screen.getByRole('combobox', { name: /action/i }))
+    await userEvent.click(screen.getByRole('option', { name: /all actions/i }))
+    expect(onChange).toHaveBeenCalledWith({ action: undefined })
+  })
+
+  it('clears source when All sources is selected', async () => {
+    render(<AuditLogFilters filter={{ source: 'api' }} onChange={onChange} />)
+    await userEvent.click(screen.getByRole('combobox', { name: /source/i }))
+    await userEvent.click(screen.getByRole('option', { name: /all sources/i }))
+    expect(onChange).toHaveBeenCalledWith({ source: undefined })
+  })
+
+  it('syncs changedBy input when filter.changedBy prop changes', () => {
+    const { rerender } = render(<AuditLogFilters filter={{ changedBy: 'alice' }} onChange={onChange} />)
+    rerender(<AuditLogFilters filter={{ changedBy: 'bob' }} onChange={onChange} />)
+    expect((screen.getByLabelText(/changed by/i) as HTMLInputElement).value).toBe('bob')
+  })
 })
