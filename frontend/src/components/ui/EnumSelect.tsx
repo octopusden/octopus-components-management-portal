@@ -14,6 +14,7 @@ interface EnumSelectProps {
   onValueChange: (value: string) => void
   placeholder?: string
   allowFreeText?: boolean
+  disabled?: boolean
 }
 
 export function EnumSelect({
@@ -22,6 +23,7 @@ export function EnumSelect({
   onValueChange,
   placeholder = 'Select an option',
   allowFreeText = false,
+  disabled = false,
 }: EnumSelectProps) {
   const { options, isLoading } = useFieldConfigOptions(fieldPath)
 
@@ -51,6 +53,7 @@ export function EnumSelect({
       <Select
         value={value || '__none__'}
         onValueChange={(val) => onValueChange(val === '__none__' ? '' : val)}
+        disabled={disabled}
       >
         <SelectTrigger>
           <SelectValue placeholder={placeholder} />
@@ -71,6 +74,7 @@ export function EnumSelect({
     <Select
       value={value || '__none__'}
       onValueChange={(val) => onValueChange(val === '__none__' ? '' : val)}
+      disabled={disabled}
     >
       <SelectTrigger>
         <SelectValue placeholder={placeholder} />

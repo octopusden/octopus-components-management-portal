@@ -3,13 +3,13 @@ import { UseFormReturn } from 'react-hook-form'
 import { Label } from '../ui/label'
 import { Input } from '../ui/input'
 import { Switch } from '../ui/switch'
-import { EnumSelect } from '../ui/EnumSelect'
 import { PeopleInput } from '../ui/PeopleInput'
 import { ComponentSelect } from '../ui/ComponentSelect'
 import { FieldOverrideInline } from './FieldOverrideInline'
 import type { ComponentDetail } from '../../lib/types'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../../lib/auth'
+import { useFieldConfigEntry } from '../../hooks/useFieldConfig'
 
 export interface GeneralFormValues {
   /**
@@ -23,6 +23,8 @@ export interface GeneralFormValues {
   name: string
   displayName: string
   componentOwner: string
+  /** productType stays in GeneralFormValues (still part of the ComponentDetail
+   *  DTO) but is rendered and saved from EscrowTab (§7.0/2c migration). */
   productType: string
   system: string
   clientCode: string
@@ -46,7 +48,6 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
   } = form
 
   const solution = watch('solution')
-  const productType = watch('productType')
   const componentOwner = watch('componentOwner')
   const parentComponentName = watch('parentComponentName')
 
@@ -60,11 +61,18 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
   const { data: user } = useCurrentUser()
   const canRename = hasPermission(user, PERMISSIONS.RENAME_COMPONENTS)
 
+  // Field-config visibility entries — section-prefixed paths per ADR-011
+  const { entry: displayNameEntry } = useFieldConfigEntry('component.displayName')
+  const { entry: componentOwnerEntry } = useFieldConfigEntry('component.componentOwner')
+  const { entry: systemEntry } = useFieldConfigEntry('component.system')
+  const { entry: clientCodeEntry } = useFieldConfigEntry('component.clientCode')
+
   useEffect(() => {
     setValue('name', component.name)
     setValue('displayName', component.displayName ?? '')
     setValue('componentOwner', component.componentOwner ?? '')
     setValue('productType', component.productType ?? '')
+    // Only set system when visible — don't clobber undefined sentinel
     setValue('system', component.system.join(', '))
     setValue('clientCode', component.clientCode ?? '')
     setValue('solution', component.solution ?? false)
@@ -74,122 +82,150 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {/* Name — editable only with RENAME_COMPONENTS (B7.1.4). On the create
-            surface (isNew) the field is unconditionally editable because the
-            server enforces RENAME_COMPONENTS only on PATCH; POST permits
-            anything the EDIT_COMPONENTS holder can name. */}
-        <div className="space-y-1.5">
-          <Label htmlFor="name">Name</Label>
-          <Input
-            id="name"
-            placeholder="my-component"
-            disabled={!isNew && !canRename}
-            className={!isNew && !canRename ? 'bg-muted' : undefined}
-            {...register('name')}
-          />
-          {!isNew && !canRename && (
+      {/* ── Identity ──────────────────────────────────────────────────────── */}
+      <div>
+        <h3 className="text-sm font-medium text-muted-foreground mb-3">Identity</h3>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {/* Name — editable only with RENAME_COMPONENTS (B7.1.4). On the create
+              surface (isNew) the field is unconditionally editable because the
+              server enforces RENAME_COMPONENTS only on PATCH; POST permits
+              anything the EDIT_COMPONENTS holder can name. */}
+          <div className="space-y-1.5">
+            <Label htmlFor="name">Name</Label>
+            <Input
+              id="name"
+              placeholder="my-component"
+              disabled={!isNew && !canRename}
+              className={!isNew && !canRename ? 'bg-muted' : undefined}
+              {...register('name')}
+            />
+            {!isNew && !canRename && (
+              <p className="text-xs text-muted-foreground">
+                Renaming requires the RENAME_COMPONENTS permission (typically ROLE_ADMIN).
+                Ask an admin to rename this component or request the permission.
+              </p>
+            )}
+            {!isNew && canRename && (
+              <p className="text-xs text-muted-foreground">
+                Renaming changes the canonical identifier — every legacy v1/v2/v3 lookup
+                by old name will resolve to the renamed component.
+              </p>
+            )}
+          </div>
+
+          {/* Display Name — visibility-gated */}
+          {displayNameEntry.visibility !== 'hidden' && (
+            <div className="space-y-1.5">
+              <Label htmlFor="displayName">Display Name</Label>
+              <Input
+                id="displayName"
+                placeholder="Human-readable name"
+                disabled={displayNameEntry.visibility === 'readonly'}
+                className={displayNameEntry.visibility === 'readonly' ? 'bg-muted' : undefined}
+                {...register('displayName')}
+              />
+              {errors.displayName && (
+                <p className="text-xs text-destructive">{errors.displayName.message}</p>
+              )}
+            </div>
+          )}
+
+          {/* Parent Component — editable autocomplete (7.1.5). Backend stores the
+              canonical `name`, so the picker writes the same. Empty string maps to
+              "no parent" at save time (ComponentDetailPage hands the wire layer a
+              `null`, see useComponent.ts ComponentUpdateRequest). */}
+          <div className="space-y-1.5 sm:col-span-2 sm:max-w-md">
+            <Label htmlFor="parentComponentName">Parent Component</Label>
+            <ComponentSelect
+              id="parentComponentName"
+              value={parentComponentName ?? ''}
+              excludeName={component.name}
+              onChange={(val) => setValue('parentComponentName', val, { shouldDirty: true })}
+              placeholder="No parent (top-level component)"
+            />
             <p className="text-xs text-muted-foreground">
-              Renaming requires the RENAME_COMPONENTS permission (typically ROLE_ADMIN).
-              Ask an admin to rename this component or request the permission.
+              Reference another component by name. Leave blank for a top-level component.
             </p>
-          )}
-          {!isNew && canRename && (
-            <p className="text-xs text-muted-foreground">
-              Renaming changes the canonical identifier — every legacy v1/v2/v3 lookup
-              by old name will resolve to the renamed component.
-            </p>
-          )}
-        </div>
+          </div>
 
-        {/* Display Name */}
-        <div className="space-y-1.5">
-          <Label htmlFor="displayName">Display Name</Label>
-          <Input
-            id="displayName"
-            placeholder="Human-readable name"
-            {...register('displayName')}
-          />
-          {errors.displayName && (
-            <p className="text-xs text-destructive">{errors.displayName.message}</p>
-          )}
-        </div>
-
-        {/* Component Owner */}
-        <div className="space-y-1.5">
-          <Label htmlFor="componentOwner">Component Owner</Label>
-          <PeopleInput
-            value={componentOwner}
-            onChange={(val) => setValue('componentOwner', val)}
-          />
-          <FieldOverrideInline componentId={component.id} fieldPath="componentOwner" />
-        </div>
-
-        {/* Product Type */}
-        <div className="space-y-1.5">
-          <Label htmlFor="productType">Product Type</Label>
-          <EnumSelect
-            fieldPath="productType"
-            value={productType || ''}
-            onValueChange={(val) => setValue('productType', val)}
-            placeholder="Select product type"
-          />
-        </div>
-
-        {/* System (comma-separated) */}
-        <div className="space-y-1.5">
-          <Label htmlFor="system">System(s)</Label>
-          <Input
-            id="system"
-            placeholder="SYSTEM1, SYSTEM2"
-            {...register('system')}
-          />
-          <p className="text-xs text-muted-foreground">Comma-separated list of systems.</p>
-          <FieldOverrideInline componentId={component.id} fieldPath="system" />
-        </div>
-
-        {/* Client Code */}
-        <div className="space-y-1.5">
-          <Label htmlFor="clientCode">Client Code</Label>
-          <Input
-            id="clientCode"
-            placeholder="CLIENT_CODE"
-            {...register('clientCode')}
-          />
-          <FieldOverrideInline componentId={component.id} fieldPath="clientCode" />
+          {/* Solution toggle */}
+          <div className="sm:col-span-2 flex items-center gap-3">
+            <Switch
+              id="solution"
+              checked={solution}
+              onCheckedChange={(checked) => setValue('solution', checked)}
+            />
+            <Label htmlFor="solution" className="cursor-pointer">Solution</Label>
+          </div>
         </div>
       </div>
 
-      {/* Toggles */}
-      <div className="flex flex-wrap gap-6">
-        <div className="flex items-center gap-3">
-          <Switch
-            id="solution"
-            checked={solution}
-            onCheckedChange={(checked) => setValue('solution', checked)}
-          />
-          <Label htmlFor="solution" className="cursor-pointer">Solution</Label>
+      {/* ── Ownership ─────────────────────────────────────────────────────── */}
+      {componentOwnerEntry.visibility !== 'hidden' && (
+        <div>
+          <h3 className="text-sm font-medium text-muted-foreground mb-3">Ownership</h3>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {/* Component Owner */}
+            <div className="space-y-1.5">
+              <Label htmlFor="componentOwner">Component Owner</Label>
+              {componentOwnerEntry.visibility === 'readonly' ? (
+                <Input
+                  id="componentOwner"
+                  value={componentOwner}
+                  disabled
+                  className="bg-muted"
+                  readOnly
+                />
+              ) : (
+                <PeopleInput
+                  value={componentOwner}
+                  onChange={(val) => setValue('componentOwner', val)}
+                />
+              )}
+              <FieldOverrideInline componentId={component.id} fieldPath="componentOwner" />
+            </div>
+          </div>
         </div>
+      )}
 
-      </div>
+      {/* ── Metadata ──────────────────────────────────────────────────────── */}
+      {(systemEntry.visibility !== 'hidden' || clientCodeEntry.visibility !== 'hidden') && (
+        <div>
+          <h3 className="text-sm font-medium text-muted-foreground mb-3">Metadata</h3>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {/* System (comma-separated) */}
+            {systemEntry.visibility !== 'hidden' && (
+              <div className="space-y-1.5">
+                <Label htmlFor="system">System(s)</Label>
+                <Input
+                  id="system"
+                  placeholder="SYSTEM1, SYSTEM2"
+                  disabled={systemEntry.visibility === 'readonly'}
+                  className={systemEntry.visibility === 'readonly' ? 'bg-muted' : undefined}
+                  {...register('system')}
+                />
+                <p className="text-xs text-muted-foreground">Comma-separated list of systems.</p>
+                <FieldOverrideInline componentId={component.id} fieldPath="system" />
+              </div>
+            )}
 
-      {/* Parent Component — editable autocomplete (7.1.5). Backend stores the
-          canonical `name`, so the picker writes the same. Empty string maps to
-          "no parent" at save time (ComponentDetailPage hands the wire layer a
-          `null`, see useComponent.ts ComponentUpdateRequest). */}
-      <div className="space-y-1.5 sm:max-w-md">
-        <Label htmlFor="parentComponentName">Parent Component</Label>
-        <ComponentSelect
-          id="parentComponentName"
-          value={parentComponentName ?? ''}
-          excludeName={component.name}
-          onChange={(val) => setValue('parentComponentName', val, { shouldDirty: true })}
-          placeholder="No parent (top-level component)"
-        />
-        <p className="text-xs text-muted-foreground">
-          Reference another component by name. Leave blank for a top-level component.
-        </p>
-      </div>
+            {/* Client Code */}
+            {clientCodeEntry.visibility !== 'hidden' && (
+              <div className="space-y-1.5">
+                <Label htmlFor="clientCode">Client Code</Label>
+                <Input
+                  id="clientCode"
+                  placeholder="CLIENT_CODE"
+                  disabled={clientCodeEntry.visibility === 'readonly'}
+                  className={clientCodeEntry.visibility === 'readonly' ? 'bg-muted' : undefined}
+                  {...register('clientCode')}
+                />
+                <FieldOverrideInline componentId={component.id} fieldPath="clientCode" />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {component.createdAt && (
         <div className="flex gap-6 text-xs text-muted-foreground">

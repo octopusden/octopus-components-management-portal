@@ -30,6 +30,7 @@ import { useQueryClient, type UseMutationResult } from '@tanstack/react-query'
 import type { ComponentDetail } from '../lib/types'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../lib/auth'
+import { useFieldConfigEntry } from '../hooks/useFieldConfig'
 
 export type UpdateMutation = UseMutationResult<ComponentDetail, Error, ComponentUpdateRequest>
 
@@ -47,6 +48,16 @@ export function ComponentDetailPage() {
 
   const canArchive = hasPermission(user, PERMISSIONS.DELETE_COMPONENTS)
   const canUnarchive = hasPermission(user, PERMISSIONS.ARCHIVE_COMPONENTS)
+
+  // Field-config visibility — used to filter hidden fields from the save payload.
+  // Portal-side enforcement is required because CRS server-side does NOT filter
+  // by field-config (ComponentManagementServiceImpl.kt:163 writes any field that
+  // arrives in the request). Sending a hidden field would silently overwrite the
+  // server value. See §7.0 critical contract #1 and #2.
+  const { entry: displayNameFc } = useFieldConfigEntry('component.displayName')
+  const { entry: componentOwnerFc } = useFieldConfigEntry('component.componentOwner')
+  const { entry: systemFc } = useFieldConfigEntry('component.system')
+  const { entry: clientCodeFc } = useFieldConfigEntry('component.clientCode')
 
   const jiraBaseUrl = import.meta.env.VITE_JIRA_BASE_URL as string | undefined
   const gitBaseUrl = import.meta.env.VITE_GIT_BASE_URL as string | undefined
@@ -104,11 +115,15 @@ export function ComponentDetailPage() {
       await updateMutation.mutateAsync({
         version: component.version,
         name: renameField,
-        displayName: values.displayName || undefined,
-        componentOwner: values.componentOwner || undefined,
-        productType: values.productType || undefined,
-        system: systemArray,
-        clientCode: values.clientCode || undefined,
+        // displayName: hidden → undefined (no change); otherwise send value or undefined for empty
+        displayName: displayNameFc.visibility === 'hidden' ? undefined : (values.displayName || undefined),
+        // componentOwner: hidden → undefined
+        componentOwner: componentOwnerFc.visibility === 'hidden' ? undefined : (values.componentOwner || undefined),
+        // productType is rendered/saved from EscrowTab; do NOT send it from the General save
+        // system: hidden → undefined (NOT [], which would wipe the server value via JSON merge-patch)
+        system: systemFc.visibility === 'hidden' ? undefined : systemArray,
+        // clientCode: hidden → undefined
+        clientCode: clientCodeFc.visibility === 'hidden' ? undefined : (values.clientCode || undefined),
         solution: values.solution,
         archived: archivedChanged ? values.archived : undefined,
         parentComponentName,

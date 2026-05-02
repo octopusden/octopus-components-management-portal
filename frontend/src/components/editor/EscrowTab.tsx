@@ -10,6 +10,7 @@ import type { ComponentDetail } from '../../lib/types'
 import type { ComponentUpdateRequest } from '../../hooks/useComponent'
 import type { UseMutationResult } from '@tanstack/react-query'
 import { ApiError } from '../../lib/api'
+import { useFieldConfigEntry } from '../../hooks/useFieldConfig'
 
 interface EscrowTabProps {
   component: ComponentDetail
@@ -20,6 +21,13 @@ interface EscrowTabProps {
 export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) {
   const esc = component.escrowConfigurations[0]
 
+  // productType migrated here from GeneralTab (§7.0/2c).
+  // Semantic: product-line classifier (KERNEL/CARDS/DWH/DWH_DB etc.) used for
+  // escrow-specific classification; lives on the top-level ComponentDetail but
+  // is conceptually escrow metadata.
+  const { entry: productTypeEntry } = useFieldConfigEntry('component.productType')
+  const [productType, setProductType] = useState(component.productType ?? '')
+
   const [buildTask, setBuildTask] = useState(esc?.buildTask ?? '')
   const [generation, setGeneration] = useState(esc?.generation ?? '')
   const [diskSpace, setDiskSpace] = useState(esc?.diskSpace ?? '')
@@ -28,6 +36,7 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
 
   useEffect(() => {
     const e = component.escrowConfigurations[0]
+    setProductType(component.productType ?? '')
     setBuildTask(e?.buildTask ?? '')
     setGeneration(e?.generation ?? '')
     setDiskSpace(e?.diskSpace ?? '')
@@ -39,6 +48,11 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
     try {
       await updateMutation.mutateAsync({
         version: component.version,
+        // productType: hidden → don't include (undefined = no change);
+        // editable/readonly → send only when a value is present.
+        ...(productTypeEntry.visibility !== 'hidden' && productType
+          ? { productType }
+          : {}),
         escrowConfiguration: {
           buildTask: buildTask || undefined,
           generation: generation || undefined,
@@ -60,6 +74,20 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {/* Product Type — migrated from GeneralTab (§7.0/2c); visibility-gated */}
+        {productTypeEntry.visibility !== 'hidden' && (
+          <div className="space-y-1.5">
+            <Label>Product Type</Label>
+            <EnumSelect
+              fieldPath="component.productType"
+              value={productType}
+              onValueChange={setProductType}
+              placeholder="Select product type"
+              disabled={productTypeEntry.visibility === 'readonly'}
+            />
+          </div>
+        )}
+
         <div className="space-y-1.5">
           <Label>Build Task</Label>
           <Input
