@@ -33,6 +33,9 @@ export default defineConfig({
         'src/main.tsx',
         // Pure TypeScript type declarations — no runtime code
         'src/lib/types.ts',
+        // Vendored shadcn boilerplate — state machine / DOM wiring, covered by E2E
+        'src/hooks/use-toast.ts',
+        'src/components/ui/toaster.tsx',
       ],
       thresholds: {
         lines: 55,

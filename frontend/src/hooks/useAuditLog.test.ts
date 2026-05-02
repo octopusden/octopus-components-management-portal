@@ -63,8 +63,47 @@ describe('useEntityAuditLog', () => {
       () => useEntityAuditLog('component', ''),
       { wrapper: makeWrapper() },
     )
-    // Should not fetch when disabled
     expect(result.current.isFetching).toBe(false)
     expect(mockApi.get).not.toHaveBeenCalled()
+  })
+
+  it('is disabled when entityType is empty', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result } = renderHook(
+      () => useEntityAuditLog('', 'abc-123'),
+      { wrapper: makeWrapper() },
+    )
+    expect(result.current.isFetching).toBe(false)
+    expect(mockApi.get).not.toHaveBeenCalled()
+  })
+})
+
+describe('useRecentAuditLog — filter params', () => {
+  it('appends all filter fields to the query string', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result } = renderHook(
+      () =>
+        useRecentAuditLog({
+          filter: {
+            entityType: 'component',
+            entityId: 'cmp-1',
+            changedBy: 'alice',
+            source: 'api',
+            action: 'UPDATE',
+            from: '2026-04-01T00:00:00Z',
+            to: '2026-04-30T23:59:59Z',
+          },
+        }),
+      { wrapper: makeWrapper() },
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const url = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    expect(url).toContain('entityType=component')
+    expect(url).toContain('entityId=cmp-1')
+    expect(url).toContain('changedBy=alice')
+    expect(url).toContain('source=api')
+    expect(url).toContain('action=UPDATE')
+    expect(url).toContain('from=')
+    expect(url).toContain('to=')
   })
 })
