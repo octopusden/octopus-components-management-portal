@@ -46,7 +46,6 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
   } = form
 
   const solution = watch('solution')
-  const archived = watch('archived')
   const productType = watch('productType')
   const componentOwner = watch('componentOwner')
   const parentComponentName = watch('parentComponentName')
@@ -172,14 +171,6 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
           <Label htmlFor="solution" className="cursor-pointer">Solution</Label>
         </div>
 
-        <div className="flex items-center gap-3">
-          <Switch
-            id="archived"
-            checked={archived}
-            onCheckedChange={(checked) => setValue('archived', checked)}
-          />
-          <Label htmlFor="archived" className="cursor-pointer">Archived</Label>
-        </div>
       </div>
 
       {/* Parent Component — editable autocomplete (7.1.5). Backend stores the

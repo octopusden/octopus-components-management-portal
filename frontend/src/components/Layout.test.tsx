@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 import { Layout } from './Layout'
 import type { User } from '../lib/auth'
+import { useAdminMode } from '@/lib/adminModeStore'
 
 vi.mock('@/hooks/useCurrentUser', () => ({
   useCurrentUser: vi.fn(),
@@ -12,6 +13,11 @@ vi.mock('@/hooks/useCurrentUser', () => ({
 
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 const mockedUseCurrentUser = vi.mocked(useCurrentUser)
+
+// Helper: set Zustand adminMode state directly
+function setAdminMode(enabled: boolean) {
+  useAdminMode.setState({ enabled })
+}
 
 function renderLayout() {
   // AppFooter mounts inside Layout and uses useQuery via @tanstack/react-query.
@@ -39,6 +45,8 @@ function renderLayout() {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.unstubAllGlobals()
+  // Reset adminMode to false before each test
+  setAdminMode(false)
 })
 
 describe('Layout nav visibility', () => {
@@ -156,5 +164,82 @@ describe('Layout nav visibility', () => {
     expect(screen.getByRole('link', { name: /Admin/i })).toBeDefined()
     // Explicit "auth check failed" signal so the operator sees the cause.
     expect(screen.getByText(/auth check failed/i)).toBeDefined()
+  })
+})
+
+describe('Layout ADMIN badge — double-gate', () => {
+  const adminUser: User = {
+    username: 'alice',
+    roles: [
+      {
+        name: 'ROLE_F1_ADMIN',
+        permissions: ['ACCESS_COMPONENTS', 'ACCESS_AUDIT', 'IMPORT_DATA'],
+      },
+    ],
+    groups: [],
+  }
+
+  const viewerUser: User = {
+    username: 'carol',
+    roles: [{ name: 'ROLE_REGISTRY_VIEWER', permissions: ['ACCESS_COMPONENTS'] }],
+    groups: [],
+  }
+
+  it('(a) admin user + adminMode true → ADMIN badge visible', () => {
+    setAdminMode(true)
+    mockedUseCurrentUser.mockReturnValue({
+      data: adminUser,
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useCurrentUser>)
+
+    renderLayout()
+    expect(screen.getByText('ADMIN')).toBeDefined()
+  })
+
+  it('(b) admin user + adminMode false → no ADMIN badge', () => {
+    setAdminMode(false)
+    mockedUseCurrentUser.mockReturnValue({
+      data: adminUser,
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useCurrentUser>)
+
+    renderLayout()
+    expect(screen.queryByText('ADMIN')).toBeNull()
+  })
+
+  it('(c) viewer + adminMode true (localStorage bypass) → no ADMIN badge (security canary)', () => {
+    // This is the key security case: a viewer can set adminMode=true in localStorage,
+    // but without IMPORT_DATA permission the badge must NOT render.
+    setAdminMode(true)
+    mockedUseCurrentUser.mockReturnValue({
+      data: viewerUser,
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useCurrentUser>)
+
+    renderLayout()
+    expect(screen.queryByText('ADMIN')).toBeNull()
+  })
+
+  it('(d) no user (unauthenticated) → no ADMIN badge', () => {
+    setAdminMode(true)
+    mockedUseCurrentUser.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useCurrentUser>)
+
+    renderLayout()
+    expect(screen.queryByText('ADMIN')).toBeNull()
   })
 })

@@ -4,6 +4,8 @@ import { cn } from '../lib/utils'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { hasPermission, logout, PERMISSIONS } from '@/lib/auth'
 import { AppFooter } from './AppFooter'
+import { Badge } from './ui/badge'
+import { useAdminMode } from '@/lib/adminModeStore'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -25,6 +27,7 @@ const navItems: NavItem[] = [
 export function Layout({ children }: LayoutProps) {
   const location = useLocation()
   const { data: user, isError } = useCurrentUser()
+  const adminMode = useAdminMode((s) => s.enabled)
 
   // When /auth/me fails with a non-401 backend error, isError is true and `user` is
   // undefined. Don't hide admin/audit in that case — the user may be a valid admin;
@@ -62,6 +65,12 @@ export function Layout({ children }: LayoutProps) {
             })}
           </nav>
           <div className="ml-auto flex items-center gap-3 text-sm">
+            {/* ADMIN badge: double-gate — adminMode Zustand state AND real IMPORT_DATA
+                permission. Without the permission check, any user could set adminMode=true
+                in localStorage and see the badge without having admin rights. */}
+            {adminMode && hasPermission(user, PERMISSIONS.IMPORT_DATA) && (
+              <Badge variant="destructive">ADMIN</Badge>
+            )}
             {isError && (
               <span
                 className="flex items-center gap-1 text-destructive"

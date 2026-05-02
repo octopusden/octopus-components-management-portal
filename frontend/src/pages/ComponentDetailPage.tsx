@@ -1,6 +1,6 @@
 import { useParams, useNavigate, Link } from 'react-router'
 import { useForm } from 'react-hook-form'
-import { ArrowLeft, Save, Trash2, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, Save, Trash2, AlertTriangle, ExternalLink, GitBranch } from 'lucide-react'
 import { useState } from 'react'
 import { Layout } from '../components/Layout'
 import { Button } from '../components/ui/button'
@@ -28,6 +28,8 @@ import { ApiError } from '../lib/api'
 import { describeOptimisticConflict } from '../lib/conflict'
 import { useQueryClient, type UseMutationResult } from '@tanstack/react-query'
 import type { ComponentDetail } from '../lib/types'
+import { useCurrentUser } from '../hooks/useCurrentUser'
+import { hasPermission, PERMISSIONS } from '../lib/auth'
 
 export type UpdateMutation = UseMutationResult<ComponentDetail, Error, ComponentUpdateRequest>
 
@@ -41,6 +43,13 @@ export function ComponentDetailPage() {
   const { data: component, isLoading, error } = useComponent(id ?? '')
   const updateMutation = useUpdateComponent(id ?? '')
   const deleteMutation = useDeleteComponent(id ?? '')
+  const { data: user } = useCurrentUser()
+
+  const canArchive = hasPermission(user, PERMISSIONS.DELETE_COMPONENTS)
+  const canUnarchive = hasPermission(user, PERMISSIONS.ARCHIVE_COMPONENTS)
+
+  const jiraBaseUrl = import.meta.env.VITE_JIRA_BASE_URL as string | undefined
+  const gitBaseUrl = import.meta.env.VITE_GIT_BASE_URL as string | undefined
 
   const form = useForm<GeneralFormValues>({
     defaultValues: {
@@ -133,19 +142,33 @@ export function ComponentDetailPage() {
     }
   }
 
-  async function handleDelete() {
+  async function handleArchive() {
     try {
       await deleteMutation.mutateAsync()
-      toast({ title: 'Component deleted' })
+      toast({ title: 'Component archived', description: 'The component has been archived.' })
       navigate('/components')
     } catch (err) {
       toast({
-        title: 'Delete failed',
+        title: 'Archive failed',
         description: err instanceof Error ? err.message : String(err),
         variant: 'destructive',
       })
     }
     setDeleteDialogOpen(false)
+  }
+
+  async function handleUnarchive() {
+    if (!component) return
+    try {
+      await updateMutation.mutateAsync({ version: component.version, archived: false })
+      toast({ title: 'Component unarchived', description: 'The component has been restored.' })
+    } catch (err) {
+      toast({
+        title: 'Unarchive failed',
+        description: err instanceof Error ? err.message : String(err),
+        variant: 'destructive',
+      })
+    }
   }
 
   if (isLoading) {
@@ -192,13 +215,43 @@ export function ComponentDetailPage() {
               <ArrowLeft className="h-4 w-4" />
               Back to Components
             </Link>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-2xl font-semibold tracking-tight">{component.name}</h1>
               <Badge variant={component.archived ? 'destructive' : 'secondary'}>
                 {component.archived ? 'Archived' : 'Active'}
               </Badge>
               {component.solution && (
                 <Badge variant="outline">Solution</Badge>
+              )}
+              {/* Breadcrumb badges: system + build system */}
+              {component.system.length > 0 && (
+                <Badge variant="outline">{component.system[0]}</Badge>
+              )}
+              {component.buildConfigurations[0]?.buildSystem && (
+                <Badge variant="outline">{component.buildConfigurations[0].buildSystem}</Badge>
+              )}
+              {/* Quick-links: Jira and Git */}
+              {jiraBaseUrl && component.jiraComponentConfigs[0]?.projectKey && (
+                <a
+                  href={`${jiraBaseUrl}/browse/${component.jiraComponentConfigs[0].projectKey}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+                  title={`Jira: ${component.jiraComponentConfigs[0].projectKey}`}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              )}
+              {gitBaseUrl && component.vcsSettings[0]?.entries[0]?.vcsPath && (
+                <a
+                  href={`${gitBaseUrl}/${component.vcsSettings[0].entries[0].vcsPath}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+                  title={`Git: ${component.vcsSettings[0].entries[0].vcsPath}`}
+                >
+                  <GitBranch className="h-4 w-4" />
+                </a>
               )}
             </div>
             {component.displayName && (
@@ -207,15 +260,29 @@ export function ComponentDetailPage() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setDeleteDialogOpen(true)}
-              className="text-destructive hover:text-destructive border-destructive/30 hover:bg-destructive/10"
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete
-            </Button>
+            {/* Archive / Unarchive — permission-gated, not just disabled */}
+            {!component.archived && canArchive && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setDeleteDialogOpen(true)}
+                className="text-destructive hover:text-destructive border-destructive/30 hover:bg-destructive/10"
+              >
+                <Trash2 className="h-4 w-4" />
+                Archive
+              </Button>
+            )}
+            {component.archived && canUnarchive && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleUnarchive}
+                disabled={updateMutation.isPending}
+              >
+                <Trash2 className="h-4 w-4" />
+                Unarchive
+              </Button>
+            )}
             <Button
               size="sm"
               onClick={handleSave}
@@ -319,18 +386,18 @@ export function ComponentDetailPage() {
         </Tabs>
       </div>
 
-      {/* Delete confirmation dialog */}
+      {/* Archive confirmation dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-destructive" />
-              Delete Component
+              Archive Component
             </DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Are you sure you want to delete <span className="font-semibold text-foreground">{component.name}</span>?
-            This action cannot be undone.
+            Are you sure you want to archive <span className="font-semibold text-foreground">{component.name}</span>?
+            This will archive the component. You can restore it later.
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
@@ -338,10 +405,10 @@ export function ComponentDetailPage() {
             </Button>
             <Button
               variant="destructive"
-              onClick={handleDelete}
+              onClick={handleArchive}
               disabled={deleteMutation.isPending}
             >
-              {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
+              {deleteMutation.isPending ? 'Archiving…' : 'Archive'}
             </Button>
           </DialogFooter>
         </DialogContent>
