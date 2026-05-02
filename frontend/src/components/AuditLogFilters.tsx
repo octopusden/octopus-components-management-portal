@@ -20,6 +20,7 @@ import { Button } from './ui/button'
  * worry about the user's timezone.
  */
 export interface AuditFilter {
+  entityType?: string
   changedBy?: string
   source?: string
   action?: string
@@ -34,6 +35,7 @@ interface AuditLogFiltersProps {
 
 const ALL_VALUE = '__all__'
 
+const ENTITY_TYPE_OPTIONS = ['Component'] as const
 const SOURCE_OPTIONS = ['api', 'git-history'] as const
 const ACTION_OPTIONS = ['CREATE', 'UPDATE', 'DELETE', 'RENAME', 'ARCHIVE'] as const
 
@@ -83,6 +85,10 @@ export function AuditLogFilters({ filter, onChange }: AuditLogFiltersProps) {
     }, 300)
   }
 
+  const handleEntityType = (value: string) => {
+    onChange({ ...filter, entityType: value === ALL_VALUE ? undefined : value })
+  }
+
   const handleSource = (value: string) => {
     onChange({ ...filter, source: value === ALL_VALUE ? undefined : value })
   }
@@ -105,10 +111,27 @@ export function AuditLogFilters({ filter, onChange }: AuditLogFiltersProps) {
   }
 
   const hasActiveFilters =
-    !!filter.changedBy || !!filter.source || !!filter.action || !!filter.from || !!filter.to
+    !!filter.entityType || !!filter.changedBy || !!filter.source || !!filter.action || !!filter.from || !!filter.to
 
   return (
     <div className="flex flex-wrap items-end gap-3 rounded-md border bg-card px-4 py-3">
+      <div className="space-y-1.5">
+        <Label htmlFor="audit-filter-entityType">Entity Type</Label>
+        <Select value={filter.entityType ?? ALL_VALUE} onValueChange={handleEntityType}>
+          <SelectTrigger id="audit-filter-entityType" aria-label="Entity Type" className="w-[160px]">
+            <SelectValue placeholder="All types" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_VALUE}>All types</SelectItem>
+            {ENTITY_TYPE_OPTIONS.map((t) => (
+              <SelectItem key={t} value={t}>
+                {t}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       <div className="space-y-1.5">
         <Label htmlFor="audit-filter-changedBy">Changed by</Label>
         <Input

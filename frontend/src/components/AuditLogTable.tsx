@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Link } from 'react-router'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import {
   Table,
@@ -21,8 +22,9 @@ interface AuditLogTableProps {
 
 const ACTION_BADGE_CLASSES: Record<string, string> = {
   CREATE: 'border-transparent bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
-  UPDATE: 'border-transparent bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
+  UPDATE: 'border-transparent bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
   DELETE: 'border-transparent bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
+  RENAME: 'border-transparent bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
 }
 
 function formatDate(dateStr: string): string {
@@ -123,7 +125,16 @@ export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
                         </span>
                       </TableCell>
                       <TableCell>
-                        <span className="font-mono text-xs">{entry.entityId}</span>
+                        {entry.entityType === 'Component' ? (
+                          <Link
+                            to={`/components/${entry.entityId}`}
+                            className="font-medium text-primary hover:underline"
+                          >
+                            {entry.entityId}
+                          </Link>
+                        ) : (
+                          <span className="font-mono text-xs">{entry.entityId}</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Badge className={actionClass}>

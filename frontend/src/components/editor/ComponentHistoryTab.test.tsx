@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import React from 'react'
 import { render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ComponentHistoryTab } from './ComponentHistoryTab'
 import type { AuditLogEntry, Page } from '../../lib/types'
@@ -20,7 +21,11 @@ vi.mock('../../hooks/useAuditLog', () => ({
 
 function renderWithProviders(ui: React.ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
+  return render(
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+    </MemoryRouter>,
+  )
 }
 
 function makeEntry(overrides: Partial<AuditLogEntry> = {}): AuditLogEntry {
