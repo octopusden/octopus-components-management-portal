@@ -98,7 +98,7 @@ describe('CreateComponentDialog — form submission', () => {
   })
 
   it('shows a 409 conflict toast with a descriptive message', async () => {
-    mockMutateAsync.mockRejectedValue(new ApiError(409, 'Conflict', 'component exists'))
+    mockMutateAsync.mockRejectedValue(new ApiError(409, 'component exists'))
     renderWithProviders(<CreateComponentButton />)
     await openDialog()
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'duplicate-lib')

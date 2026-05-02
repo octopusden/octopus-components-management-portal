@@ -51,13 +51,13 @@ describe('AuditLogTable', () => {
   it('expands row on click and shows AuditDiffViewer', async () => {
     render(<AuditLogTable data={[makeEntry()]} isLoading={false} />)
     expect(screen.queryByTestId('audit-diff-viewer')).toBeNull()
-    await userEvent.click(screen.getAllByRole('row')[1])
+    await userEvent.click(screen.getAllByRole('row')[1]!)
     expect(screen.getByTestId('audit-diff-viewer')).toBeDefined()
   })
 
   it('collapses already-expanded row on second click', async () => {
     render(<AuditLogTable data={[makeEntry()]} isLoading={false} />)
-    const row = screen.getAllByRole('row')[1]
+    const row = screen.getAllByRole('row')[1]!
     await userEvent.click(row)
     expect(screen.getByTestId('audit-diff-viewer')).toBeDefined()
     await userEvent.click(row)
@@ -71,13 +71,13 @@ describe('AuditLogTable', () => {
         isLoading={false}
       />,
     )
-    await userEvent.click(screen.getAllByRole('row')[1])
+    await userEvent.click(screen.getAllByRole('row')[1]!)
     expect(screen.getByText('corr-xyz')).toBeDefined()
   })
 
   it('does not show correlation line when correlationId is null', async () => {
     render(<AuditLogTable data={[makeEntry({ correlationId: null })]} isLoading={false} />)
-    await userEvent.click(screen.getAllByRole('row')[1])
+    await userEvent.click(screen.getAllByRole('row')[1]!)
     expect(screen.queryByText(/Correlation ID/)).toBeNull()
   })
 

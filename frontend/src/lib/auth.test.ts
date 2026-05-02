@@ -180,7 +180,6 @@ describe('logout', () => {
     mockReadCookie.mockReturnValue('csrf-token-value')
     logout()
     expect(submitSpy).toHaveBeenCalledOnce()
-    const form = document.body.querySelector('form[action="/logout"]') as HTMLFormElement | null
     // form.remove() is called via queueMicrotask, so the DOM element may already be gone;
     // assert on submit being called instead
     expect(submitSpy).toHaveBeenCalled()
