@@ -11,11 +11,30 @@ vi.mock('../hooks/useOwners', () => ({
   useOwners: () => ({ data: ['alice', 'bob', 'carol'], isLoading: false }),
 }))
 
+// Stub useCurrentUser — My Components checkbox needs the current user.
+vi.mock('../hooks/useCurrentUser', () => ({
+  useCurrentUser: vi.fn(),
+}))
+
+import { useCurrentUser } from '../hooks/useCurrentUser'
+const mockUseCurrentUser = vi.mocked(useCurrentUser)
+
+function mockCurrentUser(username: string | null) {
+  mockUseCurrentUser.mockReturnValue({
+    data: username ? { username, roles: [], groups: [] } : undefined,
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  } as unknown as ReturnType<typeof useCurrentUser>)
+}
+
 describe('ComponentFilters', () => {
   const onFilterChange = vi.fn()
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockCurrentUser('testuser')
   })
 
   it('renders search input', () => {
@@ -40,51 +59,123 @@ describe('ComponentFilters', () => {
     vi.useRealTimers()
   })
 
-  it('shows archived toggle cycling through states', async () => {
-    const { rerender } = render(
-      <ComponentFilters filter={{}} onFilterChange={onFilterChange} />,
-    )
-
-    // Initial: 'All'
-    expect(screen.getByRole('button', { name: 'All' })).toBeDefined()
-
-    // Click once → archived: true
-    await userEvent.click(screen.getByRole('button', { name: 'All' }))
-    expect(onFilterChange).toHaveBeenCalledWith({ archived: true })
-
-    rerender(<ComponentFilters filter={{ archived: true }} onFilterChange={onFilterChange} />)
-    expect(screen.getByRole('button', { name: 'Archived only' })).toBeDefined()
-
-    // Click again → archived: false
-    await userEvent.click(screen.getByRole('button', { name: 'Archived only' }))
-    expect(onFilterChange).toHaveBeenCalledWith({ archived: false })
-
-    rerender(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
-    expect(screen.getByRole('button', { name: 'Active only' })).toBeDefined()
-
-    // Click again → archived: undefined
-    await userEvent.click(screen.getByRole('button', { name: 'Active only' }))
-    expect(onFilterChange).toHaveBeenCalledWith({ archived: undefined })
-  })
-
   it('shows Clear filters button only when filters are active', () => {
     const { rerender } = render(
-      <ComponentFilters filter={{}} onFilterChange={onFilterChange} />,
+      <ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />,
     )
+    // archived: false is the default — should NOT show Clear filters
     expect(screen.queryByText('Clear filters')).toBeNull()
 
-    rerender(<ComponentFilters filter={{ search: 'foo' }} onFilterChange={onFilterChange} />)
+    rerender(<ComponentFilters filter={{ search: 'foo', archived: false }} onFilterChange={onFilterChange} />)
     expect(screen.getByText('Clear filters')).toBeDefined()
   })
 
   it('resets all filters when Clear filters is clicked', async () => {
     render(
-      <ComponentFilters filter={{ search: 'foo', system: 'ALFA' }} onFilterChange={onFilterChange} />,
+      <ComponentFilters filter={{ search: 'foo', system: 'ALFA', archived: false }} onFilterChange={onFilterChange} />,
     )
 
     await userEvent.click(screen.getByText('Clear filters'))
 
-    expect(onFilterChange).toHaveBeenCalledWith({})
+    // Clear resets to default: archived: false
+    expect(onFilterChange).toHaveBeenCalledWith({ archived: false })
+  })
+})
+
+describe('ComponentFilters archived filter (§7.0/2e)', () => {
+  const onFilterChange = vi.fn()
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockCurrentUser('testuser')
+  })
+
+  it('default filter archived=false shows "Show archived components" button', () => {
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    expect(screen.getByRole('button', { name: 'Show archived components' })).toBeDefined()
+  })
+
+  it('clicking "Show archived components" toggles archived to undefined', async () => {
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Show archived components' }))
+    expect(onFilterChange).toHaveBeenCalledWith({ archived: undefined })
+  })
+
+  it('filter archived=undefined shows "Hide archived components" button', () => {
+    render(<ComponentFilters filter={{ archived: undefined }} onFilterChange={onFilterChange} />)
+    expect(screen.getByRole('button', { name: 'Hide archived components' })).toBeDefined()
+  })
+
+  it('clicking "Hide archived components" toggles archived back to false', async () => {
+    render(<ComponentFilters filter={{ archived: undefined }} onFilterChange={onFilterChange} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Hide archived components' }))
+    expect(onFilterChange).toHaveBeenCalledWith({ archived: false })
+  })
+
+  it('hasActiveFilters does not count archived=false as an active filter', () => {
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    // No "Clear filters" when only the default archived:false is set
+    expect(screen.queryByText('Clear filters')).toBeNull()
+  })
+
+  it('hasActiveFilters counts archived=undefined as an active filter', () => {
+    render(<ComponentFilters filter={{ archived: undefined }} onFilterChange={onFilterChange} />)
+    expect(screen.getByText('Clear filters')).toBeDefined()
+  })
+})
+
+describe('ComponentFilters My Components (§7.0/2e)', () => {
+  const onFilterChange = vi.fn()
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('renders My Components switch', () => {
+    mockCurrentUser('alice')
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    expect(screen.getByLabelText('My Components')).toBeDefined()
+  })
+
+  it('switch is disabled when currentUser is null', () => {
+    mockCurrentUser(null)
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    const sw = screen.getByLabelText('My Components') as HTMLButtonElement
+    expect(sw.disabled).toBe(true)
+  })
+
+  it('checking My Components sets owner to currentUser.username', async () => {
+    mockCurrentUser('alice')
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    const sw = screen.getByLabelText('My Components')
+    await userEvent.click(sw)
+    expect(onFilterChange).toHaveBeenCalledWith({ archived: false, owner: 'alice' })
+  })
+
+  it('unchecking My Components clears owner', async () => {
+    mockCurrentUser('alice')
+    render(
+      <ComponentFilters filter={{ archived: false, owner: 'alice' }} onFilterChange={onFilterChange} />,
+    )
+    const sw = screen.getByLabelText('My Components')
+    await userEvent.click(sw)
+    expect(onFilterChange).toHaveBeenCalledWith({ archived: false, owner: undefined })
+  })
+
+  it('Owner dropdown is disabled when My Components is checked', () => {
+    mockCurrentUser('alice')
+    render(
+      <ComponentFilters filter={{ archived: false, owner: 'alice' }} onFilterChange={onFilterChange} />,
+    )
+    const ownerTrigger = screen.getByRole('combobox', { name: /owner/i })
+    expect(ownerTrigger.hasAttribute('disabled') || ownerTrigger.getAttribute('aria-disabled') === 'true' || ownerTrigger.getAttribute('data-disabled') !== null).toBe(true)
+  })
+
+  it('Owner dropdown is enabled when My Components is not checked', () => {
+    mockCurrentUser('alice')
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    const ownerTrigger = screen.getByRole('combobox', { name: /owner/i })
+    expect(ownerTrigger.getAttribute('data-disabled')).toBeNull()
   })
 })
 
@@ -93,6 +184,7 @@ describe('ComponentFilters owner dropdown (B7.1.1)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockCurrentUser('testuser')
   })
 
   it('renders an owner dropdown with the values from /components/meta/owners', async () => {
@@ -131,7 +223,7 @@ describe('ComponentFilters owner dropdown (B7.1.1)', () => {
   })
 
   it('shows Clear filters when owner is the only active filter', () => {
-    render(<ComponentFilters filter={{ owner: 'alice' }} onFilterChange={onFilterChange} />)
+    render(<ComponentFilters filter={{ owner: 'alice', archived: false }} onFilterChange={onFilterChange} />)
     expect(screen.getByText('Clear filters')).toBeDefined()
   })
 })

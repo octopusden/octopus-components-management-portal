@@ -8,7 +8,7 @@ import { useComponents } from '../hooks/useComponents'
 import type { ComponentFilter } from '../lib/types'
 
 export function ComponentListPage() {
-  const [filter, setFilter] = useState<ComponentFilter>({})
+  const [filter, setFilter] = useState<ComponentFilter>({ archived: false })
   const [page, setPage] = useState(0)
   const [size, setSize] = useState(20)
 

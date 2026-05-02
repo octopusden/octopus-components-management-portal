@@ -59,19 +59,19 @@ const columns = [
       </button>
     ),
     cell: ({ row }) => (
-      <Link
-        to={`/components/${row.original.id}`}
-        className="font-medium text-primary hover:underline"
-      >
-        {row.original.name}
-      </Link>
+      <div className="flex flex-col">
+        <Link
+          to={`/components/${row.original.id}`}
+          className="font-medium text-primary hover:underline"
+        >
+          {row.original.name}
+        </Link>
+        {row.original.displayName && (
+          <span className="text-xs text-muted-foreground">{row.original.displayName}</span>
+        )}
+      </div>
     ),
     enableSorting: true,
-  }),
-  columnHelper.accessor('displayName', {
-    header: 'Display Name',
-    cell: ({ getValue }) => <span className="text-muted-foreground">{getValue() ?? '—'}</span>,
-    enableSorting: false,
   }),
   columnHelper.accessor('componentOwner', {
     header: 'Owner',
@@ -227,7 +227,7 @@ export function ComponentTable({ data, isLoading }: ComponentTableProps) {
         </TableHeader>
         <TableBody>
           {table.getRowModel().rows.map((row) => (
-            <TableRow key={row.id}>
+            <TableRow key={row.id} className={cn(row.original.archived && 'opacity-50')}>
               {row.getVisibleCells().map((cell) => (
                 <TableCell key={cell.id}>
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
