@@ -1,0 +1,13 @@
+# Override: use real components registry data instead of the e2e test fixture.
+#
+# Usage:
+#   docker compose -f infra/dev/docker-compose.yml \
+#                  -f infra/dev/docker-compose.real-data.yml \
+#                  up -d
+#
+# Requires: ~/projects/ow/components-registry checked out locally.
+
+services:
+  crs:
+    volumes:
+      - ~/projects/ow/components-registry/src/main/resources:/opt/crs-fixture:ro

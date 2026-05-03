@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Save, RotateCcw, Download } from 'lucide-react'
 import { Button } from '../ui/button'
+import { InlineError } from '../ui/inline-error'
+import { SkeletonBlock } from '../ui/skeleton-block'
+import { StatusBanner } from '../ui/status-banner'
 import { useComponentDefaults, useUpdateComponentDefaults, useMigrateDefaults } from '../../hooks/useAdminConfig'
 
 export function ComponentDefaultsEditor() {
@@ -46,18 +49,22 @@ export function ComponentDefaultsEditor() {
   if (isLoading) {
     return (
       <div className="space-y-3">
-        <div className="h-4 bg-muted animate-pulse rounded w-1/4" />
-        <div className="h-64 bg-muted animate-pulse rounded" />
+        <SkeletonBlock height="h-4" width="w-1/4" />
+        <SkeletonBlock height="h-64" width="w-full" />
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-        Failed to load component defaults:{' '}
-        {error instanceof Error ? error.message : String(error)}
-      </div>
+      <InlineError
+        message={
+          <>
+            Failed to load component defaults:{' '}
+            {error instanceof Error ? error.message : String(error)}
+          </>
+        }
+      />
     )
   }
 
@@ -99,18 +106,18 @@ export function ComponentDefaultsEditor() {
       </div>
 
       {parseError && (
-        <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive font-mono">
+        <StatusBanner variant="destructive" className="text-xs font-mono">
           JSON parse error: {parseError}
-        </div>
+        </StatusBanner>
       )}
 
       {updateMutation.error && (
-        <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <StatusBanner variant="destructive">
           Save failed:{' '}
           {updateMutation.error instanceof Error
             ? updateMutation.error.message
             : String(updateMutation.error)}
-        </div>
+        </StatusBanner>
       )}
 
       <textarea

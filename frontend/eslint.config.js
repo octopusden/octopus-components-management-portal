@@ -5,7 +5,10 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-  { ignores: ['dist', 'build'] },
+  // Underscore-prefixed visual specs (e.g. _compare-vs-prototype.spec.ts)
+  // are ad-hoc compare/debug tools — never gated by Playwright (see
+  // playwright.config.ts) and never linted in the project gate.
+  { ignores: ['dist', 'build', 'e2e/visual/_*.spec.ts'] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],

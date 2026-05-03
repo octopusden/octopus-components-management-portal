@@ -1,9 +1,11 @@
 import { Link, useLocation } from 'react-router'
-import { Package, History, Settings, LogOut, User as UserIcon, AlertTriangle } from 'lucide-react'
-import { cn } from '../lib/utils'
+import { Package, History, Settings, LogOut, AlertTriangle } from 'lucide-react'
+import { cn, initials } from '../lib/utils'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { hasPermission, logout, PERMISSIONS } from '@/lib/auth'
 import { AppFooter } from './AppFooter'
+import { Badge } from './ui/badge'
+import { useAdminMode } from '@/lib/adminModeStore'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -25,6 +27,7 @@ const navItems: NavItem[] = [
 export function Layout({ children }: LayoutProps) {
   const location = useLocation()
   const { data: user, isError } = useCurrentUser()
+  const adminMode = useAdminMode((s) => s.enabled)
 
   // When /auth/me fails with a non-401 backend error, isError is true and `user` is
   // undefined. Don't hide admin/audit in that case — the user may be a valid admin;
@@ -62,6 +65,12 @@ export function Layout({ children }: LayoutProps) {
             })}
           </nav>
           <div className="ml-auto flex items-center gap-3 text-sm">
+            {/* ADMIN badge: double-gate — adminMode Zustand state AND real IMPORT_DATA
+                permission. Without the permission check, any user could set adminMode=true
+                in localStorage and see the badge without having admin rights. */}
+            {adminMode && hasPermission(user, PERMISSIONS.IMPORT_DATA) && (
+              <Badge variant="destructive">ADMIN</Badge>
+            )}
             {isError && (
               <span
                 className="flex items-center gap-1 text-destructive"
@@ -72,8 +81,13 @@ export function Layout({ children }: LayoutProps) {
               </span>
             )}
             {user && (
-              <span className="flex items-center gap-1 text-muted-foreground">
-                <UserIcon className="h-4 w-4" />
+              <span className="flex items-center gap-2 text-muted-foreground">
+                <span
+                  aria-hidden
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-xs font-medium text-accent-foreground"
+                >
+                  {initials(user.username)}
+                </span>
                 {user.username}
               </span>
             )}
@@ -88,7 +102,7 @@ export function Layout({ children }: LayoutProps) {
           </div>
         </div>
       </header>
-      <main className="flex-1 max-w-screen-xl w-full mx-auto px-4 py-6">{children}</main>
+      <main className="flex-1 max-w-screen-xl w-full mx-auto px-6 py-6">{children}</main>
       <AppFooter />
     </div>
   )

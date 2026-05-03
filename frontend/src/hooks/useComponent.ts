@@ -99,6 +99,13 @@ export interface ComponentUpdateRequest {
   parentComponentName?: string | null
   archived?: boolean
   metadata?: Record<string, unknown>
+  // SYS-039 (CRS PR #163). undefined = "don't touch" per JSON Merge Patch.
+  groupId?: string
+  releaseManager?: string
+  securityChampion?: string
+  copyright?: string
+  releasesInDefaultBranch?: boolean
+  labels?: string[]
   buildConfiguration?: BuildConfigurationUpdate
   vcsSettings?: VcsSettingsUpdate
   distribution?: DistributionUpdate

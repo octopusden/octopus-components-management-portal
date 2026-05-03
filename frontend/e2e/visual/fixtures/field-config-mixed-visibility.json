@@ -1,0 +1,60 @@
+{
+  "component": {
+    "name": {
+      "visibility": "editable",
+      "required": true,
+      "description": "Component identifier (locked, always required)."
+    },
+    "displayName": {
+      "visibility": "editable",
+      "required": false,
+      "defaultValue": "",
+      "description": "Human-readable component name."
+    },
+    "solution": {
+      "visibility": "hidden",
+      "required": false,
+      "description": "Solution flag (hidden by org policy)."
+    },
+    "componentOwner": {
+      "visibility": "editable",
+      "required": true,
+      "description": "Primary owner of the component."
+    },
+    "system": {
+      "visibility": "readonly",
+      "required": false,
+      "defaultValue": "CLASSIC",
+      "description": "System taxonomy (read-only after migration)."
+    },
+    "productType": {
+      "visibility": "editable",
+      "required": false,
+      "options": ["TYPE_A", "TYPE_B", "TYPE_C", "TYPE_D"],
+      "description": "Product-line classifier."
+    },
+    "clientCode": {
+      "visibility": "readonly",
+      "required": false,
+      "description": "Client code (read-only — managed by support)."
+    }
+  },
+  "build": {
+    "buildSystem": {
+      "visibility": "editable",
+      "required": true,
+      "options": ["GRADLE", "MAVEN"],
+      "defaultValue": "GRADLE"
+    },
+    "javaVersion": {
+      "visibility": "editable",
+      "required": false,
+      "defaultValue": "21"
+    },
+    "gradleVersion": {
+      "visibility": "editable",
+      "required": false,
+      "defaultValue": "8.6"
+    }
+  }
+}

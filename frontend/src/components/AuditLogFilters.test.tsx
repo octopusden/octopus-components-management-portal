@@ -156,4 +156,42 @@ describe('AuditLogFilters (B7.1.3)', () => {
     rerender(<AuditLogFilters filter={{ changedBy: 'bob' }} onChange={onChange} />)
     expect((screen.getByLabelText(/changed by/i) as HTMLInputElement).value).toBe('bob')
   })
+
+  it('exposes an entity-type dropdown with Component option and an All types option', async () => {
+    render(<AuditLogFilters filter={{}} onChange={onChange} />)
+
+    await userEvent.click(screen.getByRole('combobox', { name: /entity type/i }))
+
+    expect(screen.getByRole('option', { name: 'Component' })).toBeDefined()
+    expect(screen.getByRole('option', { name: /all types/i })).toBeDefined()
+  })
+
+  it('calls onChange with entityType=Component when Component is selected', async () => {
+    render(<AuditLogFilters filter={{}} onChange={onChange} />)
+
+    await userEvent.click(screen.getByRole('combobox', { name: /entity type/i }))
+    await userEvent.click(screen.getByRole('option', { name: 'Component' }))
+
+    expect(onChange).toHaveBeenCalledWith({ entityType: 'Component' })
+  })
+
+  it('clears entityType when All types is selected', async () => {
+    render(<AuditLogFilters filter={{ entityType: 'Component' }} onChange={onChange} />)
+
+    await userEvent.click(screen.getByRole('combobox', { name: /entity type/i }))
+    await userEvent.click(screen.getByRole('option', { name: /all types/i }))
+
+    expect(onChange).toHaveBeenCalledWith({ entityType: undefined })
+  })
+
+  it('shows Clear filters when only entityType filter is active', () => {
+    render(<AuditLogFilters filter={{ entityType: 'Component' }} onChange={onChange} />)
+    expect(screen.getByRole('button', { name: /clear filters/i })).toBeDefined()
+  })
+
+  it('resets entityType on Clear filters click', async () => {
+    render(<AuditLogFilters filter={{ entityType: 'Component' }} onChange={onChange} />)
+    await userEvent.click(screen.getByRole('button', { name: /clear filters/i }))
+    expect(onChange).toHaveBeenCalledWith({})
+  })
 })

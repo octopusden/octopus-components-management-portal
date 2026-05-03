@@ -25,6 +25,8 @@ import {
   useUpdateFieldOverride,
   useDeleteFieldOverride,
 } from '../../hooks/useComponent'
+import { EmptyState } from '../ui/empty-state'
+import { SkeletonBlock } from '../ui/skeleton-block'
 import { useToast } from '../../hooks/use-toast'
 import type { FieldOverride } from '../../lib/types'
 
@@ -123,7 +125,7 @@ export function FieldOverrides({ componentId }: FieldOverridesProps) {
     return (
       <div className="space-y-2">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="h-10 bg-muted rounded animate-pulse" />
+          <SkeletonBlock key={i} height="h-9" />
         ))}
       </div>
     )
@@ -140,8 +142,8 @@ export function FieldOverrides({ componentId }: FieldOverridesProps) {
       </div>
 
       {!overrides || overrides.length === 0 ? (
-        <div className="rounded-md border border-dashed p-8 text-center text-muted-foreground">
-          No field overrides defined.
+        <div className="rounded-md border border-dashed">
+          <EmptyState message="No field overrides defined." className="py-8" />
         </div>
       ) : (
         <div className="rounded-md border overflow-hidden">

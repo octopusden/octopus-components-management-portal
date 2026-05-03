@@ -10,6 +10,7 @@ import {
 import { toast } from '@/hooks/use-toast'
 import { formatMigrationError } from '@/lib/migrationErrors'
 import { Button } from '@/components/ui/button'
+import { StatusBanner } from '@/components/ui/status-banner'
 import {
   Dialog,
   DialogContent,
@@ -235,32 +236,32 @@ export function MigrationHistoryPanel() {
       )}
 
       {job.isError && (
-        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+        <StatusBanner variant="destructive">
           Failed to fetch history migration status. {formatMigrationError(job.error)}
-        </div>
+        </StatusBanner>
       )}
 
       {isFailed && jobData?.errorMessage && (
-        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+        <StatusBanner variant="destructive">
           History migration failed: {jobData.errorMessage}
-        </div>
+        </StatusBanner>
       )}
 
       {isStuck && jobData?.errorMessage && (
-        <div
+        <StatusBanner
+          variant="destructive"
           data-testid="history-stuck-banner"
           role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
         >
           {jobData.errorMessage}
-        </div>
+        </StatusBanner>
       )}
 
       {isUnrecognisedRecovery && (
-        <div
+        <StatusBanner
+          variant="destructive"
           data-testid="history-unknown-recovery-banner"
           role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
         >
           Unknown recovery action ({String(jobData?.recoveryAction)}). The
           backend reported a state this SPA build cannot classify. Both action
@@ -269,19 +270,19 @@ export function MigrationHistoryPanel() {
           {jobData?.errorMessage && (
             <div className="mt-2 text-xs">Backend message: {jobData.errorMessage}</div>
           )}
-        </div>
+        </StatusBanner>
       )}
 
       {startHistory.isError && (
-        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+        <StatusBanner variant="destructive">
           {formatMigrationError(startHistory.error)}
-        </div>
+        </StatusBanner>
       )}
 
       {forceReset.isError && (
-        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+        <StatusBanner variant="destructive">
           Force reset failed: {formatMigrationError(forceReset.error)}
-        </div>
+        </StatusBanner>
       )}
 
       {isCompleted && result && (

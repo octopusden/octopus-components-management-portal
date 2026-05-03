@@ -39,7 +39,8 @@ test.describe('Components Management Portal – viewer smoke', () => {
     await page.waitForURL('**/components/**')
 
     await expect(page.getByRole('button', { name: /save/i })).toBeVisible({ timeout: 10_000 })
-    await expect(page.getByRole('button', { name: /delete/i })).toBeVisible()
+    // Archive button is gated by DELETE_COMPONENTS permission — viewer does not have it.
+    await expect(page.getByRole('button', { name: /archive/i })).not.toBeVisible()
 
     await expect(page.getByRole('tab', { name: /general/i })).toBeVisible()
     await expect(page.getByRole('tab', { name: /build/i })).toBeVisible()

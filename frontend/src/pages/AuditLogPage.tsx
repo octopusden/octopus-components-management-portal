@@ -3,6 +3,7 @@ import { Layout } from '../components/Layout'
 import { AuditLogTable } from '../components/AuditLogTable'
 import { AuditLogFilters, type AuditFilter } from '../components/AuditLogFilters'
 import { Pagination } from '../components/Pagination'
+import { InlineError } from '../components/ui/inline-error'
 import { useRecentAuditLog } from '../hooks/useAuditLog'
 
 export function AuditLogPage() {
@@ -40,10 +41,14 @@ export function AuditLogPage() {
         <AuditLogFilters filter={filter} onChange={handleFilterChange} />
 
         {error && (
-          <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            Failed to load audit log:{' '}
-            {error instanceof Error ? error.message : String(error)}
-          </div>
+          <InlineError
+            message={
+              <>
+                Failed to load audit log:{' '}
+                {error instanceof Error ? error.message : String(error)}
+              </>
+            }
+          />
         )}
 
         <AuditLogTable data={data?.content ?? []} isLoading={isLoading} />

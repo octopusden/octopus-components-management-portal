@@ -2,25 +2,82 @@
 
 @theme {
   --color-background: hsl(0 0% 100%);
-  --color-foreground: hsl(222.2 84% 4.9%);
+  --color-foreground: hsl(240 10% 3.9%);
   --color-card: hsl(0 0% 100%);
-  --color-card-foreground: hsl(222.2 84% 4.9%);
+  --color-card-foreground: hsl(240 10% 3.9%);
   --color-popover: hsl(0 0% 100%);
-  --color-popover-foreground: hsl(222.2 84% 4.9%);
-  --color-primary: hsl(222.2 47.4% 11.2%);
-  --color-primary-foreground: hsl(210 40% 98%);
-  --color-secondary: hsl(210 40% 96.1%);
-  --color-secondary-foreground: hsl(222.2 47.4% 11.2%);
-  --color-muted: hsl(210 40% 96.1%);
-  --color-muted-foreground: hsl(215.4 16.3% 46.9%);
-  --color-accent: hsl(210 40% 96.1%);
-  --color-accent-foreground: hsl(222.2 47.4% 11.2%);
+  --color-popover-foreground: hsl(240 10% 3.9%);
+  --color-primary: hsl(240 6% 10%);
+  --color-primary-foreground: hsl(0 0% 98%);
+  --color-secondary: hsl(240 5% 96%);
+  --color-secondary-foreground: hsl(240 6% 10%);
+  --color-muted: hsl(240 5% 96%);
+  --color-muted-foreground: hsl(240 4% 46%);
+  --color-accent: hsl(240 5% 96%);
+  --color-accent-foreground: hsl(240 6% 10%);
   --color-destructive: hsl(0 84.2% 60.2%);
-  --color-destructive-foreground: hsl(210 40% 98%);
-  --color-border: hsl(214.3 31.8% 91.4%);
-  --color-input: hsl(214.3 31.8% 91.4%);
-  --color-ring: hsl(222.2 84% 4.9%);
+  --color-destructive-foreground: hsl(0 0% 98%);
+  --color-border: hsl(240 6% 90%);
+  --color-input: hsl(240 6% 90%);
+  --color-ring: hsl(240 10% 3.9%);
   --radius: 0.5rem;
+
+  /* Semantic badge tokens — values from prototype theme.js (light palette).
+     Used by Badge variants success/warning/info/danger and by FieldConfigEditor
+     visibility-cell text colors. Dark equivalents live under
+     :root[data-theme="dark"] (dormant — not auto-activated). */
+  --color-badge-green-bg: #dcfce7;
+  --color-badge-green-fg: #166534;
+  --color-badge-blue-bg: #dbeafe;
+  --color-badge-blue-fg: #1e40af;
+  --color-badge-yellow-bg: #fef9c3;
+  --color-badge-yellow-fg: #854d0e;
+  --color-badge-red-bg: #fee2e2;
+  --color-badge-red-fg: #991b1b;
+
+  /* Visibility-text aliases for FieldConfigEditor visibility cell.
+     One source of truth — index.css. */
+  --color-visibility-editable-fg: #16a34a;
+  --color-visibility-readonly-fg: #ca8a04;
+  --color-visibility-hidden-fg: var(--color-muted-foreground);
+}
+
+/* Dormant dark palette — activated only when document.documentElement carries
+   data-theme="dark". No prefers-color-scheme media query: existing users keep
+   light mode regardless of OS preference until a theme-toggle UI lands. */
+:root[data-theme="dark"] {
+  --color-background: hsl(240 10% 3.9%);
+  --color-foreground: hsl(0 0% 98%);
+  --color-card: hsl(240 10% 3.9%);
+  --color-card-foreground: hsl(0 0% 98%);
+  --color-popover: hsl(240 10% 3.9%);
+  --color-popover-foreground: hsl(0 0% 98%);
+  --color-primary: hsl(0 0% 98%);
+  --color-primary-foreground: hsl(240 5.9% 10%);
+  --color-secondary: hsl(240 3.7% 15.9%);
+  --color-secondary-foreground: hsl(0 0% 98%);
+  --color-muted: hsl(240 3.7% 15.9%);
+  --color-muted-foreground: hsl(240 5% 64.9%);
+  --color-accent: hsl(240 3.7% 15.9%);
+  --color-accent-foreground: hsl(0 0% 98%);
+  --color-destructive: hsl(0 62.8% 30.6%);
+  --color-destructive-foreground: hsl(0 0% 98%);
+  --color-border: hsl(240 3.7% 15.9%);
+  --color-input: hsl(240 3.7% 15.9%);
+  --color-ring: hsl(240 4.9% 83.9%);
+
+  --color-badge-green-bg: hsl(142 76% 16%);
+  --color-badge-green-fg: hsl(142 71% 65%);
+  --color-badge-blue-bg: hsl(217 91% 16%);
+  --color-badge-blue-fg: hsl(217 91% 65%);
+  --color-badge-yellow-bg: hsl(48 96% 14%);
+  --color-badge-yellow-fg: hsl(48 96% 60%);
+  --color-badge-red-bg: hsl(0 74% 16%);
+  --color-badge-red-fg: hsl(0 74% 65%);
+
+  --color-visibility-editable-fg: hsl(142 71% 65%);
+  --color-visibility-readonly-fg: hsl(48 96% 60%);
+  --color-visibility-hidden-fg: var(--color-muted-foreground);
 }
 
 @layer base {

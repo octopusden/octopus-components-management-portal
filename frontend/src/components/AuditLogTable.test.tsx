@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router'
 import userEvent from '@testing-library/user-event'
 import { AuditLogTable } from './AuditLogTable'
 import type { AuditLogEntry } from '../lib/types'
@@ -27,8 +28,9 @@ function makeEntry(overrides: Partial<AuditLogEntry> = {}): AuditLogEntry {
 describe('AuditLogTable', () => {
   it('renders skeleton rows while loading', () => {
     render(<AuditLogTable data={[]} isLoading />)
-    const cells = document.querySelectorAll('.animate-pulse')
-    expect(cells.length).toBeGreaterThan(0)
+    // PR-3: target the SkeletonTable primitive's data-testid instead of
+    // a fragile className selector — survives Tailwind class churn.
+    expect(screen.getByTestId('skeleton-table')).toBeDefined()
   })
 
   it('shows empty state when data is empty and not loading', () => {
@@ -111,9 +113,73 @@ describe('AuditLogTable', () => {
     expect(screen.getByText('—')).toBeDefined()
   })
 
-  it('applies a muted badge class for unknown action types', () => {
+  it('applies the secondary Badge variant for unknown action types', () => {
     render(<AuditLogTable data={[makeEntry({ action: 'CUSTOM_ACTION' })]} isLoading={false} />)
-    const badge = screen.getByText('CUSTOM_ACTION')
-    expect(badge.className).toContain('bg-muted')
+    // Badge is the closest [data-variant] ancestor of the action label.
+    const badge = screen.getByText('CUSTOM_ACTION').closest('[data-variant]')
+    expect(badge?.getAttribute('data-variant')).toBe('secondary')
+  })
+
+  it('renders entityId as a link to /components/{id} when entityType is Component (PascalCase)', () => {
+    render(
+      <MemoryRouter>
+        <AuditLogTable
+          data={[makeEntry({ entityType: 'Component', entityId: 'comp-42' })]}
+          isLoading={false}
+        />
+      </MemoryRouter>,
+    )
+    const link = screen.getByRole('link', { name: 'comp-42' })
+    expect(link).toBeDefined()
+    expect(link.getAttribute('href')).toBe('/components/comp-42')
+  })
+
+  it('renders entityId as mono text (not a link) when entityType is not Component', () => {
+    render(
+      <MemoryRouter>
+        <AuditLogTable
+          data={[makeEntry({ entityType: 'FieldOverride', entityId: 'fo-99' })]}
+          isLoading={false}
+        />
+      </MemoryRouter>,
+    )
+    expect(screen.queryByRole('link', { name: 'fo-99' })).toBeNull()
+    expect(screen.getByText('fo-99')).toBeDefined()
+  })
+
+  it('does NOT render a link for lowercase "component" (case-sensitive check)', () => {
+    render(
+      <MemoryRouter>
+        <AuditLogTable
+          data={[makeEntry({ entityType: 'component', entityId: 'comp-1' })]}
+          isLoading={false}
+        />
+      </MemoryRouter>,
+    )
+    expect(screen.queryByRole('link', { name: 'comp-1' })).toBeNull()
+  })
+
+  it('applies the success Badge variant for CREATE action', () => {
+    render(<AuditLogTable data={[makeEntry({ action: 'CREATE' })]} isLoading={false} />)
+    const badge = screen.getByText('CREATE').closest('[data-variant]')
+    expect(badge?.getAttribute('data-variant')).toBe('success')
+  })
+
+  it('applies the warning Badge variant for UPDATE action', () => {
+    render(<AuditLogTable data={[makeEntry({ action: 'UPDATE' })]} isLoading={false} />)
+    const badge = screen.getByText('UPDATE').closest('[data-variant]')
+    expect(badge?.getAttribute('data-variant')).toBe('warning')
+  })
+
+  it('applies the destructive Badge variant for DELETE action', () => {
+    render(<AuditLogTable data={[makeEntry({ action: 'DELETE' })]} isLoading={false} />)
+    const badge = screen.getByText('DELETE').closest('[data-variant]')
+    expect(badge?.getAttribute('data-variant')).toBe('destructive')
+  })
+
+  it('applies the warning Badge variant for RENAME action', () => {
+    render(<AuditLogTable data={[makeEntry({ action: 'RENAME' })]} isLoading={false} />)
+    const badge = screen.getByText('RENAME').closest('[data-variant]')
+    expect(badge?.getAttribute('data-variant')).toBe('warning')
   })
 })

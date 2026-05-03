@@ -16,7 +16,7 @@ const buttonVariants = cva(
         link: 'text-primary underline-offset-4 hover:underline',
       },
       size: {
-        default: 'h-10 px-4 py-2',
+        default: 'h-9 px-4 py-2',
         sm: 'h-9 rounded-md px-3',
         lg: 'h-11 rounded-md px-8',
         icon: 'h-10 w-10',
@@ -38,11 +38,17 @@ export interface ButtonProps
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, ...props }, ref) => {
     const Comp = asChild ? Slot : 'button'
+    // CVA does NOT auto-emit data-variant; visual specs (e.g. Archive
+    // button on /components/{id}) assert against this attribute, so we
+    // set it explicitly. Slot will forward it to the rendered child.
+    // Spread props first so a caller-supplied data-variant cannot shadow
+    // the variant resolved here.
     return (
       <Comp
+        {...props}
+        data-variant={variant ?? 'default'}
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
-        {...props}
       />
     )
   }

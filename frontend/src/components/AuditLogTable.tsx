@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Link } from 'react-router'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import {
   Table,
@@ -9,7 +10,10 @@ import {
   TableRow,
 } from './ui/table'
 import { Badge } from './ui/badge'
+import type { BadgeProps } from './ui/badge'
 import { Button } from './ui/button'
+import { EmptyState } from './ui/empty-state'
+import { SkeletonTable } from './ui/skeleton-table'
 import { AuditDiffViewer } from './AuditDiffViewer'
 import type { AuditLogEntry } from '../lib/types'
 import { cn } from '../lib/utils'
@@ -19,10 +23,14 @@ interface AuditLogTableProps {
   isLoading: boolean
 }
 
-const ACTION_BADGE_CLASSES: Record<string, string> = {
-  CREATE: 'border-transparent bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
-  UPDATE: 'border-transparent bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
-  DELETE: 'border-transparent bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
+// Action → semantic Badge variant. CRS emits CREATE/UPDATE/DELETE/RENAME
+// (see ComponentManagementServiceImpl + GitHistoryImportServiceImpl).
+// MIGRATE/ARCHIVE are intentionally absent — CRS does not emit them.
+const ACTION_BADGE_VARIANT: Record<string, BadgeProps['variant']> = {
+  CREATE: 'success',
+  UPDATE: 'warning',
+  DELETE: 'destructive',
+  RENAME: 'warning',
 }
 
 function formatDate(dateStr: string): string {
@@ -48,18 +56,6 @@ function diffSummary(entry: AuditLogEntry): string | null {
   return `${keys.slice(0, 3).join(', ')} +${keys.length - 3} more`
 }
 
-function SkeletonRow() {
-  return (
-    <TableRow>
-      {Array.from({ length: 6 }).map((_, i) => (
-        <TableCell key={i}>
-          <div className="h-4 bg-muted animate-pulse rounded w-3/4" />
-        </TableCell>
-      ))}
-    </TableRow>
-  )
-}
-
 export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
   const [expandedId, setExpandedId] = useState<number | null>(null)
 
@@ -67,6 +63,8 @@ export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
     setExpandedId((prev) => (prev === id ? null : id))
   }
 
+  // Loading state keeps the real TableHeader (column widths must match
+  // post-load) and only replaces the body rows via SkeletonTable.
   return (
     <div className="rounded-md border">
       <Table>
@@ -81,21 +79,22 @@ export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
             <TableHead>Changed Fields</TableHead>
           </TableRow>
         </TableHeader>
+        {isLoading ? (
+          <SkeletonTable rows={5} cols={7} showHeader={false} />
+        ) : (
         <TableBody>
-          {isLoading
-            ? Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)
-            : data.length === 0
+          {data.length === 0
             ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                  No audit log entries found.
+                <TableCell colSpan={7} className="p-0">
+                  <EmptyState message="No audit log entries found." />
                 </TableCell>
               </TableRow>
             )
             : data.map((entry) => {
                 const isExpanded = expandedId === entry.id
                 const summary = diffSummary(entry)
-                const actionClass = ACTION_BADGE_CLASSES[entry.action] ?? 'border-transparent bg-muted text-muted-foreground'
+                const actionVariant = ACTION_BADGE_VARIANT[entry.action] ?? 'secondary'
 
                 return (
                   <React.Fragment key={entry.id}>
@@ -123,12 +122,19 @@ export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
                         </span>
                       </TableCell>
                       <TableCell>
-                        <span className="font-mono text-xs">{entry.entityId}</span>
+                        {entry.entityType === 'Component' ? (
+                          <Link
+                            to={`/components/${entry.entityId}`}
+                            className="font-medium text-primary hover:underline"
+                          >
+                            {entry.entityId}
+                          </Link>
+                        ) : (
+                          <span className="font-mono text-xs">{entry.entityId}</span>
+                        )}
                       </TableCell>
                       <TableCell>
-                        <Badge className={actionClass}>
-                          {entry.action}
-                        </Badge>
+                        <Badge variant={actionVariant}>{entry.action}</Badge>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {summary ?? '—'}
@@ -151,6 +157,7 @@ export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
                 )
               })}
         </TableBody>
+        )}
       </Table>
     </div>
   )

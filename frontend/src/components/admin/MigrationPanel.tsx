@@ -11,6 +11,7 @@ import {
 import { toast } from '@/hooks/use-toast'
 import { formatMigrationError } from '@/lib/migrationErrors'
 import { Button } from '@/components/ui/button'
+import { StatusBanner } from '@/components/ui/status-banner'
 import {
   Dialog,
   DialogContent,
@@ -185,15 +186,15 @@ export function MigrationPanel() {
       )}
 
       {isFailed && jobData?.errorMessage && (
-        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+        <StatusBanner variant="destructive">
           Migration failed: {jobData.errorMessage}
-        </div>
+        </StatusBanner>
       )}
 
       {startMigration.isError && (
-        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+        <StatusBanner variant="destructive">
           {formatMigrationError(startMigration.error)}
-        </div>
+        </StatusBanner>
       )}
 
       {isCompleted && result && (
