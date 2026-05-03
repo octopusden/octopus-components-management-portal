@@ -97,7 +97,7 @@ export function Layout({ children }: LayoutProps) {
           </div>
         </div>
       </header>
-      <main className="flex-1 max-w-screen-xl w-full mx-auto px-4 py-6">{children}</main>
+      <main className="flex-1 max-w-screen-xl w-full mx-auto px-6 py-6">{children}</main>
       <AppFooter />
     </div>
   )

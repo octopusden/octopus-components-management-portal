@@ -83,9 +83,9 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
   return (
     <div className="space-y-6">
       {/* ── Identity ──────────────────────────────────────────────────────── */}
-      <div>
+      <section data-testid="section-identity">
         <h3 className="text-sm font-medium text-muted-foreground mb-3">Identity</h3>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           {/* Name — editable only with RENAME_COMPONENTS (B7.1.4). On the create
               surface (isNew) the field is unconditionally editable because the
               server enforces RENAME_COMPONENTS only on PATCH; POST permits
@@ -158,13 +158,13 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
             <Label htmlFor="solution" className="cursor-pointer">Solution</Label>
           </div>
         </div>
-      </div>
+      </section>
 
       {/* ── Ownership ─────────────────────────────────────────────────────── */}
       {componentOwnerEntry.visibility !== 'hidden' && (
-        <div>
+        <section data-testid="section-ownership">
           <h3 className="text-sm font-medium text-muted-foreground mb-3">Ownership</h3>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             {/* Component Owner */}
             <div className="space-y-1.5">
               <Label htmlFor="componentOwner">Component Owner</Label>
@@ -185,14 +185,14 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
               <FieldOverrideInline componentId={component.id} fieldPath="componentOwner" />
             </div>
           </div>
-        </div>
+        </section>
       )}
 
       {/* ── Metadata ──────────────────────────────────────────────────────── */}
       {(systemEntry.visibility !== 'hidden' || clientCodeEntry.visibility !== 'hidden') && (
-        <div>
+        <section data-testid="section-metadata">
           <h3 className="text-sm font-medium text-muted-foreground mb-3">Metadata</h3>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             {/* System (comma-separated) */}
             {systemEntry.visibility !== 'hidden' && (
               <div className="space-y-1.5">
@@ -224,7 +224,7 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
               </div>
             )}
           </div>
-        </div>
+        </section>
       )}
 
       {component.createdAt && (

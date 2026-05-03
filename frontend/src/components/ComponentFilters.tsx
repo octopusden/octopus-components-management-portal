@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from './ui/select'
 import { Button } from './ui/button'
+import { FilterBar } from './ui/filter-bar'
 import { Switch } from './ui/switch'
 import { Label } from './ui/label'
 import type { ComponentFilter } from '../lib/types'
@@ -107,7 +108,7 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
       : 'Hide archived components'
 
   return (
-    <div className="flex flex-wrap items-center gap-3">
+    <FilterBar>
       <div className="relative flex-1 min-w-[200px] max-w-xs">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
@@ -186,6 +187,6 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
           Clear filters
         </Button>
       )}
-    </div>
+    </FilterBar>
   )
 }

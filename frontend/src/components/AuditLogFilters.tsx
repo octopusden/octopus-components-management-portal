@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from './ui/select'
 import { Button } from './ui/button'
+import { FilterBar } from './ui/filter-bar'
 
 /**
  * Filter shape consumed by AuditLogPage. Each field is independently
@@ -114,7 +115,7 @@ export function AuditLogFilters({ filter, onChange }: AuditLogFiltersProps) {
     !!filter.entityType || !!filter.changedBy || !!filter.source || !!filter.action || !!filter.from || !!filter.to
 
   return (
-    <div className="flex flex-wrap items-end gap-3 rounded-md border bg-card px-4 py-3">
+    <FilterBar withLabels>
       <div className="space-y-1.5">
         <Label htmlFor="audit-filter-entityType">Entity Type</Label>
         <Select value={filter.entityType ?? ALL_VALUE} onValueChange={handleEntityType}>
@@ -204,6 +205,6 @@ export function AuditLogFilters({ filter, onChange }: AuditLogFiltersProps) {
           Clear filters
         </Button>
       )}
-    </div>
+    </FilterBar>
   )
 }
