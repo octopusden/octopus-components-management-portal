@@ -75,9 +75,10 @@ export function ComponentDetailPage() {
   // Race-guard: while field-config is still loading, every FC entry falls
   // back to visibility='editable', which would let a fast-clicking user
   // overwrite hidden/readonly fields with form defaults before the real
-  // policy arrives. All four hooks share the same underlying useFieldConfig
-  // query, so any one loading flag implies all four are. Save button is
-  // disabled until at least one entry resolves.
+  // policy arrives. All useFieldConfigEntry calls share the same
+  // underlying useFieldConfig query, so any one loading flag implies all
+  // are loading — checking the four pre-SYS-039 entries is sufficient.
+  // Save button is disabled until at least one entry resolves.
   const fieldConfigLoading =
     displayNameFcLoading || componentOwnerFcLoading || systemFcLoading || clientCodeFcLoading
 
@@ -95,6 +96,16 @@ export function ComponentDetailPage() {
       solution: false,
       archived: false,
       parentComponentName: '',
+      // SYS-039 — must match GeneralFormValues (no `?` modifier on those
+      // fields). Without these defaults, an early Save (before useEffect
+      // populates from `component`) would read `undefined` for labels and
+      // friends and emit empty / wrong wire shapes.
+      groupId: '',
+      releaseManager: '',
+      securityChampion: '',
+      copyright: '',
+      releasesInDefaultBranch: false,
+      labels: '',
     },
   })
 
@@ -106,10 +117,21 @@ export function ComponentDetailPage() {
       ? values.system.split(',').map((s) => s.trim()).filter(Boolean)
       : []
 
-    // SYS-039 — labels uses the same comma-separated convention as system.
+    // SYS-039 — labels uses the same comma-separated convention as
+    // system, but with two extra rules to match scalar JSON Merge Patch
+    // semantics: (a) blank input → undefined ("don't touch"), not [] (an
+    // explicit clear); (b) dedup via Set to avoid emitting duplicates
+    // until CRS adds a DB-level constraint (PR #163 NIT).
     const labelsArray = values.labels
-      ? values.labels.split(',').map((s) => s.trim()).filter(Boolean)
-      : []
+      ? Array.from(
+          new Set(
+            values.labels
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean),
+          ),
+        )
+      : undefined
     // releasesInDefaultBranch is the only SYS-039 boolean — only send when
     // it actually changed so a non-toggle save doesn't ship the default
     // (the form `?? false` fallback would otherwise emit `false` for
@@ -174,6 +196,7 @@ export function ComponentDetailPage() {
             ? undefined
             : values.releasesInDefaultBranch,
         labels: labelsFc.visibility === 'hidden' ? undefined : labelsArray,
+        // labelsArray is already `undefined` when input is blank — see helper above.
       })
       toast({ title: 'Component saved', description: 'Changes have been saved successfully.' })
     } catch (err) {
