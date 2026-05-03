@@ -10,7 +10,10 @@ import type { Page, Route } from '@playwright/test'
 // regex to disambiguate `/components/{id}` from `/components?...`.
 
 const COMPONENTS_LIST = '**/rest/api/4/components?**'
+// Detail must NOT match /components/meta/owners — keep the path segment
+// strictly UUID-like (no slashes after /components/).
 const COMPONENTS_DETAIL = /\/rest\/api\/4\/components\/[^/?]+(?:\?.*)?$/
+const COMPONENTS_OWNERS = '**/rest/api/4/components/meta/owners'
 const AUDIT_RECENT = '**/rest/api/4/audit/recent?**'
 const FIELD_CONFIG = '**/rest/api/4/config/field-config'
 
@@ -37,6 +40,16 @@ export async function mockComponentDetail(page: Page, fixture: unknown) {
 /** Mock GET /audit/recent with a Page<AuditLogEntry> fixture. */
 export async function mockAuditRecent(page: Page, fixture: unknown) {
   await page.route(AUDIT_RECENT, (route) => jsonRoute(route, 200, fixture))
+}
+
+/**
+ * Mock GET /components/meta/owners — used by PeopleInput / useOwners.
+ * Default fixture is an empty list, which is sufficient for layout
+ * conformance specs that don't open the picker; pass a string[] to seed
+ * suggestions for tests that do.
+ */
+export async function mockOwners(page: Page, fixture: string[] = []) {
+  await page.route(COMPONENTS_OWNERS, (route) => jsonRoute(route, 200, fixture))
 }
 
 /** Mock GET /config/field-config with a sectioned-shape fixture. */

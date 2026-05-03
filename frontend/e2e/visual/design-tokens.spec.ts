@@ -7,6 +7,7 @@ import {
   mockComponentDetail,
   mockComponentList,
   mockFieldConfig,
+  mockOwners,
 } from './_helpers'
 
 // PR-2 visual-acceptance: every variant-driven UI surface must emit a
@@ -64,12 +65,17 @@ test.describe('design tokens — Component detail Archive button', () => {
   test('Archive button uses Button variant="destructive" (no inline custom classes)', async ({
     page,
   }) => {
-    // Need both /components and /components/{id}: header navigation hits both.
+    // ComponentDetailPage hits four endpoints on render: the list (header
+    // breadcrumb fetches it), the detail body, the registry-wide field
+    // config (visibility-gating in GeneralTab), and the owners list
+    // (PeopleInput suggestions). All four MUST be route-mocked — leaving
+    // any unmocked makes the spec dependent on live CRS state and risks
+    // flakiness when admins change field-config or owners drift.
     await mockComponentList(page, componentsFixture)
+    await mockFieldConfig(page, fieldConfigFixture)
+    await mockOwners(page, [])
 
-    // Build a non-archived component detail fixture from the list entry. The
-    // page only needs the scalar fields present on ComponentSummary plus the
-    // ComponentDetail-specific arrays (empty is fine).
+    // Build a non-archived component detail fixture from the list entry.
     const summary = (componentsFixture as { content: Array<Record<string, unknown>> }).content[0]
     const detailFixture = {
       ...summary,

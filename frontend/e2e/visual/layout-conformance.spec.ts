@@ -1,10 +1,13 @@
 import { test, expect } from '@playwright/test'
 import auditFixture from './fixtures/audit-actions.json' with { type: 'json' }
 import componentsFixture from './fixtures/components-with-archived.json' with { type: 'json' }
+import fieldConfigFixture from './fixtures/field-config-mixed-visibility.json' with { type: 'json' }
 import {
   mockAuditRecent,
   mockComponentDetail,
   mockComponentList,
+  mockFieldConfig,
+  mockOwners,
 } from './_helpers'
 
 // PR-4 visual-acceptance: cross-page layout invariants. Filter rows
@@ -60,27 +63,37 @@ test.describe('layout conformance — main container width', () => {
 })
 
 test.describe('layout conformance — ComponentDetailPage', () => {
+  // ComponentDetailPage hits four endpoints on render: the list (header
+  // breadcrumb), the detail body, the registry-wide field config (visibility
+  // gating in GeneralTab), and the owners list (PeopleInput suggestions).
+  // All four MUST be route-mocked — leaving any unmocked makes the spec
+  // dependent on live CRS state and risks flakiness when admins change
+  // field-config or owners drift.
+  const summary = (componentsFixture as { content: Array<Record<string, unknown>> }).content[0]
+  const detailFixture = {
+    ...summary,
+    archived: false,
+    version: 1,
+    createdAt: '2026-01-01T00:00:00Z',
+    metadata: {},
+    buildConfigurations: [],
+    vcsSettings: [],
+    distributions: [],
+    jiraComponentConfigs: [],
+    escrowConfigurations: [],
+    versions: [],
+  }
+
+  test.beforeEach(async ({ page }) => {
+    await mockComponentList(page, componentsFixture)
+    await mockComponentDetail(page, detailFixture)
+    await mockFieldConfig(page, fieldConfigFixture)
+    await mockOwners(page, [])
+  })
+
   test('GeneralTab renders 3 sections (Identity / Ownership / Metadata) with gap-6', async ({
     page,
   }) => {
-    await mockComponentList(page, componentsFixture)
-
-    const summary = (componentsFixture as { content: Array<Record<string, unknown>> }).content[0]
-    const detailFixture = {
-      ...summary,
-      archived: false,
-      version: 1,
-      createdAt: '2026-01-01T00:00:00Z',
-      metadata: {},
-      buildConfigurations: [],
-      vcsSettings: [],
-      distributions: [],
-      jiraComponentConfigs: [],
-      escrowConfigurations: [],
-      versions: [],
-    }
-    await mockComponentDetail(page, detailFixture)
-
     await page.goto(`/components/${summary.id}`)
 
     // GeneralTab is the default tab; section data-testids land in DOM.
@@ -95,24 +108,6 @@ test.describe('layout conformance — ComponentDetailPage', () => {
   })
 
   test('Archive button is rendered with data-variant="destructive"', async ({ page }) => {
-    await mockComponentList(page, componentsFixture)
-
-    const summary = (componentsFixture as { content: Array<Record<string, unknown>> }).content[0]
-    const detailFixture = {
-      ...summary,
-      archived: false,
-      version: 1,
-      createdAt: '2026-01-01T00:00:00Z',
-      metadata: {},
-      buildConfigurations: [],
-      vcsSettings: [],
-      distributions: [],
-      jiraComponentConfigs: [],
-      escrowConfigurations: [],
-      versions: [],
-    }
-    await mockComponentDetail(page, detailFixture)
-
     await page.goto(`/components/${summary.id}`)
 
     const archive = page.getByRole('button', { name: /^archive$/i })
