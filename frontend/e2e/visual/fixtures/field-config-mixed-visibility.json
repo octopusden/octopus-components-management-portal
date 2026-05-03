@@ -30,7 +30,7 @@
     "productType": {
       "visibility": "editable",
       "required": false,
-      "options": ["KERNEL", "CARDS", "DWH", "DWH_DB"],
+      "options": ["TYPE_A", "TYPE_B", "TYPE_C", "TYPE_D"],
       "description": "Product-line classifier."
     },
     "clientCode": {

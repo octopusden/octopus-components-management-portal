@@ -301,7 +301,7 @@ describe('GeneralTab visibility-gating', () => {
 
   it('productType EnumSelect is NOT rendered in GeneralTab (migrated to EscrowTab)', () => {
     setAllEditable()
-    const component = baseComponent({ productType: 'KERNEL' })
+    const component = baseComponent({ productType: 'TYPE_A' })
     renderWithProviders(<Harness component={component} />)
 
     // productType should not appear in GeneralTab at all

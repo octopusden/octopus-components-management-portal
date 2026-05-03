@@ -6,7 +6,7 @@
       "displayName": "Alpha Service",
       "componentOwner": "alice",
       "system": ["CLASSIC"],
-      "productType": "KERNEL",
+      "productType": "TYPE_A",
       "archived": false,
       "updatedAt": "2026-01-15T10:00:00Z"
     },
@@ -16,7 +16,7 @@
       "displayName": "Beta Module",
       "componentOwner": "bob",
       "system": ["CLASSIC"],
-      "productType": "CARDS",
+      "productType": "TYPE_B",
       "archived": false,
       "updatedAt": "2026-01-16T10:00:00Z"
     },
@@ -26,7 +26,7 @@
       "displayName": "Legacy Component",
       "componentOwner": "carol",
       "system": ["CLASSIC"],
-      "productType": "DWH",
+      "productType": "TYPE_C",
       "archived": true,
       "updatedAt": "2025-06-01T10:00:00Z"
     }

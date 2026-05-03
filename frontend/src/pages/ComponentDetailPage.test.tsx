@@ -64,7 +64,7 @@ const baseComponent: ComponentDetail = {
   name: 'my-component',
   displayName: 'My Component',
   componentOwner: 'alice',
-  productType: 'KERNEL',
+  productType: 'TYPE_A',
   system: ['SYS1'],
   clientCode: null,
   archived: false,
