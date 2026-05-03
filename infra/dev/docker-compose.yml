@@ -27,6 +27,7 @@
 services:
   postgres:
     image: postgres:16
+    platform: linux/amd64
     environment:
       POSTGRES_DB: components_registry
       POSTGRES_USER: crs
@@ -38,6 +39,7 @@ services:
 
   keycloak:
     image: quay.io/keycloak/keycloak:24.0.3
+    platform: linux/amd64
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
@@ -54,7 +56,9 @@ services:
     command: start-dev --import-realm
 
   crs:
-    image: docker.artifactory.openwaygroup.com/octopusden/components-registry-service:2.0.84-3229
+    # Set CRS_DOCKER_REGISTRY to your internal registry (e.g. via .env file or shell export).
+    image: ${CRS_DOCKER_REGISTRY}/octopusden/components-registry-service:${CRS_VERSION:-2.0.84-3229}
+    platform: linux/amd64
     depends_on:
       - postgres
       - keycloak
