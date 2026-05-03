@@ -93,10 +93,12 @@ describe('ComponentTable', () => {
     })
 
     it('renders em-dash when buildSystem is null', () => {
-      const { container } = renderTable([makeComponent({ buildSystem: null })])
-      // Build System cell sits in column index 2 (after Name, Owner)
-      const bsCell = container.querySelector('tbody tr td:nth-child(3)')
-      expect(bsCell?.textContent).toContain('—')
+      renderTable([makeComponent({ buildSystem: null })])
+      // No GRADLE/MAVEN-style badge text when buildSystem is null. Assert
+      // by what's NOT there + global em-dash presence; column-position
+      // selectors would tie the test to current column order.
+      expect(screen.queryByText(/^(GRADLE|MAVEN)$/)).toBeNull()
+      expect(screen.getAllByText('—').length).toBeGreaterThan(0)
     })
   })
 
@@ -160,9 +162,12 @@ describe('ComponentTable', () => {
     })
 
     it('renders em-dash when no env vars are set', () => {
-      const { container } = renderTable([makeComponent()])
-      const linksCell = container.querySelector('tbody tr td:nth-child(4)')
-      expect(linksCell?.textContent).toContain('—')
+      renderTable([makeComponent()])
+      // Without any link-base env var set, no link icon renders — assert
+      // by absence of any Jira/Git/TC/DMS anchor instead of a positional
+      // cell selector.
+      expect(screen.queryByRole('link', { name: /Jira|Git|TeamCity|DMS/i })).toBeNull()
+      expect(screen.getAllByText('—').length).toBeGreaterThan(0)
     })
   })
 

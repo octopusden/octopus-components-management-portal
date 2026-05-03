@@ -14,6 +14,10 @@ describe('initials', () => {
     expect(initials('alice smith')).toBe('AS')
   })
 
+  it('takes first chars of two segments split by underscore', () => {
+    expect(initials('foo_bar')).toBe('FB')
+  })
+
   it('returns single uppercase char for a single-segment username', () => {
     expect(initials('alice')).toBe('A')
   })
