@@ -278,10 +278,9 @@ export function ComponentDetailPage() {
             {/* Archive / Unarchive — permission-gated, not just disabled */}
             {!component.archived && canArchive && (
               <Button
-                variant="outline"
+                variant="destructive"
                 size="sm"
                 onClick={() => setDeleteDialogOpen(true)}
-                className="text-destructive hover:text-destructive border-destructive/30 hover:bg-destructive/10"
               >
                 <Trash2 className="h-4 w-4" />
                 Archive

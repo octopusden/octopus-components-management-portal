@@ -10,6 +10,7 @@ import {
   TableRow,
 } from './ui/table'
 import { Badge } from './ui/badge'
+import type { BadgeProps } from './ui/badge'
 import { Button } from './ui/button'
 import { AuditDiffViewer } from './AuditDiffViewer'
 import type { AuditLogEntry } from '../lib/types'
@@ -20,11 +21,14 @@ interface AuditLogTableProps {
   isLoading: boolean
 }
 
-const ACTION_BADGE_CLASSES: Record<string, string> = {
-  CREATE: 'border-transparent bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
-  UPDATE: 'border-transparent bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
-  DELETE: 'border-transparent bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
-  RENAME: 'border-transparent bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
+// Action → semantic Badge variant. CRS emits CREATE/UPDATE/DELETE/RENAME
+// (see ComponentManagementServiceImpl + GitHistoryImportServiceImpl).
+// MIGRATE/ARCHIVE are intentionally absent — CRS does not emit them.
+const ACTION_BADGE_VARIANT: Record<string, BadgeProps['variant']> = {
+  CREATE: 'success',
+  UPDATE: 'warning',
+  DELETE: 'destructive',
+  RENAME: 'warning',
 }
 
 function formatDate(dateStr: string): string {
@@ -97,7 +101,7 @@ export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
             : data.map((entry) => {
                 const isExpanded = expandedId === entry.id
                 const summary = diffSummary(entry)
-                const actionClass = ACTION_BADGE_CLASSES[entry.action] ?? 'border-transparent bg-muted text-muted-foreground'
+                const actionVariant = ACTION_BADGE_VARIANT[entry.action] ?? 'secondary'
 
                 return (
                   <React.Fragment key={entry.id}>
@@ -137,9 +141,7 @@ export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge className={actionClass}>
-                          {entry.action}
-                        </Badge>
+                        <Badge variant={actionVariant}>{entry.action}</Badge>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {summary ?? '—'}

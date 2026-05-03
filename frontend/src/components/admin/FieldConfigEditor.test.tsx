@@ -127,6 +127,42 @@ describe('FieldConfigEditor — locked rows', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Visibility-cell accessibility + data-attribute hooks (PR-2 / §7.0.5)
+// ---------------------------------------------------------------------------
+
+describe('FieldConfigEditor — visibility a11y + data hooks', () => {
+  it('emits data-visibility on each visibility SelectTrigger reflecting current value', () => {
+    renderEditor({
+      component: {
+        displayName: { visibility: 'editable' },
+        clientCode:  { visibility: 'readonly' },
+        solution:    { visibility: 'hidden' },
+      },
+    })
+    expect(
+      screen.getByRole('combobox', { name: /displayName visibility/ })
+        .getAttribute('data-visibility'),
+    ).toBe('editable')
+    expect(
+      screen.getByRole('combobox', { name: /clientCode visibility/ })
+        .getAttribute('data-visibility'),
+    ).toBe('readonly')
+    expect(
+      screen.getByRole('combobox', { name: /solution visibility/ })
+        .getAttribute('data-visibility'),
+    ).toBe('hidden')
+  })
+
+  it('uses field-specific aria-label so multiple visibility comboboxes can be targeted by name', () => {
+    renderEditor({})
+    // Two different fields → two distinguishable accessible names.
+    const displayNameCombo = screen.getByRole('combobox', { name: /displayName visibility/ })
+    const clientCodeCombo = screen.getByRole('combobox', { name: /clientCode visibility/ })
+    expect(displayNameCombo).not.toBe(clientCodeCombo)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Reads existing server data (sectioned shape)
 // ---------------------------------------------------------------------------
 

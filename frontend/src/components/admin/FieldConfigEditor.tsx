@@ -130,26 +130,36 @@ function buildOutput(draft: DraftState): Record<string, unknown> {
 // Visibility Select cell
 // ---------------------------------------------------------------------------
 
+// Visibility text-colour comes from semantic tokens defined in index.css
+// `@theme` (PR-1). One source of truth for light + dormant dark palettes.
 const VISIBILITY_CLASSES: Record<FieldVisibility, string> = {
-  editable: 'text-green-600 dark:text-green-400',
-  readonly: 'text-yellow-600 dark:text-yellow-500',
-  hidden:   'text-muted-foreground',
+  editable: 'text-[color:var(--color-visibility-editable-fg)]',
+  readonly: 'text-[color:var(--color-visibility-readonly-fg)]',
+  hidden:   'text-[color:var(--color-visibility-hidden-fg)]',
 }
 
 interface VisibilitySelectProps {
   value: FieldVisibility
   onChange: (v: FieldVisibility) => void
   disabled?: boolean
+  /** Field label, used to compose an accessible name for the trigger
+   *  (e.g. "displayName visibility") so visual specs can target the row
+   *  unambiguously: `getByRole('combobox', { name: /displayName visibility/ })`. */
+  fieldLabel: string
 }
 
-function VisibilitySelect({ value, onChange, disabled }: VisibilitySelectProps) {
+function VisibilitySelect({ value, onChange, disabled, fieldLabel }: VisibilitySelectProps) {
   return (
     <Select
       value={value}
       onValueChange={(v) => onChange(v as FieldVisibility)}
       disabled={disabled}
     >
-      <SelectTrigger className="h-8 w-32 text-xs">
+      <SelectTrigger
+        className="h-8 w-32 text-xs"
+        aria-label={`${fieldLabel} visibility`}
+        data-visibility={value}
+      >
         <SelectValue>
           <span className={cn('text-xs', VISIBILITY_CLASSES[value])}>{value}</span>
         </SelectValue>
@@ -216,6 +226,7 @@ function SectionTable({ title, rows, draft, onDraftChange }: SectionTableProps) 
                     value={d.visibility}
                     onChange={(v) => onDraftChange(key, { visibility: v })}
                     disabled={row.locked}
+                    fieldLabel={row.label}
                   />
                 </TableCell>
 

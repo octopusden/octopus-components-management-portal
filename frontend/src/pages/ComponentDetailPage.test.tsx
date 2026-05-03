@@ -176,6 +176,15 @@ describe('ComponentDetailPage — Archive / Unarchive buttons', () => {
     expect(screen.getByRole('button', { name: /archive/i })).toBeDefined()
   })
 
+  it('(a) Archive button uses Button variant="destructive" (no inline custom classes)', () => {
+    const user = makeUser(['ACCESS_COMPONENTS', 'DELETE_COMPONENTS'])
+    renderPage(baseComponent, user)
+    // Header Archive (not the dialog confirm button) is the only one before
+    // any click; assert via data-variant attribute set by Button.
+    const archiveBtn = screen.getByRole('button', { name: /^archive$/i })
+    expect(archiveBtn.getAttribute('data-variant')).toBe('destructive')
+  })
+
   it('(a) Archive button is hidden for user without DELETE_COMPONENTS', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(baseComponent, user)

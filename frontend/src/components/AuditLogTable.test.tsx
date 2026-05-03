@@ -112,10 +112,11 @@ describe('AuditLogTable', () => {
     expect(screen.getByText('—')).toBeDefined()
   })
 
-  it('applies a muted badge class for unknown action types', () => {
+  it('applies the secondary Badge variant for unknown action types', () => {
     render(<AuditLogTable data={[makeEntry({ action: 'CUSTOM_ACTION' })]} isLoading={false} />)
-    const badge = screen.getByText('CUSTOM_ACTION')
-    expect(badge.className).toContain('bg-muted')
+    // Badge is the closest [data-variant] ancestor of the action label.
+    const badge = screen.getByText('CUSTOM_ACTION').closest('[data-variant]')
+    expect(badge?.getAttribute('data-variant')).toBe('secondary')
   })
 
   it('renders entityId as a link to /components/{id} when entityType is Component (PascalCase)', () => {
@@ -157,27 +158,27 @@ describe('AuditLogTable', () => {
     expect(screen.queryByRole('link', { name: 'comp-1' })).toBeNull()
   })
 
-  it('applies green badge class for CREATE action', () => {
+  it('applies the success Badge variant for CREATE action', () => {
     render(<AuditLogTable data={[makeEntry({ action: 'CREATE' })]} isLoading={false} />)
-    const badge = screen.getByText('CREATE')
-    expect(badge.className).toContain('bg-green-100')
+    const badge = screen.getByText('CREATE').closest('[data-variant]')
+    expect(badge?.getAttribute('data-variant')).toBe('success')
   })
 
-  it('applies yellow badge class for UPDATE action', () => {
+  it('applies the warning Badge variant for UPDATE action', () => {
     render(<AuditLogTable data={[makeEntry({ action: 'UPDATE' })]} isLoading={false} />)
-    const badge = screen.getByText('UPDATE')
-    expect(badge.className).toContain('bg-yellow-100')
+    const badge = screen.getByText('UPDATE').closest('[data-variant]')
+    expect(badge?.getAttribute('data-variant')).toBe('warning')
   })
 
-  it('applies red badge class for DELETE action', () => {
+  it('applies the destructive Badge variant for DELETE action', () => {
     render(<AuditLogTable data={[makeEntry({ action: 'DELETE' })]} isLoading={false} />)
-    const badge = screen.getByText('DELETE')
-    expect(badge.className).toContain('bg-red-100')
+    const badge = screen.getByText('DELETE').closest('[data-variant]')
+    expect(badge?.getAttribute('data-variant')).toBe('destructive')
   })
 
-  it('applies yellow badge class for RENAME action', () => {
+  it('applies the warning Badge variant for RENAME action', () => {
     render(<AuditLogTable data={[makeEntry({ action: 'RENAME' })]} isLoading={false} />)
-    const badge = screen.getByText('RENAME')
-    expect(badge.className).toContain('bg-yellow-100')
+    const badge = screen.getByText('RENAME').closest('[data-variant]')
+    expect(badge?.getAttribute('data-variant')).toBe('warning')
   })
 })

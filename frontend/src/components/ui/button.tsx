@@ -38,8 +38,12 @@ export interface ButtonProps
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, ...props }, ref) => {
     const Comp = asChild ? Slot : 'button'
+    // CVA does NOT auto-emit data-variant; visual specs (e.g. Archive
+    // button on /components/{id}) assert against this attribute, so we
+    // set it explicitly. Slot will forward it to the rendered child.
     return (
       <Comp
+        data-variant={variant ?? 'default'}
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
         {...props}
