@@ -41,12 +41,14 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     // CVA does NOT auto-emit data-variant; visual specs (e.g. Archive
     // button on /components/{id}) assert against this attribute, so we
     // set it explicitly. Slot will forward it to the rendered child.
+    // Spread props first so a caller-supplied data-variant cannot shadow
+    // the variant resolved here.
     return (
       <Comp
+        {...props}
         data-variant={variant ?? 'default'}
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
-        {...props}
       />
     )
   }

@@ -33,12 +33,14 @@ export interface BadgeProps
 
 function Badge({ className, variant, ...props }: BadgeProps) {
   // CVA does NOT auto-emit data-variant; visual specs assert against this
-  // attribute (`data-variant="success"` etc.), so we set it explicitly.
+  // attribute (`data-variant="success"` etc.). Spread props first so a
+  // caller-supplied data-variant (rare, but possible) cannot accidentally
+  // shadow the variant we resolved here.
   return (
     <div
+      {...props}
       data-variant={variant ?? 'default'}
       className={cn(badgeVariants({ variant }), className)}
-      {...props}
     />
   )
 }

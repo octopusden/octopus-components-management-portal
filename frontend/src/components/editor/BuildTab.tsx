@@ -190,6 +190,8 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
               const summary = buildToolSummary(item)
               return (
                 <li key={idx} className="flex items-center gap-2 text-sm">
+                  {/* PR-2 (§7.0.5) keeps `secondary` intentionally; swap to `info`
+                      pending side-by-side review against component-detail.html. */}
                   <Badge variant="secondary">{type}</Badge>
                   {summary && <span className="text-muted-foreground">{summary}</span>}
                 </li>
