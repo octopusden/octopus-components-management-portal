@@ -56,10 +56,21 @@ export function ComponentDetailPage() {
   // by field-config (ComponentManagementServiceImpl.kt:163 writes any field that
   // arrives in the request). Sending a hidden field would silently overwrite the
   // server value. See §7.0 critical contract #1 and #2.
-  const { entry: displayNameFc } = useFieldConfigEntry('component.displayName')
-  const { entry: componentOwnerFc } = useFieldConfigEntry('component.componentOwner')
-  const { entry: systemFc } = useFieldConfigEntry('component.system')
-  const { entry: clientCodeFc } = useFieldConfigEntry('component.clientCode')
+  const { entry: displayNameFc, isLoading: displayNameFcLoading } =
+    useFieldConfigEntry('component.displayName')
+  const { entry: componentOwnerFc, isLoading: componentOwnerFcLoading } =
+    useFieldConfigEntry('component.componentOwner')
+  const { entry: systemFc, isLoading: systemFcLoading } = useFieldConfigEntry('component.system')
+  const { entry: clientCodeFc, isLoading: clientCodeFcLoading } =
+    useFieldConfigEntry('component.clientCode')
+  // Race-guard: while field-config is still loading, every FC entry falls
+  // back to visibility='editable', which would let a fast-clicking user
+  // overwrite hidden/readonly fields with form defaults before the real
+  // policy arrives. All four hooks share the same underlying useFieldConfig
+  // query, so any one loading flag implies all four are. Save button is
+  // disabled until at least one entry resolves.
+  const fieldConfigLoading =
+    displayNameFcLoading || componentOwnerFcLoading || systemFcLoading || clientCodeFcLoading
 
   const jiraBaseUrl = import.meta.env.VITE_JIRA_BASE_URL as string | undefined
   const gitBaseUrl = import.meta.env.VITE_GIT_BASE_URL as string | undefined
@@ -302,7 +313,8 @@ export function ComponentDetailPage() {
             <Button
               size="sm"
               onClick={handleSave}
-              disabled={updateMutation.isPending}
+              disabled={updateMutation.isPending || fieldConfigLoading}
+              title={fieldConfigLoading ? 'Loading field configuration…' : undefined}
             >
               <Save className="h-4 w-4" />
               {updateMutation.isPending ? 'Saving…' : 'Save'}

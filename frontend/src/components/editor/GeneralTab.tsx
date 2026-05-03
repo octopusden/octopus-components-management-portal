@@ -68,11 +68,15 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
   const { entry: clientCodeEntry } = useFieldConfigEntry('component.clientCode')
 
   useEffect(() => {
+    // Form mirrors server state unconditionally — hidden fields just stay
+    // unrendered. Visibility filtering happens at save time in
+    // ComponentDetailPage.handleSave (hidden → undefined in payload), so
+    // populating the form here cannot leak server data: there's no input
+    // to show it and no save path that emits it.
     setValue('name', component.name)
     setValue('displayName', component.displayName ?? '')
     setValue('componentOwner', component.componentOwner ?? '')
     setValue('productType', component.productType ?? '')
-    // Only set system when visible — don't clobber undefined sentinel
     setValue('system', component.system.join(', '))
     setValue('clientCode', component.clientCode ?? '')
     setValue('solution', component.solution ?? false)
