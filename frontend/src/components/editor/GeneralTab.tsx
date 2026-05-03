@@ -31,6 +31,14 @@ export interface GeneralFormValues {
   solution: boolean
   archived: boolean
   parentComponentName: string
+  // SYS-039 (CRS PR #163). labels rendered as comma-separated input
+  // (same convention as `system`); a real chips widget is backlog.
+  groupId: string
+  releaseManager: string
+  securityChampion: string
+  copyright: string
+  releasesInDefaultBranch: boolean
+  labels: string
 }
 
 interface GeneralTabProps {
@@ -50,6 +58,10 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
   const solution = watch('solution')
   const componentOwner = watch('componentOwner')
   const parentComponentName = watch('parentComponentName')
+  // SYS-039 watchers — PeopleInput / Switch are controlled, not register'd
+  const releaseManager = watch('releaseManager')
+  const securityChampion = watch('securityChampion')
+  const releasesInDefaultBranch = watch('releasesInDefaultBranch')
 
   // RENAME_COMPONENTS gates the Name input on the edit surface. The same
   // permission is enforced server-side in ComponentControllerV4's PATCH SpEL
@@ -66,6 +78,14 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
   const { entry: componentOwnerEntry } = useFieldConfigEntry('component.componentOwner')
   const { entry: systemEntry } = useFieldConfigEntry('component.system')
   const { entry: clientCodeEntry } = useFieldConfigEntry('component.clientCode')
+  // SYS-039 fields
+  const { entry: groupIdEntry } = useFieldConfigEntry('component.groupId')
+  const { entry: releaseManagerEntry } = useFieldConfigEntry('component.releaseManager')
+  const { entry: securityChampionEntry } = useFieldConfigEntry('component.securityChampion')
+  const { entry: copyrightEntry } = useFieldConfigEntry('component.copyright')
+  const { entry: releasesInDefaultBranchEntry } =
+    useFieldConfigEntry('component.releasesInDefaultBranch')
+  const { entry: labelsEntry } = useFieldConfigEntry('component.labels')
 
   useEffect(() => {
     // Form mirrors server state unconditionally — hidden fields just stay
@@ -82,6 +102,13 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
     setValue('solution', component.solution ?? false)
     setValue('archived', component.archived)
     setValue('parentComponentName', component.parentComponentName ?? '')
+    // SYS-039
+    setValue('groupId', component.groupId ?? '')
+    setValue('releaseManager', component.releaseManager ?? '')
+    setValue('securityChampion', component.securityChampion ?? '')
+    setValue('copyright', component.copyright ?? '')
+    setValue('releasesInDefaultBranch', component.releasesInDefaultBranch ?? false)
+    setValue('labels', (component.labels ?? []).join(', '))
   }, [component, setValue])
 
   return (
@@ -152,6 +179,20 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
             </p>
           </div>
 
+          {/* groupId — SYS-039 (Maven groupId) */}
+          {groupIdEntry.visibility !== 'hidden' && (
+            <div className="space-y-1.5">
+              <Label htmlFor="groupId">Group ID</Label>
+              <Input
+                id="groupId"
+                placeholder="org.example.product"
+                disabled={groupIdEntry.visibility === 'readonly'}
+                className={groupIdEntry.visibility === 'readonly' ? 'bg-muted' : undefined}
+                {...register('groupId')}
+              />
+            </div>
+          )}
+
           {/* Solution toggle */}
           <div className="sm:col-span-2 flex items-center gap-3">
             <Switch
@@ -161,39 +202,103 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
             />
             <Label htmlFor="solution" className="cursor-pointer">Solution</Label>
           </div>
+
+          {/* releasesInDefaultBranch toggle — SYS-039 */}
+          {releasesInDefaultBranchEntry.visibility !== 'hidden' && (
+            <div className="sm:col-span-2 flex items-center gap-3">
+              <Switch
+                id="releasesInDefaultBranch"
+                checked={releasesInDefaultBranch}
+                disabled={releasesInDefaultBranchEntry.visibility === 'readonly'}
+                onCheckedChange={(checked) => setValue('releasesInDefaultBranch', checked)}
+              />
+              <Label htmlFor="releasesInDefaultBranch" className="cursor-pointer">
+                Releases in default branch
+              </Label>
+            </div>
+          )}
         </div>
       </section>
 
       {/* ── Ownership ─────────────────────────────────────────────────────── */}
-      {componentOwnerEntry.visibility !== 'hidden' && (
+      {(componentOwnerEntry.visibility !== 'hidden' ||
+        releaseManagerEntry.visibility !== 'hidden' ||
+        securityChampionEntry.visibility !== 'hidden') && (
         <section data-testid="section-ownership">
           <h3 className="text-sm font-medium text-muted-foreground mb-3">Ownership</h3>
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             {/* Component Owner */}
-            <div className="space-y-1.5">
-              <Label htmlFor="componentOwner">Component Owner</Label>
-              {componentOwnerEntry.visibility === 'readonly' ? (
-                <Input
-                  id="componentOwner"
-                  value={componentOwner}
-                  disabled
-                  className="bg-muted"
-                  readOnly
-                />
-              ) : (
-                <PeopleInput
-                  value={componentOwner}
-                  onChange={(val) => setValue('componentOwner', val)}
-                />
-              )}
-              <FieldOverrideInline componentId={component.id} fieldPath="componentOwner" />
-            </div>
+            {componentOwnerEntry.visibility !== 'hidden' && (
+              <div className="space-y-1.5">
+                <Label htmlFor="componentOwner">Component Owner</Label>
+                {componentOwnerEntry.visibility === 'readonly' ? (
+                  <Input
+                    id="componentOwner"
+                    value={componentOwner}
+                    disabled
+                    className="bg-muted"
+                    readOnly
+                  />
+                ) : (
+                  <PeopleInput
+                    value={componentOwner}
+                    onChange={(val) => setValue('componentOwner', val)}
+                  />
+                )}
+                <FieldOverrideInline componentId={component.id} fieldPath="componentOwner" />
+              </div>
+            )}
+
+            {/* Release Manager — SYS-039 */}
+            {releaseManagerEntry.visibility !== 'hidden' && (
+              <div className="space-y-1.5">
+                <Label htmlFor="releaseManager">Release Manager</Label>
+                {releaseManagerEntry.visibility === 'readonly' ? (
+                  <Input
+                    id="releaseManager"
+                    value={releaseManager}
+                    disabled
+                    className="bg-muted"
+                    readOnly
+                  />
+                ) : (
+                  <PeopleInput
+                    value={releaseManager}
+                    onChange={(val) => setValue('releaseManager', val)}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Security Champion — SYS-039 */}
+            {securityChampionEntry.visibility !== 'hidden' && (
+              <div className="space-y-1.5">
+                <Label htmlFor="securityChampion">Security Champion</Label>
+                {securityChampionEntry.visibility === 'readonly' ? (
+                  <Input
+                    id="securityChampion"
+                    value={securityChampion}
+                    disabled
+                    className="bg-muted"
+                    readOnly
+                  />
+                ) : (
+                  <PeopleInput
+                    value={securityChampion}
+                    onChange={(val) => setValue('securityChampion', val)}
+                  />
+                )}
+              </div>
+            )}
           </div>
         </section>
       )}
 
       {/* ── Metadata ──────────────────────────────────────────────────────── */}
-      {(systemEntry.visibility !== 'hidden' || clientCodeEntry.visibility !== 'hidden') && (
+      {(systemEntry.visibility !== 'hidden' ||
+        clientCodeEntry.visibility !== 'hidden' ||
+        copyrightEntry.visibility !== 'hidden' ||
+        labelsEntry.visibility !== 'hidden') && (
         <section data-testid="section-metadata">
           <h3 className="text-sm font-medium text-muted-foreground mb-3">Metadata</h3>
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
@@ -225,6 +330,36 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                   {...register('clientCode')}
                 />
                 <FieldOverrideInline componentId={component.id} fieldPath="clientCode" />
+              </div>
+            )}
+
+            {/* Copyright — SYS-039 */}
+            {copyrightEntry.visibility !== 'hidden' && (
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="copyright">Copyright</Label>
+                <Input
+                  id="copyright"
+                  placeholder="(c) 2026 Acme Inc."
+                  disabled={copyrightEntry.visibility === 'readonly'}
+                  className={copyrightEntry.visibility === 'readonly' ? 'bg-muted' : undefined}
+                  {...register('copyright')}
+                />
+              </div>
+            )}
+
+            {/* Labels — SYS-039. Comma-separated input matching the System
+                pattern; a real chips widget is backlog. */}
+            {labelsEntry.visibility !== 'hidden' && (
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="labels">Labels</Label>
+                <Input
+                  id="labels"
+                  placeholder="backend, internal, owned-by-platform"
+                  disabled={labelsEntry.visibility === 'readonly'}
+                  className={labelsEntry.visibility === 'readonly' ? 'bg-muted' : undefined}
+                  {...register('labels')}
+                />
+                <p className="text-xs text-muted-foreground">Comma-separated tags.</p>
               </div>
             )}
           </div>

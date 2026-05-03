@@ -333,3 +333,121 @@ describe('GeneralTab system field hidden → form value contract', () => {
     expect(val).toBe('SYS1, SYS2')
   })
 })
+
+describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
+  it('groupId editable → input rendered with current value', () => {
+    setAllEditable()
+    const component = baseComponent({ groupId: 'org.example.alpha' })
+    renderWithProviders(<Harness component={component} />)
+
+    const input = screen.getByLabelText(/group id/i) as HTMLInputElement
+    expect(input).toBeDefined()
+    expect(input.value).toBe('org.example.alpha')
+    expect(input.disabled).toBe(false)
+  })
+
+  it('groupId hidden → input NOT rendered', () => {
+    mockUseFieldConfigEntry.mockImplementation((path: string) => {
+      if (path === 'component.groupId') return makeEntry('hidden')
+      return makeEntry('editable')
+    })
+    const component = baseComponent({ groupId: 'org.example.alpha' })
+    renderWithProviders(<Harness component={component} />)
+
+    expect(screen.queryByLabelText(/group id/i)).toBeNull()
+  })
+
+  it('releaseManager editable → PeopleInput rendered (Label text present, not Input)', () => {
+    setAllEditable()
+    const component = baseComponent({ releaseManager: 'rm-user' })
+    renderWithProviders(<Harness component={component} />)
+
+    // Editable path renders PeopleInput (custom widget). The <Label htmlFor>
+    // does not bind to a single Input id, so fall back to text presence.
+    expect(screen.getByText(/release manager/i)).toBeDefined()
+  })
+
+  it('releaseManager readonly → input rendered disabled', () => {
+    mockUseFieldConfigEntry.mockImplementation((path: string) => {
+      if (path === 'component.releaseManager') return makeEntry('readonly')
+      return makeEntry('editable')
+    })
+    const component = baseComponent({ releaseManager: 'rm-user' })
+    renderWithProviders(<Harness component={component} />)
+
+    const input = screen.getByLabelText(/release manager/i) as HTMLInputElement
+    expect(input.disabled).toBe(true)
+  })
+
+  it('securityChampion hidden → input NOT rendered', () => {
+    mockUseFieldConfigEntry.mockImplementation((path: string) => {
+      if (path === 'component.securityChampion') return makeEntry('hidden')
+      return makeEntry('editable')
+    })
+    const component = baseComponent({ securityChampion: 'sc-user' })
+    renderWithProviders(<Harness component={component} />)
+
+    expect(screen.queryByLabelText(/security champion/i)).toBeNull()
+  })
+
+  it('copyright editable → input rendered with current value', () => {
+    setAllEditable()
+    const component = baseComponent({ copyright: '(c) 2026 Acme Inc.' })
+    renderWithProviders(<Harness component={component} />)
+
+    const input = screen.getByLabelText(/copyright/i) as HTMLInputElement
+    expect(input.value).toBe('(c) 2026 Acme Inc.')
+  })
+
+  it('releasesInDefaultBranch hidden → switch NOT rendered', () => {
+    mockUseFieldConfigEntry.mockImplementation((path: string) => {
+      if (path === 'component.releasesInDefaultBranch') return makeEntry('hidden')
+      return makeEntry('editable')
+    })
+    const component = baseComponent({ releasesInDefaultBranch: true })
+    renderWithProviders(<Harness component={component} />)
+
+    expect(screen.queryByLabelText(/releases in default branch/i)).toBeNull()
+  })
+
+  it('labels editable → input rendered with comma-joined value', () => {
+    setAllEditable()
+    const component = baseComponent({ labels: ['backend', 'internal'] })
+    renderWithProviders(<Harness component={component} />)
+
+    const input = screen.getByLabelText(/^labels$/i) as HTMLInputElement
+    expect(input.value).toBe('backend, internal')
+  })
+
+  it('all SYS-039 entries hidden → none of the SYS-039 controls render', () => {
+    mockUseFieldConfigEntry.mockImplementation((path: string) => {
+      if (
+        path === 'component.groupId' ||
+        path === 'component.releaseManager' ||
+        path === 'component.securityChampion' ||
+        path === 'component.copyright' ||
+        path === 'component.releasesInDefaultBranch' ||
+        path === 'component.labels'
+      ) {
+        return makeEntry('hidden')
+      }
+      return makeEntry('editable')
+    })
+    const component = baseComponent({
+      groupId: 'org.example',
+      releaseManager: 'rm',
+      securityChampion: 'sc',
+      copyright: '(c)',
+      releasesInDefaultBranch: true,
+      labels: ['x'],
+    })
+    renderWithProviders(<Harness component={component} />)
+
+    expect(screen.queryByLabelText(/group id/i)).toBeNull()
+    expect(screen.queryByLabelText(/release manager/i)).toBeNull()
+    expect(screen.queryByLabelText(/security champion/i)).toBeNull()
+    expect(screen.queryByLabelText(/copyright/i)).toBeNull()
+    expect(screen.queryByLabelText(/releases in default branch/i)).toBeNull()
+    expect(screen.queryByLabelText(/^labels$/i)).toBeNull()
+  })
+})

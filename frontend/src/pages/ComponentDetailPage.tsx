@@ -63,6 +63,15 @@ export function ComponentDetailPage() {
   const { entry: systemFc, isLoading: systemFcLoading } = useFieldConfigEntry('component.system')
   const { entry: clientCodeFc, isLoading: clientCodeFcLoading } =
     useFieldConfigEntry('component.clientCode')
+  // SYS-039 FC entries
+  const { entry: groupIdFc } = useFieldConfigEntry('component.groupId')
+  const { entry: releaseManagerFc } = useFieldConfigEntry('component.releaseManager')
+  const { entry: securityChampionFc } = useFieldConfigEntry('component.securityChampion')
+  const { entry: copyrightFc } = useFieldConfigEntry('component.copyright')
+  const { entry: releasesInDefaultBranchFc } = useFieldConfigEntry(
+    'component.releasesInDefaultBranch',
+  )
+  const { entry: labelsFc } = useFieldConfigEntry('component.labels')
   // Race-guard: while field-config is still loading, every FC entry falls
   // back to visibility='editable', which would let a fast-clicking user
   // overwrite hidden/readonly fields with form defaults before the real
@@ -96,6 +105,17 @@ export function ComponentDetailPage() {
     const systemArray = values.system
       ? values.system.split(',').map((s) => s.trim()).filter(Boolean)
       : []
+
+    // SYS-039 — labels uses the same comma-separated convention as system.
+    const labelsArray = values.labels
+      ? values.labels.split(',').map((s) => s.trim()).filter(Boolean)
+      : []
+    // releasesInDefaultBranch is the only SYS-039 boolean — only send when
+    // it actually changed so a non-toggle save doesn't ship the default
+    // (the form `?? false` fallback would otherwise emit `false` for
+    // components whose stored value is null).
+    const releasesInDefaultBranchChanged =
+      values.releasesInDefaultBranch !== (component.releasesInDefaultBranch ?? false)
 
     // `archived` is gated server-side by ARCHIVE_COMPONENTS (a permission
     // ROLE_REGISTRY_EDITOR does not hold). Send it only when the user actually
@@ -140,6 +160,20 @@ export function ComponentDetailPage() {
         solution: values.solution,
         archived: archivedChanged ? values.archived : undefined,
         parentComponentName,
+        // SYS-039: hidden → undefined, blank string → undefined (keep
+        // existing). releasesInDefaultBranch only sent on actual change to
+        // avoid clobbering a stored null with the form's `false` default.
+        groupId: groupIdFc.visibility === 'hidden' ? undefined : (values.groupId || undefined),
+        releaseManager:
+          releaseManagerFc.visibility === 'hidden' ? undefined : (values.releaseManager || undefined),
+        securityChampion:
+          securityChampionFc.visibility === 'hidden' ? undefined : (values.securityChampion || undefined),
+        copyright: copyrightFc.visibility === 'hidden' ? undefined : (values.copyright || undefined),
+        releasesInDefaultBranch:
+          releasesInDefaultBranchFc.visibility === 'hidden' || !releasesInDefaultBranchChanged
+            ? undefined
+            : values.releasesInDefaultBranch,
+        labels: labelsFc.visibility === 'hidden' ? undefined : labelsArray,
       })
       toast({ title: 'Component saved', description: 'Changes have been saved successfully.' })
     } catch (err) {

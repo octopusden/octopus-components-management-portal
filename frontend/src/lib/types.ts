@@ -29,6 +29,15 @@ export interface ComponentDetail {
   version: number
   createdAt: string | null
   updatedAt: string | null
+  // SYS-039 (CRS PR #163). Optional so the type can ship before the
+  // CRS deploy lands — older responses that omit the fields just leave
+  // them undefined here, and the editor renders empty inputs.
+  groupId?: string | null
+  releaseManager?: string | null
+  securityChampion?: string | null
+  copyright?: string | null
+  releasesInDefaultBranch?: boolean | null
+  labels?: string[]
   buildConfigurations: BuildConfiguration[]
   vcsSettings: VcsSettings[]
   distributions: Distribution[]
