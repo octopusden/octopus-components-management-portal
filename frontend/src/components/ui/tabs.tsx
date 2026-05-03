@@ -97,5 +97,4 @@ const TabsContent = React.forwardRef<
 ))
 TabsContent.displayName = TabsPrimitive.Content.displayName
 
-// eslint-disable-next-line react-refresh/only-export-components
-export { Tabs, TabsList, TabsTrigger, TabsContent, tabsListVariants, tabsTriggerVariants }
+export { Tabs, TabsList, TabsTrigger, TabsContent }

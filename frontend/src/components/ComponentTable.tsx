@@ -58,7 +58,6 @@ function IconLink({ href, label, icon: Icon }: IconLinkProps) {
       title={label}
       aria-label={label}
       className="text-muted-foreground hover:text-foreground transition-colors"
-      onClick={(e) => e.stopPropagation()}
     >
       <Icon className="h-4 w-4" />
     </a>

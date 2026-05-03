@@ -133,11 +133,13 @@ export function ComponentDetailPage() {
         )
       : undefined
     // releasesInDefaultBranch is the only SYS-039 boolean — only send when
-    // it actually changed so a non-toggle save doesn't ship the default
-    // (the form `?? false` fallback would otherwise emit `false` for
-    // components whose stored value is null).
+    // it actually changed. Use react-hook-form's dirtyFields rather than
+    // comparing values.X to (stored ?? false): with the value compare, a
+    // stored null + toggle-on + toggle-back-to-off would compare false===false
+    // and silently drop a real user interaction. dirtyFields tracks any
+    // touch by the user, regardless of round-tripping back to the default.
     const releasesInDefaultBranchChanged =
-      values.releasesInDefaultBranch !== (component.releasesInDefaultBranch ?? false)
+      form.formState.dirtyFields.releasesInDefaultBranch === true
 
     // `archived` is gated server-side by ARCHIVE_COMPONENTS (a permission
     // ROLE_REGISTRY_EDITOR does not hold). Send it only when the user actually
