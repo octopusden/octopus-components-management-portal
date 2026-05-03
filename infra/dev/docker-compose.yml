@@ -1,0 +1,97 @@
+# Local dev stack: Postgres + Keycloak + CRS.
+# Portal runs separately via ./gradlew bootRun (see instructions below).
+# Frontend hot-reload via cd frontend && npm run dev.
+#
+# One-time host setup required:
+#   echo "127.0.0.1 keycloak" | sudo tee -a /etc/hosts
+#
+# Start stack:
+#   docker compose -f infra/dev/docker-compose.yml up -d
+#
+# Run portal (in a separate terminal):
+#   SPRING_PROFILES_ACTIVE=dev \
+#   AUTH_SERVER_URL=http://keycloak:8080 \
+#   AUTH_SERVER_REALM=portal \
+#   AUTH_SERVER_CLIENT_ID=portal-bff \
+#   AUTH_SERVER_CLIENT_SECRET=dev-bff-secret \
+#   COMPONENTS_REGISTRY_SERVICE_URL=http://localhost:4567 \
+#   ./gradlew bootRun
+#
+# Run frontend (in a separate terminal):
+#   cd frontend && npm run dev
+#
+# Open: http://localhost:5173
+# Login: e2e-admin / admin  (roles: ADMIN)
+#        e2e-viewer / viewer (roles: REGISTRY_VIEWER)
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: components_registry
+      POSTGRES_USER: crs
+      POSTGRES_PASSWORD: crs
+    ports:
+      - "5434:5432"
+    volumes:
+      - crs-pgdata:/var/lib/postgresql/data
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.3
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME: keycloak
+      KC_HOSTNAME_PORT: "8080"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
+      KC_PROXY: edge
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./keycloak/portal-realm-dev.json:/opt/keycloak/data/import/portal-realm.json:ro
+    command: start-dev --import-realm
+
+  crs:
+    image: docker.artifactory.openwaygroup.com/octopusden/components-registry-service:2.0.84-3229
+    depends_on:
+      - postgres
+      - keycloak
+    environment:
+      SPRING_PROFILES_ACTIVE: dev-db-automigrate
+      SPRING_CLOUD_CONFIG_ENABLED: "false"
+      SPRING_CLOUD_BOOTSTRAP_ENABLED: "false"
+      SPRING_CONFIG_IMPORT: ""
+      EUREKA_CLIENT_ENABLED: "false"
+      SERVER_PORT: "4567"
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: components_registry
+      POSTGRES_USER: crs
+      POSTGRES_PASSWORD: crs
+      AUTH_SERVER_URL: http://keycloak:8080
+      AUTH_SERVER_REALM: portal
+      COMPONENTS_REGISTRY_WORK_DIR: /opt/crs-fixture
+      COMPONENTS_REGISTRY_GROOVY_PATH: /opt/crs-fixture
+      COMPONENTS_REGISTRY_MAIN_GROOVY_FILE: Aggregator.groovy
+      COMPONENTS_REGISTRY_DEPENDENCY_MAPPING_FILE: dependency_mapping.properties
+      COMPONENTS_REGISTRY_COPYRIGHT_PATH: /opt/crs-fixture/copyrights
+      COMPONENTS_REGISTRY_SUPPORTEDGROUPIDS: "org.octopusden.octopus,io.bcomponent"
+      COMPONENTS_REGISTRY_SUPPORTEDSYSTEMS: "NONE,CLASSIC,ALFA"
+      COMPONENTS_REGISTRY_VERSION_NAME_SERVICE_BRANCH: serviceCBranch
+      COMPONENTS_REGISTRY_VERSION_NAME_SERVICE: serviceC
+      COMPONENTS_REGISTRY_VERSION_NAME_MINOR: minorC
+      COMPONENTS_REGISTRY_PRODUCT_TYPE_C: PT_C
+      COMPONENTS_REGISTRY_PRODUCT_TYPE_K: PT_K
+      COMPONENTS_REGISTRY_PRODUCT_TYPE_D: PT_D
+      COMPONENTS_REGISTRY_PRODUCT_TYPE_DDB: PT_D_DB
+      COMPONENTS_REGISTRY_VCS_ENABLED: "false"
+      COMPONENTS_REGISTRY_AUTO_MIGRATE: "true"
+    ports:
+      - "4567:4567"
+    volumes:
+      - ../../src/test/resources/e2e/crs-fixture:/opt/crs-fixture:ro
+
+volumes:
+  crs-pgdata:
