@@ -40,6 +40,12 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:24.0.3
     platform: linux/amd64
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/realms/portal/.well-known/openid-configuration || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
@@ -60,8 +66,10 @@ services:
     image: ${CRS_DOCKER_REGISTRY}/octopusden/components-registry-service:${CRS_VERSION:-2.0.84-3229}
     platform: linux/amd64
     depends_on:
-      - postgres
-      - keycloak
+      postgres:
+        condition: service_started
+      keycloak:
+        condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: dev-db-automigrate
       SPRING_CLOUD_CONFIG_ENABLED: "false"
