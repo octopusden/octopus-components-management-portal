@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router'
-import { Package, History, Settings, LogOut, User as UserIcon, AlertTriangle } from 'lucide-react'
-import { cn } from '../lib/utils'
+import { Package, History, Settings, LogOut, AlertTriangle } from 'lucide-react'
+import { cn, initials } from '../lib/utils'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { hasPermission, logout, PERMISSIONS } from '@/lib/auth'
 import { AppFooter } from './AppFooter'
@@ -81,8 +81,13 @@ export function Layout({ children }: LayoutProps) {
               </span>
             )}
             {user && (
-              <span className="flex items-center gap-1 text-muted-foreground">
-                <UserIcon className="h-4 w-4" />
+              <span className="flex items-center gap-2 text-muted-foreground">
+                <span
+                  aria-hidden
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-xs font-medium text-accent-foreground"
+                >
+                  {initials(user.username)}
+                </span>
                 {user.username}
               </span>
             )}

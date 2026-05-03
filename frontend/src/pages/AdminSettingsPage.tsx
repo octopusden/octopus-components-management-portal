@@ -13,7 +13,7 @@ export function AdminSettingsPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Admin Settings</h1>
         </div>
 
-        <Tabs defaultValue="field-config">
+        <Tabs defaultValue="field-config" variant="underline">
           <TabsList>
             <TabsTrigger value="field-config">Field Configuration</TabsTrigger>
             <TabsTrigger value="component-defaults">Component Defaults</TabsTrigger>

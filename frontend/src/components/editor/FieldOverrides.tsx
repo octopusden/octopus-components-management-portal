@@ -125,7 +125,7 @@ export function FieldOverrides({ componentId }: FieldOverridesProps) {
     return (
       <div className="space-y-2">
         {Array.from({ length: 3 }).map((_, i) => (
-          <SkeletonBlock key={i} height="h-10" />
+          <SkeletonBlock key={i} height="h-9" />
         ))}
       </div>
     )

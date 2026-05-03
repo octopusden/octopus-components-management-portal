@@ -313,8 +313,8 @@ export function ComponentDetailPage() {
         <Separator />
 
         {/* Tabs */}
-        <Tabs defaultValue="general">
-          <TabsList className="flex-wrap h-auto gap-1">
+        <Tabs defaultValue="general" variant="underline">
+          <TabsList className="flex-wrap gap-1">
             <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="build">
               Build
