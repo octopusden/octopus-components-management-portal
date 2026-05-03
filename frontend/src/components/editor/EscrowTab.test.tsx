@@ -37,7 +37,7 @@ function baseComponent(overrides: Partial<ComponentDetail> = {}): ComponentDetai
     name: 'my-component',
     displayName: 'My Component',
     componentOwner: 'alice',
-    productType: 'KERNEL',
+    productType: 'TYPE_A',
     system: [],
     clientCode: null,
     solution: false,
@@ -106,7 +106,7 @@ beforeEach(() => {
 describe('EscrowTab productType render (§7.0/2c)', () => {
   it('renders Product Type label when visibility is editable', () => {
     setProductTypeVisibility('editable')
-    const component = baseComponent({ productType: 'KERNEL' })
+    const component = baseComponent({ productType: 'TYPE_A' })
     renderWithProviders(
       <EscrowTab component={component} updateMutation={makeMutation()} toast={makeToast()} />
     )
@@ -115,7 +115,7 @@ describe('EscrowTab productType render (§7.0/2c)', () => {
 
   it('does NOT render Product Type when visibility is hidden', () => {
     setProductTypeVisibility('hidden')
-    const component = baseComponent({ productType: 'KERNEL' })
+    const component = baseComponent({ productType: 'TYPE_A' })
     renderWithProviders(
       <EscrowTab component={component} updateMutation={makeMutation()} toast={makeToast()} />
     )
@@ -124,7 +124,7 @@ describe('EscrowTab productType render (§7.0/2c)', () => {
 
   it('renders Product Type label when visibility is readonly (control is disabled)', () => {
     setProductTypeVisibility('readonly')
-    const component = baseComponent({ productType: 'KERNEL' })
+    const component = baseComponent({ productType: 'TYPE_A' })
     renderWithProviders(
       <EscrowTab component={component} updateMutation={makeMutation()} toast={makeToast()} />
     )
@@ -139,7 +139,7 @@ describe('EscrowTab save handler', () => {
   it('clicking Save sends both productType (top-level) and escrowConfiguration', async () => {
     setProductTypeVisibility('editable')
     const mutateAsync = vi.fn().mockResolvedValue({})
-    const component = baseComponent({ productType: 'CARDS', version: 5 })
+    const component = baseComponent({ productType: 'TYPE_B', version: 5 })
     renderWithProviders(
       <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} />
     )
@@ -153,7 +153,7 @@ describe('EscrowTab save handler', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const payload = mutateAsync.mock.calls[0]![0] as any
     expect(payload.version).toBe(5)
-    expect(payload.productType).toBe('CARDS')
+    expect(payload.productType).toBe('TYPE_B')
     expect(payload.escrowConfiguration).toBeDefined()
     expect(payload.escrowConfiguration.buildTask).toBe('clean install')
   })
@@ -161,7 +161,7 @@ describe('EscrowTab save handler', () => {
   it('hidden productType is NOT included in save payload', async () => {
     setProductTypeVisibility('hidden')
     const mutateAsync = vi.fn().mockResolvedValue({})
-    const component = baseComponent({ productType: 'KERNEL', version: 2 })
+    const component = baseComponent({ productType: 'TYPE_A', version: 2 })
     renderWithProviders(
       <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} />
     )
@@ -180,7 +180,7 @@ describe('EscrowTab save handler', () => {
   it('escrowConfiguration is always sent regardless of productType visibility', async () => {
     setProductTypeVisibility('hidden')
     const mutateAsync = vi.fn().mockResolvedValue({})
-    const component = baseComponent({ productType: 'KERNEL' })
+    const component = baseComponent({ productType: 'TYPE_A' })
     renderWithProviders(
       <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} />
     )

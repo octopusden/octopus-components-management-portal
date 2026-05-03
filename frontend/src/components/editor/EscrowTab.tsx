@@ -22,7 +22,7 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
   const esc = component.escrowConfigurations[0]
 
   // productType migrated here from GeneralTab (§7.0/2c).
-  // Semantic: product-line classifier (KERNEL/CARDS/DWH/DWH_DB etc.) used for
+  // Semantic: product-line classifier (values configured via FieldConfig options) used for
   // escrow-specific classification; lives on the top-level ComponentDetail but
   // is conceptually escrow metadata.
   const { entry: productTypeEntry } = useFieldConfigEntry('component.productType')

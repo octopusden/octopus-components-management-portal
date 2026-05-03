@@ -132,14 +132,14 @@ describe('useFieldConfigEntry', () => {
 
   it('resolves bare path from flat data', () => {
     mockUseFieldConfig.mockReturnValue({
-      data: { fields: { productType: { options: ['KERNEL', 'CARDS'], visibility: 'editable' } } },
+      data: { fields: { productType: { options: ['TYPE_A', 'TYPE_B'], visibility: 'editable' } } },
       isLoading: false,
     } as unknown as ReturnType<typeof useFieldConfig>)
     const { result } = renderHook(
       () => useFieldConfigEntry('productType'),
       { wrapper: makeWrapper() },
     )
-    expect(result.current.entry.options).toEqual(['KERNEL', 'CARDS'])
+    expect(result.current.entry.options).toEqual(['TYPE_A', 'TYPE_B'])
     expect(result.current.entry.visibility).toBe('editable')
   })
 
@@ -164,14 +164,14 @@ describe('useFieldConfigEntry', () => {
 
   it('resolves bare path from component section when no flat fields', () => {
     mockUseFieldConfig.mockReturnValue({
-      data: { component: { productType: { options: ['DWH'], visibility: 'editable' } } },
+      data: { component: { productType: { options: ['TYPE_C'], visibility: 'editable' } } },
       isLoading: false,
     } as unknown as ReturnType<typeof useFieldConfig>)
     const { result } = renderHook(
       () => useFieldConfigEntry('productType'),
       { wrapper: makeWrapper() },
     )
-    expect(result.current.entry.options).toEqual(['DWH'])
+    expect(result.current.entry.options).toEqual(['TYPE_C'])
   })
 
   it('resolves bare path from build section as fallback', () => {
