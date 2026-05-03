@@ -28,8 +28,9 @@ function makeEntry(overrides: Partial<AuditLogEntry> = {}): AuditLogEntry {
 describe('AuditLogTable', () => {
   it('renders skeleton rows while loading', () => {
     render(<AuditLogTable data={[]} isLoading />)
-    const cells = document.querySelectorAll('.animate-pulse')
-    expect(cells.length).toBeGreaterThan(0)
+    // PR-3: target the SkeletonTable primitive's data-testid instead of
+    // a fragile className selector — survives Tailwind class churn.
+    expect(screen.getByTestId('skeleton-table')).toBeDefined()
   })
 
   it('shows empty state when data is empty and not loading', () => {
