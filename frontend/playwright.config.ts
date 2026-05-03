@@ -57,9 +57,12 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         storageState: 'playwright/.auth/admin.json',
       },
-      // Admin project owns the admin smoke slice and the migration
-      // page.route happy-path / disabled-button journeys.
-      testMatch: /(smoke-admin|admin-migration)\.spec\.ts$/,
+      // Admin project owns the admin smoke slice, the migration
+      // page.route happy-path / disabled-button journeys, and the
+      // visual-acceptance suite under e2e/visual/. Visual specs are
+      // route-mocked and admin-authenticated, so they piggyback this
+      // project rather than starting a fourth one.
+      testMatch: /(smoke-admin|admin-migration|visual\/.+)\.spec\.ts$/,
     },
   ],
 })

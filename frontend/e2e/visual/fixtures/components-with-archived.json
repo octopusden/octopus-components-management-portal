@@ -1,0 +1,40 @@
+{
+  "content": [
+    {
+      "id": "00000000-0000-0000-0000-000000000001",
+      "name": "alpha",
+      "displayName": "Alpha Service",
+      "componentOwner": "alice",
+      "system": ["CLASSIC"],
+      "productType": "KERNEL",
+      "archived": false,
+      "updatedAt": "2026-01-15T10:00:00Z"
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000002",
+      "name": "beta",
+      "displayName": "Beta Module",
+      "componentOwner": "bob",
+      "system": ["CLASSIC"],
+      "productType": "CARDS",
+      "archived": false,
+      "updatedAt": "2026-01-16T10:00:00Z"
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000099",
+      "name": "legacy-archived",
+      "displayName": "Legacy Component",
+      "componentOwner": "carol",
+      "system": ["CLASSIC"],
+      "productType": "DWH",
+      "archived": true,
+      "updatedAt": "2025-06-01T10:00:00Z"
+    }
+  ],
+  "totalElements": 3,
+  "totalPages": 1,
+  "number": 0,
+  "size": 20,
+  "first": true,
+  "last": true
+}

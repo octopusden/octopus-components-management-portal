@@ -1,0 +1,58 @@
+{
+  "content": [
+    {
+      "id": 1,
+      "entityType": "Component",
+      "entityId": "00000000-0000-0000-0000-000000000001",
+      "action": "CREATE",
+      "changedBy": "alice",
+      "changedAt": "2026-01-01T10:00:00Z",
+      "oldValue": null,
+      "newValue": { "name": "alpha" },
+      "changeDiff": null,
+      "correlationId": "corr-create-01"
+    },
+    {
+      "id": 2,
+      "entityType": "Component",
+      "entityId": "00000000-0000-0000-0000-000000000002",
+      "action": "UPDATE",
+      "changedBy": "bob",
+      "changedAt": "2026-01-02T10:00:00Z",
+      "oldValue": { "system": ["A"] },
+      "newValue": { "system": ["B"] },
+      "changeDiff": null,
+      "correlationId": "corr-update-02"
+    },
+    {
+      "id": 3,
+      "entityType": "Component",
+      "entityId": "00000000-0000-0000-0000-000000000003",
+      "action": "DELETE",
+      "changedBy": "carol",
+      "changedAt": "2026-01-03T10:00:00Z",
+      "oldValue": { "name": "gamma" },
+      "newValue": null,
+      "changeDiff": null,
+      "correlationId": "corr-delete-03"
+    },
+    {
+      "id": 4,
+      "entityType": "Component",
+      "entityId": "00000000-0000-0000-0000-000000000004",
+      "action": "RENAME",
+      "changedBy": "dan",
+      "changedAt": "2026-01-04T10:00:00Z",
+      "oldValue": { "name": "old-name" },
+      "newValue": { "name": "new-name" },
+      "changeDiff": null,
+      "correlationId": "corr-rename-04"
+    }
+  ],
+  "totalElements": 4,
+  "totalPages": 1,
+  "number": 0,
+  "size": 20,
+  "first": true,
+  "last": true
+}
