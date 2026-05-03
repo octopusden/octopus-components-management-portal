@@ -22,3 +22,5 @@ CLAUDE.md
 
 # Local dev secrets (copy from infra/dev/.env.example)
 infra/dev/.env
+# Realm JSON with substituted secrets — produced by infra/dev/up.sh
+infra/dev/keycloak/.local/

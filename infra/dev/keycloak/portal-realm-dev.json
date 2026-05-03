@@ -45,7 +45,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "admin",
+          "value": "__E2E_ADMIN_PASSWORD__",
           "temporary": false
         }
       ],
@@ -66,7 +66,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "viewer",
+          "value": "__E2E_VIEWER_PASSWORD__",
           "temporary": false
         }
       ],
@@ -84,7 +84,7 @@
       "name": "Components Management Portal BFF",
       "enabled": true,
       "clientAuthenticatorType": "client-secret",
-      "secret": "dev-bff-secret",
+      "secret": "__PORTAL_BFF_SECRET__",
       "redirectUris": [
         "http://portal:18090/login/oauth2/code/keycloak",
         "http://localhost:18090/login/oauth2/code/keycloak",
@@ -165,7 +165,7 @@
       "name": "E2E direct-grants sanity client",
       "enabled": true,
       "clientAuthenticatorType": "client-secret",
-      "secret": "dev-direct-secret",
+      "secret": "__PORTAL_E2E_DIRECT_SECRET__",
       "redirectUris": [],
       "webOrigins": [],
       "bearerOnly": false,

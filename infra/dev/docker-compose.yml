@@ -4,16 +4,20 @@
 #
 # One-time host setup required:
 #   echo "127.0.0.1 keycloak" | sudo tee -a /etc/hosts
+#   cp infra/dev/.env.example infra/dev/.env  # edit secrets if you don't want defaults
 #
-# Start stack:
-#   docker compose -f infra/dev/docker-compose.yml up -d
+# Start stack (use the wrapper — it envsubst's the realm JSON before bringing
+# up the containers, matching the runtime-substitution pattern that
+# E2ETestcontainersDriver.kt uses for E2E):
+#   cd infra/dev && ./up.sh up -d
 #
 # Run portal (in a separate terminal):
+#   set -a; source infra/dev/.env; set +a
 #   SPRING_PROFILES_ACTIVE=dev \
 #   AUTH_SERVER_URL=http://keycloak:8080 \
 #   AUTH_SERVER_REALM=portal \
 #   AUTH_SERVER_CLIENT_ID=portal-bff \
-#   AUTH_SERVER_CLIENT_SECRET=dev-bff-secret \
+#   AUTH_SERVER_CLIENT_SECRET="$PORTAL_BFF_SECRET" \
 #   COMPONENTS_REGISTRY_SERVICE_URL=http://localhost:4567 \
 #   ./gradlew bootRun
 #
@@ -21,8 +25,8 @@
 #   cd frontend && npm run dev
 #
 # Open: http://localhost:5173
-# Login: e2e-admin / admin  (roles: ADMIN)
-#        e2e-viewer / viewer (roles: REGISTRY_VIEWER)
+# Login: e2e-admin / $E2E_ADMIN_PASSWORD  (roles: ADMIN)
+#        e2e-viewer / $E2E_VIEWER_PASSWORD (roles: REGISTRY_VIEWER)
 
 services:
   postgres:
@@ -58,7 +62,11 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./keycloak/portal-realm-dev.json:/opt/keycloak/data/import/portal-realm.json:ro
+      # Mount the envsubst-rendered realm produced by up.sh, NOT the
+      # placeholder source. up.sh writes the rendered file to keycloak/.local/
+      # which is gitignored, so committed history never carries plaintext
+      # secrets.
+      - ./keycloak/.local/portal-realm.json:/opt/keycloak/data/import/portal-realm.json:ro
     command: start-dev --import-realm
 
   crs:
