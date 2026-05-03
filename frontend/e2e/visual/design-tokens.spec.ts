@@ -20,17 +20,20 @@ test.describe('design tokens — Audit log action badges', () => {
     await page.goto('/audit')
 
     // Each action label is rendered inside a Badge; the closest [data-variant]
-    // ancestor is the Badge root.
-    const variantOf = async (text: string) => {
-      const label = page.getByRole('cell').getByText(text, { exact: true }).first()
-      const badge = label.locator('xpath=ancestor::*[@data-variant][1]')
-      return badge.getAttribute('data-variant')
+    // ancestor is the Badge root. We auto-wait on visibility before reading
+    // attributes — `Locator.getAttribute()` does not auto-retry, only
+    // `expect(...).toHaveAttribute(...)` does.
+    const expectVariant = async (text: string, variant: string) => {
+      const label = page.getByText(text, { exact: true }).first()
+      await expect(label).toBeVisible()
+      const badge = label.locator('xpath=ancestor-or-self::*[@data-variant][1]')
+      await expect(badge).toHaveAttribute('data-variant', variant)
     }
 
-    expect(await variantOf('CREATE')).toBe('success')
-    expect(await variantOf('UPDATE')).toBe('warning')
-    expect(await variantOf('DELETE')).toBe('destructive')
-    expect(await variantOf('RENAME')).toBe('warning')
+    await expectVariant('CREATE', 'success')
+    await expectVariant('UPDATE', 'warning')
+    await expectVariant('DELETE', 'destructive')
+    await expectVariant('RENAME', 'warning')
   })
 })
 
