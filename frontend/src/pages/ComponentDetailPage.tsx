@@ -6,6 +6,8 @@ import { Layout } from '../components/Layout'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
 import { Separator } from '../components/ui/separator'
+import { InlineError } from '../components/ui/inline-error'
+import { SkeletonBlock } from '../components/ui/skeleton-block'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
 import {
   Dialog,
@@ -190,9 +192,9 @@ export function ComponentDetailPage() {
     return (
       <Layout>
         <div className="space-y-4">
-          <div className="h-8 w-48 bg-muted rounded animate-pulse" />
-          <div className="h-4 w-64 bg-muted rounded animate-pulse" />
-          <div className="h-64 bg-muted rounded animate-pulse" />
+          <SkeletonBlock height="h-8" width="w-48" />
+          <SkeletonBlock height="h-4" width="w-64" />
+          <SkeletonBlock height="h-64" width="w-full" />
         </div>
       </Layout>
     )
@@ -209,9 +211,9 @@ export function ComponentDetailPage() {
             <ArrowLeft className="h-4 w-4" />
             Back to Components
           </Link>
-          <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {error instanceof Error ? error.message : 'Component not found.'}
-          </div>
+          <InlineError
+            message={error instanceof Error ? error.message : 'Component not found.'}
+          />
         </div>
       </Layout>
     )

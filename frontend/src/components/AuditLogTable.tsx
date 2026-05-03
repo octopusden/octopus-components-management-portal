@@ -12,6 +12,8 @@ import {
 import { Badge } from './ui/badge'
 import type { BadgeProps } from './ui/badge'
 import { Button } from './ui/button'
+import { EmptyState } from './ui/empty-state'
+import { SkeletonTable } from './ui/skeleton-table'
 import { AuditDiffViewer } from './AuditDiffViewer'
 import type { AuditLogEntry } from '../lib/types'
 import { cn } from '../lib/utils'
@@ -54,18 +56,6 @@ function diffSummary(entry: AuditLogEntry): string | null {
   return `${keys.slice(0, 3).join(', ')} +${keys.length - 3} more`
 }
 
-function SkeletonRow() {
-  return (
-    <TableRow>
-      {Array.from({ length: 6 }).map((_, i) => (
-        <TableCell key={i}>
-          <div className="h-4 bg-muted animate-pulse rounded w-3/4" />
-        </TableCell>
-      ))}
-    </TableRow>
-  )
-}
-
 export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
   const [expandedId, setExpandedId] = useState<number | null>(null)
 
@@ -73,6 +63,8 @@ export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
     setExpandedId((prev) => (prev === id ? null : id))
   }
 
+  // Loading state keeps the real TableHeader (column widths must match
+  // post-load) and only replaces the body rows via SkeletonTable.
   return (
     <div className="rounded-md border">
       <Table>
@@ -87,14 +79,15 @@ export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
             <TableHead>Changed Fields</TableHead>
           </TableRow>
         </TableHeader>
+        {isLoading ? (
+          <SkeletonTable rows={5} cols={7} showHeader={false} />
+        ) : (
         <TableBody>
-          {isLoading
-            ? Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)
-            : data.length === 0
+          {data.length === 0
             ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                  No audit log entries found.
+                <TableCell colSpan={7} className="p-0">
+                  <EmptyState message="No audit log entries found." />
                 </TableCell>
               </TableRow>
             )
@@ -164,6 +157,7 @@ export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
                 )
               })}
         </TableBody>
+        )}
       </Table>
     </div>
   )

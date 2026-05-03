@@ -18,6 +18,8 @@ import {
   TableRow,
 } from './ui/table'
 import { Badge } from './ui/badge'
+import { EmptyState } from './ui/empty-state'
+import { SkeletonTable } from './ui/skeleton-table'
 import { cn } from '../lib/utils'
 import type { ComponentSummary } from '../lib/types'
 
@@ -152,26 +154,7 @@ export function ComponentTable({ data, isLoading }: ComponentTableProps) {
     return (
       <div className="rounded-md border">
         <Table>
-          <TableHeader>
-            <TableRow>
-              {columns.map((_, i) => (
-                <TableHead key={i}>
-                  <div className="h-4 w-24 bg-muted rounded animate-pulse" />
-                </TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {Array.from({ length: 8 }).map((_, i) => (
-              <TableRow key={i}>
-                {columns.map((_, j) => (
-                  <TableCell key={j}>
-                    <div className="h-4 bg-muted rounded animate-pulse" style={{ width: `${60 + (j * 13) % 40}%` }} />
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TableBody>
+          <SkeletonTable rows={8} cols={columns.length} />
         </Table>
       </div>
     )
@@ -196,8 +179,8 @@ export function ComponentTable({ data, isLoading }: ComponentTableProps) {
           </TableHeader>
           <TableBody>
             <TableRow>
-              <TableCell colSpan={columns.length} className="text-center py-12 text-muted-foreground">
-                No components found
+              <TableCell colSpan={columns.length} className="p-0">
+                <EmptyState message="No components found" />
               </TableCell>
             </TableRow>
           </TableBody>

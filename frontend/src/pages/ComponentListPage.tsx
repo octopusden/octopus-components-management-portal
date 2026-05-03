@@ -4,6 +4,7 @@ import { ComponentFilters } from '../components/ComponentFilters'
 import { ComponentTable } from '../components/ComponentTable'
 import { Pagination } from '../components/Pagination'
 import { CreateComponentButton } from '../components/CreateComponentDialog'
+import { InlineError } from '../components/ui/inline-error'
 import { useComponents } from '../hooks/useComponents'
 import type { ComponentFilter } from '../lib/types'
 
@@ -42,9 +43,13 @@ export function ComponentListPage() {
         <ComponentFilters filter={filter} onFilterChange={handleFilterChange} />
 
         {error && (
-          <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            Failed to load components: {error instanceof Error ? error.message : String(error)}
-          </div>
+          <InlineError
+            message={
+              <>
+                Failed to load components: {error instanceof Error ? error.message : String(error)}
+              </>
+            }
+          />
         )}
 
         <ComponentTable

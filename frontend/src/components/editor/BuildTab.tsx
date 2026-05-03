@@ -5,6 +5,7 @@ import { Input } from '../ui/input'
 import { Switch } from '../ui/switch'
 import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
+import { EmptyState } from '../ui/empty-state'
 import { EnumSelect } from '../ui/EnumSelect'
 import { FieldOverrideInline } from './FieldOverrideInline'
 import type { ComponentDetail } from '../../lib/types'
@@ -182,7 +183,7 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
           Build Tools (read-only)
         </span>
         {buildTools.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No build tools configured.</p>
+          <EmptyState message="No build tools configured." className="py-6" />
         ) : (
           <ul className="space-y-1.5">
             {buildTools.map((item, idx) => {

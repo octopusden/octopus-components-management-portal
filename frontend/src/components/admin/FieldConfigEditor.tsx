@@ -17,6 +17,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select'
+import { InlineError } from '../ui/inline-error'
+import { SkeletonBlock } from '../ui/skeleton-block'
+import { StatusBanner } from '../ui/status-banner'
 import { useFieldConfig, useUpdateFieldConfig } from '../../hooks/useAdminConfig'
 import type { FieldConfigEntry, FieldVisibility } from '../../hooks/useFieldConfig'
 import { cn } from '../../lib/utils'
@@ -324,8 +327,8 @@ export function FieldConfigEditor() {
   if (isLoading) {
     return (
       <div className="space-y-3">
-        <div className="h-4 bg-muted animate-pulse rounded w-1/4" />
-        <div className="h-64 bg-muted animate-pulse rounded" />
+        <SkeletonBlock height="h-4" width="w-1/4" />
+        <SkeletonBlock height="h-64" width="w-full" />
       </div>
     )
   }
@@ -333,10 +336,14 @@ export function FieldConfigEditor() {
   // ----- Error state -----
   if (error) {
     return (
-      <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-        Failed to load field configuration:{' '}
-        {error instanceof Error ? error.message : String(error)}
-      </div>
+      <InlineError
+        message={
+          <>
+            Failed to load field configuration:{' '}
+            {error instanceof Error ? error.message : String(error)}
+          </>
+        }
+      />
     )
   }
 
@@ -371,12 +378,12 @@ export function FieldConfigEditor() {
 
       {/* Save error */}
       {updateMutation.error && (
-        <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <StatusBanner variant="destructive">
           Save failed:{' '}
           {updateMutation.error instanceof Error
             ? updateMutation.error.message
             : String(updateMutation.error)}
-        </div>
+        </StatusBanner>
       )}
 
       {/* Component Fields table */}
