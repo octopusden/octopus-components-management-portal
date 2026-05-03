@@ -210,7 +210,9 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                 id="releasesInDefaultBranch"
                 checked={releasesInDefaultBranch}
                 disabled={releasesInDefaultBranchEntry.visibility === 'readonly'}
-                onCheckedChange={(checked) => setValue('releasesInDefaultBranch', checked)}
+                onCheckedChange={(checked) =>
+                  setValue('releasesInDefaultBranch', checked, { shouldDirty: true })
+                }
               />
               <Label htmlFor="releasesInDefaultBranch" className="cursor-pointer">
                 Releases in default branch

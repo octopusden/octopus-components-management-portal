@@ -1,8 +1,24 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { ComponentTable } from './ComponentTable'
 import type { ComponentSummary } from '../lib/types'
+
+/**
+ * Helper: get the body cell that lines up with a header by display name.
+ * Robust to column reordering — relies on header text, not column index
+ * literals. Assumes a single body row.
+ */
+function cellForColumn(headerText: string): HTMLElement {
+  const headers = screen.getAllByRole('columnheader')
+  const idx = headers.findIndex((h) => h.textContent?.trim().includes(headerText))
+  expect(idx).toBeGreaterThanOrEqual(0) // header must exist for the assertion to be meaningful
+  const rows = screen.getAllByRole('row')
+  // rows[0] is header row; rows[1] is the first body row.
+  expect(rows.length).toBeGreaterThanOrEqual(2)
+  const cells = within(rows[1]!).getAllByRole('cell')
+  return cells[idx]!
+}
 
 function makeComponent(overrides: Partial<ComponentSummary> = {}): ComponentSummary {
   return {
@@ -94,11 +110,10 @@ describe('ComponentTable', () => {
 
     it('renders em-dash when buildSystem is null', () => {
       renderTable([makeComponent({ buildSystem: null })])
-      // No GRADLE/MAVEN-style badge text when buildSystem is null. Assert
-      // by what's NOT there + global em-dash presence; column-position
-      // selectors would tie the test to current column order.
-      expect(screen.queryByText(/^(GRADLE|MAVEN)$/)).toBeNull()
-      expect(screen.getAllByText('—').length).toBeGreaterThan(0)
+      // Header-driven cell lookup — robust to column reorder AND
+      // specific to the Build System column (em-dashes elsewhere in the
+      // row don't mask a regression in this cell).
+      expect(cellForColumn('Build System').textContent).toContain('—')
     })
   })
 
@@ -163,11 +178,11 @@ describe('ComponentTable', () => {
 
     it('renders em-dash when no env vars are set', () => {
       renderTable([makeComponent()])
-      // Without any link-base env var set, no link icon renders — assert
-      // by absence of any Jira/Git/TC/DMS anchor instead of a positional
-      // cell selector.
+      // Header-driven cell lookup pinpoints the Links column.
+      // Belt-and-suspenders: assert no anchor in the row either, in
+      // case future content changes the cell text but leaves a stale link.
+      expect(cellForColumn('Links').textContent).toContain('—')
       expect(screen.queryByRole('link', { name: /Jira|Git|TeamCity|DMS/i })).toBeNull()
-      expect(screen.getAllByText('—').length).toBeGreaterThan(0)
     })
   })
 
