@@ -7,6 +7,11 @@ export interface ComponentSummary {
   productType: string | null
   archived: boolean
   updatedAt: string | null
+  // SYS-040 list-view extras (CRS v4 mapper). Null when the source
+  // nested entity is absent or its leaf field is blank.
+  buildSystem?: string | null
+  jiraProjectKey?: string | null
+  vcsPath?: string | null
 }
 
 export interface ComponentDetail {

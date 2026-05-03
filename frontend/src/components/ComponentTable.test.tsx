@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { ComponentTable } from './ComponentTable'
@@ -63,6 +63,106 @@ describe('ComponentTable', () => {
     it('renders only the name link when displayName is empty string', () => {
       renderTable([makeComponent({ name: 'gamma', displayName: '' })])
       expect(screen.getByRole('link', { name: 'gamma' })).toBeDefined()
+    })
+  })
+
+  describe('SYS-040 — list view column scope', () => {
+    it('does not render a System column', () => {
+      renderTable([makeComponent({ system: ['CLASSIC'] })])
+      expect(screen.queryByRole('columnheader', { name: 'System' })).toBeNull()
+    })
+
+    it('does not render a Product Type column', () => {
+      renderTable([makeComponent({ productType: 'TYPE_A' })])
+      expect(screen.queryByRole('columnheader', { name: 'Product Type' })).toBeNull()
+    })
+
+    it('renders a Build System column header', () => {
+      renderTable([makeComponent()])
+      expect(screen.getByRole('columnheader', { name: 'Build System' })).toBeDefined()
+    })
+
+    it('renders a Links column header', () => {
+      renderTable([makeComponent()])
+      expect(screen.getByRole('columnheader', { name: 'Links' })).toBeDefined()
+    })
+
+    it('renders Build System as a Badge when buildSystem is set', () => {
+      renderTable([makeComponent({ buildSystem: 'GRADLE' })])
+      expect(screen.getByText('GRADLE')).toBeDefined()
+    })
+
+    it('renders em-dash when buildSystem is null', () => {
+      const { container } = renderTable([makeComponent({ buildSystem: null })])
+      // Build System cell sits in column index 2 (after Name, Owner)
+      const bsCell = container.querySelector('tbody tr td:nth-child(3)')
+      expect(bsCell?.textContent).toContain('—')
+    })
+  })
+
+  describe('SYS-040 — Links column env-driven rendering', () => {
+    const env = import.meta.env as Record<string, unknown>
+
+    beforeEach(() => {
+      delete env.VITE_JIRA_BASE_URL
+      delete env.VITE_GIT_BASE_URL
+      delete env.VITE_TC_BASE_URL
+      delete env.VITE_DMS_BASE_URL
+    })
+
+    afterEach(() => {
+      delete env.VITE_JIRA_BASE_URL
+      delete env.VITE_GIT_BASE_URL
+      delete env.VITE_TC_BASE_URL
+      delete env.VITE_DMS_BASE_URL
+    })
+
+    it('renders Jira icon when VITE_JIRA_BASE_URL is set and jiraProjectKey present', () => {
+      env.VITE_JIRA_BASE_URL = 'https://jira.example.com'
+      renderTable([makeComponent({ jiraProjectKey: 'PROJ' })])
+      const link = screen.getByRole('link', { name: /Jira: PROJ/i })
+      expect(link).toBeDefined()
+      expect((link as HTMLAnchorElement).href).toBe('https://jira.example.com/browse/PROJ')
+    })
+
+    it('does NOT render Jira icon when env is missing even if jiraProjectKey is present', () => {
+      renderTable([makeComponent({ jiraProjectKey: 'PROJ' })])
+      expect(screen.queryByRole('link', { name: /Jira/i })).toBeNull()
+    })
+
+    it('does NOT render Jira icon when env is set but jiraProjectKey is null', () => {
+      env.VITE_JIRA_BASE_URL = 'https://jira.example.com'
+      renderTable([makeComponent({ jiraProjectKey: null })])
+      expect(screen.queryByRole('link', { name: /Jira/i })).toBeNull()
+    })
+
+    it('renders Git icon when VITE_GIT_BASE_URL and vcsPath present', () => {
+      env.VITE_GIT_BASE_URL = 'https://git.example.com'
+      renderTable([makeComponent({ vcsPath: 'org/repo' })])
+      const link = screen.getByRole('link', { name: /Git: org\/repo/i })
+      expect(link).toBeDefined()
+      expect((link as HTMLAnchorElement).href).toBe('https://git.example.com/org/repo')
+    })
+
+    it('renders TeamCity icon based solely on env (uses component name)', () => {
+      env.VITE_TC_BASE_URL = 'https://tc.example.com'
+      renderTable([makeComponent({ name: 'alpha' })])
+      const link = screen.getByRole('link', { name: /TeamCity: alpha/i })
+      expect(link).toBeDefined()
+      expect((link as HTMLAnchorElement).href).toBe('https://tc.example.com/alpha')
+    })
+
+    it('renders DMS icon based solely on env (uses component name)', () => {
+      env.VITE_DMS_BASE_URL = 'https://dms.example.com'
+      renderTable([makeComponent({ name: 'alpha' })])
+      const link = screen.getByRole('link', { name: /DMS: alpha/i })
+      expect(link).toBeDefined()
+    })
+
+    it('renders em-dash when no env vars are set', () => {
+      const { container } = renderTable([makeComponent()])
+      const linksCell = container.querySelector('tbody tr td:nth-child(4)')
+      expect(linksCell?.textContent).toContain('—')
     })
   })
 

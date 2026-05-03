@@ -7,7 +7,7 @@ import {
   createColumnHelper,
   type SortingState,
 } from '@tanstack/react-table'
-import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
+import { ArrowUpDown, ArrowUp, ArrowDown, Bug, GitBranch, Hammer, Database } from 'lucide-react'
 import { useState } from 'react'
 import {
   Table,
@@ -41,6 +41,28 @@ function formatDate(dateStr: string | null): string {
   } catch {
     return dateStr
   }
+}
+
+interface IconLinkProps {
+  href: string
+  label: string
+  icon: React.ComponentType<{ className?: string }>
+}
+
+function IconLink({ href, label, icon: Icon }: IconLinkProps) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={label}
+      aria-label={label}
+      className="text-muted-foreground hover:text-foreground transition-colors"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <Icon className="h-4 w-4" />
+    </a>
+  )
 }
 
 const columns = [
@@ -80,26 +102,71 @@ const columns = [
     cell: ({ getValue }) => <span>{getValue() ?? '—'}</span>,
     enableSorting: false,
   }),
-  columnHelper.accessor('system', {
-    header: 'System',
+  columnHelper.accessor('buildSystem', {
+    header: 'Build System',
     cell: ({ getValue }) => {
-      const systems = getValue()
-      if (!systems || systems.length === 0) return <span className="text-muted-foreground">—</span>
+      const bs = getValue()
+      if (!bs) return <span className="text-muted-foreground">—</span>
       return (
-        <div className="flex flex-wrap gap-1">
-          {systems.map((sys) => (
-            <Badge key={sys} variant="secondary" className="text-xs">
-              {sys}
-            </Badge>
-          ))}
-        </div>
+        <Badge variant="secondary" className="text-xs font-mono">
+          {bs}
+        </Badge>
       )
     },
     enableSorting: false,
   }),
-  columnHelper.accessor('productType', {
-    header: 'Product Type',
-    cell: ({ getValue }) => <span>{getValue() ?? '—'}</span>,
+  columnHelper.display({
+    id: 'links',
+    header: 'Links',
+    cell: ({ row }) => {
+      const { name, jiraProjectKey, vcsPath } = row.original
+      // Read env per render so tests can mutate import.meta.env between
+      // cases (mirrors the ComponentDetailPage quick-link pattern).
+      const jiraBaseUrl = import.meta.env.VITE_JIRA_BASE_URL as string | undefined
+      const gitBaseUrl = import.meta.env.VITE_GIT_BASE_URL as string | undefined
+      const tcBaseUrl = import.meta.env.VITE_TC_BASE_URL as string | undefined
+      const dmsBaseUrl = import.meta.env.VITE_DMS_BASE_URL as string | undefined
+      const links: IconLinkProps[] = []
+      if (jiraBaseUrl && jiraProjectKey) {
+        links.push({
+          href: `${jiraBaseUrl}/browse/${jiraProjectKey}`,
+          label: `Jira: ${jiraProjectKey}`,
+          icon: Bug,
+        })
+      }
+      if (gitBaseUrl && vcsPath) {
+        links.push({
+          href: `${gitBaseUrl}/${vcsPath}`,
+          label: `Git: ${vcsPath}`,
+          icon: GitBranch,
+        })
+      }
+      if (tcBaseUrl) {
+        // Component name is the URL slug for TC/DMS — encode to survive
+        // characters that aren't allowed in raw URL paths. Jira/Git use
+        // server-validated keys (projectKey / vcsPath) and don't need it.
+        links.push({
+          href: `${tcBaseUrl}/${encodeURIComponent(name)}`,
+          label: `TeamCity: ${name}`,
+          icon: Hammer,
+        })
+      }
+      if (dmsBaseUrl) {
+        links.push({
+          href: `${dmsBaseUrl}/${encodeURIComponent(name)}`,
+          label: `DMS: ${name}`,
+          icon: Database,
+        })
+      }
+      if (links.length === 0) return <span className="text-muted-foreground">—</span>
+      return (
+        <div className="flex items-center gap-2">
+          {links.map((l) => (
+            <IconLink key={l.label} {...l} />
+          ))}
+        </div>
+      )
+    },
     enableSorting: false,
   }),
   columnHelper.accessor('archived', {
