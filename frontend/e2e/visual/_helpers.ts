@@ -29,14 +29,9 @@ export async function mockComponentList(page: Page, fixture: unknown) {
 
 /** Mock GET /components/{id} (detail) with a ComponentDetail fixture. */
 export async function mockComponentDetail(page: Page, fixture: unknown) {
-  await page.route(COMPONENTS_DETAIL, (route) => {
-    // Disambiguate from list route: list URL ends with `/components?...`.
-    if (route.request().url().includes('/components?')) {
-      void route.fallback()
-      return
-    }
-    jsonRoute(route, 200, fixture)
-  })
+  // Regex `[^/?]+` already excludes the list URL (`/components?...`),
+  // so no extra disambiguation is needed in the callback.
+  await page.route(COMPONENTS_DETAIL, (route) => jsonRoute(route, 200, fixture))
 }
 
 /** Mock GET /audit/recent with a Page<AuditLogEntry> fixture. */

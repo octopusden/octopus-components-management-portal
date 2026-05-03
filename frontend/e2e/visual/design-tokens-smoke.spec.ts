@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test'
+import componentsFixture from './fixtures/components-with-archived.json' with { type: 'json' }
+import { mockComponentList } from './_helpers'
 
 // Sanity smoke for the visual-acceptance harness landed in PR-1:
 // confirms (a) the visual project's testMatch picks up specs under
@@ -9,6 +11,7 @@ import { test, expect } from '@playwright/test'
 
 test.describe('Visual harness smoke', () => {
   test('semantic badge tokens resolve to prototype theme.js light values', async ({ page }) => {
+    await mockComponentList(page, componentsFixture)
     await page.goto('/components')
 
     // Read computed values of the new --color-badge-* custom properties on
@@ -44,6 +47,7 @@ test.describe('Visual harness smoke', () => {
   })
 
   test('dormant dark palette activates only when data-theme="dark" is set', async ({ page }) => {
+    await mockComponentList(page, componentsFixture)
     await page.goto('/components')
 
     // Without the attribute, light values must hold (no @media activation).
