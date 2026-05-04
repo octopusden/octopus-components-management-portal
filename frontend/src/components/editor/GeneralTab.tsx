@@ -11,6 +11,34 @@ import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../../lib/auth'
 import { useFieldConfigEntry } from '../../hooks/useFieldConfig'
 
+/**
+ * Canonical list of field names owned by GeneralTab — used by
+ * ComponentDetailPage to decide which CRS 400 field errors are wired to
+ * form.setError (and the toast suppressed) vs. surfaced as a toast.
+ *
+ * Membership rule: a field belongs here only if GeneralTab actually renders
+ * an inline-error <p> for it. Otherwise the 400 path would call setError on
+ * an unrendered field while suppressing the toast, leaving the user with no
+ * visible error. Intentionally excluded:
+ *   - productType: rendered/saved by EscrowTab (§7.0/2c migration)
+ *   - solution / archived / releasesInDefaultBranch: boolean Switches with
+ *     no inline error display; let CRS business-rule violations like
+ *     "cannot archive while children exist" surface as a toast.
+ */
+export const GENERAL_TAB_FIELDS = [
+  'name',
+  'displayName',
+  'componentOwner',
+  'system',
+  'clientCode',
+  'parentComponentName',
+  'groupId',
+  'releaseManager',
+  'securityChampion',
+  'copyright',
+  'labels',
+] as const
+
 export interface GeneralFormValues {
   /**
    * Component name. Editable only by users with RENAME_COMPONENTS (today
@@ -130,13 +158,16 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
               className={!isNew && !canRename ? 'bg-muted' : undefined}
               {...register('name')}
             />
-            {!isNew && !canRename && (
+            {errors.name && (
+              <p className="text-xs text-destructive">{errors.name.message}</p>
+            )}
+            {!errors.name && !isNew && !canRename && (
               <p className="text-xs text-muted-foreground">
                 Renaming requires the RENAME_COMPONENTS permission (typically ROLE_ADMIN).
                 Ask an admin to rename this component or request the permission.
               </p>
             )}
-            {!isNew && canRename && (
+            {!errors.name && !isNew && canRename && (
               <p className="text-xs text-muted-foreground">
                 Renaming changes the canonical identifier — every legacy v1/v2/v3 lookup
                 by old name will resolve to the renamed component.
@@ -174,9 +205,13 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
               onChange={(val) => setValue('parentComponentName', val, { shouldDirty: true })}
               placeholder="No parent (top-level component)"
             />
-            <p className="text-xs text-muted-foreground">
-              Reference another component by name. Leave blank for a top-level component.
-            </p>
+            {errors.parentComponentName ? (
+              <p className="text-xs text-destructive">{errors.parentComponentName.message}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Reference another component by name. Leave blank for a top-level component.
+              </p>
+            )}
           </div>
 
           {/* groupId — SYS-039 (Maven groupId) */}
@@ -190,6 +225,9 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                 className={groupIdEntry.visibility === 'readonly' ? 'bg-muted' : undefined}
                 {...register('groupId')}
               />
+              {errors.groupId && (
+                <p className="text-xs text-destructive">{errors.groupId.message}</p>
+              )}
             </div>
           )}
 
@@ -247,6 +285,9 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                     onChange={(val) => setValue('componentOwner', val)}
                   />
                 )}
+                {errors.componentOwner && (
+                  <p className="text-xs text-destructive">{errors.componentOwner.message}</p>
+                )}
                 <FieldOverrideInline componentId={component.id} fieldPath="componentOwner" />
               </div>
             )}
@@ -269,6 +310,9 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                     onChange={(val) => setValue('releaseManager', val)}
                   />
                 )}
+                {errors.releaseManager && (
+                  <p className="text-xs text-destructive">{errors.releaseManager.message}</p>
+                )}
               </div>
             )}
 
@@ -289,6 +333,9 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                     value={securityChampion}
                     onChange={(val) => setValue('securityChampion', val)}
                   />
+                )}
+                {errors.securityChampion && (
+                  <p className="text-xs text-destructive">{errors.securityChampion.message}</p>
                 )}
               </div>
             )}
@@ -315,7 +362,11 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                   className={systemEntry.visibility === 'readonly' ? 'bg-muted' : undefined}
                   {...register('system')}
                 />
-                <p className="text-xs text-muted-foreground">Comma-separated list of systems.</p>
+                {errors.system ? (
+                  <p className="text-xs text-destructive">{errors.system.message}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Comma-separated list of systems.</p>
+                )}
                 <FieldOverrideInline componentId={component.id} fieldPath="system" />
               </div>
             )}
@@ -331,6 +382,9 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                   className={clientCodeEntry.visibility === 'readonly' ? 'bg-muted' : undefined}
                   {...register('clientCode')}
                 />
+                {errors.clientCode && (
+                  <p className="text-xs text-destructive">{errors.clientCode.message}</p>
+                )}
                 <FieldOverrideInline componentId={component.id} fieldPath="clientCode" />
               </div>
             )}
@@ -346,6 +400,9 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                   className={copyrightEntry.visibility === 'readonly' ? 'bg-muted' : undefined}
                   {...register('copyright')}
                 />
+                {errors.copyright && (
+                  <p className="text-xs text-destructive">{errors.copyright.message}</p>
+                )}
               </div>
             )}
 
@@ -361,7 +418,11 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                   className={labelsEntry.visibility === 'readonly' ? 'bg-muted' : undefined}
                   {...register('labels')}
                 />
-                <p className="text-xs text-muted-foreground">Comma-separated tags.</p>
+                {errors.labels ? (
+                  <p className="text-xs text-destructive">{errors.labels.message}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Comma-separated tags.</p>
+                )}
               </div>
             )}
           </div>

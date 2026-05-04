@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import React from 'react'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
@@ -449,5 +449,57 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
     expect(screen.queryByLabelText(/copyright/i)).toBeNull()
     expect(screen.queryByLabelText(/releases in default branch/i)).toBeNull()
     expect(screen.queryByLabelText(/^labels$/i)).toBeNull()
+  })
+})
+
+// ── Server-side 400 inline error display (S3.1a) ──────────────────────────────
+// When ComponentDetailPage catches a 400 it calls form.setError for fields in
+// GENERAL_TAB_FIELDS. The GeneralTab must render those errors inline next to
+// the relevant input.
+
+describe('GeneralTab server error display (S3.1a)', () => {
+  it('setError("componentOwner") renders the message inline below the field', async () => {
+    setAllEditable()
+    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    renderWithProviders(<Harness component={baseComponent()} formRef={formRef} />)
+
+    await act(async () => {
+      formRef.current?.setError('componentOwner', { type: 'server', message: 'must not be blank' })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('must not be blank')).toBeDefined()
+    })
+  })
+
+  it('setError("name") renders the message and suppresses the rename hint', async () => {
+    setAllEditable()
+    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    renderWithProviders(<Harness component={baseComponent({ name: 'x' })} formRef={formRef} />)
+
+    await act(async () => {
+      formRef.current?.setError('name', { type: 'server', message: 'must not be blank' })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('must not be blank')).toBeDefined()
+      // Rename hint must not appear alongside the error
+      expect(screen.queryByText(/canonical identifier/i)).toBeNull()
+    })
+  })
+
+  it('setError("system") renders the message instead of the hint text', async () => {
+    setAllEditable()
+    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    renderWithProviders(<Harness component={baseComponent({ system: ['S1'] })} formRef={formRef} />)
+
+    await act(async () => {
+      formRef.current?.setError('system', { type: 'server', message: 'must not be null' })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('must not be null')).toBeDefined()
+      expect(screen.queryByText(/comma-separated list/i)).toBeNull()
+    })
   })
 })

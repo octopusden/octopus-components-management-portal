@@ -24,9 +24,18 @@ vi.mock('../components/AppFooter', () => ({
   AppFooter: () => React.createElement('footer', null, 'footer'),
 }))
 // Editor tabs — stub so only the header/action-area is tested here.
-vi.mock('../components/editor/GeneralTab', () => ({
-  GeneralTab: () => React.createElement('div', { 'data-testid': 'general-tab' }),
-}))
+// GeneralTab also exports GENERAL_TAB_FIELDS, which ComponentDetailPage imports
+// for the 400-error routing. importActual preserves real exports so any future
+// test exercising the 400 path doesn't crash on a missing constant.
+vi.mock('../components/editor/GeneralTab', async () => {
+  const actual = await vi.importActual<typeof import('../components/editor/GeneralTab')>(
+    '../components/editor/GeneralTab',
+  )
+  return {
+    ...actual,
+    GeneralTab: () => React.createElement('div', { 'data-testid': 'general-tab' }),
+  }
+})
 vi.mock('../components/editor/BuildTab', () => ({
   BuildTab: () => React.createElement('div', { 'data-testid': 'build-tab' }),
 }))
@@ -336,3 +345,4 @@ describe('ComponentDetailPage — confirmation dialog text', () => {
     })
   })
 })
+

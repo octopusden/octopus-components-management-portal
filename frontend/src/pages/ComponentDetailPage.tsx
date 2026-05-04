@@ -16,7 +16,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '../components/ui/dialog'
-import { GeneralTab, type GeneralFormValues } from '../components/editor/GeneralTab'
+import { GeneralTab, type GeneralFormValues, GENERAL_TAB_FIELDS } from '../components/editor/GeneralTab'
 import { BuildTab } from '../components/editor/BuildTab'
 import { VcsTab } from '../components/editor/VcsTab'
 import { DistributionTab } from '../components/editor/DistributionTab'
@@ -33,6 +33,7 @@ import type { ComponentDetail } from '../lib/types'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../lib/auth'
 import { useFieldConfigEntry } from '../hooks/useFieldConfig'
+import { parseServerFieldErrors } from '../lib/serverErrors'
 
 export type UpdateMutation = UseMutationResult<ComponentDetail, Error, ComponentUpdateRequest>
 
@@ -111,6 +112,11 @@ export function ComponentDetailPage() {
 
   async function handleSave() {
     if (!component) return
+    // Server-side errors set on a previous failed submit don't auto-clear when
+    // the user fixes the input or when the next save succeeds (RHF only
+    // clears errors on its own validation passes). Wipe them at the start of
+    // each save so a successful retry doesn't leave stale red text behind.
+    form.clearErrors()
     const values = form.getValues()
 
     const systemArray = values.system
@@ -220,6 +226,25 @@ export function ComponentDetailPage() {
         const { title, description } = describeOptimisticConflict(latest)
         toast({ title, description, variant: 'destructive' })
         return
+      }
+      if (err instanceof ApiError && err.status === 400) {
+        const fieldErrors = parseServerFieldErrors(err.message)
+        let anyFieldMapped = false
+        for (const [field, message] of fieldErrors) {
+          // Only set errors for fields owned by GeneralTab; fields from other
+          // tabs (buildConfiguration, vcsSettings, …) arrive in the same 400
+          // but should not pollute GeneralTab's form state.
+          if ((GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(field)) {
+            form.setError(field as keyof GeneralFormValues, { type: 'server', message })
+            anyFieldMapped = true
+          }
+        }
+        // TODO(3.1b): mixed 400 with both GeneralTab and other-tab field
+        // errors silently drops the non-tab errors here. Acceptable while
+        // CRS update validations don't combine cross-tab violations in one
+        // response; revisit when the shared-error-mapping helper lands.
+        if (anyFieldMapped) return
+        // No field mapped → fall through to generic toast so the error is still surfaced.
       }
       toast({
         title: 'Save failed',
