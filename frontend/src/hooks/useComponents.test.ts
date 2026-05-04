@@ -136,4 +136,23 @@ describe('useComponents — URL params', () => {
     const calledUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
     expect(calledUrl).toContain('owner=alice%40example.com')
   })
+
+  it('passes buildSystem filter when set', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result } = renderHook(
+      () => useComponents({ filter: { buildSystem: 'GRADLE' } }),
+      { wrapper: makeWrapper() },
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const calledUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    expect(calledUrl).toContain('buildSystem=GRADLE')
+  })
+
+  it('does not include buildSystem param when filter is undefined', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result } = renderHook(() => useComponents(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const calledUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    expect(calledUrl).not.toContain('buildSystem=')
+  })
 })

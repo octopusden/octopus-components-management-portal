@@ -123,25 +123,25 @@ const columns = [
       const visible = labels.slice(0, 3)
       const overflow = labels.slice(3)
       return (
-        <TooltipProvider>
-          <div className="flex flex-wrap gap-1">
-            {visible.map((label) => (
-              <Badge key={label} variant="secondary" className="text-xs font-mono">
-                {label}
-              </Badge>
-            ))}
-            {overflow.length > 0 && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Badge variant="outline" className="text-xs cursor-default">
-                    +{overflow.length}
-                  </Badge>
-                </TooltipTrigger>
-                <TooltipContent>{overflow.join(', ')}</TooltipContent>
-              </Tooltip>
-            )}
-          </div>
-        </TooltipProvider>
+        <div className="flex flex-wrap gap-1">
+          {visible.map((label, i) => (
+            // Index-prefixed key — labels can legally repeat in the array (CRS dedup
+            // is a soft contract; defending against duplicates here keeps React happy).
+            <Badge key={`${i}-${label}`} variant="secondary" className="text-xs font-mono">
+              {label}
+            </Badge>
+          ))}
+          {overflow.length > 0 && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge variant="outline" className="text-xs cursor-default">
+                  +{overflow.length}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>{overflow.join(', ')}</TooltipContent>
+            </Tooltip>
+          )}
+        </div>
       )
     },
     enableSorting: false,
@@ -288,36 +288,41 @@ export function ComponentTable({ data, isLoading }: ComponentTableProps) {
   }
 
   return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id}>
-              {headerGroup.headers.map((header) => (
-                <TableHead
-                  key={header.id}
-                  className={cn(header.column.getCanSort() && 'cursor-pointer select-none')}
-                >
-                  {header.isPlaceholder
-                    ? null
-                    : flexRender(header.column.columnDef.header, header.getContext())}
-                </TableHead>
-              ))}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {table.getRowModel().rows.map((row) => (
-            <TableRow key={row.id} className={cn(row.original.archived && 'opacity-50')}>
-              {row.getVisibleCells().map((cell) => (
-                <TableCell key={cell.id}>
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+    // Single TooltipProvider wraps the table so per-cell Tooltip instances
+    // (labels overflow) share one context — instantiating a Provider per
+    // cell adds noticeable React work on long lists.
+    <TooltipProvider>
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead
+                    key={header.id}
+                    className={cn(header.column.getCanSort() && 'cursor-pointer select-none')}
+                  >
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(header.column.columnDef.header, header.getContext())}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {table.getRowModel().rows.map((row) => (
+              <TableRow key={row.id} className={cn(row.original.archived && 'opacity-50')}>
+                {row.getVisibleCells().map((cell) => (
+                  <TableCell key={cell.id}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </TooltipProvider>
   )
 }
