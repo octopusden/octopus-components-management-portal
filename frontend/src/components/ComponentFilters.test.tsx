@@ -16,6 +16,26 @@ vi.mock('../hooks/useCurrentUser', () => ({
   useCurrentUser: vi.fn(),
 }))
 
+// Stub useAdminConfig so useFieldConfigEntry (used by Build System select)
+// returns a deterministic options list without hitting the network.
+vi.mock('../hooks/useAdminConfig', () => ({
+  useFieldConfig: vi.fn(),
+  useUpdateFieldConfig: vi.fn(),
+  useComponentDefaults: vi.fn(),
+  useUpdateComponentDefaults: vi.fn(),
+  useMigrateDefaults: vi.fn(),
+}))
+
+import { useFieldConfig } from '../hooks/useAdminConfig'
+const mockUseFieldConfig = vi.mocked(useFieldConfig)
+
+function mockFieldConfig(options: string[]) {
+  mockUseFieldConfig.mockReturnValue({
+    data: { fields: { buildSystem: { options } } },
+    isLoading: false,
+  } as unknown as ReturnType<typeof useFieldConfig>)
+}
+
 import { useCurrentUser } from '../hooks/useCurrentUser'
 const mockUseCurrentUser = vi.mocked(useCurrentUser)
 
@@ -35,6 +55,7 @@ describe('ComponentFilters', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockCurrentUser('testuser')
+    mockFieldConfig([])
   })
 
   it('renders search input', () => {
@@ -88,6 +109,7 @@ describe('ComponentFilters archived filter (§7.0/2e)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockCurrentUser('testuser')
+    mockFieldConfig([])
   })
 
   it('default filter archived=false shows "Show archived components" button', () => {
@@ -129,6 +151,7 @@ describe('ComponentFilters My Components (§7.0/2e)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockFieldConfig([])
   })
 
   it('renders My Components switch', () => {
@@ -185,6 +208,7 @@ describe('ComponentFilters owner dropdown (B7.1.1)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockCurrentUser('testuser')
+    mockFieldConfig([])
   })
 
   it('renders an owner dropdown with the values from /components/meta/owners', async () => {
@@ -225,5 +249,55 @@ describe('ComponentFilters owner dropdown (B7.1.1)', () => {
   it('shows Clear filters when owner is the only active filter', () => {
     render(<ComponentFilters filter={{ owner: 'alice', archived: false }} onFilterChange={onFilterChange} />)
     expect(screen.getByText('Clear filters')).toBeDefined()
+  })
+})
+
+describe('ComponentFilters Build System select (Wave 2)', () => {
+  const onFilterChange = vi.fn()
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockCurrentUser('testuser')
+    mockFieldConfig(['GRADLE', 'MAVEN'])
+  })
+
+  it('renders a Build System dropdown', () => {
+    render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
+    expect(screen.getByRole('combobox', { name: /build system/i })).toBeDefined()
+  })
+
+  it('lists options sourced from field-config', async () => {
+    render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
+    await userEvent.click(screen.getByRole('combobox', { name: /build system/i }))
+    expect(screen.getByRole('option', { name: 'GRADLE' })).toBeDefined()
+    expect(screen.getByRole('option', { name: 'MAVEN' })).toBeDefined()
+    expect(screen.getByRole('option', { name: /all build systems/i })).toBeDefined()
+  })
+
+  it('calls onFilterChange with buildSystem when an option is selected', async () => {
+    render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
+    await userEvent.click(screen.getByRole('combobox', { name: /build system/i }))
+    await userEvent.click(screen.getByRole('option', { name: 'GRADLE' }))
+    expect(onFilterChange).toHaveBeenCalledWith({ buildSystem: 'GRADLE' })
+  })
+
+  it('clears buildSystem when "All build systems" is selected', async () => {
+    render(<ComponentFilters filter={{ buildSystem: 'MAVEN' }} onFilterChange={onFilterChange} />)
+    await userEvent.click(screen.getByRole('combobox', { name: /build system/i }))
+    await userEvent.click(screen.getByRole('option', { name: /all build systems/i }))
+    expect(onFilterChange).toHaveBeenCalledWith({ buildSystem: undefined })
+  })
+
+  it('shows Clear filters when buildSystem is the only active filter', () => {
+    render(<ComponentFilters filter={{ buildSystem: 'GRADLE', archived: false }} onFilterChange={onFilterChange} />)
+    expect(screen.getByText('Clear filters')).toBeDefined()
+  })
+
+  it('renders only "All build systems" when field-config has no options', async () => {
+    mockFieldConfig([])
+    render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
+    await userEvent.click(screen.getByRole('combobox', { name: /build system/i }))
+    expect(screen.getByRole('option', { name: /all build systems/i })).toBeDefined()
+    expect(screen.queryByRole('option', { name: 'GRADLE' })).toBeNull()
   })
 })

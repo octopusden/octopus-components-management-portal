@@ -20,6 +20,7 @@ import {
 import { Badge } from './ui/badge'
 import { EmptyState } from './ui/empty-state'
 import { SkeletonTable } from './ui/skeleton-table'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip'
 import { cn } from '../lib/utils'
 import type { ComponentSummary } from '../lib/types'
 
@@ -110,6 +111,37 @@ const columns = [
         <Badge variant="secondary" className="text-xs font-mono">
           {bs}
         </Badge>
+      )
+    },
+    enableSorting: false,
+  }),
+  columnHelper.accessor('labels', {
+    header: 'Labels',
+    cell: ({ getValue }) => {
+      const labels = getValue()
+      if (!labels || labels.length === 0) return <span className="text-muted-foreground">—</span>
+      const visible = labels.slice(0, 3)
+      const overflow = labels.slice(3)
+      return (
+        <TooltipProvider>
+          <div className="flex flex-wrap gap-1">
+            {visible.map((label) => (
+              <Badge key={label} variant="secondary" className="text-xs font-mono">
+                {label}
+              </Badge>
+            ))}
+            {overflow.length > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="outline" className="text-xs cursor-default">
+                    +{overflow.length}
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>{overflow.join(', ')}</TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+        </TooltipProvider>
       )
     },
     enableSorting: false,

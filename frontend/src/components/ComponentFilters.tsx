@@ -15,6 +15,7 @@ import { Label } from './ui/label'
 import type { ComponentFilter } from '../lib/types'
 import { useOwners } from '../hooks/useOwners'
 import { useCurrentUser } from '../hooks/useCurrentUser'
+import { useFieldConfigEntry } from '../hooks/useFieldConfig'
 
 interface ComponentFiltersProps {
   filter: ComponentFilter
@@ -61,6 +62,10 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
     onFilterChange({ ...filter, owner: value === ALL_VALUE ? undefined : value })
   }
 
+  const handleBuildSystemChange = (value: string) => {
+    onFilterChange({ ...filter, buildSystem: value === ALL_VALUE ? undefined : value })
+  }
+
   // Archived filter: 2-state cycle — false (active only, default) ↔ undefined (all)
   const handleArchivedToggle = () => {
     if (filter.archived === false) {
@@ -82,6 +87,7 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
     !!filter.system ||
     !!filter.productType ||
     !!filter.owner ||
+    !!filter.buildSystem ||
     filter.archived === undefined
 
   // Owner list comes from /components/meta/owners (B7.1.1, SYS-035 backend).
@@ -90,6 +96,11 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
   // grows beyond a few hundred we can switch to a typeahead picker matching
   // PeopleInput's pattern.
   const { data: owners = [] } = useOwners()
+  // Build system options come from admin field-config, not a hardcoded enum —
+  // admin-driven options are the contract here. If not configured, only the
+  // "All" row is shown; the select is still visible so admins can discover
+  // the filter even before options are configured.
+  const { entry: buildSystemEntry } = useFieldConfigEntry('buildSystem')
   const { data: currentUser } = useCurrentUser()
 
   // My Components: when checked, owner is pinned to the current user
@@ -142,6 +153,20 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
           {PRODUCT_TYPE_OPTIONS.map((pt) => (
             <SelectItem key={pt} value={pt}>
               {pt}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select value={filter.buildSystem ?? ALL_VALUE} onValueChange={handleBuildSystemChange}>
+        <SelectTrigger className="w-[160px]" aria-label="Build System">
+          <SelectValue placeholder="All build systems" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={ALL_VALUE}>All build systems</SelectItem>
+          {(buildSystemEntry.options ?? []).map((bs) => (
+            <SelectItem key={bs} value={bs}>
+              {bs}
             </SelectItem>
           ))}
         </SelectContent>
