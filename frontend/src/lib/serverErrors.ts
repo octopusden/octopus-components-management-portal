@@ -41,8 +41,14 @@ export function parseServerFieldErrors(apiErrorMessage: string): Map<string, str
     return result
   }
 
-  // Plain message — try to extract a leading "fieldName " pattern.
-  // e.g. "name must not be blank" → field="name", msg="must not be blank"
+  // Plain message — best-effort heuristic that takes the first identifier-
+  // looking word as a candidate field. False-positive on messages like
+  // "Something went wrong" is intentional: the caller filters by its own
+  // field allowlist (GENERAL_TAB_FIELDS), so phantom hits like "Something"
+  // are dropped there. If CRS ever starts emitting plain-text non-field
+  // errors that begin with a real field name (e.g. a hypothetical
+  // "name conflict" notice), this heuristic would mis-route them; revisit
+  // if that pattern appears in CRS error catalog.
   const plainMatch = /^([a-zA-Z][a-zA-Z0-9]*)(\s.+)$/.exec(errorMessage)
   if (plainMatch) {
     result.set(plainMatch[1]!, plainMatch[2]!.trim())

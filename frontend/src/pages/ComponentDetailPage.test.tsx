@@ -370,14 +370,13 @@ describe('parseServerFieldErrors — IllegalArgumentException format', () => {
     expect(result.get('name')).toBe('must not be blank')
   })
 
-  it('returns empty map for a plain message with no leading field identifier', () => {
+  it('plain-message heuristic captures the first word as candidate field (filtered by caller via GENERAL_TAB_FIELDS)', () => {
     const body = JSON.stringify({ errorMessage: 'Something went wrong internally' })
     const result = parseServerFieldErrors(body)
-    // "Something" starts with uppercase, matches identifier pattern → field="Something"
-    // This is acceptable: the filter in ComponentDetailPage checks GENERAL_TAB_FIELDS,
-    // so non-tab fields are silently ignored and the toast path handles the message.
-    // Verify at minimum that no crash occurs and the result is a Map.
-    expect(result).toBeInstanceOf(Map)
+    // "Something" matches the identifier pattern → key="Something", value="went wrong internally".
+    // The caller filters by GENERAL_TAB_FIELDS, so a phantom "Something" key is harmlessly
+    // ignored and the toast path surfaces the original message.
+    expect(result.get('Something')).toBe('went wrong internally')
   })
 
   it('returns empty map for an unparseable (non-JSON) message', () => {

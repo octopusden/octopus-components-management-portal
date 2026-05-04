@@ -112,6 +112,11 @@ export function ComponentDetailPage() {
 
   async function handleSave() {
     if (!component) return
+    // Server-side errors set on a previous failed submit don't auto-clear when
+    // the user fixes the input or when the next save succeeds (RHF only
+    // clears errors on its own validation passes). Wipe them at the start of
+    // each save so a successful retry doesn't leave stale red text behind.
+    form.clearErrors()
     const values = form.getValues()
 
     const systemArray = values.system
@@ -234,6 +239,10 @@ export function ComponentDetailPage() {
             anyFieldMapped = true
           }
         }
+        // TODO(3.1b): mixed 400 with both GeneralTab and other-tab field
+        // errors silently drops the non-tab errors here. Acceptable while
+        // CRS update validations don't combine cross-tab violations in one
+        // response; revisit when the shared-error-mapping helper lands.
         if (anyFieldMapped) return
         // No field mapped → fall through to generic toast so the error is still surfaced.
       }

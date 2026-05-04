@@ -16,11 +16,14 @@ import { useFieldConfigEntry } from '../../hooks/useFieldConfig'
  * to decide which CRS 400 field errors should be wired to form.setError vs.
  * surfaced as a toast (fields belonging to other tabs).
  */
+// productType is intentionally absent — it lives in GeneralFormValues (still
+// part of the ComponentDetail DTO) but renders and saves from EscrowTab.
+// A 400 on productType therefore must surface in EscrowTab's UI, not here,
+// so it falls through to the generic toast handler.
 export const GENERAL_TAB_FIELDS = [
   'name',
   'displayName',
   'componentOwner',
-  'productType',
   'system',
   'clientCode',
   'solution',
