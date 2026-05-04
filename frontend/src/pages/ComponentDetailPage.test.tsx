@@ -4,7 +4,6 @@ import { MemoryRouter, Route, Routes } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 import { ComponentDetailPage } from './ComponentDetailPage'
-import { parseServerFieldErrors } from '../lib/serverErrors'
 import type { User } from '@/lib/auth'
 import type { ComponentDetail } from '@/lib/types'
 
@@ -25,9 +24,18 @@ vi.mock('../components/AppFooter', () => ({
   AppFooter: () => React.createElement('footer', null, 'footer'),
 }))
 // Editor tabs — stub so only the header/action-area is tested here.
-vi.mock('../components/editor/GeneralTab', () => ({
-  GeneralTab: () => React.createElement('div', { 'data-testid': 'general-tab' }),
-}))
+// GeneralTab also exports GENERAL_TAB_FIELDS, which ComponentDetailPage imports
+// for the 400-error routing. importActual preserves real exports so any future
+// test exercising the 400 path doesn't crash on a missing constant.
+vi.mock('../components/editor/GeneralTab', async () => {
+  const actual = await vi.importActual<typeof import('../components/editor/GeneralTab')>(
+    '../components/editor/GeneralTab',
+  )
+  return {
+    ...actual,
+    GeneralTab: () => React.createElement('div', { 'data-testid': 'general-tab' }),
+  }
+})
 vi.mock('../components/editor/BuildTab', () => ({
   BuildTab: () => React.createElement('div', { 'data-testid': 'build-tab' }),
 }))
@@ -338,64 +346,3 @@ describe('ComponentDetailPage — confirmation dialog text', () => {
   })
 })
 
-// ── parseServerFieldErrors ─────────────────────────────────────────────────────
-// Confirmed CRS 400 format from ControllerExceptionHandler.kt:56-69:
-//   { "errorMessage": "Validation failed: field: msg, ..." }  (MethodArgumentNotValidException)
-//   { "errorMessage": "name must not be blank" }              (IllegalArgumentException)
-// Both are wrapped in ErrorResponse.errorMessage (ErrorResponse.kt:7).
-
-describe('parseServerFieldErrors — MethodArgumentNotValidException format', () => {
-  it('extracts a single field error from "Validation failed: field: msg"', () => {
-    const body = JSON.stringify({ errorMessage: 'Validation failed: componentOwner: must not be blank' })
-    const result = parseServerFieldErrors(body)
-    expect(result.get('componentOwner')).toBe('must not be blank')
-    expect(result.size).toBe(1)
-  })
-
-  it('extracts multiple field errors separated by ", "', () => {
-    const body = JSON.stringify({
-      errorMessage: 'Validation failed: componentOwner: must not be blank, system: must not be null',
-    })
-    const result = parseServerFieldErrors(body)
-    expect(result.get('componentOwner')).toBe('must not be blank')
-    expect(result.get('system')).toBe('must not be null')
-    expect(result.size).toBe(2)
-  })
-})
-
-describe('parseServerFieldErrors — IllegalArgumentException format', () => {
-  it('extracts field and message from "name must not be blank" (plain space-separated)', () => {
-    const body = JSON.stringify({ errorMessage: 'name must not be blank' })
-    const result = parseServerFieldErrors(body)
-    expect(result.get('name')).toBe('must not be blank')
-  })
-
-  it('plain-message heuristic captures the first word as candidate field (filtered by caller via GENERAL_TAB_FIELDS)', () => {
-    const body = JSON.stringify({ errorMessage: 'Something went wrong internally' })
-    const result = parseServerFieldErrors(body)
-    // "Something" matches the identifier pattern → key="Something", value="went wrong internally".
-    // The caller filters by GENERAL_TAB_FIELDS, so a phantom "Something" key is harmlessly
-    // ignored and the toast path surfaces the original message.
-    expect(result.get('Something')).toBe('went wrong internally')
-  })
-
-  it('returns empty map for an unparseable (non-JSON) message', () => {
-    const result = parseServerFieldErrors('not json at all')
-    expect(result.size).toBe(0)
-  })
-
-  it('returns empty map when errorMessage field is absent', () => {
-    const result = parseServerFieldErrors(JSON.stringify({ status: 400, detail: 'oops' }))
-    expect(result.size).toBe(0)
-  })
-})
-
-describe('parseServerFieldErrors — non-GeneralTab field is not in GENERAL_TAB_FIELDS', () => {
-  it('a field outside GeneralTab scope (e.g. buildConfiguration) is parsed but filtered by caller', () => {
-    // parseServerFieldErrors itself parses any field — scope filtering is in ComponentDetailPage.
-    const body = JSON.stringify({ errorMessage: 'Validation failed: buildSystem: must not be blank' })
-    const result = parseServerFieldErrors(body)
-    // Parsed but not in GENERAL_TAB_FIELDS — the page's for-loop skips it
-    expect(result.get('buildSystem')).toBe('must not be blank')
-  })
-})

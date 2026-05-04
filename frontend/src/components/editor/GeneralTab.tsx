@@ -12,28 +12,30 @@ import { hasPermission, PERMISSIONS } from '../../lib/auth'
 import { useFieldConfigEntry } from '../../hooks/useFieldConfig'
 
 /**
- * Canonical list of field names owned by GeneralTab. Used in ComponentDetailPage
- * to decide which CRS 400 field errors should be wired to form.setError vs.
- * surfaced as a toast (fields belonging to other tabs).
+ * Canonical list of field names owned by GeneralTab — used by
+ * ComponentDetailPage to decide which CRS 400 field errors are wired to
+ * form.setError (and the toast suppressed) vs. surfaced as a toast.
+ *
+ * Membership rule: a field belongs here only if GeneralTab actually renders
+ * an inline-error <p> for it. Otherwise the 400 path would call setError on
+ * an unrendered field while suppressing the toast, leaving the user with no
+ * visible error. Intentionally excluded:
+ *   - productType: rendered/saved by EscrowTab (§7.0/2c migration)
+ *   - solution / archived / releasesInDefaultBranch: boolean Switches with
+ *     no inline error display; let CRS business-rule violations like
+ *     "cannot archive while children exist" surface as a toast.
  */
-// productType is intentionally absent — it lives in GeneralFormValues (still
-// part of the ComponentDetail DTO) but renders and saves from EscrowTab.
-// A 400 on productType therefore must surface in EscrowTab's UI, not here,
-// so it falls through to the generic toast handler.
 export const GENERAL_TAB_FIELDS = [
   'name',
   'displayName',
   'componentOwner',
   'system',
   'clientCode',
-  'solution',
-  'archived',
   'parentComponentName',
   'groupId',
   'releaseManager',
   'securityChampion',
   'copyright',
-  'releasesInDefaultBranch',
   'labels',
 ] as const
 
