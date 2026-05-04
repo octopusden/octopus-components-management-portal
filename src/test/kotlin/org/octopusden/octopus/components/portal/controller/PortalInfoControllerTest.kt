@@ -56,6 +56,104 @@ class PortalInfoControllerTest {
             .jsonPath("$.version").isEqualTo(EXPECTED_VERSION)
     }
 
+    @Test
+    fun `links block is present in response`() {
+        webTestClient
+            .get()
+            .uri("/portal/info")
+            .exchange()
+            .expectStatus().isOk
+            .expectBody()
+            .jsonPath("$.links").exists()
+    }
+
+    @SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = [
+            "management.server.port=0",
+            "portal.links.jira-base-url=https://jira.example.com",
+            "portal.links.git-base-url=https://git.example.com",
+            "portal.links.tc-base-url=https://tc.example.com",
+            "portal.links.dms-base-url=https://dms.example.com",
+        ],
+    )
+    @AutoConfigureWebTestClient
+    @ActiveProfiles("test")
+    @Import(TestSecurityConfig::class, TestBuildPropertiesConfig::class)
+    inner class AllLinksConfigured {
+        @Autowired
+        lateinit var client: WebTestClient
+
+        @Test
+        fun `all four URLs configured returns them all`() {
+            client.get().uri("/portal/info").exchange()
+                .expectStatus().isOk
+                .expectBody()
+                .jsonPath("$.links.jiraBaseUrl").isEqualTo("https://jira.example.com")
+                .jsonPath("$.links.gitBaseUrl").isEqualTo("https://git.example.com")
+                .jsonPath("$.links.tcBaseUrl").isEqualTo("https://tc.example.com")
+                .jsonPath("$.links.dmsBaseUrl").isEqualTo("https://dms.example.com")
+        }
+    }
+
+    @SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = [
+            "management.server.port=0",
+            "portal.links.jira-base-url=",
+            "portal.links.git-base-url=",
+            "portal.links.tc-base-url=",
+            "portal.links.dms-base-url=",
+        ],
+    )
+    @AutoConfigureWebTestClient
+    @ActiveProfiles("test")
+    @Import(TestSecurityConfig::class, TestBuildPropertiesConfig::class)
+    inner class AllLinksEmpty {
+        @Autowired
+        lateinit var client: WebTestClient
+
+        @Test
+        fun `all four empty strings collapse to null in response`() {
+            client.get().uri("/portal/info").exchange()
+                .expectStatus().isOk
+                .expectBody()
+                .jsonPath("$.links.jiraBaseUrl").doesNotExist()
+                .jsonPath("$.links.gitBaseUrl").doesNotExist()
+                .jsonPath("$.links.tcBaseUrl").doesNotExist()
+                .jsonPath("$.links.dmsBaseUrl").doesNotExist()
+        }
+    }
+
+    @SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = [
+            "management.server.port=0",
+            "portal.links.jira-base-url=https://jira.example.com",
+            "portal.links.git-base-url=",
+            "portal.links.tc-base-url=",
+            "portal.links.dms-base-url=",
+        ],
+    )
+    @AutoConfigureWebTestClient
+    @ActiveProfiles("test")
+    @Import(TestSecurityConfig::class, TestBuildPropertiesConfig::class)
+    inner class MixedLinks {
+        @Autowired
+        lateinit var client: WebTestClient
+
+        @Test
+        fun `only jira configured returns jira non-null others null`() {
+            client.get().uri("/portal/info").exchange()
+                .expectStatus().isOk
+                .expectBody()
+                .jsonPath("$.links.jiraBaseUrl").isEqualTo("https://jira.example.com")
+                .jsonPath("$.links.gitBaseUrl").doesNotExist()
+                .jsonPath("$.links.tcBaseUrl").doesNotExist()
+                .jsonPath("$.links.dmsBaseUrl").doesNotExist()
+        }
+    }
+
     @TestConfiguration
     open class TestBuildPropertiesConfig {
         // BuildProperties is a final class, but its public Properties-based

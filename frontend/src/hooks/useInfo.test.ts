@@ -133,16 +133,17 @@ describe('useCrsInfo', () => {
 
 describe('usePortalInfo', () => {
   it('GETs ${BASE_URL}portal/info and parses the JSON body', async () => {
+    const fixture = { name: 'portal', version: '1.2.3', links: { jiraBaseUrl: null, gitBaseUrl: null, tcBaseUrl: null, dmsBaseUrl: null } }
     const mockFetch = vi
       .fn()
-      .mockResolvedValue(new Response(JSON.stringify({ name: 'portal', version: '1.2.3' }), { status: 200 }))
+      .mockResolvedValue(new Response(JSON.stringify(fixture), { status: 200 }))
     vi.stubGlobal('fetch', mockFetch)
 
     const { result } = renderHook(() => usePortalInfo(), { wrapper: makeWrapper() })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
     expect(mockFetch.mock.calls[0]![0]).toBe(`${import.meta.env.BASE_URL}portal/info`)
-    expect(result.current.data).toEqual({ name: 'portal', version: '1.2.3' })
+    expect(result.current.data).toEqual(fixture)
   })
 
   it('honors deployment sub-path BASE_URL', async () => {
@@ -151,7 +152,7 @@ describe('usePortalInfo', () => {
     const { usePortalInfo: freshHook } = await import('./useInfo')
     const mockFetch = vi
       .fn()
-      .mockResolvedValue(new Response(JSON.stringify({ name: 'portal', version: '1.2.3' }), { status: 200 }))
+      .mockResolvedValue(new Response(JSON.stringify({ name: 'portal', version: '1.2.3', links: { jiraBaseUrl: null, gitBaseUrl: null, tcBaseUrl: null, dmsBaseUrl: null } }), { status: 200 }))
     vi.stubGlobal('fetch', mockFetch)
 
     const { result } = renderHook(() => freshHook(), { wrapper: makeWrapper() })

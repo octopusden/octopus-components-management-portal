@@ -163,9 +163,17 @@ export interface FieldOverride {
   updatedAt: string | null
 }
 
+export interface PortalLinks {
+  jiraBaseUrl: string | null
+  gitBaseUrl: string | null
+  tcBaseUrl: string | null
+  dmsBaseUrl: string | null
+}
+
 export interface PortalInfo {
   name: string
   version: string
+  links: PortalLinks
 }
 
 export interface CrsInfo {

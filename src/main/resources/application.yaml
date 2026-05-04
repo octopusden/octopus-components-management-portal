@@ -46,6 +46,17 @@ auth-server:
   client-id:
   client-secret:
 
+# Link base URLs are runtime-config (not baked into the Vite bundle) so that
+# a single build can be deployed to multiple environments (prod, QA, staging)
+# with different external tool URLs. Unset vars produce empty strings, which
+# the controller collapses to null in the JSON response.
+portal:
+  links:
+    jira-base-url: ${PORTAL_LINKS_JIRA_BASE_URL:}
+    git-base-url: ${PORTAL_LINKS_GIT_BASE_URL:}
+    tc-base-url: ${PORTAL_LINKS_TC_BASE_URL:}
+    dms-base-url: ${PORTAL_LINKS_DMS_BASE_URL:}
+
 management:
   endpoints:
     web:

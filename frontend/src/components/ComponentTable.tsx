@@ -22,7 +22,15 @@ import { EmptyState } from './ui/empty-state'
 import { SkeletonTable } from './ui/skeleton-table'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip'
 import { cn } from '../lib/utils'
-import type { ComponentSummary } from '../lib/types'
+import type { ComponentSummary, PortalLinks } from '../lib/types'
+import { usePortalInfo } from '../hooks/useInfo'
+
+declare module '@tanstack/react-table' {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface TableMeta<TData> {
+    links?: PortalLinks | null
+  }
+}
 
 interface ComponentTableProps {
   data: ComponentSummary[]
@@ -157,14 +165,13 @@ const columns = [
   columnHelper.display({
     id: 'links',
     header: 'Links',
-    cell: ({ row }) => {
+    cell: ({ row, table }) => {
       const { name, jiraProjectKey, vcsPath } = row.original
-      // Read env per render so tests can mutate import.meta.env between
-      // cases (mirrors the ComponentDetailPage quick-link pattern).
-      const jiraBaseUrl = import.meta.env.VITE_JIRA_BASE_URL as string | undefined
-      const gitBaseUrl = import.meta.env.VITE_GIT_BASE_URL as string | undefined
-      const tcBaseUrl = import.meta.env.VITE_TC_BASE_URL as string | undefined
-      const dmsBaseUrl = import.meta.env.VITE_DMS_BASE_URL as string | undefined
+      const linksConfig = table.options.meta?.links
+      const jiraBaseUrl = linksConfig?.jiraBaseUrl ?? undefined
+      const gitBaseUrl = linksConfig?.gitBaseUrl ?? undefined
+      const tcBaseUrl = linksConfig?.tcBaseUrl ?? undefined
+      const dmsBaseUrl = linksConfig?.dmsBaseUrl ?? undefined
       const links: IconLinkProps[] = []
       if (jiraBaseUrl && jiraProjectKey) {
         links.push({
@@ -245,6 +252,7 @@ const columns = [
 
 export function ComponentTable({ data, isLoading }: ComponentTableProps) {
   const [sorting, setSorting] = useState<SortingState>([])
+  const { data: portalInfo } = usePortalInfo()
 
   const table = useReactTable({
     data,
@@ -254,6 +262,7 @@ export function ComponentTable({ data, isLoading }: ComponentTableProps) {
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     manualSorting: false,
+    meta: { links: portalInfo?.links },
   })
 
   if (isLoading) {
