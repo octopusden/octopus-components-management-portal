@@ -16,7 +16,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '../components/ui/dialog'
-import { GeneralTab, type GeneralFormValues } from '../components/editor/GeneralTab'
+import { GeneralTab, type GeneralFormValues, GENERAL_TAB_FIELDS } from '../components/editor/GeneralTab'
 import { BuildTab } from '../components/editor/BuildTab'
 import { VcsTab } from '../components/editor/VcsTab'
 import { DistributionTab } from '../components/editor/DistributionTab'
@@ -33,6 +33,7 @@ import type { ComponentDetail } from '../lib/types'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../lib/auth'
 import { useFieldConfigEntry } from '../hooks/useFieldConfig'
+import { parseServerFieldErrors } from '../lib/serverErrors'
 
 export type UpdateMutation = UseMutationResult<ComponentDetail, Error, ComponentUpdateRequest>
 
@@ -220,6 +221,21 @@ export function ComponentDetailPage() {
         const { title, description } = describeOptimisticConflict(latest)
         toast({ title, description, variant: 'destructive' })
         return
+      }
+      if (err instanceof ApiError && err.status === 400) {
+        const fieldErrors = parseServerFieldErrors(err.message)
+        let anyFieldMapped = false
+        for (const [field, message] of fieldErrors) {
+          // Only set errors for fields owned by GeneralTab; fields from other
+          // tabs (buildConfiguration, vcsSettings, …) arrive in the same 400
+          // but should not pollute GeneralTab's form state.
+          if ((GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(field)) {
+            form.setError(field as keyof GeneralFormValues, { type: 'server', message })
+            anyFieldMapped = true
+          }
+        }
+        if (anyFieldMapped) return
+        // No field mapped → fall through to generic toast so the error is still surfaced.
       }
       toast({
         title: 'Save failed',
