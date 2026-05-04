@@ -36,6 +36,7 @@ object PlaywrightContainer {
         viewerPassword: String,
         testClientId: String,
         testClientSecret: String,
+        testFilter: String? = null,
     ): GenericContainer<*> {
         check(frontendDir.toFile().isDirectory) { "frontend/ not found at $frontendDir" }
         val image = ImageFromDockerfile()
@@ -128,7 +129,10 @@ object PlaywrightContainer {
                 org.testcontainers.containers.startupcheck.OneShotStartupCheckStrategy()
                     .withTimeout(Duration.ofMinutes(10)),
             )
-            .withCommand("npx", "playwright", "test")
+            .withCommand(*buildList {
+                add("npx"); add("playwright"); add("test")
+                if (!testFilter.isNullOrBlank()) add(testFilter)
+            }.toTypedArray())
             .withLogConsumer(Slf4jLogConsumer(log))
     }
 }

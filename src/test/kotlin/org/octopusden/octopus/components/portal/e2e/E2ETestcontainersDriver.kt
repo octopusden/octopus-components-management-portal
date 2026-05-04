@@ -502,6 +502,7 @@ open class E2ETestcontainersDriver {
             viewerPassword = e2eViewerPassword,
             testClientId = KEYCLOAK_DIRECT_GRANT_CLIENT,
             testClientSecret = keycloakDirectGrantSecret,
+            testFilter = System.getProperty("e2e.testFilter")?.takeIf { it.isNotBlank() },
         )
         try {
             playwright.start()

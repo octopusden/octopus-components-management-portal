@@ -218,6 +218,8 @@ val e2eTest = tasks.register<Test>("e2eTest") {
     systemProperty("crs.version", project.property("crs.version") as String)
     systemProperty("keycloak.version", project.property("keycloak.version") as String)
     systemProperty("postgres.version", project.property("postgres.version") as String)
+    val e2eTestFilter = (project.findProperty("e2e.testFilter") as String?)?.takeIf { it.isNotBlank() }
+    if (e2eTestFilter != null) systemProperty("e2e.testFilter", e2eTestFilter)
     // Pass the registry knobs through verbatim — the driver resolves
     // priority. We deliberately do NOT bake a default here so the
     // registry hostname stays out of source; if neither env nor -P sets
