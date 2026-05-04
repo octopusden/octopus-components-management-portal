@@ -12,6 +12,7 @@ export interface ComponentSummary {
   buildSystem?: string | null
   jiraProjectKey?: string | null
   vcsPath?: string | null
+  labels?: string[]
 }
 
 export interface ComponentDetail {
@@ -127,6 +128,7 @@ export interface ComponentFilter {
    * `/components/meta/owners` for the autocomplete picker. SYS-035.
    */
   owner?: string
+  buildSystem?: string
 }
 
 export interface Page<T> {

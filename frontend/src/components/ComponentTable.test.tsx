@@ -117,6 +117,46 @@ describe('ComponentTable', () => {
     })
   })
 
+  describe('Wave 2 — Labels column', () => {
+    it('renders a Labels column header', () => {
+      renderTable([makeComponent()])
+      expect(screen.getByRole('columnheader', { name: 'Labels' })).toBeDefined()
+    })
+
+    it('renders em-dash when labels is undefined', () => {
+      renderTable([makeComponent()])
+      expect(cellForColumn('Labels').textContent).toContain('—')
+    })
+
+    it('renders em-dash when labels is an empty array', () => {
+      renderTable([makeComponent({ labels: [] })])
+      expect(cellForColumn('Labels').textContent).toContain('—')
+    })
+
+    it('renders a single label as a Badge chip', () => {
+      renderTable([makeComponent({ labels: ['feature'] })])
+      expect(screen.getByText('feature')).toBeDefined()
+    })
+
+    it('renders up to 3 labels without overflow badge', () => {
+      renderTable([makeComponent({ labels: ['a', 'b', 'c'] })])
+      expect(screen.getByText('a')).toBeDefined()
+      expect(screen.getByText('b')).toBeDefined()
+      expect(screen.getByText('c')).toBeDefined()
+      expect(screen.queryByText(/^\+/)).toBeNull()
+    })
+
+    it('renders +N overflow badge when more than 3 labels are present', () => {
+      renderTable([makeComponent({ labels: ['a', 'b', 'c', 'd'] })])
+      expect(screen.getByText('a')).toBeDefined()
+      expect(screen.getByText('b')).toBeDefined()
+      expect(screen.getByText('c')).toBeDefined()
+      expect(screen.getByText('+1')).toBeDefined()
+      // 'd' is in the tooltip content — not rendered as a standalone chip
+      expect(screen.queryByText('d')).toBeNull()
+    })
+  })
+
   describe('SYS-040 — Links column env-driven rendering', () => {
     const env = import.meta.env as Record<string, unknown>
 
