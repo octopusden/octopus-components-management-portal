@@ -129,10 +129,20 @@ object PlaywrightContainer {
                 org.testcontainers.containers.startupcheck.OneShotStartupCheckStrategy()
                     .withTimeout(Duration.ofMinutes(10)),
             )
-            .withCommand(*buildList {
-                add("npx"); add("playwright"); add("test")
-                if (!testFilter.isNullOrBlank()) add(testFilter)
-            }.toTypedArray())
+            .withCommand(*buildPlaywrightCommand(testFilter))
             .withLogConsumer(Slf4jLogConsumer(log))
     }
+}
+
+internal fun buildPlaywrightCommand(testFilter: String?): Array<String> {
+    // testFilter is documented as a spec-path arg; reject `-`-prefixed values
+    // so a typo can't silently switch playwright into option-mode (--grep,
+    // --project, --pass-with-no-tests, …) and change suite semantics.
+    require(testFilter == null || !testFilter.startsWith("-")) {
+        "e2e.testFilter must be a spec path, not a Playwright option (got '$testFilter')"
+    }
+    return buildList {
+        add("npx"); add("playwright"); add("test")
+        if (!testFilter.isNullOrBlank()) add(testFilter)
+    }.toTypedArray()
 }
