@@ -134,7 +134,15 @@ const columns = [
           {overflow.length > 0 && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Badge variant="outline" className="text-xs cursor-default">
+                {/* Badge is a <div>; make it keyboard-focusable so the tooltip
+                    is reachable without a mouse, and label it for SR users. */}
+                <Badge
+                  variant="outline"
+                  className="text-xs cursor-default focus:outline-none focus:ring-2 focus:ring-ring"
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`Show ${overflow.length} more label${overflow.length === 1 ? '' : 's'}`}
+                >
                   +{overflow.length}
                 </Badge>
               </TooltipTrigger>
