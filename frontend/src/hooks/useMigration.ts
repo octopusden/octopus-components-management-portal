@@ -31,7 +31,7 @@ function parseSameKindAttach<T>(err: ApiError): T | null {
   if (err.status !== 409) return null
   const parsed = (() => {
     try {
-      return JSON.parse(err.message) as unknown
+      return JSON.parse(err.rawBody) as unknown
     } catch {
       return null
     }
@@ -81,7 +81,7 @@ export function useMigrationStatus(options: MigrationStatusOptions = {}) {
  * The CRS endpoint returns 202 Accepted on a freshly-started job and 409 Conflict
  * if a migration is already RUNNING — the body shape is identical
  * (`MigrationJobResponse`) in both cases, the only thing that differs is the HTTP
- * status. The api wrapper turns any non-2xx into ApiError(status, body), so we
+ * status. The api wrapper turns any non-2xx into ApiError(status, displayMessage, rawBody), so we
  * intercept 409 here and resolve as success: the SPA should "attach" to the
  * in-flight job rather than render a destructive block under the button it just
  * clicked.
