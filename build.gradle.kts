@@ -1,5 +1,6 @@
 import com.github.gradle.node.npm.task.NpmTask
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.math.BigDecimal
 import java.time.Duration
 
 plugins {
@@ -8,10 +9,21 @@ plugins {
     id("com.github.node-gradle.node")
     id("io.github.gradle-nexus.publish-plugin")
     id("com.bmuschko.docker-spring-boot-application")
+    id("io.gitlab.arturbosch.detekt")
+    id("org.jlleitschuh.gradle.ktlint")
+    id("org.jetbrains.kotlinx.kover")
+    id("org.octopusden.octopus-quality")
     signing
     idea
     `maven-publish`
     jacoco
+}
+
+octopusQuality {
+    coverage {
+        minimumLineCoverage.set(BigDecimal("0.00"))
+        overallMinimum.set(BigDecimal("0.00"))
+    }
 }
 
 group = "org.octopusden.octopus.components.portal"
@@ -136,16 +148,8 @@ val npmTestCoverage = tasks.register<NpmTask>("npmTestCoverage") {
     npmCommand.set(listOf("run", "test:coverage"))
 }
 
-tasks.register("qualityStatic") {
-    dependsOn(npmLint, npmTypecheck)
-}
-
-tasks.register("qualityCoverage") {
-    dependsOn(npmTestCoverage)
-}
-
 tasks.named("check") {
-    dependsOn("qualityStatic", "qualityCoverage")
+    dependsOn(npmLint, npmTypecheck, npmTestCoverage)
 }
 
 val copyFrontendDist = tasks.register<Sync>("copyFrontendDist") {

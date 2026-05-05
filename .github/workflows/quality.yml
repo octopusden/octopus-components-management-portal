@@ -1,18 +1,15 @@
+# INTERNAL — triggered on push to main and manually; never on pull_request.
 name: Quality Gates
 
 on:
-  pull_request:
   push:
-    branches: [main]
+    branches: [ main ]
+  workflow_call:
   workflow_dispatch:
 
 jobs:
   quality:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v2.2.0
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v2.3.4
     with:
       java-version: '21'
-      static-reports-path: |
-        frontend/build/reports/eslint/**
-      coverage-reports-path: |
-        frontend/build/reports/coverage/**
-        frontend/build/test-results/**
+    secrets: inherit
