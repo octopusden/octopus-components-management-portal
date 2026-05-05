@@ -23,6 +23,10 @@ vi.mock('../hooks/use-toast', () => ({
 vi.mock('../components/AppFooter', () => ({
   AppFooter: () => React.createElement('footer', null, 'footer'),
 }))
+vi.mock('../hooks/useInfo', () => ({
+  usePortalConfig: vi.fn(),
+  useCrsInfo: vi.fn(),
+}))
 // Editor tabs — stub so only the header/action-area is tested here.
 // GeneralTab also exports GENERAL_TAB_FIELDS, which ComponentDetailPage imports
 // for the 400-error routing. importActual preserves real exports so any future
@@ -60,6 +64,9 @@ vi.mock('../components/editor/ComponentHistoryTab', () => ({
 
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useComponent, useUpdateComponent, useDeleteComponent } from '../hooks/useComponent'
+import { usePortalConfig } from '../hooks/useInfo'
+
+const mockedUsePortalConfig = vi.mocked(usePortalConfig)
 
 const mockedUseCurrentUser = vi.mocked(useCurrentUser)
 const mockedUseComponent = vi.mocked(useComponent)
@@ -173,9 +180,12 @@ function renderPage(component: ComponentDetail, user: User | null, opts: RenderP
 beforeEach(() => {
   vi.clearAllMocks()
   vi.unstubAllGlobals()
-  // Reset env vars
-  delete (import.meta.env as Record<string, unknown>).VITE_JIRA_BASE_URL
-  delete (import.meta.env as Record<string, unknown>).VITE_GIT_BASE_URL
+  mockedUsePortalConfig.mockReturnValue({
+    data: undefined,
+    isLoading: false,
+    isError: false,
+    error: null,
+  } as unknown as ReturnType<typeof usePortalConfig>)
 })
 
 describe('ComponentDetailPage — Archive / Unarchive buttons', () => {
@@ -283,8 +293,13 @@ describe('ComponentDetailPage — breadcrumb badges', () => {
 })
 
 describe('ComponentDetailPage — Jira/Git quick-links', () => {
-  it('(f) Jira link renders when VITE_JIRA_BASE_URL is set and projectKey exists', () => {
-    ;(import.meta.env as Record<string, unknown>).VITE_JIRA_BASE_URL = 'https://jira.example.com'
+  it('(f) Jira link renders when jiraBaseUrl is set and projectKey exists', () => {
+    mockedUsePortalConfig.mockReturnValue({
+      data: { links: { jiraBaseUrl: 'https://jira.example.com', gitBaseUrl: null, tcBaseUrl: null, dmsBaseUrl: null } },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof usePortalConfig>)
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(baseComponent, user)
     const link = screen.getByTitle('Jira: PROJ') as HTMLAnchorElement
@@ -292,14 +307,19 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
     expect(link.href).toContain('jira.example.com/browse/PROJ')
   })
 
-  it('(f) Jira link does NOT render when VITE_JIRA_BASE_URL is undefined', () => {
+  it('(f) Jira link does NOT render when jiraBaseUrl is null', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(baseComponent, user)
     expect(screen.queryByTitle(/jira/i)).toBeNull()
   })
 
   it('(f) Jira link does NOT render when projectKey is null', () => {
-    ;(import.meta.env as Record<string, unknown>).VITE_JIRA_BASE_URL = 'https://jira.example.com'
+    mockedUsePortalConfig.mockReturnValue({
+      data: { links: { jiraBaseUrl: 'https://jira.example.com', gitBaseUrl: null, tcBaseUrl: null, dmsBaseUrl: null } },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof usePortalConfig>)
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(
       { ...baseComponent, jiraComponentConfigs: [{ id: 'j1', projectKey: null, displayName: null, componentVersionFormat: null, technical: false, metadata: {} }] },
@@ -308,8 +328,13 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
     expect(screen.queryByTitle(/jira/i)).toBeNull()
   })
 
-  it('(f) Git link renders when VITE_GIT_BASE_URL is set and vcsPath exists', () => {
-    ;(import.meta.env as Record<string, unknown>).VITE_GIT_BASE_URL = 'https://git.example.com'
+  it('(f) Git link renders when gitBaseUrl is set and vcsPath exists', () => {
+    mockedUsePortalConfig.mockReturnValue({
+      data: { links: { jiraBaseUrl: null, gitBaseUrl: 'https://git.example.com', tcBaseUrl: null, dmsBaseUrl: null } },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof usePortalConfig>)
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(baseComponent, user)
     const link = screen.getByTitle('Git: org/repo') as HTMLAnchorElement
@@ -317,14 +342,19 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
     expect(link.href).toContain('git.example.com/org/repo')
   })
 
-  it('(f) Git link does NOT render when VITE_GIT_BASE_URL is undefined', () => {
+  it('(f) Git link does NOT render when gitBaseUrl is null', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(baseComponent, user)
     expect(screen.queryByTitle(/git:/i)).toBeNull()
   })
 
   it('(f) Git link does NOT render when vcsSettings is empty', () => {
-    ;(import.meta.env as Record<string, unknown>).VITE_GIT_BASE_URL = 'https://git.example.com'
+    mockedUsePortalConfig.mockReturnValue({
+      data: { links: { jiraBaseUrl: null, gitBaseUrl: 'https://git.example.com', tcBaseUrl: null, dmsBaseUrl: null } },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof usePortalConfig>)
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage({ ...baseComponent, vcsSettings: [] }, user)
     expect(screen.queryByTitle(/git:/i)).toBeNull()

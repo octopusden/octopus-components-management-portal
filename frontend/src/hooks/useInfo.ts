@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import type { CrsInfo, PortalInfo } from '../lib/types'
+import type { CrsInfo, PortalConfig, PortalInfo } from '../lib/types'
 
 // /portal/info and /rest/api/4/info are anonymous build-info endpoints used by
 // the footer. They MUST go through plain `fetch` rather than the shared
@@ -9,9 +9,12 @@ import type { CrsInfo, PortalInfo } from '../lib/types'
 //
 // URL construction mirrors api.ts:4 — `${BASE_URL}<path>` so deployments under
 // a sub-path (e.g. /components-management-portal/) reach the correct gateway.
-// Both endpoints are permitAll on the portal SecurityConfig:
-//   - /portal/info     → PortalInfoController (this app)
+// Anonymous endpoints on the portal SecurityConfig:
+//   - /portal/info     → PortalInfoController (this app) — name + version only
 //   - /rest/api/4/info → CRS, proxied through Spring Cloud Gateway TokenRelay
+//
+// Authenticated endpoint (falls through to default anyExchange().authenticated()):
+//   - /portal/links    → PortalInfoController — four base URLs for icon links
 
 async function fetchInfo<T>(url: string): Promise<T> {
   const response = await fetch(url, { credentials: 'include' })
@@ -42,6 +45,14 @@ export function usePortalInfo() {
   return useQuery<PortalInfo>({
     queryKey: ['info', 'portal'],
     queryFn: () => fetchInfo<PortalInfo>(`${import.meta.env.BASE_URL}portal/info`),
+    ...QUERY_OPTIONS,
+  })
+}
+
+export function usePortalConfig() {
+  return useQuery<PortalConfig>({
+    queryKey: ['config', 'portal'],
+    queryFn: () => fetchInfo<PortalConfig>(`${import.meta.env.BASE_URL}portal/links`),
     ...QUERY_OPTIONS,
   })
 }

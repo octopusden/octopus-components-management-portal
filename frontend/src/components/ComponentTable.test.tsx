@@ -1,8 +1,18 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import React from 'react'
 import { ComponentTable } from './ComponentTable'
-import type { ComponentSummary } from '../lib/types'
+import type { ComponentSummary, PortalLinks } from '../lib/types'
+
+vi.mock('../hooks/useInfo', () => ({
+  usePortalConfig: vi.fn(),
+  useCrsInfo: vi.fn(),
+}))
+
+import { usePortalConfig } from '../hooks/useInfo'
+const mockedUsePortalConfig = vi.mocked(usePortalConfig)
 
 /**
  * Helper: get the body cell that lines up with a header by display name.
@@ -34,15 +44,36 @@ function makeComponent(overrides: Partial<ComponentSummary> = {}): ComponentSumm
   }
 }
 
+function mockLinks(links: Partial<PortalLinks> | null = null) {
+  const resolved = links
+    ? { jiraBaseUrl: null, gitBaseUrl: null, tcBaseUrl: null, dmsBaseUrl: null, ...links }
+    : null
+  mockedUsePortalConfig.mockReturnValue({
+    data: resolved ? { links: resolved } : undefined,
+    isLoading: false,
+    isError: false,
+    error: null,
+  } as unknown as ReturnType<typeof usePortalConfig>)
+}
+
 function renderTable(data: ComponentSummary[]) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
-    <MemoryRouter>
-      <ComponentTable data={data} isLoading={false} />
-    </MemoryRouter>,
+    React.createElement(
+      QueryClientProvider,
+      { client },
+      <MemoryRouter>
+        <ComponentTable data={data} isLoading={false} />
+      </MemoryRouter>,
+    ),
   )
 }
 
 describe('ComponentTable', () => {
+  beforeEach(() => {
+    mockLinks(null)
+  })
+
   it('renders the Name column header', () => {
     renderTable([makeComponent()])
     expect(screen.getByRole('button', { name: /name/i })).toBeDefined()
@@ -157,66 +188,52 @@ describe('ComponentTable', () => {
     })
   })
 
-  describe('SYS-040 — Links column env-driven rendering', () => {
-    const env = import.meta.env as Record<string, unknown>
-
-    beforeEach(() => {
-      delete env.VITE_JIRA_BASE_URL
-      delete env.VITE_GIT_BASE_URL
-      delete env.VITE_TC_BASE_URL
-      delete env.VITE_DMS_BASE_URL
-    })
-
-    afterEach(() => {
-      delete env.VITE_JIRA_BASE_URL
-      delete env.VITE_GIT_BASE_URL
-      delete env.VITE_TC_BASE_URL
-      delete env.VITE_DMS_BASE_URL
-    })
-
-    it('renders Jira icon when VITE_JIRA_BASE_URL is set and jiraProjectKey present', () => {
-      env.VITE_JIRA_BASE_URL = 'https://jira.example.com'
+  describe('SYS-040 — Links column runtime-config rendering', () => {
+    it('renders Jira icon when jiraBaseUrl is set and jiraProjectKey present', () => {
+      mockLinks({ jiraBaseUrl: 'https://jira.example.com' })
       renderTable([makeComponent({ jiraProjectKey: 'PROJ' })])
       const link = screen.getByRole('link', { name: /Jira: PROJ/i })
       expect(link).toBeDefined()
       expect((link as HTMLAnchorElement).href).toBe('https://jira.example.com/browse/PROJ')
     })
 
-    it('does NOT render Jira icon when env is missing even if jiraProjectKey is present', () => {
+    it('does NOT render Jira icon when jiraBaseUrl is null even if jiraProjectKey is present', () => {
+      mockLinks(null)
       renderTable([makeComponent({ jiraProjectKey: 'PROJ' })])
       expect(screen.queryByRole('link', { name: /Jira/i })).toBeNull()
     })
 
-    it('does NOT render Jira icon when env is set but jiraProjectKey is null', () => {
-      env.VITE_JIRA_BASE_URL = 'https://jira.example.com'
+    it('does NOT render Jira icon when jiraBaseUrl is set but jiraProjectKey is null', () => {
+      mockLinks({ jiraBaseUrl: 'https://jira.example.com' })
       renderTable([makeComponent({ jiraProjectKey: null })])
       expect(screen.queryByRole('link', { name: /Jira/i })).toBeNull()
     })
 
-    it('renders Git icon when VITE_GIT_BASE_URL and vcsPath present', () => {
-      env.VITE_GIT_BASE_URL = 'https://git.example.com'
+    it('renders Git icon when gitBaseUrl and vcsPath present', () => {
+      mockLinks({ gitBaseUrl: 'https://git.example.com' })
       renderTable([makeComponent({ vcsPath: 'org/repo' })])
       const link = screen.getByRole('link', { name: /Git: org\/repo/i })
       expect(link).toBeDefined()
       expect((link as HTMLAnchorElement).href).toBe('https://git.example.com/org/repo')
     })
 
-    it('renders TeamCity icon based solely on env (uses component name)', () => {
-      env.VITE_TC_BASE_URL = 'https://tc.example.com'
+    it('renders TeamCity icon based solely on tcBaseUrl (uses component name)', () => {
+      mockLinks({ tcBaseUrl: 'https://tc.example.com' })
       renderTable([makeComponent({ name: 'alpha' })])
       const link = screen.getByRole('link', { name: /TeamCity: alpha/i })
       expect(link).toBeDefined()
       expect((link as HTMLAnchorElement).href).toBe('https://tc.example.com/alpha')
     })
 
-    it('renders DMS icon based solely on env (uses component name)', () => {
-      env.VITE_DMS_BASE_URL = 'https://dms.example.com'
+    it('renders DMS icon based solely on dmsBaseUrl (uses component name)', () => {
+      mockLinks({ dmsBaseUrl: 'https://dms.example.com' })
       renderTable([makeComponent({ name: 'alpha' })])
       const link = screen.getByRole('link', { name: /DMS: alpha/i })
       expect(link).toBeDefined()
     })
 
-    it('renders em-dash when no env vars are set', () => {
+    it('renders em-dash when no links are configured', () => {
+      mockLinks(null)
       renderTable([makeComponent()])
       // Header-driven cell lookup pinpoints the Links column.
       // Belt-and-suspenders: assert no anchor in the row either, in

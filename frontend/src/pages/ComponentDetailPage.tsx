@@ -34,6 +34,7 @@ import { useCurrentUser } from '../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../lib/auth'
 import { useFieldConfigEntry } from '../hooks/useFieldConfig'
 import { parseServerFieldErrors } from '../lib/serverErrors'
+import { usePortalConfig } from '../hooks/useInfo'
 
 export type UpdateMutation = UseMutationResult<ComponentDetail, Error, ComponentUpdateRequest>
 
@@ -83,8 +84,9 @@ export function ComponentDetailPage() {
   const fieldConfigLoading =
     displayNameFcLoading || componentOwnerFcLoading || systemFcLoading || clientCodeFcLoading
 
-  const jiraBaseUrl = import.meta.env.VITE_JIRA_BASE_URL as string | undefined
-  const gitBaseUrl = import.meta.env.VITE_GIT_BASE_URL as string | undefined
+  const { data: portalConfig } = usePortalConfig()
+  const jiraBaseUrl = portalConfig?.links.jiraBaseUrl ?? undefined
+  const gitBaseUrl = portalConfig?.links.gitBaseUrl ?? undefined
 
   const form = useForm<GeneralFormValues>({
     defaultValues: {

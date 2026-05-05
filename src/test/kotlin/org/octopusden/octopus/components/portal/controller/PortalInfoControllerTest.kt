@@ -56,6 +56,17 @@ class PortalInfoControllerTest {
             .jsonPath("$.version").isEqualTo(EXPECTED_VERSION)
     }
 
+    @Test
+    fun `anonymous GET portal info does not include links`() {
+        webTestClient
+            .get()
+            .uri("/portal/info")
+            .exchange()
+            .expectStatus().isOk
+            .expectBody()
+            .jsonPath("$.links").doesNotExist()
+    }
+
     @TestConfiguration
     open class TestBuildPropertiesConfig {
         // BuildProperties is a final class, but its public Properties-based
