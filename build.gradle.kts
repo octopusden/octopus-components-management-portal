@@ -26,6 +26,17 @@ octopusQuality {
     }
 }
 
+kover {
+    currentProject {
+        instrumentation {
+            // e2eTest spins up Testcontainers (Postgres + Keycloak + CRS) and requires
+            // a private Docker registry — never runnable in a standard CI sandbox.
+            // Excluding it prevents Kover from wiring e2eTest into the check lifecycle.
+            disabledForTestTasks.add("e2eTest")
+        }
+    }
+}
+
 group = "org.octopusden.octopus.components.portal"
 
 java {
