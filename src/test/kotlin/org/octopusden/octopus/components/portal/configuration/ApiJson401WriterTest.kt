@@ -8,11 +8,14 @@ import org.springframework.http.MediaType
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest
 import org.springframework.mock.web.server.MockServerWebExchange
 
-// Locks in the wire-level JSON envelope that the SPA's frontend/src/lib/api.ts reads.
-// The shape `{ "error": "<message>" }` and the constant reason texts must stay stable —
-// both auth-failure paths (anonymous via SecurityConfig entry point, and refresh-failed
-// via ApiClientAuthorizationFailureFilter) share this writer, so a regression here
-// affects both code paths simultaneously.
+// Locks in the JSON envelope shape and reason texts. The SPA's
+// `frontend/src/lib/api.ts` currently branches only on `response.status === 401` and
+// does not inspect the body — a body change is NOT load-bearing for the login-bounce
+// flow today. The reason this writer matters anyway: both auth-failure paths (anonymous
+// via SecurityConfig entry point, refresh-failed via ApiClientAuthorizationFailureFilter)
+// share it, so the response shape across those paths stays consistent for any client
+// that does parse the body (cURL/scripts, future SPA UX surfacing the reason, log
+// scrapers, integration tests with shared assertions).
 class ApiJson401WriterTest {
     private val writer = ApiJson401Writer(ObjectMapper())
 

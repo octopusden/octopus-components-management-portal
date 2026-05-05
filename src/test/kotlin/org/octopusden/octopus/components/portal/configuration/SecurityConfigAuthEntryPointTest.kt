@@ -1,6 +1,6 @@
 package org.octopusden.octopus.components.portal.configuration
 
-import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
@@ -8,7 +8,6 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
-import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.reactive.server.WebTestClient
@@ -22,10 +21,11 @@ import org.springframework.test.web.reactive.server.WebTestClient
  * navigations get the OIDC 302 they expect for full-page login.
  *
  * The other auth-failure path (authenticated session whose access_token cannot be
- * refreshed -> [ClientAuthorizationRequiredException]) is covered separately in
- * [ApiClientAuthorizationFailureFilterTest]. Standing up an SCG TokenRelay route
- * just to provoke that exception inside an integration test is more setup than
- * payoff; the unit test gives deterministic coverage of the same code path.
+ * refreshed -> [ClientAuthorizationRequiredException]) is covered in two places:
+ * [ApiClientAuthorizationFailureFilterTest] for the filter logic in isolation, and
+ * [ClientAuthorizationRequiredIntegrationTest] for the load-bearing piece — that the
+ * filter actually sits at the right position in the real Spring Security WebFilter
+ * chain so the redirect filter never catches the exception first.
  */
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -61,16 +61,26 @@ class SecurityConfigAuthEntryPointTest {
         @Test
         fun `permitAll proxied rest info is not blocked by auth chain`() {
             // /rest/api/4/info is permitAll on the portal side and proxied to CRS.
-            // No CRS runs in the test fixture, so SCG will return a 5xx gateway error;
-            // the only invariant we assert is that the security chain neither answers
-            // 401 nor 302-bounces to OIDC.
-            val status =
+            // No CRS runs in the test fixture, so SCG should return a 5xx gateway error
+            // (connection refused); if a fixture eventually stands up CRS the upstream
+            // can return 2xx instead. Either is "request actually reached the gateway
+            // route". We tighten the assertion beyond "not 401, not 302" so a future
+            // routing/handler regression that 404s the path or returns SPA HTML cannot
+            // silently pass: status must be 2xx or 5xx, AND no Location header pointing
+            // back at the OIDC entry point can be set.
+            val result =
                 webTestClient.get().uri("/rest/api/4/info")
                     .exchange()
                     .returnResult(Void::class.java)
-                    .status
-            assertNotEquals(HttpStatus.UNAUTHORIZED, status)
-            assertNotEquals(HttpStatus.FOUND, status)
+            val status = result.status
+            assertTrue(
+                status.is2xxSuccessful || status.is5xxServerError,
+                "expected proxied response (5xx if no CRS upstream, 2xx if up), got $status",
+            )
+            assertNull(
+                result.responseHeaders.getFirst("Location"),
+                "permitAll path must not redirect anywhere",
+            )
         }
 
         @Test
