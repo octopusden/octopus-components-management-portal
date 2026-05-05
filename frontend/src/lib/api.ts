@@ -78,8 +78,11 @@ async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
     let message = errorBody || response.statusText
     try {
       const parsed: unknown = JSON.parse(errorBody)
-      if (parsed !== null && typeof parsed === 'object' && 'message' in parsed && typeof (parsed as Record<string, unknown>).message === 'string') {
-        message = (parsed as { message: string }).message
+      if (parsed !== null && typeof parsed === 'object') {
+        const obj = parsed as Record<string, unknown>
+        // CRS uses `errorMessage`; Spring Boot default uses `message`.
+        const extracted = obj['errorMessage'] ?? obj['message']
+        if (typeof extracted === 'string') message = extracted
       }
     } catch {
       // not JSON — use raw body as-is
