@@ -344,7 +344,8 @@ export function ComponentDetailPage() {
               {component.buildConfigurations[0]?.buildSystem && (
                 <Badge variant="outline">{component.buildConfigurations[0].buildSystem}</Badge>
               )}
-              {/* Quick-links: Jira and Git */}
+              {/* Quick-links: Jira and Git. aria-label mirrors the title so
+                  screen readers announce the icon-only link's destination. */}
               {jiraBaseUrl && component.jiraComponentConfigs[0]?.projectKey && (
                 <a
                   href={`${jiraBaseUrl}/browse/${component.jiraComponentConfigs[0].projectKey}`}
@@ -352,6 +353,7 @@ export function ComponentDetailPage() {
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
                   title={`Jira: ${component.jiraComponentConfigs[0].projectKey}`}
+                  aria-label={`Jira: ${component.jiraComponentConfigs[0].projectKey}`}
                 >
                   <ExternalLink className="h-4 w-4" />
                 </a>
@@ -371,6 +373,7 @@ export function ComponentDetailPage() {
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
                     title={`Git: ${vcsPath}`}
+                    aria-label={`Git: ${vcsPath}`}
                   >
                     <GitBranch className="h-4 w-4" />
                   </a>

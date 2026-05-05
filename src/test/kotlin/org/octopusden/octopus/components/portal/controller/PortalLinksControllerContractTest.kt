@@ -33,13 +33,17 @@ class PortalLinksControllerContractTest {
         mapper.readTree(Files.readString(Paths.get("frontend", "src", "test-fixtures", name)))
 
     private fun fetchBody(client: WebTestClient): JsonNode {
+        // expectBody().returnResult() collects every Flux chunk into one
+        // ByteArray; blockFirst() on returnResult(ByteArray::class.java) only
+        // sees the first chunk and would silently parse a truncated JSON for
+        // any response large enough to be split.
         val bytes = client.get().uri("/portal/links")
             .exchange()
             .expectStatus().isOk
             .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
-            .returnResult(ByteArray::class.java)
-            .responseBody
-            .blockFirst()!!
+            .expectBody()
+            .returnResult()
+            .responseBodyContent!!
         return mapper.readTree(bytes)
     }
 
