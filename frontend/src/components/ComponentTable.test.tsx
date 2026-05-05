@@ -195,6 +195,7 @@ describe('ComponentTable', () => {
       const link = screen.getByRole('link', { name: /Jira: PROJ/i })
       expect(link).toBeDefined()
       expect((link as HTMLAnchorElement).href).toBe('https://jira.example.com/browse/PROJ')
+      expect(within(link).getByTestId('brand-icon-jira')).toBeDefined()
     })
 
     it('does NOT render Jira icon when jiraBaseUrl is null even if jiraProjectKey is present', () => {
@@ -209,14 +210,17 @@ describe('ComponentTable', () => {
       expect(screen.queryByRole('link', { name: /Jira/i })).toBeNull()
     })
 
-    it('renders Git icon as Bitbucket-Server browser URL (vcsPath split on first slash)', () => {
+    it('renders Bitbucket icon + browser URL (vcsPath split on first slash)', () => {
       mockLinks({ gitBaseUrl: 'https://git.example.com' })
       renderTable([makeComponent({ vcsPath: 'CREG/components-registry' })])
-      const link = screen.getByRole('link', { name: /Git: CREG\/components-registry/i })
+      const link = screen.getByRole('link', { name: /Bitbucket: CREG\/components-registry/i })
       expect(link).toBeDefined()
       expect((link as HTMLAnchorElement).href).toBe(
         'https://git.example.com/projects/CREG/repos/components-registry',
       )
+      // Pin the brand icon — without this assertion the visual mockup match
+      // could regress to a generic glyph without a test failure.
+      expect(within(link).getByTestId('brand-icon-bitbucket')).toBeDefined()
     })
 
     it('hides Git icon when vcsPath has no slash (cannot derive project key + repo)', () => {

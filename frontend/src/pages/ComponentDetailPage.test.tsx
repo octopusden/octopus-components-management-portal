@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
@@ -337,16 +337,18 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
     } as unknown as ReturnType<typeof usePortalLinks>)
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(baseComponent, user)
-    const link = screen.getByTitle('Git: org/repo') as HTMLAnchorElement
+    const link = screen.getByTitle('Bitbucket: org/repo') as HTMLAnchorElement
     expect(link).toBeDefined()
     // Bitbucket-Server browser URL: vcsPath "org/repo" → /projects/org/repos/repo
     expect(link.href).toBe('https://git.example.com/projects/org/repos/repo')
+    // Pin the brand icon — see ComponentTable.test.tsx for rationale.
+    expect(within(link).getByTestId('brand-icon-bitbucket')).toBeDefined()
   })
 
-  it('(f) Git link does NOT render when gitBaseUrl is null', () => {
+  it('(f) Bitbucket link does NOT render when gitBaseUrl is null', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(baseComponent, user)
-    expect(screen.queryByTitle(/git:/i)).toBeNull()
+    expect(screen.queryByTitle(/bitbucket:/i)).toBeNull()
   })
 
   it('(f) Git link does NOT render when vcsSettings is empty', () => {
@@ -358,7 +360,7 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
     } as unknown as ReturnType<typeof usePortalLinks>)
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage({ ...baseComponent, vcsSettings: [] }, user)
-    expect(screen.queryByTitle(/git:/i)).toBeNull()
+    expect(screen.queryByTitle(/bitbucket:/i)).toBeNull()
   })
 })
 

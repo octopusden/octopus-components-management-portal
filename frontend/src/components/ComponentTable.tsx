@@ -7,7 +7,8 @@ import {
   createColumnHelper,
   type SortingState,
 } from '@tanstack/react-table'
-import { ArrowUpDown, ArrowUp, ArrowDown, Bug, GitBranch, Database } from 'lucide-react'
+import { ArrowUpDown, ArrowUp, ArrowDown, Package } from 'lucide-react'
+import { JiraIcon, BitbucketIcon } from './ui/icons/brand-icons'
 import { useState } from 'react'
 import {
   Table,
@@ -66,7 +67,11 @@ function IconLink({ href, label, icon: Icon }: IconLinkProps) {
       rel="noopener noreferrer"
       title={label}
       aria-label={label}
-      className="text-muted-foreground hover:text-foreground transition-colors"
+      // Brand-color SVGs (Jira/Bitbucket/TC) keep their fill across themes,
+      // so `hover:text-foreground` produced no visible change. Mirror the
+      // prototype's affordance with opacity instead — works uniformly for
+      // brand icons and the generic Package/DMS glyph.
+      className="text-muted-foreground hover:opacity-80 transition-opacity"
     >
       <Icon className="h-4 w-4" />
     </a>
@@ -177,7 +182,7 @@ const columns = [
         links.push({
           href: `${jiraBaseUrl}/browse/${jiraProjectKey}`,
           label: `Jira: ${jiraProjectKey}`,
-          icon: Bug,
+          icon: JiraIcon,
         })
       }
       if (gitBaseUrl && vcsPath) {
@@ -190,8 +195,8 @@ const columns = [
           const repoName = vcsPath.slice(slashIdx + 1)
           links.push({
             href: `${gitBaseUrl}/projects/${encodeURIComponent(projectKey)}/repos/${encodeURIComponent(repoName)}`,
-            label: `Git: ${vcsPath}`,
-            icon: GitBranch,
+            label: `Bitbucket: ${vcsPath}`,
+            icon: BitbucketIcon,
           })
         }
       }
@@ -206,7 +211,7 @@ const columns = [
         links.push({
           href: `${dmsBaseUrl}/?component=${encodeURIComponent(name)}`,
           label: `DMS: ${name}`,
-          icon: Database,
+          icon: Package,
         })
       }
       if (links.length === 0) return <span className="text-muted-foreground">—</span>
