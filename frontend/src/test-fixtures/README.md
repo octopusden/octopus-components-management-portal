@@ -14,6 +14,12 @@ the contract drift before it reaches an E2E build.
 
 ## Files
 
-- `portal-links.contract.json` — `/portal/links` response shape. Backend
-  contract: `PortalLinksControllerContractTest.kt`. Frontend contract:
-  `useInfo.test.ts` (`'contract:'`-prefixed cases).
+- `portal-links.contract.json` — `/portal/links` happy-path response with all
+  four URLs configured.
+- `portal-links.empty.contract.json` — `/portal/links` response when no
+  `PORTAL_LINKS_*_BASE_URL` env vars are set: Jackson omits the null fields,
+  so the body is `{}`. Frontend code must treat each field as `undefined`-
+  capable (not just `string | null`).
+
+Both files drive `PortalLinksControllerContractTest.kt` (backend) and the
+`'contract:'`-prefixed cases in `useInfo.test.ts` (frontend).

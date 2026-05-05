@@ -164,13 +164,16 @@ export interface FieldOverride {
 }
 
 // /portal/links returns the LinksResponse Kotlin data class directly — flat
-// JSON, not wrapped in a `links` envelope. Kept identical to PortalInfo's
-// flat shape so the contract is consistent across portal endpoints.
+// JSON, not wrapped in a `links` envelope. Each key is optional because
+// Jackson omits unconfigured (null) properties from the response: a portal
+// with no PORTAL_LINKS_*_BASE_URL env vars set returns an empty `{}`. Code
+// reading these fields must tolerate `undefined` (key absent) AND `null`
+// (key present with null value, possible if the serializer config changes).
 export interface PortalLinks {
-  jiraBaseUrl: string | null
-  gitBaseUrl: string | null
-  tcBaseUrl: string | null
-  dmsBaseUrl: string | null
+  jiraBaseUrl?: string | null
+  gitBaseUrl?: string | null
+  tcBaseUrl?: string | null
+  dmsBaseUrl?: string | null
 }
 
 export interface PortalInfo {

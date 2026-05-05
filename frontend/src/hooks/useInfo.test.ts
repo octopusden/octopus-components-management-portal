@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 import { useCrsInfo, usePortalLinks, usePortalInfo } from './useInfo'
 import portalLinksContract from '../test-fixtures/portal-links.contract.json'
+import portalLinksEmptyContract from '../test-fixtures/portal-links.empty.contract.json'
 
 // useInfo deliberately does NOT use the shared api wrapper from src/lib/api.ts.
 // `api` redirects to /oauth2/authorization/<id> on 401, which is the right
@@ -218,9 +219,9 @@ describe('usePortalLinks', () => {
   })
 
   // Contract guard against backend/frontend shape drift.
-  // The fixture in src/test-fixtures/portal-links.contract.json is also read by
-  // PortalLinksControllerContractTest on the Kotlin side to verify Spring's
-  // serialized LinksResponse matches it byte-for-byte. If the frontend reverts
+  // The fixtures in src/test-fixtures/portal-links*.contract.json are also read
+  // by PortalLinksControllerContractTest on the Kotlin side to verify Spring's
+  // serialized LinksResponse matches them byte-for-byte. If the frontend reverts
   // to a nested `{ links: { ... } }` envelope, these direct flat-key assertions
   // fail; if Spring starts wrapping the DTO, the backend test fails first.
   it('contract: flat /portal/links JSON populates the hook directly (no envelope)', async () => {
@@ -238,5 +239,29 @@ describe('usePortalLinks', () => {
     expect(result.current.data?.gitBaseUrl).toBe(portalLinksContract.gitBaseUrl)
     expect(result.current.data?.tcBaseUrl).toBe(portalLinksContract.tcBaseUrl)
     expect(result.current.data?.dmsBaseUrl).toBe(portalLinksContract.dmsBaseUrl)
+    // Reading 'links' on the data must yield undefined — guards against a future
+    // type/access regression that re-introduces the nested envelope shape.
+    expect((result.current.data as unknown as { links?: unknown })?.links).toBeUndefined()
+  })
+
+  // The portal serves `{}` when no PORTAL_LINKS_*_BASE_URL env vars are set —
+  // Jackson omits null properties. Frontend code must treat each key as
+  // possibly absent, not just null. PortalLinksControllerContractTest's
+  // NoUrlsConfigured case binds the same fixture on the Kotlin side.
+  it('contract: empty /portal/links body leaves all four keys undefined', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(portalLinksEmptyContract), { status: 200 }),
+      ),
+    )
+
+    const { result } = renderHook(() => usePortalLinks(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(result.current.data?.jiraBaseUrl).toBeUndefined()
+    expect(result.current.data?.gitBaseUrl).toBeUndefined()
+    expect(result.current.data?.tcBaseUrl).toBeUndefined()
+    expect(result.current.data?.dmsBaseUrl).toBeUndefined()
   })
 })

@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.portal.controller
 
+import com.fasterxml.jackson.annotation.JsonInclude
 import org.octopusden.octopus.components.portal.configuration.PortalLinksProperties
 import org.springframework.boot.info.BuildProperties
 import org.springframework.web.bind.annotation.GetMapping
@@ -32,6 +33,11 @@ class PortalInfoController(
         val version: String,
     )
 
+    // Omit null fields so a portal with no PORTAL_LINKS_*_BASE_URL env vars
+    // configured returns `{}` rather than four explicit null entries — the
+    // body is then a clean signal that nothing is set, and frontend code can
+    // treat the keys as absent (PortalLinks marks each as optional).
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     data class LinksResponse(
         val jiraBaseUrl: String?,
         val gitBaseUrl: String?,

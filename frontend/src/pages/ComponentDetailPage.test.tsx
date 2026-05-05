@@ -339,7 +339,8 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
     renderPage(baseComponent, user)
     const link = screen.getByTitle('Git: org/repo') as HTMLAnchorElement
     expect(link).toBeDefined()
-    expect(link.href).toContain('git.example.com/org/repo')
+    // Bitbucket-Server browser URL: vcsPath "org/repo" → /projects/org/repos/repo
+    expect(link.href).toBe('https://git.example.com/projects/org/repos/repo')
   })
 
   it('(f) Git link does NOT render when gitBaseUrl is null', () => {
