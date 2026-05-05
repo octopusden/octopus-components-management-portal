@@ -173,6 +173,9 @@ export interface PortalLinks {
 export interface PortalInfo {
   name: string
   version: string
+}
+
+export interface PortalConfig {
   links: PortalLinks
 }
 

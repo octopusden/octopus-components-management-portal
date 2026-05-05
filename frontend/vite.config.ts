@@ -81,6 +81,14 @@ export default defineConfig({
         changeOrigin: true,
         cookieDomainRewrite: 'localhost',
       },
+      // Forwards /portal/info (footer pre-login) and /portal/links (authenticated
+      // config) to the Spring gateway. Also fixes the pre-existing AppFooter
+      // "no version" dev-mode degradation.
+      '/portal': {
+        target: 'http://localhost:8090',
+        changeOrigin: true,
+        cookieDomainRewrite: 'localhost',
+      },
     },
   },
   build: {

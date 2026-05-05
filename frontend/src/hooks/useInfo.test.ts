@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
-import { useCrsInfo, usePortalInfo } from './useInfo'
+import { useCrsInfo, usePortalConfig, usePortalInfo } from './useInfo'
 
 // useInfo deliberately does NOT use the shared api wrapper from src/lib/api.ts.
 // `api` redirects to /oauth2/authorization/<id> on 401, which is the right
@@ -133,7 +133,7 @@ describe('useCrsInfo', () => {
 
 describe('usePortalInfo', () => {
   it('GETs ${BASE_URL}portal/info and parses the JSON body', async () => {
-    const fixture = { name: 'portal', version: '1.2.3', links: { jiraBaseUrl: null, gitBaseUrl: null, tcBaseUrl: null, dmsBaseUrl: null } }
+    const fixture = { name: 'portal', version: '1.2.3' }
     const mockFetch = vi
       .fn()
       .mockResolvedValue(new Response(JSON.stringify(fixture), { status: 200 }))
@@ -152,7 +152,7 @@ describe('usePortalInfo', () => {
     const { usePortalInfo: freshHook } = await import('./useInfo')
     const mockFetch = vi
       .fn()
-      .mockResolvedValue(new Response(JSON.stringify({ name: 'portal', version: '1.2.3', links: { jiraBaseUrl: null, gitBaseUrl: null, tcBaseUrl: null, dmsBaseUrl: null } }), { status: 200 }))
+      .mockResolvedValue(new Response(JSON.stringify({ name: 'portal', version: '1.2.3' }), { status: 200 }))
     vi.stubGlobal('fetch', mockFetch)
 
     const { result } = renderHook(() => freshHook(), { wrapper: makeWrapper() })
@@ -168,6 +168,49 @@ describe('usePortalInfo', () => {
     )
 
     const { result } = renderHook(() => usePortalInfo(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.isError).toBe(true))
+
+    expect(assignSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe('usePortalConfig', () => {
+  it('GETs ${BASE_URL}portal/links and parses the JSON body', async () => {
+    const fixture = { links: { jiraBaseUrl: 'https://jira.example.com', gitBaseUrl: null, tcBaseUrl: null, dmsBaseUrl: null } }
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify(fixture), { status: 200 }))
+    vi.stubGlobal('fetch', mockFetch)
+
+    const { result } = renderHook(() => usePortalConfig(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(mockFetch.mock.calls[0]![0]).toBe(`${import.meta.env.BASE_URL}portal/links`)
+    expect(result.current.data).toEqual(fixture)
+  })
+
+  it('honors deployment sub-path BASE_URL', async () => {
+    vi.stubEnv('BASE_URL', '/components-management-portal/')
+    vi.resetModules()
+    const { usePortalConfig: freshHook } = await import('./useInfo')
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ links: { jiraBaseUrl: null, gitBaseUrl: null, tcBaseUrl: null, dmsBaseUrl: null } }), { status: 200 }))
+    vi.stubGlobal('fetch', mockFetch)
+
+    const { result } = renderHook(() => freshHook(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(mockFetch.mock.calls[0]![0]).toBe('/components-management-portal/portal/links')
+  })
+
+  it('5xx surfaces as isError without redirecting to OIDC', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response('boom', { status: 503 })),
+    )
+
+    const { result } = renderHook(() => usePortalConfig(), { wrapper: makeWrapper() })
     await waitFor(() => expect(result.current.isError).toBe(true))
 
     expect(assignSpy).not.toHaveBeenCalled()

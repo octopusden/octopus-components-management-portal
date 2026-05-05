@@ -16,19 +16,20 @@ class PortalInfoController(
     fun info(): InfoResponse = InfoResponse(
         name = buildProperties.name,
         version = buildProperties.version,
-        links = LinksResponse(
-            // empty-string yaml binding collapses to null so unset vars produce JSON null
-            jiraBaseUrl = linksProperties.jiraBaseUrl?.takeIf(String::isNotBlank),
-            gitBaseUrl = linksProperties.gitBaseUrl?.takeIf(String::isNotBlank),
-            tcBaseUrl = linksProperties.tcBaseUrl?.takeIf(String::isNotBlank),
-            dmsBaseUrl = linksProperties.dmsBaseUrl?.takeIf(String::isNotBlank),
-        ),
+    )
+
+    @GetMapping("/links")
+    fun links(): LinksResponse = LinksResponse(
+        // empty-string yaml binding collapses to null so unset vars produce JSON null
+        jiraBaseUrl = linksProperties.jiraBaseUrl?.takeIf(String::isNotBlank),
+        gitBaseUrl = linksProperties.gitBaseUrl?.takeIf(String::isNotBlank),
+        tcBaseUrl = linksProperties.tcBaseUrl?.takeIf(String::isNotBlank),
+        dmsBaseUrl = linksProperties.dmsBaseUrl?.takeIf(String::isNotBlank),
     )
 
     data class InfoResponse(
         val name: String,
         val version: String,
-        val links: LinksResponse,
     )
 
     data class LinksResponse(

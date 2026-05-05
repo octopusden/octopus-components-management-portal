@@ -7,12 +7,12 @@ import { ComponentTable } from './ComponentTable'
 import type { ComponentSummary, PortalLinks } from '../lib/types'
 
 vi.mock('../hooks/useInfo', () => ({
-  usePortalInfo: vi.fn(),
+  usePortalConfig: vi.fn(),
   useCrsInfo: vi.fn(),
 }))
 
-import { usePortalInfo } from '../hooks/useInfo'
-const mockedUsePortalInfo = vi.mocked(usePortalInfo)
+import { usePortalConfig } from '../hooks/useInfo'
+const mockedUsePortalConfig = vi.mocked(usePortalConfig)
 
 /**
  * Helper: get the body cell that lines up with a header by display name.
@@ -48,12 +48,12 @@ function mockLinks(links: Partial<PortalLinks> | null = null) {
   const resolved = links
     ? { jiraBaseUrl: null, gitBaseUrl: null, tcBaseUrl: null, dmsBaseUrl: null, ...links }
     : null
-  mockedUsePortalInfo.mockReturnValue({
-    data: resolved ? { name: 'portal', version: '1.0.0', links: resolved } : undefined,
+  mockedUsePortalConfig.mockReturnValue({
+    data: resolved ? { links: resolved } : undefined,
     isLoading: false,
     isError: false,
     error: null,
-  } as unknown as ReturnType<typeof usePortalInfo>)
+  } as unknown as ReturnType<typeof usePortalConfig>)
 }
 
 function renderTable(data: ComponentSummary[]) {

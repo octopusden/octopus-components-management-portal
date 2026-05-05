@@ -24,7 +24,7 @@ vi.mock('../components/AppFooter', () => ({
   AppFooter: () => React.createElement('footer', null, 'footer'),
 }))
 vi.mock('../hooks/useInfo', () => ({
-  usePortalInfo: vi.fn(),
+  usePortalConfig: vi.fn(),
   useCrsInfo: vi.fn(),
 }))
 // Editor tabs — stub so only the header/action-area is tested here.
@@ -64,9 +64,9 @@ vi.mock('../components/editor/ComponentHistoryTab', () => ({
 
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useComponent, useUpdateComponent, useDeleteComponent } from '../hooks/useComponent'
-import { usePortalInfo } from '../hooks/useInfo'
+import { usePortalConfig } from '../hooks/useInfo'
 
-const mockedUsePortalInfo = vi.mocked(usePortalInfo)
+const mockedUsePortalConfig = vi.mocked(usePortalConfig)
 
 const mockedUseCurrentUser = vi.mocked(useCurrentUser)
 const mockedUseComponent = vi.mocked(useComponent)
@@ -180,12 +180,12 @@ function renderPage(component: ComponentDetail, user: User | null, opts: RenderP
 beforeEach(() => {
   vi.clearAllMocks()
   vi.unstubAllGlobals()
-  mockedUsePortalInfo.mockReturnValue({
+  mockedUsePortalConfig.mockReturnValue({
     data: undefined,
     isLoading: false,
     isError: false,
     error: null,
-  } as unknown as ReturnType<typeof usePortalInfo>)
+  } as unknown as ReturnType<typeof usePortalConfig>)
 })
 
 describe('ComponentDetailPage — Archive / Unarchive buttons', () => {
@@ -294,12 +294,12 @@ describe('ComponentDetailPage — breadcrumb badges', () => {
 
 describe('ComponentDetailPage — Jira/Git quick-links', () => {
   it('(f) Jira link renders when jiraBaseUrl is set and projectKey exists', () => {
-    mockedUsePortalInfo.mockReturnValue({
-      data: { name: 'portal', version: '1.0.0', links: { jiraBaseUrl: 'https://jira.example.com', gitBaseUrl: null, tcBaseUrl: null, dmsBaseUrl: null } },
+    mockedUsePortalConfig.mockReturnValue({
+      data: { links: { jiraBaseUrl: 'https://jira.example.com', gitBaseUrl: null, tcBaseUrl: null, dmsBaseUrl: null } },
       isLoading: false,
       isError: false,
       error: null,
-    } as unknown as ReturnType<typeof usePortalInfo>)
+    } as unknown as ReturnType<typeof usePortalConfig>)
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(baseComponent, user)
     const link = screen.getByTitle('Jira: PROJ') as HTMLAnchorElement
@@ -314,12 +314,12 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
   })
 
   it('(f) Jira link does NOT render when projectKey is null', () => {
-    mockedUsePortalInfo.mockReturnValue({
-      data: { name: 'portal', version: '1.0.0', links: { jiraBaseUrl: 'https://jira.example.com', gitBaseUrl: null, tcBaseUrl: null, dmsBaseUrl: null } },
+    mockedUsePortalConfig.mockReturnValue({
+      data: { links: { jiraBaseUrl: 'https://jira.example.com', gitBaseUrl: null, tcBaseUrl: null, dmsBaseUrl: null } },
       isLoading: false,
       isError: false,
       error: null,
-    } as unknown as ReturnType<typeof usePortalInfo>)
+    } as unknown as ReturnType<typeof usePortalConfig>)
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(
       { ...baseComponent, jiraComponentConfigs: [{ id: 'j1', projectKey: null, displayName: null, componentVersionFormat: null, technical: false, metadata: {} }] },
@@ -329,12 +329,12 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
   })
 
   it('(f) Git link renders when gitBaseUrl is set and vcsPath exists', () => {
-    mockedUsePortalInfo.mockReturnValue({
-      data: { name: 'portal', version: '1.0.0', links: { jiraBaseUrl: null, gitBaseUrl: 'https://git.example.com', tcBaseUrl: null, dmsBaseUrl: null } },
+    mockedUsePortalConfig.mockReturnValue({
+      data: { links: { jiraBaseUrl: null, gitBaseUrl: 'https://git.example.com', tcBaseUrl: null, dmsBaseUrl: null } },
       isLoading: false,
       isError: false,
       error: null,
-    } as unknown as ReturnType<typeof usePortalInfo>)
+    } as unknown as ReturnType<typeof usePortalConfig>)
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(baseComponent, user)
     const link = screen.getByTitle('Git: org/repo') as HTMLAnchorElement
@@ -349,12 +349,12 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
   })
 
   it('(f) Git link does NOT render when vcsSettings is empty', () => {
-    mockedUsePortalInfo.mockReturnValue({
-      data: { name: 'portal', version: '1.0.0', links: { jiraBaseUrl: null, gitBaseUrl: 'https://git.example.com', tcBaseUrl: null, dmsBaseUrl: null } },
+    mockedUsePortalConfig.mockReturnValue({
+      data: { links: { jiraBaseUrl: null, gitBaseUrl: 'https://git.example.com', tcBaseUrl: null, dmsBaseUrl: null } },
       isLoading: false,
       isError: false,
       error: null,
-    } as unknown as ReturnType<typeof usePortalInfo>)
+    } as unknown as ReturnType<typeof usePortalConfig>)
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage({ ...baseComponent, vcsSettings: [] }, user)
     expect(screen.queryByTitle(/git:/i)).toBeNull()

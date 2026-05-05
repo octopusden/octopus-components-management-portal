@@ -34,7 +34,7 @@ import { useCurrentUser } from '../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../lib/auth'
 import { useFieldConfigEntry } from '../hooks/useFieldConfig'
 import { parseServerFieldErrors } from '../lib/serverErrors'
-import { usePortalInfo } from '../hooks/useInfo'
+import { usePortalConfig } from '../hooks/useInfo'
 
 export type UpdateMutation = UseMutationResult<ComponentDetail, Error, ComponentUpdateRequest>
 
@@ -84,9 +84,9 @@ export function ComponentDetailPage() {
   const fieldConfigLoading =
     displayNameFcLoading || componentOwnerFcLoading || systemFcLoading || clientCodeFcLoading
 
-  const { data: portalInfo } = usePortalInfo()
-  const jiraBaseUrl = portalInfo?.links.jiraBaseUrl ?? undefined
-  const gitBaseUrl = portalInfo?.links.gitBaseUrl ?? undefined
+  const { data: portalConfig } = usePortalConfig()
+  const jiraBaseUrl = portalConfig?.links.jiraBaseUrl ?? undefined
+  const gitBaseUrl = portalConfig?.links.gitBaseUrl ?? undefined
 
   const form = useForm<GeneralFormValues>({
     defaultValues: {
