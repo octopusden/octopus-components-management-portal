@@ -7,7 +7,7 @@ import {
   createColumnHelper,
   type SortingState,
 } from '@tanstack/react-table'
-import { ArrowUpDown, ArrowUp, ArrowDown, Bug, GitBranch, Hammer, Database } from 'lucide-react'
+import { ArrowUpDown, ArrowUp, ArrowDown, Bug, GitBranch, Database } from 'lucide-react'
 import { useState } from 'react'
 import {
   Table,
@@ -170,8 +170,8 @@ const columns = [
       const linksConfig = table.options.meta?.links
       const jiraBaseUrl = linksConfig?.jiraBaseUrl ?? undefined
       const gitBaseUrl = linksConfig?.gitBaseUrl ?? undefined
-      const tcBaseUrl = linksConfig?.tcBaseUrl ?? undefined
       const dmsBaseUrl = linksConfig?.dmsBaseUrl ?? undefined
+      // tcBaseUrl is intentionally unused — see TODO at the TC block below.
       const links: IconLinkProps[] = []
       if (jiraBaseUrl && jiraProjectKey) {
         links.push({
@@ -181,25 +181,30 @@ const columns = [
         })
       }
       if (gitBaseUrl && vcsPath) {
-        links.push({
-          href: `${gitBaseUrl}/${vcsPath}`,
-          label: `Git: ${vcsPath}`,
-          icon: GitBranch,
-        })
+        // vcsPath is the slash-joined Bitbucket project key + repo slug
+        // (e.g. "creg/components-registry"). Bitbucket Server's browser-
+        // friendly URL is /projects/<key>/repos/<repo>, not /<key>/<repo>.
+        const slashIdx = vcsPath.indexOf('/')
+        if (slashIdx > 0 && slashIdx < vcsPath.length - 1) {
+          const projectKey = vcsPath.slice(0, slashIdx)
+          const repoName = vcsPath.slice(slashIdx + 1)
+          links.push({
+            href: `${gitBaseUrl}/projects/${encodeURIComponent(projectKey)}/repos/${encodeURIComponent(repoName)}`,
+            label: `Git: ${vcsPath}`,
+            icon: GitBranch,
+          })
+        }
       }
-      if (tcBaseUrl) {
-        // Component name is the URL slug for TC/DMS — encode to survive
-        // characters that aren't allowed in raw URL paths. Jira/Git use
-        // server-validated keys (projectKey / vcsPath) and don't need it.
-        links.push({
-          href: `${tcBaseUrl}/${encodeURIComponent(name)}`,
-          label: `TeamCity: ${name}`,
-          icon: Hammer,
-        })
-      }
+      // TODO: TeamCity link needs the project's webUrl, which today
+      // components-automation reads from the TC REST API per project (no
+      // deterministic component-name → projectId mapping checked into the
+      // codebase). Restore the icon once CRS exposes either a computed
+      // tcProjectUrl on the summary DTO or a stable projectId we can template
+      // into the TC URL.
       if (dmsBaseUrl) {
+        // DMS uses a query-string component selector, not a path segment.
         links.push({
-          href: `${dmsBaseUrl}/${encodeURIComponent(name)}`,
+          href: `${dmsBaseUrl}/?component=${encodeURIComponent(name)}`,
           label: `DMS: ${name}`,
           icon: Database,
         })

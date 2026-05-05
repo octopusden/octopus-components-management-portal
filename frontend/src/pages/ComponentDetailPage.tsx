@@ -344,7 +344,8 @@ export function ComponentDetailPage() {
               {component.buildConfigurations[0]?.buildSystem && (
                 <Badge variant="outline">{component.buildConfigurations[0].buildSystem}</Badge>
               )}
-              {/* Quick-links: Jira and Git */}
+              {/* Quick-links: Jira and Git. aria-label mirrors the title so
+                  screen readers announce the icon-only link's destination. */}
               {jiraBaseUrl && component.jiraComponentConfigs[0]?.projectKey && (
                 <a
                   href={`${jiraBaseUrl}/browse/${component.jiraComponentConfigs[0].projectKey}`}
@@ -352,21 +353,32 @@ export function ComponentDetailPage() {
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
                   title={`Jira: ${component.jiraComponentConfigs[0].projectKey}`}
+                  aria-label={`Jira: ${component.jiraComponentConfigs[0].projectKey}`}
                 >
                   <ExternalLink className="h-4 w-4" />
                 </a>
               )}
-              {gitBaseUrl && component.vcsSettings[0]?.entries[0]?.vcsPath && (
-                <a
-                  href={`${gitBaseUrl}/${component.vcsSettings[0].entries[0].vcsPath}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-                  title={`Git: ${component.vcsSettings[0].entries[0].vcsPath}`}
-                >
-                  <GitBranch className="h-4 w-4" />
-                </a>
-              )}
+              {(() => {
+                const vcsPath = component.vcsSettings[0]?.entries[0]?.vcsPath
+                if (!gitBaseUrl || !vcsPath) return null
+                const slashIdx = vcsPath.indexOf('/')
+                if (slashIdx <= 0 || slashIdx >= vcsPath.length - 1) return null
+                const projectKey = vcsPath.slice(0, slashIdx)
+                const repoName = vcsPath.slice(slashIdx + 1)
+                const href = `${gitBaseUrl}/projects/${encodeURIComponent(projectKey)}/repos/${encodeURIComponent(repoName)}`
+                return (
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+                    title={`Git: ${vcsPath}`}
+                    aria-label={`Git: ${vcsPath}`}
+                  >
+                    <GitBranch className="h-4 w-4" />
+                  </a>
+                )
+              })()}
             </div>
             {component.displayName && (
               <p className="text-sm text-muted-foreground">{component.displayName}</p>

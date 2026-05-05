@@ -209,27 +209,34 @@ describe('ComponentTable', () => {
       expect(screen.queryByRole('link', { name: /Jira/i })).toBeNull()
     })
 
-    it('renders Git icon when gitBaseUrl and vcsPath present', () => {
+    it('renders Git icon as Bitbucket-Server browser URL (vcsPath split on first slash)', () => {
       mockLinks({ gitBaseUrl: 'https://git.example.com' })
-      renderTable([makeComponent({ vcsPath: 'org/repo' })])
-      const link = screen.getByRole('link', { name: /Git: org\/repo/i })
+      renderTable([makeComponent({ vcsPath: 'CREG/components-registry' })])
+      const link = screen.getByRole('link', { name: /Git: CREG\/components-registry/i })
       expect(link).toBeDefined()
-      expect((link as HTMLAnchorElement).href).toBe('https://git.example.com/org/repo')
+      expect((link as HTMLAnchorElement).href).toBe(
+        'https://git.example.com/projects/CREG/repos/components-registry',
+      )
     })
 
-    it('renders TeamCity icon based solely on tcBaseUrl (uses component name)', () => {
+    it('hides Git icon when vcsPath has no slash (cannot derive project key + repo)', () => {
+      mockLinks({ gitBaseUrl: 'https://git.example.com' })
+      renderTable([makeComponent({ vcsPath: 'standalone' })])
+      expect(screen.queryByRole('link', { name: /Git:/i })).toBeNull()
+    })
+
+    it('does NOT render TeamCity icon yet (waiting on CRS to expose tc projectUrl/projectId)', () => {
       mockLinks({ tcBaseUrl: 'https://tc.example.com' })
       renderTable([makeComponent({ name: 'alpha' })])
-      const link = screen.getByRole('link', { name: /TeamCity: alpha/i })
-      expect(link).toBeDefined()
-      expect((link as HTMLAnchorElement).href).toBe('https://tc.example.com/alpha')
+      expect(screen.queryByRole('link', { name: /TeamCity/i })).toBeNull()
     })
 
-    it('renders DMS icon based solely on dmsBaseUrl (uses component name)', () => {
+    it('renders DMS icon as ?component= query selector (not a path segment)', () => {
       mockLinks({ dmsBaseUrl: 'https://dms.example.com' })
       renderTable([makeComponent({ name: 'alpha' })])
       const link = screen.getByRole('link', { name: /DMS: alpha/i })
       expect(link).toBeDefined()
+      expect((link as HTMLAnchorElement).href).toBe('https://dms.example.com/?component=alpha')
     })
 
     it('renders em-dash when no links are configured', () => {
