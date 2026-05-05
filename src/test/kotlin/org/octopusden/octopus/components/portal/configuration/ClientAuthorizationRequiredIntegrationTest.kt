@@ -27,12 +27,21 @@ private const val TRIGGER_HEADER = "X-Test-Throw-Refresh-Required"
 // is opt-in via @Import — never picked up by main component scan.
 @TestConfiguration
 open class ClientAuthFailureSimulatorConfig {
-    // LOWEST_PRECEDENCE places this filter deeper in the WebFlux chain than every
-    // Spring Security filter (including OAuth2AuthorizationRequestRedirectWebFilter
-    // at HTTP_BASIC and our ApiClientAuthorizationFailureFilter at
-    // OAUTH2_AUTHORIZATION_CODE + 1), so an error raised here propagates back up
-    // through the real production filter chain in production order. That is the
-    // whole point of this fixture: locking in the wiring, not just the filter logic.
+    // LOWEST_PRECEDENCE positions this filter at the end of the outer WebFilter chain,
+    // running after Spring Security's WebFilterChainProxy. The proxy is itself a single
+    // WebFilter; the actual security filters (HTTP_BASIC, OAUTH2_AUTHORIZATION_CODE, etc.)
+    // live inside it, so order numbers between this simulator and the security filters
+    // are not directly comparable.
+    //
+    // Reactive chain semantics is what makes this test exercise the real wiring: when the
+    // simulator throws inside its filter(), the error propagates back UP through every
+    // Mono in the call stack on the way out — including the inner security chain.
+    // ApiClientAuthorizationFailureFilter is registered deeper in that security chain
+    // (`addFilterAfter(OAUTH2_AUTHORIZATION_CODE)`) than OAuth2AuthorizationRequestRedirectWebFilter
+    // (at `HTTP_BASIC`), so its onErrorResume fires first. If a future change drifts the
+    // wiring to `addFilterBefore` or shifts the enum positions, the redirect filter would
+    // catch the error first and write a 302 — assertions below fail with
+    // "expected 401 but got 302" pointing straight at the regression.
     @Bean
     open fun simulateClientAuthorizationRequired(): WebFilter =
         object : WebFilter, Ordered {
