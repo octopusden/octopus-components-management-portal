@@ -83,6 +83,31 @@ describe('api — URL construction', () => {
     expect(error.status).toBe(404)
   })
 
+  it('extracts message from JSON ErrorResponse body', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ message: 'TC sync is not configured: teamcity.base-url is blank' }), { status: 500 }),
+      ),
+    )
+
+    const error = await api.get('/admin/resync').catch((e) => e) as ApiError
+    expect(error).toBeInstanceOf(ApiError)
+    expect(error.status).toBe(500)
+    expect(error.message).toBe('TC sync is not configured: teamcity.base-url is blank')
+  })
+
+  it('falls back to raw body when error response is not JSON', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response('Internal Server Error', { status: 500 })),
+    )
+
+    const error = await api.get('/admin/resync').catch((e) => e) as ApiError
+    expect(error).toBeInstanceOf(ApiError)
+    expect(error.message).toBe('Internal Server Error')
+  })
+
   it('sends credentials on every request (BFF session cookie)', async () => {
     const mockFetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({}), { status: 200 }),
