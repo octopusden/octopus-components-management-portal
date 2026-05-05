@@ -48,6 +48,9 @@ const CATALOG: CatalogRow[] = [
   { section: 'component', fieldName: 'system',         label: 'system'                       },
   { section: 'component', fieldName: 'productType',    label: 'productType'                  },
   { section: 'component', fieldName: 'clientCode',     label: 'clientCode'                   },
+  // TC link restoration — manual override pair (admin-gated).
+  { section: 'component', fieldName: 'teamcityProjectId',  label: 'teamcityProjectId'  },
+  { section: 'component', fieldName: 'teamcityProjectUrl', label: 'teamcityProjectUrl' },
   // Build Fields — Appendix B
   { section: 'build', fieldName: 'buildSystem',   label: 'buildSystem'   },
   { section: 'build', fieldName: 'javaVersion',   label: 'javaVersion'   },

@@ -13,6 +13,13 @@ export interface ComponentSummary {
   jiraProjectKey?: string | null
   vcsPath?: string | null
   labels?: string[]
+  // TC link restoration (CRS PR-2). Optional so the type can ship before the
+  // CRS deploy lands — older responses that omit the fields just leave them
+  // undefined here, and the list/detail views render no TC icon.
+  // - teamcityProjectId: matching key (TC project's id, e.g. "MyProject_Build").
+  // - teamcityProjectUrl: full webUrl as TC returned it; rendered verbatim.
+  teamcityProjectId?: string | null
+  teamcityProjectUrl?: string | null
 }
 
 export interface ComponentDetail {
@@ -39,6 +46,9 @@ export interface ComponentDetail {
   copyright?: string | null
   releasesInDefaultBranch?: boolean | null
   labels?: string[]
+  // TC link restoration (CRS PR-2). See ComponentSummary for shape rationale.
+  teamcityProjectId?: string | null
+  teamcityProjectUrl?: string | null
   buildConfigurations: BuildConfiguration[]
   vcsSettings: VcsSettings[]
   distributions: Distribution[]

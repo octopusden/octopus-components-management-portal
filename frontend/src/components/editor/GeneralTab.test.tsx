@@ -452,6 +452,135 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
   })
 })
 
+describe('GeneralTab TC link restoration fields (Portal PR-3)', () => {
+  it('teamcityProjectId editable → input rendered with current value', () => {
+    setAllEditable()
+    const component = baseComponent({
+      teamcityProjectId: 'MyProject_Build',
+      teamcityProjectUrl: 'https://teamcity.example.com/project/MyProject_Build',
+    })
+    renderWithProviders(<Harness component={component} />)
+
+    const input = screen.getByLabelText(/tc project id/i) as HTMLInputElement
+    expect(input).toBeDefined()
+    expect(input.value).toBe('MyProject_Build')
+    expect(input.disabled).toBe(false)
+  })
+
+  it('teamcityProjectUrl editable → input rendered with current value', () => {
+    setAllEditable()
+    const component = baseComponent({
+      teamcityProjectId: 'MyProject_Build',
+      teamcityProjectUrl: 'https://teamcity.example.com/project/MyProject_Build',
+    })
+    renderWithProviders(<Harness component={component} />)
+
+    const input = screen.getByLabelText(/tc project url/i) as HTMLInputElement
+    expect(input).toBeDefined()
+    expect(input.value).toBe('https://teamcity.example.com/project/MyProject_Build')
+  })
+
+  it('teamcityProjectId hidden → input NOT rendered AND entire TC section absent', () => {
+    mockUseFieldConfigEntry.mockImplementation((path: string) => {
+      if (path === 'component.teamcityProjectId') return makeEntry('hidden')
+      return makeEntry('editable')
+    })
+    const component = baseComponent({
+      teamcityProjectId: 'X',
+      teamcityProjectUrl: 'https://teamcity.example.com/project/X',
+    })
+    const { container } = renderWithProviders(<Harness component={component} />)
+
+    // With the && guard, hiding either field hides the entire section.
+    expect(screen.queryByLabelText(/tc project id/i)).toBeNull()
+    expect(screen.queryByLabelText(/tc project url/i)).toBeNull()
+    expect(container.querySelector('[data-testid="section-teamcity"]')).toBeNull()
+  })
+
+  it('teamcityProjectUrl hidden → entire TC section NOT rendered', () => {
+    mockUseFieldConfigEntry.mockImplementation((path: string) => {
+      if (path === 'component.teamcityProjectUrl') return makeEntry('hidden')
+      return makeEntry('editable')
+    })
+    const component = baseComponent({
+      teamcityProjectId: 'X',
+      teamcityProjectUrl: 'https://teamcity.example.com/project/X',
+    })
+    const { container } = renderWithProviders(<Harness component={component} />)
+
+    // Hiding the URL field alone must suppress the whole section (pair logic).
+    expect(screen.queryByLabelText(/tc project id/i)).toBeNull()
+    expect(screen.queryByLabelText(/tc project url/i)).toBeNull()
+    expect(container.querySelector('[data-testid="section-teamcity"]')).toBeNull()
+  })
+
+  it('both TC fields hidden → entire TeamCity section NOT rendered', () => {
+    mockUseFieldConfigEntry.mockImplementation((path: string) => {
+      if (
+        path === 'component.teamcityProjectId' ||
+        path === 'component.teamcityProjectUrl'
+      ) {
+        return makeEntry('hidden')
+      }
+      return makeEntry('editable')
+    })
+    const component = baseComponent({
+      teamcityProjectId: 'X',
+      teamcityProjectUrl: 'https://teamcity.example.com/project/X',
+    })
+    const { container } = renderWithProviders(<Harness component={component} />)
+
+    expect(screen.queryByLabelText(/tc project id/i)).toBeNull()
+    expect(screen.queryByLabelText(/tc project url/i)).toBeNull()
+    expect(container.querySelector('[data-testid="section-teamcity"]')).toBeNull()
+  })
+
+  it('teamcityProjectUrl readonly → input disabled', () => {
+    mockUseFieldConfigEntry.mockImplementation((path: string) => {
+      if (path === 'component.teamcityProjectUrl') return makeEntry('readonly')
+      return makeEntry('editable')
+    })
+    const component = baseComponent({
+      teamcityProjectUrl: 'https://teamcity.example.com/project/X',
+    })
+    renderWithProviders(<Harness component={component} />)
+
+    const input = screen.getByLabelText(/tc project url/i) as HTMLInputElement
+    expect(input.disabled).toBe(true)
+  })
+
+  it('typing into TC inputs updates form state (drives the save payload)', async () => {
+    setAllEditable()
+    const component = baseComponent()
+    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    renderWithProviders(<Harness component={component} formRef={formRef} />)
+
+    // Wait for the GeneralTab useEffect to populate the form from
+    // `component` (sets both TC fields to '' here since the fixture doesn't
+    // set them). RHF doesn't always flush synchronously after setValue, so
+    // an await ensures the inputs reflect the post-effect value before we
+    // type into them — preventing concurrent overwrites.
+    await waitFor(() => {
+      const input = screen.getByLabelText(/tc project id/i) as HTMLInputElement
+      expect(input.value).toBe('')
+    })
+
+    const idInput = screen.getByLabelText(/tc project id/i) as HTMLInputElement
+    const urlInput = screen.getByLabelText(/tc project url/i) as HTMLInputElement
+    await userEvent.type(idInput, 'MyProject_Build')
+    await userEvent.type(urlInput, 'https://teamcity.example.com/project/MyProject_Build')
+
+    // Form values reflect what the user typed — these are the values that
+    // ComponentDetailPage.handleSave reads via form.getValues() and writes
+    // into the PATCH payload (see the `(values.X || undefined)` helpers).
+    const values = formRef.current!.getValues()
+    expect(values.teamcityProjectId).toBe('MyProject_Build')
+    expect(values.teamcityProjectUrl).toBe(
+      'https://teamcity.example.com/project/MyProject_Build',
+    )
+  })
+})
+
 // ── Server-side 400 inline error display (S3.1a) ──────────────────────────────
 // When ComponentDetailPage catches a 400 it calls form.setError for fields in
 // GENERAL_TAB_FIELDS. The GeneralTab must render those errors inline next to

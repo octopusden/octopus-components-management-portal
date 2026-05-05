@@ -229,9 +229,50 @@ describe('ComponentTable', () => {
       expect(screen.queryByRole('link', { name: /Git:/i })).toBeNull()
     })
 
-    it('does NOT render TeamCity icon yet (waiting on CRS to expose tc projectUrl/projectId)', () => {
-      mockLinks({ tcBaseUrl: 'https://tc.example.com' })
-      renderTable([makeComponent({ name: 'alpha' })])
+    it('renders TeamCity icon when teamcityProjectUrl is set (verbatim href, no templating)', () => {
+      // Intentionally omit tcBaseUrl: the icon is gated only on the
+      // per-component URL (CRS PR-2 contract). tcBaseUrl from /portal/links
+      // must not affect rendering of this icon.
+      mockLinks(null)
+      renderTable([
+        makeComponent({
+          name: 'alpha',
+          teamcityProjectUrl: 'https://teamcity.example.com/project/Alpha_Build',
+        }),
+      ])
+      const link = screen.getByRole('link', { name: /TeamCity: alpha/i })
+      expect(link).toBeDefined()
+      // Render the URL verbatim — no /buildTypes/ or /favicon coercion.
+      expect((link as HTMLAnchorElement).href).toBe(
+        'https://teamcity.example.com/project/Alpha_Build',
+      )
+      // Pin the brand icon — visual mockup match guard.
+      expect(within(link).getByTestId('brand-icon-teamcity')).toBeDefined()
+    })
+
+    it('renders TeamCity icon even when tcBaseUrl from /portal/links is null', () => {
+      // Per CRS PR-2 the URL is self-sufficient — tcBaseUrl is only used as
+      // a sanity flag for "TC integration is configured globally" and must
+      // not gate per-component rendering.
+      mockLinks({ tcBaseUrl: null })
+      renderTable([
+        makeComponent({
+          name: 'beta',
+          teamcityProjectUrl: 'https://teamcity.example.com/project/Beta_Build',
+        }),
+      ])
+      expect(screen.getByRole('link', { name: /TeamCity: beta/i })).toBeDefined()
+    })
+
+    it('does NOT render TeamCity icon when teamcityProjectUrl is null', () => {
+      mockLinks({ tcBaseUrl: 'https://teamcity.example.com' })
+      renderTable([makeComponent({ name: 'gamma', teamcityProjectUrl: null })])
+      expect(screen.queryByRole('link', { name: /TeamCity/i })).toBeNull()
+    })
+
+    it('does NOT render TeamCity icon when teamcityProjectUrl is undefined', () => {
+      mockLinks({ tcBaseUrl: 'https://teamcity.example.com' })
+      renderTable([makeComponent({ name: 'delta' })])
       expect(screen.queryByRole('link', { name: /TeamCity/i })).toBeNull()
     })
 

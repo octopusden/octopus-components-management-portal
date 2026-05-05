@@ -4,6 +4,7 @@ import { FieldConfigEditor } from '../components/admin/FieldConfigEditor'
 import { ComponentDefaultsForm } from '../components/admin/ComponentDefaultsForm'
 import { MigrationHistoryPanel } from '../components/admin/MigrationHistoryPanel'
 import { MigrationPanel } from '../components/admin/MigrationPanel'
+import { TeamCityResyncPanel } from '../components/admin/TeamCityResyncPanel'
 
 export function AdminSettingsPage() {
   return (
@@ -66,6 +67,18 @@ export function AdminSettingsPage() {
                 </p>
                 <div className="pt-2">
                   <MigrationHistoryPanel />
+                </div>
+              </div>
+
+              <div className="border-t pt-6 space-y-2">
+                <h2 className="text-lg font-semibold">TeamCity</h2>
+                <p className="text-sm text-muted-foreground">
+                  Resync persisted teamcityProjectId + teamcityProjectUrl from
+                  TC project params. Overwrites manual overrides for matched
+                  components. Enable Admin mode in the footer to arm the button.
+                </p>
+                <div className="pt-2">
+                  <TeamCityResyncPanel />
                 </div>
               </div>
             </div>

@@ -106,6 +106,15 @@ export interface ComponentUpdateRequest {
   copyright?: string
   releasesInDefaultBranch?: boolean
   labels?: string[]
+  // TC link restoration (CRS PR-2). Manual override pair: admin types both
+  // the matching key (`teamcityProjectId`) and the display URL
+  // (`teamcityProjectUrl`). undefined = "don't touch"; empty-string is sent
+  // as undefined here too — admin clears via the resync button (documented
+  // limitation, see plan B3 option (a)). Never null because the CRS
+  // `?.let { }` update path can't distinguish absent from explicit-null
+  // anyway (JSON Merge Patch semantics).
+  teamcityProjectId?: string
+  teamcityProjectUrl?: string
   buildConfiguration?: BuildConfigurationUpdate
   vcsSettings?: VcsSettingsUpdate
   distribution?: DistributionUpdate
