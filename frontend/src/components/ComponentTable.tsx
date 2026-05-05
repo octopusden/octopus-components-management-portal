@@ -22,7 +22,7 @@ import { Badge } from './ui/badge'
 import { EmptyState } from './ui/empty-state'
 import { SkeletonTable } from './ui/skeleton-table'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip'
-import { cn } from '../lib/utils'
+import { cn, safeHttpUrl } from '../lib/utils'
 import type { ComponentSummary, PortalLinks } from '../lib/types'
 import { usePortalLinks } from '../hooks/useInfo'
 
@@ -207,9 +207,12 @@ const columns = [
       // (the persisted webUrl). Independent of `tcBaseUrl` because the URL
       // is self-sufficient: CRS resolves projectId → webUrl during resync
       // and stores the result; Portal does NOT template it.
-      if (teamcityProjectUrl) {
+      // safeHttpUrl allowlists http/https before the URL reaches an <a href>
+      // — prevents javascript: or data: URIs from being rendered as links.
+      const safeTcUrl = safeHttpUrl(teamcityProjectUrl)
+      if (safeTcUrl) {
         links.push({
-          href: teamcityProjectUrl,
+          href: safeTcUrl,
           label: `TeamCity: ${name}`,
           icon: TeamCityIcon,
         })

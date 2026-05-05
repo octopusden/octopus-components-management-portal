@@ -75,7 +75,7 @@ export function TeamCityResyncPanel() {
         </StatusBanner>
       )}
 
-      {result && !resync.isPending && (
+      {resync.isSuccess && result && !resync.isPending && (
         <div className="space-y-3">
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
             <StatCard label="Scanned" value={result.scanned} />

@@ -36,6 +36,7 @@ import { hasPermission, PERMISSIONS } from '../lib/auth'
 import { useFieldConfigEntry } from '../hooks/useFieldConfig'
 import { parseServerFieldErrors } from '../lib/serverErrors'
 import { usePortalLinks } from '../hooks/useInfo'
+import { safeHttpUrl } from '../lib/utils'
 
 export type UpdateMutation = UseMutationResult<ComponentDetail, Error, ComponentUpdateRequest>
 
@@ -185,6 +186,25 @@ export function ComponentDetailPage() {
           ? null
           : trimmedParent
 
+    // TC link restoration — pair enforcement. Both FC entries must be visible
+    // to send either field. If one is hidden, omit both so the server never
+    // receives only one half of the pair (which could produce an inconsistent
+    // projectId/projectUrl state). When both are visible, follow the same
+    // SYS-039 `(values.X || undefined)` shape as the other string fields.
+    const tcIdVisible = teamcityProjectIdFc.visibility !== 'hidden'
+    const tcUrlVisible = teamcityProjectUrlFc.visibility !== 'hidden'
+    const tcPatch: { teamcityProjectId?: string; teamcityProjectUrl?: string } = {}
+    if (tcIdVisible && tcUrlVisible) {
+      const tcId = values.teamcityProjectId || undefined
+      const tcUrl = values.teamcityProjectUrl || undefined
+      // Only include the pair when at least one half carries a value —
+      // both undefined means the user left the fields blank, i.e. "don't touch".
+      if (tcId !== undefined || tcUrl !== undefined) {
+        tcPatch.teamcityProjectId = tcId
+        tcPatch.teamcityProjectUrl = tcUrl
+      }
+    }
+
     try {
       await updateMutation.mutateAsync({
         version: component.version,
@@ -216,34 +236,8 @@ export function ComponentDetailPage() {
             : values.releasesInDefaultBranch,
         labels: labelsFc.visibility === 'hidden' ? undefined : labelsArray,
         // labelsArray is already `undefined` when input is blank — see helper above.
-        // TC link restoration — manual override pair. Hidden → undefined
-        // (don't touch). Empty string → undefined: clearing back to null is a
-        // documented limitation of the CRS update path's `?.let { }`
-        // semantics (admin clears via the Resync button instead). Send as a
-        // pair: never send only one half.
-        //
-        // Reconciliation with plan B3 step 4 ("compare to component.<field>
-        // for dirty detection — only send when changed"): we deliberately
-        // use the SYS-039 `(values.X || undefined)` shape (see displayName /
-        // componentOwner / groupId above) rather than gating via
-        // form.formState.dirtyFields.teamcityProjectId. Two reasons:
-        //   1. It mirrors the codebase precedent the plan itself cited as
-        //      the template for the wire shape.
-        //   2. CRS's `?.let { it.teamcityProjectId = … }` setter is
-        //      idempotent on identical values — re-sending the persisted
-        //      string is a no-op at the DB level, so per-field dirty gating
-        //      buys nothing here. The releasesInDefaultBranch field above
-        //      uses dirtyFields specifically because its `false` default
-        //      collides with the stored-null case; TC strings have no such
-        //      collision.
-        teamcityProjectId:
-          teamcityProjectIdFc.visibility === 'hidden'
-            ? undefined
-            : (values.teamcityProjectId || undefined),
-        teamcityProjectUrl:
-          teamcityProjectUrlFc.visibility === 'hidden'
-            ? undefined
-            : (values.teamcityProjectUrl || undefined),
+        // TC pair spread — see tcPatch computation above handleSave's try block.
+        ...tcPatch,
       })
       toast({ title: 'Component saved', description: 'Changes have been saved successfully.' })
     } catch (err) {
@@ -422,19 +416,25 @@ export function ComponentDetailPage() {
               {/* TeamCity quick-link — gated on the per-component webUrl
                   persisted by CRS PR-2. Same affordance/aria pattern as the
                   Jira and Bitbucket links above. The URL is rendered
-                  verbatim; the SPA does NOT template it from tcBaseUrl. */}
-              {component.teamcityProjectUrl && (
-                <a
-                  href={component.teamcityProjectUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-sm hover:opacity-80 transition-opacity"
-                  title={`TeamCity: ${component.name}`}
-                  aria-label={`TeamCity: ${component.name}`}
-                >
-                  <TeamCityIcon className="h-4 w-4" />
-                </a>
-              )}
+                  verbatim; the SPA does NOT template it from tcBaseUrl.
+                  safeHttpUrl allowlists http/https before the URL reaches
+                  an <a href> — prevents javascript: or data: URIs. */}
+              {(() => {
+                const safeTcUrl = safeHttpUrl(component.teamcityProjectUrl)
+                if (!safeTcUrl) return null
+                return (
+                  <a
+                    href={safeTcUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-sm hover:opacity-80 transition-opacity"
+                    title={`TeamCity: ${component.name}`}
+                    aria-label={`TeamCity: ${component.name}`}
+                  >
+                    <TeamCityIcon className="h-4 w-4" />
+                  </a>
+                )
+              })()}
             </div>
             {component.displayName && (
               <p className="text-sm text-muted-foreground">{component.displayName}</p>

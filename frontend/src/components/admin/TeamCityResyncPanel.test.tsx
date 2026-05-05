@@ -9,8 +9,7 @@ import { TeamCityResyncPanel } from './TeamCityResyncPanel'
 
 // Same shape as MigrationPanel: hook is mocked so the test focuses on panel
 // behavior — admin-mode gating, confirm dialog, toast on success, banner on
-// error. The hook itself has no separate test today (one-shot mutation,
-// schema is exercised via the Kotlin contract in CRS PR-2).
+// error. The hook is also covered by useTeamCityResync.test.ts.
 
 vi.mock('@/hooks/useTeamCityResync', () => ({
   useTeamCityResync: vi.fn(),

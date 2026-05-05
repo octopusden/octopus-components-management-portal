@@ -445,14 +445,13 @@ describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => 
     expect(payload['teamcityProjectUrl']).toBeUndefined()
   })
 
-  it('save sends teamcity* when component already had values and form mirrors them', async () => {
+  it('skips teamcity* fields when GeneralTab stub leaves form at defaults (both undefined → omit pair)', async () => {
     // Seed the component with TC values; the form's useEffect (in the real
     // GeneralTab) would mirror these into the form, but here GeneralTab is
     // mocked so the form values stay empty — meaning unchanged-defaults
     // means "user hasn't touched, send undefined". The save payload should
-    // therefore NOT include the persisted values either: undefined === skip.
-    // This pins the contract that mocked GeneralTab leaves form at defaults
-    // and the manual-override flow only emits what the user actually typed.
+    // therefore NOT include the persisted values either: both halves are
+    // undefined, so the pair-enforcement block emits nothing ("don't touch").
     const updateMutateAsync = vi.fn(() => Promise.resolve())
     const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
     const seeded: ComponentDetail = {

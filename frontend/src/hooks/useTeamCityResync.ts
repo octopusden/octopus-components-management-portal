@@ -31,9 +31,9 @@ export interface TeamCityResyncResult {
  * resync over ~hundreds of components fits in a single HTTP cycle.
  *
  * On success the SPA invalidates `['components']` so the list view picks up
- * the new TC URLs without a manual refresh; component-detail caches are
- * keyed by id and individually still valid (resync doesn't change name /
- * version / etc.) so we don't blow them away.
+ * the new TC URLs without a manual refresh, and also invalidates all
+ * `['component', id]` detail caches so open detail pages reflect the
+ * updated teamcityProjectId / teamcityProjectUrl immediately.
  */
 export function useTeamCityResync() {
   const queryClient = useQueryClient()
@@ -42,6 +42,9 @@ export function useTeamCityResync() {
       api.post<TeamCityResyncResult>('/admin/teamcity-project-ids/resync'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['components'] })
+      queryClient.invalidateQueries({
+        predicate: (query) => query.queryKey[0] === 'component',
+      })
     },
   })
 }
