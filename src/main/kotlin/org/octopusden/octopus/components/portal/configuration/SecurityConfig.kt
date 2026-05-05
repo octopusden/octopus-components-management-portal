@@ -2,21 +2,22 @@ package org.octopusden.octopus.components.portal.configuration
 
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
-import org.springframework.http.HttpStatus
 import org.springframework.security.config.Customizer
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity
+import org.springframework.security.config.web.server.SecurityWebFiltersOrder
 import org.springframework.security.config.web.server.ServerHttpSecurity
 import org.springframework.security.oauth2.client.oidc.web.server.logout.OidcClientInitiatedServerLogoutSuccessHandler
 import org.springframework.security.oauth2.client.registration.ReactiveClientRegistrationRepository
 import org.springframework.security.web.server.DelegatingServerAuthenticationEntryPoint
 import org.springframework.security.web.server.DelegatingServerAuthenticationEntryPoint.DelegateEntry
 import org.springframework.security.web.server.SecurityWebFilterChain
-import org.springframework.security.web.server.authentication.HttpStatusServerEntryPoint
+import org.springframework.security.web.server.ServerAuthenticationEntryPoint
 import org.springframework.security.web.server.authentication.RedirectServerAuthenticationEntryPoint
 import org.springframework.security.web.server.authentication.logout.ServerLogoutSuccessHandler
 import org.springframework.security.web.server.csrf.CookieServerCsrfTokenRepository
 import org.springframework.security.web.server.csrf.CsrfToken
 import org.springframework.security.web.server.csrf.ServerCsrfTokenRequestAttributeHandler
+import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatcher
 import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatchers
 import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatchers.pathMatchers
 import org.springframework.web.server.WebFilter
@@ -29,13 +30,22 @@ import reactor.core.publisher.Mono
 //
 // Auth entry points are split so API callers get a JSON-shaped 401 instead of the
 // OAuth2 302 redirect that browsers need for SPA navigation:
-//   - /rest/** and /auth/** -> HTTP 401 so `frontend/src/lib/api.ts` 401-handler
-//     fires cleanly. The frontend additionally sets
-//     X-Requested-With: XMLHttpRequest as belt-and-braces; the server-side gate
+//   - /rest/** and /auth/** -> JSON 401 (via [ApiJson401Writer]) so
+//     `frontend/src/lib/api.ts` 401-handler fires cleanly. The frontend additionally
+//     sets X-Requested-With: XMLHttpRequest as belt-and-braces; the server-side gate
 //     is path-based and does not require that header.
 //   - Everything else (typed URL, link, SPA navigation) redirects to
 //     /oauth2/authorization/<REGISTRATION_ID>, which Spring Security intercepts
 //     to start the OIDC authorization code flow.
+//   - The DelegatingServerAuthenticationEntryPoint above only fires for
+//     unauthenticated/anonymous calls. The other auth-failure path — authenticated
+//     session whose access_token expired and whose refresh_token can no longer be
+//     used — surfaces from Spring Cloud Gateway's TokenRelay as a
+//     ClientAuthorizationRequiredException, which `oauth2Login()` would otherwise
+//     turn into a 302 to OIDC (CORS-fails on cross-origin XHR — the original bug).
+//     [ApiClientAuthorizationFailureFilter] catches that exception for api paths
+//     and routes through the same [ApiJson401Writer], so the SPA sees an identical
+//     401 envelope on either path.
 //
 // CSRF: because authentication is a session cookie (BFF), cross-origin mutating calls
 // could ride an authenticated user's session without a double-submit token. We use
@@ -47,11 +57,15 @@ import reactor.core.publisher.Mono
 @EnableWebFluxSecurity
 open class SecurityConfig(
     private val clientRegistrationRepository: ReactiveClientRegistrationRepository,
+    private val apiJson401Writer: ApiJson401Writer,
 ) {
     @Bean
     open fun securityFilterChain(http: ServerHttpSecurity): SecurityWebFilterChain {
-        val apiMatcher = pathMatchers("/rest/**", "/auth/**")
-        val apiEntryPoint = HttpStatusServerEntryPoint(HttpStatus.UNAUTHORIZED)
+        val apiMatcher: ServerWebExchangeMatcher = pathMatchers("/rest/**", "/auth/**")
+        val apiEntryPoint =
+            ServerAuthenticationEntryPoint { exchange, _ ->
+                apiJson401Writer.write(exchange, ApiJson401Reason.UNAUTHENTICATED)
+            }
         val browserEntryPoint =
             RedirectServerAuthenticationEntryPoint("/oauth2/authorization/$OIDC_REGISTRATION_ID")
         val delegatingEntryPoint =
@@ -89,8 +103,18 @@ open class SecurityConfig(
             .oauth2Login(Customizer.withDefaults())
             // Override the entry point AFTER oauth2Login registers its default so the
             // delegating one wins: it keeps browser OIDC redirect for navigations but
-            // returns 401 for API callers.
+            // returns JSON 401 for API callers.
             .exceptionHandling { it.authenticationEntryPoint(delegatingEntryPoint) }
+            // Inner filter (sits AFTER OAUTH2_AUTHORIZATION_CODE in DSL = deeper in the
+            // chain = sees errors before the redirect filter does) that catches
+            // ClientAuthorizationRequiredException from TokenRelay and routes API/XHR
+            // calls through the same JSON 401 writer. Without this, an authenticated
+            // session with an unrefreshable token would 302 cross-origin to Keycloak
+            // and CORS-fail the SPA's XHR — see filter Kdoc for the full chain.
+            .addFilterAfter(
+                ApiClientAuthorizationFailureFilter(apiMatcher, apiJson401Writer),
+                SecurityWebFiltersOrder.OAUTH2_AUTHORIZATION_CODE,
+            )
             .logout { it.logoutSuccessHandler(oidcLogoutSuccessHandler()) }
             .oidcLogout { it.backChannel(Customizer.withDefaults()) }
             .csrf { csrf ->
