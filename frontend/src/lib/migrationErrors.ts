@@ -23,11 +23,14 @@ export function formatMigrationError(error: unknown): string {
     if (error instanceof Error) return error.message
     return String(error)
   }
-  // Layer 1: structured conflict envelope.
+  // Layer 1: structured conflict envelope — probe rawBody, not message, because
+  // api.ts now extracts the human-readable .message field into error.message
+  // for display. The raw JSON envelope (needed to check kind/message shape) is
+  // preserved verbatim in rawBody regardless of whether extraction happened.
   const message = error.message
-  if (message.startsWith('{')) {
+  if (error.rawBody.startsWith('{')) {
     try {
-      const parsed = JSON.parse(message) as unknown
+      const parsed = JSON.parse(error.rawBody) as unknown
       if (
         parsed !== null &&
         typeof parsed === 'object' &&
