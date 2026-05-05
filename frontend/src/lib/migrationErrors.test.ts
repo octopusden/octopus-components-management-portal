@@ -23,6 +23,23 @@ describe('formatMigrationError', () => {
     expect(formatted).not.toContain('"code"')
   })
 
+  it('extracts conflict message when constructed with separate rawBody (production api.ts path)', () => {
+    // api.ts extracts .message into the display field and stores the full JSON in rawBody.
+    // Layer 1 must probe rawBody, not message, to work in this path.
+    const rawBody = JSON.stringify({
+      kind: 'conflict',
+      code: 'history-import-likely-live-elsewhere',
+      message: 'Refusing force-reset: the IN_PROGRESS claim was updated 12s ago.',
+    })
+    const formatted = formatMigrationError(
+      new ApiError(409, 'Refusing force-reset: the IN_PROGRESS claim was updated 12s ago.', rawBody),
+    )
+    expect(formatted).toBe(
+      '409 Refusing force-reset: the IN_PROGRESS claim was updated 12s ago.',
+    )
+    expect(formatted).not.toContain('"kind"')
+  })
+
   it('falls through to status + body when kind is missing (older CRS, opaque error)', () => {
     const formatted = formatMigrationError(new ApiError(409, 'something old-style'))
     expect(formatted).toBe('409 something old-style')
