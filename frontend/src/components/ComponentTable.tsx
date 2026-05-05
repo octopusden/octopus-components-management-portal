@@ -67,7 +67,11 @@ function IconLink({ href, label, icon: Icon }: IconLinkProps) {
       rel="noopener noreferrer"
       title={label}
       aria-label={label}
-      className="text-muted-foreground hover:text-foreground transition-colors"
+      // Brand-color SVGs (Jira/Bitbucket/TC) keep their fill across themes,
+      // so `hover:text-foreground` produced no visible change. Mirror the
+      // prototype's affordance with opacity instead — works uniformly for
+      // brand icons and the generic Package/DMS glyph.
+      className="text-muted-foreground hover:opacity-80 transition-opacity"
     >
       <Icon className="h-4 w-4" />
     </a>
@@ -191,7 +195,7 @@ const columns = [
           const repoName = vcsPath.slice(slashIdx + 1)
           links.push({
             href: `${gitBaseUrl}/projects/${encodeURIComponent(projectKey)}/repos/${encodeURIComponent(repoName)}`,
-            label: `Git: ${vcsPath}`,
+            label: `Bitbucket: ${vcsPath}`,
             icon: BitbucketIcon,
           })
         }

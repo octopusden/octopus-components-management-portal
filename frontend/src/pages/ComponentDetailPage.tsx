@@ -345,14 +345,17 @@ export function ComponentDetailPage() {
               {component.buildConfigurations[0]?.buildSystem && (
                 <Badge variant="outline">{component.buildConfigurations[0].buildSystem}</Badge>
               )}
-              {/* Quick-links: Jira and Git. aria-label mirrors the title so
-                  screen readers announce the icon-only link's destination. */}
+              {/* Quick-links: Jira (Atlassian) and Bitbucket. aria-label mirrors
+                  the title so screen readers announce the icon-only link's
+                  destination — using brand-specific names so the cue matches
+                  the icon a sighted user sees. Hover affordance is opacity-
+                  based because brand-color SVGs ignore text-color hovers. */}
               {jiraBaseUrl && component.jiraComponentConfigs[0]?.projectKey && (
                 <a
                   href={`${jiraBaseUrl}/browse/${component.jiraComponentConfigs[0].projectKey}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+                  className="inline-flex items-center gap-1 text-sm hover:opacity-80 transition-opacity"
                   title={`Jira: ${component.jiraComponentConfigs[0].projectKey}`}
                   aria-label={`Jira: ${component.jiraComponentConfigs[0].projectKey}`}
                 >
@@ -372,9 +375,9 @@ export function ComponentDetailPage() {
                     href={href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-                    title={`Git: ${vcsPath}`}
-                    aria-label={`Git: ${vcsPath}`}
+                    className="inline-flex items-center gap-1 text-sm hover:opacity-80 transition-opacity"
+                    title={`Bitbucket: ${vcsPath}`}
+                    aria-label={`Bitbucket: ${vcsPath}`}
                   >
                     <BitbucketIcon className="h-4 w-4" />
                   </a>
