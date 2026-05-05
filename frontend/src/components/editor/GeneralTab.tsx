@@ -453,54 +453,51 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
           from TC project params on demand; manual edit here lets ops fix a
           one-off mismatch. Clearing both back to null is not supported via
           this UI (admin clears via the Resync button — see plan B3 (a)). */}
-      {(teamcityProjectIdEntry.visibility !== 'hidden' ||
+      {(teamcityProjectIdEntry.visibility !== 'hidden' &&
         teamcityProjectUrlEntry.visibility !== 'hidden') && (
         <section data-testid="section-teamcity">
           <h3 className="text-sm font-medium text-muted-foreground mb-3">TeamCity</h3>
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            {teamcityProjectIdEntry.visibility !== 'hidden' && (
-              <div className="space-y-1.5">
-                <Label htmlFor="teamcityProjectId">TC Project ID</Label>
-                <Input
-                  id="teamcityProjectId"
-                  placeholder="MyProject_Build"
-                  disabled={teamcityProjectIdEntry.visibility === 'readonly'}
-                  className={
-                    teamcityProjectIdEntry.visibility === 'readonly' ? 'bg-muted' : undefined
-                  }
-                  {...register('teamcityProjectId')}
-                />
-                {errors.teamcityProjectId ? (
-                  <p className="text-xs text-destructive">{errors.teamcityProjectId.message}</p>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    Matching key (TC project id). Resync overwrites from TC params.
-                  </p>
-                )}
-              </div>
-            )}
+            {/* Both fields are guaranteed non-hidden by the outer && guard. */}
+            <div className="space-y-1.5">
+              <Label htmlFor="teamcityProjectId">TC Project ID</Label>
+              <Input
+                id="teamcityProjectId"
+                placeholder="MyProject_Build"
+                disabled={teamcityProjectIdEntry.visibility === 'readonly'}
+                className={
+                  teamcityProjectIdEntry.visibility === 'readonly' ? 'bg-muted' : undefined
+                }
+                {...register('teamcityProjectId')}
+              />
+              {errors.teamcityProjectId ? (
+                <p className="text-xs text-destructive">{errors.teamcityProjectId.message}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Matching key (TC project id). Resync overwrites from TC params.
+                </p>
+              )}
+            </div>
 
-            {teamcityProjectUrlEntry.visibility !== 'hidden' && (
-              <div className="space-y-1.5">
-                <Label htmlFor="teamcityProjectUrl">TC Project URL</Label>
-                <Input
-                  id="teamcityProjectUrl"
-                  placeholder="https://teamcity.example.com/project/MyProject_Build"
-                  disabled={teamcityProjectUrlEntry.visibility === 'readonly'}
-                  className={
-                    teamcityProjectUrlEntry.visibility === 'readonly' ? 'bg-muted' : undefined
-                  }
-                  {...register('teamcityProjectUrl')}
-                />
-                {errors.teamcityProjectUrl ? (
-                  <p className="text-xs text-destructive">{errors.teamcityProjectUrl.message}</p>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    Display URL rendered as-is in the quick-link icon.
-                  </p>
-                )}
-              </div>
-            )}
+            <div className="space-y-1.5">
+              <Label htmlFor="teamcityProjectUrl">TC Project URL</Label>
+              <Input
+                id="teamcityProjectUrl"
+                placeholder="https://teamcity.example.com/project/MyProject_Build"
+                disabled={teamcityProjectUrlEntry.visibility === 'readonly'}
+                className={
+                  teamcityProjectUrlEntry.visibility === 'readonly' ? 'bg-muted' : undefined
+                }
+                {...register('teamcityProjectUrl')}
+              />
+              {errors.teamcityProjectUrl ? (
+                <p className="text-xs text-destructive">{errors.teamcityProjectUrl.message}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Display URL rendered as-is in the quick-link icon.
+                </p>
+              )}
+            </div>
           </div>
         </section>
       )}

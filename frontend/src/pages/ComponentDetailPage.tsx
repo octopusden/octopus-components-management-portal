@@ -197,9 +197,11 @@ export function ComponentDetailPage() {
     if (tcIdVisible && tcUrlVisible) {
       const tcId = values.teamcityProjectId || undefined
       const tcUrl = values.teamcityProjectUrl || undefined
-      // Only include the pair when at least one half carries a value —
-      // both undefined means the user left the fields blank, i.e. "don't touch".
-      if (tcId !== undefined || tcUrl !== undefined) {
+      // Only include the pair when BOTH halves carry a value — a filled id
+      // with a blank url (or vice versa) omits both, preserving the pair
+      // invariant and preventing a partial PATCH (undefined is dropped by
+      // JSON.stringify, which would send only one field).
+      if (tcId !== undefined && tcUrl !== undefined) {
         tcPatch.teamcityProjectId = tcId
         tcPatch.teamcityProjectUrl = tcUrl
       }

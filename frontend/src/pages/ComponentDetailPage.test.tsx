@@ -539,6 +539,37 @@ describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => 
     expect(payload['teamcityProjectId']).toBeUndefined()
     expect(payload['teamcityProjectUrl']).toBeUndefined()
   })
+
+  it('partial pair (tcId filled, tcUrl blank) omits BOTH from PATCH (pair invariant)', async () => {
+    // Regression guard for Bug B: when the user fills only teamcityProjectId
+    // and leaves teamcityProjectUrl blank, the `||` condition would have sent
+    // a partial PATCH (id=value, url=undefined → JSON.stringify drops url,
+    // server receives only one half). With `&&` both must be non-empty or
+    // neither is included.
+    vi.mocked(GeneralTab).mockImplementation(({ form }) => {
+      useEffect(() => {
+        form.setValue('teamcityProjectId', 'OnlyId_Build')
+        // teamcityProjectUrl intentionally left at default '' (falsy)
+      }, [form])
+      return React.createElement('div', { 'data-testid': 'general-tab-partial' })
+    })
+    const updateMutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    renderPage(baseComponent, user, { updateMutation: { mutateAsync: updateMutateAsync } })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('general-tab-partial')).toBeDefined()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
+    const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
+    // tcUrl is '' → undefined; because only one half is defined, && condition
+    // suppresses both keys — server sees no teamcity* fields at all.
+    expect(payload['teamcityProjectId']).toBeUndefined()
+    expect(payload['teamcityProjectUrl']).toBeUndefined()
+  })
 })
 
 describe('ComponentDetailPage — confirmation dialog text', () => {

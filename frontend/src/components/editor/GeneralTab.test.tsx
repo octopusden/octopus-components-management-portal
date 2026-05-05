@@ -480,15 +480,38 @@ describe('GeneralTab TC link restoration fields (Portal PR-3)', () => {
     expect(input.value).toBe('https://teamcity.example.com/project/MyProject_Build')
   })
 
-  it('teamcityProjectId hidden → input NOT rendered', () => {
+  it('teamcityProjectId hidden → input NOT rendered AND entire TC section absent', () => {
     mockUseFieldConfigEntry.mockImplementation((path: string) => {
       if (path === 'component.teamcityProjectId') return makeEntry('hidden')
       return makeEntry('editable')
     })
-    const component = baseComponent({ teamcityProjectId: 'X' })
-    renderWithProviders(<Harness component={component} />)
+    const component = baseComponent({
+      teamcityProjectId: 'X',
+      teamcityProjectUrl: 'https://teamcity.example.com/project/X',
+    })
+    const { container } = renderWithProviders(<Harness component={component} />)
 
+    // With the && guard, hiding either field hides the entire section.
     expect(screen.queryByLabelText(/tc project id/i)).toBeNull()
+    expect(screen.queryByLabelText(/tc project url/i)).toBeNull()
+    expect(container.querySelector('[data-testid="section-teamcity"]')).toBeNull()
+  })
+
+  it('teamcityProjectUrl hidden → entire TC section NOT rendered', () => {
+    mockUseFieldConfigEntry.mockImplementation((path: string) => {
+      if (path === 'component.teamcityProjectUrl') return makeEntry('hidden')
+      return makeEntry('editable')
+    })
+    const component = baseComponent({
+      teamcityProjectId: 'X',
+      teamcityProjectUrl: 'https://teamcity.example.com/project/X',
+    })
+    const { container } = renderWithProviders(<Harness component={component} />)
+
+    // Hiding the URL field alone must suppress the whole section (pair logic).
+    expect(screen.queryByLabelText(/tc project id/i)).toBeNull()
+    expect(screen.queryByLabelText(/tc project url/i)).toBeNull()
+    expect(container.querySelector('[data-testid="section-teamcity"]')).toBeNull()
   })
 
   it('both TC fields hidden → entire TeamCity section NOT rendered', () => {
