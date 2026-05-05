@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import React from 'react'
+import React, { useEffect } from 'react'
 import { ComponentDetailPage } from './ComponentDetailPage'
 import type { User } from '@/lib/auth'
 import type { ComponentDetail } from '@/lib/types'
@@ -38,13 +38,18 @@ vi.mock('../hooks/useFieldConfig', () => ({
 // GeneralTab also exports GENERAL_TAB_FIELDS, which ComponentDetailPage imports
 // for the 400-error routing. importActual preserves real exports so any future
 // test exercising the 400 path doesn't crash on a missing constant.
+//
+// GeneralTab is wrapped in vi.fn() (not a plain arrow) so individual tests can
+// mockImplementationOnce to simulate the real component's form-population
+// behavior — see the "populated values flow through to PATCH" test below.
+// Default impl returns an empty div, matching the original stub.
 vi.mock('../components/editor/GeneralTab', async () => {
   const actual = await vi.importActual<typeof import('../components/editor/GeneralTab')>(
     '../components/editor/GeneralTab',
   )
   return {
     ...actual,
-    GeneralTab: () => React.createElement('div', { 'data-testid': 'general-tab' }),
+    GeneralTab: vi.fn(() => React.createElement('div', { 'data-testid': 'general-tab' })),
   }
 })
 vi.mock('../components/editor/BuildTab', () => ({
@@ -73,6 +78,7 @@ import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useComponent, useUpdateComponent, useDeleteComponent } from '../hooks/useComponent'
 import { usePortalLinks } from '../hooks/useInfo'
 import { useFieldConfigEntry } from '../hooks/useFieldConfig'
+import { GeneralTab } from '../components/editor/GeneralTab'
 
 const mockedUsePortalLinks = vi.mocked(usePortalLinks)
 const mockedUseFieldConfigEntry = vi.mocked(useFieldConfigEntry)
@@ -201,6 +207,13 @@ beforeEach(() => {
     entry: { visibility: 'editable', required: false },
     isLoading: false,
   }))
+  // Default GeneralTab stub — empty div. Individual tests can override
+  // (e.g. the populated-values save test mirrors the real component's
+  // useEffect setValue dance). Re-set every beforeEach because tests that
+  // call mockImplementation would otherwise leak across the suite.
+  vi.mocked(GeneralTab).mockImplementation(() =>
+    React.createElement('div', { 'data-testid': 'general-tab' }),
+  )
 })
 
 describe('ComponentDetailPage — Archive / Unarchive buttons', () => {
@@ -456,6 +469,46 @@ describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => 
     // Same as above — without typing, both fields are skipped.
     expect(payload['teamcityProjectId']).toBeUndefined()
     expect(payload['teamcityProjectUrl']).toBeUndefined()
+  })
+
+  it('populated teamcity* values flow through to PATCH when the form mirrors server state', async () => {
+    // The previous test pins the contract for the *empty* GeneralTab stub:
+    // unchanged defaults emit nothing. This test exercises the populated
+    // branch of the `(values.teamcityProjectId || undefined)` helper at
+    // ComponentDetailPage.tsx:224-231 — a regression that swapped the
+    // truthy/falsy halves would still pass every undefined-asserting test
+    // above. Override the GeneralTab mock for this case only with a stub
+    // that mirrors the real component's `useEffect` setValue dance so the
+    // form holds the seeded TC values when handleSave runs.
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('teamcityProjectId', component.teamcityProjectId ?? '')
+        form.setValue('teamcityProjectUrl', component.teamcityProjectUrl ?? '')
+      }, [component, form])
+      return React.createElement('div', { 'data-testid': 'general-tab-mirrored' })
+    })
+    const updateMutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    const seeded: ComponentDetail = {
+      ...baseComponent,
+      teamcityProjectId: 'Existing_Build',
+      teamcityProjectUrl: 'https://teamcity.example.com/project/Existing_Build',
+    }
+    renderPage(seeded, user, { updateMutation: { mutateAsync: updateMutateAsync } })
+
+    // Sanity check: the per-test mock rendered (not the default).
+    await waitFor(() => {
+      expect(screen.getByTestId('general-tab-mirrored')).toBeDefined()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
+    const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
+    // Both keys present AND populated — proves the truthy half of the helper
+    // and the editable-FC visibility branch both fire.
+    expect(payload['teamcityProjectId']).toBe('Existing_Build')
+    expect(payload['teamcityProjectUrl']).toBe('https://teamcity.example.com/project/Existing_Build')
   })
 
   it('FC hidden skips both teamcity* fields on save (defence-in-depth)', async () => {

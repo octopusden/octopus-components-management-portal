@@ -221,6 +221,21 @@ export function ComponentDetailPage() {
         // documented limitation of the CRS update path's `?.let { }`
         // semantics (admin clears via the Resync button instead). Send as a
         // pair: never send only one half.
+        //
+        // Reconciliation with plan B3 step 4 ("compare to component.<field>
+        // for dirty detection — only send when changed"): we deliberately
+        // use the SYS-039 `(values.X || undefined)` shape (see displayName /
+        // componentOwner / groupId above) rather than gating via
+        // form.formState.dirtyFields.teamcityProjectId. Two reasons:
+        //   1. It mirrors the codebase precedent the plan itself cited as
+        //      the template for the wire shape.
+        //   2. CRS's `?.let { it.teamcityProjectId = … }` setter is
+        //      idempotent on identical values — re-sending the persisted
+        //      string is a no-op at the DB level, so per-field dirty gating
+        //      buys nothing here. The releasesInDefaultBranch field above
+        //      uses dirtyFields specifically because its `false` default
+        //      collides with the stored-null case; TC strings have no such
+        //      collision.
         teamcityProjectId:
           teamcityProjectIdFc.visibility === 'hidden'
             ? undefined
