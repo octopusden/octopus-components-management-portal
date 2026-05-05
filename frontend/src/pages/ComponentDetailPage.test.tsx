@@ -24,7 +24,7 @@ vi.mock('../components/AppFooter', () => ({
   AppFooter: () => React.createElement('footer', null, 'footer'),
 }))
 vi.mock('../hooks/useInfo', () => ({
-  usePortalConfig: vi.fn(),
+  usePortalLinks: vi.fn(),
   useCrsInfo: vi.fn(),
 }))
 // Editor tabs — stub so only the header/action-area is tested here.
@@ -64,9 +64,9 @@ vi.mock('../components/editor/ComponentHistoryTab', () => ({
 
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useComponent, useUpdateComponent, useDeleteComponent } from '../hooks/useComponent'
-import { usePortalConfig } from '../hooks/useInfo'
+import { usePortalLinks } from '../hooks/useInfo'
 
-const mockedUsePortalConfig = vi.mocked(usePortalConfig)
+const mockedUsePortalConfig = vi.mocked(usePortalLinks)
 
 const mockedUseCurrentUser = vi.mocked(useCurrentUser)
 const mockedUseComponent = vi.mocked(useComponent)
@@ -185,7 +185,7 @@ beforeEach(() => {
     isLoading: false,
     isError: false,
     error: null,
-  } as unknown as ReturnType<typeof usePortalConfig>)
+  } as unknown as ReturnType<typeof usePortalLinks>)
 })
 
 describe('ComponentDetailPage — Archive / Unarchive buttons', () => {
@@ -295,11 +295,11 @@ describe('ComponentDetailPage — breadcrumb badges', () => {
 describe('ComponentDetailPage — Jira/Git quick-links', () => {
   it('(f) Jira link renders when jiraBaseUrl is set and projectKey exists', () => {
     mockedUsePortalConfig.mockReturnValue({
-      data: { links: { jiraBaseUrl: 'https://jira.example.com', gitBaseUrl: null, tcBaseUrl: null, dmsBaseUrl: null } },
+      data: { jiraBaseUrl: 'https://jira.example.com', gitBaseUrl: null, tcBaseUrl: null, dmsBaseUrl: null },
       isLoading: false,
       isError: false,
       error: null,
-    } as unknown as ReturnType<typeof usePortalConfig>)
+    } as unknown as ReturnType<typeof usePortalLinks>)
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(baseComponent, user)
     const link = screen.getByTitle('Jira: PROJ') as HTMLAnchorElement
@@ -315,11 +315,11 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
 
   it('(f) Jira link does NOT render when projectKey is null', () => {
     mockedUsePortalConfig.mockReturnValue({
-      data: { links: { jiraBaseUrl: 'https://jira.example.com', gitBaseUrl: null, tcBaseUrl: null, dmsBaseUrl: null } },
+      data: { jiraBaseUrl: 'https://jira.example.com', gitBaseUrl: null, tcBaseUrl: null, dmsBaseUrl: null },
       isLoading: false,
       isError: false,
       error: null,
-    } as unknown as ReturnType<typeof usePortalConfig>)
+    } as unknown as ReturnType<typeof usePortalLinks>)
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(
       { ...baseComponent, jiraComponentConfigs: [{ id: 'j1', projectKey: null, displayName: null, componentVersionFormat: null, technical: false, metadata: {} }] },
@@ -330,11 +330,11 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
 
   it('(f) Git link renders when gitBaseUrl is set and vcsPath exists', () => {
     mockedUsePortalConfig.mockReturnValue({
-      data: { links: { jiraBaseUrl: null, gitBaseUrl: 'https://git.example.com', tcBaseUrl: null, dmsBaseUrl: null } },
+      data: { jiraBaseUrl: null, gitBaseUrl: 'https://git.example.com', tcBaseUrl: null, dmsBaseUrl: null },
       isLoading: false,
       isError: false,
       error: null,
-    } as unknown as ReturnType<typeof usePortalConfig>)
+    } as unknown as ReturnType<typeof usePortalLinks>)
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(baseComponent, user)
     const link = screen.getByTitle('Git: org/repo') as HTMLAnchorElement
@@ -350,11 +350,11 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
 
   it('(f) Git link does NOT render when vcsSettings is empty', () => {
     mockedUsePortalConfig.mockReturnValue({
-      data: { links: { jiraBaseUrl: null, gitBaseUrl: 'https://git.example.com', tcBaseUrl: null, dmsBaseUrl: null } },
+      data: { jiraBaseUrl: null, gitBaseUrl: 'https://git.example.com', tcBaseUrl: null, dmsBaseUrl: null },
       isLoading: false,
       isError: false,
       error: null,
-    } as unknown as ReturnType<typeof usePortalConfig>)
+    } as unknown as ReturnType<typeof usePortalLinks>)
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage({ ...baseComponent, vcsSettings: [] }, user)
     expect(screen.queryByTitle(/git:/i)).toBeNull()

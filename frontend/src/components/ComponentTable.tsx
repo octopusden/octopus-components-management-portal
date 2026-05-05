@@ -23,7 +23,7 @@ import { SkeletonTable } from './ui/skeleton-table'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip'
 import { cn } from '../lib/utils'
 import type { ComponentSummary, PortalLinks } from '../lib/types'
-import { usePortalConfig } from '../hooks/useInfo'
+import { usePortalLinks } from '../hooks/useInfo'
 
 declare module '@tanstack/react-table' {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -252,7 +252,7 @@ const columns = [
 
 export function ComponentTable({ data, isLoading }: ComponentTableProps) {
   const [sorting, setSorting] = useState<SortingState>([])
-  const { data: portalConfig } = usePortalConfig()
+  const { data: portalLinks } = usePortalLinks()
 
   const table = useReactTable({
     data,
@@ -262,7 +262,7 @@ export function ComponentTable({ data, isLoading }: ComponentTableProps) {
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     manualSorting: false,
-    meta: { links: portalConfig?.links },
+    meta: { links: portalLinks },
   })
 
   if (isLoading) {

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import type { CrsInfo, PortalConfig, PortalInfo } from '../lib/types'
+import type { CrsInfo, PortalInfo, PortalLinks } from '../lib/types'
 
 // /portal/info and /rest/api/4/info are anonymous build-info endpoints used by
 // the footer. They MUST go through plain `fetch` rather than the shared
@@ -49,10 +49,10 @@ export function usePortalInfo() {
   })
 }
 
-export function usePortalConfig() {
-  return useQuery<PortalConfig>({
-    queryKey: ['config', 'portal'],
-    queryFn: () => fetchInfo<PortalConfig>(`${import.meta.env.BASE_URL}portal/links`),
+export function usePortalLinks() {
+  return useQuery<PortalLinks>({
+    queryKey: ['links', 'portal'],
+    queryFn: () => fetchInfo<PortalLinks>(`${import.meta.env.BASE_URL}portal/links`),
     ...QUERY_OPTIONS,
   })
 }

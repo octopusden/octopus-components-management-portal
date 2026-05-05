@@ -163,6 +163,9 @@ export interface FieldOverride {
   updatedAt: string | null
 }
 
+// /portal/links returns the LinksResponse Kotlin data class directly — flat
+// JSON, not wrapped in a `links` envelope. Kept identical to PortalInfo's
+// flat shape so the contract is consistent across portal endpoints.
 export interface PortalLinks {
   jiraBaseUrl: string | null
   gitBaseUrl: string | null
@@ -173,10 +176,6 @@ export interface PortalLinks {
 export interface PortalInfo {
   name: string
   version: string
-}
-
-export interface PortalConfig {
-  links: PortalLinks
 }
 
 export interface CrsInfo {
