@@ -8,7 +8,7 @@ import {
   type SortingState,
 } from '@tanstack/react-table'
 import { ArrowUpDown, ArrowUp, ArrowDown, Package } from 'lucide-react'
-import { JiraIcon, BitbucketIcon } from './ui/icons/brand-icons'
+import { JiraIcon, BitbucketIcon, TeamCityIcon } from './ui/icons/brand-icons'
 import { useState } from 'react'
 import {
   Table,
@@ -171,12 +171,15 @@ const columns = [
     id: 'links',
     header: 'Links',
     cell: ({ row, table }) => {
-      const { name, jiraProjectKey, vcsPath } = row.original
+      const { name, jiraProjectKey, vcsPath, teamcityProjectUrl } = row.original
       const linksConfig = table.options.meta?.links
       const jiraBaseUrl = linksConfig?.jiraBaseUrl ?? undefined
       const gitBaseUrl = linksConfig?.gitBaseUrl ?? undefined
       const dmsBaseUrl = linksConfig?.dmsBaseUrl ?? undefined
-      // tcBaseUrl is intentionally unused — see TODO at the TC block below.
+      // tcBaseUrl from /portal/links is intentionally NOT used here — CRS PR-2
+      // persists the full TC webUrl per component on `teamcityProjectUrl`, so
+      // Portal renders the URL verbatim and does not template it. The runtime
+      // config still ships `tcBaseUrl` for any future cross-project link.
       const links: IconLinkProps[] = []
       if (jiraBaseUrl && jiraProjectKey) {
         links.push({
@@ -200,12 +203,17 @@ const columns = [
           })
         }
       }
-      // TODO: TeamCity link needs the project's webUrl, which today
-      // components-automation reads from the TC REST API per project (no
-      // deterministic component-name → projectId mapping checked into the
-      // codebase). Restore the icon once CRS exposes either a computed
-      // tcProjectUrl on the summary DTO or a stable projectId we can template
-      // into the TC URL.
+      // TeamCity icon — gated only on the per-component `teamcityProjectUrl`
+      // (the persisted webUrl). Independent of `tcBaseUrl` because the URL
+      // is self-sufficient: CRS resolves projectId → webUrl during resync
+      // and stores the result; Portal does NOT template it.
+      if (teamcityProjectUrl) {
+        links.push({
+          href: teamcityProjectUrl,
+          label: `TeamCity: ${name}`,
+          icon: TeamCityIcon,
+        })
+      }
       if (dmsBaseUrl) {
         // DMS uses a query-string component selector, not a path segment.
         links.push({

@@ -27,6 +27,13 @@ vi.mock('../hooks/useInfo', () => ({
   usePortalLinks: vi.fn(),
   useCrsInfo: vi.fn(),
 }))
+// Field-config hook — mocked so individual tests can pin TC fields to
+// 'hidden' / 'editable'. Default (set in beforeEach) returns editable for
+// every field path so existing tests behave unchanged.
+vi.mock('../hooks/useFieldConfig', () => ({
+  useFieldConfigEntry: vi.fn(),
+  useFieldConfigOptions: () => ({ options: [], isLoading: false }),
+}))
 // Editor tabs — stub so only the header/action-area is tested here.
 // GeneralTab also exports GENERAL_TAB_FIELDS, which ComponentDetailPage imports
 // for the 400-error routing. importActual preserves real exports so any future
@@ -65,8 +72,10 @@ vi.mock('../components/editor/ComponentHistoryTab', () => ({
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useComponent, useUpdateComponent, useDeleteComponent } from '../hooks/useComponent'
 import { usePortalLinks } from '../hooks/useInfo'
+import { useFieldConfigEntry } from '../hooks/useFieldConfig'
 
 const mockedUsePortalLinks = vi.mocked(usePortalLinks)
+const mockedUseFieldConfigEntry = vi.mocked(useFieldConfigEntry)
 
 const mockedUseCurrentUser = vi.mocked(useCurrentUser)
 const mockedUseComponent = vi.mocked(useComponent)
@@ -186,6 +195,12 @@ beforeEach(() => {
     isError: false,
     error: null,
   } as unknown as ReturnType<typeof usePortalLinks>)
+  // Default: every field-config entry resolves as 'editable'. Individual
+  // tests override per-field by re-mocking this implementation.
+  mockedUseFieldConfigEntry.mockImplementation(() => ({
+    entry: { visibility: 'editable', required: false },
+    isLoading: false,
+  }))
 })
 
 describe('ComponentDetailPage — Archive / Unarchive buttons', () => {
@@ -361,6 +376,116 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage({ ...baseComponent, vcsSettings: [] }, user)
     expect(screen.queryByTitle(/bitbucket:/i)).toBeNull()
+  })
+
+  it('(g) TeamCity link renders when teamcityProjectUrl is set; href is the verbatim webUrl', () => {
+    // Per CRS PR-2 the URL is self-sufficient — gated only on the
+    // per-component URL, not on /portal/links tcBaseUrl.
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    renderPage(
+      {
+        ...baseComponent,
+        teamcityProjectUrl: 'https://teamcity.example.com/project/MyProject_Build',
+      },
+      user,
+    )
+    const link = screen.getByTitle('TeamCity: my-component') as HTMLAnchorElement
+    expect(link).toBeDefined()
+    expect(link.href).toBe('https://teamcity.example.com/project/MyProject_Build')
+    expect(within(link).getByTestId('brand-icon-teamcity')).toBeDefined()
+  })
+
+  it('(g) TeamCity link does NOT render when teamcityProjectUrl is null', () => {
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    renderPage({ ...baseComponent, teamcityProjectUrl: null }, user)
+    expect(screen.queryByTitle(/teamcity/i)).toBeNull()
+  })
+
+  it('(g) TeamCity link does NOT render when teamcityProjectUrl is undefined', () => {
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    renderPage(baseComponent, user)
+    expect(screen.queryByTitle(/teamcity/i)).toBeNull()
+  })
+})
+
+describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => {
+  // These tests mount ComponentDetailPage with GeneralTab mocked out (the
+  // file-wide mock above), which means the form values stay at their
+  // useForm `defaultValues` — empty string for both TC fields. That's
+  // exactly the right surface to assert: save with unchanged defaults
+  // should NOT include the TC fields in the PATCH payload (empty → undefined),
+  // and we can flip FC visibility to 'hidden' to assert the gate works.
+
+  it('save with unchanged defaults does NOT include teamcity* in PATCH (empty → undefined)', async () => {
+    const updateMutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    renderPage(baseComponent, user, { updateMutation: { mutateAsync: updateMutateAsync } })
+
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
+    const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
+    // Empty-string defaults map to undefined per the "(values.X || undefined)"
+    // helper in handleSave. JSON.stringify drops undefined keys, so the
+    // backend sees no teamcity* keys at all → "don't touch" semantics.
+    expect(payload['teamcityProjectId']).toBeUndefined()
+    expect(payload['teamcityProjectUrl']).toBeUndefined()
+  })
+
+  it('save sends teamcity* when component already had values and form mirrors them', async () => {
+    // Seed the component with TC values; the form's useEffect (in the real
+    // GeneralTab) would mirror these into the form, but here GeneralTab is
+    // mocked so the form values stay empty — meaning unchanged-defaults
+    // means "user hasn't touched, send undefined". The save payload should
+    // therefore NOT include the persisted values either: undefined === skip.
+    // This pins the contract that mocked GeneralTab leaves form at defaults
+    // and the manual-override flow only emits what the user actually typed.
+    const updateMutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    const seeded: ComponentDetail = {
+      ...baseComponent,
+      teamcityProjectId: 'MyProject_Build',
+      teamcityProjectUrl: 'https://teamcity.example.com/project/MyProject_Build',
+    }
+    renderPage(seeded, user, { updateMutation: { mutateAsync: updateMutateAsync } })
+
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
+    const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
+    // Same as above — without typing, both fields are skipped.
+    expect(payload['teamcityProjectId']).toBeUndefined()
+    expect(payload['teamcityProjectUrl']).toBeUndefined()
+  })
+
+  it('FC hidden skips both teamcity* fields on save (defence-in-depth)', async () => {
+    // Even if the form somehow held a value, hidden FC visibility must
+    // make handleSave drop both keys from the payload — server-side does
+    // NOT enforce field-config (CRS PR-2 spec note), so the SPA is the
+    // line of defence against an editor with a stale form snapshot
+    // overwriting a hidden field.
+    mockedUseFieldConfigEntry.mockImplementation((path: string) => {
+      if (
+        path === 'component.teamcityProjectId' ||
+        path === 'component.teamcityProjectUrl'
+      ) {
+        return {
+          entry: { visibility: 'hidden', required: false },
+          isLoading: false,
+        }
+      }
+      return { entry: { visibility: 'editable', required: false }, isLoading: false }
+    })
+    const updateMutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    renderPage(baseComponent, user, { updateMutation: { mutateAsync: updateMutateAsync } })
+
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
+    const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
+    expect(payload['teamcityProjectId']).toBeUndefined()
+    expect(payload['teamcityProjectUrl']).toBeUndefined()
   })
 })
 

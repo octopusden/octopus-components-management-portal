@@ -37,6 +37,11 @@ export const GENERAL_TAB_FIELDS = [
   'securityChampion',
   'copyright',
   'labels',
+  // TC link restoration — manual override pair. Both render inline error <p>
+  // tags below their inputs, so they belong here for the 400-routing
+  // contract (see ComponentDetailPage.handleSave 400 branch).
+  'teamcityProjectId',
+  'teamcityProjectUrl',
 ] as const
 
 export interface GeneralFormValues {
@@ -67,6 +72,11 @@ export interface GeneralFormValues {
   copyright: string
   releasesInDefaultBranch: boolean
   labels: string
+  // TC link restoration — manual override pair. Empty string means
+  // "don't touch" at save time (clear-to-null is a documented limitation
+  // of the CRS update path; clear via the admin Resync button).
+  teamcityProjectId: string
+  teamcityProjectUrl: string
 }
 
 interface GeneralTabProps {
@@ -114,6 +124,10 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
   const { entry: releasesInDefaultBranchEntry } =
     useFieldConfigEntry('component.releasesInDefaultBranch')
   const { entry: labelsEntry } = useFieldConfigEntry('component.labels')
+  // TC link restoration — manual override pair gated by field-config so
+  // admins can hide these from non-admin editors per role.
+  const { entry: teamcityProjectIdEntry } = useFieldConfigEntry('component.teamcityProjectId')
+  const { entry: teamcityProjectUrlEntry } = useFieldConfigEntry('component.teamcityProjectUrl')
 
   useEffect(() => {
     // Form mirrors server state unconditionally — hidden fields just stay
@@ -137,6 +151,10 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
     setValue('copyright', component.copyright ?? '')
     setValue('releasesInDefaultBranch', component.releasesInDefaultBranch ?? false)
     setValue('labels', (component.labels ?? []).join(', '))
+    // TC link restoration — populate from server. Null/undefined → empty
+    // string so the input renders blank rather than the literal "null".
+    setValue('teamcityProjectId', component.teamcityProjectId ?? '')
+    setValue('teamcityProjectUrl', component.teamcityProjectUrl ?? '')
   }, [component, setValue])
 
   return (
@@ -422,6 +440,64 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                   <p className="text-xs text-destructive">{errors.labels.message}</p>
                 ) : (
                   <p className="text-xs text-muted-foreground">Comma-separated tags.</p>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* ── TeamCity ──────────────────────────────────────────────────────────
+          Manual override pair. Both fields are field-config-gated so admins
+          can hide them from non-admin editors. CRS resync rewrites these
+          from TC project params on demand; manual edit here lets ops fix a
+          one-off mismatch. Clearing both back to null is not supported via
+          this UI (admin clears via the Resync button — see plan B3 (a)). */}
+      {(teamcityProjectIdEntry.visibility !== 'hidden' ||
+        teamcityProjectUrlEntry.visibility !== 'hidden') && (
+        <section data-testid="section-teamcity">
+          <h3 className="text-sm font-medium text-muted-foreground mb-3">TeamCity</h3>
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            {teamcityProjectIdEntry.visibility !== 'hidden' && (
+              <div className="space-y-1.5">
+                <Label htmlFor="teamcityProjectId">TC Project ID</Label>
+                <Input
+                  id="teamcityProjectId"
+                  placeholder="MyProject_Build"
+                  disabled={teamcityProjectIdEntry.visibility === 'readonly'}
+                  className={
+                    teamcityProjectIdEntry.visibility === 'readonly' ? 'bg-muted' : undefined
+                  }
+                  {...register('teamcityProjectId')}
+                />
+                {errors.teamcityProjectId ? (
+                  <p className="text-xs text-destructive">{errors.teamcityProjectId.message}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Matching key (TC project id). Resync overwrites from TC params.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {teamcityProjectUrlEntry.visibility !== 'hidden' && (
+              <div className="space-y-1.5">
+                <Label htmlFor="teamcityProjectUrl">TC Project URL</Label>
+                <Input
+                  id="teamcityProjectUrl"
+                  placeholder="https://teamcity.example.com/project/MyProject_Build"
+                  disabled={teamcityProjectUrlEntry.visibility === 'readonly'}
+                  className={
+                    teamcityProjectUrlEntry.visibility === 'readonly' ? 'bg-muted' : undefined
+                  }
+                  {...register('teamcityProjectUrl')}
+                />
+                {errors.teamcityProjectUrl ? (
+                  <p className="text-xs text-destructive">{errors.teamcityProjectUrl.message}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Display URL rendered as-is in the quick-link icon.
+                  </p>
                 )}
               </div>
             )}

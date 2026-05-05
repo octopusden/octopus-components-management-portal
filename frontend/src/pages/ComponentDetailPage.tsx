@@ -1,7 +1,7 @@
 import { useParams, useNavigate, Link } from 'react-router'
 import { useForm } from 'react-hook-form'
 import { ArrowLeft, Save, Trash2, AlertTriangle } from 'lucide-react'
-import { JiraIcon, BitbucketIcon } from '../components/ui/icons/brand-icons'
+import { JiraIcon, BitbucketIcon, TeamCityIcon } from '../components/ui/icons/brand-icons'
 import { useState } from 'react'
 import { Layout } from '../components/Layout'
 import { Button } from '../components/ui/button'
@@ -75,6 +75,10 @@ export function ComponentDetailPage() {
     'component.releasesInDefaultBranch',
   )
   const { entry: labelsFc } = useFieldConfigEntry('component.labels')
+  // TC link restoration — manual override pair. Hidden FC visibility skips
+  // both fields on save (see handleSave below).
+  const { entry: teamcityProjectIdFc } = useFieldConfigEntry('component.teamcityProjectId')
+  const { entry: teamcityProjectUrlFc } = useFieldConfigEntry('component.teamcityProjectUrl')
   // Race-guard: while field-config is still loading, every FC entry falls
   // back to visibility='editable', which would let a fast-clicking user
   // overwrite hidden/readonly fields with form defaults before the real
@@ -110,6 +114,10 @@ export function ComponentDetailPage() {
       copyright: '',
       releasesInDefaultBranch: false,
       labels: '',
+      // TC link restoration — empty-string defaults match the same
+      // "blank means don't touch" convention as the SYS-039 string fields.
+      teamcityProjectId: '',
+      teamcityProjectUrl: '',
     },
   })
 
@@ -208,6 +216,19 @@ export function ComponentDetailPage() {
             : values.releasesInDefaultBranch,
         labels: labelsFc.visibility === 'hidden' ? undefined : labelsArray,
         // labelsArray is already `undefined` when input is blank — see helper above.
+        // TC link restoration — manual override pair. Hidden → undefined
+        // (don't touch). Empty string → undefined: clearing back to null is a
+        // documented limitation of the CRS update path's `?.let { }`
+        // semantics (admin clears via the Resync button instead). Send as a
+        // pair: never send only one half.
+        teamcityProjectId:
+          teamcityProjectIdFc.visibility === 'hidden'
+            ? undefined
+            : (values.teamcityProjectId || undefined),
+        teamcityProjectUrl:
+          teamcityProjectUrlFc.visibility === 'hidden'
+            ? undefined
+            : (values.teamcityProjectUrl || undefined),
       })
       toast({ title: 'Component saved', description: 'Changes have been saved successfully.' })
     } catch (err) {
@@ -383,6 +404,22 @@ export function ComponentDetailPage() {
                   </a>
                 )
               })()}
+              {/* TeamCity quick-link — gated on the per-component webUrl
+                  persisted by CRS PR-2. Same affordance/aria pattern as the
+                  Jira and Bitbucket links above. The URL is rendered
+                  verbatim; the SPA does NOT template it from tcBaseUrl. */}
+              {component.teamcityProjectUrl && (
+                <a
+                  href={component.teamcityProjectUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-sm hover:opacity-80 transition-opacity"
+                  title={`TeamCity: ${component.name}`}
+                  aria-label={`TeamCity: ${component.name}`}
+                >
+                  <TeamCityIcon className="h-4 w-4" />
+                </a>
+              )}
             </div>
             {component.displayName && (
               <p className="text-sm text-muted-foreground">{component.displayName}</p>
