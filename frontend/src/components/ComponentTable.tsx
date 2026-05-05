@@ -7,7 +7,8 @@ import {
   createColumnHelper,
   type SortingState,
 } from '@tanstack/react-table'
-import { ArrowUpDown, ArrowUp, ArrowDown, Bug, GitBranch, Database } from 'lucide-react'
+import { ArrowUpDown, ArrowUp, ArrowDown, Package } from 'lucide-react'
+import { JiraIcon, BitbucketIcon } from './ui/icons/brand-icons'
 import { useState } from 'react'
 import {
   Table,
@@ -177,7 +178,7 @@ const columns = [
         links.push({
           href: `${jiraBaseUrl}/browse/${jiraProjectKey}`,
           label: `Jira: ${jiraProjectKey}`,
-          icon: Bug,
+          icon: JiraIcon,
         })
       }
       if (gitBaseUrl && vcsPath) {
@@ -191,7 +192,7 @@ const columns = [
           links.push({
             href: `${gitBaseUrl}/projects/${encodeURIComponent(projectKey)}/repos/${encodeURIComponent(repoName)}`,
             label: `Git: ${vcsPath}`,
-            icon: GitBranch,
+            icon: BitbucketIcon,
           })
         }
       }
@@ -206,7 +207,7 @@ const columns = [
         links.push({
           href: `${dmsBaseUrl}/?component=${encodeURIComponent(name)}`,
           label: `DMS: ${name}`,
-          icon: Database,
+          icon: Package,
         })
       }
       if (links.length === 0) return <span className="text-muted-foreground">—</span>

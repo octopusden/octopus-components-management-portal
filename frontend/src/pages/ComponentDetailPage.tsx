@@ -1,6 +1,7 @@
 import { useParams, useNavigate, Link } from 'react-router'
 import { useForm } from 'react-hook-form'
-import { ArrowLeft, Save, Trash2, AlertTriangle, ExternalLink, GitBranch } from 'lucide-react'
+import { ArrowLeft, Save, Trash2, AlertTriangle } from 'lucide-react'
+import { JiraIcon, BitbucketIcon } from '../components/ui/icons/brand-icons'
 import { useState } from 'react'
 import { Layout } from '../components/Layout'
 import { Button } from '../components/ui/button'
@@ -355,7 +356,7 @@ export function ComponentDetailPage() {
                   title={`Jira: ${component.jiraComponentConfigs[0].projectKey}`}
                   aria-label={`Jira: ${component.jiraComponentConfigs[0].projectKey}`}
                 >
-                  <ExternalLink className="h-4 w-4" />
+                  <JiraIcon className="h-4 w-4" />
                 </a>
               )}
               {(() => {
@@ -375,7 +376,7 @@ export function ComponentDetailPage() {
                     title={`Git: ${vcsPath}`}
                     aria-label={`Git: ${vcsPath}`}
                   >
-                    <GitBranch className="h-4 w-4" />
+                    <BitbucketIcon className="h-4 w-4" />
                   </a>
                 )
               })()}
