@@ -70,7 +70,10 @@ class ApiClientAuthorizationFailureFilterTest {
 
         // Filter must not have written anything to the response; the downstream
         // OAuth2AuthorizationRequestRedirectWebFilter is responsible for the 302.
+        // ApiJson401Writer always sets both status and content-type before writeWith,
+        // so checking they are both null asserts the writer was never invoked.
         assertNull(exchange.response.statusCode)
+        assertNull(exchange.response.headers.contentType)
     }
 
     @Test

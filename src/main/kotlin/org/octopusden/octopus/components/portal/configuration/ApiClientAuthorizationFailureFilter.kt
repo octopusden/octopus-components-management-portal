@@ -25,10 +25,13 @@ import reactor.core.publisher.Mono
  * CORS-fails on Keycloak's preflight — surfacing in the SPA as `TypeError: Failed to fetch`.
  *
  * This filter must sit INNER of `OAuth2AuthorizationRequestRedirectWebFilter` so the
- * exception bubbles up through here first. In `ServerHttpSecurity` DSL that means
- * `addFilterAfter(filter, SecurityWebFiltersOrder.OAUTH2_AUTHORIZATION_CODE)` — "after"
- * places the filter at a higher order and therefore deeper in the chain, so reactive
- * errors propagate outward through it before reaching the redirect filter.
+ * exception bubbles up through here first. Spring Security registers that redirect
+ * filter at `SecurityWebFiltersOrder.HTTP_BASIC` (an outer position in the WebFilter
+ * chain). Wiring this filter via
+ * `addFilterAfter(filter, SecurityWebFiltersOrder.OAUTH2_AUTHORIZATION_CODE)` places it
+ * at a higher order than HTTP_BASIC and therefore deeper in the chain, so reactive
+ * errors propagate outward through `onErrorResume` here before reaching the redirect
+ * filter's own `onErrorResume`.
  *
  * For non-API paths (browser navigations like `/`, `/components`) the exception is
  * re-emitted unchanged so the default redirect filter handles it normally — full-page
