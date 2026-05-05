@@ -4,9 +4,15 @@ import { readCookie } from './cookies'
 const API_BASE = `${import.meta.env.BASE_URL}rest/api/4`
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  /** Raw response body text — always the full string from the server.
+   *  Use this when you need to JSON.parse the structured error envelope
+   *  (e.g. 409 MigrationJobResponse). Use `message` for display. */
+  readonly rawBody: string
+
+  constructor(public status: number, message: string, rawBody?: string) {
     super(message)
     this.name = 'ApiError'
+    this.rawBody = rawBody ?? message
   }
 }
 
@@ -78,7 +84,7 @@ async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
     } catch {
       // not JSON — use raw body as-is
     }
-    throw new ApiError(response.status, message)
+    throw new ApiError(response.status, message, errorBody)
   }
   if (response.status === 204) return undefined as T
   return response.json()
