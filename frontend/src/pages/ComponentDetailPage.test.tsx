@@ -66,7 +66,7 @@ import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useComponent, useUpdateComponent, useDeleteComponent } from '../hooks/useComponent'
 import { usePortalLinks } from '../hooks/useInfo'
 
-const mockedUsePortalConfig = vi.mocked(usePortalLinks)
+const mockedUsePortalLinks = vi.mocked(usePortalLinks)
 
 const mockedUseCurrentUser = vi.mocked(useCurrentUser)
 const mockedUseComponent = vi.mocked(useComponent)
@@ -180,7 +180,7 @@ function renderPage(component: ComponentDetail, user: User | null, opts: RenderP
 beforeEach(() => {
   vi.clearAllMocks()
   vi.unstubAllGlobals()
-  mockedUsePortalConfig.mockReturnValue({
+  mockedUsePortalLinks.mockReturnValue({
     data: undefined,
     isLoading: false,
     isError: false,
@@ -294,7 +294,7 @@ describe('ComponentDetailPage — breadcrumb badges', () => {
 
 describe('ComponentDetailPage — Jira/Git quick-links', () => {
   it('(f) Jira link renders when jiraBaseUrl is set and projectKey exists', () => {
-    mockedUsePortalConfig.mockReturnValue({
+    mockedUsePortalLinks.mockReturnValue({
       data: { jiraBaseUrl: 'https://jira.example.com', gitBaseUrl: null, tcBaseUrl: null, dmsBaseUrl: null },
       isLoading: false,
       isError: false,
@@ -314,7 +314,7 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
   })
 
   it('(f) Jira link does NOT render when projectKey is null', () => {
-    mockedUsePortalConfig.mockReturnValue({
+    mockedUsePortalLinks.mockReturnValue({
       data: { jiraBaseUrl: 'https://jira.example.com', gitBaseUrl: null, tcBaseUrl: null, dmsBaseUrl: null },
       isLoading: false,
       isError: false,
@@ -329,7 +329,7 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
   })
 
   it('(f) Git link renders when gitBaseUrl is set and vcsPath exists', () => {
-    mockedUsePortalConfig.mockReturnValue({
+    mockedUsePortalLinks.mockReturnValue({
       data: { jiraBaseUrl: null, gitBaseUrl: 'https://git.example.com', tcBaseUrl: null, dmsBaseUrl: null },
       isLoading: false,
       isError: false,
@@ -349,7 +349,7 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
   })
 
   it('(f) Git link does NOT render when vcsSettings is empty', () => {
-    mockedUsePortalConfig.mockReturnValue({
+    mockedUsePortalLinks.mockReturnValue({
       data: { jiraBaseUrl: null, gitBaseUrl: 'https://git.example.com', tcBaseUrl: null, dmsBaseUrl: null },
       isLoading: false,
       isError: false,
