@@ -108,6 +108,18 @@ describe('api — URL construction', () => {
     expect(error.message).toBe('Internal Server Error')
   })
 
+  it('falls back to statusText when body is empty', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response('', { status: 502, statusText: 'Bad Gateway' })),
+    )
+
+    const error = await api.get('/components').catch((e) => e) as ApiError
+    expect(error).toBeInstanceOf(ApiError)
+    expect(error.status).toBe(502)
+    expect(error.message).toBe('Bad Gateway')
+  })
+
   it('sends credentials on every request (BFF session cookie)', async () => {
     const mockFetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({}), { status: 200 }),
