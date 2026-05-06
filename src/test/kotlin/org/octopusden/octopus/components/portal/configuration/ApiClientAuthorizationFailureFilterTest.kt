@@ -19,14 +19,15 @@ import org.springframework.web.server.WebFilterChain
 import reactor.core.publisher.Mono
 
 // Deterministic coverage of the actual bug fix: ApiClientAuthorizationFailureFilter must
-// convert ClientAuthorizationRequiredException from Spring Cloud Gateway's TokenRelay into
-// a JSON 401 for API/XHR paths, and re-emit the exception unchanged for everything else
-// (so Spring Security's OAuth2AuthorizationRequestRedirectWebFilter still handles browser
-// navigations with its default 302 to OIDC).
+// convert ClientAuthorizationException (and its subclass ClientAuthorizationRequiredException)
+// from Spring Cloud Gateway's TokenRelay into a JSON 401 for API/XHR paths, and re-emit
+// the exception unchanged for everything else (so Spring Security's
+// OAuth2AuthorizationRequestRedirectWebFilter still handles browser navigations with its
+// default 302 to OIDC).
 //
 // Pure unit test is preferred over an integration test here because the only reliable way
-// to provoke a ClientAuthorizationRequiredException from inside an SCG filter chain is to
-// stand up a real route + mocked authorized-client manager, which adds substantial setup
+// to provoke a ClientAuthorizationException from inside an SCG filter chain is to stand up
+// a real route + mocked authorized-client manager, which adds substantial setup
 // for one assertion. The filter contract is small and self-contained — exercising it
 // directly with MockServerWebExchange gives the same regression guarantee at a fraction
 // of the cost.

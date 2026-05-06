@@ -41,8 +41,10 @@ import reactor.core.publisher.Mono
 //     unauthenticated/anonymous calls. The other auth-failure path — authenticated
 //     session whose access_token expired and whose refresh_token can no longer be
 //     used — surfaces from Spring Cloud Gateway's TokenRelay as a
-//     ClientAuthorizationRequiredException, which `oauth2Login()` would otherwise
-//     turn into a 302 to OIDC (CORS-fails on cross-origin XHR — the original bug).
+//     ClientAuthorizationException (e.g. invalid_grant when the refresh token has
+//     expired) or its subclass ClientAuthorizationRequiredException, which
+//     `oauth2Login()` would otherwise turn into a 302 to OIDC (CORS-fails on
+//     cross-origin XHR — the original bug).
 //     [ApiClientAuthorizationFailureFilter] catches that exception for api paths
 //     and routes through the same [ApiJson401Writer], so the SPA sees an identical
 //     401 envelope on either path.
@@ -107,7 +109,8 @@ open class SecurityConfig(
             .exceptionHandling { it.authenticationEntryPoint(delegatingEntryPoint) }
             // Inner filter (sits AFTER OAUTH2_AUTHORIZATION_CODE in DSL = deeper in the
             // chain = sees errors before the redirect filter does) that catches
-            // ClientAuthorizationRequiredException from TokenRelay and routes API/XHR
+            // ClientAuthorizationException (and its subclass ClientAuthorizationRequiredException)
+            // from TokenRelay and routes API/XHR
             // calls through the same JSON 401 writer. Without this, an authenticated
             // session with an unrefreshable token would 302 cross-origin to Keycloak
             // and CORS-fail the SPA's XHR — see filter Kdoc for the full chain.

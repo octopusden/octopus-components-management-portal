@@ -28,9 +28,9 @@
         <error line="44" column="48" source="standard:class-signature" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/portal/configuration/SecurityConfig.kt">
-        <error line="101" column="35" source="standard:chain-method-continuation" />
-        <error line="103" column="13" source="standard:chain-method-continuation" />
-        <error line="118" column="13" source="standard:chain-method-continuation" />
+        <error line="103" column="35" source="standard:chain-method-continuation" />
+        <error line="105" column="13" source="standard:chain-method-continuation" />
+        <error line="121" column="13" source="standard:chain-method-continuation" />
     </file>
     <file name="src/main/kotlin/org/octopusden/octopus/components/portal/configuration/SpaFallbackFilter.kt">
         <error line="17" column="25" source="standard:function-signature" />
