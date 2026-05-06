@@ -263,7 +263,7 @@ export function ComponentDetailPage() {
         return
       }
       if (err instanceof ApiError && err.status === 400) {
-        const fieldErrors = parseServerFieldErrors(err.message)
+        const fieldErrors = parseServerFieldErrors(err.rawBody)
         let anyFieldMapped = false
         for (const [field, message] of fieldErrors) {
           // Only set errors for fields owned by GeneralTab; fields from other
