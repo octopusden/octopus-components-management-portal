@@ -46,6 +46,16 @@ describe('parseServerFieldErrors — IllegalArgumentException format', () => {
     expect(result.size).toBe(0)
   })
 
+  it('returns empty map when called with an already-extracted errorMessage string (callers must pass rawBody, not ApiError.message)', () => {
+    // After api.ts extracts errorMessage into ApiError.message for display, the
+    // display string is no longer JSON — parseServerFieldErrors must receive
+    // ApiError.rawBody (the original JSON envelope) from the call site.
+    // This test documents that contract: passing the extracted string yields no fields.
+    const extractedDisplayString = 'Validation failed: name: must not be blank'
+    const result = parseServerFieldErrors(extractedDisplayString)
+    expect(result.size).toBe(0)
+  })
+
   it('returns empty map when errorMessage field is absent', () => {
     const result = parseServerFieldErrors(JSON.stringify({ status: 400, detail: 'oops' }))
     expect(result.size).toBe(0)

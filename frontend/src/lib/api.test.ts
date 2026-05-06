@@ -97,6 +97,40 @@ describe('api — URL construction', () => {
     expect(error.message).toBe('TC sync is not configured: teamcity.base-url is blank')
   })
 
+  it('extracts errorMessage from CRS error envelope ({"errorMessage":"..."})', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ errorMessage: 'TC sync is not configured: teamcity.base-url is blank. Set the TEAMCITY_BASE_URL environment variable.' }),
+          { status: 500 },
+        ),
+      ),
+    )
+
+    const error = await api.post('/admin/teamcity-project-ids/resync').catch((e) => e) as ApiError
+    expect(error).toBeInstanceOf(ApiError)
+    expect(error.status).toBe(500)
+    expect(error.message).toBe('TC sync is not configured: teamcity.base-url is blank. Set the TEAMCITY_BASE_URL environment variable.')
+    // rawBody must still carry the original JSON for callers that need to inspect it
+    expect(error.rawBody).toBe(JSON.stringify({ errorMessage: 'TC sync is not configured: teamcity.base-url is blank. Set the TEAMCITY_BASE_URL environment variable.' }))
+  })
+
+  it('prefers errorMessage over message when both are present', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ errorMessage: 'CRS message', message: 'Spring message' }),
+          { status: 400 },
+        ),
+      ),
+    )
+
+    const error = await api.post('/components').catch((e) => e) as ApiError
+    expect(error.message).toBe('CRS message')
+  })
+
   it('falls back to raw body when error response is not JSON', async () => {
     vi.stubGlobal(
       'fetch',
