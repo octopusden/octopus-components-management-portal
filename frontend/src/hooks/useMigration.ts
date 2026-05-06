@@ -1,60 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '../lib/api'
+import { parseSameKindAttach } from '../lib/migrationConflict'
 import type { HistoryMigrationJobResponse, MigrationJobResponse, MigrationStatus } from '../lib/types'
 
 const JOB_KEY = ['migration', 'job'] as const
 const HISTORY_JOB_KEY = ['migration-history', 'job'] as const
 const JOB_POLL_INTERVAL_MS = 1_000
-
-/**
- * Branch a 409 response body between the two shapes the backend can return:
- *  - same-kind 409 (a second start while one is RUNNING) → MigrationJobResponse
- *    or HistoryMigrationJobResponse with `kind === 'job'`. Caller should resolve
- *    as success (the SPA "attaches" to the in-flight job).
- *  - cross-kind 409 (the OTHER migration kind owns the gate; or the
- *    likely-live-elsewhere check refusing force-reset) → MigrationConflictResponse
- *    with `kind === 'conflict'`. Caller should rethrow so the destructive
- *    block renders the message.
- *
- * Returns the parsed attach-job body on same-kind 409, or null when:
- *  - the body is malformed JSON,
- *  - the body has `kind === 'conflict'` (cross-kind, caller must rethrow),
- *  - the body has neither discriminator AND lacks a recognisable JobState
- *    (treat as cross-kind / unknown — safer to surface as error).
- *
- * Hoisted out of the individual hooks so both useRunMigration and
- * useRunHistoryMigration use the same branching logic. The previous
- * useRunMigration had no cross-kind handling at all and would crash on a
- * cross-kind 409 (per review P1).
- */
-function parseSameKindAttach<T>(err: ApiError): T | null {
-  if (err.status !== 409) return null
-  const parsed = (() => {
-    try {
-      return JSON.parse(err.rawBody) as unknown
-    } catch {
-      return null
-    }
-  })()
-  // Guard against primitives, arrays, null, undefined: only plain objects
-  // can carry the discriminator + JobResponse shape. typeof null === 'object',
-  // hence the explicit null check; Array.isArray catches the array case
-  // (arrays would also pass the typeof check otherwise).
-  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null
-  const obj = parsed as Record<string, unknown>
-  // Explicit cross-kind → not an attach.
-  if (obj['kind'] === 'conflict') return null
-  const looksLikeKnownState = obj['state'] === 'RUNNING' || obj['state'] === 'COMPLETED' || obj['state'] === 'FAILED'
-  // Explicit job (new CRS) OR known-state heuristic (old CRS without the
-  // discriminator). Either way, validate the job-shape minimum: `id` +
-  // `state` must both be present so the panel doesn't bind undefined into
-  // its progress label / cache key. Without this, a buggy 409 with just
-  // `{"state":"RUNNING"}` (no id) would render as "undefined / NaN%".
-  const isJobShape = obj['kind'] === 'job' || looksLikeKnownState
-  if (!isJobShape) return null
-  if (typeof obj['id'] !== 'string' || !looksLikeKnownState) return null
-  return obj as unknown as T
-}
 
 interface MigrationStatusOptions {
   /**
