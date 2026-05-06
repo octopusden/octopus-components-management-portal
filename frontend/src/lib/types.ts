@@ -323,9 +323,10 @@ export interface HistoryMigrationJobResponse {
 
 /**
  * 409 body returned for cross-kind conflicts — components POST while history
- * is RUNNING, force-reset while history is RUNNING, etc. Distinct from the
- * same-kind attach 409 that returns a full job-response body — distinguished
- * by the `kind` discriminator (always 'conflict' here).
+ * is RUNNING, history POST while TC sync is RUNNING, force-reset while
+ * history is RUNNING, etc. Distinct from the same-kind attach 409 that
+ * returns a full job-response body — distinguished by the `kind`
+ * discriminator (always 'conflict' here).
  */
 export interface MigrationConflictResponse {
   /** Discriminator — always 'conflict' for this shape. Mutually exclusive with the 'job' shape. */
@@ -334,7 +335,44 @@ export interface MigrationConflictResponse {
     | 'components-migration-running'
     | 'history-migration-running'
     | 'history-import-likely-live-elsewhere'
+    | 'tc-resync-running'
   message: string
-  activeKind: 'COMPONENTS' | 'HISTORY'
+  activeKind: 'COMPONENTS' | 'HISTORY' | 'TC_RESYNC'
   activeJobId: string | null
+}
+
+/**
+ * Wire shape of `TeamcitySyncResult` — the per-pass counters returned
+ * embedded in [TeamCityResyncJobResponse]'s `result` field once the job
+ * reaches COMPLETED. Field names are the same shape the legacy synchronous
+ * `POST /resync` endpoint returns.
+ */
+export interface TeamCityResyncResult {
+  scanned: number
+  updated: number
+  unchanged: number
+  skipped_no_match: number
+  skipped_ambiguous: number
+  errors: string[]
+}
+
+/**
+ * Wire shape of `POST /admin/teamcity-project-ids/sync` (202 / 409 same-kind
+ * attach) and `GET /admin/teamcity-project-ids/sync/job` (200 / 404).
+ *
+ * Mirrors [MigrationJobResponse] for the components flow but with the
+ * domain-specific [TeamCityResyncResult] payload. While RUNNING the panel
+ * renders an indeterminate spinner (TC sync has no per-component progress
+ * yet); on COMPLETED it switches to rendering the per-pass counter tiles +
+ * first error from `result`.
+ */
+export interface TeamCityResyncJobResponse {
+  /** Discriminator — always 'job' for this shape. */
+  kind?: 'job'
+  id: string
+  state: JobState
+  startedAt: string
+  finishedAt: string | null
+  errorMessage: string | null
+  result: TeamCityResyncResult | null
 }
