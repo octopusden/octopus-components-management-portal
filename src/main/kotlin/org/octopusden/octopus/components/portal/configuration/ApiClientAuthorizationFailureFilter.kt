@@ -46,13 +46,11 @@ import reactor.core.publisher.Mono
  * so for the `invalid_grant` pathway the ordering is not strictly required — but keeping a
  * single, consistent registration avoids any future confusion.)
  *
- * For non-API paths, the exception is re-emitted unchanged. For [org.springframework.security.oauth2.client.ClientAuthorizationRequiredException]
- * (the subclass) the default [org.springframework.security.oauth2.client.web.server.OAuth2AuthorizationRequestRedirectWebFilter]
- * then handles it with a full-page 302 to OIDC — the correct UX for a browser navigation.
- * For [ClientAuthorizationException] (the parent), this case cannot arise in practice:
- * the parent is only thrown by TokenRelay, which only runs on SCG-routed paths
- * (`/rest/**`, `/auth/**`); browser paths like `/components` are served by
- * [SpaFallbackFilter] and never enter the proxy, so they never produce this exception.
+ * For non-API paths (browser navigations like /components) the exception is re-emitted
+ * unchanged so the default redirect filter handles it normally. Note: the redirect filter
+ * catches only ClientAuthorizationRequiredException (the subclass) with a full-page 302;
+ * the parent ClientAuthorizationException cannot arise on browser paths in practice —
+ * it is only thrown by TokenRelay, which only runs on SCG-routed paths.
  */
 class ApiClientAuthorizationFailureFilter(
     private val apiMatcher: ServerWebExchangeMatcher,
