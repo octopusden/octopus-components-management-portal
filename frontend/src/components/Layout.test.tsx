@@ -53,7 +53,7 @@ describe('Layout nav visibility', () => {
   it('shows only Components for a user without audit/import permissions', () => {
     const viewer: User = {
       username: 'carol',
-      roles: [{ name: 'ROLE_REGISTRY_VIEWER', permissions: ['ACCESS_COMPONENTS'] }],
+      roles: [{ name: 'ROLE_COMPONENTS_REGISTRY_VIEWER', permissions: ['ACCESS_COMPONENTS'] }],
       groups: [],
     }
     mockedUseCurrentUser.mockReturnValue({
@@ -99,7 +99,7 @@ describe('Layout nav visibility', () => {
   it('renders a <footer> region with the brand line so the version label has a host', () => {
     const viewer: User = {
       username: 'carol',
-      roles: [{ name: 'ROLE_REGISTRY_VIEWER', permissions: ['ACCESS_COMPONENTS'] }],
+      roles: [{ name: 'ROLE_COMPONENTS_REGISTRY_VIEWER', permissions: ['ACCESS_COMPONENTS'] }],
       groups: [],
     }
     mockedUseCurrentUser.mockReturnValue({
@@ -121,7 +121,7 @@ describe('Layout nav visibility', () => {
   it('uses a vertical flex column so AppFooter can stick to the bottom (mt-auto)', () => {
     const viewer: User = {
       username: 'carol',
-      roles: [{ name: 'ROLE_REGISTRY_VIEWER', permissions: ['ACCESS_COMPONENTS'] }],
+      roles: [{ name: 'ROLE_COMPONENTS_REGISTRY_VIEWER', permissions: ['ACCESS_COMPONENTS'] }],
       groups: [],
     }
     mockedUseCurrentUser.mockReturnValue({
@@ -181,7 +181,7 @@ describe('Layout ADMIN badge — double-gate', () => {
 
   const viewerUser: User = {
     username: 'carol',
-    roles: [{ name: 'ROLE_REGISTRY_VIEWER', permissions: ['ACCESS_COMPONENTS'] }],
+    roles: [{ name: 'ROLE_COMPONENTS_REGISTRY_VIEWER', permissions: ['ACCESS_COMPONENTS'] }],
     groups: [],
   }
 

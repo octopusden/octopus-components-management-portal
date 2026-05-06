@@ -141,7 +141,7 @@ describe('RequirePermission', () => {
   it('redirects to fallback when user lacks the required permission', () => {
     const viewer: User = {
       username: 'carol',
-      roles: [{ name: 'ROLE_REGISTRY_VIEWER', permissions: ['ACCESS_COMPONENTS'] }],
+      roles: [{ name: 'ROLE_COMPONENTS_REGISTRY_VIEWER', permissions: ['ACCESS_COMPONENTS'] }],
       groups: [],
     }
     mockedUseCurrentUser.mockReturnValue({

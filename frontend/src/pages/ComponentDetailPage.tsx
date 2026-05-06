@@ -160,7 +160,7 @@ export function ComponentDetailPage() {
       form.formState.dirtyFields.releasesInDefaultBranch === true
 
     // `archived` is gated server-side by ARCHIVE_COMPONENTS (a permission
-    // ROLE_REGISTRY_EDITOR does not hold). Send it only when the user actually
+    // ROLE_COMPONENTS_REGISTRY_EDITOR does not hold). Send it only when the user actually
     // toggled it — otherwise a plain rename/owner/system edit from a non-admin
     // would trip the archive guard with 403.
     const archivedChanged = values.archived !== component.archived

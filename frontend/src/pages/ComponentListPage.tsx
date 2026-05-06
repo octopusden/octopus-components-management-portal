@@ -6,6 +6,9 @@ import { Pagination } from '../components/Pagination'
 import { CreateComponentButton } from '../components/CreateComponentDialog'
 import { InlineError } from '../components/ui/inline-error'
 import { useComponents } from '../hooks/useComponents'
+import { useCurrentUser } from '@/hooks/useCurrentUser'
+import { hasPermission, PERMISSIONS } from '@/lib/auth'
+import { ApiError } from '../lib/api'
 import type { ComponentFilter } from '../lib/types'
 
 export function ComponentListPage() {
@@ -13,6 +16,7 @@ export function ComponentListPage() {
   const [page, setPage] = useState(0)
   const [size, setSize] = useState(20)
 
+  const { data: user } = useCurrentUser()
   const { data, isLoading, error } = useComponents({ filter, page, size })
 
   const handleFilterChange = (newFilter: ComponentFilter) => {
@@ -37,7 +41,7 @@ export function ComponentListPage() {
               </span>
             )}
           </div>
-          <CreateComponentButton />
+          {hasPermission(user, PERMISSIONS.EDIT_COMPONENTS) && <CreateComponentButton />}
         </div>
 
         <ComponentFilters filter={filter} onFilterChange={handleFilterChange} />
@@ -45,9 +49,13 @@ export function ComponentListPage() {
         {error && (
           <InlineError
             message={
-              <>
-                Failed to load components: {error instanceof Error ? error.message : String(error)}
-              </>
+              error instanceof ApiError && error.status === 403 ? (
+                <>You do not have permission to view components. Contact your administrator.</>
+              ) : (
+                <>
+                  Failed to load components: {error instanceof Error ? error.message : String(error)}
+                </>
+              )
             }
           />
         )}
