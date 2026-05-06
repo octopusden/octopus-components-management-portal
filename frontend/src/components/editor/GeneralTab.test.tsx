@@ -31,7 +31,7 @@ vi.mock('./FieldOverrideInline', () => ({
 
 // Stub useCurrentUser so each test pins the role/permission set under test.
 // The 7.1.4 rename surface depends on the JWT-derived RENAME_COMPONENTS
-// permission: ROLE_ADMIN holds it; ROLE_REGISTRY_EDITOR / VIEWER do not.
+// permission: ROLE_ADMIN holds it; ROLE_COMPONENTS_REGISTRY_EDITOR / VIEWER do not.
 const mockUseCurrentUser = vi.fn()
 vi.mock('../../hooks/useCurrentUser', () => ({
   useCurrentUser: () => mockUseCurrentUser(),
@@ -124,7 +124,7 @@ const EDITOR_USER = {
   username: 'bob',
   roles: [
     {
-      name: 'ROLE_REGISTRY_EDITOR',
+      name: 'ROLE_COMPONENTS_REGISTRY_EDITOR',
       permissions: ['ACCESS_COMPONENTS', 'EDIT_COMPONENTS', 'ACCESS_AUDIT'],
     },
   ],
@@ -205,7 +205,7 @@ describe('GeneralTab rename (B7.1.4)', () => {
     mockUseCurrentUser.mockReturnValue({
       data: {
         username: 'carol',
-        roles: [{ name: 'ROLE_REGISTRY_VIEWER', permissions: ['ACCESS_COMPONENTS', 'ACCESS_AUDIT'] }],
+        roles: [{ name: 'ROLE_COMPONENTS_REGISTRY_VIEWER', permissions: ['ACCESS_COMPONENTS', 'ACCESS_AUDIT'] }],
         groups: [],
       },
       isLoading: false,

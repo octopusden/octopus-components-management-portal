@@ -37,7 +37,7 @@ const adminUser: User = {
 }
 const viewerUser: User = {
   username: 'carol',
-  roles: [{ name: 'ROLE_REGISTRY_VIEWER', permissions: ['ACCESS_COMPONENTS'] }],
+  roles: [{ name: 'ROLE_COMPONENTS_REGISTRY_VIEWER', permissions: ['ACCESS_COMPONENTS'] }],
   groups: [],
 }
 
