@@ -1,0 +1,62 @@
+# PUBLIC — every PR triggers this workflow and the gate/merge check must be green to merge.
+name: Merge Gate
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  build:
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v2.3.4
+    with:
+      java-version: '21'
+      flow-type: 'hybrid'
+      docker-image: components-management-portal
+    secrets: inherit
+
+  quality:
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v2.3.4
+    with:
+      java-version: '21'
+    secrets: inherit
+
+  security:
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v2.3.4
+    with:
+      java-version: '21'
+      enable-codeql: false
+      trivy-continue-on-error: true
+    secrets: inherit
+
+  frontend:
+    name: frontend / lint-typecheck-coverage
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test:coverage
+
+  gate-merge:
+    name: gate/merge
+    needs: [ build, quality, security, frontend ]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: octopusden/octopus-base/.github/actions/merge-gate@v2.3.4
+        with:
+          needs: ${{ toJson(needs) }}
