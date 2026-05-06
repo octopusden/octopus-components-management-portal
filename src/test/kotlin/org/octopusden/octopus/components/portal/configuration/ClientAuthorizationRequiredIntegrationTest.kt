@@ -10,7 +10,9 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
 import org.springframework.core.Ordered
 import org.springframework.http.MediaType
+import org.springframework.security.oauth2.client.ClientAuthorizationException
 import org.springframework.security.oauth2.client.ClientAuthorizationRequiredException
+import org.springframework.security.oauth2.core.OAuth2Error
 import org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.reactive.server.WebTestClient
@@ -20,6 +22,7 @@ import org.springframework.web.server.WebFilterChain
 import reactor.core.publisher.Mono
 
 private const val TRIGGER_HEADER = "X-Test-Throw-Refresh-Required"
+private const val TRIGGER_HEADER_INVALID_GRANT = "X-Test-Throw-Refresh-Failed"
 
 // Test-only @TestConfiguration that injects a deep WebFilter simulating the SCG
 // TokenRelay throwing ClientAuthorizationRequiredException on a refresh-failed
@@ -46,10 +49,17 @@ open class ClientAuthFailureSimulatorConfig {
     open fun simulateClientAuthorizationRequired(): WebFilter =
         object : WebFilter, Ordered {
             override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> =
-                if (exchange.request.headers.containsKey(TRIGGER_HEADER)) {
-                    Mono.error(ClientAuthorizationRequiredException("keycloak"))
-                } else {
-                    chain.filter(exchange)
+                when {
+                    exchange.request.headers.containsKey(TRIGGER_HEADER) ->
+                        Mono.error(ClientAuthorizationRequiredException("keycloak"))
+                    exchange.request.headers.containsKey(TRIGGER_HEADER_INVALID_GRANT) ->
+                        Mono.error(
+                            ClientAuthorizationException(
+                                OAuth2Error("invalid_grant", "Token is not active", null),
+                                "keycloak",
+                            )
+                        )
+                    else -> chain.filter(exchange)
                 }
 
             override fun getOrder() = Ordered.LOWEST_PRECEDENCE
@@ -116,6 +126,30 @@ class ClientAuthorizationRequiredIntegrationTest {
             .expectBody().jsonPath("$.error").isEqualTo("Authorization expired")
     }
 
+    @Test
+    fun `rest path returns json 401 envelope on refresh-rejected invalid_grant for authenticated user`() {
+        client
+            .mutateWith(SecurityMockServerConfigurers.mockOAuth2Login())
+            .get().uri("/rest/api/4/components")
+            .header(TRIGGER_HEADER_INVALID_GRANT, "true")
+            .exchange()
+            .expectStatus().isUnauthorized
+            .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+            .expectBody().jsonPath("$.error").isEqualTo("Authorization expired")
+    }
+
+    @Test
+    fun `auth path returns json 401 envelope on refresh-rejected invalid_grant for authenticated user`() {
+        client
+            .mutateWith(SecurityMockServerConfigurers.mockOAuth2Login())
+            .get().uri("/auth/me")
+            .header(TRIGGER_HEADER_INVALID_GRANT, "true")
+            .exchange()
+            .expectStatus().isUnauthorized
+            .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+            .expectBody().jsonPath("$.error").isEqualTo("Authorization expired")
+    }
+
     // Note: a "browser path returns 302" companion test is intentionally omitted here.
     // SpaFallbackFilter (a regular @Component WebFilter, no Ordered annotation) runs
     // shallower than this fixture's LOWEST_PRECEDENCE simulator and short-circuits
@@ -129,5 +163,19 @@ class ClientAuthorizationRequiredIntegrationTest {
     // unit-tested in ApiClientAuthorizationFailureFilterTest. Anonymous browser
     // navigations still 302 to OIDC — that path is covered in
     // SecurityConfigAuthEntryPointTest.
+    //
+    // The two invalid_grant methods above (`rest path returns json 401 envelope on
+    // refresh-rejected invalid_grant…` and `auth path returns json 401 envelope on
+    // refresh-rejected invalid_grant…`) guard a different concern from the subclass
+    // variants above them. The subclass (ClientAuthorizationRequiredException) is caught
+    // by OAuth2AuthorizationRequestRedirectWebFilter, so the subclass tests verify filter
+    // ordering — if ApiClientAuthorizationFailureFilter were moved to addFilterBefore,
+    // the redirect filter would win and produce a 302 instead of the expected 401.
+    // The parent (ClientAuthorizationException with invalid_grant) is NOT caught by the
+    // redirect filter, so ordering is not the concern here. What the parent-exception
+    // methods guard instead is that our filter is actually registered and reachable in
+    // the real security chain, and that the real apiMatcher bean (/rest/**, /auth/**)
+    // matches as expected. A regression that removed the filter from the chain, or
+    // changed the matcher to exclude /rest or /auth, would surface here as a 500.
 }
 

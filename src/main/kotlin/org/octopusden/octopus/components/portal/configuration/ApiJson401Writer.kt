@@ -13,10 +13,12 @@ import reactor.core.publisher.Mono
 //   1. Anonymous request to a protected /rest or /auth path — invoked from the api branch
 //      of SecurityConfig's DelegatingServerAuthenticationEntryPoint.
 //   2. Authenticated session whose OAuth2 access_token expired and refresh failed —
-//      ApiClientAuthorizationFailureFilter catches ClientAuthorizationRequiredException
-//      from Spring Cloud Gateway's TokenRelay and routes here instead of letting
-//      OAuth2AuthorizationRequestRedirectWebFilter turn the failure into a 302 to the OIDC
-//      provider (which would CORS-fail on cross-origin XHR — the original bug).
+//      ApiClientAuthorizationFailureFilter catches ClientAuthorizationException (covers both
+//      the refresh-rejected / invalid_grant case and the SSO-session-killed subclass
+//      ClientAuthorizationRequiredException) from Spring Cloud Gateway's TokenRelay and
+//      routes here instead of letting OAuth2AuthorizationRequestRedirectWebFilter turn the
+//      failure into a 302 to the OIDC provider (which would CORS-fail on cross-origin
+//      XHR — the original bug).
 //
 // Reason text comes from a fixed-set ApiJson401Reason enum, NOT from exception messages.
 // Keycloak / Spring Security exception details would leak client_id, provider URLs, and
