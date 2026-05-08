@@ -86,7 +86,10 @@ export function TeamCityResyncPanel() {
     invalidatedJobs.current.add(jobData.id)
     toast({
       title: 'TC resync completed',
-      description: `${result.scanned} scanned, ${result.updated} updated, ${result.unchanged} unchanged, ${result.skipped_no_match} no match, ${result.skipped_ambiguous} ambiguous, ${result.errors.length} errors`,
+      description:
+        `${result.scanned} scanned, ${result.updated} updated, ${result.unchanged} unchanged, ` +
+        `${result.skipped_no_match} no match, ${result.skipped_ambiguous} ambiguous, ` +
+        `${result.ambiguous_auto_resolved ?? 0} auto-resolved, ${result.errors.length} errors`,
     })
     queryClient.invalidateQueries({ queryKey: ['components'] })
     queryClient.invalidateQueries({
@@ -166,12 +169,19 @@ export function TeamCityResyncPanel() {
 
       {isCompleted && result && (
         <div className="space-y-3">
-          <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
+          {/*
+           * 7 tiles: 3-up on phones, 4-up on tablets (so 7 wraps as 4+3),
+           * 7-up on desktop. The new "Auto-resolved" sits next to "Ambiguous"
+           * because it's a sub-counter that explains how the auto tie-break
+           * is performing on multi-candidate matches (CRS PR #188).
+           */}
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-7">
             <StatCard label="Scanned" value={result.scanned} />
             <StatCard label="Updated" value={result.updated} />
             <StatCard label="Unchanged" value={result.unchanged} />
             <StatCard label="No match" value={result.skipped_no_match} />
             <StatCard label="Ambiguous" value={result.skipped_ambiguous} />
+            <StatCard label="Auto-resolved" value={result.ambiguous_auto_resolved ?? 0} />
             <StatCard label="Errors" value={errorCount} />
           </div>
           {errorCount > 0 && (
