@@ -42,6 +42,7 @@ const RESULT: TeamCityResyncResult = {
   unchanged: 580,
   skipped_no_match: 50,
   skipped_ambiguous: 8,
+  ambiguous_auto_resolved: 4,
   errors: [],
 }
 
@@ -211,7 +212,7 @@ describe('TeamCityResyncPanel — RUNNING / COMPLETED / FAILED rendering', () =>
     expect(screen.getByRole('button', { name: /resyncing/i })).toBeDisabled()
   })
 
-  it('renders all six counter tiles on COMPLETED', () => {
+  it('renders all seven counter tiles on COMPLETED', () => {
     mockUseJob.mockReturnValue(buildJobQuery(COMPLETED_JOB))
     useAdminMode.setState({ enabled: true })
     renderPanel()
@@ -220,7 +221,29 @@ describe('TeamCityResyncPanel — RUNNING / COMPLETED / FAILED rendering', () =>
     expect(screen.getByText('580')).toBeDefined()
     expect(screen.getByText('50')).toBeDefined()
     expect(screen.getByText('8')).toBeDefined()
+    expect(screen.getByText('Auto-resolved')).toBeDefined()
+    // Pin the new sub-counter value to guard against tile reordering accidentally
+    // mapping a number to the wrong label.
+    expect(screen.getByText('4')).toBeDefined()
     expect(screen.getByText('Errors')).toBeDefined()
+  })
+
+  it('renders Auto-resolved as 0 when the field is absent (older CRS without ambiguous_auto_resolved)', () => {
+    const { ambiguous_auto_resolved: _omit, ...legacyResult } = RESULT
+    void _omit
+    const legacyJob: TeamCityResyncJobResponse = {
+      ...COMPLETED_JOB,
+      result: legacyResult as TeamCityResyncResult,
+    }
+    mockUseJob.mockReturnValue(buildJobQuery(legacyJob))
+    useAdminMode.setState({ enabled: true })
+    renderPanel()
+    // Scope the assertion to the Auto-resolved tile because the Errors tile
+    // also renders "0" with this fixture; a global getByText('0') would
+    // ambiguously match both.
+    const autoResolvedTile = screen.getByText('Auto-resolved').closest('div.rounded-md') as HTMLElement
+    expect(autoResolvedTile).not.toBeNull()
+    expect(within(autoResolvedTile).getByText('0')).toBeDefined()
   })
 
   it('expands the errors disclosure with each error string when errors are present', () => {
@@ -287,6 +310,7 @@ describe('TeamCityResyncPanel — terminal COMPLETED side-effects', () => {
     expect(call.title).toMatch(/TC resync completed/i)
     expect(call.description).toContain('650 scanned')
     expect(call.description).toContain('12 updated')
+    expect(call.description).toContain('4 auto-resolved')
 
     // Pin BOTH invalidation calls so a regression that drops one (the
     // queryKey-based call OR the predicate-based call) is caught.

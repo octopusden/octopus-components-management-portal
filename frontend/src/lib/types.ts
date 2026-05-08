@@ -346,6 +346,11 @@ export interface MigrationConflictResponse {
  * embedded in [TeamCityResyncJobResponse]'s `result` field once the job
  * reaches COMPLETED. Field names are the same shape the legacy synchronous
  * `POST /resync` endpoint returns.
+ *
+ * `ambiguous_auto_resolved` is a sub-counter of `updated`+`unchanged`: how
+ * many of those rows came from a CDRelease tie-break on a multi-candidate
+ * match (introduced by CRS PR #188). Optional in the type because older CRS
+ * builds omit the field; the panel falls back to 0 in that case.
  */
 export interface TeamCityResyncResult {
   scanned: number
@@ -353,6 +358,7 @@ export interface TeamCityResyncResult {
   unchanged: number
   skipped_no_match: number
   skipped_ambiguous: number
+  ambiguous_auto_resolved?: number
   errors: string[]
 }
 
