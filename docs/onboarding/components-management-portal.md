@@ -2,7 +2,7 @@
 
 **Environment:** prod
 **Started:** 2026-04-10
-**Last updated:** 2026-04-28
+**Last updated:** 2026-05-08
 
 ## Prod
 
@@ -16,3 +16,4 @@
 | 6 | First deploy & verify | ✅ | Pod running, Spring Boot started OK |
 | 7 | API Gateway route | ⏭️ skipped | Not needed — using custom domain |
 | 8 | Custom domain | ⚠️ pending TLS migration | Prod Route exists but still uses inline TLS (current cert expires 2026-05-07). TLS migration to Ingress + shared wildcard Secret on cluster `ocpm` is tracked as its own deliverable in [`docs/tech-debt/TD-004-tls-ingress-migration.md`](../tech-debt/TD-004-tls-ingress-migration.md) — read that for the work breakdown and the QA reference pattern. |
+| 9 | Keycloak realm-roles | ✅ | `COMPONENTS_REGISTRY_EDITOR` / `_VIEWER` provisioned in QA + prod realms; EDITOR added to `default-roles-{realm}` so every authenticated user inherits `[ACCESS_COMPONENTS, EDIT_COMPONENTS, ACCESS_AUDIT]`. Per-organisation Admin-Console setup steps live in CRS [`deployment/keycloak-setup.md`](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/db-migration/deployment/keycloak-setup.md) — single canonical guide for any deployment. |
