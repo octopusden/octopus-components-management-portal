@@ -231,17 +231,21 @@ describe('TeamCityResyncPanel — RUNNING / COMPLETED / FAILED rendering', () =>
   it('renders Auto-resolved as 0 when the field is absent (older CRS without ambiguous_auto_resolved)', () => {
     const { ambiguous_auto_resolved: _omit, ...legacyResult } = RESULT
     void _omit
+    // No cast: ambiguous_auto_resolved is optional on TeamCityResyncResult, so
+    // omitting it via destructuring still satisfies the type.
     const legacyJob: TeamCityResyncJobResponse = {
       ...COMPLETED_JOB,
-      result: legacyResult as TeamCityResyncResult,
+      result: legacyResult,
     }
     mockUseJob.mockReturnValue(buildJobQuery(legacyJob))
     useAdminMode.setState({ enabled: true })
     renderPanel()
     // Scope the assertion to the Auto-resolved tile because the Errors tile
     // also renders "0" with this fixture; a global getByText('0') would
-    // ambiguously match both.
-    const autoResolvedTile = screen.getByText('Auto-resolved').closest('div.rounded-md') as HTMLElement
+    // ambiguously match both. Walk the DOM via parentElement (the StatCard
+    // root) rather than a Tailwind class selector, so the test is stable
+    // against purely presentational refactors of StatCard.
+    const autoResolvedTile = screen.getByText('Auto-resolved').parentElement as HTMLElement
     expect(autoResolvedTile).not.toBeNull()
     expect(within(autoResolvedTile).getByText('0')).toBeDefined()
   })
