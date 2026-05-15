@@ -99,6 +99,20 @@ The portal renamed the persisted `field-config` and `component-defaults` registr
 
 CRS-rendered `v4.json` ships `"info": { "version": "v0" }` — the Springdoc default. Setting it to the actual `2.0.84-NNNN` build tag (or the equivalent maven version) lets the portal-side spec-pin's traceability ("what CRS build was this spec snapshotted from?") read from the spec itself rather than from a separate annotation.
 
+### 10. Domain-named meta endpoints for option lists
+
+Schema-v2 made `BuildAspect.buildSystem`, `Escrow.generation`, and `VcsEntry.repositoryType` free-form `string` on the wire. The legacy enums (`BuildSystem.type`, `Escrow.generation`, `VersionControlSystem.type`) are still the canonical valid-token sets but are no longer reachable from the v4 typed contract. On a fresh CRS install where the admin has not seeded `field-config.<section>.<field>.options`, the portal's EnumSelect collapses to "None + current value" — users cannot change build systems away from the existing one.
+
+Portal commit `6ad8876` introduced `useFieldOptions(fieldPath)` which prefers admin field-config options when set and otherwise GETs a CRS-side domain endpoint. The endpoints do not exist yet; expected paths:
+
+| fieldPath | endpoint |
+|---|---|
+| `buildSystem` | `GET /rest/api/4/components/meta/build-systems` |
+| `repositoryType` | `GET /rest/api/4/components/meta/repository-types` |
+| `generation` | `GET /rest/api/4/components/meta/escrow-generations` |
+
+Each returns `string[]`. Source can be the legacy enum, a config table, or anything CRS chooses — the wire surface stays domain-named, not implementation-coupled. Until CRS lands the endpoints the portal's hook 404s gracefully and the dropdown stays in current shape; no portal change required when CRS ships.
+
 ## Out of scope
 
 - Re-architecting the chromium-admin / chromium-viewer split. The current pattern works for the new specs above.
