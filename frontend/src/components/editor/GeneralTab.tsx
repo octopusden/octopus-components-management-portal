@@ -8,7 +8,6 @@ import { Input } from '../ui/input'
 import { Switch } from '../ui/switch'
 import { PeopleInput } from '../ui/PeopleInput'
 import { ComponentSelect } from '../ui/ComponentSelect'
-import { FieldOverrideInline } from './FieldOverrideInline'
 import type { ComponentDetail } from '../../lib/types'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../../lib/auth'
@@ -363,7 +362,6 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                 {errors.componentOwner && (
                   <p className="text-xs text-destructive">{errors.componentOwner.message}</p>
                 )}
-                <FieldOverrideInline componentId={component.id} overriddenAttribute="componentOwner" />
               </div>
             )}
 
@@ -442,7 +440,6 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                 ) : (
                   <p className="text-xs text-muted-foreground">Comma-separated list of systems.</p>
                 )}
-                <FieldOverrideInline componentId={component.id} overriddenAttribute="system" />
               </div>
             )}
 
@@ -460,7 +457,6 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                 {errors.clientCode && (
                   <p className="text-xs text-destructive">{errors.clientCode.message}</p>
                 )}
-                <FieldOverrideInline componentId={component.id} overriddenAttribute="clientCode" />
               </div>
             )}
 

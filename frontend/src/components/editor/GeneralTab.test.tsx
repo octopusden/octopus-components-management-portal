@@ -25,8 +25,11 @@ vi.mock('../../hooks/useFieldConfig', () => ({
   useFieldConfigEntry: (fieldPath: string) => mockUseFieldConfigEntry(fieldPath),
 }))
 
+// Render a queryable marker so tests can assert presence/absence per attribute.
 vi.mock('./FieldOverrideInline', () => ({
-  FieldOverrideInline: () => null,
+  FieldOverrideInline: ({ overriddenAttribute }: { overriddenAttribute: string }) => (
+    <span data-testid={`field-override-inline-${overriddenAttribute}`} />
+  ),
 }))
 
 // Stub useCurrentUser so each test pins the role/permission set under test.
@@ -652,4 +655,27 @@ describe('GeneralTab server error display (S3.1a)', () => {
       expect(screen.queryByText(/comma-separated list/i)).toBeNull()
     })
   })
+})
+
+// ---------------------------------------------------------------------------
+// FieldOverride catalogue gating — schema-v2 contract.
+//
+// CRS schema-v2 only accepts overriddenAttribute strings that map to
+// SCALAR_ATTRIBUTE_PATHS (build.*, escrow.*, jira.* — config-row scalars)
+// or to one of the six marker names. Component-level fields like
+// componentOwner, system, clientCode live on the top-level ComponentDetail
+// row, not on component_configurations rows, so POST /field-overrides with
+// those attributes returns 400. We must not surface those override buttons.
+// ---------------------------------------------------------------------------
+
+describe('GeneralTab — FieldOverrideInline gating (schema-v2 contract)', () => {
+  it.each(['componentOwner', 'system', 'clientCode'])(
+    'does not render FieldOverrideInline for component-level field %s',
+    (attribute) => {
+      renderWithProviders(<Harness component={baseComponent()} />)
+      expect(
+        screen.queryByTestId(`field-override-inline-${attribute}`),
+      ).toBeNull()
+    },
+  )
 })
