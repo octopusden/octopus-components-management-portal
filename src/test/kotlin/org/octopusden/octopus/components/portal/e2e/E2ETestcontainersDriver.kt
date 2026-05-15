@@ -519,6 +519,72 @@ open class E2ETestcontainersDriver {
         }
     }
 
+    /**
+     * Contract test: the v4 meta endpoint for `buildSystem` advertises the
+     * persistence-layer enum tokens, NOT the `core.dto.BuildSystem` mirror.
+     *
+     * Background: CRS PR #202 (SYS-038) introduced
+     * `GET /rest/api/4/components/meta/build-systems` to populate the
+     * portal's `EnumSelect` dropdown when admin field-config has no
+     * `options[]` seeded for `buildSystem`. The implementation deliberately
+     * sources from `org.octopusden.octopus.escrow.BuildSystem` (persistence)
+     * rather than the `core.dto.BuildSystem` mirror — the two enums differ
+     * on one token (`ESCROW_NOT_SUPPORTED` vs `NOT_SUPPORTED`), and
+     * `EntityMappers.safeParseBuildSystem` parses against the persistence
+     * variant. If the controller ever reverts to the DTO mirror, save would
+     * silently drop user input of `NOT_SUPPORTED`.
+     *
+     * This probe locks the contract end-to-end against a real CRS
+     * instance — orthogonal to the CRS-side
+     * `buildSystems_advertisesPersistenceTokens` unit test, which runs
+     * against MockMvc and would not catch a packaging/dependency-version
+     * regression in the deployed jar.
+     */
+    @Test
+    fun `CRS meta build-systems endpoint advertises persistence enum tokens`() {
+        val host = crs.host
+        val port = crs.getMappedPort(CRS_INTERNAL_PORT)
+        val url = URI(
+            "http://$host:$port/rest/api/4/components/meta/build-systems",
+        ).toURL()
+        val conn = url.openConnection() as HttpURLConnection
+        try {
+            conn.requestMethod = "GET"
+            val status = conn.responseCode
+            if (status != 200) {
+                val errBody = runCatching {
+                    (conn.errorStream ?: conn.inputStream).bufferedReader().use { it.readText() }
+                }.getOrElse { "<unreadable body: ${it.javaClass.simpleName}>" }
+                fail<Nothing>(
+                    "Expected 200 from GET /rest/api/4/components/meta/build-systems " +
+                            "(SYS-038), got $status. Body: $errBody",
+                )
+            }
+            val body = conn.inputStream.bufferedReader().use { it.readText() }
+            assertTrue(
+                body.contains("\"GRADLE\""),
+                "Response should contain at least GRADLE. Body: ${body.take(500)}",
+            )
+            assertTrue(
+                body.contains("\"ESCROW_NOT_SUPPORTED\""),
+                "Response MUST contain the persistence token ESCROW_NOT_SUPPORTED " +
+                        "(regression guard against reverting to core.dto.BuildSystem). " +
+                        "Body: ${body.take(500)}",
+            )
+            // Leading quote in the search literal distinguishes the bare DTO
+            // token `"NOT_SUPPORTED"` from the persistence token
+            // `"ESCROW_NOT_SUPPORTED"` (which has `_` immediately before
+            // `NOT_SUPPORTED`).
+            assertTrue(
+                !body.contains("\"NOT_SUPPORTED\""),
+                "Response MUST NOT carry the bare DTO token NOT_SUPPORTED. " +
+                        "Body: ${body.take(500)}",
+            )
+        } finally {
+            conn.disconnect()
+        }
+    }
+
     @Test
     fun `OIDC userinfo emits bare role names`() {
         // Sanity check that the realm fixture's protocol mappers and bare
