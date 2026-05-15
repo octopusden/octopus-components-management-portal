@@ -21,7 +21,7 @@
       "required": true,
       "description": "Primary owner of the component."
     },
-    "system": {
+    "systems": {
       "visibility": "readonly",
       "required": false,
       "defaultValue": "CLASSIC",

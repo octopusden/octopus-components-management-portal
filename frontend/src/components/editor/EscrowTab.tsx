@@ -5,12 +5,12 @@ import { Input } from '../ui/input'
 import { Switch } from '../ui/switch'
 import { Button } from '../ui/button'
 import { EnumSelect } from '../ui/EnumSelect'
-import { FieldOverrideInline } from './FieldOverrideInline'
 import type { ComponentDetail } from '../../lib/types'
 import type { ComponentUpdateRequest } from '../../hooks/useComponent'
 import type { UseMutationResult } from '@tanstack/react-query'
 import { ApiError } from '../../lib/api'
 import { useFieldConfigEntry } from '../../hooks/useFieldConfig'
+import { selectBaseRow } from '../../lib/api/baseRow'
 
 interface EscrowTabProps {
   component: ComponentDetail
@@ -19,7 +19,8 @@ interface EscrowTabProps {
 }
 
 export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) {
-  const esc = component.escrowConfigurations[0]
+  const baseRow = selectBaseRow(component)
+  const escrow = baseRow?.escrow
 
   // productType migrated here from GeneralTab (§7.0/2c).
   // Semantic: product-line classifier (values configured via FieldConfig options) used for
@@ -28,16 +29,14 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
   const { entry: productTypeEntry } = useFieldConfigEntry('component.productType')
   const [productType, setProductType] = useState(component.productType ?? '')
 
-  const [buildTask, setBuildTask] = useState(esc?.buildTask ?? '')
-  const [generation, setGeneration] = useState(esc?.generation ?? '')
-  const [diskSpace, setDiskSpace] = useState(esc?.diskSpace ?? '')
-  const [reusable, setReusable] = useState(esc?.reusable ?? false)
-  const [providedDependencies, setProvidedDependencies] = useState(esc?.providedDependencies ?? '')
+  const [generation, setGeneration] = useState(escrow?.generation ?? '')
+  const [diskSpace, setDiskSpace] = useState(escrow?.diskSpace ?? '')
+  const [reusable, setReusable] = useState(escrow?.reusable ?? false)
+  const [providedDependencies, setProvidedDependencies] = useState(escrow?.providedDependencies ?? '')
 
   useEffect(() => {
-    const e = component.escrowConfigurations[0]
+    const e = selectBaseRow(component)?.escrow
     setProductType(component.productType ?? '')
-    setBuildTask(e?.buildTask ?? '')
     setGeneration(e?.generation ?? '')
     setDiskSpace(e?.diskSpace ?? '')
     setReusable(e?.reusable ?? false)
@@ -53,12 +52,13 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
         ...(productTypeEntry.visibility !== 'hidden' && productType
           ? { productType }
           : {}),
-        escrowConfiguration: {
-          buildTask: buildTask || undefined,
-          generation: generation || undefined,
-          diskSpace: diskSpace || undefined,
-          reusable,
-          providedDependencies: providedDependencies || undefined,
+        baseConfiguration: {
+          escrow: {
+            providedDependencies: providedDependencies || null,
+            reusable,
+            generation: generation || null,
+            diskSpace: diskSpace || null,
+          },
         },
       })
       toast({ title: 'Escrow configuration saved' })
@@ -87,16 +87,6 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
             />
           </div>
         )}
-
-        <div className="space-y-1.5">
-          <Label>Build Task</Label>
-          <Input
-            value={buildTask}
-            onChange={(e) => setBuildTask(e.target.value)}
-            placeholder="clean install"
-          />
-          <FieldOverrideInline componentId={component.id} fieldPath="escrow.buildTask" />
-        </div>
 
         <div className="space-y-1.5">
           <Label>Generation</Label>

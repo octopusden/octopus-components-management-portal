@@ -9,6 +9,7 @@ import {
   useRunMigration,
 } from '@/hooks/useMigration'
 import { toast } from '@/hooks/use-toast'
+import { ApiError } from '@/lib/api'
 import { formatMigrationError } from '@/lib/migrationErrors'
 import { Button } from '@/components/ui/button'
 import { StatusBanner } from '@/components/ui/status-banner'
@@ -192,9 +193,23 @@ export function MigrationPanel() {
       )}
 
       {startMigration.isError && (
-        <StatusBanner variant="destructive">
-          {formatMigrationError(startMigration.error)}
-        </StatusBanner>
+        startMigration.error instanceof ApiError && startMigration.error.status === 501 ? (
+          // schema-v2 transitional: CRS PR #192's ImportServiceImpl returns
+          // UnsupportedOperationException → 501 until the §6 pipeline (MIG-039)
+          // lands. Surface a domain-specific banner rather than the generic
+          // "501 Operation not implemented" — operators need to know this is
+          // expected during the schema-v2 transition, not a deployment fault.
+          <StatusBanner variant="warning">
+            Migration is temporarily disabled while the schema-v2 import pipeline
+            (MIG-039) is being implemented in CRS. The endpoint will return 501
+            until that work merges; until then, component data is managed via
+            the per-component Save buttons on the detail page.
+          </StatusBanner>
+        ) : (
+          <StatusBanner variant="destructive">
+            {formatMigrationError(startMigration.error)}
+          </StatusBanner>
+        )
       )}
 
       {isCompleted && result && (

@@ -83,7 +83,7 @@ describe('CreateComponentDialog — form submission', () => {
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/components/comp-42'))
   })
 
-  it('calls mutation with system as an array when comma-separated values are entered', async () => {
+  it('calls mutation with systems as an array when comma-separated values are entered', async () => {
     mockMutateAsync.mockResolvedValue({ id: 'x', name: 'x' })
     renderWithProviders(<CreateComponentButton />)
     await openDialog()
@@ -92,7 +92,7 @@ describe('CreateComponentDialog — form submission', () => {
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() =>
       expect(mockMutateAsync).toHaveBeenCalledWith(
-        expect.objectContaining({ system: ['SYS1', 'SYS2'] }),
+        expect.objectContaining({ systems: ['SYS1', 'SYS2'] }),
       ),
     )
   })

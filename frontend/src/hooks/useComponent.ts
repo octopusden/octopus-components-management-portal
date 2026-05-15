@@ -1,126 +1,18 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
-import type { ComponentDetail, FieldOverride } from '../lib/types'
+import type {
+  ComponentCreateRequest,
+  ComponentDetail,
+  ComponentUpdateRequest,
+  FieldOverride,
+  MarkerChildrenPayload,
+} from '../lib/types'
 
-export interface ComponentCreateRequest {
-  name: string
-  displayName?: string
-  componentOwner?: string
-  productType?: string
-  system?: string[]
-  clientCode?: string
-  solution?: boolean
-  archived?: boolean
-  metadata?: Record<string, unknown>
-}
-
-export interface BuildConfigurationUpdate {
-  buildSystem?: string
-  buildFilePath?: string
-  javaVersion?: string
-  deprecated?: boolean
-  metadata?: Record<string, unknown>
-}
-
-export interface VcsSettingsEntryUpdate {
-  id?: string
-  name?: string
-  vcsPath?: string
-  repositoryType?: string
-  tag?: string
-  branch?: string
-}
-
-export interface VcsSettingsUpdate {
-  vcsType?: string
-  externalRegistry?: string
-  entries?: VcsSettingsEntryUpdate[]
-}
-
-export interface DistributionArtifactUpdate {
-  id?: string
-  artifactType?: string
-  groupPattern?: string
-  artifactPattern?: string
-  name?: string
-  tag?: string
-}
-
-export interface DistributionSecurityGroupUpdate {
-  id?: string
-  groupType?: string
-  groupName?: string
-}
-
-export interface DistributionUpdate {
-  explicit?: boolean
-  external?: boolean
-  artifacts?: DistributionArtifactUpdate[]
-  securityGroups?: DistributionSecurityGroupUpdate[]
-}
-
-export interface JiraComponentConfigUpdate {
-  projectKey?: string
-  displayName?: string
-  componentVersionFormat?: Record<string, unknown>
-  technical?: boolean
-  metadata?: Record<string, unknown>
-}
-
-export interface EscrowConfigurationUpdate {
-  buildTask?: string
-  providedDependencies?: string
-  reusable?: boolean
-  generation?: string
-  diskSpace?: string
-}
-
-export interface ComponentUpdateRequest {
-  version: number
-  /**
-   * Rename. Only send when actually changing — the server gates on
-   * RENAME_COMPONENTS via canRenameComponent (per ComponentControllerV4
-   * PATCH SpEL) and would 403 a non-admin's plain edit if `name` were
-   * always present.
-   */
-  name?: string
-  displayName?: string
-  componentOwner?: string
-  productType?: string
-  system?: string[]
-  clientCode?: string
-  solution?: boolean
-  /**
-   * Component name reference of the parent. `string` sets the parent;
-   * `null` clears it (JSON Merge Patch — see FS §1.4); `undefined`
-   * means "leave unchanged". Backend: `ComponentUpdateRequest.parentComponentName`
-   * (Kotlin nullable String).
-   */
-  parentComponentName?: string | null
-  archived?: boolean
-  metadata?: Record<string, unknown>
-  // SYS-039 (CRS PR #163). undefined = "don't touch" per JSON Merge Patch.
-  groupId?: string
-  releaseManager?: string
-  securityChampion?: string
-  copyright?: string
-  releasesInDefaultBranch?: boolean
-  labels?: string[]
-  // TC link restoration (CRS PR-2). Manual override pair: admin types both
-  // the matching key (`teamcityProjectId`) and the display URL
-  // (`teamcityProjectUrl`). undefined = "don't touch"; empty-string is sent
-  // as undefined here too — admin clears via the resync button (documented
-  // limitation, see plan B3 option (a)). Never null because the CRS
-  // `?.let { }` update path can't distinguish absent from explicit-null
-  // anyway (JSON Merge Patch semantics).
-  teamcityProjectId?: string
-  teamcityProjectUrl?: string
-  buildConfiguration?: BuildConfigurationUpdate
-  vcsSettings?: VcsSettingsUpdate
-  distribution?: DistributionUpdate
-  jiraComponentConfig?: JiraComponentConfigUpdate
-  escrowConfiguration?: EscrowConfigurationUpdate
-}
+// schema-v2: request body types moved into `frontend/src/lib/types.ts`
+// alongside the response types. Re-export here so existing callers that
+// imported them from this module continue to compile during the Wave A
+// migration.
+export type { ComponentCreateRequest, ComponentUpdateRequest } from '../lib/types'
 
 export function useComponent(id: string) {
   return useQuery({
@@ -167,10 +59,28 @@ export function useFieldOverrides(componentId: string) {
   })
 }
 
+// schema-v2: `fieldPath` → `overriddenAttribute`, plus optional
+// `markerChildren` for the six marker overrides (vcs.settings,
+// distribution.{maven,fileUrl,docker,packages}, build.requiredTools).
+// Scalar overrides leave `markerChildren` null and pass `value`; marker
+// overrides leave `value` null and pass the matching child collection.
+export interface FieldOverrideCreateBody {
+  overriddenAttribute: string
+  versionRange: string
+  value?: unknown
+  markerChildren?: MarkerChildrenPayload | null
+}
+
+export interface FieldOverrideUpdateBody {
+  versionRange?: string
+  value?: unknown
+  markerChildren?: MarkerChildrenPayload | null
+}
+
 export function useCreateFieldOverride(componentId: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (request: { fieldPath: string; versionRange: string; value: unknown }) =>
+    mutationFn: (request: FieldOverrideCreateBody) =>
       api.post<FieldOverride>(`/components/${componentId}/field-overrides`, request),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ['field-overrides', componentId] }),
@@ -180,18 +90,10 @@ export function useCreateFieldOverride(componentId: string) {
 export function useUpdateFieldOverride(componentId: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({
-      overrideId,
-      ...request
-    }: {
-      overrideId: string
-      fieldPath?: string
-      versionRange?: string
-      value?: unknown
-    }) =>
+    mutationFn: ({ overrideId, ...request }: { overrideId: string } & FieldOverrideUpdateBody) =>
       api.patch<FieldOverride>(
         `/components/${componentId}/field-overrides/${overrideId}`,
-        request
+        request,
       ),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ['field-overrides', componentId] }),

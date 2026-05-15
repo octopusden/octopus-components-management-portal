@@ -114,7 +114,7 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
   // Field-config visibility entries — section-prefixed paths per ADR-011
   const { entry: displayNameEntry } = useFieldConfigEntry('component.displayName')
   const { entry: componentOwnerEntry } = useFieldConfigEntry('component.componentOwner')
-  const { entry: systemEntry } = useFieldConfigEntry('component.system')
+  const { entry: systemEntry } = useFieldConfigEntry('component.systems')
   const { entry: clientCodeEntry } = useFieldConfigEntry('component.clientCode')
   // SYS-039 fields
   const { entry: groupIdEntry } = useFieldConfigEntry('component.groupId')
@@ -139,22 +139,28 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
     setValue('displayName', component.displayName ?? '')
     setValue('componentOwner', component.componentOwner ?? '')
     setValue('productType', component.productType ?? '')
-    setValue('system', component.system.join(', '))
+    setValue('system', (component.systems ?? []).join(', '))
     setValue('clientCode', component.clientCode ?? '')
     setValue('solution', component.solution ?? false)
     setValue('archived', component.archived)
     setValue('parentComponentName', component.parentComponentName ?? '')
-    // SYS-039
-    setValue('groupId', component.groupId ?? '')
+    // schema-v2: groupId is now a typed child row (component.group.groupKey),
+    // not a flat string. Wave A survival: keep the form field named `groupId`
+    // and read the group's key; Wave B adds the full group editor with
+    // isFake/role plumbing.
+    setValue('groupId', component.group?.groupKey ?? '')
     setValue('releaseManager', component.releaseManager ?? '')
     setValue('securityChampion', component.securityChampion ?? '')
     setValue('copyright', component.copyright ?? '')
     setValue('releasesInDefaultBranch', component.releasesInDefaultBranch ?? false)
     setValue('labels', (component.labels ?? []).join(', '))
-    // TC link restoration — populate from server. Null/undefined → empty
-    // string so the input renders blank rather than the literal "null".
-    setValue('teamcityProjectId', component.teamcityProjectId ?? '')
-    setValue('teamcityProjectUrl', component.teamcityProjectUrl ?? '')
+    // schema-v2: TC project id/url are now per-component child rows
+    // (component.teamcityProjects[]). Wave A survival: surface the first row
+    // only — matches what ComponentSummaryResponse derives for the list-view
+    // badge. Wave B adds the multi-row TC projects editor. The URL field is
+    // server-derived and not writable; the input becomes display-only.
+    setValue('teamcityProjectId', component.teamcityProjects?.[0]?.projectId ?? '')
+    setValue('teamcityProjectUrl', component.teamcityProjects?.[0]?.projectUrl ?? '')
   }, [component, setValue])
 
   return (
@@ -306,7 +312,7 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                 {errors.componentOwner && (
                   <p className="text-xs text-destructive">{errors.componentOwner.message}</p>
                 )}
-                <FieldOverrideInline componentId={component.id} fieldPath="componentOwner" />
+                <FieldOverrideInline componentId={component.id} overriddenAttribute="componentOwner" />
               </div>
             )}
 
@@ -385,7 +391,7 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                 ) : (
                   <p className="text-xs text-muted-foreground">Comma-separated list of systems.</p>
                 )}
-                <FieldOverrideInline componentId={component.id} fieldPath="system" />
+                <FieldOverrideInline componentId={component.id} overriddenAttribute="system" />
               </div>
             )}
 
@@ -403,7 +409,7 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                 {errors.clientCode && (
                   <p className="text-xs text-destructive">{errors.clientCode.message}</p>
                 )}
-                <FieldOverrideInline componentId={component.id} fieldPath="clientCode" />
+                <FieldOverrideInline componentId={component.id} overriddenAttribute="clientCode" />
               </div>
             )}
 

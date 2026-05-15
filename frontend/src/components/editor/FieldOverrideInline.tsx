@@ -9,16 +9,16 @@ import type { FieldOverride } from '../../lib/types'
 
 interface FieldOverrideInlineProps {
   componentId: string
-  fieldPath: string
+  overriddenAttribute: string
 }
 
-export function FieldOverrideInline({ componentId, fieldPath }: FieldOverrideInlineProps) {
+export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldOverrideInlineProps) {
   const { data: allOverrides = [] } = useFieldOverrides(componentId)
   const createMutation = useCreateFieldOverride(componentId)
   const updateMutation = useUpdateFieldOverride(componentId)
   const deleteMutation = useDeleteFieldOverride(componentId)
 
-  const overrides = allOverrides.filter((o) => o.fieldPath === fieldPath)
+  const overrides = allOverrides.filter((o) => o.overriddenAttribute === overriddenAttribute)
 
   const [adding, setAdding] = useState(false)
   const [newRange, setNewRange] = useState('(,)')
@@ -30,7 +30,7 @@ export function FieldOverrideInline({ componentId, fieldPath }: FieldOverrideInl
   function handleAdd() {
     if (!isValidVersionRange(newRange) || !newValue.trim()) return
     createMutation.mutate(
-      { fieldPath, versionRange: newRange, value: newValue },
+      { overriddenAttribute, versionRange: newRange, value: newValue },
       {
         onSuccess: () => {
           setAdding(false)

@@ -80,7 +80,7 @@ describe('FieldConfigEditor — catalog rows', () => {
 
   it('renders all expected component field rows', () => {
     renderEditor({})
-    const componentFields = ['name', 'displayName', 'solution', 'componentOwner', 'system', 'productType', 'clientCode']
+    const componentFields = ['name', 'displayName', 'solution', 'componentOwner', 'systems', 'productType', 'clientCode']
     for (const field of componentFields) {
       // Each field label appears in the table (may appear in multiple cells/elements)
       const elements = screen.getAllByText(field)

@@ -88,7 +88,7 @@ export function CreateComponentDialog({ open, onOpenChange }: CreateComponentDia
         displayName: values.displayName || undefined,
         componentOwner: values.componentOwner || undefined,
         productType: (productType && productType !== '__none__') ? productType : undefined,
-        system: systemArray.length > 0 ? systemArray : undefined,
+        systems: systemArray.length > 0 ? systemArray : undefined,
       })
       toast({ title: 'Component created', description: `"${component.name}" was created.` })
       handleOpenChange(false)

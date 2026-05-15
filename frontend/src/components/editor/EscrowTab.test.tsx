@@ -7,10 +7,6 @@ import type { ComponentDetail } from '../../lib/types'
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
-vi.mock('./FieldOverrideInline', () => ({
-  FieldOverrideInline: () => null,
-}))
-
 // Control productType visibility per test
 const mockUseFieldConfigEntry = vi.fn()
 vi.mock('../../hooks/useFieldConfig', () => ({
@@ -38,30 +34,37 @@ function baseComponent(overrides: Partial<ComponentDetail> = {}): ComponentDetai
     displayName: 'My Component',
     componentOwner: 'alice',
     productType: 'TYPE_A',
-    system: [],
+    systems: [],
     clientCode: null,
     solution: false,
     parentComponentName: null,
     archived: false,
-    metadata: {},
     version: 3,
     createdAt: null,
     updatedAt: null,
-    buildConfigurations: [],
-    vcsSettings: [],
-    distributions: [],
-    jiraComponentConfigs: [],
-    escrowConfigurations: [
+    configurations: [
       {
-        id: 'esc-1',
-        buildTask: 'clean install',
-        generation: 'G2',
-        diskSpace: '5GB',
-        reusable: false,
-        providedDependencies: 'dep1, dep2',
+        id: 'cfg-1',
+        versionRange: '(,0),[0,)',
+        rowType: 'BASE',
+        overriddenAttribute: null,
+        isSyntheticBase: false,
+        build: null,
+        escrow: {
+          providedDependencies: 'dep1, dep2',
+          reusable: false,
+          generation: 'G2',
+          diskSpace: '5GB',
+        },
+        jira: null,
+        vcsEntries: [],
+        mavenArtifacts: [],
+        fileUrlArtifacts: [],
+        dockerImages: [],
+        packages: [],
+        requiredTools: [],
       },
     ],
-    versions: [],
     ...overrides,
   } as ComponentDetail
 }
@@ -133,10 +136,10 @@ describe('EscrowTab productType render (§7.0/2c)', () => {
   })
 })
 
-// ── Save handler: sends productType + escrowConfiguration ─────────────────────
+// ── Save handler: sends productType + baseConfiguration.escrow ────────────────
 
 describe('EscrowTab save handler', () => {
-  it('clicking Save sends both productType (top-level) and escrowConfiguration', async () => {
+  it('clicking Save sends both productType (top-level) and baseConfiguration.escrow', async () => {
     setProductTypeVisibility('editable')
     const mutateAsync = vi.fn().mockResolvedValue({})
     const component = baseComponent({ productType: 'TYPE_B', version: 5 })
@@ -154,8 +157,8 @@ describe('EscrowTab save handler', () => {
     const payload = mutateAsync.mock.calls[0]![0] as any
     expect(payload.version).toBe(5)
     expect(payload.productType).toBe('TYPE_B')
-    expect(payload.escrowConfiguration).toBeDefined()
-    expect(payload.escrowConfiguration.buildTask).toBe('clean install')
+    expect(payload.baseConfiguration).toBeDefined()
+    expect(payload.baseConfiguration.escrow).toBeDefined()
   })
 
   it('hidden productType is NOT included in save payload', async () => {
@@ -173,11 +176,11 @@ describe('EscrowTab save handler', () => {
     const payload = mutateAsync.mock.calls[0]![0] as any
     // hidden → not in payload (undefined key)
     expect(Object.prototype.hasOwnProperty.call(payload, 'productType')).toBe(false)
-    // escrowConfiguration still present
-    expect(payload.escrowConfiguration).toBeDefined()
+    // baseConfiguration.escrow still present
+    expect(payload.baseConfiguration.escrow).toBeDefined()
   })
 
-  it('escrowConfiguration is always sent regardless of productType visibility', async () => {
+  it('baseConfiguration.escrow is always sent regardless of productType visibility', async () => {
     setProductTypeVisibility('hidden')
     const mutateAsync = vi.fn().mockResolvedValue({})
     const component = baseComponent({ productType: 'TYPE_A' })
@@ -189,6 +192,6 @@ describe('EscrowTab save handler', () => {
     await vi.waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce())
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect((mutateAsync.mock.calls[0]![0] as any).escrowConfiguration).toBeDefined()
+    expect((mutateAsync.mock.calls[0]![0] as any).baseConfiguration.escrow).toBeDefined()
   })
 })

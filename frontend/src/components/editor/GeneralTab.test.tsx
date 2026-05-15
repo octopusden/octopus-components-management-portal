@@ -44,16 +44,14 @@ function baseComponent(overrides: Partial<ComponentDetail> = {}): ComponentDetai
     displayName: 'My Component',
     componentOwner: 'alice',
     productType: '',
-    system: [],
+    systems: [],
     clientCode: null,
     solution: false,
     parentComponentName: null,
     archived: false,
-    metadata: {},
     version: 0,
     createdAt: null,
     updatedAt: null,
-    versions: [],
     ...overrides,
   } as ComponentDetail
 }
@@ -75,7 +73,7 @@ function Harness({ component, formRef }: { component: ComponentDetail; formRef?:
       displayName: component.displayName ?? '',
       componentOwner: component.componentOwner ?? '',
       productType: component.productType ?? '',
-      system: component.system.join(', '),
+      system: (component.systems ?? []).join(', '),
       clientCode: component.clientCode ?? '',
       solution: component.solution ?? false,
       archived: component.archived,
@@ -256,10 +254,10 @@ describe('GeneralTab visibility-gating', () => {
 
   it('system hidden → System(s) input NOT rendered', () => {
     mockUseFieldConfigEntry.mockImplementation((path: string) => {
-      if (path === 'component.system') return makeEntry('hidden')
+      if (path === 'component.systems') return makeEntry('hidden')
       return makeEntry('editable')
     })
-    const component = baseComponent({ system: ['SYS1'] })
+    const component = baseComponent({ systems: ['SYS1'] })
     renderWithProviders(<Harness component={component} />)
 
     expect(screen.queryByLabelText(/system\(s\)/i)).toBeNull()
@@ -267,10 +265,10 @@ describe('GeneralTab visibility-gating', () => {
 
   it('system readonly → System(s) input rendered disabled', () => {
     mockUseFieldConfigEntry.mockImplementation((path: string) => {
-      if (path === 'component.system') return makeEntry('readonly')
+      if (path === 'component.systems') return makeEntry('readonly')
       return makeEntry('editable')
     })
-    const component = baseComponent({ system: ['SYS1'] })
+    const component = baseComponent({ systems: ['SYS1'] })
     renderWithProviders(<Harness component={component} />)
 
     const input = screen.getByLabelText(/system\(s\)/i) as HTMLInputElement
@@ -318,11 +316,11 @@ describe('GeneralTab visibility-gating', () => {
 describe('GeneralTab system field hidden → form value contract', () => {
   it('when system is hidden, the form still initialises system from component.system join (page filters to undefined on save)', () => {
     mockUseFieldConfigEntry.mockImplementation((path: string) => {
-      if (path === 'component.system') return makeEntry('hidden')
+      if (path === 'component.systems') return makeEntry('hidden')
       return makeEntry('editable')
     })
     const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
-    const component = baseComponent({ system: ['SYS1', 'SYS2'] })
+    const component = baseComponent({ systems: ['SYS1', 'SYS2'] })
     renderWithProviders(<Harness component={component} formRef={formRef} />)
 
     // Input not rendered (hidden)
@@ -337,7 +335,7 @@ describe('GeneralTab system field hidden → form value contract', () => {
 describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
   it('groupId editable → input rendered with current value', () => {
     setAllEditable()
-    const component = baseComponent({ groupId: 'org.example.alpha' })
+    const component = baseComponent({ group: { groupKey: 'org.example.alpha', isFake: false, role: 'MEMBER' } })
     renderWithProviders(<Harness component={component} />)
 
     const input = screen.getByLabelText(/group id/i) as HTMLInputElement
@@ -351,7 +349,7 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
       if (path === 'component.groupId') return makeEntry('hidden')
       return makeEntry('editable')
     })
-    const component = baseComponent({ groupId: 'org.example.alpha' })
+    const component = baseComponent({ group: { groupKey: 'org.example.alpha', isFake: false, role: 'MEMBER' } })
     renderWithProviders(<Harness component={component} />)
 
     expect(screen.queryByLabelText(/group id/i)).toBeNull()
@@ -434,7 +432,7 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
       return makeEntry('editable')
     })
     const component = baseComponent({
-      groupId: 'org.example',
+      group: { groupKey: 'org.example', isFake: false, role: 'MEMBER' },
       releaseManager: 'rm',
       securityChampion: 'sc',
       copyright: '(c)',
@@ -456,8 +454,14 @@ describe('GeneralTab TC link restoration fields (Portal PR-3)', () => {
   it('teamcityProjectId editable → input rendered with current value', () => {
     setAllEditable()
     const component = baseComponent({
-      teamcityProjectId: 'MyProject_Build',
-      teamcityProjectUrl: 'https://teamcity.example.com/project/MyProject_Build',
+      teamcityProjects: [
+        {
+          id: 'tc-1',
+          projectId: 'MyProject_Build',
+          projectUrl: 'https://teamcity.example.com/project/MyProject_Build',
+          sortOrder: 0,
+        },
+      ],
     })
     renderWithProviders(<Harness component={component} />)
 
@@ -470,8 +474,14 @@ describe('GeneralTab TC link restoration fields (Portal PR-3)', () => {
   it('teamcityProjectUrl editable → input rendered with current value', () => {
     setAllEditable()
     const component = baseComponent({
-      teamcityProjectId: 'MyProject_Build',
-      teamcityProjectUrl: 'https://teamcity.example.com/project/MyProject_Build',
+      teamcityProjects: [
+        {
+          id: 'tc-1',
+          projectId: 'MyProject_Build',
+          projectUrl: 'https://teamcity.example.com/project/MyProject_Build',
+          sortOrder: 0,
+        },
+      ],
     })
     renderWithProviders(<Harness component={component} />)
 
@@ -486,8 +496,14 @@ describe('GeneralTab TC link restoration fields (Portal PR-3)', () => {
       return makeEntry('editable')
     })
     const component = baseComponent({
-      teamcityProjectId: 'X',
-      teamcityProjectUrl: 'https://teamcity.example.com/project/X',
+      teamcityProjects: [
+        {
+          id: 'tc-1',
+          projectId: 'X',
+          projectUrl: 'https://teamcity.example.com/project/X',
+          sortOrder: 0,
+        },
+      ],
     })
     const { container } = renderWithProviders(<Harness component={component} />)
 
@@ -503,8 +519,14 @@ describe('GeneralTab TC link restoration fields (Portal PR-3)', () => {
       return makeEntry('editable')
     })
     const component = baseComponent({
-      teamcityProjectId: 'X',
-      teamcityProjectUrl: 'https://teamcity.example.com/project/X',
+      teamcityProjects: [
+        {
+          id: 'tc-1',
+          projectId: 'X',
+          projectUrl: 'https://teamcity.example.com/project/X',
+          sortOrder: 0,
+        },
+      ],
     })
     const { container } = renderWithProviders(<Harness component={component} />)
 
@@ -525,8 +547,14 @@ describe('GeneralTab TC link restoration fields (Portal PR-3)', () => {
       return makeEntry('editable')
     })
     const component = baseComponent({
-      teamcityProjectId: 'X',
-      teamcityProjectUrl: 'https://teamcity.example.com/project/X',
+      teamcityProjects: [
+        {
+          id: 'tc-1',
+          projectId: 'X',
+          projectUrl: 'https://teamcity.example.com/project/X',
+          sortOrder: 0,
+        },
+      ],
     })
     const { container } = renderWithProviders(<Harness component={component} />)
 
@@ -541,7 +569,14 @@ describe('GeneralTab TC link restoration fields (Portal PR-3)', () => {
       return makeEntry('editable')
     })
     const component = baseComponent({
-      teamcityProjectUrl: 'https://teamcity.example.com/project/X',
+      teamcityProjects: [
+        {
+          id: 'tc-1',
+          projectId: 'X',
+          projectUrl: 'https://teamcity.example.com/project/X',
+          sortOrder: 0,
+        },
+      ],
     })
     renderWithProviders(<Harness component={component} />)
 
@@ -620,7 +655,7 @@ describe('GeneralTab server error display (S3.1a)', () => {
   it('setError("system") renders the message instead of the hint text', async () => {
     setAllEditable()
     const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
-    renderWithProviders(<Harness component={baseComponent({ system: ['S1'] })} formRef={formRef} />)
+    renderWithProviders(<Harness component={baseComponent({ systems: ['S1'] })} formRef={formRef} />)
 
     await act(async () => {
       formRef.current?.setError('system', { type: 'server', message: 'must not be null' })

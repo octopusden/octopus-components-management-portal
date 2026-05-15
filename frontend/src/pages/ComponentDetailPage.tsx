@@ -31,6 +31,7 @@ import { ApiError } from '../lib/api'
 import { describeOptimisticConflict } from '../lib/conflict'
 import { useQueryClient, type UseMutationResult } from '@tanstack/react-query'
 import type { ComponentDetail } from '../lib/types'
+import { selectBaseRow } from '../lib/api/baseRow'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../lib/auth'
 import { useFieldConfigEntry } from '../hooks/useFieldConfig'
@@ -64,7 +65,9 @@ export function ComponentDetailPage() {
     useFieldConfigEntry('component.displayName')
   const { entry: componentOwnerFc, isLoading: componentOwnerFcLoading } =
     useFieldConfigEntry('component.componentOwner')
-  const { entry: systemFc, isLoading: systemFcLoading } = useFieldConfigEntry('component.system')
+  // schema-v2: field-config registry key renamed `component.system` → `component.systems`
+  // in lockstep with the DTO field. CRS PR #192 ships the data migration.
+  const { entry: systemFc, isLoading: systemFcLoading } = useFieldConfigEntry('component.systems')
   const { entry: clientCodeFc, isLoading: clientCodeFcLoading } =
     useFieldConfigEntry('component.clientCode')
   // SYS-039 FC entries
@@ -186,24 +189,33 @@ export function ComponentDetailPage() {
           ? null
           : trimmedParent
 
-    // TC link restoration — pair enforcement. Both FC entries must be visible
-    // to send either field. If one is hidden, omit both so the server never
-    // receives only one half of the pair (which could produce an inconsistent
-    // projectId/projectUrl state). When both are visible, follow the same
-    // SYS-039 `(values.X || undefined)` shape as the other string fields.
+    // schema-v2: TC link is now a per-component list (component.teamcityProjects[]).
+    // Wave A survival: send a single-element list when both id+url FC entries are
+    // visible AND the form has a projectId. The URL is server-derived, not sent on
+    // the wire (TeamcityProjectRequest carries only `projectId`). Wave B adds the
+    // multi-row list editor.
     const tcIdVisible = teamcityProjectIdFc.visibility !== 'hidden'
     const tcUrlVisible = teamcityProjectUrlFc.visibility !== 'hidden'
-    const tcPatch: { teamcityProjectId?: string; teamcityProjectUrl?: string } = {}
+    const tcPatch: { teamcityProjects?: { projectId: string }[] } = {}
     if (tcIdVisible && tcUrlVisible) {
-      const tcId = values.teamcityProjectId || undefined
-      const tcUrl = values.teamcityProjectUrl || undefined
-      // Only include the pair when BOTH halves carry a value — a filled id
-      // with a blank url (or vice versa) omits both, preserving the pair
-      // invariant and preventing a partial PATCH (undefined is dropped by
-      // JSON.stringify, which would send only one field).
-      if (tcId !== undefined && tcUrl !== undefined) {
-        tcPatch.teamcityProjectId = tcId
-        tcPatch.teamcityProjectUrl = tcUrl
+      const tcId = (values.teamcityProjectId || '').trim()
+      if (tcId !== '') {
+        tcPatch.teamcityProjects = [{ projectId: tcId }]
+      }
+    }
+
+    // schema-v2: groupId is now component.group (ComponentGroupRequest = { groupKey }).
+    // Wave A survival: form field `groupId` (string) maps to:
+    //   - hidden → undefined / no clearGroup (don't touch)
+    //   - blank string + currently has group → clearGroup: true (clear)
+    //   - non-blank string → group: { groupKey: value }
+    const groupPatch: { group?: { groupKey: string }; clearGroup?: boolean } = {}
+    if (groupIdFc.visibility !== 'hidden') {
+      const trimmedGroupId = (values.groupId || '').trim()
+      if (trimmedGroupId !== '') {
+        groupPatch.group = { groupKey: trimmedGroupId }
+      } else if (component.group) {
+        groupPatch.clearGroup = true
       }
     }
 
@@ -216,8 +228,8 @@ export function ComponentDetailPage() {
         // componentOwner: hidden → undefined
         componentOwner: componentOwnerFc.visibility === 'hidden' ? undefined : (values.componentOwner || undefined),
         // productType is rendered/saved from EscrowTab; do NOT send it from the General save
-        // system: hidden → undefined (NOT [], which would wipe the server value via JSON merge-patch)
-        system: systemFc.visibility === 'hidden' ? undefined : systemArray,
+        // systems: hidden → undefined (NOT [], which would wipe the server value via JSON merge-patch)
+        systems: systemFc.visibility === 'hidden' ? undefined : systemArray,
         // clientCode: hidden → undefined
         clientCode: clientCodeFc.visibility === 'hidden' ? undefined : (values.clientCode || undefined),
         solution: values.solution,
@@ -226,7 +238,6 @@ export function ComponentDetailPage() {
         // SYS-039: hidden → undefined, blank string → undefined (keep
         // existing). releasesInDefaultBranch only sent on actual change to
         // avoid clobbering a stored null with the form's `false` default.
-        groupId: groupIdFc.visibility === 'hidden' ? undefined : (values.groupId || undefined),
         releaseManager:
           releaseManagerFc.visibility === 'hidden' ? undefined : (values.releaseManager || undefined),
         securityChampion:
@@ -238,7 +249,8 @@ export function ComponentDetailPage() {
             : values.releasesInDefaultBranch,
         labels: labelsFc.visibility === 'hidden' ? undefined : labelsArray,
         // labelsArray is already `undefined` when input is blank — see helper above.
-        // TC pair spread — see tcPatch computation above handleSave's try block.
+        // schema-v2 group + TC patches — see groupPatch / tcPatch computation above.
+        ...groupPatch,
         ...tcPatch,
       })
       toast({ title: 'Component saved', description: 'Changes have been saved successfully.' })
@@ -370,32 +382,37 @@ export function ComponentDetailPage() {
               {component.solution && (
                 <Badge variant="outline">Solution</Badge>
               )}
-              {/* Breadcrumb badges: system + build system */}
-              {component.system.length > 0 && (
-                <Badge variant="outline">{component.system[0]}</Badge>
-              )}
-              {component.buildConfigurations[0]?.buildSystem && (
-                <Badge variant="outline">{component.buildConfigurations[0].buildSystem}</Badge>
-              )}
-              {/* Quick-links: Jira (Atlassian) and Bitbucket. aria-label mirrors
-                  the title so screen readers announce the icon-only link's
-                  destination — using brand-specific names so the cue matches
-                  the icon a sighted user sees. Hover affordance is opacity-
-                  based because brand-color SVGs ignore text-color hovers. */}
-              {jiraBaseUrl && component.jiraComponentConfigs[0]?.projectKey && (
-                <a
-                  href={`${jiraBaseUrl}/browse/${component.jiraComponentConfigs[0].projectKey}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-sm hover:opacity-80 transition-opacity"
-                  title={`Jira: ${component.jiraComponentConfigs[0].projectKey}`}
-                  aria-label={`Jira: ${component.jiraComponentConfigs[0].projectKey}`}
-                >
-                  <JiraIcon className="h-4 w-4" />
-                </a>
-              )}
+              {/* Breadcrumb badges: system + build system (schema-v2: read from BASE row). */}
               {(() => {
-                const vcsPath = component.vcsSettings[0]?.entries[0]?.vcsPath
+                const baseRow = selectBaseRow(component)
+                const firstSystem = component.systems?.[0]
+                const buildSystem = baseRow?.build?.buildSystem
+                const jiraProjectKey = baseRow?.jira?.projectKey
+                return (
+                  <>
+                    {firstSystem && <Badge variant="outline">{firstSystem}</Badge>}
+                    {buildSystem && <Badge variant="outline">{buildSystem}</Badge>}
+                    {/* Quick-links: Jira (Atlassian) and Bitbucket. aria-label mirrors
+                        the title so screen readers announce the icon-only link's
+                        destination — using brand-specific names so the cue matches
+                        the icon a sighted user sees. */}
+                    {jiraBaseUrl && jiraProjectKey && (
+                      <a
+                        href={`${jiraBaseUrl}/browse/${jiraProjectKey}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-sm hover:opacity-80 transition-opacity"
+                        title={`Jira: ${jiraProjectKey}`}
+                        aria-label={`Jira: ${jiraProjectKey}`}
+                      >
+                        <JiraIcon className="h-4 w-4" />
+                      </a>
+                    )}
+                  </>
+                )
+              })()}
+              {(() => {
+                const vcsPath = selectBaseRow(component)?.vcsEntries[0]?.vcsPath
                 if (!gitBaseUrl || !vcsPath) return null
                 const slashIdx = vcsPath.indexOf('/')
                 if (slashIdx <= 0 || slashIdx >= vcsPath.length - 1) return null
@@ -422,7 +439,9 @@ export function ComponentDetailPage() {
                   safeHttpUrl allowlists http/https before the URL reaches
                   an <a href> — prevents javascript: or data: URIs. */}
               {(() => {
-                const safeTcUrl = safeHttpUrl(component.teamcityProjectUrl)
+                // schema-v2: TC link moved to component.teamcityProjects[]; surface the first
+                // row (matches ComponentSummaryResponse's derived list-view badge).
+                const safeTcUrl = safeHttpUrl(component.teamcityProjects?.[0]?.projectUrl ?? null)
                 if (!safeTcUrl) return null
                 return (
                   <a
@@ -484,46 +503,36 @@ export function ComponentDetailPage() {
         <Tabs defaultValue="general" variant="underline">
           <TabsList className="flex-wrap gap-1">
             <TabsTrigger value="general">General</TabsTrigger>
-            <TabsTrigger value="build">
-              Build
-              {component.buildConfigurations.length > 0 && (
-                <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 text-xs">
-                  {component.buildConfigurations.length}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="vcs">
-              VCS
-              {component.vcsSettings.length > 0 && (
-                <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 text-xs">
-                  {component.vcsSettings.length}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="distribution">
-              Distribution
-              {component.distributions.length > 0 && (
-                <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 text-xs">
-                  {component.distributions.length}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="jira">
-              Jira
-              {component.jiraComponentConfigs.length > 0 && (
-                <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 text-xs">
-                  {component.jiraComponentConfigs.length}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="escrow">
-              Escrow
-              {component.escrowConfigurations.length > 0 && (
-                <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 text-xs">
-                  {component.escrowConfigurations.length}
-                </span>
-              )}
-            </TabsTrigger>
+            {(() => {
+              // schema-v2: counts derived from the BASE row. Build/Jira/Escrow are
+              // 0-or-1 (presence of the aspect); VCS counts vcsEntries; Distribution
+              // sums the four typed families + component-level securityGroups[].
+              const baseRow = selectBaseRow(component)
+              const vcsCount = baseRow?.vcsEntries.length ?? 0
+              const distCount =
+                (baseRow?.mavenArtifacts.length ?? 0) +
+                (baseRow?.fileUrlArtifacts.length ?? 0) +
+                (baseRow?.dockerImages.length ?? 0) +
+                (baseRow?.packages.length ?? 0)
+              const buildPresent = baseRow?.build ? 1 : 0
+              const jiraPresent = baseRow?.jira ? 1 : 0
+              const escrowPresent = baseRow?.escrow ? 1 : 0
+              const tabBadge = (n: number) =>
+                n > 0 && (
+                  <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 text-xs">
+                    {n}
+                  </span>
+                )
+              return (
+                <>
+                  <TabsTrigger value="build">Build{tabBadge(buildPresent)}</TabsTrigger>
+                  <TabsTrigger value="vcs">VCS{tabBadge(vcsCount)}</TabsTrigger>
+                  <TabsTrigger value="distribution">Distribution{tabBadge(distCount)}</TabsTrigger>
+                  <TabsTrigger value="jira">Jira{tabBadge(jiraPresent)}</TabsTrigger>
+                  <TabsTrigger value="escrow">Escrow{tabBadge(escrowPresent)}</TabsTrigger>
+                </>
+              )
+            })()}
             <TabsTrigger value="overrides">Overrides</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
           </TabsList>

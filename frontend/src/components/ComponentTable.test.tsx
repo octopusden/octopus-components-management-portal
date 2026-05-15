@@ -36,7 +36,7 @@ function makeComponent(overrides: Partial<ComponentSummary> = {}): ComponentSumm
     name: 'my-component',
     displayName: null,
     componentOwner: null,
-    system: [],
+    systems: [],
     productType: null,
     archived: false,
     updatedAt: null,
@@ -115,7 +115,7 @@ describe('ComponentTable', () => {
 
   describe('SYS-040 — list view column scope', () => {
     it('does not render a System column', () => {
-      renderTable([makeComponent({ system: ['CLASSIC'] })])
+      renderTable([makeComponent({ systems: ['CLASSIC'] })])
       expect(screen.queryByRole('columnheader', { name: 'System' })).toBeNull()
     })
 
