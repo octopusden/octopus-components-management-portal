@@ -3,12 +3,12 @@ import { render, screen } from '@testing-library/react'
 import { EnumSelect } from './EnumSelect'
 
 // Mock the hook so tests don't need a real API
-vi.mock('../../hooks/useFieldConfig', () => ({
-  useFieldConfigOptions: vi.fn(),
+vi.mock('../../hooks/useFieldOptions', () => ({
+  useFieldOptions: vi.fn(),
 }))
 
-import { useFieldConfigOptions } from '../../hooks/useFieldConfig'
-const mockUseFieldConfigOptions = vi.mocked(useFieldConfigOptions)
+import { useFieldOptions } from '../../hooks/useFieldOptions'
+const mockUseFieldConfigOptions = vi.mocked(useFieldOptions)
 
 beforeEach(() => {
   vi.clearAllMocks()

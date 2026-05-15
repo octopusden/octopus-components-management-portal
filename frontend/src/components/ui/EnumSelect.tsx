@@ -6,7 +6,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from './select'
-import { useFieldConfigOptions } from '../../hooks/useFieldConfig'
+import { useFieldOptions } from '../../hooks/useFieldOptions'
 
 interface EnumSelectProps {
   fieldPath: string
@@ -25,7 +25,7 @@ export function EnumSelect({
   allowFreeText = false,
   disabled = false,
 }: EnumSelectProps) {
-  const { options, isLoading } = useFieldConfigOptions(fieldPath)
+  const { options, isLoading } = useFieldOptions(fieldPath)
 
   if (isLoading) {
     return (
