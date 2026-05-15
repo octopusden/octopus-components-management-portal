@@ -66,12 +66,27 @@ export function VcsTab({ component, updateMutation, toast }: VcsTabProps) {
   }
 
   async function handleSave() {
+    // Drop rows whose required `vcsPath` is still blank — the wire shape's
+    // required string would otherwise hit the server as an empty value and
+    // 400. Save is a button click (not a form submit), so HTML `required`
+    // doesn't gate; this is the equivalent guard server-side contracts assume.
+    const cleanedEntries = entries
+      .map((e) => ({
+        name: (e.name || '').trim(),
+        vcsPath: e.vcsPath.trim(),
+        branch: (e.branch || '').trim(),
+        tag: (e.tag || '').trim(),
+        hotfixBranch: (e.hotfixBranch || '').trim(),
+        repositoryType: (e.repositoryType || '').trim(),
+      }))
+      .filter((e) => e.vcsPath !== '')
+
     try {
       await updateMutation.mutateAsync({
         version: component.version,
         vcsExternalRegistry: externalRegistry || null,
         baseConfiguration: {
-          vcsEntries: entries.map((e) => ({
+          vcsEntries: cleanedEntries.map((e) => ({
             name: e.name || null,
             vcsPath: e.vcsPath,
             branch: e.branch || null,

@@ -437,8 +437,13 @@ open class E2ETestcontainersDriver {
             conn.requestMethod = "GET"
             val status = conn.responseCode
             if (status != 200) {
-                val errBody = (conn.errorStream ?: conn.inputStream)
-                    .bufferedReader().use { it.readText() }
+                // HttpURLConnection.inputStream raises IOException for error
+                // responses on some JDKs; fall back to errorStream and then
+                // to a placeholder so the assertion message is deterministic
+                // regardless of whether the server emitted a body.
+                val errBody = runCatching {
+                    (conn.errorStream ?: conn.inputStream).bufferedReader().use { it.readText() }
+                }.getOrElse { "<unreadable body: ${it.javaClass.simpleName}>" }
                 fail<Nothing>(
                     "Expected 200 from GET /rest/api/4/components?sort=componentKey,asc " +
                             "(canonical schema-v2 entity property), got $status. Body: $errBody",

@@ -108,30 +108,73 @@ export function DistributionTab({ component, updateMutation, toast }: Distributi
   function removeSecurityGroup(i: number) { setSecurityGroups((p) => p.filter((_, idx) => idx !== i)) }
 
   async function handleSave() {
+    // Drop rows whose required fields are still blank — the wire shape's
+    // required strings would otherwise hit the server as empty values
+    // and 400. Save is a button click (not a form submit), so HTML
+    // `required` doesn't gate; this is the equivalent guard server-side
+    // contracts assume. Trim before checking so whitespace-only doesn't
+    // sneak through.
+    const cleanedMaven = maven
+      .map((a) => ({
+        groupPattern: a.groupPattern.trim(),
+        artifactPattern: a.artifactPattern.trim(),
+        extension: (a.extension || '').trim(),
+        classifier: (a.classifier || '').trim(),
+      }))
+      .filter((a) => a.groupPattern !== '' && a.artifactPattern !== '')
+    const cleanedFileUrl = fileUrl
+      .map((a) => ({
+        url: a.url.trim(),
+        artifactId: (a.artifactId || '').trim(),
+        classifier: (a.classifier || '').trim(),
+      }))
+      .filter((a) => a.url !== '')
+    const cleanedDocker = docker
+      .map((d) => ({
+        imageName: d.imageName.trim(),
+        flavor: (d.flavor || '').trim(),
+      }))
+      .filter((d) => d.imageName !== '')
+    const cleanedPackages = packages
+      .map((p) => ({
+        packageType: p.packageType.trim(),
+        packageName: p.packageName.trim(),
+      }))
+      .filter((p) => p.packageType !== '' && p.packageName !== '')
+    const cleanedSecGroups = securityGroups
+      .map((g) => ({
+        groupType: g.groupType.trim(),
+        groupName: g.groupName.trim(),
+      }))
+      .filter((g) => g.groupName !== '')
+
     try {
       await updateMutation.mutateAsync({
         version: component.version,
         distributionExplicit: explicit,
         distributionExternal: external,
         // securityGroups are a per-component list — sent top-level, NOT inside baseConfiguration
-        securityGroups: securityGroups.map((g) => ({ groupType: g.groupType, groupName: g.groupName })),
+        securityGroups: cleanedSecGroups.map((g) => ({
+          groupType: g.groupType,
+          groupName: g.groupName,
+        })),
         baseConfiguration: {
-          mavenArtifacts: maven.map((a) => ({
+          mavenArtifacts: cleanedMaven.map((a) => ({
             groupPattern: a.groupPattern,
             artifactPattern: a.artifactPattern,
             extension: a.extension || null,
             classifier: a.classifier || null,
           })),
-          fileUrlArtifacts: fileUrl.map((a) => ({
+          fileUrlArtifacts: cleanedFileUrl.map((a) => ({
             url: a.url,
             artifactId: a.artifactId || null,
             classifier: a.classifier || null,
           })),
-          dockerImages: docker.map((d) => ({
+          dockerImages: cleanedDocker.map((d) => ({
             imageName: d.imageName,
             flavor: d.flavor || null,
           })),
-          packages: packages.map((p) => ({
+          packages: cleanedPackages.map((p) => ({
             packageType: p.packageType,
             packageName: p.packageName,
           })),
