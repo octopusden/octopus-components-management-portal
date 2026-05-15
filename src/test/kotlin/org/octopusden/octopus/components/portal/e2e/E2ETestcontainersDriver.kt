@@ -409,48 +409,49 @@ open class E2ETestcontainersDriver {
     }
 
     /**
-     * Regression contract gate: CRS PR #192 (`feat/schema-v2-sql`) renamed
-     * `components.name` to `components.component_key` in V1__schema.sql; the
-     * JPA `ComponentEntity` property followed the column. Spring Data binds
-     * the `sort=` query param to the entity property — not the v4 DTO field
-     * — so `sort=name,asc` throws PropertyReferenceException inside JPA and
-     * surfaces to the client as HTTP 500 with Spring's DefaultErrorAttributes
-     * body.
+     * Contract test: the v4 list endpoint accepts `sort=componentKey` (the
+     * canonical schema-v2 entity property) and returns a Page envelope.
      *
-     * The SPA's `useComponents.ts` default was `sort=name,asc` (v4 DTO still
-     * exposes the column under the `name` field), so opening the
-     * /components page would 500 against any CRS 2.0.84-NNNN build past the
-     * schema-v2 cutoff. Portal-side workaround landed in the same commit
-     * series as this test (changed SPA default to `componentKey,asc`).
+     * Background: CRS PR #192 (`feat/schema-v2-sql`) renamed the entity
+     * property from `name` to `componentKey` (column `component_key`).
+     * Spring Data binds the `sort=` query param to the entity property
+     * directly, NOT the v4 DTO field — so the SPA must sort by the new
+     * property name. The portal default was updated in the same commit
+     * series (see `useComponents.ts`); this test pins the contract
+     * end-to-end against a real CRS instance so any future entity-rename
+     * regression (or sort allowlist change) trips here.
      *
-     * This Kotlin probe stays as the contract gate: CRS should accept the
-     * legacy `sort=name` as a backward-compat alias for `sort=componentKey`,
-     * because the v4 DTO continues to expose the value under `name`. Stays
-     * failing until CRS adds the alias OR until v4 changes the DTO field
-     * name to match the entity (less likely — breaking change).
+     * v4 explicitly does NOT carry a backward-compat alias for the old
+     * `sort=name`. The earlier draft of this test asserted that alias
+     * should exist; deleted once the v4 design decision settled.
      */
     @Test
-    fun `CRS list endpoint accepts sort=name (v4 DTO field name) as backward-compat alias`() {
+    fun `CRS list endpoint accepts sort=componentKey (schema-v2 entity property)`() {
         val host = crs.host
         val port = crs.getMappedPort(CRS_INTERNAL_PORT)
         val url = URI(
-            "http://$host:$port/rest/api/4/components?page=0&size=20&sort=name,asc",
+            "http://$host:$port/rest/api/4/components?page=0&size=20&sort=componentKey,asc",
         ).toURL()
         val conn = url.openConnection() as HttpURLConnection
         try {
             conn.requestMethod = "GET"
             val status = conn.responseCode
             if (status != 200) {
-                // Echo the server-side error body verbatim so the CRS team
-                // gets the exact timestamp + path on first inspection.
                 val errBody = (conn.errorStream ?: conn.inputStream)
                     .bufferedReader().use { it.readText() }
                 fail<Nothing>(
-                    "Expected 200 from GET /rest/api/4/components?sort=name,asc " +
-                            "(legacy alias for sort=componentKey on schema-v2 entity), " +
-                            "got $status. Body: $errBody",
+                    "Expected 200 from GET /rest/api/4/components?sort=componentKey,asc " +
+                            "(canonical schema-v2 entity property), got $status. Body: $errBody",
                 )
             }
+            // Sanity-check the response shape so a "200 OK with wrong body"
+            // regression (e.g. CRS swaps PageImpl for a different envelope)
+            // also trips here.
+            val body = conn.inputStream.bufferedReader().use { it.readText() }
+            assertTrue(
+                body.contains("\"content\""),
+                "Response is missing the Page `content` array. Body: ${body.take(500)}",
+            )
         } finally {
             conn.disconnect()
         }
