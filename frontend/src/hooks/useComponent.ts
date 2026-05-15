@@ -77,13 +77,27 @@ export interface FieldOverrideUpdateBody {
   markerChildren?: MarkerChildrenPayload | null
 }
 
+// Override CUD mutations invalidate BOTH caches:
+//   - ['field-overrides', id]  → FieldOverrides table
+//   - ['component', id]        → ConfigurationsTab (reads configurations[]
+//                                  off the parent component fetch); without
+//                                  this invalidation, edits show in the
+//                                  Overrides tab but the Configurations
+//                                  view stays stale until a full refetch.
+function invalidateOverrideAndComponent(
+  queryClient: ReturnType<typeof useQueryClient>,
+  componentId: string,
+) {
+  queryClient.invalidateQueries({ queryKey: ['field-overrides', componentId] })
+  queryClient.invalidateQueries({ queryKey: ['component', componentId] })
+}
+
 export function useCreateFieldOverride(componentId: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (request: FieldOverrideCreateBody) =>
       api.post<FieldOverride>(`/components/${componentId}/field-overrides`, request),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ['field-overrides', componentId] }),
+    onSuccess: () => invalidateOverrideAndComponent(queryClient, componentId),
   })
 }
 
@@ -95,8 +109,7 @@ export function useUpdateFieldOverride(componentId: string) {
         `/components/${componentId}/field-overrides/${overrideId}`,
         request,
       ),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ['field-overrides', componentId] }),
+    onSuccess: () => invalidateOverrideAndComponent(queryClient, componentId),
   })
 }
 
@@ -105,7 +118,6 @@ export function useDeleteFieldOverride(componentId: string) {
   return useMutation({
     mutationFn: (overrideId: string) =>
       api.delete(`/components/${componentId}/field-overrides/${overrideId}`),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ['field-overrides', componentId] }),
+    onSuccess: () => invalidateOverrideAndComponent(queryClient, componentId),
   })
 }
