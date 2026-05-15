@@ -15,12 +15,12 @@
         "description": "Super-admin. Bare name; UserInfoGrantedAuthoritiesConverter prefixes ROLE_."
       },
       {
-        "name": "REGISTRY_VIEWER",
-        "description": "Read-only access to components. Bare name; converter prefixes ROLE_."
+        "name": "COMPONENTS_REGISTRY_VIEWER",
+        "description": "Read-only access to components. Bare name; converter prefixes ROLE_. Renamed from REGISTRY_VIEWER for schema-v2 CRS (PR #192/#193) — the application.yml role-to-permission map only knows COMPONENTS_REGISTRY_VIEWER now."
       },
       {
-        "name": "REGISTRY_EDITOR",
-        "description": "Read/write access to components. Bare name; converter prefixes ROLE_."
+        "name": "COMPONENTS_REGISTRY_EDITOR",
+        "description": "Read/write access to components. Bare name; converter prefixes ROLE_. Renamed from REGISTRY_EDITOR for schema-v2 CRS — see VIEWER above."
       }
     ]
   },
@@ -74,7 +74,7 @@
         "/e2e-viewers"
       ],
       "realmRoles": [
-        "REGISTRY_VIEWER"
+        "COMPONENTS_REGISTRY_VIEWER"
       ]
     }
   ],

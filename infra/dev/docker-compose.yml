@@ -26,7 +26,7 @@
 #
 # Open: http://localhost:5173
 # Login: e2e-admin / $E2E_ADMIN_PASSWORD  (roles: ADMIN)
-#        e2e-viewer / $E2E_VIEWER_PASSWORD (roles: REGISTRY_VIEWER)
+#        e2e-viewer / $E2E_VIEWER_PASSWORD (roles: COMPONENTS_REGISTRY_VIEWER)
 
 services:
   postgres:

@@ -51,7 +51,7 @@ export default defineConfig({
       // that /admin redirects viewers to /components. Also picks up
       // regression-*.spec.ts files — those are bug-reproduction specs
       // that exercise read-only endpoints, so the viewer storageState
-      // (REGISTRY_VIEWER → ACCESS_COMPONENTS + ACCESS_AUDIT) is enough.
+      // (COMPONENTS_REGISTRY_VIEWER → ACCESS_COMPONENTS + ACCESS_AUDIT) is enough.
       testMatch: /(smoke-viewer|admin-migration-viewer|regression-[^/]+)\.spec\.ts$/,
     },
     {
