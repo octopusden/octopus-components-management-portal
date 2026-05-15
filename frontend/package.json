@@ -14,7 +14,7 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "generate-types": "openapi-typescript src/lib/api/v4.json -o src/lib/api/schema.d.ts",
-    "generate-types:check": "openapi-typescript src/lib/api/v4.json -o /tmp/schema-check.d.ts && diff src/lib/api/schema.d.ts /tmp/schema-check.d.ts"
+    "generate-types:check": "openapi-typescript src/lib/api/v4.json -o /tmp/schema-check-$$.d.ts && diff -u src/lib/api/schema.d.ts /tmp/schema-check-$$.d.ts; rc=$?; rm -f /tmp/schema-check-$$.d.ts; exit $rc"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
