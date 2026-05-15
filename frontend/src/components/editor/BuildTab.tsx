@@ -24,37 +24,59 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
   const build = baseRow?.build
 
   const [buildSystem, setBuildSystem] = useState(build?.buildSystem ?? '')
+  const [buildSystemVersion, setBuildSystemVersion] = useState(build?.buildSystemVersion ?? '')
   const [buildFilePath, setBuildFilePath] = useState(build?.buildFilePath ?? '')
   const [javaVersion, setJavaVersion] = useState(build?.javaVersion ?? '')
-  const [deprecated, setDeprecated] = useState(build?.deprecated ?? false)
+  const [mavenVersion, setMavenVersion] = useState(build?.mavenVersion ?? '')
   const [gradleVersion, setGradleVersion] = useState(build?.gradleVersion ?? '')
+  const [deprecated, setDeprecated] = useState(build?.deprecated ?? false)
+  const [requiredProject, setRequiredProject] = useState(build?.requiredProject ?? false)
+  const [projectVersion, setProjectVersion] = useState(build?.projectVersion ?? '')
+  const [systemProperties, setSystemProperties] = useState(build?.systemProperties ?? '')
+  const [buildTasks, setBuildTasks] = useState(build?.buildTasks ?? '')
+  const [requiredToolsInput, setRequiredToolsInput] = useState((baseRow?.requiredTools ?? []).join(', '))
 
   useEffect(() => {
     const br = selectBaseRow(component)
     const b = br?.build
     setBuildSystem(b?.buildSystem ?? '')
+    setBuildSystemVersion(b?.buildSystemVersion ?? '')
     setBuildFilePath(b?.buildFilePath ?? '')
     setJavaVersion(b?.javaVersion ?? '')
-    setDeprecated(b?.deprecated ?? false)
+    setMavenVersion(b?.mavenVersion ?? '')
     setGradleVersion(b?.gradleVersion ?? '')
+    setDeprecated(b?.deprecated ?? false)
+    setRequiredProject(b?.requiredProject ?? false)
+    setProjectVersion(b?.projectVersion ?? '')
+    setSystemProperties(b?.systemProperties ?? '')
+    setBuildTasks(b?.buildTasks ?? '')
+    setRequiredToolsInput((br?.requiredTools ?? []).join(', '))
   }, [component])
 
   async function handleSave() {
     try {
-      // Wave A scope: surface only the four fields the legacy UI exposed plus
-      // gradleVersion. mavenVersion and buildTasks (typed BuildAspect scalars)
-      // are deferred to Wave B; absent-from-payload = "don't touch" per JSON
-      // Merge Patch, so they stay untouched on the server side.
+      const requiredToolsArray = [...new Set(
+        requiredToolsInput.split(',').map((t) => t.trim()).filter(Boolean)
+      )]
+
       await updateMutation.mutateAsync({
         version: component.version,
         baseConfiguration: {
           build: {
             buildSystem: buildSystem || null,
+            buildSystemVersion: buildSystemVersion || null,
             buildFilePath: buildFilePath || null,
             javaVersion: javaVersion || null,
+            mavenVersion: mavenVersion || null,
             gradleVersion: gradleVersion || null,
             deprecated,
+            requiredProject,
+            projectVersion: projectVersion || null,
+            systemProperties: systemProperties || null,
+            buildTasks: buildTasks || null,
           },
+          // requiredTools lives at the BaseConfigurationRequest level, not inside build
+          requiredTools: requiredToolsArray,
         },
       })
       toast({ title: 'Build configuration saved' })
@@ -67,7 +89,9 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
     }
   }
 
-  const requiredTools = baseRow?.requiredTools ?? []
+  const parsedRequiredTools = [...new Set(
+    requiredToolsInput.split(',').map((t) => t.trim()).filter(Boolean)
+  )]
 
   return (
     <div className="space-y-6">
@@ -81,6 +105,16 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
             placeholder="Select build system"
           />
           <FieldOverrideInline componentId={component.id} overriddenAttribute="buildSystem" />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>Build System Version</Label>
+          <Input
+            value={buildSystemVersion}
+            onChange={(e) => setBuildSystemVersion(e.target.value)}
+            placeholder="e.g. 3.9.6"
+          />
+          <FieldOverrideInline componentId={component.id} overriddenAttribute="build.buildSystemVersion" />
         </div>
 
         <div className="space-y-1.5">
@@ -103,6 +137,16 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
         </div>
 
         <div className="space-y-1.5">
+          <Label>Maven Version</Label>
+          <Input
+            value={mavenVersion}
+            onChange={(e) => setMavenVersion(e.target.value)}
+            placeholder="3.9.6"
+          />
+          <FieldOverrideInline componentId={component.id} overriddenAttribute="build.mavenVersion" />
+        </div>
+
+        <div className="space-y-1.5">
           <Label>Gradle Version</Label>
           <Input
             value={gradleVersion}
@@ -111,6 +155,36 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
           />
           <FieldOverrideInline componentId={component.id} overriddenAttribute="build.gradleVersion" />
         </div>
+
+        <div className="space-y-1.5">
+          <Label>Project Version</Label>
+          <Input
+            value={projectVersion}
+            onChange={(e) => setProjectVersion(e.target.value)}
+            placeholder="1.0.0"
+          />
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Build Tasks</Label>
+        <Input
+          value={buildTasks}
+          onChange={(e) => setBuildTasks(e.target.value)}
+          placeholder="clean install / assemble"
+        />
+        <FieldOverrideInline componentId={component.id} overriddenAttribute="build.buildTasks" />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>System Properties</Label>
+        <textarea
+          className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-y min-h-[80px]"
+          value={systemProperties}
+          onChange={(e) => setSystemProperties(e.target.value)}
+          placeholder="-Dproperty=value"
+          spellCheck={false}
+        />
       </div>
 
       <div className="flex items-center gap-3">
@@ -122,18 +196,30 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
         <Label htmlFor="build-deprecated" className="cursor-pointer">Deprecated</Label>
       </div>
 
-      {requiredTools.length > 0 && (
-        <div className="space-y-2">
-          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Required Tools (read-only)
-          </span>
-          <div className="flex flex-wrap gap-2">
-            {requiredTools.map((tool) => (
+      <div className="flex items-center gap-3">
+        <Switch
+          id="build-required-project"
+          checked={requiredProject}
+          onCheckedChange={setRequiredProject}
+        />
+        <Label htmlFor="build-required-project" className="cursor-pointer">Required Project</Label>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Required Tools</Label>
+        <Input
+          value={requiredToolsInput}
+          onChange={(e) => setRequiredToolsInput(e.target.value)}
+          placeholder="tool-a, tool-b"
+        />
+        {parsedRequiredTools.length > 0 && (
+          <div className="flex flex-wrap gap-2 pt-1">
+            {parsedRequiredTools.map((tool) => (
               <Badge key={tool} variant="outline">{tool}</Badge>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       <div className="flex justify-end">
         <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending}>

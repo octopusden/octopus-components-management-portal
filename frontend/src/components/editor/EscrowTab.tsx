@@ -5,6 +5,7 @@ import { Input } from '../ui/input'
 import { Switch } from '../ui/switch'
 import { Button } from '../ui/button'
 import { EnumSelect } from '../ui/EnumSelect'
+import { FieldOverrideInline } from './FieldOverrideInline'
 import type { ComponentDetail } from '../../lib/types'
 import type { ComponentUpdateRequest } from '../../hooks/useComponent'
 import type { UseMutationResult } from '@tanstack/react-query'
@@ -33,6 +34,10 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
   const [diskSpace, setDiskSpace] = useState(escrow?.diskSpace ?? '')
   const [reusable, setReusable] = useState(escrow?.reusable ?? false)
   const [providedDependencies, setProvidedDependencies] = useState(escrow?.providedDependencies ?? '')
+  const [additionalSources, setAdditionalSources] = useState(escrow?.additionalSources ?? '')
+  const [gradleIncludeConfigurations, setGradleIncludeConfigurations] = useState(escrow?.gradleIncludeConfigurations ?? '')
+  const [gradleExcludeConfigurations, setGradleExcludeConfigurations] = useState(escrow?.gradleExcludeConfigurations ?? '')
+  const [gradleIncludeTestConfigurations, setGradleIncludeTestConfigurations] = useState(escrow?.gradleIncludeTestConfigurations ?? false)
 
   useEffect(() => {
     const e = selectBaseRow(component)?.escrow
@@ -41,6 +46,10 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
     setDiskSpace(e?.diskSpace ?? '')
     setReusable(e?.reusable ?? false)
     setProvidedDependencies(e?.providedDependencies ?? '')
+    setAdditionalSources(e?.additionalSources ?? '')
+    setGradleIncludeConfigurations(e?.gradleIncludeConfigurations ?? '')
+    setGradleExcludeConfigurations(e?.gradleExcludeConfigurations ?? '')
+    setGradleIncludeTestConfigurations(e?.gradleIncludeTestConfigurations ?? false)
   }, [component])
 
   async function handleSave() {
@@ -58,6 +67,10 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
             reusable,
             generation: generation || null,
             diskSpace: diskSpace || null,
+            additionalSources: additionalSources || null,
+            gradleIncludeConfigurations: gradleIncludeConfigurations || null,
+            gradleExcludeConfigurations: gradleExcludeConfigurations || null,
+            gradleIncludeTestConfigurations,
           },
         },
       })
@@ -126,6 +139,48 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
           spellCheck={false}
           placeholder="Comma-separated list of provided dependencies"
         />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Additional Sources</Label>
+        <Input
+          value={additionalSources}
+          onChange={(e) => setAdditionalSources(e.target.value)}
+          placeholder="Additional source paths"
+        />
+        <FieldOverrideInline componentId={component.id} overriddenAttribute="escrow.additionalSources" />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label>Gradle Include Configurations</Label>
+          <Input
+            value={gradleIncludeConfigurations}
+            onChange={(e) => setGradleIncludeConfigurations(e.target.value)}
+            placeholder="e.g. compile,runtimeClasspath"
+          />
+          <FieldOverrideInline componentId={component.id} overriddenAttribute="escrow.gradleIncludeConfigurations" />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>Gradle Exclude Configurations</Label>
+          <Input
+            value={gradleExcludeConfigurations}
+            onChange={(e) => setGradleExcludeConfigurations(e.target.value)}
+            placeholder="e.g. testCompile,testRuntime"
+          />
+          <FieldOverrideInline componentId={component.id} overriddenAttribute="escrow.gradleExcludeConfigurations" />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Switch
+          id="escrow-gradle-include-test"
+          checked={gradleIncludeTestConfigurations}
+          onCheckedChange={setGradleIncludeTestConfigurations}
+        />
+        <Label htmlFor="escrow-gradle-include-test" className="cursor-pointer">Gradle Include Test Configurations</Label>
+        <FieldOverrideInline componentId={component.id} overriddenAttribute="escrow.gradleIncludeTestConfigurations" />
       </div>
 
       <div className="flex justify-end">
