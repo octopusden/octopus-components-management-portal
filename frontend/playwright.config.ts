@@ -48,8 +48,11 @@ export default defineConfig({
       },
       // Viewer project owns the smoke slice that doesn't touch /admin
       // (gated by IMPORT_DATA permission), plus the cross-role check
-      // that /admin redirects viewers to /components.
-      testMatch: /(smoke-viewer|admin-migration-viewer)\.spec\.ts$/,
+      // that /admin redirects viewers to /components. Also picks up
+      // regression-*.spec.ts files — those are bug-reproduction specs
+      // that exercise read-only endpoints, so the viewer storageState
+      // (REGISTRY_VIEWER → ACCESS_COMPONENTS + ACCESS_AUDIT) is enough.
+      testMatch: /(smoke-viewer|admin-migration-viewer|regression-[^/]+)\.spec\.ts$/,
     },
     {
       name: 'chromium-admin',
