@@ -612,10 +612,9 @@ describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => 
 
     await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
     const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
-    // tcUrl is '' → undefined; because only one half is defined, && condition
-    // suppresses both keys — server sees no teamcity* fields at all.
-    expect(payload['teamcityProjectId']).toBeUndefined()
-    expect(payload['teamcityProjectUrl']).toBeUndefined()
+    // schema-v2 list: the trimmed-blank row is dropped at handleSave's
+    // .filter step, the populated row survives.
+    expect(payload['teamcityProjects']).toEqual([{ projectId: 'OnlyId_Build' }])
   })
 })
 

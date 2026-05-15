@@ -24,6 +24,7 @@ import { DistributionTab } from '../components/editor/DistributionTab'
 import { JiraTab } from '../components/editor/JiraTab'
 import { EscrowTab } from '../components/editor/EscrowTab'
 import { FieldOverrides } from '../components/editor/FieldOverrides'
+import { ConfigurationsTab } from '../components/editor/ConfigurationsTab'
 import { ComponentHistoryTab } from '../components/editor/ComponentHistoryTab'
 import { useComponent, useUpdateComponent, useDeleteComponent, type ComponentUpdateRequest } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
@@ -576,6 +577,15 @@ export function ComponentDetailPage() {
                 </>
               )
             })()}
+            <TabsTrigger value="configurations">
+              Configurations
+              {(() => {
+                const n = component.configurations?.length ?? 0
+                return n > 0 && (
+                  <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 text-xs">{n}</span>
+                )
+              })()}
+            </TabsTrigger>
             <TabsTrigger value="overrides">Overrides</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
           </TabsList>
@@ -609,6 +619,10 @@ export function ComponentDetailPage() {
 
             <TabsContent value="escrow">
               <EscrowTab component={component} updateMutation={updateMutation} toast={toast} />
+            </TabsContent>
+
+            <TabsContent value="configurations">
+              <ConfigurationsTab component={component} />
             </TabsContent>
 
             <TabsContent value="overrides">
