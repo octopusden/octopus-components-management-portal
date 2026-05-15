@@ -312,7 +312,7 @@ describe('ComponentDetailPage — breadcrumb badges', () => {
     expect(screen.getByText('SYS1')).toBeDefined()
   })
 
-  it('(e) BuildSystem badge renders when buildConfigurations[0].buildSystem is present', () => {
+  it('(e) BuildSystem badge renders when BASE row build aspect has buildSystem', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(baseComponent, user)
     expect(screen.getByText('GRADLE')).toBeDefined()
@@ -483,12 +483,13 @@ describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => 
     expect(payload['teamcityProjects']).toBeUndefined()
   })
 
-  it('skips teamcityProjects when GeneralTab stub leaves form at defaults', async () => {
-    // Seed the component with TC values; the form's useEffect (in the real
-    // GeneralTab) would mirror these into the form, but here GeneralTab is
-    // mocked so the form values stay empty — meaning unchanged-defaults
-    // means "user hasn't touched, send undefined". The save payload should
-    // therefore NOT include teamcityProjects.
+  it('blank teamcityProjectId + prior TC project sends explicit clear ([])', async () => {
+    // schema-v2 wave A contract: blanking the TC ID input when the component
+    // has a prior TC project sends `teamcityProjects: []` (REPLACE → clear),
+    // not undefined. This makes the clear path discoverable through the
+    // form rather than only via the admin Resync button. The test mocks
+    // GeneralTab as an empty stub so the form value stays at its '' default,
+    // exercising exactly the "blank input + had prior" branch.
     const updateMutateAsync = vi.fn(() => Promise.resolve())
     const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
     const seeded: ComponentDetail = {
@@ -508,7 +509,7 @@ describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => 
 
     await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
     const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
-    expect(payload['teamcityProjects']).toBeUndefined()
+    expect(payload['teamcityProjects']).toEqual([])
   })
 
   it('populated teamcity* values flow through to PATCH when the form mirrors server state', async () => {

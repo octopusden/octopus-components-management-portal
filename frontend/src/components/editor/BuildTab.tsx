@@ -41,6 +41,10 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
 
   async function handleSave() {
     try {
+      // Wave A scope: surface only the four fields the legacy UI exposed plus
+      // gradleVersion. mavenVersion and buildTasks (typed BuildAspect scalars)
+      // are deferred to Wave B; absent-from-payload = "don't touch" per JSON
+      // Merge Patch, so they stay untouched on the server side.
       await updateMutation.mutateAsync({
         version: component.version,
         baseConfiguration: {

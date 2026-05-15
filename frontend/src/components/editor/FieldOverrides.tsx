@@ -197,6 +197,8 @@ export function FieldOverrides({ componentId }: FieldOverridesProps) {
                           size="icon"
                           className="h-8 w-8 text-destructive hover:text-destructive"
                           onClick={() => setDeleteConfirm(override.id)}
+                          disabled={isMarker}
+                          title={isMarker ? 'Marker overrides are read-only in Wave A' : undefined}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>

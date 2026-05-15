@@ -190,17 +190,23 @@ export function ComponentDetailPage() {
           : trimmedParent
 
     // schema-v2: TC link is now a per-component list (component.teamcityProjects[]).
-    // Wave A survival: send a single-element list when both id+url FC entries are
-    // visible AND the form has a projectId. The URL is server-derived, not sent on
-    // the wire (TeamcityProjectRequest carries only `projectId`). Wave B adds the
-    // multi-row list editor.
+    // Wave A survival mapping:
+    //   - hidden FC visibility → omit field (don't touch)
+    //   - blank input + no prior TC project → omit field (don't touch)
+    //   - blank input + prior TC project → send [] (explicit clear, REPLACE semantics)
+    //   - non-blank input → send [{ projectId }] (URL is server-derived;
+    //     TeamcityProjectRequest carries only projectId). Wave B adds the
+    //     multi-row editor.
     const tcIdVisible = teamcityProjectIdFc.visibility !== 'hidden'
     const tcUrlVisible = teamcityProjectUrlFc.visibility !== 'hidden'
     const tcPatch: { teamcityProjects?: { projectId: string }[] } = {}
     if (tcIdVisible && tcUrlVisible) {
       const tcId = (values.teamcityProjectId || '').trim()
+      const hadPrior = (component.teamcityProjects?.length ?? 0) > 0
       if (tcId !== '') {
         tcPatch.teamcityProjects = [{ projectId: tcId }]
+      } else if (hadPrior) {
+        tcPatch.teamcityProjects = []
       }
     }
 
