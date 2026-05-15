@@ -111,13 +111,27 @@ open class E2ETestcontainersDriver {
          * (forwarded by the e2eTest task). A bump there is the single
          * source of truth — drift between the property and the driver
          * is the kind of thing reviewers shouldn't have to spot.
+         *
+         * Registry resolution: when `DOCKER_REGISTRY` (env or `docker.registry`
+         * sysprop) is set to anything other than the canonical public default,
+         * the value is used as the prefix for postgres and keycloak pulls
+         * too — not just the CRS image and the portal Dockerfile base. This
+         * matches what the TC build agent already passes through via
+         * `-Pdocker.registry=...` / `DOCKER_REGISTRY=...` and lets a private
+         * mirror serve the whole testcontainers stack instead of letting the
+         * anonymous Docker Hub / quay.io rate limit gate every PR.
          */
         private fun postgresImageName(): DockerImageName {
             val version = firstNonBlank(
                 System.getProperty("postgres.version"),
                 System.getenv("POSTGRES_VERSION"),
             ) ?: error("postgres.version not set — pass -Ppostgres.version=... or env POSTGRES_VERSION")
-            return DockerImageName.parse("postgres:$version")
+            val name = imageWithRegistry(canonicalHubPath = "postgres", version = version)
+            // `asCompatibleSubstituteFor("postgres")` keeps
+            // PostgreSQLContainer's built-in checks happy when the resolved
+            // image lives under a mirror prefix (otherwise testcontainers
+            // refuses to recognise it as a postgres image).
+            return DockerImageName.parse(name).asCompatibleSubstituteFor("postgres")
         }
 
         private fun keycloakImageName(): DockerImageName {
@@ -125,7 +139,50 @@ open class E2ETestcontainersDriver {
                 System.getProperty("keycloak.version"),
                 System.getenv("KEYCLOAK_VERSION"),
             ) ?: error("keycloak.version not set — pass -Pkeycloak.version=... or env KEYCLOAK_VERSION")
-            return DockerImageName.parse("quay.io/keycloak/keycloak:$version")
+            // Canonical Keycloak home is quay.io/keycloak/keycloak. When a
+            // private mirror is configured it is expected to proxy the
+            // upstream path; the keycloak sub-path is preserved so a single
+            // mirror can serve both Docker Hub and quay.io content under one
+            // hostname.
+            val name = imageWithRegistry(
+                canonicalHubPath = "keycloak/keycloak",
+                canonicalUnmirroredImage = "quay.io/keycloak/keycloak",
+                version = version,
+            )
+            return DockerImageName.parse(name)
+        }
+
+        /**
+         * Build the fully-qualified image name based on the resolved
+         * registry. When the registry is the public default (unset / blank
+         * / `docker.io`), return the bare canonical image name so
+         * testcontainers / docker-java picks its own default registry; for
+         * non-default registries, prepend the mirror hostname.
+         *
+         * @param canonicalHubPath image path under Docker Hub (e.g. `postgres`,
+         *   `keycloak/keycloak`). Used both as the mirrored suffix AND as the
+         *   default bare Hub image name when `canonicalUnmirroredImage` is null.
+         * @param canonicalUnmirroredImage canonical fully-qualified image name
+         *   used when no mirror is configured (e.g. `quay.io/keycloak/keycloak`).
+         *   Falls back to `canonicalHubPath` when null (the Docker Hub case).
+         */
+        private fun imageWithRegistry(
+            canonicalHubPath: String,
+            canonicalUnmirroredImage: String? = null,
+            version: String,
+        ): String {
+            val registry = firstNonBlank(
+                System.getenv("DOCKER_REGISTRY"),
+                System.getProperty("docker.registry"),
+            )
+            val isPublicDefault = registry.isNullOrBlank() ||
+                    registry == "docker.io" ||
+                    registry == "registry-1.docker.io"
+            return if (isPublicDefault) {
+                "${canonicalUnmirroredImage ?: canonicalHubPath}:$version"
+            } else {
+                "$registry/$canonicalHubPath:$version"
+            }
         }
 
         /**
