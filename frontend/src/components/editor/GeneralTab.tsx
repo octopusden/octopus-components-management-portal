@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { UseFormReturn, useFieldArray } from 'react-hook-form'
 import { Plus, Trash2 } from 'lucide-react'
 import { Badge } from '../ui/badge'
@@ -109,6 +109,19 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
   const tcFieldArray = useFieldArray({ control, name: 'teamcityProjects' })
   const docsFieldArray = useFieldArray({ control, name: 'docs' })
   const artifactIdsFieldArray = useFieldArray({ control, name: 'artifactIds' })
+
+  // Map projectId → server-side projectUrl so the per-row URL display stays
+  // correct after the user reorders or removes rows. The previous index-based
+  // lookup against component.teamcityProjects desynchronised once useFieldArray
+  // shuffled indices.
+  const tcUrlByProjectId = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const tc of component.teamcityProjects ?? []) {
+      if (tc.projectId && tc.projectUrl) m.set(tc.projectId, tc.projectUrl)
+    }
+    return m
+  }, [component.teamcityProjects])
+  const watchedTcProjects = watch('teamcityProjects')
 
   // RENAME_COMPONENTS gates the Name input on the edit surface. The same
   // permission is enforced server-side in ComponentControllerV4's PATCH SpEL
@@ -507,13 +520,15 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
               <p className="text-xs text-muted-foreground">No TeamCity projects configured.</p>
             ) : (
               tcFieldArray.fields.map((field, index) => {
-                const serverUrl = component.teamcityProjects?.[index]?.projectUrl
+                const currentProjectId = watchedTcProjects?.[index]?.projectId
+                const serverUrl = currentProjectId ? tcUrlByProjectId.get(currentProjectId) : undefined
                 return (
                   <div key={field.id} className="flex items-start gap-2">
                     <div className="flex-1 space-y-1">
                       <Input
                         placeholder="MyProject_Build"
                         disabled={teamcityProjectIdEntry.visibility === 'readonly'}
+                        aria-label={`TC project ID (row ${index + 1})`}
                         {...register(`teamcityProjects.${index}.projectId` as const)}
                       />
                       {serverUrl && (
@@ -562,10 +577,12 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
               <div key={field.id} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
                 <Input
                   placeholder="docs-component-key"
+                  aria-label={`Doc link component key (row ${index + 1})`}
                   {...register(`docs.${index}.docComponentKey` as const)}
                 />
                 <Input
                   placeholder="majorVersion (e.g. 3.x)"
+                  aria-label={`Doc link major version (row ${index + 1})`}
                   {...register(`docs.${index}.majorVersion` as const)}
                 />
                 <Button
@@ -603,10 +620,12 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
               <div key={field.id} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
                 <Input
                   placeholder="org.example.alpha"
+                  aria-label={`Artifact ID group pattern (row ${index + 1})`}
                   {...register(`artifactIds.${index}.groupPattern` as const)}
                 />
                 <Input
                   placeholder="my-component-*"
+                  aria-label={`Artifact ID artifact pattern (row ${index + 1})`}
                   {...register(`artifactIds.${index}.artifactPattern` as const)}
                 />
                 <Button
