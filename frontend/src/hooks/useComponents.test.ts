@@ -47,7 +47,7 @@ describe('useComponents — URL params', () => {
     const calledUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
     expect(calledUrl).toContain('page=0')
     expect(calledUrl).toContain('size=20')
-    expect(calledUrl).toContain('sort=name%2Casc')
+    expect(calledUrl).toContain('sort=componentKey%2Casc')
   })
 
   it('passes system filter when set', async () => {
