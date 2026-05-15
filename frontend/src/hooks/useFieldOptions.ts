@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, skipToken } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { useFieldConfigOptions } from './useFieldConfig'
 
@@ -16,11 +16,13 @@ export function useFieldOptions(fieldPath: string): {
     useFieldConfigOptions(fieldPath)
   const endpoint = META_ENDPOINTS[fieldPath]
   const hasAdminOptions = adminOptions.length > 0
+  const shouldFetchMeta = !!endpoint && !adminLoading && !hasAdminOptions
 
   const metaQuery = useQuery({
     queryKey: ['meta', 'field-options', fieldPath],
-    queryFn: () => api.get<string[]>(endpoint!),
-    enabled: !!endpoint && !adminLoading && !hasAdminOptions,
+    queryFn: shouldFetchMeta
+      ? () => api.get<string[]>(endpoint)
+      : skipToken,
     staleTime: 5 * 60 * 1000,
     retry: false,
   })
