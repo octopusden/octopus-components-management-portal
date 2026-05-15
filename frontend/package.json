@@ -12,7 +12,9 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "generate-types": "openapi-typescript src/lib/api/v4.json -o src/lib/api/schema.d.ts",
+    "generate-types:check": "openapi-typescript src/lib/api/v4.json -o /tmp/schema-check.d.ts && diff src/lib/api/schema.d.ts /tmp/schema-check.d.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -58,6 +60,7 @@
     "eslint-plugin-react-refresh": "^0.4.16",
     "globals": "^15.14.0",
     "jsdom": "^29.0.2",
+    "openapi-typescript": "^7.13.0",
     "playwright": "^1.59.1",
     "postcss": "^8.5.12",
     "tailwindcss": "^4.2.1",
