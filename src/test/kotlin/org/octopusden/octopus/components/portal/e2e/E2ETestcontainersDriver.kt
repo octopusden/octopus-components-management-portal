@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.portal.e2e
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.fail
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -402,6 +403,54 @@ open class E2ETestcontainersDriver {
             val match = Regex("\"numberOfElements\"\\s*:\\s*(\\d+)").find(body)
             val total = match?.groupValues?.get(1)?.toIntOrNull() ?: 0
             assertTrue(total > 0, "Expected ≥1 component, got: ${body.take(500)}")
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    /**
+     * Regression contract gate: CRS PR #192 (`feat/schema-v2-sql`) renamed
+     * `components.name` to `components.component_key` in V1__schema.sql; the
+     * JPA `ComponentEntity` property followed the column. Spring Data binds
+     * the `sort=` query param to the entity property — not the v4 DTO field
+     * — so `sort=name,asc` throws PropertyReferenceException inside JPA and
+     * surfaces to the client as HTTP 500 with Spring's DefaultErrorAttributes
+     * body.
+     *
+     * The SPA's `useComponents.ts` default was `sort=name,asc` (v4 DTO still
+     * exposes the column under the `name` field), so opening the
+     * /components page would 500 against any CRS 2.0.84-NNNN build past the
+     * schema-v2 cutoff. Portal-side workaround landed in the same commit
+     * series as this test (changed SPA default to `componentKey,asc`).
+     *
+     * This Kotlin probe stays as the contract gate: CRS should accept the
+     * legacy `sort=name` as a backward-compat alias for `sort=componentKey`,
+     * because the v4 DTO continues to expose the value under `name`. Stays
+     * failing until CRS adds the alias OR until v4 changes the DTO field
+     * name to match the entity (less likely — breaking change).
+     */
+    @Test
+    fun `CRS list endpoint accepts sort=name (v4 DTO field name) as backward-compat alias`() {
+        val host = crs.host
+        val port = crs.getMappedPort(CRS_INTERNAL_PORT)
+        val url = URI(
+            "http://$host:$port/rest/api/4/components?page=0&size=20&sort=name,asc",
+        ).toURL()
+        val conn = url.openConnection() as HttpURLConnection
+        try {
+            conn.requestMethod = "GET"
+            val status = conn.responseCode
+            if (status != 200) {
+                // Echo the server-side error body verbatim so the CRS team
+                // gets the exact timestamp + path on first inspection.
+                val errBody = (conn.errorStream ?: conn.inputStream)
+                    .bufferedReader().use { it.readText() }
+                fail<Nothing>(
+                    "Expected 200 from GET /rest/api/4/components?sort=name,asc " +
+                            "(legacy alias for sort=componentKey on schema-v2 entity), " +
+                            "got $status. Body: $errBody",
+                )
+            }
         } finally {
             conn.disconnect()
         }
