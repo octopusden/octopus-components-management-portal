@@ -6,7 +6,7 @@ import { test, expect } from '@playwright/test'
 // components" banner with the raw error body. Reproduced here at the HTTP
 // layer so the failure is isolated from any UI rendering concerns.
 //
-// Two probes:
+// Three probes:
 //   1. The exact call the SPA makes on /components page load (page+size+sort).
 //   2. A bare call with no query string — to disambiguate whether the failure
 //      depends on a specific param (sort=name,asc is a likely suspect — JPA
@@ -77,5 +77,11 @@ test.describe('Regression: GET /rest/api/4/components first-page 500', () => {
           `got ${resp.status()}. Body: ${body}`,
       )
     }
+    // Page-shape sanity: same gate the other two probes use. Catches a
+    // future "200 OK with the wrong body" regression where CRS returns
+    // an empty / placeholder response without throwing.
+    const json = await resp.json()
+    expect(json).toHaveProperty('content')
+    expect(Array.isArray(json.content)).toBe(true)
   })
 })
