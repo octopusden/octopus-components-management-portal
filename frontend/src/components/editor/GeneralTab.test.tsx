@@ -338,7 +338,7 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
     const component = baseComponent({ group: { groupKey: 'org.example.alpha', isFake: false, role: 'MEMBER' } })
     renderWithProviders(<Harness component={component} />)
 
-    const input = screen.getByLabelText(/group id/i) as HTMLInputElement
+    const input = screen.getByLabelText(/group key/i) as HTMLInputElement
     expect(input).toBeDefined()
     expect(input.value).toBe('org.example.alpha')
     expect(input.disabled).toBe(false)
@@ -352,7 +352,7 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
     const component = baseComponent({ group: { groupKey: 'org.example.alpha', isFake: false, role: 'MEMBER' } })
     renderWithProviders(<Harness component={component} />)
 
-    expect(screen.queryByLabelText(/group id/i)).toBeNull()
+    expect(screen.queryByLabelText(/group key/i)).toBeNull()
   })
 
   it('releaseManager editable → PeopleInput rendered (Label text present, not Input)', () => {
@@ -441,7 +441,7 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
     })
     renderWithProviders(<Harness component={component} />)
 
-    expect(screen.queryByLabelText(/group id/i)).toBeNull()
+    expect(screen.queryByLabelText(/group key/i)).toBeNull()
     expect(screen.queryByLabelText(/release manager/i)).toBeNull()
     expect(screen.queryByLabelText(/security champion/i)).toBeNull()
     expect(screen.queryByLabelText(/copyright/i)).toBeNull()
@@ -451,7 +451,7 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
 })
 
 describe('GeneralTab TC link restoration fields (Portal PR-3)', () => {
-  it('teamcityProjectId editable → input rendered with current value', () => {
+  it('teamcityProjects entry: input populated with projectId from server', () => {
     setAllEditable()
     const component = baseComponent({
       teamcityProjects: [
@@ -465,13 +465,14 @@ describe('GeneralTab TC link restoration fields (Portal PR-3)', () => {
     })
     renderWithProviders(<Harness component={component} />)
 
-    const input = screen.getByLabelText(/tc project id/i) as HTMLInputElement
-    expect(input).toBeDefined()
-    expect(input.value).toBe('MyProject_Build')
-    expect(input.disabled).toBe(false)
+    // Wave B: list editor with placeholder-keyed inputs (no aria-label per row).
+    const inputs = screen.getAllByPlaceholderText('MyProject_Build') as HTMLInputElement[]
+    expect(inputs.length).toBe(1)
+    expect(inputs[0]!.value).toBe('MyProject_Build')
+    expect(inputs[0]!.disabled).toBe(false)
   })
 
-  it('teamcityProjectUrl editable → input rendered with current value', () => {
+  it('teamcityProjects entry: server projectUrl rendered as static text (not editable)', () => {
     setAllEditable()
     const component = baseComponent({
       teamcityProjects: [
@@ -485,9 +486,10 @@ describe('GeneralTab TC link restoration fields (Portal PR-3)', () => {
     })
     renderWithProviders(<Harness component={component} />)
 
-    const input = screen.getByLabelText(/tc project url/i) as HTMLInputElement
-    expect(input).toBeDefined()
-    expect(input.value).toBe('https://teamcity.example.com/project/MyProject_Build')
+    // schema-v2 TeamcityProjectRequest has only projectId; the URL is
+    // server-derived and shown as readonly text under the projectId input.
+    const urlText = screen.getByText(/URL:.*teamcity\.example\.com\/project\/MyProject_Build/)
+    expect(urlText).toBeDefined()
   })
 
   it('teamcityProjectId hidden → input NOT rendered AND entire TC section absent', () => {
@@ -563,11 +565,8 @@ describe('GeneralTab TC link restoration fields (Portal PR-3)', () => {
     expect(container.querySelector('[data-testid="section-teamcity"]')).toBeNull()
   })
 
-  it('teamcityProjectUrl readonly → input disabled', () => {
-    mockUseFieldConfigEntry.mockImplementation((path: string) => {
-      if (path === 'component.teamcityProjectUrl') return makeEntry('readonly')
-      return makeEntry('editable')
-    })
+  it('schema-v2: server projectUrl rendered as readonly text next to its row', () => {
+    setAllEditable()
     const component = baseComponent({
       teamcityProjects: [
         {
@@ -579,40 +578,27 @@ describe('GeneralTab TC link restoration fields (Portal PR-3)', () => {
       ],
     })
     renderWithProviders(<Harness component={component} />)
-
-    const input = screen.getByLabelText(/tc project url/i) as HTMLInputElement
-    expect(input.disabled).toBe(true)
+    // URL is server-derived (TeamcityProjectRequest carries only projectId),
+    // so it's surfaced as static text below the input, not as an editable field.
+    expect(screen.getByText(/URL:.*teamcity\.example\.com\/project\/X/)).toBeDefined()
   })
 
-  it('typing into TC inputs updates form state (drives the save payload)', async () => {
+  it('Add TC project appends a row whose projectId input populates the form', async () => {
     setAllEditable()
     const component = baseComponent()
     const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
     renderWithProviders(<Harness component={component} formRef={formRef} />)
 
-    // Wait for the GeneralTab useEffect to populate the form from
-    // `component` (sets both TC fields to '' here since the fixture doesn't
-    // set them). RHF doesn't always flush synchronously after setValue, so
-    // an await ensures the inputs reflect the post-effect value before we
-    // type into them — preventing concurrent overwrites.
-    await waitFor(() => {
-      const input = screen.getByLabelText(/tc project id/i) as HTMLInputElement
-      expect(input.value).toBe('')
-    })
+    // Append a row, then type into its projectId input. The new row gets
+    // an empty value via append({ projectId: '' }) and is the only TC row.
+    await userEvent.click(screen.getByRole('button', { name: /add tc project/i }))
 
-    const idInput = screen.getByLabelText(/tc project id/i) as HTMLInputElement
-    const urlInput = screen.getByLabelText(/tc project url/i) as HTMLInputElement
-    await userEvent.type(idInput, 'MyProject_Build')
-    await userEvent.type(urlInput, 'https://teamcity.example.com/project/MyProject_Build')
+    const inputs = screen.getAllByPlaceholderText('MyProject_Build') as HTMLInputElement[]
+    expect(inputs.length).toBe(1)
+    await userEvent.type(inputs[0]!, 'MyProject_Build')
 
-    // Form values reflect what the user typed — these are the values that
-    // ComponentDetailPage.handleSave reads via form.getValues() and writes
-    // into the PATCH payload (see the `(values.X || undefined)` helpers).
     const values = formRef.current!.getValues()
-    expect(values.teamcityProjectId).toBe('MyProject_Build')
-    expect(values.teamcityProjectUrl).toBe(
-      'https://teamcity.example.com/project/MyProject_Build',
-    )
+    expect(values.teamcityProjects).toEqual([{ projectId: 'MyProject_Build' }])
   })
 })
 

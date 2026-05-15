@@ -113,15 +113,17 @@ export function ComponentDetailPage() {
       // populates from `component`) would read `undefined` for labels and
       // friends and emit empty / wrong wire shapes.
       groupId: '',
+      groupIsFake: false,
       releaseManager: '',
       securityChampion: '',
       copyright: '',
       releasesInDefaultBranch: false,
       labels: '',
-      // TC link restoration — empty-string defaults match the same
-      // "blank means don't touch" convention as the SYS-039 string fields.
-      teamcityProjectId: '',
-      teamcityProjectUrl: '',
+      // schema-v2 list defaults — empty arrays so an early Save before useEffect
+      // populates from `component` still produces a coherent form value.
+      teamcityProjects: [],
+      docs: [],
+      artifactIds: [],
     },
   })
 
@@ -190,39 +192,72 @@ export function ComponentDetailPage() {
           : trimmedParent
 
     // schema-v2: TC link is now a per-component list (component.teamcityProjects[]).
-    // Wave A survival mapping:
-    //   - hidden FC visibility → omit field (don't touch)
-    //   - blank input + no prior TC project → omit field (don't touch)
-    //   - blank input + prior TC project → send [] (explicit clear, REPLACE semantics)
-    //   - non-blank input → send [{ projectId }] (URL is server-derived;
-    //     TeamcityProjectRequest carries only projectId). Wave B adds the
-    //     multi-row editor.
-    const tcIdVisible = teamcityProjectIdFc.visibility !== 'hidden'
-    const tcUrlVisible = teamcityProjectUrlFc.visibility !== 'hidden'
+    // Wave B list-editor mapping. Filter blank rows, then:
+    //   - hidden FC visibility → omit (don't touch)
+    //   - cleaned list non-empty → send the list (REPLACE)
+    //   - cleaned list empty + had prior → send [] (explicit clear)
+    //   - cleaned list empty + no prior → omit (don't touch)
+    // The wire request carries only `projectId`; the URL is server-derived
+    // by CRS resync.
+    const tcVisible =
+      teamcityProjectIdFc.visibility !== 'hidden' && teamcityProjectUrlFc.visibility !== 'hidden'
     const tcPatch: { teamcityProjects?: { projectId: string }[] } = {}
-    if (tcIdVisible && tcUrlVisible) {
-      const tcId = (values.teamcityProjectId || '').trim()
-      const hadPrior = (component.teamcityProjects?.length ?? 0) > 0
-      if (tcId !== '') {
-        tcPatch.teamcityProjects = [{ projectId: tcId }]
-      } else if (hadPrior) {
-        tcPatch.teamcityProjects = []
+    if (tcVisible) {
+      const cleanedTc = (values.teamcityProjects ?? [])
+        .map((p) => ({ projectId: (p.projectId ?? '').trim() }))
+        .filter((p) => p.projectId !== '')
+      const tcHadPrior = (component.teamcityProjects?.length ?? 0) > 0
+      if (cleanedTc.length > 0 || tcHadPrior) {
+        tcPatch.teamcityProjects = cleanedTc
       }
     }
 
-    // schema-v2: groupId is now component.group (ComponentGroupRequest = { groupKey }).
-    // Wave A survival: form field `groupId` (string) maps to:
-    //   - hidden → undefined / no clearGroup (don't touch)
-    //   - blank string + currently has group → clearGroup: true (clear)
-    //   - non-blank string → group: { groupKey: value }
-    const groupPatch: { group?: { groupKey: string }; clearGroup?: boolean } = {}
+    // schema-v2 group editor: groupId form field is the typed groupKey;
+    // groupIsFake is the isFake flag on ComponentGroupRequest. Blank groupKey
+    // + existing component.group → clearGroup:true (explicit clear). Hidden
+    // FC visibility → omit (don't touch).
+    const groupPatch: {
+      group?: { groupKey: string; isFake: boolean }
+      clearGroup?: boolean
+    } = {}
     if (groupIdFc.visibility !== 'hidden') {
       const trimmedGroupId = (values.groupId || '').trim()
       if (trimmedGroupId !== '') {
-        groupPatch.group = { groupKey: trimmedGroupId }
+        groupPatch.group = { groupKey: trimmedGroupId, isFake: values.groupIsFake ?? false }
       } else if (component.group) {
         groupPatch.clearGroup = true
       }
+    }
+
+    // schema-v2 per-component lists. Same REPLACE / clear / omit semantics
+    // as teamcityProjects. DocLinks blank rows → drop; artifactIds rows with
+    // either pattern blank → drop (both fields are required server-side).
+    const cleanedDocs = (values.docs ?? [])
+      .map((d) => ({
+        docComponentKey: (d.docComponentKey ?? '').trim(),
+        majorVersion: (d.majorVersion ?? '').trim(),
+      }))
+      .filter((d) => d.docComponentKey !== '')
+      .map((d) => ({
+        docComponentKey: d.docComponentKey,
+        majorVersion: d.majorVersion === '' ? null : d.majorVersion,
+      }))
+    const docsHadPrior = (component.docs?.length ?? 0) > 0
+    const docsPatch: { docs?: { docComponentKey: string; majorVersion: string | null }[] } = {}
+    if (cleanedDocs.length > 0 || docsHadPrior) {
+      docsPatch.docs = cleanedDocs
+    }
+
+    const cleanedAids = (values.artifactIds ?? [])
+      .map((a) => ({
+        groupPattern: (a.groupPattern ?? '').trim(),
+        artifactPattern: (a.artifactPattern ?? '').trim(),
+      }))
+      .filter((a) => a.groupPattern !== '' && a.artifactPattern !== '')
+    const aidsHadPrior = (component.artifactIds?.length ?? 0) > 0
+    const artifactIdsPatch: { artifactIds?: { groupPattern: string; artifactPattern: string }[] } = {}
+    if (cleanedAids.length > 0 || aidsHadPrior) {
+      artifactIdsPatch.artifactIds = cleanedAids
     }
 
     try {
@@ -255,9 +290,11 @@ export function ComponentDetailPage() {
             : values.releasesInDefaultBranch,
         labels: labelsFc.visibility === 'hidden' ? undefined : labelsArray,
         // labelsArray is already `undefined` when input is blank — see helper above.
-        // schema-v2 group + TC patches — see groupPatch / tcPatch computation above.
+        // schema-v2 child-list patches — see *Patch computation above.
         ...groupPatch,
         ...tcPatch,
+        ...docsPatch,
+        ...artifactIdsPatch,
       })
       toast({ title: 'Component saved', description: 'Changes have been saved successfully.' })
     } catch (err) {

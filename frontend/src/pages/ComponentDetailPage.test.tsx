@@ -523,9 +523,10 @@ describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => 
     // form holds the seeded TC values when handleSave runs.
     vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
       useEffect(() => {
-        const tc = component.teamcityProjects?.[0]
-        form.setValue('teamcityProjectId', tc?.projectId ?? '')
-        form.setValue('teamcityProjectUrl', tc?.projectUrl ?? '')
+        form.setValue(
+          'teamcityProjects',
+          (component.teamcityProjects ?? []).map((tc) => ({ projectId: tc.projectId })),
+        )
       }, [component, form])
       return React.createElement('div', { 'data-testid': 'general-tab-mirrored' })
     })
@@ -559,12 +560,13 @@ describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => 
     expect(payload['teamcityProjects']).toEqual([{ projectId: 'Existing_Build' }])
   })
 
-  it('FC hidden skips both teamcity* fields on save (defence-in-depth)', async () => {
+  it('FC hidden skips teamcityProjects on save (defence-in-depth)', async () => {
     // Even if the form somehow held a value, hidden FC visibility must
-    // make handleSave drop both keys from the payload — server-side does
+    // make handleSave drop the list from the payload — server-side does
     // NOT enforce field-config (CRS PR-2 spec note), so the SPA is the
     // line of defence against an editor with a stale form snapshot
-    // overwriting a hidden field.
+    // overwriting a hidden field. Either FC entry hidden suppresses the
+    // whole section per the pair-visibility rule.
     mockedUseFieldConfigEntry.mockImplementation((path: string) => {
       if (
         path === 'component.teamcityProjectId' ||
@@ -585,20 +587,16 @@ describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => 
 
     await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
     const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
-    expect(payload['teamcityProjectId']).toBeUndefined()
-    expect(payload['teamcityProjectUrl']).toBeUndefined()
+    expect(payload['teamcityProjects']).toBeUndefined()
   })
 
-  it('partial pair (tcId filled, tcUrl blank) omits BOTH from PATCH (pair invariant)', async () => {
-    // Regression guard for Bug B: when the user fills only teamcityProjectId
-    // and leaves teamcityProjectUrl blank, the `||` condition would have sent
-    // a partial PATCH (id=value, url=undefined → JSON.stringify drops url,
-    // server receives only one half). With `&&` both must be non-empty or
-    // neither is included.
+  it('blank-row entries in teamcityProjects are filtered out before sending', async () => {
+    // Wave B list editor: rows with blank projectId after trim are dropped.
+    // Used to be the "partial pair (tcId filled, tcUrl blank)" Wave A guard;
+    // schema-v2 has no URL field, so the analogue is "blank row gets dropped".
     vi.mocked(GeneralTab).mockImplementation(({ form }) => {
       useEffect(() => {
-        form.setValue('teamcityProjectId', 'OnlyId_Build')
-        // teamcityProjectUrl intentionally left at default '' (falsy)
+        form.setValue('teamcityProjects', [{ projectId: 'OnlyId_Build' }, { projectId: '  ' }])
       }, [form])
       return React.createElement('div', { 'data-testid': 'general-tab-partial' })
     })

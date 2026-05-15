@@ -58,6 +58,12 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
       const requiredToolsArray = [...new Set(
         requiredToolsInput.split(',').map((t) => t.trim()).filter(Boolean)
       )]
+      // Guard against wiping server-side requiredTools when no BASE row was
+      // loaded yet. The form's requiredToolsInput would be '' (parsed to []),
+      // and BaseConfigurationRequest.requiredTools = [] is an explicit clear.
+      // Sending null = "don't touch" preserves whatever the server has.
+      const baseRowPresent = selectBaseRow(component) !== undefined
+      const requiredToolsPayload = baseRowPresent ? requiredToolsArray : null
 
       await updateMutation.mutateAsync({
         version: component.version,
@@ -76,7 +82,7 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
             buildTasks: buildTasks || null,
           },
           // requiredTools lives at the BaseConfigurationRequest level, not inside build
-          requiredTools: requiredToolsArray,
+          requiredTools: requiredToolsPayload,
         },
       })
       toast({ title: 'Build configuration saved' })
@@ -104,7 +110,7 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
             onValueChange={setBuildSystem}
             placeholder="Select build system"
           />
-          <FieldOverrideInline componentId={component.id} overriddenAttribute="buildSystem" />
+          <FieldOverrideInline componentId={component.id} overriddenAttribute="build.buildSystem" />
         </div>
 
         <div className="space-y-1.5">
@@ -124,7 +130,7 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
             onChange={(e) => setBuildFilePath(e.target.value)}
             placeholder="pom.xml / build.gradle"
           />
-          <FieldOverrideInline componentId={component.id} overriddenAttribute="buildFilePath" />
+          <FieldOverrideInline componentId={component.id} overriddenAttribute="build.buildFilePath" />
         </div>
 
         <div className="space-y-1.5">
