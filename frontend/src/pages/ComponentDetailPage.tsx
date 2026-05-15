@@ -196,8 +196,14 @@ export function ComponentDetailPage() {
     // Wave B list-editor mapping. Filter blank rows, then:
     //   - hidden FC visibility → omit (don't touch)
     //   - cleaned list non-empty → send the list (REPLACE)
-    //   - cleaned list empty + had prior → send [] (explicit clear)
-    //   - cleaned list empty + no prior → omit (don't touch)
+    //   - cleaned list empty + user-dirty + had prior → send [] (explicit clear)
+    //   - cleaned list empty + not dirty → omit (don't touch)
+    // The dirty gate guards against a Save fired before GeneralTab.useEffect
+    // mirrors the server data into the form (form default is `[]` everywhere
+    // — sending `[]` against a populated server list would silently wipe it).
+    // useFieldArray's append/remove/update mark the field dirty; the useEffect
+    // setValue() does not (no shouldDirty flag), so non-dirty == "user hasn't
+    // touched the list yet, server snapshot is the source of truth".
     // The wire request carries only `projectId`; the URL is server-derived
     // by CRS resync.
     const tcVisible =
@@ -208,31 +214,38 @@ export function ComponentDetailPage() {
         .map((p) => ({ projectId: (p.projectId ?? '').trim() }))
         .filter((p) => p.projectId !== '')
       const tcHadPrior = (component.teamcityProjects?.length ?? 0) > 0
-      if (cleanedTc.length > 0 || tcHadPrior) {
+      const tcDirty = !!form.formState.dirtyFields.teamcityProjects
+      if (cleanedTc.length > 0) {
         tcPatch.teamcityProjects = cleanedTc
+      } else if (tcDirty && tcHadPrior) {
+        tcPatch.teamcityProjects = []
       }
     }
 
     // schema-v2 group editor: groupId form field is the typed groupKey;
     // groupIsFake is the isFake flag on ComponentGroupRequest. Blank groupKey
-    // + existing component.group → clearGroup:true (explicit clear). Hidden
-    // FC visibility → omit (don't touch).
+    // + user-dirty groupId + existing component.group → clearGroup:true
+    // (explicit clear). Same dirty gate as the lists above — without it a
+    // Save before useEffect-mirror would treat the empty default as "user
+    // cleared" and wipe component.group.
     const groupPatch: {
       group?: { groupKey: string; isFake: boolean }
       clearGroup?: boolean
     } = {}
     if (groupIdFc.visibility !== 'hidden') {
       const trimmedGroupId = (values.groupId || '').trim()
+      const groupIdDirty = form.formState.dirtyFields.groupId === true
       if (trimmedGroupId !== '') {
         groupPatch.group = { groupKey: trimmedGroupId, isFake: values.groupIsFake ?? false }
-      } else if (component.group) {
+      } else if (groupIdDirty && component.group) {
         groupPatch.clearGroup = true
       }
     }
 
     // schema-v2 per-component lists. Same REPLACE / clear / omit semantics
-    // as teamcityProjects. DocLinks blank rows → drop; artifactIds rows with
-    // either pattern blank → drop (both fields are required server-side).
+    // as teamcityProjects, including the dirty-gate on the clear branch.
+    // DocLinks blank rows → drop; artifactIds rows with either pattern blank
+    // → drop (both fields are required server-side).
     const cleanedDocs = (values.docs ?? [])
       .map((d) => ({
         docComponentKey: (d.docComponentKey ?? '').trim(),
@@ -244,9 +257,12 @@ export function ComponentDetailPage() {
         majorVersion: d.majorVersion === '' ? null : d.majorVersion,
       }))
     const docsHadPrior = (component.docs?.length ?? 0) > 0
+    const docsDirty = !!form.formState.dirtyFields.docs
     const docsPatch: { docs?: { docComponentKey: string; majorVersion: string | null }[] } = {}
-    if (cleanedDocs.length > 0 || docsHadPrior) {
+    if (cleanedDocs.length > 0) {
       docsPatch.docs = cleanedDocs
+    } else if (docsDirty && docsHadPrior) {
+      docsPatch.docs = []
     }
 
     const cleanedAids = (values.artifactIds ?? [])
@@ -256,9 +272,12 @@ export function ComponentDetailPage() {
       }))
       .filter((a) => a.groupPattern !== '' && a.artifactPattern !== '')
     const aidsHadPrior = (component.artifactIds?.length ?? 0) > 0
+    const aidsDirty = !!form.formState.dirtyFields.artifactIds
     const artifactIdsPatch: { artifactIds?: { groupPattern: string; artifactPattern: string }[] } = {}
-    if (cleanedAids.length > 0 || aidsHadPrior) {
+    if (cleanedAids.length > 0) {
       artifactIdsPatch.artifactIds = cleanedAids
+    } else if (aidsDirty && aidsHadPrior) {
+      artifactIdsPatch.artifactIds = []
     }
 
     try {

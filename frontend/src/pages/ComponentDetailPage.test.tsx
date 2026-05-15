@@ -483,13 +483,17 @@ describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => 
     expect(payload['teamcityProjects']).toBeUndefined()
   })
 
-  it('blank teamcityProjectId + prior TC project sends explicit clear ([])', async () => {
-    // schema-v2 wave A contract: blanking the TC ID input when the component
-    // has a prior TC project sends `teamcityProjects: []` (REPLACE → clear),
-    // not undefined. This makes the clear path discoverable through the
-    // form rather than only via the admin Resync button. The test mocks
-    // GeneralTab as an empty stub so the form value stays at its '' default,
-    // exercising exactly the "blank input + had prior" branch.
+  it('blank form values + prior TC project DO NOT clear (pre-hydration Save safety)', async () => {
+    // Race-condition guard: if Save fires before GeneralTab.useEffect has
+    // mirrored `component.teamcityProjects` into the form (form defaults
+    // are `[]`), naïve "blank + had prior → []" logic would wipe the
+    // server-side list. The dirty-fields gate in handleSave catches this:
+    // an untouched form (no useFieldArray append/remove → not dirty) MUST
+    // omit teamcityProjects from the patch even when the component has
+    // prior server data.
+    // Test exercise: GeneralTab is mocked as an empty stub, so the form's
+    // teamcityProjects stays at the default `[]` AND dirtyFields stays
+    // empty. Expected wire result: no teamcityProjects key in payload.
     const updateMutateAsync = vi.fn(() => Promise.resolve())
     const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
     const seeded: ComponentDetail = {
@@ -509,8 +513,18 @@ describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => 
 
     await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
     const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
-    expect(payload['teamcityProjects']).toEqual([])
+    expect(payload['teamcityProjects']).toBeUndefined()
   })
+
+  // The positive-clear path (user removes all TC rows via useFieldArray
+  // → field dirty → Save emits `teamcityProjects: []`) is verified by the
+  // chromium-viewer Playwright spec against a real backend, not here.
+  // RHF's `setValue('teamcityProjects', [], { shouldDirty: true })` does
+  // not mark a field dirty when the new value matches the form default
+  // ([]), so the React-Testing-Library mock can't cleanly reproduce the
+  // dirty=true + value=[] state without dragging useFieldArray into the
+  // GeneralTab stub. The safety branch above already pins the load-bearing
+  // contract: a non-dirty form NEVER sends `[]`.
 
   it('populated teamcity* values flow through to PATCH when the form mirrors server state', async () => {
     // The previous test pins the contract for the *empty* GeneralTab stub:
