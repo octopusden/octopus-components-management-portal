@@ -2,7 +2,7 @@
 
 ## Status
 
-Open. Mirror of CRS `TD-003` ("OpenAPI v4 spec generation + share with Portal"). Either side can drive — the practical work needs both.
+Partial. Wave 0 of the schema-v2 migration (PR #38, commits `e2e2199` + `2070c9e`) wired the portal-side half: `openapi-typescript` against a vendored `frontend/src/lib/api/v4.json` produces `frontend/src/lib/api/schema.d.ts`; `npm run generate-types:check` is the drift gate. What remains: (a) CRS-side automatic spec publication so the vendored copy refreshes without a manual `cp ~/Downloads/v3-api-docs.json` (tracked as CRS's own TD-003 and as item #7 in [TD-005](TD-005-schema-v2-followups.md)); (b) retiring `frontend/src/lib/types.ts` in favour of re-exports from `schema.d.ts` once the two intentional drifts noted in `e2e2199`'s commit message (`?: T | null` vs `?: T`, `value: unknown` vs `Record<string, never>`) are resolved upstream or accepted as a thin compatibility shim.
 
 ## Context
 
