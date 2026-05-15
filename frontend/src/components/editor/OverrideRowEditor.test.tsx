@@ -210,6 +210,14 @@ describe('OverrideRowEditor — create mode', () => {
     expect(screen.queryByPlaceholderText('Value for Deprecated')).toBeNull()
   })
 
+  it('selecting escrow.gradleIncludeTestConfigurations renders a Switch (boolean dispatch)', async () => {
+    renderEditor()
+    const select = screen.getByTestId('attr-select') as HTMLSelectElement
+    await userEvent.selectOptions(select, 'escrow.gradleIncludeTestConfigurations')
+    const switches = screen.getAllByRole('switch')
+    expect(switches.length).toBeGreaterThan(0)
+  })
+
   it('switching to Marker and selecting distribution.maven renders Maven child list editor', async () => {
     renderEditor()
     await userEvent.click(screen.getByRole('radio', { name: /marker/i }))

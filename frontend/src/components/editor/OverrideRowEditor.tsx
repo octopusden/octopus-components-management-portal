@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -62,7 +62,12 @@ const SCALAR_ATTRS: ScalarAttr[] = [
   { path: 'escrow.gradleIncludeConfigurations', label: 'Gradle Include Configurations', type: 'string' },
   { path: 'escrow.gradleExcludeConfigurations', label: 'Gradle Exclude Configurations', type: 'string' },
   { path: 'escrow.gradleIncludeTestConfigurations', label: 'Gradle Include Test Configurations', type: 'boolean' },
-  { path: 'escrow.buildTask', label: 'Build Task', type: 'string' },
+  // NOTE: `escrow.buildTask` is intentionally omitted. CRS PR #193 added the
+  // `escrow_build_task` DB column distinct from `build.buildTasks`, but the
+  // `SCALAR_ATTRIBUTE_PATHS` set in `ConfigurationRowAccessors.kt` at PR #193
+  // HEAD does NOT include `escrow.buildTask`, so `applyScalarValue()` would
+  // `require()`-throw → 400 on any override attempt. Add back when CRS
+  // registers the path.
   // Jira
   { path: 'jira.projectKey', label: 'Project Key', type: 'string' },
   { path: 'jira.technical', label: 'Technical', type: 'boolean' },
@@ -263,6 +268,18 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
     onOpenChange(nextOpen)
   }
 
+  // Re-run resetState whenever the dialog opens OR the controlling props
+  // (override / mode) change while it stays open. Without this, a parent
+  // that swaps `override` without toggling `open` (e.g. a future refactor
+  // that keeps the editor mounted) would render stale form state.
+  useEffect(() => {
+    if (open) resetState()
+    // resetState is recreated each render; exhaustive-deps would force a
+    // useCallback that complicates the closure. The dependencies below are
+    // the ones that matter for re-running the prefill.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, override, mode])
+
   // ---------------------------------------------------------------------------
   // Attribute type lookup
   // ---------------------------------------------------------------------------
@@ -368,6 +385,18 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
     e.preventDefault()
     if (!attribute) {
       toast({ title: 'Please select an attribute', variant: 'destructive' })
+      return
+    }
+    // Guard against a stored attribute that no longer maps to any catalogue
+    // entry (e.g. server adds a new path the portal build doesn't know about).
+    // Without this, buildScalarValue / buildMarkerChildren return undefined /
+    // null and the wire body would be silently malformed.
+    if (overrideType === 'scalar' && !selectedScalarAttr) {
+      toast({ title: 'Unknown scalar attribute', description: attribute, variant: 'destructive' })
+      return
+    }
+    if (overrideType === 'marker' && !selectedMarkerAttr) {
+      toast({ title: 'Unknown marker attribute', description: attribute, variant: 'destructive' })
       return
     }
     try {
