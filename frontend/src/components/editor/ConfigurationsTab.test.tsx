@@ -209,3 +209,83 @@ describe('ConfigurationsTab — build.requiredTools marker', () => {
     expect(screen.getByText('3 tools')).toBeDefined()
   })
 })
+
+describe('ConfigurationsTab — scalar override edge cases', () => {
+  it('renders "= false" when the typed boolean override value is false', () => {
+    const component = makeComponent({
+      configurations: [
+        makeConfig({
+          id: 'sc-bool',
+          rowType: 'SCALAR_OVERRIDE',
+          overriddenAttribute: 'build.deprecated',
+          build: { deprecated: false },
+        }),
+      ],
+    })
+    render(<ConfigurationsTab component={component} />)
+    expect(screen.getByText('= false')).toBeDefined()
+  })
+
+  it('renders "= null" when the override aspect carries the field explicitly nulled', () => {
+    const component = makeComponent({
+      configurations: [
+        makeConfig({
+          id: 'sc-null',
+          rowType: 'SCALAR_OVERRIDE',
+          overriddenAttribute: 'build.javaVersion',
+          build: { javaVersion: null },
+        }),
+      ],
+    })
+    render(<ConfigurationsTab component={component} />)
+    expect(screen.getByText('= null')).toBeDefined()
+  })
+
+  it('renders em-dash when the override aspect does not carry the field at all', () => {
+    // Schema mismatch / drift: aspect object lacks the referenced field key.
+    // The summary should NOT misleadingly render "= null" — em-dash signals
+    // "absent" so a debugger can distinguish the two.
+    const component = makeComponent({
+      configurations: [
+        makeConfig({
+          id: 'sc-absent',
+          rowType: 'SCALAR_OVERRIDE',
+          overriddenAttribute: 'build.javaVersion',
+          build: {}, // field absent (not "= null")
+        }),
+      ],
+    })
+    render(<ConfigurationsTab component={component} />)
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0)
+  })
+
+  it('renders em-dash when overriddenAttribute has no dot', () => {
+    const component = makeComponent({
+      configurations: [
+        makeConfig({
+          id: 'sc-nodot',
+          rowType: 'SCALAR_OVERRIDE',
+          overriddenAttribute: 'noDotPath',
+        }),
+      ],
+    })
+    render(<ConfigurationsTab component={component} />)
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0)
+  })
+})
+
+describe('ConfigurationsTab — unknown marker fallback', () => {
+  it('renders em-dash for a marker name not in the canonical six-marker map', () => {
+    const component = makeComponent({
+      configurations: [
+        makeConfig({
+          id: 'marker-unknown',
+          rowType: 'MARKER',
+          overriddenAttribute: 'distribution.helmChart', // hypothetical future marker
+        }),
+      ],
+    })
+    render(<ConfigurationsTab component={component} />)
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0)
+  })
+})

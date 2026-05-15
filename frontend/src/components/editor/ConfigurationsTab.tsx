@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Badge } from '../ui/badge'
 import {
   Table,
@@ -59,9 +60,12 @@ function scalarOverrideSummary(row: ComponentConfiguration): string {
   const fieldKey = attr.slice(dotIdx + 1)
 
   const aspect = row[aspectKey] as Record<string, unknown> | null | undefined
-  const value = aspect?.[fieldKey]
-
-  if (value === null || value === undefined) return '= null'
+  // Distinguish "field absent" (undefined) from "field present, explicitly
+  // nulled" (null) so debugging a schema mismatch doesn't see misleading
+  // `= null` on a path the row doesn't even carry.
+  if (aspect === undefined || aspect === null || !(fieldKey in aspect)) return '—'
+  const value = aspect[fieldKey]
+  if (value === null) return '= null'
   return `= ${String(value)}`
 }
 
@@ -111,14 +115,18 @@ function sortedConfigurations(rows: ComponentConfiguration[]): ComponentConfigur
 
 export function ConfigurationsTab({ component }: ConfigurationsTabProps) {
   const configurations = component.configurations
+  // Memoize the sort before any early-return branch so the hook is called
+  // unconditionally on every render (React rules of hooks).
+  const sorted = useMemo(
+    () => sortedConfigurations(configurations ?? []),
+    [configurations],
+  )
 
   if (!configurations || configurations.length === 0) {
     return (
       <p className="text-sm text-muted-foreground py-4">No configuration rows</p>
     )
   }
-
-  const sorted = sortedConfigurations(configurations)
 
   return (
     <div className="rounded-md border overflow-hidden">
