@@ -625,8 +625,8 @@ export interface MigrationConflictResponse {
  *
  * `ambiguous_auto_resolved` is a sub-counter of `updated`+`unchanged`: how
  * many of those rows came from a CDRelease tie-break on a multi-candidate
- * match (introduced by CRS PR #188). Optional in the type because older CRS
- * builds omit the field; the panel falls back to 0 in that case.
+ * match. Optional in the type because older CRS builds omit the field;
+ * the panel falls back to 0 in that case.
  */
 export interface TeamCityResyncResult {
   scanned: number
