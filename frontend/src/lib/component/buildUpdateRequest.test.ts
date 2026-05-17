@@ -194,6 +194,16 @@ describe('buildUpdateRequest — dirtyFields gating (pre-hydration safety)', () 
     expect(req.systems).toBeUndefined()
   })
 
+  it('systems dirty + empty input → omits (would otherwise send [] which CRS rejects)', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({ systems: ['SYS1'] }),
+      values: makeValues({ system: '   ,  ,   ' }),
+      visibilities: EDITABLE,
+      dirtyFields: { system: true },
+    })
+    expect(req.systems).toBeUndefined()
+  })
+
   it('systems populated + dirty → forwards parsed array', () => {
     const req = buildUpdateRequest({
       component: makeComponent({ systems: ['OLD'] }),

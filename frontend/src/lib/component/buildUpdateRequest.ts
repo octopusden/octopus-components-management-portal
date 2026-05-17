@@ -112,15 +112,17 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
     componentOwner:
       visibilities.componentOwner === 'hidden' ? undefined : (values.componentOwner || undefined),
     // productType is owned by EscrowTab — never sent from the General save.
-    // Pre-hydration guard: form mounts with `system: ''` → `systemArray = []`
-    // BEFORE GeneralTab's useEffect mirrors the server `systems` into the
-    // input. Without the dirty gate, a fast Save would emit `systems: []`
-    // and CRS would reject the required field with 400 (or worse, accept
-    // an empty list on a future relaxation of the contract). dirtyFields
-    // for `system` only flips true when the user types — RHF's
-    // setValue(...) inside the mirror useEffect does not set shouldDirty.
+    // Two guards on `systems`:
+    //   - Pre-hydration: form mounts with `system: ''` → `systemArray = []`
+    //     BEFORE GeneralTab's useEffect mirrors the server `systems` into
+    //     the input. The dirty-gate blocks the unwanted clear.
+    //   - Empty-after-dirty: `systems` is REQUIRED server-side. If the
+    //     user types into the input then deletes everything (RHF still
+    //     marks dirty on the round-trip), sending `systems: []` would 400.
+    //     Omit instead — server keeps the previous list; UI ideally adds
+    //     form validation to surface this to the user (deferred).
     systems:
-      visibilities.systems === 'hidden' || dirtyFields.system !== true
+      visibilities.systems === 'hidden' || dirtyFields.system !== true || systemArray.length === 0
         ? undefined
         : systemArray,
     clientCode:
