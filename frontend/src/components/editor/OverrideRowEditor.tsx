@@ -329,46 +329,85 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
   function buildMarkerChildren(): MarkerChildrenPayload | null {
     if (!selectedMarkerAttr) return null
     const key = selectedMarkerAttr.childKey
+    // Each marker branch trims string fields and drops rows whose required
+    // fields are still blank — the modal Save is a button click (not a form
+    // submit), so HTML `required` doesn't gate the wire body. Without this
+    // a newly-added empty row reaches the server as `"   "` and 400s. Same
+    // pattern that VcsTab + DistributionTab already use for the BASE-row
+    // paths — required-field rules below mirror CRS v4 wire contract.
     if (key === 'vcsEntries') {
-      const entries: VcsEntryRequest[] = vcsEntries.map((e) => ({
-        name: e.name || null,
-        vcsPath: e.vcsPath,
-        branch: e.branch || null,
-        tag: e.tag || null,
-        hotfixBranch: e.hotfixBranch || null,
-        repositoryType: e.repositoryType || null,
-      }))
+      const entries: VcsEntryRequest[] = vcsEntries
+        .map((e) => ({
+          name: (e.name || '').trim(),
+          vcsPath: e.vcsPath.trim(),
+          branch: (e.branch || '').trim(),
+          tag: (e.tag || '').trim(),
+          hotfixBranch: (e.hotfixBranch || '').trim(),
+          repositoryType: (e.repositoryType || '').trim(),
+        }))
+        .filter((e) => e.vcsPath !== '')
+        .map((e) => ({
+          name: e.name || null,
+          vcsPath: e.vcsPath,
+          branch: e.branch || null,
+          tag: e.tag || null,
+          hotfixBranch: e.hotfixBranch || null,
+          repositoryType: e.repositoryType || null,
+        }))
       return { vcsEntries: entries }
     }
     if (key === 'mavenArtifacts') {
-      const arts: MavenArtifactRequest[] = mavenArtifacts.map((a) => ({
-        groupPattern: a.groupPattern,
-        artifactPattern: a.artifactPattern,
-        extension: a.extension || null,
-        classifier: a.classifier || null,
-      }))
+      const arts: MavenArtifactRequest[] = mavenArtifacts
+        .map((a) => ({
+          groupPattern: a.groupPattern.trim(),
+          artifactPattern: a.artifactPattern.trim(),
+          extension: (a.extension || '').trim(),
+          classifier: (a.classifier || '').trim(),
+        }))
+        .filter((a) => a.groupPattern !== '' && a.artifactPattern !== '')
+        .map((a) => ({
+          groupPattern: a.groupPattern,
+          artifactPattern: a.artifactPattern,
+          extension: a.extension || null,
+          classifier: a.classifier || null,
+        }))
       return { mavenArtifacts: arts }
     }
     if (key === 'fileUrlArtifacts') {
-      const arts: FileUrlArtifactRequest[] = fileUrlArtifacts.map((a) => ({
-        url: a.url,
-        artifactId: a.artifactId || null,
-        classifier: a.classifier || null,
-      }))
+      const arts: FileUrlArtifactRequest[] = fileUrlArtifacts
+        .map((a) => ({
+          url: a.url.trim(),
+          artifactId: (a.artifactId || '').trim(),
+          classifier: (a.classifier || '').trim(),
+        }))
+        .filter((a) => a.url !== '')
+        .map((a) => ({
+          url: a.url,
+          artifactId: a.artifactId || null,
+          classifier: a.classifier || null,
+        }))
       return { fileUrlArtifacts: arts }
     }
     if (key === 'dockerImages') {
-      const imgs: DockerImageRequest[] = dockerImages.map((d) => ({
-        imageName: d.imageName,
-        flavor: d.flavor || null,
-      }))
+      const imgs: DockerImageRequest[] = dockerImages
+        .map((d) => ({
+          imageName: d.imageName.trim(),
+          flavor: (d.flavor || '').trim(),
+        }))
+        .filter((d) => d.imageName !== '')
+        .map((d) => ({
+          imageName: d.imageName,
+          flavor: d.flavor || null,
+        }))
       return { dockerImages: imgs }
     }
     if (key === 'packages') {
-      const pkgs: PackageRequest[] = packages.map((p) => ({
-        packageType: p.packageType,
-        packageName: p.packageName,
-      }))
+      const pkgs: PackageRequest[] = packages
+        .map((p) => ({
+          packageType: p.packageType.trim(),
+          packageName: p.packageName.trim(),
+        }))
+        .filter((p) => p.packageType !== '' && p.packageName !== '')
       return { packages: pkgs }
     }
     if (key === 'requiredTools') {

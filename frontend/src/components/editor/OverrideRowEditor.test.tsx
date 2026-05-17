@@ -477,3 +477,82 @@ describe('OverrideRowEditor — all six markers accessible', () => {
     expect(optionValues).toContain('build.requiredTools')
   })
 })
+
+// ---------------------------------------------------------------------------
+// Tests: marker child trim + blank-row filter (regression lock)
+// ---------------------------------------------------------------------------
+// Mirrors the DistributionTab + VcsTab cleaned-row pattern. A newly-added
+// empty row in the modal must NOT reach the server as whitespace — required
+// CRS fields would 400. Whitespace-only required fields are dropped; trim
+// is applied to all string fields.
+
+describe('OverrideRowEditor — marker child trim + blank-row filter', () => {
+  beforeEach(() => {
+    mockCreateMutateAsync.mockReset()
+    mockUpdateMutateAsync.mockReset()
+    mockToast.mockReset()
+  })
+
+  it('vcs.settings: whitespace-only vcsPath row is dropped, surviving row is trimmed', async () => {
+    // HTML5 `required` accepts `"   "` as non-empty, so the form-submit
+    // gate does NOT catch whitespace-only required fields. Without the
+    // trim+filter, that row reaches CRS as `vcsPath: "   "` and 400s.
+    mockCreateMutateAsync.mockResolvedValue({})
+    renderEditor()
+    await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
+    const select = screen.getByTestId('attr-select') as HTMLSelectElement
+    await userEvent.selectOptions(select, 'vcs.settings')
+
+    // Row 1 — populate vcsPath with surrounding whitespace
+    await userEvent.click(screen.getByRole('button', { name: /add entry/i }))
+    const vcsPathInputs = await screen.findAllByPlaceholderText('ssh://git@...')
+    await userEvent.type(vcsPathInputs[0]!, '  ssh://git@host/repo  ')
+
+    // Row 2 — whitespace-only vcsPath (satisfies HTML5 required) → row dropped
+    await userEvent.click(screen.getByRole('button', { name: /add entry/i }))
+    const vcsPathInputs2 = await screen.findAllByPlaceholderText('ssh://git@...')
+    await userEvent.type(vcsPathInputs2[1]!, '   ')
+
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+
+    await waitFor(() => {
+      expect(mockCreateMutateAsync).toHaveBeenCalledOnce()
+      const body = mockCreateMutateAsync.mock.calls[0]![0]
+      expect(body.markerChildren.vcsEntries).toHaveLength(1)
+      expect(body.markerChildren.vcsEntries[0].vcsPath).toBe('ssh://git@host/repo')
+    })
+  })
+
+  it('distribution.maven: whitespace-only artifactPattern row is dropped, surviving row is trimmed', async () => {
+    mockCreateMutateAsync.mockResolvedValue({})
+    renderEditor()
+    await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
+    const select = screen.getByTestId('attr-select') as HTMLSelectElement
+    await userEvent.selectOptions(select, 'distribution.maven')
+
+    // Row 1 — both patterns populated with surrounding whitespace
+    await userEvent.click(screen.getByRole('button', { name: /add artifact/i }))
+    const groupInputs = await screen.findAllByPlaceholderText('org.example.alpha')
+    const artifactInputs = await screen.findAllByPlaceholderText('my-component-*')
+    await userEvent.type(groupInputs[0]!, '  org.example.alpha  ')
+    await userEvent.type(artifactInputs[0]!, '  my-lib-*  ')
+
+    // Row 2 — groupPattern populated, artifactPattern whitespace-only
+    // (satisfies HTML5 required) → row dropped by trim+filter
+    await userEvent.click(screen.getByRole('button', { name: /add artifact/i }))
+    const groupInputs2 = await screen.findAllByPlaceholderText('org.example.alpha')
+    const artifactInputs2 = await screen.findAllByPlaceholderText('my-component-*')
+    await userEvent.type(groupInputs2[1]!, 'org.example.beta')
+    await userEvent.type(artifactInputs2[1]!, '   ')
+
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+
+    await waitFor(() => {
+      expect(mockCreateMutateAsync).toHaveBeenCalledOnce()
+      const body = mockCreateMutateAsync.mock.calls[0]![0]
+      expect(body.markerChildren.mavenArtifacts).toHaveLength(1)
+      expect(body.markerChildren.mavenArtifacts[0].groupPattern).toBe('org.example.alpha')
+      expect(body.markerChildren.mavenArtifacts[0].artifactPattern).toBe('my-lib-*')
+    })
+  })
+})
