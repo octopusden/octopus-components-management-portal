@@ -40,6 +40,7 @@ function makeComponent(overrides: Partial<ComponentSummary> = {}): ComponentSumm
     productType: null,
     archived: false,
     updatedAt: null,
+    labels: [],
     ...overrides,
   }
 }
@@ -154,12 +155,10 @@ describe('ComponentTable', () => {
       expect(screen.getByRole('columnheader', { name: 'Labels' })).toBeDefined()
     })
 
-    it('renders em-dash when labels is undefined', () => {
-      renderTable([makeComponent()])
-      expect(cellForColumn('Labels').textContent).toContain('—')
-    })
-
     it('renders em-dash when labels is an empty array', () => {
+      // labels is required on the wire (`ComponentSummaryResponse.labels`);
+      // server emits [] for the empty case, never omits the key. Renders
+      // an em-dash placeholder so the column doesn't look broken.
       renderTable([makeComponent({ labels: [] })])
       expect(cellForColumn('Labels').textContent).toContain('—')
     })

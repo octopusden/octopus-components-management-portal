@@ -1,5 +1,13 @@
 # PR #38 — review action plan
 
+> **STATUS — superseded by landed commits.** This doc was the working tracker
+> during the multi-agent review pass. The "P1 — block merge", "P2 — fix before
+> merge", and "Actionable Copilot findings" sections below are **historical
+> context** describing what was found at review time. The authoritative current
+> state is the **"Final landed state on PR #38"** table further down — every
+> P1 item is either ✓ landed or explicitly deferred to a follow-up PR with the
+> reason. Don't read the early sections as a current to-do list.
+
 Multi-agent review of `feature/crs-schema-v2` (schema-v2 contract migration, Waves A–C + 0) + Copilot inline threads. Generated 2026-05-17 after the `2.0.84-3395 → 2.0.84-3519` CRS pin bump (commit `5ceb97a`) and unblocking draft → ready.
 
 PR: https://github.com/octopusden/octopus-components-management-portal/pull/38
@@ -33,16 +41,16 @@ This doc is a working plan, not a TD. Items here that survive merge should fold 
 
 **Action:** click "Resolve conversation" on each in the GitHub UI.
 
-### Actionable Copilot findings (not fixed)
+### Actionable Copilot findings — ✓ ALL ADDRESSED in commit `441e08a`
 
-- **A1** — `src/test/.../E2ETestcontainersDriver.kt:503` — new `HttpURLConnection` probes lack `connect/read` timeouts. Slow CRS startup / DNS hiccup → hung e2e run. **Fix:** `conn.connectTimeout = 30_000; conn.readTimeout = 60_000`.
-- **A2** — `frontend/src/components/CreateComponentDialog.tsx:115` — dialog copy says "The component key cannot be changed after creation" but `GeneralTab` rename flow at :207-225 explicitly supports it (admin-gated by `RENAME_COMPONENTS` permission). **Fix:** rewrite to "Component keys are stable identifiers — renames require the `RENAME_COMPONENTS` permission" or similar, or drop the sentence.
+- **A1** ✓ — `src/test/.../E2ETestcontainersDriver.kt:498-499, 558-559` — `connectTimeout = 30_000; readTimeout = 60_000` added on both new probes.
+- **A2** ✓ — `frontend/src/components/CreateComponentDialog.tsx:115-117` — rewritten to "Renaming the component key later requires the Rename Components permission."
 
 ## Multi-agent fleet — findings
 
 Six specialized agents reviewed architecture, security, tests, UI/UX, codegen, code-quality + one Sonnet validator on the CRS bump commit. Detailed reports captured in agent transcripts; consolidated and de-duplicated below. P0 already-fixed items are dropped from this list.
 
-### P1 — block merge
+### P1 — block merge — historical (see "Final landed state" table for current status)
 
 1. **Types misalign with required wire shape.** `frontend/src/lib/types.ts:48,57-62` declares `labels`, `docs`, `artifactIds`, `securityGroups`, `teamcityProjects`, `configurations` as `?:`, but OpenAPI marks them required. (`systems` is already required at `types.ts:15,35` — no fix needed there.) A backend bug dropping `configurations` would surface as a silently-empty editor, not an error. **Fix:** drop `?:` from the six server-required arrays; surface absent-required as error in `selectBaseRow`/refetch.
 
@@ -62,7 +70,7 @@ Six specialized agents reviewed architecture, security, tests, UI/UX, codegen, c
 
 9. **Override delete round-trip never asserted.** `frontend/src/components/editor/FieldOverrides.test.tsx:178-192` opens the confirm dialog and asserts visibility, then stops. `mockDeleteMutateAsync` is declared and reset but `toHaveBeenCalled()` is never asserted anywhere. The deletion API takes only `overrideId: string` (`useComponent.ts:119`; `FieldOverrides.tsx:56` passes `overrideId` through). **Fix:** click Delete, assert `mockDeleteMutateAsync('fo-scalar')` (the override row's id, e.g. `'fo-scalar'` in the fixture) was called, assert toast.
 
-### P2 — fix before merge
+### P2 — fix before merge — historical (see "Final landed state" table for current status)
 
 11. **`useComponent.fieldOverrides` test asserts only cache invalidation.** `frontend/src/hooks/useComponent.fieldOverrides.test.ts` — body of the underlying `api.post/patch/delete` calls never inspected. **Fix:** add assertions on `mockApi.post.mock.calls[0][0]` (URL) and `[1]` (body) for one scalar + one marker create.
 

@@ -17,7 +17,9 @@ export interface ComponentSummary {
   productType: string | null
   archived: boolean
   updatedAt: string | null
-  labels?: string[]
+  // Required on the wire per ComponentSummaryResponse — server emits []
+  // for empty, never omits the key. Matches ComponentDetail.labels.
+  labels: string[]
   // SYS-040 list-view extras — derived by the v4 mapper from the BASE
   // configuration row + first child (sort_order = 0); blank strings normalized to null.
   buildSystem?: string | null
