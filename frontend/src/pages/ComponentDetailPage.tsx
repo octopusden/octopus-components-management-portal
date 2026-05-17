@@ -18,6 +18,7 @@ import {
   DialogFooter,
 } from '../components/ui/dialog'
 import { GeneralTab, type GeneralFormValues, GENERAL_TAB_FIELDS } from '../components/editor/GeneralTab'
+import { buildUpdateRequest } from '../lib/component/buildUpdateRequest'
 import { BuildTab } from '../components/editor/BuildTab'
 import { VcsTab } from '../components/editor/VcsTab'
 import { DistributionTab } from '../components/editor/DistributionTab'
@@ -130,205 +131,46 @@ export function ComponentDetailPage() {
 
   async function handleSave() {
     if (!component) return
-    // Server-side errors set on a previous failed submit don't auto-clear when
-    // the user fixes the input or when the next save succeeds (RHF only
-    // clears errors on its own validation passes). Wipe them at the start of
-    // each save so a successful retry doesn't leave stale red text behind.
+    // Server-side errors set on a previous failed submit don't auto-clear
+    // when the user fixes the input or when the next save succeeds (RHF
+    // only clears errors on its own validation passes). Wipe them at the
+    // start of each save so a successful retry doesn't leave stale red
+    // text behind.
     form.clearErrors()
-    const values = form.getValues()
 
-    const systemArray = values.system
-      ? values.system.split(',').map((s) => s.trim()).filter(Boolean)
-      : []
-
-    // SYS-039 — labels uses the same comma-separated convention as
-    // system, but with two extra rules to match scalar JSON Merge Patch
-    // semantics: (a) blank input → undefined ("don't touch"), not [] (an
-    // explicit clear); (b) dedup via Set to avoid emitting duplicates
-    // until CRS adds a DB-level constraint (PR #163 NIT).
-    const labelsArray = values.labels
-      ? Array.from(
-          new Set(
-            values.labels
-              .split(',')
-              .map((s) => s.trim())
-              .filter(Boolean),
-          ),
-        )
-      : undefined
-    // releasesInDefaultBranch is the only SYS-039 boolean — only send when
-    // it actually changed. Use react-hook-form's dirtyFields rather than
-    // comparing values.X to (stored ?? false): with the value compare, a
-    // stored null + toggle-on + toggle-back-to-off would compare false===false
-    // and silently drop a real user interaction. dirtyFields tracks any
-    // touch by the user, regardless of round-tripping back to the default.
-    const releasesInDefaultBranchChanged =
-      form.formState.dirtyFields.releasesInDefaultBranch === true
-
-    // `solution` follows the same dirtyFields guard as
-    // releasesInDefaultBranch. Form default is `false`; server `null`
-    // means "unknown". Without this gate a Save fired before the user
-    // touches the toggle would send `false` and clobber the stored null
-    // (JSON merge-patch treats present-and-false as a real write). The
-    // value-compare pattern used for `archived` below cannot be reused
-    // here because false !== null compares true and would mis-mark the
-    // unchanged form as dirty on every load.
-    const solutionChanged = form.formState.dirtyFields.solution === true
-
-    // `archived` is gated server-side by ARCHIVE_COMPONENTS (a permission
-    // ROLE_COMPONENTS_REGISTRY_EDITOR does not hold). Send it only when the user actually
-    // toggled it — otherwise a plain rename/owner/system edit from a non-admin
-    // would trip the archive guard with 403.
-    const archivedChanged = values.archived !== component.archived
-
-    // `name` is gated server-side by RENAME_COMPONENTS (same role gap as
-    // archive). The Name input is disabled in the UI for users without it
-    // (GeneralTab.tsx), but defence in depth: only send `name` when it
-    // actually changed, regardless of permission. A trimmed-blank or
-    // whitespace-only name would 400, and "unchanged" carries no semantic
-    // meaning so undefined is the right wire shape.
-    const trimmedName = values.name.trim()
-    const nameChanged = trimmedName !== '' && trimmedName !== component.name
-    const renameField = nameChanged ? trimmedName : undefined
-
-    // parentComponentName: blank input clears the field (JSON Merge Patch null);
-    // an unchanged value means "don't touch" (undefined). Anything else sets it.
-    const trimmedParent = values.parentComponentName.trim()
-    const currentParent = component.parentComponentName ?? ''
-    const parentComponentName: string | null | undefined =
-      trimmedParent === currentParent
-        ? undefined
-        : trimmedParent === ''
-          ? null
-          : trimmedParent
-
-    // schema-v2: TC link is now a per-component list (component.teamcityProjects[]).
-    // Wave B list-editor mapping. Filter blank rows, then:
-    //   - hidden FC visibility → omit (don't touch)
-    //   - cleaned list non-empty → send the list (REPLACE)
-    //   - cleaned list empty + user-dirty + had prior → send [] (explicit clear)
-    //   - cleaned list empty + not dirty → omit (don't touch)
-    // The dirty gate guards against a Save fired before GeneralTab.useEffect
-    // mirrors the server data into the form (form default is `[]` everywhere
-    // — sending `[]` against a populated server list would silently wipe it).
-    // useFieldArray's append/remove/update mark the field dirty; the useEffect
-    // setValue() does not (no shouldDirty flag), so non-dirty == "user hasn't
-    // touched the list yet, server snapshot is the source of truth".
-    // The wire request carries only `projectId`; the URL is server-derived
-    // by CRS resync.
-    const tcVisible =
-      teamcityProjectIdFc.visibility !== 'hidden' && teamcityProjectUrlFc.visibility !== 'hidden'
-    const tcPatch: { teamcityProjects?: { projectId: string }[] } = {}
-    if (tcVisible) {
-      const cleanedTc = (values.teamcityProjects ?? [])
-        .map((p) => ({ projectId: (p.projectId ?? '').trim() }))
-        .filter((p) => p.projectId !== '')
-      const tcHadPrior = (component.teamcityProjects?.length ?? 0) > 0
-      const tcDirty = !!form.formState.dirtyFields.teamcityProjects
-      if (cleanedTc.length > 0) {
-        tcPatch.teamcityProjects = cleanedTc
-      } else if (tcDirty && tcHadPrior) {
-        tcPatch.teamcityProjects = []
-      }
-    }
-
-    // schema-v2 group editor: groupId form field is the typed groupKey;
-    // groupIsFake is the isFake flag on ComponentGroupRequest. Blank groupKey
-    // + user-dirty groupId + existing component.group → clearGroup:true
-    // (explicit clear). Same dirty gate as the lists above — without it a
-    // Save before useEffect-mirror would treat the empty default as "user
-    // cleared" and wipe component.group.
-    const groupPatch: {
-      group?: { groupKey: string; isFake: boolean }
-      clearGroup?: boolean
-    } = {}
-    if (groupIdFc.visibility !== 'hidden') {
-      const trimmedGroupId = (values.groupId || '').trim()
-      const groupIdDirty = form.formState.dirtyFields.groupId === true
-      if (trimmedGroupId !== '') {
-        groupPatch.group = { groupKey: trimmedGroupId, isFake: values.groupIsFake ?? false }
-      } else if (groupIdDirty && component.group) {
-        groupPatch.clearGroup = true
-      }
-    }
-
-    // schema-v2 per-component lists. Same REPLACE / clear / omit semantics
-    // as teamcityProjects, including the dirty-gate on the clear branch.
-    // DocLinks blank rows → drop; artifactIds rows with either pattern blank
-    // → drop (both fields are required server-side).
-    const cleanedDocs = (values.docs ?? [])
-      .map((d) => ({
-        docComponentKey: (d.docComponentKey ?? '').trim(),
-        majorVersion: (d.majorVersion ?? '').trim(),
-      }))
-      .filter((d) => d.docComponentKey !== '')
-      .map((d) => ({
-        docComponentKey: d.docComponentKey,
-        majorVersion: d.majorVersion === '' ? null : d.majorVersion,
-      }))
-    const docsHadPrior = (component.docs?.length ?? 0) > 0
-    const docsDirty = !!form.formState.dirtyFields.docs
-    const docsPatch: { docs?: { docComponentKey: string; majorVersion: string | null }[] } = {}
-    if (cleanedDocs.length > 0) {
-      docsPatch.docs = cleanedDocs
-    } else if (docsDirty && docsHadPrior) {
-      docsPatch.docs = []
-    }
-
-    const cleanedAids = (values.artifactIds ?? [])
-      .map((a) => ({
-        groupPattern: (a.groupPattern ?? '').trim(),
-        artifactPattern: (a.artifactPattern ?? '').trim(),
-      }))
-      .filter((a) => a.groupPattern !== '' && a.artifactPattern !== '')
-    const aidsHadPrior = (component.artifactIds?.length ?? 0) > 0
-    const aidsDirty = !!form.formState.dirtyFields.artifactIds
-    const artifactIdsPatch: { artifactIds?: { groupPattern: string; artifactPattern: string }[] } = {}
-    if (cleanedAids.length > 0) {
-      artifactIdsPatch.artifactIds = cleanedAids
-    } else if (aidsDirty && aidsHadPrior) {
-      artifactIdsPatch.artifactIds = []
-    }
+    const request = buildUpdateRequest({
+      component,
+      values: form.getValues(),
+      // Each FieldConfigEntry.visibility is optional in the type but the
+      // hook falls back to 'editable' when the config row is missing, so
+      // mirror the same default here for the (rare) case where data is
+      // shaped without the visibility key set.
+      visibilities: {
+        displayName: displayNameFc.visibility ?? 'editable',
+        componentOwner: componentOwnerFc.visibility ?? 'editable',
+        systems: systemFc.visibility ?? 'editable',
+        clientCode: clientCodeFc.visibility ?? 'editable',
+        groupId: groupIdFc.visibility ?? 'editable',
+        releaseManager: releaseManagerFc.visibility ?? 'editable',
+        securityChampion: securityChampionFc.visibility ?? 'editable',
+        copyright: copyrightFc.visibility ?? 'editable',
+        releasesInDefaultBranch: releasesInDefaultBranchFc.visibility ?? 'editable',
+        labels: labelsFc.visibility ?? 'editable',
+        teamcityProjectId: teamcityProjectIdFc.visibility ?? 'editable',
+        teamcityProjectUrl: teamcityProjectUrlFc.visibility ?? 'editable',
+      },
+      dirtyFields: {
+        releasesInDefaultBranch: form.formState.dirtyFields.releasesInDefaultBranch === true,
+        solution: form.formState.dirtyFields.solution === true,
+        groupId: form.formState.dirtyFields.groupId === true,
+        teamcityProjects: !!form.formState.dirtyFields.teamcityProjects,
+        docs: !!form.formState.dirtyFields.docs,
+        artifactIds: !!form.formState.dirtyFields.artifactIds,
+      },
+    })
 
     try {
-      await updateMutation.mutateAsync({
-        version: component.version,
-        // Required on the wire. Default to false; groupPatch below may
-        // override with true when the user explicitly cleared the group.
-        clearGroup: false,
-        name: renameField,
-        // displayName: hidden → undefined (no change); otherwise send value or undefined for empty
-        displayName: displayNameFc.visibility === 'hidden' ? undefined : (values.displayName || undefined),
-        // componentOwner: hidden → undefined
-        componentOwner: componentOwnerFc.visibility === 'hidden' ? undefined : (values.componentOwner || undefined),
-        // productType is rendered/saved from EscrowTab; do NOT send it from the General save
-        // systems: hidden → undefined (NOT [], which would wipe the server value via JSON merge-patch)
-        systems: systemFc.visibility === 'hidden' ? undefined : systemArray,
-        // clientCode: hidden → undefined
-        clientCode: clientCodeFc.visibility === 'hidden' ? undefined : (values.clientCode || undefined),
-        solution: solutionChanged ? values.solution : undefined,
-        archived: archivedChanged ? values.archived : undefined,
-        parentComponentName,
-        // SYS-039: hidden → undefined, blank string → undefined (keep
-        // existing). releasesInDefaultBranch only sent on actual change to
-        // avoid clobbering a stored null with the form's `false` default.
-        releaseManager:
-          releaseManagerFc.visibility === 'hidden' ? undefined : (values.releaseManager || undefined),
-        securityChampion:
-          securityChampionFc.visibility === 'hidden' ? undefined : (values.securityChampion || undefined),
-        copyright: copyrightFc.visibility === 'hidden' ? undefined : (values.copyright || undefined),
-        releasesInDefaultBranch:
-          releasesInDefaultBranchFc.visibility === 'hidden' || !releasesInDefaultBranchChanged
-            ? undefined
-            : values.releasesInDefaultBranch,
-        labels: labelsFc.visibility === 'hidden' ? undefined : labelsArray,
-        // labelsArray is already `undefined` when input is blank — see helper above.
-        // schema-v2 child-list patches — see *Patch computation above.
-        ...groupPatch,
-        ...tcPatch,
-        ...docsPatch,
-        ...artifactIdsPatch,
-      })
+      await updateMutation.mutateAsync(request)
       toast({ title: 'Component saved', description: 'Changes have been saved successfully.' })
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
