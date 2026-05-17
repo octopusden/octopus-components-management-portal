@@ -85,7 +85,7 @@ const columns = [
         className="flex items-center gap-1 font-medium hover:text-foreground transition-colors"
         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
       >
-        Name
+        Component Key
         {column.getIsSorted() === 'asc' ? (
           <ArrowUp className="h-3.5 w-3.5" />
         ) : column.getIsSorted() === 'desc' ? (

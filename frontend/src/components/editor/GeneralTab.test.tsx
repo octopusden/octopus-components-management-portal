@@ -170,7 +170,7 @@ describe('GeneralTab rename (B7.1.4)', () => {
     const component = baseComponent({ name: 'orig-name' })
     renderWithProviders(<Harness component={component} />)
 
-    const input = screen.getByLabelText(/^name$/i) as HTMLInputElement
+    const input = screen.getByLabelText(/^component key$/i) as HTMLInputElement
     expect(input).toBeDefined()
     expect(input.disabled).toBe(false)
     expect(input.value).toBe('orig-name')
@@ -181,7 +181,7 @@ describe('GeneralTab rename (B7.1.4)', () => {
     const component = baseComponent({ name: 'orig-name' })
     renderWithProviders(<Harness component={component} />)
 
-    const input = screen.getByLabelText(/^name$/i) as HTMLInputElement
+    const input = screen.getByLabelText(/^component key$/i) as HTMLInputElement
     expect(input).toBeDefined()
     expect(input.disabled).toBe(true)
     expect(input.value).toBe('orig-name')
@@ -195,7 +195,7 @@ describe('GeneralTab rename (B7.1.4)', () => {
     const component = baseComponent({ name: 'orig-name' })
     renderWithProviders(<Harness component={component} />)
 
-    const input = screen.getByLabelText(/^name$/i) as HTMLInputElement
+    const input = screen.getByLabelText(/^component key$/i) as HTMLInputElement
     await userEvent.clear(input)
     await userEvent.type(input, 'renamed-component')
 
@@ -215,7 +215,7 @@ describe('GeneralTab rename (B7.1.4)', () => {
     const component = baseComponent({ name: 'orig-name' })
     renderWithProviders(<Harness component={component} />)
 
-    const input = screen.getByLabelText(/^name$/i) as HTMLInputElement
+    const input = screen.getByLabelText(/^component key$/i) as HTMLInputElement
     expect(input.disabled).toBe(true)
   })
 })

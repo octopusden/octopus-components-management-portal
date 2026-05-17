@@ -209,7 +209,7 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
               server enforces RENAME_COMPONENTS only on PATCH; POST permits
               anything the EDIT_COMPONENTS holder can name. */}
           <div className="space-y-1.5">
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor="name">Component Key</Label>
             <Input
               id="name"
               placeholder="my-component"
@@ -229,7 +229,7 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
             {!errors.name && !isNew && canRename && (
               <p className="text-xs text-muted-foreground">
                 Renaming changes the canonical identifier — every legacy v1/v2/v3 lookup
-                by old name will resolve to the renamed component.
+                by old key will resolve to the renamed component.
               </p>
             )}
           </div>

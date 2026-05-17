@@ -74,9 +74,9 @@ describe('ComponentTable', () => {
     mockLinks(null)
   })
 
-  it('renders the Name column header', () => {
+  it('renders the Component Key column header', () => {
     renderTable([makeComponent()])
-    expect(screen.getByRole('button', { name: /name/i })).toBeDefined()
+    expect(screen.getByRole('button', { name: /component key/i })).toBeDefined()
   })
 
   it('does not render a standalone Display Name column header', () => {

@@ -63,13 +63,13 @@ describe('CreateComponentDialog — form submission', () => {
     mockToast.mockReset()
   })
 
-  it('shows a validation error for an invalid name', async () => {
+  it('shows a validation error for an invalid component key', async () => {
     renderWithProviders(<CreateComponentButton />)
     await openDialog()
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'bad name!')
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() =>
-      expect(screen.getByText(/name can only contain/i)).toBeDefined(),
+      expect(screen.getByText(/component key can only contain/i)).toBeDefined(),
     )
     expect(mockMutateAsync).not.toHaveBeenCalled()
   })
