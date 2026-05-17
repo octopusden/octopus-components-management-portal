@@ -48,6 +48,12 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
+      # Wave 0 drift gate. Regenerates schema.d.ts from the vendored
+      # v4.json and `diff`s against the committed copy — any uncommitted
+      # delta between the spec and the generated types fails the PR.
+      # Without this the script existed only as a local command and
+      # contributors could re-vendor v4.json without regenerating.
+      - run: npm run generate-types:check
       - run: npm run test:coverage
 
   gate-merge:
