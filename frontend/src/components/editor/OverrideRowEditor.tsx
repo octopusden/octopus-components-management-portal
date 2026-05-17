@@ -99,6 +99,11 @@ const MARKER_ATTRS: MarkerAttr[] = [
 
 const MARKER_BY_PATH = new Map(MARKER_ATTRS.map((a) => [a.path, a]))
 
+// Tracks `override` objects that already triggered the drift warning so a
+// re-render of an unchanged dialog doesn't re-warn. WeakSet drops entries
+// once the override goes out of scope; no memory leak.
+const unknownAttrWarned = new WeakSet<object>()
+
 // ---------------------------------------------------------------------------
 // Child list state types
 // ---------------------------------------------------------------------------
@@ -139,6 +144,27 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
     }
     return 'scalar'
   })()
+
+  // CRS drift surfaces: when an existing override row's attribute is
+  // present in NEITHER catalogue (because CRS added a new scalar path the
+  // portal build doesn't know about yet, or because CRS renamed one), the
+  // submit guard at handleSubmit toasts "Unknown ... attribute" — but only
+  // when the user actually clicks Update. Log a console.warn at edit-open
+  // so devs catch the drift in browser devtools without needing a save
+  // attempt. WeakSet caps to one warn per override object to avoid spamming
+  // on every render.
+  useEffect(() => {
+    if (mode !== 'edit' || !override) return
+    if (SCALAR_BY_PATH.has(override.overriddenAttribute)) return
+    if (MARKER_BY_PATH.has(override.overriddenAttribute)) return
+    if (unknownAttrWarned.has(override)) return
+    unknownAttrWarned.add(override)
+    console.warn(
+      `[OverrideRowEditor] Stored override "${override.overriddenAttribute}" is not in either ` +
+        `SCALAR_ATTRS or MARKER_ATTRS — likely CRS contract drift. Update the catalogue in ` +
+        `OverrideRowEditor.tsx or check the CRS-side SCALAR_ATTRIBUTE_PATHS registry.`,
+    )
+  }, [mode, override])
 
   const initialAttribute = mode === 'edit' && override ? override.overriddenAttribute : ''
   const initialVersionRange = mode === 'edit' && override ? override.versionRange : '(,0),[0,)'

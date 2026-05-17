@@ -11,7 +11,7 @@ import { selectBaseRow } from '../../lib/api/baseRow'
 import type { ComponentDetail } from '../../lib/types'
 import type { ComponentUpdateRequest } from '../../hooks/useComponent'
 import type { UseMutationResult } from '@tanstack/react-query'
-import { ApiError } from '../../lib/api'
+import { useOptimisticConflict } from '../../hooks/useOptimisticConflict'
 
 interface BuildTabProps {
   component: ComponentDetail
@@ -20,6 +20,7 @@ interface BuildTabProps {
 }
 
 export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
+  const handleConflict = useOptimisticConflict(component.id)
   const baseRow = selectBaseRow(component)
   const build = baseRow?.build
 
@@ -88,8 +89,9 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
       })
       toast({ title: 'Build configuration saved' })
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        toast({ title: 'Conflict', description: 'Please refresh and try again.', variant: 'destructive' })
+      const conflict = await handleConflict(err)
+      if (conflict) {
+        toast({ ...conflict, variant: 'destructive' })
         return
       }
       toast({ title: 'Save failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' })

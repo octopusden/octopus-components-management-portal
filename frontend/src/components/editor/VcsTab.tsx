@@ -8,7 +8,7 @@ import { Separator } from '../ui/separator'
 import type { ComponentDetail, VcsEntry } from '../../lib/types'
 import type { ComponentUpdateRequest } from '../../hooks/useComponent'
 import type { UseMutationResult } from '@tanstack/react-query'
-import { ApiError } from '../../lib/api'
+import { useOptimisticConflict } from '../../hooks/useOptimisticConflict'
 import { selectBaseRow } from '../../lib/api/baseRow'
 
 interface VcsTabProps {
@@ -40,6 +40,7 @@ function toEntryState(e: VcsEntry): EntryState {
 }
 
 export function VcsTab({ component, updateMutation, toast }: VcsTabProps) {
+  const handleConflict = useOptimisticConflict(component.id)
   const [externalRegistry, setExternalRegistry] = useState(component.vcsExternalRegistry ?? '')
   const [entries, setEntries] = useState<EntryState[]>(
     selectBaseRow(component)?.vcsEntries?.map(toEntryState) ?? [],
@@ -99,8 +100,9 @@ export function VcsTab({ component, updateMutation, toast }: VcsTabProps) {
       })
       toast({ title: 'VCS settings saved' })
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        toast({ title: 'Conflict', description: 'Please refresh and try again.', variant: 'destructive' })
+      const conflict = await handleConflict(err)
+      if (conflict) {
+        toast({ ...conflict, variant: 'destructive' })
         return
       }
       toast({ title: 'Save failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' })

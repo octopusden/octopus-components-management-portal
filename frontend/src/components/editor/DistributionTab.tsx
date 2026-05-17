@@ -8,7 +8,7 @@ import { Separator } from '../ui/separator'
 import type { ComponentDetail, MavenArtifact, FileUrlArtifact, DockerImage, PackageEntry, SecurityGroup } from '../../lib/types'
 import type { ComponentUpdateRequest } from '../../hooks/useComponent'
 import type { UseMutationResult } from '@tanstack/react-query'
-import { ApiError } from '../../lib/api'
+import { useOptimisticConflict } from '../../hooks/useOptimisticConflict'
 import { selectBaseRow } from '../../lib/api/baseRow'
 
 interface DistributionTabProps {
@@ -49,6 +49,7 @@ function sortBy<T extends { sortOrder: number }>(arr: T[]): T[] {
 }
 
 export function DistributionTab({ component, updateMutation, toast }: DistributionTabProps) {
+  const handleConflict = useOptimisticConflict(component.id)
   const [explicit, setExplicit] = useState(component.distributionExplicit ?? false)
   const [external, setExternal] = useState(component.distributionExternal ?? false)
 
@@ -183,8 +184,9 @@ export function DistributionTab({ component, updateMutation, toast }: Distributi
       })
       toast({ title: 'Distribution saved' })
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        toast({ title: 'Conflict', description: 'Please refresh and try again.', variant: 'destructive' })
+      const conflict = await handleConflict(err)
+      if (conflict) {
+        toast({ ...conflict, variant: 'destructive' })
         return
       }
       toast({ title: 'Save failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' })

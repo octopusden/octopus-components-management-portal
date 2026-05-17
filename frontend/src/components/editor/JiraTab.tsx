@@ -8,7 +8,7 @@ import { FieldOverrideInline } from './FieldOverrideInline'
 import type { ComponentDetail } from '../../lib/types'
 import type { ComponentUpdateRequest } from '../../hooks/useComponent'
 import type { UseMutationResult } from '@tanstack/react-query'
-import { ApiError } from '../../lib/api'
+import { useOptimisticConflict } from '../../hooks/useOptimisticConflict'
 import { selectBaseRow } from '../../lib/api/baseRow'
 
 interface JiraTabProps {
@@ -18,6 +18,7 @@ interface JiraTabProps {
 }
 
 export function JiraTab({ component, updateMutation, toast }: JiraTabProps) {
+  const handleConflict = useOptimisticConflict(component.id)
   const baseRow = selectBaseRow(component)
   const jira = baseRow?.jira
 
@@ -69,8 +70,9 @@ export function JiraTab({ component, updateMutation, toast }: JiraTabProps) {
       })
       toast({ title: 'Jira configuration saved' })
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        toast({ title: 'Conflict', description: 'Please refresh and try again.', variant: 'destructive' })
+      const conflict = await handleConflict(err)
+      if (conflict) {
+        toast({ ...conflict, variant: 'destructive' })
         return
       }
       toast({ title: 'Save failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' })

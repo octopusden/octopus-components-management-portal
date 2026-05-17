@@ -30,8 +30,10 @@ import { ComponentHistoryTab } from '../components/editor/ComponentHistoryTab'
 import { useComponent, useUpdateComponent, useDeleteComponent, type ComponentUpdateRequest } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
 import { ApiError } from '../lib/api'
-import { describeOptimisticConflict } from '../lib/conflict'
-import { useQueryClient, type UseMutationResult } from '@tanstack/react-query'
+import { useOptimisticConflict } from '../hooks/useOptimisticConflict'
+import { type UseMutationResult } from '@tanstack/react-query'
+// queryClient + describeOptimisticConflict were moved into
+// useOptimisticConflict — the hook owns refetch + toast-shape composition.
 import type { ComponentDetail } from '../lib/types'
 import { selectBaseRow } from '../lib/api/baseRow'
 import { useCurrentUser } from '../hooks/useCurrentUser'
@@ -47,7 +49,7 @@ export function ComponentDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { toast } = useToast()
-  const queryClient = useQueryClient()
+  const handleConflict = useOptimisticConflict(id)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 
   const { data: component, isLoading, error } = useComponent(id ?? '')
@@ -173,23 +175,12 @@ export function ComponentDetailPage() {
       await updateMutation.mutateAsync(request)
       toast({ title: 'Component saved', description: 'Changes have been saved successfully.' })
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        // Optimistic-locking conflict (B7.1.6). Two things matter for UX:
-        //   1) The cached ComponentDetail is stale — refetch so the next
-        //      render shows the actual server state. Without this the user could
-        //      keep clicking Save against the same stale @Version and keep getting
-        //      409s.
-        //   2) The toast message names *what* and *when*, where "when" is the
-        //      server's post-conflict updatedAt — i.e. the timestamp of the OTHER
-        //      person's commit. We use refetchQueries here (not invalidateQueries)
-        //      because invalidate only marks the cache stale and resolves once
-        //      the next observer re-subscribes — getQueryData would still see the
-        //      old snapshot. refetchQueries waits for the actual network round-trip
-        //      so getQueryData below sees the new value.
-        await queryClient.refetchQueries({ queryKey: ['component', id ?? ''], type: 'active' })
-        const latest = queryClient.getQueryData<ComponentDetail>(['component', id ?? ''])
-        const { title, description } = describeOptimisticConflict(latest)
-        toast({ title, description, variant: 'destructive' })
+      // Optimistic-locking 409 (B7.1.6) — useOptimisticConflict refetches
+      // the component and returns the toast options; null means "not a 409,
+      // fall through to other branches".
+      const conflict = await handleConflict(err)
+      if (conflict) {
+        toast({ ...conflict, variant: 'destructive' })
         return
       }
       if (err instanceof ApiError && err.status === 400) {
