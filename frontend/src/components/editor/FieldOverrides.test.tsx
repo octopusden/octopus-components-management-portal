@@ -145,8 +145,7 @@ describe('FieldOverrides', () => {
     })
     renderComponent()
 
-    const pencilButtons = document.querySelectorAll('button.h-8.w-8')
-    await userEvent.click(pencilButtons[0]!)
+    await userEvent.click(screen.getByRole('button', { name: /^edit override$/i }))
 
     await waitFor(() => {
       const editor = screen.getByTestId('override-row-editor')
@@ -162,8 +161,7 @@ describe('FieldOverrides', () => {
     })
     renderComponent()
 
-    const pencilButtons = document.querySelectorAll('button.h-8.w-8')
-    const editBtn = pencilButtons[0] as HTMLButtonElement
+    const editBtn = screen.getByRole('button', { name: /^edit override$/i }) as HTMLButtonElement
     // Must NOT be disabled (Wave C-write re-enables marker edit for MARKER rows)
     expect(editBtn.disabled).toBe(false)
 
@@ -182,9 +180,7 @@ describe('FieldOverrides', () => {
     })
     renderComponent()
 
-    const trashButtons = document.querySelectorAll('button.h-8.w-8')
-    // Delete is the second icon button in the row (after Edit)
-    await userEvent.click(trashButtons[1]!)
+    await userEvent.click(screen.getByRole('button', { name: /^delete override$/i }))
 
     await waitFor(() => {
       expect(screen.getByText('Delete Override')).toBeDefined()
@@ -200,8 +196,7 @@ describe('FieldOverrides', () => {
     renderComponent()
 
     // Open the confirm dialog from the row trash icon
-    const trashButtons = document.querySelectorAll('button.h-8.w-8')
-    await userEvent.click(trashButtons[1]!)
+    await userEvent.click(screen.getByRole('button', { name: /^delete override$/i }))
     await waitFor(() => expect(screen.getByText('Delete Override')).toBeDefined())
 
     // Click the destructive "Delete" button inside the confirm dialog
@@ -223,8 +218,7 @@ describe('FieldOverrides', () => {
     })
     renderComponent()
 
-    const trashButtons = document.querySelectorAll('button.h-8.w-8')
-    const deleteBtn = trashButtons[1] as HTMLButtonElement
+    const deleteBtn = screen.getByRole('button', { name: /^delete override$/i }) as HTMLButtonElement
     expect(deleteBtn.disabled).toBe(false)
   })
 

@@ -128,6 +128,7 @@ export function FieldOverrides({ componentId }: FieldOverridesProps) {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
+                          aria-label="Edit override"
                           onClick={() => openEdit(override)}
                         >
                           <Pencil className="h-3.5 w-3.5" />
@@ -136,6 +137,7 @@ export function FieldOverrides({ componentId }: FieldOverridesProps) {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-destructive hover:text-destructive"
+                          aria-label="Delete override"
                           onClick={() => setDeleteConfirm(override.id)}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
