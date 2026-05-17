@@ -492,6 +492,11 @@ open class E2ETestcontainersDriver {
         val conn = url.openConnection() as HttpURLConnection
         try {
             conn.requestMethod = "GET"
+            // Without these the JDK default is "wait forever" — a CRS that hangs
+            // during startup or a Docker network hiccup would block the e2e run
+            // indefinitely instead of failing with a clear assertion.
+            conn.connectTimeout = 30_000
+            conn.readTimeout = 60_000
             val status = conn.responseCode
             if (status != 200) {
                 // HttpURLConnection.inputStream raises IOException for error
@@ -550,6 +555,8 @@ open class E2ETestcontainersDriver {
         val conn = url.openConnection() as HttpURLConnection
         try {
             conn.requestMethod = "GET"
+            conn.connectTimeout = 30_000
+            conn.readTimeout = 60_000
             val status = conn.responseCode
             if (status != 200) {
                 val errBody = runCatching {

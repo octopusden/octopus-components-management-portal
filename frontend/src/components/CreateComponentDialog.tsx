@@ -112,7 +112,8 @@ export function CreateComponentDialog({ open, onOpenChange }: CreateComponentDia
         <DialogHeader>
           <DialogTitle>Create Component</DialogTitle>
           <DialogDescription>
-            Add a new component to the registry. The component key cannot be changed after creation.
+            Add a new component to the registry. Renaming the component key
+            later requires the Rename Components permission.
           </DialogDescription>
         </DialogHeader>
 
