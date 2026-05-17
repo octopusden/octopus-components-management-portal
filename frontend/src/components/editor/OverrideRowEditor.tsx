@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select'
+import { Tabs, TabsList, TabsTrigger } from '../ui/tabs'
 import {
   useCreateFieldOverride,
   useUpdateFieldOverride,
@@ -459,34 +460,24 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
 
-          {/* ── Type radio (create only) ── */}
+          {/* ── Type picker (create only). Tabs primitive gives Radix
+                 keyboard nav (Left/Right between options) + theme-correct
+                 focus ring + dark-mode tokens. Selecting a new mode resets
+                 `attribute` because scalar and marker catalogues are
+                 disjoint — a stale value from the other catalogue would
+                 trip the "Unknown attribute" guard at submit. */}
           {mode === 'create' && (
             <div className="space-y-1.5">
               <Label>Override Type</Label>
-              <div className="flex items-center gap-6">
-                <label className="flex items-center gap-2 cursor-pointer text-sm">
-                  <input
-                    type="radio"
-                    name="overrideType"
-                    value="scalar"
-                    checked={overrideType === 'scalar'}
-                    onChange={() => { setOverrideType('scalar'); setAttribute('') }}
-                    className="accent-primary"
-                  />
-                  Scalar
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer text-sm">
-                  <input
-                    type="radio"
-                    name="overrideType"
-                    value="marker"
-                    checked={overrideType === 'marker'}
-                    onChange={() => { setOverrideType('marker'); setAttribute('') }}
-                    className="accent-primary"
-                  />
-                  Marker
-                </label>
-              </div>
+              <Tabs
+                value={overrideType}
+                onValueChange={(v) => { setOverrideType(v as 'scalar' | 'marker'); setAttribute('') }}
+              >
+                <TabsList>
+                  <TabsTrigger value="scalar">Scalar</TabsTrigger>
+                  <TabsTrigger value="marker">Marker</TabsTrigger>
+                </TabsList>
+              </Tabs>
             </div>
           )}
 

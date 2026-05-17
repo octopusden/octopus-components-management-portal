@@ -157,12 +157,12 @@ describe('OverrideRowEditor — create mode', () => {
     expect(screen.getByText('Add Override')).toBeDefined()
   })
 
-  it('defaults to Scalar type radio selected', () => {
+  it('defaults to Scalar type selected', () => {
     renderEditor()
-    const scalarRadio = screen.getByRole('radio', { name: /scalar/i }) as HTMLInputElement
-    expect(scalarRadio.checked).toBe(true)
-    const markerRadio = screen.getByRole('radio', { name: /marker/i }) as HTMLInputElement
-    expect(markerRadio.checked).toBe(false)
+    const scalarTab = screen.getByRole('tab', { name: /scalar/i })
+    expect(scalarTab.getAttribute('data-state')).toBe('active')
+    const markerTab = screen.getByRole('tab', { name: /marker/i })
+    expect(markerTab.getAttribute('data-state')).toBe('inactive')
   })
 
   it('renders version range input with default value (,0),[0,)', () => {
@@ -173,7 +173,7 @@ describe('OverrideRowEditor — create mode', () => {
 
   it('selecting Marker type shows marker attribute list', async () => {
     renderEditor()
-    await userEvent.click(screen.getByRole('radio', { name: /marker/i }))
+    await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
     // The select stub renders all marker options
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
     const optionValues = Array.from(select.options).map((o) => o.value)
@@ -220,7 +220,7 @@ describe('OverrideRowEditor — create mode', () => {
 
   it('switching to Marker and selecting distribution.maven renders Maven child list editor', async () => {
     renderEditor()
-    await userEvent.click(screen.getByRole('radio', { name: /marker/i }))
+    await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
     await userEvent.selectOptions(select, 'distribution.maven')
     expect(screen.getByRole('button', { name: /add artifact/i })).toBeDefined()
@@ -228,7 +228,7 @@ describe('OverrideRowEditor — create mode', () => {
 
   it('switching to Marker and selecting build.requiredTools renders comma-separated input', async () => {
     renderEditor()
-    await userEvent.click(screen.getByRole('radio', { name: /marker/i }))
+    await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
     await userEvent.selectOptions(select, 'build.requiredTools')
     expect(screen.getByPlaceholderText('tool-a, tool-b')).toBeDefined()
@@ -236,7 +236,7 @@ describe('OverrideRowEditor — create mode', () => {
 
   it('switching to Marker and selecting vcs.settings renders VCS child list with Add Entry button', async () => {
     renderEditor()
-    await userEvent.click(screen.getByRole('radio', { name: /marker/i }))
+    await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
     await userEvent.selectOptions(select, 'vcs.settings')
     expect(screen.getByRole('button', { name: /add entry/i })).toBeDefined()
@@ -244,7 +244,7 @@ describe('OverrideRowEditor — create mode', () => {
 
   it('switching to Marker and selecting distribution.docker renders Docker child list editor', async () => {
     renderEditor()
-    await userEvent.click(screen.getByRole('radio', { name: /marker/i }))
+    await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
     await userEvent.selectOptions(select, 'distribution.docker')
     expect(screen.getByRole('button', { name: /add image/i })).toBeDefined()
@@ -252,7 +252,7 @@ describe('OverrideRowEditor — create mode', () => {
 
   it('switching to Marker and selecting distribution.packages renders Packages child list editor', async () => {
     renderEditor()
-    await userEvent.click(screen.getByRole('radio', { name: /marker/i }))
+    await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
     await userEvent.selectOptions(select, 'distribution.packages')
     expect(screen.getByRole('button', { name: /add package/i })).toBeDefined()
@@ -260,7 +260,7 @@ describe('OverrideRowEditor — create mode', () => {
 
   it('switching to Marker and selecting distribution.fileUrl renders FileUrl child list editor', async () => {
     renderEditor()
-    await userEvent.click(screen.getByRole('radio', { name: /marker/i }))
+    await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
     await userEvent.selectOptions(select, 'distribution.fileUrl')
     expect(screen.getByRole('button', { name: /add artifact/i })).toBeDefined()
@@ -294,7 +294,7 @@ describe('OverrideRowEditor — create mode', () => {
   it('calls useCreateFieldOverride with correct marker body for requiredTools (deduped)', async () => {
     mockCreateMutateAsync.mockResolvedValue({})
     renderEditor()
-    await userEvent.click(screen.getByRole('radio', { name: /marker/i }))
+    await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
     await userEvent.selectOptions(select, 'build.requiredTools')
 
@@ -382,10 +382,10 @@ describe('OverrideRowEditor — edit mode (scalar)', () => {
     expect(switches[0]!.getAttribute('data-state')).toBe('checked')
   })
 
-  it('does not render type radios in edit mode — attribute is locked', () => {
+  it('does not render type picker in edit mode — attribute is locked', () => {
     renderEditor({ mode: 'edit', override: makeScalarOverride() })
-    expect(screen.queryByRole('radio', { name: /scalar/i })).toBeNull()
-    expect(screen.queryByRole('radio', { name: /marker/i })).toBeNull()
+    expect(screen.queryByRole('tab', { name: /scalar/i })).toBeNull()
+    expect(screen.queryByRole('tab', { name: /marker/i })).toBeNull()
   })
 
   it('calls useUpdateFieldOverride with correct body on submit', async () => {
@@ -466,7 +466,7 @@ describe('OverrideRowEditor — edit mode (marker)', () => {
 describe('OverrideRowEditor — all six markers accessible', () => {
   it('marker dropdown contains all six marker paths', async () => {
     renderEditor()
-    await userEvent.click(screen.getByRole('radio', { name: /marker/i }))
+    await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
     const optionValues = Array.from(select.options).map((o) => o.value)
     expect(optionValues).toContain('vcs.settings')
