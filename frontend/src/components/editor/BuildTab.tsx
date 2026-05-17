@@ -67,6 +67,7 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
 
       await updateMutation.mutateAsync({
         version: component.version,
+        clearGroup: false,
         baseConfiguration: {
           build: {
             buildSystem: buildSystem || null,

@@ -104,6 +104,11 @@ const baseComponent: ComponentDetail = {
   version: 1,
   createdAt: '2024-01-01T00:00:00Z',
   updatedAt: '2024-01-02T00:00:00Z',
+  labels: [],
+  docs: [],
+  artifactIds: [],
+  securityGroups: [],
+  teamcityProjects: [],
   configurations: [
     {
       id: 'cfg-1',

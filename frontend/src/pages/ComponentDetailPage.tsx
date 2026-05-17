@@ -283,6 +283,9 @@ export function ComponentDetailPage() {
     try {
       await updateMutation.mutateAsync({
         version: component.version,
+        // Required on the wire. Default to false; groupPatch below may
+        // override with true when the user explicitly cleared the group.
+        clearGroup: false,
         name: renameField,
         // displayName: hidden → undefined (no change); otherwise send value or undefined for empty
         displayName: displayNameFc.visibility === 'hidden' ? undefined : (values.displayName || undefined),
@@ -382,7 +385,7 @@ export function ComponentDetailPage() {
   async function handleUnarchive() {
     if (!component) return
     try {
-      await updateMutation.mutateAsync({ version: component.version, archived: false })
+      await updateMutation.mutateAsync({ version: component.version, clearGroup: false, archived: false })
       toast({ title: 'Component unarchived', description: 'The component has been restored.' })
     } catch (err) {
       toast({

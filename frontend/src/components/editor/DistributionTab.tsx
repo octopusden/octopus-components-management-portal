@@ -151,6 +151,7 @@ export function DistributionTab({ component, updateMutation, toast }: Distributi
     try {
       await updateMutation.mutateAsync({
         version: component.version,
+        clearGroup: false,
         distributionExplicit: explicit,
         distributionExternal: external,
         // securityGroups are a per-component list — sent top-level, NOT inside baseConfiguration

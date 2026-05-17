@@ -45,21 +45,25 @@ export interface ComponentDetail {
   securityChampion?: string | null
   copyright?: string | null
   releasesInDefaultBranch?: boolean | null
-  labels?: string[]
+  labels: string[]
   // schema-v2 flat per-component scalars
   jiraDisplayName?: string | null
   jiraHotfixVersionFormat?: string | null
   vcsExternalRegistry?: string | null
   distributionExplicit?: boolean | null
   distributionExternal?: boolean | null
-  // schema-v2 per-component child rows
+  // schema-v2 per-component child rows. The five list fields are required
+  // on the wire (ComponentDetailResponse.required in CRS v4 OpenAPI); the
+  // server emits [] for empty, never omits the key. Treating them as
+  // non-optional here makes a malformed response fail loudly at the call
+  // site instead of silently rendering an empty editor.
   group?: ComponentGroup | null
-  docs?: DocLink[]
-  artifactIds?: ArtifactId[]
-  securityGroups?: SecurityGroup[]
-  teamcityProjects?: TeamcityProject[]
+  docs: DocLink[]
+  artifactIds: ArtifactId[]
+  securityGroups: SecurityGroup[]
+  teamcityProjects: TeamcityProject[]
   // schema-v2 flat configuration rows (one BASE + N override rows)
-  configurations?: ComponentConfiguration[]
+  configurations: ComponentConfiguration[]
 }
 
 // ---------------------------------------------------------------------------
@@ -264,7 +268,7 @@ export interface ArtifactIdRequest {
 }
 
 export interface SecurityGroupRequest {
-  groupType?: string
+  groupType: string
   groupName: string
 }
 
@@ -345,7 +349,11 @@ export interface ComponentUpdateRequest {
   distributionExplicit?: boolean | null
   distributionExternal?: boolean | null
   group?: ComponentGroupRequest | null
-  clearGroup?: boolean
+  // Required on the wire (ComponentUpdateRequest.required in CRS v4
+  // OpenAPI). Disambiguates "clear group" (true) from "don't touch" (false)
+  // when `group` is omitted. Every PATCH must send false unless explicitly
+  // clearing — see GeneralTab/ComponentDetailPage save handlers.
+  clearGroup: boolean
   docs?: DocLinkRequest[] | null
   artifactIds?: ArtifactIdRequest[] | null
   securityGroups?: SecurityGroupRequest[] | null

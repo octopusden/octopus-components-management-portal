@@ -84,6 +84,7 @@ export function VcsTab({ component, updateMutation, toast }: VcsTabProps) {
     try {
       await updateMutation.mutateAsync({
         version: component.version,
+        clearGroup: false,
         vcsExternalRegistry: externalRegistry || null,
         baseConfiguration: {
           vcsEntries: cleanedEntries.map((e) => ({

@@ -56,6 +56,7 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
     try {
       await updateMutation.mutateAsync({
         version: component.version,
+        clearGroup: false,
         // productType: hidden → don't include (undefined = no change);
         // editable/readonly → send only when a value is present.
         ...(productTypeEntry.visibility !== 'hidden' && productType

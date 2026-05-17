@@ -51,6 +51,7 @@ export function JiraTab({ component, updateMutation, toast }: JiraTabProps) {
     try {
       await updateMutation.mutateAsync({
         version: component.version,
+        clearGroup: false,
         jiraDisplayName: displayName || null,
         jiraHotfixVersionFormat: hotfixVersionFormat || null,
         baseConfiguration: {
