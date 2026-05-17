@@ -637,6 +637,26 @@ describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => 
   })
 })
 
+describe('ComponentDetailPage — solution flag dirty-gate', () => {
+  it('untouched solution toggle on a component with server null does NOT send false', async () => {
+    // Race-condition guard analogous to the TC pre-hydration safety test
+    // above. Form default is `false`; server `solution` is `null` ("unknown").
+    // Without the dirtyFields gate, a Save fired before the user touches
+    // the toggle would send `solution: false` and wipe the stored null
+    // (JSON merge-patch treats present-and-false as a real write).
+    const updateMutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    const seeded: ComponentDetail = { ...baseComponent, solution: null }
+    renderPage(seeded, user, { updateMutation: { mutateAsync: updateMutateAsync } })
+
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
+    const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
+    expect(payload['solution']).toBeUndefined()
+  })
+})
+
 describe('ComponentDetailPage — confirmation dialog text', () => {
   it('dialog says "Archive Component" and "restore it later", not "cannot be undone"', async () => {
     const user = makeUser(['ACCESS_COMPONENTS', 'DELETE_COMPONENTS'])

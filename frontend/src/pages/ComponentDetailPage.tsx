@@ -165,6 +165,16 @@ export function ComponentDetailPage() {
     const releasesInDefaultBranchChanged =
       form.formState.dirtyFields.releasesInDefaultBranch === true
 
+    // `solution` follows the same dirtyFields guard as
+    // releasesInDefaultBranch. Form default is `false`; server `null`
+    // means "unknown". Without this gate a Save fired before the user
+    // touches the toggle would send `false` and clobber the stored null
+    // (JSON merge-patch treats present-and-false as a real write). The
+    // value-compare pattern used for `archived` below cannot be reused
+    // here because false !== null compares true and would mis-mark the
+    // unchanged form as dirty on every load.
+    const solutionChanged = form.formState.dirtyFields.solution === true
+
     // `archived` is gated server-side by ARCHIVE_COMPONENTS (a permission
     // ROLE_COMPONENTS_REGISTRY_EDITOR does not hold). Send it only when the user actually
     // toggled it — otherwise a plain rename/owner/system edit from a non-admin
@@ -296,7 +306,7 @@ export function ComponentDetailPage() {
         systems: systemFc.visibility === 'hidden' ? undefined : systemArray,
         // clientCode: hidden → undefined
         clientCode: clientCodeFc.visibility === 'hidden' ? undefined : (values.clientCode || undefined),
-        solution: values.solution,
+        solution: solutionChanged ? values.solution : undefined,
         archived: archivedChanged ? values.archived : undefined,
         parentComponentName,
         // SYS-039: hidden → undefined, blank string → undefined (keep
