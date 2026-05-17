@@ -98,3 +98,75 @@ describe('field-override mutations — cache invalidation', () => {
     )
   })
 })
+
+// Round-trip checks: the previous block pins cache invalidation; this block
+// pins the actual HTTP shape (URL + body) so a refactor that points the
+// hook at the wrong endpoint, drops the overrideId from the URL, or forwards
+// a malformed body would trip a unit test before reaching e2e.
+describe('field-override mutations — wire contract', () => {
+  it('useCreateFieldOverride POSTs to /components/:id/field-overrides with the request body', async () => {
+    mockApi.post.mockResolvedValue({ id: 'fo-1' })
+    const { wrapper } = makeHarness()
+
+    const { result } = renderHook(() => useCreateFieldOverride(COMPONENT_ID), { wrapper })
+    const body = {
+      overriddenAttribute: 'build.javaVersion',
+      versionRange: '[11,12)',
+      value: '21',
+    }
+    result.current.mutate(body)
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(mockApi.post).toHaveBeenCalledOnce()
+    expect(mockApi.post).toHaveBeenCalledWith(`/components/${COMPONENT_ID}/field-overrides`, body)
+  })
+
+  it('useCreateFieldOverride POSTs a marker body unchanged (markerChildren survives the hook)', async () => {
+    mockApi.post.mockResolvedValue({ id: 'fo-mk' })
+    const { wrapper } = makeHarness()
+
+    const { result } = renderHook(() => useCreateFieldOverride(COMPONENT_ID), { wrapper })
+    const body = {
+      overriddenAttribute: 'build.requiredTools',
+      versionRange: '*',
+      value: null,
+      markerChildren: { requiredTools: ['gradle-8.6', 'java-21'] },
+    }
+    result.current.mutate(body)
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(mockApi.post).toHaveBeenCalledWith(`/components/${COMPONENT_ID}/field-overrides`, body)
+  })
+
+  it('useUpdateFieldOverride PATCHes /components/:id/field-overrides/:overrideId and strips overrideId from the body', async () => {
+    mockApi.patch.mockResolvedValue({ id: 'fo-1' })
+    const { wrapper } = makeHarness()
+
+    const { result } = renderHook(() => useUpdateFieldOverride(COMPONENT_ID), { wrapper })
+    result.current.mutate({
+      overrideId: 'fo-1',
+      versionRange: '[12,13)',
+      value: '17',
+    })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(mockApi.patch).toHaveBeenCalledOnce()
+    expect(mockApi.patch).toHaveBeenCalledWith(
+      `/components/${COMPONENT_ID}/field-overrides/fo-1`,
+      // overrideId is the path parameter, not part of the JSON body
+      { versionRange: '[12,13)', value: '17' },
+    )
+  })
+
+  it('useDeleteFieldOverride DELETEs /components/:id/field-overrides/:overrideId', async () => {
+    mockApi.delete.mockResolvedValue(undefined)
+    const { wrapper } = makeHarness()
+
+    const { result } = renderHook(() => useDeleteFieldOverride(COMPONENT_ID), { wrapper })
+    result.current.mutate('fo-9')
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(mockApi.delete).toHaveBeenCalledOnce()
+    expect(mockApi.delete).toHaveBeenCalledWith(`/components/${COMPONENT_ID}/field-overrides/fo-9`)
+  })
+})

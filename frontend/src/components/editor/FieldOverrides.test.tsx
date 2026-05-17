@@ -191,6 +191,31 @@ describe('FieldOverrides', () => {
     })
   })
 
+  it('confirming Delete calls useDeleteFieldOverride.mutateAsync with the row id and shows toast', async () => {
+    mockOverrides.mockReturnValue({
+      data: [makeScalarOverride()],
+      isLoading: false,
+    })
+    mockDeleteMutateAsync.mockResolvedValue(undefined)
+    renderComponent()
+
+    // Open the confirm dialog from the row trash icon
+    const trashButtons = document.querySelectorAll('button.h-8.w-8')
+    await userEvent.click(trashButtons[1]!)
+    await waitFor(() => expect(screen.getByText('Delete Override')).toBeDefined())
+
+    // Click the destructive "Delete" button inside the confirm dialog
+    await userEvent.click(screen.getByRole('button', { name: /^delete$/i }))
+
+    await waitFor(() => {
+      expect(mockDeleteMutateAsync).toHaveBeenCalledOnce()
+      expect(mockDeleteMutateAsync).toHaveBeenCalledWith('fo-scalar')
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Override deleted' }),
+      )
+    })
+  })
+
   it('Delete button is enabled for MARKER rows', async () => {
     mockOverrides.mockReturnValue({
       data: [makeMarkerOverride()],

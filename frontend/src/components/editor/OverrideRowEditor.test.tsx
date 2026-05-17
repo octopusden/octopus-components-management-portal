@@ -556,3 +556,96 @@ describe('OverrideRowEditor — marker child trim + blank-row filter', () => {
     })
   })
 })
+
+// ---------------------------------------------------------------------------
+// Tests: full marker submit body for the remaining three markers
+// ---------------------------------------------------------------------------
+// Per plan item P1-8: the existing requiredTools test pinned the wire body
+// shape end-to-end; vcs.settings + distribution.maven gained that coverage
+// in the trim+filter regression-lock above; this block fills in the
+// remaining three markers (fileUrl, docker, packages) so any future
+// markerChildren contract drift fails a unit test, not e2e.
+
+describe('OverrideRowEditor — full submit body for fileUrl/docker/packages markers', () => {
+  beforeEach(() => {
+    mockCreateMutateAsync.mockReset()
+    mockUpdateMutateAsync.mockReset()
+    mockToast.mockReset()
+  })
+
+  it('calls useCreateFieldOverride with correct marker body for distribution.fileUrl', async () => {
+    mockCreateMutateAsync.mockResolvedValue({})
+    renderEditor()
+    await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
+    const select = screen.getByTestId('attr-select') as HTMLSelectElement
+    await userEvent.selectOptions(select, 'distribution.fileUrl')
+
+    // FileUrl section's Add button is labeled "Add Artifact" (same as Maven),
+    // but only one marker card is rendered at a time, so this is unambiguous.
+    await userEvent.click(screen.getByRole('button', { name: /add artifact/i }))
+    const urlInputs = await screen.findAllByPlaceholderText('https://artifacts.example.com/...')
+    await userEvent.type(urlInputs[0]!, 'https://example.com/dist.tar.gz')
+
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+
+    await waitFor(() => {
+      expect(mockCreateMutateAsync).toHaveBeenCalledOnce()
+      const body = mockCreateMutateAsync.mock.calls[0]![0]
+      expect(body.overriddenAttribute).toBe('distribution.fileUrl')
+      expect(body.value).toBeNull()
+      expect(body.markerChildren.fileUrlArtifacts).toEqual([
+        { url: 'https://example.com/dist.tar.gz', artifactId: null, classifier: null },
+      ])
+    })
+  })
+
+  it('calls useCreateFieldOverride with correct marker body for distribution.docker', async () => {
+    mockCreateMutateAsync.mockResolvedValue({})
+    renderEditor()
+    await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
+    const select = screen.getByTestId('attr-select') as HTMLSelectElement
+    await userEvent.selectOptions(select, 'distribution.docker')
+
+    await userEvent.click(screen.getByRole('button', { name: /add image/i }))
+    const imageInputs = await screen.findAllByPlaceholderText('my-org/my-image')
+    await userEvent.type(imageInputs[0]!, 'my-org/svc')
+
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+
+    await waitFor(() => {
+      expect(mockCreateMutateAsync).toHaveBeenCalledOnce()
+      const body = mockCreateMutateAsync.mock.calls[0]![0]
+      expect(body.overriddenAttribute).toBe('distribution.docker')
+      expect(body.value).toBeNull()
+      expect(body.markerChildren.dockerImages).toEqual([
+        { imageName: 'my-org/svc', flavor: null },
+      ])
+    })
+  })
+
+  it('calls useCreateFieldOverride with correct marker body for distribution.packages', async () => {
+    mockCreateMutateAsync.mockResolvedValue({})
+    renderEditor()
+    await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
+    const select = screen.getByTestId('attr-select') as HTMLSelectElement
+    await userEvent.selectOptions(select, 'distribution.packages')
+
+    await userEvent.click(screen.getByRole('button', { name: /add package/i }))
+    const typeInputs = await screen.findAllByPlaceholderText('rpm')
+    const nameInputs = await screen.findAllByPlaceholderText('my-package')
+    await userEvent.type(typeInputs[0]!, 'rpm')
+    await userEvent.type(nameInputs[0]!, 'my-svc')
+
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+
+    await waitFor(() => {
+      expect(mockCreateMutateAsync).toHaveBeenCalledOnce()
+      const body = mockCreateMutateAsync.mock.calls[0]![0]
+      expect(body.overriddenAttribute).toBe('distribution.packages')
+      expect(body.value).toBeNull()
+      expect(body.markerChildren.packages).toEqual([
+        { packageType: 'rpm', packageName: 'my-svc' },
+      ])
+    })
+  })
+})
