@@ -310,7 +310,11 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
             <Switch
               id="solution"
               checked={solution}
-              onCheckedChange={(checked) => setValue('solution', checked)}
+              // shouldDirty:true so the page-level handleSave's
+              // dirtyFields.solution gate actually fires. Without this the
+              // boolean is set on the form but never marked dirty, and the
+              // save handler omits the field every time.
+              onCheckedChange={(checked) => setValue('solution', checked, { shouldDirty: true })}
             />
             <Label htmlFor="solution" className="cursor-pointer">Solution</Label>
           </div>

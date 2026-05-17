@@ -164,6 +164,7 @@ export function ComponentDetailPage() {
       dirtyFields: {
         releasesInDefaultBranch: form.formState.dirtyFields.releasesInDefaultBranch === true,
         solution: form.formState.dirtyFields.solution === true,
+        system: form.formState.dirtyFields.system === true,
         groupId: form.formState.dirtyFields.groupId === true,
         teamcityProjects: !!form.formState.dirtyFields.teamcityProjects,
         docs: !!form.formState.dirtyFields.docs,

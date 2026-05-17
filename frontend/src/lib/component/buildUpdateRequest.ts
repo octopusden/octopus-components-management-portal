@@ -27,6 +27,7 @@ export interface FieldVisibilities {
 export interface DirtyFlags {
   releasesInDefaultBranch?: boolean
   solution?: boolean
+  system?: boolean
   groupId?: boolean
   teamcityProjects?: boolean
   docs?: boolean
@@ -111,7 +112,17 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
     componentOwner:
       visibilities.componentOwner === 'hidden' ? undefined : (values.componentOwner || undefined),
     // productType is owned by EscrowTab — never sent from the General save.
-    systems: visibilities.systems === 'hidden' ? undefined : systemArray,
+    // Pre-hydration guard: form mounts with `system: ''` → `systemArray = []`
+    // BEFORE GeneralTab's useEffect mirrors the server `systems` into the
+    // input. Without the dirty gate, a fast Save would emit `systems: []`
+    // and CRS would reject the required field with 400 (or worse, accept
+    // an empty list on a future relaxation of the contract). dirtyFields
+    // for `system` only flips true when the user types — RHF's
+    // setValue(...) inside the mirror useEffect does not set shouldDirty.
+    systems:
+      visibilities.systems === 'hidden' || dirtyFields.system !== true
+        ? undefined
+        : systemArray,
     clientCode:
       visibilities.clientCode === 'hidden' ? undefined : (values.clientCode || undefined),
     solution: solutionChanged ? values.solution : undefined,

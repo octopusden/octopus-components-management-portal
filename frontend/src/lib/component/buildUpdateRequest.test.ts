@@ -184,6 +184,26 @@ describe('buildUpdateRequest — dirtyFields gating (pre-hydration safety)', () 
     expect(req.teamcityProjects).toEqual([])
   })
 
+  it('systems form-default empty + had prior + NOT dirty → omits (pre-hydration guard)', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({ systems: ['SYS1', 'SYS2'] }),
+      values: makeValues({ system: '' }),
+      visibilities: EDITABLE,
+      dirtyFields: {},
+    })
+    expect(req.systems).toBeUndefined()
+  })
+
+  it('systems populated + dirty → forwards parsed array', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({ systems: ['OLD'] }),
+      values: makeValues({ system: 'SYS1, SYS2' }),
+      visibilities: EDITABLE,
+      dirtyFields: { system: true },
+    })
+    expect(req.systems).toEqual(['SYS1', 'SYS2'])
+  })
+
   it('empty docs + had prior + not dirty → omits; same for artifactIds', () => {
     const req = buildUpdateRequest({
       component: makeComponent({
