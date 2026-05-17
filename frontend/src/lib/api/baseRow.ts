@@ -1,11 +1,10 @@
 import type { ComponentConfiguration, ComponentDetail } from '../types'
 
-// schema-v2 stores per-component configuration as a flat list of rows on
+// Per-component configuration is a flat list of rows on
 // `ComponentDetail.configurations`. Exactly one row is the BASE row
 // (`rowType === 'BASE'`); the remainder are override rows (SCALAR_OVERRIDE
-// or MARKER). The editor surfaces in Waves A/B read from the BASE row's
-// aspects/child lists; the configurations table in Wave C-read shows them
-// all side-by-side.
+// or MARKER). Per-tab editors read aspects/child lists from the BASE row;
+// the Configurations tab renders the full flat list.
 
 // Server invariant: a component has at most one BASE row. If the server
 // ever emits more than one (data-migration bug, race during config seed),

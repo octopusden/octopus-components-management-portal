@@ -69,8 +69,8 @@ export function ComponentDetailPage() {
     useFieldConfigEntry('component.displayName')
   const { entry: componentOwnerFc, isLoading: componentOwnerFcLoading } =
     useFieldConfigEntry('component.componentOwner')
-  // schema-v2: field-config registry key renamed `component.system` → `component.systems`
-  // in lockstep with the DTO field. CRS PR #192 ships the data migration.
+  // field-config registry key is `component.systems` to match the v4 DTO
+  // field (plural). The legacy `component.system` key is migrated server-side.
   const { entry: systemFc, isLoading: systemFcLoading } = useFieldConfigEntry('component.systems')
   const { entry: clientCodeFc, isLoading: clientCodeFcLoading } =
     useFieldConfigEntry('component.clientCode')
@@ -196,10 +196,10 @@ export function ComponentDetailPage() {
             anyFieldMapped = true
           }
         }
-        // TODO(3.1b): mixed 400 with both GeneralTab and other-tab field
+        // Known gap: mixed 400 with both GeneralTab and other-tab field
         // errors silently drops the non-tab errors here. Acceptable while
-        // CRS update validations don't combine cross-tab violations in one
-        // response; revisit when the shared-error-mapping helper lands.
+        // CRS update validations don't combine cross-tab violations in
+        // one response; revisit when a shared-error-mapping helper lands.
         if (anyFieldMapped) return
         // No field mapped → fall through to generic toast so the error is still surfaced.
       }

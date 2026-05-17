@@ -9,14 +9,13 @@ interface UseComponentsParams {
   sort?: string
 }
 
-// Default sort is `componentKey,asc` — schema-v2 (CRS PR #192's V1__schema.sql)
-// renamed the component's primary text column from `name` to `component_key`
-// and the JPA entity property follows the column. Spring Data binds the
-// `sort=` query param to the entity property, NOT the v4 DTO field, so
-// `sort=name,asc` throws PropertyReferenceException inside JPA → 500.
-// Pinning the default here keeps the SPA aligned with the actual entity
-// property; v4 DTO continues to expose the value under the `name` field for
-// API consumers.
+// Default sort is `componentKey,asc`. The CRS v4 JPA entity's primary text
+// property is `componentKey` (the DB column renamed `name` → `component_key`
+// in the schema migration); Spring Data binds the `sort=` query param to
+// the entity property, NOT the v4 DTO field, so `sort=name,asc` throws
+// PropertyReferenceException inside JPA → 500. Pinning the default here
+// keeps the SPA aligned with the entity property; the v4 DTO continues to
+// expose the value under the `name` field for API consumers.
 export function useComponents({ filter, page = 0, size = 20, sort = 'componentKey,asc' }: UseComponentsParams = {}) {
   const params = new URLSearchParams()
   params.set('page', String(page))

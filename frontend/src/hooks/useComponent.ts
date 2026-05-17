@@ -8,10 +8,9 @@ import type {
   MarkerChildrenPayload,
 } from '../lib/types'
 
-// schema-v2: request body types moved into `frontend/src/lib/types.ts`
-// alongside the response types. Re-export here so existing callers that
-// imported them from this module continue to compile during the Wave A
-// migration.
+// Request body types now live alongside the response types in
+// `frontend/src/lib/types.ts`. Re-exported here so callers that imported
+// them from this module continue to compile.
 export type { ComponentCreateRequest, ComponentUpdateRequest } from '../lib/types'
 
 export function useComponent(id: string) {

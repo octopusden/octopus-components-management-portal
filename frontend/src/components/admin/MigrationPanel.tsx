@@ -194,11 +194,11 @@ export function MigrationPanel() {
 
       {startMigration.isError && (
         startMigration.error instanceof ApiError && startMigration.error.status === 501 ? (
-          // schema-v2 transitional: CRS PR #192's ImportServiceImpl returns
-          // UnsupportedOperationException → 501 until the §6 pipeline (MIG-039)
+          // Transitional 501: CRS's ImportServiceImpl returns
+          // UnsupportedOperationException until the MIG-039 import pipeline
           // lands. Surface a domain-specific banner rather than the generic
           // "501 Operation not implemented" — operators need to know this is
-          // expected during the schema-v2 transition, not a deployment fault.
+          // expected during the schema migration, not a deployment fault.
           <StatusBanner variant="warning">
             Migration is temporarily disabled while the schema-v2 import pipeline
             (MIG-039) is being implemented in CRS. The endpoint will return 501

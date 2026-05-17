@@ -1,7 +1,8 @@
-// Hand-mirrored from CRS v4 schema-v2 DTOs (CRS PR #192, branch feat/schema-v2-sql).
-// Wave 0 of the schema-v2 migration plan will regenerate from a published v4.json
-// and either retire these or keep them as a thin re-export layer; until then this
-// file is the source of truth for the wire contract.
+// Hand-mirrored from the CRS v4 wire contract (see `schema.d.ts` for the
+// generated OpenAPI types). Kept hand-written until the codegen migration
+// retires this file or reduces it to a thin re-export layer; until then
+// this is the source of truth for what crosses the wire and ships with
+// the drift gate in `npm run generate-types:check`.
 
 // ---------------------------------------------------------------------------
 // Component list & detail
