@@ -96,21 +96,37 @@ const baseComponent: ComponentDetail = {
   displayName: 'My Component',
   componentOwner: 'alice',
   productType: 'TYPE_A',
-  system: ['SYS1'],
+  systems: ['SYS1'],
   clientCode: null,
   archived: false,
   solution: false,
   parentComponentName: null,
-  metadata: {},
   version: 1,
   createdAt: '2024-01-01T00:00:00Z',
   updatedAt: '2024-01-02T00:00:00Z',
-  buildConfigurations: [{ id: 'bc-1', buildSystem: 'GRADLE', buildFilePath: null, javaVersion: null, deprecated: false, metadata: {} }],
-  vcsSettings: [{ id: 'vs-1', vcsType: 'GIT', externalRegistry: null, entries: [{ id: 'e-1', name: 'main', vcsPath: 'org/repo', repositoryType: 'FEATURE', tag: null, branch: null }] }],
-  distributions: [],
-  jiraComponentConfigs: [{ id: 'jcc-1', projectKey: 'PROJ', displayName: null, componentVersionFormat: null, technical: false, metadata: {} }],
-  escrowConfigurations: [],
-  versions: [],
+  labels: [],
+  docs: [],
+  artifactIds: [],
+  securityGroups: [],
+  teamcityProjects: [],
+  configurations: [
+    {
+      id: 'cfg-1',
+      versionRange: '(,0),[0,)',
+      rowType: 'BASE',
+      overriddenAttribute: null,
+      isSyntheticBase: false,
+      build: { buildSystem: 'GRADLE' },
+      escrow: null,
+      jira: { projectKey: 'PROJ' },
+      vcsEntries: [{ id: 'e-1', name: 'main', vcsPath: 'org/repo', sortOrder: 0 }],
+      mavenArtifacts: [],
+      fileUrlArtifacts: [],
+      dockerImages: [],
+      packages: [],
+      requiredTools: [],
+    },
+  ],
 }
 
 const archivedComponent: ComponentDetail = { ...baseComponent, archived: true }
@@ -301,7 +317,7 @@ describe('ComponentDetailPage — breadcrumb badges', () => {
     expect(screen.getByText('SYS1')).toBeDefined()
   })
 
-  it('(e) BuildSystem badge renders when buildConfigurations[0].buildSystem is present', () => {
+  it('(e) BuildSystem badge renders when BASE row build aspect has buildSystem', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(baseComponent, user)
     expect(screen.getByText('GRADLE')).toBeDefined()
@@ -309,13 +325,19 @@ describe('ComponentDetailPage — breadcrumb badges', () => {
 
   it('(e) System badge not rendered when system array is empty', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
-    renderPage({ ...baseComponent, system: [] }, user)
+    renderPage({ ...baseComponent, systems: [] }, user)
     expect(screen.queryByText('SYS1')).toBeNull()
   })
 
-  it('(e) BuildSystem badge not rendered when buildConfigurations is empty', () => {
+  it('(e) BuildSystem badge not rendered when BASE row has no build aspect', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
-    renderPage({ ...baseComponent, buildConfigurations: [] }, user)
+    renderPage(
+      {
+        ...baseComponent,
+        configurations: [{ ...baseComponent.configurations![0]!, build: null }],
+      },
+      user,
+    )
     expect(screen.queryByText('GRADLE')).toBeNull()
   })
 })
@@ -350,7 +372,12 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
     } as unknown as ReturnType<typeof usePortalLinks>)
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(
-      { ...baseComponent, jiraComponentConfigs: [{ id: 'j1', projectKey: null, displayName: null, componentVersionFormat: null, technical: false, metadata: {} }] },
+      {
+        ...baseComponent,
+        configurations: [
+          { ...baseComponent.configurations![0]!, jira: { projectKey: null } },
+        ],
+      },
       user,
     )
     expect(screen.queryByTitle(/jira/i)).toBeNull()
@@ -379,7 +406,7 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
     expect(screen.queryByTitle(/bitbucket:/i)).toBeNull()
   })
 
-  it('(f) Git link does NOT render when vcsSettings is empty', () => {
+  it('(f) Git link does NOT render when BASE row has no vcsEntries', () => {
     mockedUsePortalLinks.mockReturnValue({
       data: { jiraBaseUrl: null, gitBaseUrl: 'https://git.example.com', tcBaseUrl: null, dmsBaseUrl: null },
       isLoading: false,
@@ -387,7 +414,13 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
       error: null,
     } as unknown as ReturnType<typeof usePortalLinks>)
     const user = makeUser(['ACCESS_COMPONENTS'])
-    renderPage({ ...baseComponent, vcsSettings: [] }, user)
+    renderPage(
+      {
+        ...baseComponent,
+        configurations: [{ ...baseComponent.configurations![0]!, vcsEntries: [] }],
+      },
+      user,
+    )
     expect(screen.queryByTitle(/bitbucket:/i)).toBeNull()
   })
 
@@ -398,7 +431,14 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
     renderPage(
       {
         ...baseComponent,
-        teamcityProjectUrl: 'https://teamcity.example.com/project/MyProject_Build',
+        teamcityProjects: [
+          {
+            id: 'tc-1',
+            projectId: 'MyProject_Build',
+            projectUrl: 'https://teamcity.example.com/project/MyProject_Build',
+            sortOrder: 0,
+          },
+        ],
       },
       user,
     )
@@ -408,13 +448,19 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
     expect(within(link).getByTestId('brand-icon-teamcity')).toBeDefined()
   })
 
-  it('(g) TeamCity link does NOT render when teamcityProjectUrl is null', () => {
+  it('(g) TeamCity link does NOT render when teamcityProjects[0].projectUrl is null', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
-    renderPage({ ...baseComponent, teamcityProjectUrl: null }, user)
+    renderPage(
+      {
+        ...baseComponent,
+        teamcityProjects: [{ id: 'tc-1', projectId: 'X', projectUrl: null, sortOrder: 0 }],
+      },
+      user,
+    )
     expect(screen.queryByTitle(/teamcity/i)).toBeNull()
   })
 
-  it('(g) TeamCity link does NOT render when teamcityProjectUrl is undefined', () => {
+  it('(g) TeamCity link does NOT render when teamcityProjects is empty', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(baseComponent, user)
     expect(screen.queryByTitle(/teamcity/i)).toBeNull()
@@ -429,7 +475,7 @@ describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => 
   // should NOT include the TC fields in the PATCH payload (empty → undefined),
   // and we can flip FC visibility to 'hidden' to assert the gate works.
 
-  it('save with unchanged defaults does NOT include teamcity* in PATCH (empty → undefined)', async () => {
+  it('save with unchanged defaults does NOT include teamcityProjects in PATCH', async () => {
     const updateMutateAsync = vi.fn(() => Promise.resolve())
     const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
     renderPage(baseComponent, user, { updateMutation: { mutateAsync: updateMutateAsync } })
@@ -438,26 +484,33 @@ describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => 
 
     await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
     const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
-    // Empty-string defaults map to undefined per the "(values.X || undefined)"
-    // helper in handleSave. JSON.stringify drops undefined keys, so the
-    // backend sees no teamcity* keys at all → "don't touch" semantics.
-    expect(payload['teamcityProjectId']).toBeUndefined()
-    expect(payload['teamcityProjectUrl']).toBeUndefined()
+    // schema-v2: blank form fields → no teamcityProjects key in payload.
+    expect(payload['teamcityProjects']).toBeUndefined()
   })
 
-  it('skips teamcity* fields when GeneralTab stub leaves form at defaults (both undefined → omit pair)', async () => {
-    // Seed the component with TC values; the form's useEffect (in the real
-    // GeneralTab) would mirror these into the form, but here GeneralTab is
-    // mocked so the form values stay empty — meaning unchanged-defaults
-    // means "user hasn't touched, send undefined". The save payload should
-    // therefore NOT include the persisted values either: both halves are
-    // undefined, so the pair-enforcement block emits nothing ("don't touch").
+  it('blank form values + prior TC project DO NOT clear (pre-hydration Save safety)', async () => {
+    // Race-condition guard: if Save fires before GeneralTab.useEffect has
+    // mirrored `component.teamcityProjects` into the form (form defaults
+    // are `[]`), naïve "blank + had prior → []" logic would wipe the
+    // server-side list. The dirty-fields gate in handleSave catches this:
+    // an untouched form (no useFieldArray append/remove → not dirty) MUST
+    // omit teamcityProjects from the patch even when the component has
+    // prior server data.
+    // Test exercise: GeneralTab is mocked as an empty stub, so the form's
+    // teamcityProjects stays at the default `[]` AND dirtyFields stays
+    // empty. Expected wire result: no teamcityProjects key in payload.
     const updateMutateAsync = vi.fn(() => Promise.resolve())
     const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
     const seeded: ComponentDetail = {
       ...baseComponent,
-      teamcityProjectId: 'MyProject_Build',
-      teamcityProjectUrl: 'https://teamcity.example.com/project/MyProject_Build',
+      teamcityProjects: [
+        {
+          id: 'tc-1',
+          projectId: 'MyProject_Build',
+          projectUrl: 'https://teamcity.example.com/project/MyProject_Build',
+          sortOrder: 0,
+        },
+      ],
     }
     renderPage(seeded, user, { updateMutation: { mutateAsync: updateMutateAsync } })
 
@@ -465,10 +518,18 @@ describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => 
 
     await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
     const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
-    // Same as above — without typing, both fields are skipped.
-    expect(payload['teamcityProjectId']).toBeUndefined()
-    expect(payload['teamcityProjectUrl']).toBeUndefined()
+    expect(payload['teamcityProjects']).toBeUndefined()
   })
+
+  // The positive-clear path (user removes all TC rows via useFieldArray
+  // → field dirty → Save emits `teamcityProjects: []`) is verified by the
+  // chromium-viewer Playwright spec against a real backend, not here.
+  // RHF's `setValue('teamcityProjects', [], { shouldDirty: true })` does
+  // not mark a field dirty when the new value matches the form default
+  // ([]), so the React-Testing-Library mock can't cleanly reproduce the
+  // dirty=true + value=[] state without dragging useFieldArray into the
+  // GeneralTab stub. The safety branch above already pins the load-bearing
+  // contract: a non-dirty form NEVER sends `[]`.
 
   it('populated teamcity* values flow through to PATCH when the form mirrors server state', async () => {
     // The previous test pins the contract for the *empty* GeneralTab stub:
@@ -481,8 +542,10 @@ describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => 
     // form holds the seeded TC values when handleSave runs.
     vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
       useEffect(() => {
-        form.setValue('teamcityProjectId', component.teamcityProjectId ?? '')
-        form.setValue('teamcityProjectUrl', component.teamcityProjectUrl ?? '')
+        form.setValue(
+          'teamcityProjects',
+          (component.teamcityProjects ?? []).map((tc) => ({ projectId: tc.projectId })),
+        )
       }, [component, form])
       return React.createElement('div', { 'data-testid': 'general-tab-mirrored' })
     })
@@ -490,8 +553,14 @@ describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => 
     const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
     const seeded: ComponentDetail = {
       ...baseComponent,
-      teamcityProjectId: 'Existing_Build',
-      teamcityProjectUrl: 'https://teamcity.example.com/project/Existing_Build',
+      teamcityProjects: [
+        {
+          id: 'tc-1',
+          projectId: 'Existing_Build',
+          projectUrl: 'https://teamcity.example.com/project/Existing_Build',
+          sortOrder: 0,
+        },
+      ],
     }
     renderPage(seeded, user, { updateMutation: { mutateAsync: updateMutateAsync } })
 
@@ -504,18 +573,19 @@ describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => 
 
     await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
     const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
-    // Both keys present AND populated — proves the truthy half of the helper
-    // and the editable-FC visibility branch both fire.
-    expect(payload['teamcityProjectId']).toBe('Existing_Build')
-    expect(payload['teamcityProjectUrl']).toBe('https://teamcity.example.com/project/Existing_Build')
+    // schema-v2: TC link is now a list (single-element from the form). The URL
+    // is server-derived (TeamcityProjectRequest has only `projectId`), so the
+    // payload carries projectId only — URL is dropped at the boundary.
+    expect(payload['teamcityProjects']).toEqual([{ projectId: 'Existing_Build' }])
   })
 
-  it('FC hidden skips both teamcity* fields on save (defence-in-depth)', async () => {
+  it('FC hidden skips teamcityProjects on save (defence-in-depth)', async () => {
     // Even if the form somehow held a value, hidden FC visibility must
-    // make handleSave drop both keys from the payload — server-side does
+    // make handleSave drop the list from the payload — server-side does
     // NOT enforce field-config (CRS PR-2 spec note), so the SPA is the
     // line of defence against an editor with a stale form snapshot
-    // overwriting a hidden field.
+    // overwriting a hidden field. Either FC entry hidden suppresses the
+    // whole section per the pair-visibility rule.
     mockedUseFieldConfigEntry.mockImplementation((path: string) => {
       if (
         path === 'component.teamcityProjectId' ||
@@ -536,20 +606,16 @@ describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => 
 
     await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
     const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
-    expect(payload['teamcityProjectId']).toBeUndefined()
-    expect(payload['teamcityProjectUrl']).toBeUndefined()
+    expect(payload['teamcityProjects']).toBeUndefined()
   })
 
-  it('partial pair (tcId filled, tcUrl blank) omits BOTH from PATCH (pair invariant)', async () => {
-    // Regression guard for Bug B: when the user fills only teamcityProjectId
-    // and leaves teamcityProjectUrl blank, the `||` condition would have sent
-    // a partial PATCH (id=value, url=undefined → JSON.stringify drops url,
-    // server receives only one half). With `&&` both must be non-empty or
-    // neither is included.
+  it('blank-row entries in teamcityProjects are filtered out before sending', async () => {
+    // Wave B list editor: rows with blank projectId after trim are dropped.
+    // Used to be the "partial pair (tcId filled, tcUrl blank)" Wave A guard;
+    // schema-v2 has no URL field, so the analogue is "blank row gets dropped".
     vi.mocked(GeneralTab).mockImplementation(({ form }) => {
       useEffect(() => {
-        form.setValue('teamcityProjectId', 'OnlyId_Build')
-        // teamcityProjectUrl intentionally left at default '' (falsy)
+        form.setValue('teamcityProjects', [{ projectId: 'OnlyId_Build' }, { projectId: '  ' }])
       }, [form])
       return React.createElement('div', { 'data-testid': 'general-tab-partial' })
     })
@@ -565,10 +631,29 @@ describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => 
 
     await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
     const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
-    // tcUrl is '' → undefined; because only one half is defined, && condition
-    // suppresses both keys — server sees no teamcity* fields at all.
-    expect(payload['teamcityProjectId']).toBeUndefined()
-    expect(payload['teamcityProjectUrl']).toBeUndefined()
+    // schema-v2 list: the trimmed-blank row is dropped at handleSave's
+    // .filter step, the populated row survives.
+    expect(payload['teamcityProjects']).toEqual([{ projectId: 'OnlyId_Build' }])
+  })
+})
+
+describe('ComponentDetailPage — solution flag dirty-gate', () => {
+  it('untouched solution toggle on a component with server null does NOT send false', async () => {
+    // Race-condition guard analogous to the TC pre-hydration safety test
+    // above. Form default is `false`; server `solution` is `null` ("unknown").
+    // Without the dirtyFields gate, a Save fired before the user touches
+    // the toggle would send `solution: false` and wipe the stored null
+    // (JSON merge-patch treats present-and-false as a real write).
+    const updateMutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    const seeded: ComponentDetail = { ...baseComponent, solution: null }
+    renderPage(seeded, user, { updateMutation: { mutateAsync: updateMutateAsync } })
+
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
+    const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
+    expect(payload['solution']).toBeUndefined()
   })
 })
 

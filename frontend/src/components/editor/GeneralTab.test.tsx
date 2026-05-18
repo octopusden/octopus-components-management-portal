@@ -25,8 +25,11 @@ vi.mock('../../hooks/useFieldConfig', () => ({
   useFieldConfigEntry: (fieldPath: string) => mockUseFieldConfigEntry(fieldPath),
 }))
 
+// Render a queryable marker so tests can assert presence/absence per attribute.
 vi.mock('./FieldOverrideInline', () => ({
-  FieldOverrideInline: () => null,
+  FieldOverrideInline: ({ overriddenAttribute }: { overriddenAttribute: string }) => (
+    <span data-testid={`field-override-inline-${overriddenAttribute}`} />
+  ),
 }))
 
 // Stub useCurrentUser so each test pins the role/permission set under test.
@@ -44,16 +47,14 @@ function baseComponent(overrides: Partial<ComponentDetail> = {}): ComponentDetai
     displayName: 'My Component',
     componentOwner: 'alice',
     productType: '',
-    system: [],
+    systems: [],
     clientCode: null,
     solution: false,
     parentComponentName: null,
     archived: false,
-    metadata: {},
     version: 0,
     createdAt: null,
     updatedAt: null,
-    versions: [],
     ...overrides,
   } as ComponentDetail
 }
@@ -75,7 +76,7 @@ function Harness({ component, formRef }: { component: ComponentDetail; formRef?:
       displayName: component.displayName ?? '',
       componentOwner: component.componentOwner ?? '',
       productType: component.productType ?? '',
-      system: component.system.join(', '),
+      system: (component.systems ?? []).join(', '),
       clientCode: component.clientCode ?? '',
       solution: component.solution ?? false,
       archived: component.archived,
@@ -169,7 +170,7 @@ describe('GeneralTab rename (B7.1.4)', () => {
     const component = baseComponent({ name: 'orig-name' })
     renderWithProviders(<Harness component={component} />)
 
-    const input = screen.getByLabelText(/^name$/i) as HTMLInputElement
+    const input = screen.getByLabelText(/^component key$/i) as HTMLInputElement
     expect(input).toBeDefined()
     expect(input.disabled).toBe(false)
     expect(input.value).toBe('orig-name')
@@ -180,7 +181,7 @@ describe('GeneralTab rename (B7.1.4)', () => {
     const component = baseComponent({ name: 'orig-name' })
     renderWithProviders(<Harness component={component} />)
 
-    const input = screen.getByLabelText(/^name$/i) as HTMLInputElement
+    const input = screen.getByLabelText(/^component key$/i) as HTMLInputElement
     expect(input).toBeDefined()
     expect(input.disabled).toBe(true)
     expect(input.value).toBe('orig-name')
@@ -194,7 +195,7 @@ describe('GeneralTab rename (B7.1.4)', () => {
     const component = baseComponent({ name: 'orig-name' })
     renderWithProviders(<Harness component={component} />)
 
-    const input = screen.getByLabelText(/^name$/i) as HTMLInputElement
+    const input = screen.getByLabelText(/^component key$/i) as HTMLInputElement
     await userEvent.clear(input)
     await userEvent.type(input, 'renamed-component')
 
@@ -214,7 +215,7 @@ describe('GeneralTab rename (B7.1.4)', () => {
     const component = baseComponent({ name: 'orig-name' })
     renderWithProviders(<Harness component={component} />)
 
-    const input = screen.getByLabelText(/^name$/i) as HTMLInputElement
+    const input = screen.getByLabelText(/^component key$/i) as HTMLInputElement
     expect(input.disabled).toBe(true)
   })
 })
@@ -256,10 +257,10 @@ describe('GeneralTab visibility-gating', () => {
 
   it('system hidden → System(s) input NOT rendered', () => {
     mockUseFieldConfigEntry.mockImplementation((path: string) => {
-      if (path === 'component.system') return makeEntry('hidden')
+      if (path === 'component.systems') return makeEntry('hidden')
       return makeEntry('editable')
     })
-    const component = baseComponent({ system: ['SYS1'] })
+    const component = baseComponent({ systems: ['SYS1'] })
     renderWithProviders(<Harness component={component} />)
 
     expect(screen.queryByLabelText(/system\(s\)/i)).toBeNull()
@@ -267,10 +268,10 @@ describe('GeneralTab visibility-gating', () => {
 
   it('system readonly → System(s) input rendered disabled', () => {
     mockUseFieldConfigEntry.mockImplementation((path: string) => {
-      if (path === 'component.system') return makeEntry('readonly')
+      if (path === 'component.systems') return makeEntry('readonly')
       return makeEntry('editable')
     })
-    const component = baseComponent({ system: ['SYS1'] })
+    const component = baseComponent({ systems: ['SYS1'] })
     renderWithProviders(<Harness component={component} />)
 
     const input = screen.getByLabelText(/system\(s\)/i) as HTMLInputElement
@@ -318,11 +319,11 @@ describe('GeneralTab visibility-gating', () => {
 describe('GeneralTab system field hidden → form value contract', () => {
   it('when system is hidden, the form still initialises system from component.system join (page filters to undefined on save)', () => {
     mockUseFieldConfigEntry.mockImplementation((path: string) => {
-      if (path === 'component.system') return makeEntry('hidden')
+      if (path === 'component.systems') return makeEntry('hidden')
       return makeEntry('editable')
     })
     const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
-    const component = baseComponent({ system: ['SYS1', 'SYS2'] })
+    const component = baseComponent({ systems: ['SYS1', 'SYS2'] })
     renderWithProviders(<Harness component={component} formRef={formRef} />)
 
     // Input not rendered (hidden)
@@ -337,10 +338,10 @@ describe('GeneralTab system field hidden → form value contract', () => {
 describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
   it('groupId editable → input rendered with current value', () => {
     setAllEditable()
-    const component = baseComponent({ groupId: 'org.example.alpha' })
+    const component = baseComponent({ group: { groupKey: 'org.example.alpha', isFake: false, role: 'MEMBER' } })
     renderWithProviders(<Harness component={component} />)
 
-    const input = screen.getByLabelText(/group id/i) as HTMLInputElement
+    const input = screen.getByLabelText(/group key/i) as HTMLInputElement
     expect(input).toBeDefined()
     expect(input.value).toBe('org.example.alpha')
     expect(input.disabled).toBe(false)
@@ -351,10 +352,10 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
       if (path === 'component.groupId') return makeEntry('hidden')
       return makeEntry('editable')
     })
-    const component = baseComponent({ groupId: 'org.example.alpha' })
+    const component = baseComponent({ group: { groupKey: 'org.example.alpha', isFake: false, role: 'MEMBER' } })
     renderWithProviders(<Harness component={component} />)
 
-    expect(screen.queryByLabelText(/group id/i)).toBeNull()
+    expect(screen.queryByLabelText(/group key/i)).toBeNull()
   })
 
   it('releaseManager editable → PeopleInput rendered (Label text present, not Input)', () => {
@@ -434,7 +435,7 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
       return makeEntry('editable')
     })
     const component = baseComponent({
-      groupId: 'org.example',
+      group: { groupKey: 'org.example', isFake: false, role: 'MEMBER' },
       releaseManager: 'rm',
       securityChampion: 'sc',
       copyright: '(c)',
@@ -443,7 +444,7 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
     })
     renderWithProviders(<Harness component={component} />)
 
-    expect(screen.queryByLabelText(/group id/i)).toBeNull()
+    expect(screen.queryByLabelText(/group key/i)).toBeNull()
     expect(screen.queryByLabelText(/release manager/i)).toBeNull()
     expect(screen.queryByLabelText(/security champion/i)).toBeNull()
     expect(screen.queryByLabelText(/copyright/i)).toBeNull()
@@ -453,31 +454,45 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
 })
 
 describe('GeneralTab TC link restoration fields (Portal PR-3)', () => {
-  it('teamcityProjectId editable → input rendered with current value', () => {
+  it('teamcityProjects entry: input populated with projectId from server', () => {
     setAllEditable()
     const component = baseComponent({
-      teamcityProjectId: 'MyProject_Build',
-      teamcityProjectUrl: 'https://teamcity.example.com/project/MyProject_Build',
+      teamcityProjects: [
+        {
+          id: 'tc-1',
+          projectId: 'MyProject_Build',
+          projectUrl: 'https://teamcity.example.com/project/MyProject_Build',
+          sortOrder: 0,
+        },
+      ],
     })
     renderWithProviders(<Harness component={component} />)
 
-    const input = screen.getByLabelText(/tc project id/i) as HTMLInputElement
-    expect(input).toBeDefined()
-    expect(input.value).toBe('MyProject_Build')
-    expect(input.disabled).toBe(false)
+    // Wave B: list editor with placeholder-keyed inputs (no aria-label per row).
+    const inputs = screen.getAllByPlaceholderText('MyProject_Build') as HTMLInputElement[]
+    expect(inputs.length).toBe(1)
+    expect(inputs[0]!.value).toBe('MyProject_Build')
+    expect(inputs[0]!.disabled).toBe(false)
   })
 
-  it('teamcityProjectUrl editable → input rendered with current value', () => {
+  it('teamcityProjects entry: server projectUrl rendered as static text (not editable)', () => {
     setAllEditable()
     const component = baseComponent({
-      teamcityProjectId: 'MyProject_Build',
-      teamcityProjectUrl: 'https://teamcity.example.com/project/MyProject_Build',
+      teamcityProjects: [
+        {
+          id: 'tc-1',
+          projectId: 'MyProject_Build',
+          projectUrl: 'https://teamcity.example.com/project/MyProject_Build',
+          sortOrder: 0,
+        },
+      ],
     })
     renderWithProviders(<Harness component={component} />)
 
-    const input = screen.getByLabelText(/tc project url/i) as HTMLInputElement
-    expect(input).toBeDefined()
-    expect(input.value).toBe('https://teamcity.example.com/project/MyProject_Build')
+    // schema-v2 TeamcityProjectRequest has only projectId; the URL is
+    // server-derived and shown as readonly text under the projectId input.
+    const urlText = screen.getByText(/URL:.*teamcity\.example\.com\/project\/MyProject_Build/)
+    expect(urlText).toBeDefined()
   })
 
   it('teamcityProjectId hidden → input NOT rendered AND entire TC section absent', () => {
@@ -486,8 +501,14 @@ describe('GeneralTab TC link restoration fields (Portal PR-3)', () => {
       return makeEntry('editable')
     })
     const component = baseComponent({
-      teamcityProjectId: 'X',
-      teamcityProjectUrl: 'https://teamcity.example.com/project/X',
+      teamcityProjects: [
+        {
+          id: 'tc-1',
+          projectId: 'X',
+          projectUrl: 'https://teamcity.example.com/project/X',
+          sortOrder: 0,
+        },
+      ],
     })
     const { container } = renderWithProviders(<Harness component={component} />)
 
@@ -503,8 +524,14 @@ describe('GeneralTab TC link restoration fields (Portal PR-3)', () => {
       return makeEntry('editable')
     })
     const component = baseComponent({
-      teamcityProjectId: 'X',
-      teamcityProjectUrl: 'https://teamcity.example.com/project/X',
+      teamcityProjects: [
+        {
+          id: 'tc-1',
+          projectId: 'X',
+          projectUrl: 'https://teamcity.example.com/project/X',
+          sortOrder: 0,
+        },
+      ],
     })
     const { container } = renderWithProviders(<Harness component={component} />)
 
@@ -525,8 +552,14 @@ describe('GeneralTab TC link restoration fields (Portal PR-3)', () => {
       return makeEntry('editable')
     })
     const component = baseComponent({
-      teamcityProjectId: 'X',
-      teamcityProjectUrl: 'https://teamcity.example.com/project/X',
+      teamcityProjects: [
+        {
+          id: 'tc-1',
+          projectId: 'X',
+          projectUrl: 'https://teamcity.example.com/project/X',
+          sortOrder: 0,
+        },
+      ],
     })
     const { container } = renderWithProviders(<Harness component={component} />)
 
@@ -535,49 +568,40 @@ describe('GeneralTab TC link restoration fields (Portal PR-3)', () => {
     expect(container.querySelector('[data-testid="section-teamcity"]')).toBeNull()
   })
 
-  it('teamcityProjectUrl readonly → input disabled', () => {
-    mockUseFieldConfigEntry.mockImplementation((path: string) => {
-      if (path === 'component.teamcityProjectUrl') return makeEntry('readonly')
-      return makeEntry('editable')
-    })
+  it('schema-v2: server projectUrl rendered as readonly text next to its row', () => {
+    setAllEditable()
     const component = baseComponent({
-      teamcityProjectUrl: 'https://teamcity.example.com/project/X',
+      teamcityProjects: [
+        {
+          id: 'tc-1',
+          projectId: 'X',
+          projectUrl: 'https://teamcity.example.com/project/X',
+          sortOrder: 0,
+        },
+      ],
     })
     renderWithProviders(<Harness component={component} />)
-
-    const input = screen.getByLabelText(/tc project url/i) as HTMLInputElement
-    expect(input.disabled).toBe(true)
+    // URL is server-derived (TeamcityProjectRequest carries only projectId),
+    // so it's surfaced as static text below the input, not as an editable field.
+    expect(screen.getByText(/URL:.*teamcity\.example\.com\/project\/X/)).toBeDefined()
   })
 
-  it('typing into TC inputs updates form state (drives the save payload)', async () => {
+  it('Add TC project appends a row whose projectId input populates the form', async () => {
     setAllEditable()
     const component = baseComponent()
     const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
     renderWithProviders(<Harness component={component} formRef={formRef} />)
 
-    // Wait for the GeneralTab useEffect to populate the form from
-    // `component` (sets both TC fields to '' here since the fixture doesn't
-    // set them). RHF doesn't always flush synchronously after setValue, so
-    // an await ensures the inputs reflect the post-effect value before we
-    // type into them — preventing concurrent overwrites.
-    await waitFor(() => {
-      const input = screen.getByLabelText(/tc project id/i) as HTMLInputElement
-      expect(input.value).toBe('')
-    })
+    // Append a row, then type into its projectId input. The new row gets
+    // an empty value via append({ projectId: '' }) and is the only TC row.
+    await userEvent.click(screen.getByRole('button', { name: /add tc project/i }))
 
-    const idInput = screen.getByLabelText(/tc project id/i) as HTMLInputElement
-    const urlInput = screen.getByLabelText(/tc project url/i) as HTMLInputElement
-    await userEvent.type(idInput, 'MyProject_Build')
-    await userEvent.type(urlInput, 'https://teamcity.example.com/project/MyProject_Build')
+    const inputs = screen.getAllByPlaceholderText('MyProject_Build') as HTMLInputElement[]
+    expect(inputs.length).toBe(1)
+    await userEvent.type(inputs[0]!, 'MyProject_Build')
 
-    // Form values reflect what the user typed — these are the values that
-    // ComponentDetailPage.handleSave reads via form.getValues() and writes
-    // into the PATCH payload (see the `(values.X || undefined)` helpers).
     const values = formRef.current!.getValues()
-    expect(values.teamcityProjectId).toBe('MyProject_Build')
-    expect(values.teamcityProjectUrl).toBe(
-      'https://teamcity.example.com/project/MyProject_Build',
-    )
+    expect(values.teamcityProjects).toEqual([{ projectId: 'MyProject_Build' }])
   })
 })
 
@@ -620,7 +644,7 @@ describe('GeneralTab server error display (S3.1a)', () => {
   it('setError("system") renders the message instead of the hint text', async () => {
     setAllEditable()
     const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
-    renderWithProviders(<Harness component={baseComponent({ system: ['S1'] })} formRef={formRef} />)
+    renderWithProviders(<Harness component={baseComponent({ systems: ['S1'] })} formRef={formRef} />)
 
     await act(async () => {
       formRef.current?.setError('system', { type: 'server', message: 'must not be null' })
@@ -631,4 +655,27 @@ describe('GeneralTab server error display (S3.1a)', () => {
       expect(screen.queryByText(/comma-separated list/i)).toBeNull()
     })
   })
+})
+
+// ---------------------------------------------------------------------------
+// FieldOverride catalogue gating — schema-v2 contract.
+//
+// CRS schema-v2 only accepts overriddenAttribute strings that map to
+// SCALAR_ATTRIBUTE_PATHS (build.*, escrow.*, jira.* — config-row scalars)
+// or to one of the six marker names. Component-level fields like
+// componentOwner, system, clientCode live on the top-level ComponentDetail
+// row, not on component_configurations rows, so POST /field-overrides with
+// those attributes returns 400. We must not surface those override buttons.
+// ---------------------------------------------------------------------------
+
+describe('GeneralTab — FieldOverrideInline gating (schema-v2 contract)', () => {
+  it.each(['componentOwner', 'system', 'clientCode'])(
+    'does not render FieldOverrideInline for component-level field %s',
+    (attribute) => {
+      renderWithProviders(<Harness component={baseComponent()} />)
+      expect(
+        screen.queryByTestId(`field-override-inline-${attribute}`),
+      ).toBeNull()
+    },
+  )
 })

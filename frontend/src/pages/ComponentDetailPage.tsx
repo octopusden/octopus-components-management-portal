@@ -18,19 +18,24 @@ import {
   DialogFooter,
 } from '../components/ui/dialog'
 import { GeneralTab, type GeneralFormValues, GENERAL_TAB_FIELDS } from '../components/editor/GeneralTab'
+import { buildUpdateRequest } from '../lib/component/buildUpdateRequest'
 import { BuildTab } from '../components/editor/BuildTab'
 import { VcsTab } from '../components/editor/VcsTab'
 import { DistributionTab } from '../components/editor/DistributionTab'
 import { JiraTab } from '../components/editor/JiraTab'
 import { EscrowTab } from '../components/editor/EscrowTab'
 import { FieldOverrides } from '../components/editor/FieldOverrides'
+import { ConfigurationsTab } from '../components/editor/ConfigurationsTab'
 import { ComponentHistoryTab } from '../components/editor/ComponentHistoryTab'
 import { useComponent, useUpdateComponent, useDeleteComponent, type ComponentUpdateRequest } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
 import { ApiError } from '../lib/api'
-import { describeOptimisticConflict } from '../lib/conflict'
-import { useQueryClient, type UseMutationResult } from '@tanstack/react-query'
+import { useOptimisticConflict } from '../hooks/useOptimisticConflict'
+import { type UseMutationResult } from '@tanstack/react-query'
+// queryClient + describeOptimisticConflict were moved into
+// useOptimisticConflict — the hook owns refetch + toast-shape composition.
 import type { ComponentDetail } from '../lib/types'
+import { selectBaseRow } from '../lib/api/baseRow'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../lib/auth'
 import { useFieldConfigEntry } from '../hooks/useFieldConfig'
@@ -44,7 +49,7 @@ export function ComponentDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { toast } = useToast()
-  const queryClient = useQueryClient()
+  const handleConflict = useOptimisticConflict(id)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 
   const { data: component, isLoading, error } = useComponent(id ?? '')
@@ -64,7 +69,9 @@ export function ComponentDetailPage() {
     useFieldConfigEntry('component.displayName')
   const { entry: componentOwnerFc, isLoading: componentOwnerFcLoading } =
     useFieldConfigEntry('component.componentOwner')
-  const { entry: systemFc, isLoading: systemFcLoading } = useFieldConfigEntry('component.system')
+  // field-config registry key is `component.systems` to match the v4 DTO
+  // field (plural). The legacy `component.system` key is migrated server-side.
+  const { entry: systemFc, isLoading: systemFcLoading } = useFieldConfigEntry('component.systems')
   const { entry: clientCodeFc, isLoading: clientCodeFcLoading } =
     useFieldConfigEntry('component.clientCode')
   // SYS-039 FC entries
@@ -110,156 +117,71 @@ export function ComponentDetailPage() {
       // populates from `component`) would read `undefined` for labels and
       // friends and emit empty / wrong wire shapes.
       groupId: '',
+      groupIsFake: false,
       releaseManager: '',
       securityChampion: '',
       copyright: '',
       releasesInDefaultBranch: false,
       labels: '',
-      // TC link restoration — empty-string defaults match the same
-      // "blank means don't touch" convention as the SYS-039 string fields.
-      teamcityProjectId: '',
-      teamcityProjectUrl: '',
+      // schema-v2 list defaults — empty arrays so an early Save before useEffect
+      // populates from `component` still produces a coherent form value.
+      teamcityProjects: [],
+      docs: [],
+      artifactIds: [],
     },
   })
 
   async function handleSave() {
     if (!component) return
-    // Server-side errors set on a previous failed submit don't auto-clear when
-    // the user fixes the input or when the next save succeeds (RHF only
-    // clears errors on its own validation passes). Wipe them at the start of
-    // each save so a successful retry doesn't leave stale red text behind.
+    // Server-side errors set on a previous failed submit don't auto-clear
+    // when the user fixes the input or when the next save succeeds (RHF
+    // only clears errors on its own validation passes). Wipe them at the
+    // start of each save so a successful retry doesn't leave stale red
+    // text behind.
     form.clearErrors()
-    const values = form.getValues()
 
-    const systemArray = values.system
-      ? values.system.split(',').map((s) => s.trim()).filter(Boolean)
-      : []
-
-    // SYS-039 — labels uses the same comma-separated convention as
-    // system, but with two extra rules to match scalar JSON Merge Patch
-    // semantics: (a) blank input → undefined ("don't touch"), not [] (an
-    // explicit clear); (b) dedup via Set to avoid emitting duplicates
-    // until CRS adds a DB-level constraint (PR #163 NIT).
-    const labelsArray = values.labels
-      ? Array.from(
-          new Set(
-            values.labels
-              .split(',')
-              .map((s) => s.trim())
-              .filter(Boolean),
-          ),
-        )
-      : undefined
-    // releasesInDefaultBranch is the only SYS-039 boolean — only send when
-    // it actually changed. Use react-hook-form's dirtyFields rather than
-    // comparing values.X to (stored ?? false): with the value compare, a
-    // stored null + toggle-on + toggle-back-to-off would compare false===false
-    // and silently drop a real user interaction. dirtyFields tracks any
-    // touch by the user, regardless of round-tripping back to the default.
-    const releasesInDefaultBranchChanged =
-      form.formState.dirtyFields.releasesInDefaultBranch === true
-
-    // `archived` is gated server-side by ARCHIVE_COMPONENTS (a permission
-    // ROLE_COMPONENTS_REGISTRY_EDITOR does not hold). Send it only when the user actually
-    // toggled it — otherwise a plain rename/owner/system edit from a non-admin
-    // would trip the archive guard with 403.
-    const archivedChanged = values.archived !== component.archived
-
-    // `name` is gated server-side by RENAME_COMPONENTS (same role gap as
-    // archive). The Name input is disabled in the UI for users without it
-    // (GeneralTab.tsx), but defence in depth: only send `name` when it
-    // actually changed, regardless of permission. A trimmed-blank or
-    // whitespace-only name would 400, and "unchanged" carries no semantic
-    // meaning so undefined is the right wire shape.
-    const trimmedName = values.name.trim()
-    const nameChanged = trimmedName !== '' && trimmedName !== component.name
-    const renameField = nameChanged ? trimmedName : undefined
-
-    // parentComponentName: blank input clears the field (JSON Merge Patch null);
-    // an unchanged value means "don't touch" (undefined). Anything else sets it.
-    const trimmedParent = values.parentComponentName.trim()
-    const currentParent = component.parentComponentName ?? ''
-    const parentComponentName: string | null | undefined =
-      trimmedParent === currentParent
-        ? undefined
-        : trimmedParent === ''
-          ? null
-          : trimmedParent
-
-    // TC link restoration — pair enforcement. Both FC entries must be visible
-    // to send either field. If one is hidden, omit both so the server never
-    // receives only one half of the pair (which could produce an inconsistent
-    // projectId/projectUrl state). When both are visible, follow the same
-    // SYS-039 `(values.X || undefined)` shape as the other string fields.
-    const tcIdVisible = teamcityProjectIdFc.visibility !== 'hidden'
-    const tcUrlVisible = teamcityProjectUrlFc.visibility !== 'hidden'
-    const tcPatch: { teamcityProjectId?: string; teamcityProjectUrl?: string } = {}
-    if (tcIdVisible && tcUrlVisible) {
-      const tcId = values.teamcityProjectId || undefined
-      const tcUrl = values.teamcityProjectUrl || undefined
-      // Only include the pair when BOTH halves carry a value — a filled id
-      // with a blank url (or vice versa) omits both, preserving the pair
-      // invariant and preventing a partial PATCH (undefined is dropped by
-      // JSON.stringify, which would send only one field).
-      if (tcId !== undefined && tcUrl !== undefined) {
-        tcPatch.teamcityProjectId = tcId
-        tcPatch.teamcityProjectUrl = tcUrl
-      }
-    }
+    const request = buildUpdateRequest({
+      component,
+      values: form.getValues(),
+      // Each FieldConfigEntry.visibility is optional in the type but the
+      // hook falls back to 'editable' when the config row is missing, so
+      // mirror the same default here for the (rare) case where data is
+      // shaped without the visibility key set.
+      visibilities: {
+        displayName: displayNameFc.visibility ?? 'editable',
+        componentOwner: componentOwnerFc.visibility ?? 'editable',
+        systems: systemFc.visibility ?? 'editable',
+        clientCode: clientCodeFc.visibility ?? 'editable',
+        groupId: groupIdFc.visibility ?? 'editable',
+        releaseManager: releaseManagerFc.visibility ?? 'editable',
+        securityChampion: securityChampionFc.visibility ?? 'editable',
+        copyright: copyrightFc.visibility ?? 'editable',
+        releasesInDefaultBranch: releasesInDefaultBranchFc.visibility ?? 'editable',
+        labels: labelsFc.visibility ?? 'editable',
+        teamcityProjectId: teamcityProjectIdFc.visibility ?? 'editable',
+        teamcityProjectUrl: teamcityProjectUrlFc.visibility ?? 'editable',
+      },
+      dirtyFields: {
+        releasesInDefaultBranch: form.formState.dirtyFields.releasesInDefaultBranch === true,
+        solution: form.formState.dirtyFields.solution === true,
+        system: form.formState.dirtyFields.system === true,
+        groupId: form.formState.dirtyFields.groupId === true,
+        teamcityProjects: !!form.formState.dirtyFields.teamcityProjects,
+        docs: !!form.formState.dirtyFields.docs,
+        artifactIds: !!form.formState.dirtyFields.artifactIds,
+      },
+    })
 
     try {
-      await updateMutation.mutateAsync({
-        version: component.version,
-        name: renameField,
-        // displayName: hidden → undefined (no change); otherwise send value or undefined for empty
-        displayName: displayNameFc.visibility === 'hidden' ? undefined : (values.displayName || undefined),
-        // componentOwner: hidden → undefined
-        componentOwner: componentOwnerFc.visibility === 'hidden' ? undefined : (values.componentOwner || undefined),
-        // productType is rendered/saved from EscrowTab; do NOT send it from the General save
-        // system: hidden → undefined (NOT [], which would wipe the server value via JSON merge-patch)
-        system: systemFc.visibility === 'hidden' ? undefined : systemArray,
-        // clientCode: hidden → undefined
-        clientCode: clientCodeFc.visibility === 'hidden' ? undefined : (values.clientCode || undefined),
-        solution: values.solution,
-        archived: archivedChanged ? values.archived : undefined,
-        parentComponentName,
-        // SYS-039: hidden → undefined, blank string → undefined (keep
-        // existing). releasesInDefaultBranch only sent on actual change to
-        // avoid clobbering a stored null with the form's `false` default.
-        groupId: groupIdFc.visibility === 'hidden' ? undefined : (values.groupId || undefined),
-        releaseManager:
-          releaseManagerFc.visibility === 'hidden' ? undefined : (values.releaseManager || undefined),
-        securityChampion:
-          securityChampionFc.visibility === 'hidden' ? undefined : (values.securityChampion || undefined),
-        copyright: copyrightFc.visibility === 'hidden' ? undefined : (values.copyright || undefined),
-        releasesInDefaultBranch:
-          releasesInDefaultBranchFc.visibility === 'hidden' || !releasesInDefaultBranchChanged
-            ? undefined
-            : values.releasesInDefaultBranch,
-        labels: labelsFc.visibility === 'hidden' ? undefined : labelsArray,
-        // labelsArray is already `undefined` when input is blank — see helper above.
-        // TC pair spread — see tcPatch computation above handleSave's try block.
-        ...tcPatch,
-      })
+      await updateMutation.mutateAsync(request)
       toast({ title: 'Component saved', description: 'Changes have been saved successfully.' })
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        // Optimistic-locking conflict (B7.1.6). Two things matter for UX:
-        //   1) The cached ComponentDetail is stale — refetch so the next
-        //      render shows the actual server state. Without this the user could
-        //      keep clicking Save against the same stale @Version and keep getting
-        //      409s.
-        //   2) The toast message names *what* and *when*, where "when" is the
-        //      server's post-conflict updatedAt — i.e. the timestamp of the OTHER
-        //      person's commit. We use refetchQueries here (not invalidateQueries)
-        //      because invalidate only marks the cache stale and resolves once
-        //      the next observer re-subscribes — getQueryData would still see the
-        //      old snapshot. refetchQueries waits for the actual network round-trip
-        //      so getQueryData below sees the new value.
-        await queryClient.refetchQueries({ queryKey: ['component', id ?? ''], type: 'active' })
-        const latest = queryClient.getQueryData<ComponentDetail>(['component', id ?? ''])
-        const { title, description } = describeOptimisticConflict(latest)
-        toast({ title, description, variant: 'destructive' })
+      // Optimistic-locking 409 (B7.1.6) — useOptimisticConflict refetches
+      // the component and returns the toast options; null means "not a 409,
+      // fall through to other branches".
+      const conflict = await handleConflict(err)
+      if (conflict) {
+        toast({ ...conflict, variant: 'destructive' })
         return
       }
       if (err instanceof ApiError && err.status === 400) {
@@ -274,10 +196,10 @@ export function ComponentDetailPage() {
             anyFieldMapped = true
           }
         }
-        // TODO(3.1b): mixed 400 with both GeneralTab and other-tab field
+        // Known gap: mixed 400 with both GeneralTab and other-tab field
         // errors silently drops the non-tab errors here. Acceptable while
-        // CRS update validations don't combine cross-tab violations in one
-        // response; revisit when the shared-error-mapping helper lands.
+        // CRS update validations don't combine cross-tab violations in
+        // one response; revisit when a shared-error-mapping helper lands.
         if (anyFieldMapped) return
         // No field mapped → fall through to generic toast so the error is still surfaced.
       }
@@ -307,7 +229,7 @@ export function ComponentDetailPage() {
   async function handleUnarchive() {
     if (!component) return
     try {
-      await updateMutation.mutateAsync({ version: component.version, archived: false })
+      await updateMutation.mutateAsync({ version: component.version, clearGroup: false, archived: false })
       toast({ title: 'Component unarchived', description: 'The component has been restored.' })
     } catch (err) {
       toast({
@@ -370,32 +292,37 @@ export function ComponentDetailPage() {
               {component.solution && (
                 <Badge variant="outline">Solution</Badge>
               )}
-              {/* Breadcrumb badges: system + build system */}
-              {component.system.length > 0 && (
-                <Badge variant="outline">{component.system[0]}</Badge>
-              )}
-              {component.buildConfigurations[0]?.buildSystem && (
-                <Badge variant="outline">{component.buildConfigurations[0].buildSystem}</Badge>
-              )}
-              {/* Quick-links: Jira (Atlassian) and Bitbucket. aria-label mirrors
-                  the title so screen readers announce the icon-only link's
-                  destination — using brand-specific names so the cue matches
-                  the icon a sighted user sees. Hover affordance is opacity-
-                  based because brand-color SVGs ignore text-color hovers. */}
-              {jiraBaseUrl && component.jiraComponentConfigs[0]?.projectKey && (
-                <a
-                  href={`${jiraBaseUrl}/browse/${component.jiraComponentConfigs[0].projectKey}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-sm hover:opacity-80 transition-opacity"
-                  title={`Jira: ${component.jiraComponentConfigs[0].projectKey}`}
-                  aria-label={`Jira: ${component.jiraComponentConfigs[0].projectKey}`}
-                >
-                  <JiraIcon className="h-4 w-4" />
-                </a>
-              )}
+              {/* Breadcrumb badges: system + build system (schema-v2: read from BASE row). */}
               {(() => {
-                const vcsPath = component.vcsSettings[0]?.entries[0]?.vcsPath
+                const baseRow = selectBaseRow(component)
+                const firstSystem = component.systems?.[0]
+                const buildSystem = baseRow?.build?.buildSystem
+                const jiraProjectKey = baseRow?.jira?.projectKey
+                return (
+                  <>
+                    {firstSystem && <Badge variant="outline">{firstSystem}</Badge>}
+                    {buildSystem && <Badge variant="outline">{buildSystem}</Badge>}
+                    {/* Quick-links: Jira (Atlassian) and Bitbucket. aria-label mirrors
+                        the title so screen readers announce the icon-only link's
+                        destination — using brand-specific names so the cue matches
+                        the icon a sighted user sees. */}
+                    {jiraBaseUrl && jiraProjectKey && (
+                      <a
+                        href={`${jiraBaseUrl}/browse/${jiraProjectKey}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-sm hover:opacity-80 transition-opacity"
+                        title={`Jira: ${jiraProjectKey}`}
+                        aria-label={`Jira: ${jiraProjectKey}`}
+                      >
+                        <JiraIcon className="h-4 w-4" />
+                      </a>
+                    )}
+                  </>
+                )
+              })()}
+              {(() => {
+                const vcsPath = selectBaseRow(component)?.vcsEntries[0]?.vcsPath
                 if (!gitBaseUrl || !vcsPath) return null
                 const slashIdx = vcsPath.indexOf('/')
                 if (slashIdx <= 0 || slashIdx >= vcsPath.length - 1) return null
@@ -422,7 +349,9 @@ export function ComponentDetailPage() {
                   safeHttpUrl allowlists http/https before the URL reaches
                   an <a href> — prevents javascript: or data: URIs. */}
               {(() => {
-                const safeTcUrl = safeHttpUrl(component.teamcityProjectUrl)
+                // schema-v2: TC link moved to component.teamcityProjects[]; surface the first
+                // row (matches ComponentSummaryResponse's derived list-view badge).
+                const safeTcUrl = safeHttpUrl(component.teamcityProjects?.[0]?.projectUrl ?? null)
                 if (!safeTcUrl) return null
                 return (
                   <a
@@ -484,45 +413,44 @@ export function ComponentDetailPage() {
         <Tabs defaultValue="general" variant="underline">
           <TabsList className="flex-wrap gap-1">
             <TabsTrigger value="general">General</TabsTrigger>
-            <TabsTrigger value="build">
-              Build
-              {component.buildConfigurations.length > 0 && (
-                <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 text-xs">
-                  {component.buildConfigurations.length}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="vcs">
-              VCS
-              {component.vcsSettings.length > 0 && (
-                <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 text-xs">
-                  {component.vcsSettings.length}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="distribution">
-              Distribution
-              {component.distributions.length > 0 && (
-                <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 text-xs">
-                  {component.distributions.length}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="jira">
-              Jira
-              {component.jiraComponentConfigs.length > 0 && (
-                <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 text-xs">
-                  {component.jiraComponentConfigs.length}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="escrow">
-              Escrow
-              {component.escrowConfigurations.length > 0 && (
-                <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 text-xs">
-                  {component.escrowConfigurations.length}
-                </span>
-              )}
+            {(() => {
+              // schema-v2: counts derived from the BASE row. Build/Jira/Escrow are
+              // 0-or-1 (presence of the aspect); VCS counts vcsEntries; Distribution
+              // sums the four typed families + component-level securityGroups[].
+              const baseRow = selectBaseRow(component)
+              const vcsCount = baseRow?.vcsEntries.length ?? 0
+              const distCount =
+                (baseRow?.mavenArtifacts.length ?? 0) +
+                (baseRow?.fileUrlArtifacts.length ?? 0) +
+                (baseRow?.dockerImages.length ?? 0) +
+                (baseRow?.packages.length ?? 0)
+              const buildPresent = baseRow?.build ? 1 : 0
+              const jiraPresent = baseRow?.jira ? 1 : 0
+              const escrowPresent = baseRow?.escrow ? 1 : 0
+              const tabBadge = (n: number) =>
+                n > 0 && (
+                  <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 text-xs">
+                    {n}
+                  </span>
+                )
+              return (
+                <>
+                  <TabsTrigger value="build">Build{tabBadge(buildPresent)}</TabsTrigger>
+                  <TabsTrigger value="vcs">VCS{tabBadge(vcsCount)}</TabsTrigger>
+                  <TabsTrigger value="distribution">Distribution{tabBadge(distCount)}</TabsTrigger>
+                  <TabsTrigger value="jira">Jira{tabBadge(jiraPresent)}</TabsTrigger>
+                  <TabsTrigger value="escrow">Escrow{tabBadge(escrowPresent)}</TabsTrigger>
+                </>
+              )
+            })()}
+            <TabsTrigger value="configurations">
+              Configurations
+              {(() => {
+                const n = component.configurations?.length ?? 0
+                return n > 0 && (
+                  <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 text-xs">{n}</span>
+                )
+              })()}
             </TabsTrigger>
             <TabsTrigger value="overrides">Overrides</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
@@ -557,6 +485,10 @@ export function ComponentDetailPage() {
 
             <TabsContent value="escrow">
               <EscrowTab component={component} updateMutation={updateMutation} toast={toast} />
+            </TabsContent>
+
+            <TabsContent value="configurations">
+              <ConfigurationsTab component={component} />
             </TabsContent>
 
             <TabsContent value="overrides">

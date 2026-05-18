@@ -1,23 +1,30 @@
+// Hand-mirrored from the CRS v4 wire contract (see `schema.d.ts` for the
+// generated OpenAPI types). Kept hand-written until the codegen migration
+// retires this file or reduces it to a thin re-export layer; until then
+// this is the source of truth for what crosses the wire and ships with
+// the drift gate in `npm run generate-types:check`.
+
+// ---------------------------------------------------------------------------
+// Component list & detail
+// ---------------------------------------------------------------------------
+
 export interface ComponentSummary {
   id: string
   name: string
   displayName: string | null
   componentOwner: string | null
-  system: string[]
+  systems: string[]
   productType: string | null
   archived: boolean
   updatedAt: string | null
-  // SYS-040 list-view extras (CRS v4 mapper). Null when the source
-  // nested entity is absent or its leaf field is blank.
+  // Required on the wire per ComponentSummaryResponse — server emits []
+  // for empty, never omits the key. Matches ComponentDetail.labels.
+  labels: string[]
+  // SYS-040 list-view extras — derived by the v4 mapper from the BASE
+  // configuration row + first child (sort_order = 0); blank strings normalized to null.
   buildSystem?: string | null
   jiraProjectKey?: string | null
   vcsPath?: string | null
-  labels?: string[]
-  // TC link restoration (CRS PR-2). Optional so the type can ship before the
-  // CRS deploy lands — older responses that omit the fields just leave them
-  // undefined here, and the list/detail views render no TC icon.
-  // - teamcityProjectId: matching key (TC project's id, e.g. "MyProject_Build").
-  // - teamcityProjectUrl: full webUrl as TC returned it; rendered verbatim.
   teamcityProjectId?: string | null
   teamcityProjectUrl?: string | null
 }
@@ -28,107 +35,343 @@ export interface ComponentDetail {
   displayName: string | null
   componentOwner: string | null
   productType: string | null
-  system: string[]
+  systems: string[]
   clientCode: string | null
   archived: boolean
   solution: boolean | null
   parentComponentName: string | null
-  metadata: Record<string, unknown>
   version: number
   createdAt: string | null
   updatedAt: string | null
-  // SYS-039 (CRS PR #163). Optional so the type can ship before the
-  // CRS deploy lands — older responses that omit the fields just leave
-  // them undefined here, and the editor renders empty inputs.
-  groupId?: string | null
+  // SYS-039 retained scalars
+  releaseManager?: string | null
+  securityChampion?: string | null
+  copyright?: string | null
+  releasesInDefaultBranch?: boolean | null
+  labels: string[]
+  // schema-v2 flat per-component scalars
+  jiraDisplayName?: string | null
+  jiraHotfixVersionFormat?: string | null
+  vcsExternalRegistry?: string | null
+  distributionExplicit?: boolean | null
+  distributionExternal?: boolean | null
+  // schema-v2 per-component child rows. The five list fields are required
+  // on the wire (ComponentDetailResponse.required in CRS v4 OpenAPI); the
+  // server emits [] for empty, never omits the key. Treating them as
+  // non-optional here makes a malformed response fail loudly at the call
+  // site instead of silently rendering an empty editor.
+  group?: ComponentGroup | null
+  docs: DocLink[]
+  artifactIds: ArtifactId[]
+  securityGroups: SecurityGroup[]
+  teamcityProjects: TeamcityProject[]
+  // schema-v2 flat configuration rows (one BASE + N override rows)
+  configurations: ComponentConfiguration[]
+}
+
+// ---------------------------------------------------------------------------
+// Configuration rows (BASE + SCALAR_OVERRIDE + MARKER)
+// ---------------------------------------------------------------------------
+
+export type ConfigurationRowType = 'BASE' | 'SCALAR_OVERRIDE' | 'MARKER'
+
+export interface ComponentConfiguration {
+  id: string
+  versionRange: string
+  rowType: ConfigurationRowType
+  overriddenAttribute: string | null
+  isSyntheticBase: boolean
+  build?: BuildAspect | null
+  escrow?: EscrowAspect | null
+  jira?: JiraAspect | null
+  vcsEntries: VcsEntry[]
+  mavenArtifacts: MavenArtifact[]
+  fileUrlArtifacts: FileUrlArtifact[]
+  dockerImages: DockerImage[]
+  packages: PackageEntry[]
+  requiredTools: string[]
+}
+
+// ---------------------------------------------------------------------------
+// Aspects (read shape — same fields are reused for the write shape)
+// ---------------------------------------------------------------------------
+
+export interface BuildAspect {
+  buildSystem?: string | null
+  buildSystemVersion?: string | null
+  javaVersion?: string | null
+  mavenVersion?: string | null
+  gradleVersion?: string | null
+  buildFilePath?: string | null
+  deprecated?: boolean | null
+  requiredProject?: boolean | null
+  projectVersion?: string | null
+  systemProperties?: string | null
+  buildTasks?: string | null
+}
+
+export interface EscrowAspect {
+  providedDependencies?: string | null
+  reusable?: boolean | null
+  generation?: string | null
+  diskSpace?: string | null
+  additionalSources?: string | null
+  gradleIncludeConfigurations?: string | null
+  gradleExcludeConfigurations?: string | null
+  gradleIncludeTestConfigurations?: boolean | null
+}
+
+export interface JiraAspect {
+  projectKey?: string | null
+  technical?: boolean | null
+  majorVersionFormat?: string | null
+  releaseVersionFormat?: string | null
+  buildVersionFormat?: string | null
+  lineVersionFormat?: string | null
+  versionPrefix?: string | null
+  versionFormat?: string | null
+}
+
+// ---------------------------------------------------------------------------
+// Per-family child rows on a configuration row (Response)
+// ---------------------------------------------------------------------------
+
+export interface VcsEntry {
+  id: string
+  name?: string | null
+  vcsPath: string
+  branch?: string | null
+  tag?: string | null
+  hotfixBranch?: string | null
+  repositoryType?: string | null
+  sortOrder: number
+}
+
+export interface MavenArtifact {
+  id: string
+  groupPattern: string
+  artifactPattern: string
+  extension?: string | null
+  classifier?: string | null
+  sortOrder: number
+}
+
+export interface FileUrlArtifact {
+  id: string
+  url: string
+  artifactId?: string | null
+  classifier?: string | null
+  sortOrder: number
+}
+
+export interface DockerImage {
+  id: string
+  imageName: string
+  flavor?: string | null
+  sortOrder: number
+}
+
+// `Package` collides with the built-in DOM/Node `Package` type in some
+// TypeScript lib configurations; aliased to `PackageEntry` to avoid that.
+// On the wire the field is still `packages: PackageResponse`.
+export interface PackageEntry {
+  id: string
+  packageType: string
+  packageName: string
+  sortOrder: number
+}
+
+// ---------------------------------------------------------------------------
+// Per-component child rows (Response)
+// ---------------------------------------------------------------------------
+
+export type ComponentGroupRole = 'AGGREGATOR' | 'MEMBER'
+
+export interface ComponentGroup {
+  groupKey: string
+  isFake: boolean
+  role: ComponentGroupRole
+}
+
+export interface DocLink {
+  id: string
+  docComponentKey: string
+  majorVersion?: string | null
+  sortOrder: number
+}
+
+export interface ArtifactId {
+  id: string
+  groupPattern: string
+  artifactPattern: string
+}
+
+export interface SecurityGroup {
+  id: string
+  groupType: string
+  groupName: string
+}
+
+export interface TeamcityProject {
+  id: string
+  projectId: string
+  projectUrl?: string | null
+  sortOrder: number
+}
+
+// ---------------------------------------------------------------------------
+// Write side — Request shapes (no `id`, no `sortOrder`)
+// ---------------------------------------------------------------------------
+
+export interface VcsEntryRequest {
+  name?: string | null
+  vcsPath: string
+  branch?: string | null
+  tag?: string | null
+  hotfixBranch?: string | null
+  repositoryType?: string | null
+}
+
+export interface MavenArtifactRequest {
+  groupPattern: string
+  artifactPattern: string
+  extension?: string | null
+  classifier?: string | null
+}
+
+export interface FileUrlArtifactRequest {
+  url: string
+  artifactId?: string | null
+  classifier?: string | null
+}
+
+export interface DockerImageRequest {
+  imageName: string
+  flavor?: string | null
+}
+
+export interface PackageRequest {
+  packageType: string
+  packageName: string
+}
+
+export interface ComponentGroupRequest {
+  groupKey: string
+  isFake?: boolean
+}
+
+export interface DocLinkRequest {
+  docComponentKey: string
+  majorVersion?: string | null
+}
+
+export interface ArtifactIdRequest {
+  groupPattern: string
+  artifactPattern: string
+}
+
+export interface SecurityGroupRequest {
+  groupType: string
+  groupName: string
+}
+
+export interface TeamcityProjectRequest {
+  projectId: string
+}
+
+// Patch / create body for the BASE row. `null` scalar fields preserve on
+// update (JSON merge-patch); present child lists REPLACE. On create,
+// `versionRange` defaults server-side to `(,0),[0,)` when missing.
+export interface BaseConfigurationRequest {
+  versionRange?: string | null
+  build?: BuildAspect | null
+  escrow?: EscrowAspect | null
+  jira?: JiraAspect | null
+  vcsEntries?: VcsEntryRequest[] | null
+  mavenArtifacts?: MavenArtifactRequest[] | null
+  fileUrlArtifacts?: FileUrlArtifactRequest[] | null
+  dockerImages?: DockerImageRequest[] | null
+  packages?: PackageRequest[] | null
+  requiredTools?: string[] | null
+}
+
+// ---------------------------------------------------------------------------
+// Component Create / Update request bodies
+// ---------------------------------------------------------------------------
+
+export interface ComponentCreateRequest {
+  name: string
+  displayName?: string | null
+  componentOwner?: string | null
+  productType?: string | null
+  systems?: string[]
+  clientCode?: string | null
+  solution?: boolean | null
+  parentComponentName?: string | null
+  archived?: boolean
   releaseManager?: string | null
   securityChampion?: string | null
   copyright?: string | null
   releasesInDefaultBranch?: boolean | null
   labels?: string[]
-  // TC link restoration (CRS PR-2). See ComponentSummary for shape rationale.
-  teamcityProjectId?: string | null
-  teamcityProjectUrl?: string | null
-  buildConfigurations: BuildConfiguration[]
-  vcsSettings: VcsSettings[]
-  distributions: Distribution[]
-  jiraComponentConfigs: JiraComponentConfig[]
-  escrowConfigurations: EscrowConfiguration[]
-  versions: ComponentVersion[]
+  jiraDisplayName?: string | null
+  jiraHotfixVersionFormat?: string | null
+  vcsExternalRegistry?: string | null
+  distributionExplicit?: boolean | null
+  distributionExternal?: boolean | null
+  group?: ComponentGroupRequest | null
+  docs?: DocLinkRequest[]
+  artifactIds?: ArtifactIdRequest[]
+  securityGroups?: SecurityGroupRequest[]
+  teamcityProjects?: TeamcityProjectRequest[]
+  baseConfiguration?: BaseConfigurationRequest | null
 }
 
-export interface BuildConfiguration {
-  id: string | null
-  buildSystem: string | null
-  buildFilePath: string | null
-  javaVersion: string | null
-  deprecated: boolean
-  metadata: Record<string, unknown>
+// JSON Merge Patch semantics: null scalar = "don't touch"; present collection
+// = REPLACE. `clearGroup` disambiguates "clear group" from "don't touch group"
+// because `group: null` already means the latter.
+export interface ComponentUpdateRequest {
+  version: number
+  name?: string | null
+  displayName?: string | null
+  componentOwner?: string | null
+  productType?: string | null
+  systems?: string[] | null
+  clientCode?: string | null
+  solution?: boolean | null
+  parentComponentName?: string | null
+  archived?: boolean | null
+  releaseManager?: string | null
+  securityChampion?: string | null
+  copyright?: string | null
+  releasesInDefaultBranch?: boolean | null
+  labels?: string[] | null
+  jiraDisplayName?: string | null
+  jiraHotfixVersionFormat?: string | null
+  vcsExternalRegistry?: string | null
+  distributionExplicit?: boolean | null
+  distributionExternal?: boolean | null
+  group?: ComponentGroupRequest | null
+  // Required on the wire (ComponentUpdateRequest.required in CRS v4
+  // OpenAPI). Disambiguates "clear group" (true) from "don't touch" (false)
+  // when `group` is omitted. Every PATCH must send false unless explicitly
+  // clearing — see GeneralTab/ComponentDetailPage save handlers.
+  clearGroup: boolean
+  docs?: DocLinkRequest[] | null
+  artifactIds?: ArtifactIdRequest[] | null
+  securityGroups?: SecurityGroupRequest[] | null
+  teamcityProjects?: TeamcityProjectRequest[] | null
+  baseConfiguration?: BaseConfigurationRequest | null
 }
 
-export interface VcsSettings {
-  id: string | null
-  vcsType: string | null
-  externalRegistry: string | null
-  entries: VcsSettingsEntry[]
-}
-
-export interface VcsSettingsEntry {
-  id: string | null
-  name: string | null
-  vcsPath: string | null
-  repositoryType: string
-  tag: string | null
-  branch: string | null
-}
-
-export interface Distribution {
-  id: string | null
-  explicit: boolean
-  external: boolean
-  artifacts: DistributionArtifact[]
-  securityGroups: DistributionSecurityGroup[]
-}
-
-export interface DistributionArtifact {
-  id: string | null
-  artifactType: string
-  groupPattern: string | null
-  artifactPattern: string | null
-  name: string | null
-  tag: string | null
-}
-
-export interface DistributionSecurityGroup {
-  id: string | null
-  groupType: string
-  groupName: string
-}
-
-export interface JiraComponentConfig {
-  id: string | null
-  projectKey: string | null
-  displayName: string | null
-  componentVersionFormat: Record<string, unknown> | null
-  technical: boolean
-  metadata: Record<string, unknown>
-}
-
-export interface EscrowConfiguration {
-  id: string | null
-  buildTask: string | null
-  providedDependencies: string | null
-  reusable: boolean | null
-  generation: string | null
-  diskSpace: string | null
-}
-
-export interface ComponentVersion {
-  id: string | null
-  versionRange: string
-}
+// ---------------------------------------------------------------------------
+// Filters, paging, audit log
+// ---------------------------------------------------------------------------
 
 export interface ComponentFilter {
+  // Wire query param stays `?system=` (CRS ComponentControllerV4.kt:65 — the
+  // filter param did NOT rename even though the DTO field did). Kept as a
+  // singular field here because the filter UI is single-select.
   system?: string
   productType?: string
   archived?: boolean
@@ -158,20 +401,50 @@ export interface AuditLogEntry {
   action: string
   changedBy: string | null
   changedAt: string
+  // Pre-schema-v2 audit rows carry the OLD DTO shape (`system`, `metadata`,
+  // `buildConfigurations[]`, …) indefinitely; keep these as opaque records
+  // and render them as raw JSON in the diff viewer. Do NOT add typed
+  // field-name resolution here — it would misrender pre-migration entries.
   oldValue: Record<string, unknown> | null
   newValue: Record<string, unknown> | null
   changeDiff: Record<string, unknown> | null
   correlationId: string | null
 }
 
+// ---------------------------------------------------------------------------
+// Field overrides (renamed in schema-v2)
+// ---------------------------------------------------------------------------
+
+// Tagged-union by `overriddenAttribute`:
+//  - scalar override → `value` is a JSON primitive; `markerChildren` is null
+//  - marker override → `markerChildren` carries the replacement child list;
+//    `value` is null. Marker names: `vcs.settings`, `distribution.maven`,
+//    `distribution.fileUrl`, `distribution.docker`, `distribution.packages`,
+//    `build.requiredTools`. NO per-component lists (docs/artifactIds/
+//    securityGroups/teamcityProjects/group) are marker-overridable.
+export interface MarkerChildrenPayload {
+  vcsEntries?: VcsEntryRequest[] | null
+  mavenArtifacts?: MavenArtifactRequest[] | null
+  fileUrlArtifacts?: FileUrlArtifactRequest[] | null
+  dockerImages?: DockerImageRequest[] | null
+  packages?: PackageRequest[] | null
+  requiredTools?: string[] | null
+}
+
 export interface FieldOverride {
   id: string
-  fieldPath: string
+  overriddenAttribute: string
   versionRange: string
-  value: unknown
+  rowType: ConfigurationRowType
+  value?: unknown
+  markerChildren?: MarkerChildrenPayload | null
   createdAt: string | null
   updatedAt: string | null
 }
+
+// ---------------------------------------------------------------------------
+// Portal-side runtime config and info endpoints (unchanged)
+// ---------------------------------------------------------------------------
 
 // /portal/links returns the LinksResponse Kotlin data class directly — flat
 // JSON, not wrapped in a `links` envelope. Each key is optional because
@@ -195,6 +468,11 @@ export interface CrsInfo {
   name: string
   version: string
 }
+
+// ---------------------------------------------------------------------------
+// Migration / async-job envelopes (unchanged by schema-v2; MIG-039 deferred,
+// so POST /admin/migrate currently returns 501 Not Implemented — UI gates that)
+// ---------------------------------------------------------------------------
 
 export interface MigrationStatus {
   git: number
@@ -349,8 +627,8 @@ export interface MigrationConflictResponse {
  *
  * `ambiguous_auto_resolved` is a sub-counter of `updated`+`unchanged`: how
  * many of those rows came from a CDRelease tie-break on a multi-candidate
- * match (introduced by CRS PR #188). Optional in the type because older CRS
- * builds omit the field; the panel falls back to 0 in that case.
+ * match. Optional in the type because older CRS builds omit the field;
+ * the panel falls back to 0 in that case.
  */
 export interface TeamCityResyncResult {
   scanned: number

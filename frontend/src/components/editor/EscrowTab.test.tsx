@@ -5,11 +5,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { EscrowTab } from './EscrowTab'
 import type { ComponentDetail } from '../../lib/types'
 
-// ── Mocks ─────────────────────────────────────────────────────────────────────
-
+// Stub FieldOverrideInline so it doesn't trigger real hook calls in unit tests
 vi.mock('./FieldOverrideInline', () => ({
   FieldOverrideInline: () => null,
 }))
+
+// ── Mocks ─────────────────────────────────────────────────────────────────────
 
 // Control productType visibility per test
 const mockUseFieldConfigEntry = vi.fn()
@@ -38,30 +39,41 @@ function baseComponent(overrides: Partial<ComponentDetail> = {}): ComponentDetai
     displayName: 'My Component',
     componentOwner: 'alice',
     productType: 'TYPE_A',
-    system: [],
+    systems: [],
     clientCode: null,
     solution: false,
     parentComponentName: null,
     archived: false,
-    metadata: {},
     version: 3,
     createdAt: null,
     updatedAt: null,
-    buildConfigurations: [],
-    vcsSettings: [],
-    distributions: [],
-    jiraComponentConfigs: [],
-    escrowConfigurations: [
+    configurations: [
       {
-        id: 'esc-1',
-        buildTask: 'clean install',
-        generation: 'G2',
-        diskSpace: '5GB',
-        reusable: false,
-        providedDependencies: 'dep1, dep2',
+        id: 'cfg-1',
+        versionRange: '(,0),[0,)',
+        rowType: 'BASE',
+        overriddenAttribute: null,
+        isSyntheticBase: false,
+        build: null,
+        escrow: {
+          providedDependencies: 'dep1, dep2',
+          reusable: false,
+          generation: 'G2',
+          diskSpace: '5GB',
+          additionalSources: null,
+          gradleIncludeConfigurations: null,
+          gradleExcludeConfigurations: null,
+          gradleIncludeTestConfigurations: null,
+        },
+        jira: null,
+        vcsEntries: [],
+        mavenArtifacts: [],
+        fileUrlArtifacts: [],
+        dockerImages: [],
+        packages: [],
+        requiredTools: [],
       },
     ],
-    versions: [],
     ...overrides,
   } as ComponentDetail
 }
@@ -133,10 +145,10 @@ describe('EscrowTab productType render (§7.0/2c)', () => {
   })
 })
 
-// ── Save handler: sends productType + escrowConfiguration ─────────────────────
+// ── Save handler: sends productType + baseConfiguration.escrow ────────────────
 
 describe('EscrowTab save handler', () => {
-  it('clicking Save sends both productType (top-level) and escrowConfiguration', async () => {
+  it('clicking Save sends both productType (top-level) and baseConfiguration.escrow', async () => {
     setProductTypeVisibility('editable')
     const mutateAsync = vi.fn().mockResolvedValue({})
     const component = baseComponent({ productType: 'TYPE_B', version: 5 })
@@ -154,8 +166,8 @@ describe('EscrowTab save handler', () => {
     const payload = mutateAsync.mock.calls[0]![0] as any
     expect(payload.version).toBe(5)
     expect(payload.productType).toBe('TYPE_B')
-    expect(payload.escrowConfiguration).toBeDefined()
-    expect(payload.escrowConfiguration.buildTask).toBe('clean install')
+    expect(payload.baseConfiguration).toBeDefined()
+    expect(payload.baseConfiguration.escrow).toBeDefined()
   })
 
   it('hidden productType is NOT included in save payload', async () => {
@@ -173,11 +185,11 @@ describe('EscrowTab save handler', () => {
     const payload = mutateAsync.mock.calls[0]![0] as any
     // hidden → not in payload (undefined key)
     expect(Object.prototype.hasOwnProperty.call(payload, 'productType')).toBe(false)
-    // escrowConfiguration still present
-    expect(payload.escrowConfiguration).toBeDefined()
+    // baseConfiguration.escrow still present
+    expect(payload.baseConfiguration.escrow).toBeDefined()
   })
 
-  it('escrowConfiguration is always sent regardless of productType visibility', async () => {
+  it('baseConfiguration.escrow is always sent regardless of productType visibility', async () => {
     setProductTypeVisibility('hidden')
     const mutateAsync = vi.fn().mockResolvedValue({})
     const component = baseComponent({ productType: 'TYPE_A' })
@@ -189,6 +201,152 @@ describe('EscrowTab save handler', () => {
     await vi.waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce())
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect((mutateAsync.mock.calls[0]![0] as any).escrowConfiguration).toBeDefined()
+    expect((mutateAsync.mock.calls[0]![0] as any).baseConfiguration.escrow).toBeDefined()
+  })
+})
+
+// ── New EscrowAspect fields (Wave B) ─────────────────────────────────────────
+
+describe('EscrowTab new fields render', () => {
+  it('renders Additional Sources input', () => {
+    const component = baseComponent()
+    renderWithProviders(
+      <EscrowTab component={component} updateMutation={makeMutation()} toast={makeToast()} />
+    )
+    expect(screen.getByText(/additional sources/i)).toBeDefined()
+  })
+
+  it('renders Gradle Include Configurations input', () => {
+    const component = baseComponent()
+    renderWithProviders(
+      <EscrowTab component={component} updateMutation={makeMutation()} toast={makeToast()} />
+    )
+    expect(screen.getByText(/gradle include configurations/i)).toBeDefined()
+  })
+
+  it('renders Gradle Exclude Configurations input', () => {
+    const component = baseComponent()
+    renderWithProviders(
+      <EscrowTab component={component} updateMutation={makeMutation()} toast={makeToast()} />
+    )
+    expect(screen.getByText(/gradle exclude configurations/i)).toBeDefined()
+  })
+
+  it('renders Gradle Include Test Configurations switch', () => {
+    const component = baseComponent()
+    renderWithProviders(
+      <EscrowTab component={component} updateMutation={makeMutation()} toast={makeToast()} />
+    )
+    expect(screen.getByText(/gradle include test configurations/i)).toBeDefined()
+    expect(screen.getByRole('switch', { name: /gradle include test configurations/i })).toBeDefined()
+  })
+
+  it('initialises Additional Sources from fixture value', () => {
+    const component = baseComponent()
+    // Override escrow fixture to provide a value
+    component.configurations![0]!.escrow!.additionalSources = 'src/extra'
+    renderWithProviders(
+      <EscrowTab component={component} updateMutation={makeMutation()} toast={makeToast()} />
+    )
+    const input = screen.getByPlaceholderText(/additional source paths/i) as HTMLInputElement
+    expect(input.value).toBe('src/extra')
+  })
+
+  it('initialises gradleIncludeTestConfigurations switch from fixture', () => {
+    const component = baseComponent()
+    component.configurations![0]!.escrow!.gradleIncludeTestConfigurations = true
+    renderWithProviders(
+      <EscrowTab component={component} updateMutation={makeMutation()} toast={makeToast()} />
+    )
+    const sw = screen.getByRole('switch', { name: /gradle include test configurations/i }) as HTMLButtonElement
+    expect(sw.getAttribute('data-state')).toBe('checked')
+  })
+})
+
+describe('EscrowTab new fields save', () => {
+  it('save propagates additionalSources value', async () => {
+    setProductTypeVisibility('hidden')
+    const mutateAsync = vi.fn().mockResolvedValue({})
+    const component = baseComponent()
+    component.configurations![0]!.escrow!.additionalSources = 'src/vendor'
+    renderWithProviders(
+      <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /save escrow/i }))
+    await vi.waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce())
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const escrow = (mutateAsync.mock.calls[0]![0] as any).baseConfiguration.escrow
+    expect(escrow.additionalSources).toBe('src/vendor')
+  })
+
+  it('save sends null for additionalSources when input is blank', async () => {
+    setProductTypeVisibility('hidden')
+    const mutateAsync = vi.fn().mockResolvedValue({})
+    const component = baseComponent()
+    renderWithProviders(
+      <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /save escrow/i }))
+    await vi.waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce())
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const escrow = (mutateAsync.mock.calls[0]![0] as any).baseConfiguration.escrow
+    expect(escrow.additionalSources).toBeNull()
+  })
+
+  it('save propagates gradleIncludeConfigurations value', async () => {
+    setProductTypeVisibility('hidden')
+    const mutateAsync = vi.fn().mockResolvedValue({})
+    const component = baseComponent()
+    component.configurations![0]!.escrow!.gradleIncludeConfigurations = 'compile,runtimeClasspath'
+    renderWithProviders(
+      <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /save escrow/i }))
+    await vi.waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce())
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const escrow = (mutateAsync.mock.calls[0]![0] as any).baseConfiguration.escrow
+    expect(escrow.gradleIncludeConfigurations).toBe('compile,runtimeClasspath')
+  })
+
+  it('save sends null for gradleExcludeConfigurations when blank', async () => {
+    setProductTypeVisibility('hidden')
+    const mutateAsync = vi.fn().mockResolvedValue({})
+    const component = baseComponent()
+    renderWithProviders(
+      <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /save escrow/i }))
+    await vi.waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce())
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const escrow = (mutateAsync.mock.calls[0]![0] as any).baseConfiguration.escrow
+    expect(escrow.gradleExcludeConfigurations).toBeNull()
+  })
+
+  it('Switch toggle flips gradleIncludeTestConfigurations in save payload', async () => {
+    setProductTypeVisibility('hidden')
+    const mutateAsync = vi.fn().mockResolvedValue({})
+    const component = baseComponent()
+    renderWithProviders(
+      <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} />
+    )
+
+    // Default is false (null in fixture → false); toggle to true
+    const sw = screen.getByRole('switch', { name: /gradle include test configurations/i })
+    fireEvent.click(sw)
+
+    fireEvent.click(screen.getByRole('button', { name: /save escrow/i }))
+    await vi.waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce())
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const escrow = (mutateAsync.mock.calls[0]![0] as any).baseConfiguration.escrow
+    expect(escrow.gradleIncludeTestConfigurations).toBe(true)
   })
 })

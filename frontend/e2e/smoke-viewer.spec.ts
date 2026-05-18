@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 
-// Viewer storageState. Has REGISTRY_VIEWER → ACCESS_COMPONENTS + ACCESS_AUDIT.
+// Viewer storageState. Has COMPONENTS_REGISTRY_VIEWER → ACCESS_COMPONENTS + ACCESS_AUDIT.
 // Does NOT have IMPORT_DATA, so /admin must NOT be exercised here — that
 // belongs in smoke-admin.spec.ts under chromium-admin.
 test.describe('Components Management Portal – viewer smoke', () => {

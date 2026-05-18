@@ -1,11 +1,13 @@
-import { useEffect } from 'react'
-import { UseFormReturn } from 'react-hook-form'
+import { useEffect, useMemo } from 'react'
+import { UseFormReturn, useFieldArray } from 'react-hook-form'
+import { Plus, Trash2 } from 'lucide-react'
+import { Badge } from '../ui/badge'
+import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Input } from '../ui/input'
 import { Switch } from '../ui/switch'
 import { PeopleInput } from '../ui/PeopleInput'
 import { ComponentSelect } from '../ui/ComponentSelect'
-import { FieldOverrideInline } from './FieldOverrideInline'
 import type { ComponentDetail } from '../../lib/types'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../../lib/auth'
@@ -37,11 +39,6 @@ export const GENERAL_TAB_FIELDS = [
   'securityChampion',
   'copyright',
   'labels',
-  // TC link restoration — manual override pair. Both render inline error <p>
-  // tags below their inputs, so they belong here for the 400-routing
-  // contract (see ComponentDetailPage.handleSave 400 branch).
-  'teamcityProjectId',
-  'teamcityProjectUrl',
 ] as const
 
 export interface GeneralFormValues {
@@ -64,19 +61,22 @@ export interface GeneralFormValues {
   solution: boolean
   archived: boolean
   parentComponentName: string
-  // SYS-039 (CRS PR #163). labels rendered as comma-separated input
-  // (same convention as `system`); a real chips widget is backlog.
+  // schema-v2: groupId is the user-facing label for component.group.groupKey;
+  // groupIsFake checkboxes the typed ComponentGroupRequest.isFake flag. Blank
+  // groupId + existing component.group → clearGroup:true on save.
   groupId: string
+  groupIsFake: boolean
   releaseManager: string
   securityChampion: string
   copyright: string
   releasesInDefaultBranch: boolean
   labels: string
-  // TC link restoration — manual override pair. Empty string means
-  // "don't touch" at save time (clear-to-null is a documented limitation
-  // of the CRS update path; clear via the admin Resync button).
-  teamcityProjectId: string
-  teamcityProjectUrl: string
+  // schema-v2 per-component child lists. Each list mirrors server state on
+  // mount via useEffect; the save handler maps empty + had-prior → [] (clear),
+  // empty + no-prior → omit (don't touch), non-empty → REPLACE.
+  teamcityProjects: { projectId: string }[]
+  docs: { docComponentKey: string; majorVersion: string }[]
+  artifactIds: { groupPattern: string; artifactPattern: string }[]
 }
 
 interface GeneralTabProps {
@@ -87,6 +87,7 @@ interface GeneralTabProps {
 
 export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) {
   const {
+    control,
     register,
     setValue,
     watch,
@@ -100,6 +101,26 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
   const releaseManager = watch('releaseManager')
   const securityChampion = watch('securityChampion')
   const releasesInDefaultBranch = watch('releasesInDefaultBranch')
+  const groupIsFake = watch('groupIsFake')
+
+  // schema-v2 list editors. useFieldArray provides stable `id` keys so row
+  // re-renders don't blow away focus on text inputs.
+  const tcFieldArray = useFieldArray({ control, name: 'teamcityProjects' })
+  const docsFieldArray = useFieldArray({ control, name: 'docs' })
+  const artifactIdsFieldArray = useFieldArray({ control, name: 'artifactIds' })
+
+  // Map projectId → server-side projectUrl so the per-row URL display stays
+  // correct after the user reorders or removes rows. The previous index-based
+  // lookup against component.teamcityProjects desynchronised once useFieldArray
+  // shuffled indices.
+  const tcUrlByProjectId = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const tc of component.teamcityProjects ?? []) {
+      if (tc.projectId && tc.projectUrl) m.set(tc.projectId, tc.projectUrl)
+    }
+    return m
+  }, [component.teamcityProjects])
+  const watchedTcProjects = watch('teamcityProjects')
 
   // RENAME_COMPONENTS gates the Name input on the edit surface. The same
   // permission is enforced server-side in ComponentControllerV4's PATCH SpEL
@@ -114,7 +135,7 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
   // Field-config visibility entries — section-prefixed paths per ADR-011
   const { entry: displayNameEntry } = useFieldConfigEntry('component.displayName')
   const { entry: componentOwnerEntry } = useFieldConfigEntry('component.componentOwner')
-  const { entry: systemEntry } = useFieldConfigEntry('component.system')
+  const { entry: systemEntry } = useFieldConfigEntry('component.systems')
   const { entry: clientCodeEntry } = useFieldConfigEntry('component.clientCode')
   // SYS-039 fields
   const { entry: groupIdEntry } = useFieldConfigEntry('component.groupId')
@@ -139,22 +160,42 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
     setValue('displayName', component.displayName ?? '')
     setValue('componentOwner', component.componentOwner ?? '')
     setValue('productType', component.productType ?? '')
-    setValue('system', component.system.join(', '))
+    setValue('system', (component.systems ?? []).join(', '))
     setValue('clientCode', component.clientCode ?? '')
     setValue('solution', component.solution ?? false)
     setValue('archived', component.archived)
     setValue('parentComponentName', component.parentComponentName ?? '')
-    // SYS-039
-    setValue('groupId', component.groupId ?? '')
+    // schema-v2: groupId is the typed component.group.groupKey; isFake mirrors
+    // ComponentGroup.isFake. The component.group.role is server-derived
+    // (AGGREGATOR | MEMBER) and rendered as a readonly badge — it never enters
+    // the form.
+    setValue('groupId', component.group?.groupKey ?? '')
+    setValue('groupIsFake', component.group?.isFake ?? false)
     setValue('releaseManager', component.releaseManager ?? '')
     setValue('securityChampion', component.securityChampion ?? '')
     setValue('copyright', component.copyright ?? '')
     setValue('releasesInDefaultBranch', component.releasesInDefaultBranch ?? false)
     setValue('labels', (component.labels ?? []).join(', '))
-    // TC link restoration — populate from server. Null/undefined → empty
-    // string so the input renders blank rather than the literal "null".
-    setValue('teamcityProjectId', component.teamcityProjectId ?? '')
-    setValue('teamcityProjectUrl', component.teamcityProjectUrl ?? '')
+    // schema-v2 lists. setValue replaces the array wholesale; useFieldArray
+    // picks up the new keys on the next render.
+    setValue(
+      'teamcityProjects',
+      (component.teamcityProjects ?? []).map((tc) => ({ projectId: tc.projectId })),
+    )
+    setValue(
+      'docs',
+      (component.docs ?? []).map((d) => ({
+        docComponentKey: d.docComponentKey,
+        majorVersion: d.majorVersion ?? '',
+      })),
+    )
+    setValue(
+      'artifactIds',
+      (component.artifactIds ?? []).map((a) => ({
+        groupPattern: a.groupPattern,
+        artifactPattern: a.artifactPattern,
+      })),
+    )
   }, [component, setValue])
 
   return (
@@ -168,7 +209,7 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
               server enforces RENAME_COMPONENTS only on PATCH; POST permits
               anything the EDIT_COMPONENTS holder can name. */}
           <div className="space-y-1.5">
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor="name">Component Key</Label>
             <Input
               id="name"
               placeholder="my-component"
@@ -188,7 +229,7 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
             {!errors.name && !isNew && canRename && (
               <p className="text-xs text-muted-foreground">
                 Renaming changes the canonical identifier — every legacy v1/v2/v3 lookup
-                by old name will resolve to the renamed component.
+                by old key will resolve to the renamed component.
               </p>
             )}
           </div>
@@ -232,10 +273,13 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
             )}
           </div>
 
-          {/* groupId — SYS-039 (Maven groupId) */}
+          {/* schema-v2 group editor — typed ComponentGroup row.
+              groupId = group.groupKey; isFake = group.isFake; role is
+              server-derived (AGGREGATOR | MEMBER) and displayed as a readonly
+              badge so the user can see the resolved role without editing. */}
           {groupIdEntry.visibility !== 'hidden' && (
             <div className="space-y-1.5">
-              <Label htmlFor="groupId">Group ID</Label>
+              <Label htmlFor="groupId">Group Key</Label>
               <Input
                 id="groupId"
                 placeholder="org.example.product"
@@ -246,6 +290,18 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
               {errors.groupId && (
                 <p className="text-xs text-destructive">{errors.groupId.message}</p>
               )}
+              <div className="flex items-center gap-3 pt-1">
+                <Switch
+                  id="groupIsFake"
+                  checked={groupIsFake}
+                  disabled={groupIdEntry.visibility === 'readonly'}
+                  onCheckedChange={(checked) => setValue('groupIsFake', checked, { shouldDirty: true })}
+                />
+                <Label htmlFor="groupIsFake" className="cursor-pointer text-xs">Synthetic group (isFake)</Label>
+                {component.group?.role && (
+                  <Badge variant="outline" className="text-xs">{component.group.role}</Badge>
+                )}
+              </div>
             </div>
           )}
 
@@ -254,7 +310,11 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
             <Switch
               id="solution"
               checked={solution}
-              onCheckedChange={(checked) => setValue('solution', checked)}
+              // shouldDirty:true so the page-level handleSave's
+              // dirtyFields.solution gate actually fires. Without this the
+              // boolean is set on the form but never marked dirty, and the
+              // save handler omits the field every time.
+              onCheckedChange={(checked) => setValue('solution', checked, { shouldDirty: true })}
             />
             <Label htmlFor="solution" className="cursor-pointer">Solution</Label>
           </div>
@@ -306,7 +366,6 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                 {errors.componentOwner && (
                   <p className="text-xs text-destructive">{errors.componentOwner.message}</p>
                 )}
-                <FieldOverrideInline componentId={component.id} fieldPath="componentOwner" />
               </div>
             )}
 
@@ -385,7 +444,6 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                 ) : (
                   <p className="text-xs text-muted-foreground">Comma-separated list of systems.</p>
                 )}
-                <FieldOverrideInline componentId={component.id} fieldPath="system" />
               </div>
             )}
 
@@ -403,7 +461,6 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                 {errors.clientCode && (
                   <p className="text-xs text-destructive">{errors.clientCode.message}</p>
                 )}
-                <FieldOverrideInline componentId={component.id} fieldPath="clientCode" />
               </div>
             )}
 
@@ -447,60 +504,154 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
         </section>
       )}
 
-      {/* ── TeamCity ──────────────────────────────────────────────────────────
-          Manual override pair. Both fields are field-config-gated so admins
-          can hide them from non-admin editors. CRS resync rewrites these
-          from TC project params on demand; manual edit here lets ops fix a
-          one-off mismatch. Clearing both back to null is not supported via
-          this UI (admin clears via the Resync button — see plan B3 (a)). */}
+      {/* ── TeamCity Projects ─────────────────────────────────────────────────
+          schema-v2 list editor. The URL column is server-derived (CRS resync
+          fills it from TC project params); the portal can only supply the
+          projectId. Empty list + had-prior server data → save sends `[]`
+          (REPLACE clear). Empty list + no prior → omit (don't touch). The
+          legacy `teamcityProjectId`/`teamcityProjectUrl` FC entries gate
+          section visibility — either hidden → section absent. */}
       {(teamcityProjectIdEntry.visibility !== 'hidden' &&
         teamcityProjectUrlEntry.visibility !== 'hidden') && (
         <section data-testid="section-teamcity">
-          <h3 className="text-sm font-medium text-muted-foreground mb-3">TeamCity</h3>
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            {/* Both fields are guaranteed non-hidden by the outer && guard. */}
-            <div className="space-y-1.5">
-              <Label htmlFor="teamcityProjectId">TC Project ID</Label>
-              <Input
-                id="teamcityProjectId"
-                placeholder="MyProject_Build"
-                disabled={teamcityProjectIdEntry.visibility === 'readonly'}
-                className={
-                  teamcityProjectIdEntry.visibility === 'readonly' ? 'bg-muted' : undefined
-                }
-                {...register('teamcityProjectId')}
-              />
-              {errors.teamcityProjectId ? (
-                <p className="text-xs text-destructive">{errors.teamcityProjectId.message}</p>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  Matching key (TC project id). Resync overwrites from TC params.
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="teamcityProjectUrl">TC Project URL</Label>
-              <Input
-                id="teamcityProjectUrl"
-                placeholder="https://teamcity.example.com/project/MyProject_Build"
-                disabled={teamcityProjectUrlEntry.visibility === 'readonly'}
-                className={
-                  teamcityProjectUrlEntry.visibility === 'readonly' ? 'bg-muted' : undefined
-                }
-                {...register('teamcityProjectUrl')}
-              />
-              {errors.teamcityProjectUrl ? (
-                <p className="text-xs text-destructive">{errors.teamcityProjectUrl.message}</p>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  Display URL rendered as-is in the quick-link icon.
-                </p>
-              )}
-            </div>
+          <h3 className="text-sm font-medium text-muted-foreground mb-3">TeamCity Projects</h3>
+          <div className="space-y-2">
+            {tcFieldArray.fields.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No TeamCity projects configured.</p>
+            ) : (
+              tcFieldArray.fields.map((field, index) => {
+                const currentProjectId = watchedTcProjects?.[index]?.projectId
+                const serverUrl = currentProjectId ? tcUrlByProjectId.get(currentProjectId) : undefined
+                return (
+                  <div key={field.id} className="flex items-start gap-2">
+                    <div className="flex-1 space-y-1">
+                      <Input
+                        placeholder="MyProject_Build"
+                        disabled={teamcityProjectIdEntry.visibility === 'readonly'}
+                        aria-label={`TC project ID (row ${index + 1})`}
+                        {...register(`teamcityProjects.${index}.projectId` as const)}
+                      />
+                      {serverUrl && (
+                        <p className="text-xs text-muted-foreground truncate">URL: {serverUrl}</p>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 text-destructive"
+                      disabled={teamcityProjectIdEntry.visibility === 'readonly'}
+                      onClick={() => tcFieldArray.remove(index)}
+                      aria-label="Remove TC project"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )
+              })
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={teamcityProjectIdEntry.visibility === 'readonly'}
+              onClick={() => tcFieldArray.append({ projectId: '' })}
+            >
+              <Plus className="h-4 w-4" />
+              Add TC project
+            </Button>
           </div>
         </section>
       )}
+
+      {/* ── References (Doc Links + Artifact IDs) ─────────────────────────────
+          Both are per-component child lists introduced by schema-v2. No
+          field-config gates today; full visibility for all editors. */}
+      <section data-testid="section-references">
+        <h3 className="text-sm font-medium text-muted-foreground mb-3">Doc Links</h3>
+        <div className="space-y-2">
+          {docsFieldArray.fields.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No documentation links configured.</p>
+          ) : (
+            docsFieldArray.fields.map((field, index) => (
+              <div key={field.id} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                <Input
+                  placeholder="docs-component-key"
+                  aria-label={`Doc link component key (row ${index + 1})`}
+                  {...register(`docs.${index}.docComponentKey` as const)}
+                />
+                <Input
+                  placeholder="majorVersion (e.g. 3.x)"
+                  aria-label={`Doc link major version (row ${index + 1})`}
+                  {...register(`docs.${index}.majorVersion` as const)}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 text-destructive"
+                  onClick={() => docsFieldArray.remove(index)}
+                  aria-label="Remove doc link"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => docsFieldArray.append({ docComponentKey: '', majorVersion: '' })}
+          >
+            <Plus className="h-4 w-4" />
+            Add doc link
+          </Button>
+        </div>
+      </section>
+
+      <section data-testid="section-artifact-ids">
+        <h3 className="text-sm font-medium text-muted-foreground mb-3">Artifact IDs</h3>
+        <div className="space-y-2">
+          {artifactIdsFieldArray.fields.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No artifact IDs configured.</p>
+          ) : (
+            artifactIdsFieldArray.fields.map((field, index) => (
+              <div key={field.id} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                <Input
+                  placeholder="org.example.alpha"
+                  aria-label={`Artifact ID group pattern (row ${index + 1})`}
+                  {...register(`artifactIds.${index}.groupPattern` as const)}
+                />
+                <Input
+                  placeholder="my-component-*"
+                  aria-label={`Artifact ID artifact pattern (row ${index + 1})`}
+                  {...register(`artifactIds.${index}.artifactPattern` as const)}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 text-destructive"
+                  onClick={() => artifactIdsFieldArray.remove(index)}
+                  aria-label="Remove artifact ID"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => artifactIdsFieldArray.append({ groupPattern: '', artifactPattern: '' })}
+          >
+            <Plus className="h-4 w-4" />
+            Add artifact ID
+          </Button>
+        </div>
+      </section>
 
       {component.createdAt && (
         <div className="flex gap-6 text-xs text-muted-foreground">

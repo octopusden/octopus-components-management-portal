@@ -171,9 +171,9 @@ export function TeamCityResyncPanel() {
         <div className="space-y-3">
           {/*
            * 7 tiles: 3-up on phones, 4-up on tablets (so 7 wraps as 4+3),
-           * 7-up on desktop. The new "Auto-resolved" sits next to "Ambiguous"
-           * because it's a sub-counter that explains how the auto tie-break
-           * is performing on multi-candidate matches (CRS PR #188).
+           * 7-up on desktop. "Auto-resolved" sits next to "Ambiguous"
+           * because it's a sub-counter explaining how the CDRelease
+           * tie-break is performing on multi-candidate matches.
            */}
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-7">
             <StatCard label="Scanned" value={result.scanned} />

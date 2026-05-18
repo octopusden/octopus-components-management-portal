@@ -30,8 +30,8 @@ import { ApiError } from '../lib/api'
 const createSchema = z.object({
   name: z
     .string()
-    .min(1, 'Name is required')
-    .regex(/^[a-zA-Z0-9_\-./]+$/, 'Name can only contain letters, digits, _, -, ., /'),
+    .min(1, 'Component Key is required')
+    .regex(/^[a-zA-Z0-9_\-./]+$/, 'Component Key can only contain letters, digits, _, -, ., /'),
   displayName: z.string().optional(),
   componentOwner: z.string().optional(),
   productType: z.string().optional(),
@@ -88,7 +88,7 @@ export function CreateComponentDialog({ open, onOpenChange }: CreateComponentDia
         displayName: values.displayName || undefined,
         componentOwner: values.componentOwner || undefined,
         productType: (productType && productType !== '__none__') ? productType : undefined,
-        system: systemArray.length > 0 ? systemArray : undefined,
+        systems: systemArray.length > 0 ? systemArray : undefined,
       })
       toast({ title: 'Component created', description: `"${component.name}" was created.` })
       handleOpenChange(false)
@@ -112,14 +112,15 @@ export function CreateComponentDialog({ open, onOpenChange }: CreateComponentDia
         <DialogHeader>
           <DialogTitle>Create Component</DialogTitle>
           <DialogDescription>
-            Add a new component to the registry. The name cannot be changed after creation.
+            Add a new component to the registry. Renaming the component key
+            later requires the Rename Components permission.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="create-name">
-              Name <span className="text-destructive">*</span>
+              Component Key <span className="text-destructive">*</span>
             </Label>
             <Input
               id="create-name"

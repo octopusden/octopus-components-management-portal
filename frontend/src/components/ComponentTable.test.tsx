@@ -36,10 +36,11 @@ function makeComponent(overrides: Partial<ComponentSummary> = {}): ComponentSumm
     name: 'my-component',
     displayName: null,
     componentOwner: null,
-    system: [],
+    systems: [],
     productType: null,
     archived: false,
     updatedAt: null,
+    labels: [],
     ...overrides,
   }
 }
@@ -74,9 +75,9 @@ describe('ComponentTable', () => {
     mockLinks(null)
   })
 
-  it('renders the Name column header', () => {
+  it('renders the Component Key column header', () => {
     renderTable([makeComponent()])
-    expect(screen.getByRole('button', { name: /name/i })).toBeDefined()
+    expect(screen.getByRole('button', { name: /component key/i })).toBeDefined()
   })
 
   it('does not render a standalone Display Name column header', () => {
@@ -115,7 +116,7 @@ describe('ComponentTable', () => {
 
   describe('SYS-040 — list view column scope', () => {
     it('does not render a System column', () => {
-      renderTable([makeComponent({ system: ['CLASSIC'] })])
+      renderTable([makeComponent({ systems: ['CLASSIC'] })])
       expect(screen.queryByRole('columnheader', { name: 'System' })).toBeNull()
     })
 
@@ -154,12 +155,10 @@ describe('ComponentTable', () => {
       expect(screen.getByRole('columnheader', { name: 'Labels' })).toBeDefined()
     })
 
-    it('renders em-dash when labels is undefined', () => {
-      renderTable([makeComponent()])
-      expect(cellForColumn('Labels').textContent).toContain('—')
-    })
-
     it('renders em-dash when labels is an empty array', () => {
+      // labels is required on the wire (`ComponentSummaryResponse.labels`);
+      // server emits [] for the empty case, never omits the key. Renders
+      // an em-dash placeholder so the column doesn't look broken.
       renderTable([makeComponent({ labels: [] })])
       expect(cellForColumn('Labels').textContent).toContain('—')
     })

@@ -23,7 +23,7 @@ interface DefaultsData {
   componentOwner?: string
   releaseManager?: string
   securityChampion?: string
-  system?: string
+  systems?: string
   clientCode?: string
   parentComponent?: string
   releasesInDefaultBranch?: boolean
@@ -238,8 +238,8 @@ export function ComponentDefaultsForm() {
               <FieldInput label="Security Champion">
                 <Input value={defaults.securityChampion ?? ''} onChange={(e) => setField('securityChampion', e.target.value || undefined)} />
               </FieldInput>
-              <FieldInput label="System">
-                <Input value={defaults.system ?? ''} onChange={(e) => setField('system', e.target.value || undefined)} />
+              <FieldInput label="Systems">
+                <Input value={defaults.systems ?? ''} onChange={(e) => setField('systems', e.target.value || undefined)} />
               </FieldInput>
               <FieldInput label="Client Code">
                 <Input value={defaults.clientCode ?? ''} onChange={(e) => setField('clientCode', e.target.value || undefined)} />

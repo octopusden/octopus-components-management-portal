@@ -2,23 +2,39 @@ import { useState } from 'react'
 import { Plus, X, Pencil, Check } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
+import { Switch } from '../ui/switch'
 import { Badge } from '../ui/badge'
 import { useFieldOverrides, useCreateFieldOverride, useUpdateFieldOverride, useDeleteFieldOverride } from '../../hooks/useComponent'
 import { formatVersionRange, isValidVersionRange } from '../../lib/versionRange'
 import type { FieldOverride } from '../../lib/types'
 
+// Scalar override paths whose column type is boolean (from CRS
+// ConfigurationRowAccessors.kt). For these the inline editor must dispatch
+// to a Switch and parse the value to a JSON boolean before sending, otherwise
+// the server stores "true"/"false" as strings (the Kotlin column accessor
+// uses requireBoolean which would 400 on a string value, OR for the typed
+// fields receive the string and fail at the JPA level).
+const BOOLEAN_OVERRIDE_PATHS = new Set([
+  'build.deprecated',
+  'build.requiredProject',
+  'escrow.reusable',
+  'escrow.gradleIncludeTestConfigurations',
+  'jira.technical',
+])
+
 interface FieldOverrideInlineProps {
   componentId: string
-  fieldPath: string
+  overriddenAttribute: string
 }
 
-export function FieldOverrideInline({ componentId, fieldPath }: FieldOverrideInlineProps) {
+export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldOverrideInlineProps) {
   const { data: allOverrides = [] } = useFieldOverrides(componentId)
   const createMutation = useCreateFieldOverride(componentId)
   const updateMutation = useUpdateFieldOverride(componentId)
   const deleteMutation = useDeleteFieldOverride(componentId)
 
-  const overrides = allOverrides.filter((o) => o.fieldPath === fieldPath)
+  const overrides = allOverrides.filter((o) => o.overriddenAttribute === overriddenAttribute)
+  const isBoolean = BOOLEAN_OVERRIDE_PATHS.has(overriddenAttribute)
 
   const [adding, setAdding] = useState(false)
   const [newRange, setNewRange] = useState('(,)')
@@ -28,9 +44,19 @@ export function FieldOverrideInline({ componentId, fieldPath }: FieldOverrideInl
   const [editValue, setEditValue] = useState('')
 
   function handleAdd() {
-    if (!isValidVersionRange(newRange) || !newValue.trim()) return
+    if (!isValidVersionRange(newRange)) return
+    // Boolean paths: send the JSON primitive `true` / `false`; the local string
+    // state is `"true"` / `"false"` driven by the Switch. String paths: trim
+    // and reject empty (preserves the prior validation).
+    let wireValue: unknown
+    if (isBoolean) {
+      wireValue = newValue === 'true'
+    } else {
+      if (!newValue.trim()) return
+      wireValue = newValue
+    }
     createMutation.mutate(
-      { fieldPath, versionRange: newRange, value: newValue },
+      { overriddenAttribute, versionRange: newRange, value: wireValue },
       {
         onSuccess: () => {
           setAdding(false)
@@ -44,13 +70,20 @@ export function FieldOverrideInline({ componentId, fieldPath }: FieldOverrideInl
   function startEdit(override: FieldOverride) {
     setEditingId(override.id)
     setEditRange(override.versionRange)
-    setEditValue(String(override.value ?? ''))
+    // Boolean paths: convert the JSON boolean back to the canonical
+    // "true" / "false" string state used by the Switch.
+    if (isBoolean) {
+      setEditValue(override.value === true ? 'true' : 'false')
+    } else {
+      setEditValue(String(override.value ?? ''))
+    }
   }
 
   function handleUpdate() {
     if (!editingId || !isValidVersionRange(editRange)) return
+    const wireValue: unknown = isBoolean ? editValue === 'true' : editValue
     updateMutation.mutate(
-      { overrideId: editingId, versionRange: editRange, value: editValue },
+      { overrideId: editingId, versionRange: editRange, value: wireValue },
       { onSuccess: () => setEditingId(null) },
     )
   }
@@ -83,12 +116,22 @@ export function FieldOverrideInline({ componentId, fieldPath }: FieldOverrideInl
                 onChange={(e) => setEditRange(e.target.value)}
                 className="h-6 w-24 text-xs font-mono px-1"
                 placeholder="(,)"
+                aria-label={`Override version range for ${overriddenAttribute}`}
               />
-              <Input
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
-                className="h-6 flex-1 text-xs px-1"
-              />
+              {isBoolean ? (
+                <Switch
+                  checked={editValue === 'true'}
+                  onCheckedChange={(c) => setEditValue(c ? 'true' : 'false')}
+                  aria-label={`Override value for ${overriddenAttribute}`}
+                />
+              ) : (
+                <Input
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  className="h-6 flex-1 text-xs px-1"
+                  aria-label={`Override value for ${overriddenAttribute}`}
+                />
+              )}
               <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleUpdate} disabled={updateMutation.isPending}>
                 <Check className="h-3 w-3" />
               </Button>
@@ -130,13 +173,23 @@ export function FieldOverrideInline({ componentId, fieldPath }: FieldOverrideInl
             className="h-6 w-24 text-xs font-mono px-1"
             placeholder="(,)"
             autoFocus
+            aria-label={`New override version range for ${overriddenAttribute}`}
           />
-          <Input
-            value={newValue}
-            onChange={(e) => setNewValue(e.target.value)}
-            className="h-6 flex-1 text-xs px-1"
-            placeholder="Override value"
-          />
+          {isBoolean ? (
+            <Switch
+              checked={newValue === 'true'}
+              onCheckedChange={(c) => setNewValue(c ? 'true' : 'false')}
+              aria-label={`New override value for ${overriddenAttribute}`}
+            />
+          ) : (
+            <Input
+              value={newValue}
+              onChange={(e) => setNewValue(e.target.value)}
+              className="h-6 flex-1 text-xs px-1"
+              placeholder="Override value"
+              aria-label={`New override value for ${overriddenAttribute}`}
+            />
+          )}
           <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleAdd} disabled={createMutation.isPending}>
             <Check className="h-3 w-3" />
           </Button>

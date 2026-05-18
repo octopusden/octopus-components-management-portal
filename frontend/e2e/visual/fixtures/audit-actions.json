@@ -19,8 +19,8 @@
       "action": "UPDATE",
       "changedBy": "bob",
       "changedAt": "2026-01-02T10:00:00Z",
-      "oldValue": { "system": ["A"] },
-      "newValue": { "system": ["B"] },
+      "oldValue": { "systems": ["A"] },
+      "newValue": { "systems": ["B"] },
       "changeDiff": null,
       "correlationId": "corr-update-02"
     },

@@ -5,7 +5,7 @@
       "name": "alpha",
       "displayName": "Alpha Service",
       "componentOwner": "alice",
-      "system": ["CLASSIC"],
+      "systems": ["CLASSIC"],
       "productType": "TYPE_A",
       "archived": false,
       "updatedAt": "2026-01-15T10:00:00Z"
@@ -15,7 +15,7 @@
       "name": "beta",
       "displayName": "Beta Module",
       "componentOwner": "bob",
-      "system": ["CLASSIC"],
+      "systems": ["CLASSIC"],
       "productType": "TYPE_B",
       "archived": false,
       "updatedAt": "2026-01-16T10:00:00Z"
@@ -25,7 +25,7 @@
       "name": "legacy-archived",
       "displayName": "Legacy Component",
       "componentOwner": "carol",
-      "system": ["CLASSIC"],
+      "systems": ["CLASSIC"],
       "productType": "TYPE_C",
       "archived": true,
       "updatedAt": "2025-06-01T10:00:00Z"

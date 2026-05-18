@@ -9,8 +9,9 @@ import { FieldOverrideInline } from './FieldOverrideInline'
 import type { ComponentDetail } from '../../lib/types'
 import type { ComponentUpdateRequest } from '../../hooks/useComponent'
 import type { UseMutationResult } from '@tanstack/react-query'
-import { ApiError } from '../../lib/api'
+import { useOptimisticConflict } from '../../hooks/useOptimisticConflict'
 import { useFieldConfigEntry } from '../../hooks/useFieldConfig'
+import { selectBaseRow } from '../../lib/api/baseRow'
 
 interface EscrowTabProps {
   component: ComponentDetail
@@ -19,7 +20,9 @@ interface EscrowTabProps {
 }
 
 export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) {
-  const esc = component.escrowConfigurations[0]
+  const handleConflict = useOptimisticConflict(component.id)
+  const baseRow = selectBaseRow(component)
+  const escrow = baseRow?.escrow
 
   // productType migrated here from GeneralTab (§7.0/2c).
   // Semantic: product-line classifier (values configured via FieldConfig options) used for
@@ -28,43 +31,56 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
   const { entry: productTypeEntry } = useFieldConfigEntry('component.productType')
   const [productType, setProductType] = useState(component.productType ?? '')
 
-  const [buildTask, setBuildTask] = useState(esc?.buildTask ?? '')
-  const [generation, setGeneration] = useState(esc?.generation ?? '')
-  const [diskSpace, setDiskSpace] = useState(esc?.diskSpace ?? '')
-  const [reusable, setReusable] = useState(esc?.reusable ?? false)
-  const [providedDependencies, setProvidedDependencies] = useState(esc?.providedDependencies ?? '')
+  const [generation, setGeneration] = useState(escrow?.generation ?? '')
+  const [diskSpace, setDiskSpace] = useState(escrow?.diskSpace ?? '')
+  const [reusable, setReusable] = useState(escrow?.reusable ?? false)
+  const [providedDependencies, setProvidedDependencies] = useState(escrow?.providedDependencies ?? '')
+  const [additionalSources, setAdditionalSources] = useState(escrow?.additionalSources ?? '')
+  const [gradleIncludeConfigurations, setGradleIncludeConfigurations] = useState(escrow?.gradleIncludeConfigurations ?? '')
+  const [gradleExcludeConfigurations, setGradleExcludeConfigurations] = useState(escrow?.gradleExcludeConfigurations ?? '')
+  const [gradleIncludeTestConfigurations, setGradleIncludeTestConfigurations] = useState(escrow?.gradleIncludeTestConfigurations ?? false)
 
   useEffect(() => {
-    const e = component.escrowConfigurations[0]
+    const e = selectBaseRow(component)?.escrow
     setProductType(component.productType ?? '')
-    setBuildTask(e?.buildTask ?? '')
     setGeneration(e?.generation ?? '')
     setDiskSpace(e?.diskSpace ?? '')
     setReusable(e?.reusable ?? false)
     setProvidedDependencies(e?.providedDependencies ?? '')
+    setAdditionalSources(e?.additionalSources ?? '')
+    setGradleIncludeConfigurations(e?.gradleIncludeConfigurations ?? '')
+    setGradleExcludeConfigurations(e?.gradleExcludeConfigurations ?? '')
+    setGradleIncludeTestConfigurations(e?.gradleIncludeTestConfigurations ?? false)
   }, [component])
 
   async function handleSave() {
     try {
       await updateMutation.mutateAsync({
         version: component.version,
+        clearGroup: false,
         // productType: hidden → don't include (undefined = no change);
         // editable/readonly → send only when a value is present.
         ...(productTypeEntry.visibility !== 'hidden' && productType
           ? { productType }
           : {}),
-        escrowConfiguration: {
-          buildTask: buildTask || undefined,
-          generation: generation || undefined,
-          diskSpace: diskSpace || undefined,
-          reusable,
-          providedDependencies: providedDependencies || undefined,
+        baseConfiguration: {
+          escrow: {
+            providedDependencies: providedDependencies || null,
+            reusable,
+            generation: generation || null,
+            diskSpace: diskSpace || null,
+            additionalSources: additionalSources || null,
+            gradleIncludeConfigurations: gradleIncludeConfigurations || null,
+            gradleExcludeConfigurations: gradleExcludeConfigurations || null,
+            gradleIncludeTestConfigurations,
+          },
         },
       })
       toast({ title: 'Escrow configuration saved' })
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        toast({ title: 'Conflict', description: 'Please refresh and try again.', variant: 'destructive' })
+      const conflict = await handleConflict(err)
+      if (conflict) {
+        toast({ ...conflict, variant: 'destructive' })
         return
       }
       toast({ title: 'Save failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' })
@@ -87,16 +103,6 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
             />
           </div>
         )}
-
-        <div className="space-y-1.5">
-          <Label>Build Task</Label>
-          <Input
-            value={buildTask}
-            onChange={(e) => setBuildTask(e.target.value)}
-            placeholder="clean install"
-          />
-          <FieldOverrideInline componentId={component.id} fieldPath="escrow.buildTask" />
-        </div>
 
         <div className="space-y-1.5">
           <Label>Generation</Label>
@@ -136,6 +142,48 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
           spellCheck={false}
           placeholder="Comma-separated list of provided dependencies"
         />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Additional Sources</Label>
+        <Input
+          value={additionalSources}
+          onChange={(e) => setAdditionalSources(e.target.value)}
+          placeholder="Additional source paths"
+        />
+        <FieldOverrideInline componentId={component.id} overriddenAttribute="escrow.additionalSources" />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label>Gradle Include Configurations</Label>
+          <Input
+            value={gradleIncludeConfigurations}
+            onChange={(e) => setGradleIncludeConfigurations(e.target.value)}
+            placeholder="e.g. compile,runtimeClasspath"
+          />
+          <FieldOverrideInline componentId={component.id} overriddenAttribute="escrow.gradleIncludeConfigurations" />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>Gradle Exclude Configurations</Label>
+          <Input
+            value={gradleExcludeConfigurations}
+            onChange={(e) => setGradleExcludeConfigurations(e.target.value)}
+            placeholder="e.g. testCompile,testRuntime"
+          />
+          <FieldOverrideInline componentId={component.id} overriddenAttribute="escrow.gradleExcludeConfigurations" />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Switch
+          id="escrow-gradle-include-test"
+          checked={gradleIncludeTestConfigurations}
+          onCheckedChange={setGradleIncludeTestConfigurations}
+        />
+        <Label htmlFor="escrow-gradle-include-test" className="cursor-pointer">Gradle Include Test Configurations</Label>
+        <FieldOverrideInline componentId={component.id} overriddenAttribute="escrow.gradleIncludeTestConfigurations" />
       </div>
 
       <div className="flex justify-end">

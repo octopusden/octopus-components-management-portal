@@ -5,10 +5,11 @@ import { Input } from '../ui/input'
 import { Button } from '../ui/button'
 import { EnumSelect } from '../ui/EnumSelect'
 import { Separator } from '../ui/separator'
-import type { ComponentDetail, VcsSettingsEntry } from '../../lib/types'
-import type { ComponentUpdateRequest, VcsSettingsEntryUpdate } from '../../hooks/useComponent'
+import type { ComponentDetail, VcsEntry } from '../../lib/types'
+import type { ComponentUpdateRequest } from '../../hooks/useComponent'
 import type { UseMutationResult } from '@tanstack/react-query'
-import { ApiError } from '../../lib/api'
+import { useOptimisticConflict } from '../../hooks/useOptimisticConflict'
+import { selectBaseRow } from '../../lib/api/baseRow'
 
 interface VcsTabProps {
   component: ComponentDetail
@@ -23,31 +24,31 @@ interface EntryState {
   repositoryType: string
   tag: string
   branch: string
+  hotfixBranch: string
 }
 
-function toEntryState(e: VcsSettingsEntry): EntryState {
+function toEntryState(e: VcsEntry): EntryState {
   return {
     id: e.id,
     name: e.name ?? '',
     vcsPath: e.vcsPath ?? '',
-    repositoryType: e.repositoryType ?? 'GIT',
+    repositoryType: e.repositoryType ?? '',
     tag: e.tag ?? '',
     branch: e.branch ?? '',
+    hotfixBranch: e.hotfixBranch ?? '',
   }
 }
 
 export function VcsTab({ component, updateMutation, toast }: VcsTabProps) {
-  const vcs = component.vcsSettings[0]
-
-  const [vcsType, setVcsType] = useState(vcs?.vcsType ?? 'SINGLE')
-  const [externalRegistry, setExternalRegistry] = useState(vcs?.externalRegistry ?? '')
-  const [entries, setEntries] = useState<EntryState[]>(vcs?.entries?.map(toEntryState) ?? [])
+  const handleConflict = useOptimisticConflict(component.id)
+  const [externalRegistry, setExternalRegistry] = useState(component.vcsExternalRegistry ?? '')
+  const [entries, setEntries] = useState<EntryState[]>(
+    selectBaseRow(component)?.vcsEntries?.map(toEntryState) ?? [],
+  )
 
   useEffect(() => {
-    const v = component.vcsSettings[0]
-    setVcsType(v?.vcsType ?? 'SINGLE')
-    setExternalRegistry(v?.externalRegistry ?? '')
-    setEntries(v?.entries?.map(toEntryState) ?? [])
+    setExternalRegistry(component.vcsExternalRegistry ?? '')
+    setEntries(selectBaseRow(component)?.vcsEntries?.map(toEntryState) ?? [])
   }, [component])
 
   function updateEntry(index: number, field: keyof EntryState, value: string) {
@@ -55,7 +56,10 @@ export function VcsTab({ component, updateMutation, toast }: VcsTabProps) {
   }
 
   function addEntry() {
-    setEntries((prev) => [...prev, { name: '', vcsPath: '', repositoryType: 'GIT', tag: '', branch: '' }])
+    setEntries((prev) => [
+      ...prev,
+      { name: '', vcsPath: '', repositoryType: '', tag: '', branch: '', hotfixBranch: '' },
+    ])
   }
 
   function removeEntry(index: number) {
@@ -63,28 +67,42 @@ export function VcsTab({ component, updateMutation, toast }: VcsTabProps) {
   }
 
   async function handleSave() {
-    const entryUpdates: VcsSettingsEntryUpdate[] = entries.map((e) => ({
-      id: e.id ?? undefined,
-      name: e.name || undefined,
-      vcsPath: e.vcsPath || undefined,
-      repositoryType: e.repositoryType || 'GIT',
-      tag: e.tag || undefined,
-      branch: e.branch || undefined,
-    }))
+    // Drop rows whose required `vcsPath` is still blank — the wire shape's
+    // required string would otherwise hit the server as an empty value and
+    // 400. Save is a button click (not a form submit), so HTML `required`
+    // doesn't gate; this is the equivalent guard server-side contracts assume.
+    const cleanedEntries = entries
+      .map((e) => ({
+        name: (e.name || '').trim(),
+        vcsPath: e.vcsPath.trim(),
+        branch: (e.branch || '').trim(),
+        tag: (e.tag || '').trim(),
+        hotfixBranch: (e.hotfixBranch || '').trim(),
+        repositoryType: (e.repositoryType || '').trim(),
+      }))
+      .filter((e) => e.vcsPath !== '')
 
     try {
       await updateMutation.mutateAsync({
         version: component.version,
-        vcsSettings: {
-          vcsType: vcsType || undefined,
-          externalRegistry: externalRegistry || undefined,
-          entries: entryUpdates,
+        clearGroup: false,
+        vcsExternalRegistry: externalRegistry || null,
+        baseConfiguration: {
+          vcsEntries: cleanedEntries.map((e) => ({
+            name: e.name || null,
+            vcsPath: e.vcsPath,
+            branch: e.branch || null,
+            tag: e.tag || null,
+            hotfixBranch: e.hotfixBranch || null,
+            repositoryType: e.repositoryType || null,
+          })),
         },
       })
       toast({ title: 'VCS settings saved' })
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        toast({ title: 'Conflict', description: 'Please refresh and try again.', variant: 'destructive' })
+      const conflict = await handleConflict(err)
+      if (conflict) {
+        toast({ ...conflict, variant: 'destructive' })
         return
       }
       toast({ title: 'Save failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' })
@@ -94,17 +112,6 @@ export function VcsTab({ component, updateMutation, toast }: VcsTabProps) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label>VCS Type</Label>
-          <EnumSelect
-            fieldPath="vcsType"
-            value={vcsType}
-            onValueChange={setVcsType}
-            placeholder="Select VCS type"
-            allowFreeText
-          />
-        </div>
-
         <div className="space-y-1.5">
           <Label>External Registry</Label>
           <Input
@@ -148,12 +155,16 @@ export function VcsTab({ component, updateMutation, toast }: VcsTabProps) {
                 <EnumSelect fieldPath="repositoryType" value={entry.repositoryType} onValueChange={(val) => updateEntry(index, 'repositoryType', val)} placeholder="GIT" />
               </div>
               <div className="space-y-1">
+                <Label className="text-xs">Branch</Label>
+                <Input value={entry.branch} onChange={(e) => updateEntry(index, 'branch', e.target.value)} placeholder="Branch pattern" className="font-mono text-xs" />
+              </div>
+              <div className="space-y-1">
                 <Label className="text-xs">Tag</Label>
                 <Input value={entry.tag} onChange={(e) => updateEntry(index, 'tag', e.target.value)} placeholder="Tag pattern" className="font-mono text-xs" />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Branch</Label>
-                <Input value={entry.branch} onChange={(e) => updateEntry(index, 'branch', e.target.value)} placeholder="Branch pattern" className="font-mono text-xs" />
+                <Label className="text-xs">Hotfix Branch</Label>
+                <Input value={entry.hotfixBranch} onChange={(e) => updateEntry(index, 'hotfixBranch', e.target.value)} placeholder="Hotfix branch pattern" className="font-mono text-xs" />
               </div>
             </div>
           </div>

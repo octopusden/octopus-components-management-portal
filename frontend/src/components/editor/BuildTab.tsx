@@ -5,13 +5,13 @@ import { Input } from '../ui/input'
 import { Switch } from '../ui/switch'
 import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
-import { EmptyState } from '../ui/empty-state'
 import { EnumSelect } from '../ui/EnumSelect'
 import { FieldOverrideInline } from './FieldOverrideInline'
+import { selectBaseRow } from '../../lib/api/baseRow'
 import type { ComponentDetail } from '../../lib/types'
 import type { ComponentUpdateRequest } from '../../hooks/useComponent'
 import type { UseMutationResult } from '@tanstack/react-query'
-import { ApiError } from '../../lib/api'
+import { useOptimisticConflict } from '../../hooks/useOptimisticConflict'
 
 interface BuildTabProps {
   component: ComponentDetail
@@ -19,107 +19,88 @@ interface BuildTabProps {
   toast: (opts: { title: string; description?: string; variant?: 'default' | 'destructive' }) => void
 }
 
-/** Defensive parse: metadata.buildTools may be a JSON-encoded String inside the
- *  JSONB bag (EntityMappers.kt:582-584) or a native array on direct-DB writes.
- *  Discriminator is `type` (NOT `@type`) per BuildTool.java:17 @JsonTypeInfo. */
-function parseBuildTools(raw: unknown): Array<Record<string, unknown>> {
-  if (typeof raw === 'string') {
-    try {
-      const parsed = JSON.parse(raw)
-      return Array.isArray(parsed) ? parsed : []
-    } catch {
-      return []
-    }
-  }
-  if (Array.isArray(raw)) return raw as Array<Record<string, unknown>>
-  return []
-}
-
-function buildToolSummary(item: Record<string, unknown>): string {
-  const type = item['type'] as string | undefined
-  switch (type) {
-    case 'odbc':
-      return item['version'] ? `version ${item['version']}` : ''
-    case 'oracleDatabase': {
-      const parts: string[] = []
-      if (item['version']) parts.push(`version ${item['version']}`)
-      if (item['edition']) parts.push(String(item['edition']))
-      return parts.join(', ')
-    }
-    case 'cProduct':
-    case 'kProduct':
-    case 'dProduct':
-    case 'dDbProduct': {
-      const parts: string[] = []
-      if (item['version']) parts.push(`version ${item['version']}`)
-      if (item['settingsProperty']) parts.push(String(item['settingsProperty']))
-      return parts.join(', ')
-    }
-    default: {
-      const json = JSON.stringify(item)
-      return json.length > 80 ? json.slice(0, 77) + '...' : json
-    }
-  }
-}
-
 export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
-  const bc = component.buildConfigurations[0]
+  const handleConflict = useOptimisticConflict(component.id)
+  const baseRow = selectBaseRow(component)
+  const build = baseRow?.build
 
-  const [buildSystem, setBuildSystem] = useState(bc?.buildSystem ?? '')
-  const [buildFilePath, setBuildFilePath] = useState(bc?.buildFilePath ?? '')
-  const [javaVersion, setJavaVersion] = useState(bc?.javaVersion ?? '')
-  const [deprecated, setDeprecated] = useState(bc?.deprecated ?? false)
-  const [gradleVersion, setGradleVersion] = useState(
-    (bc?.metadata?.gradleVersion as string | undefined) ?? ''
-  )
+  const [buildSystem, setBuildSystem] = useState(build?.buildSystem ?? '')
+  const [buildSystemVersion, setBuildSystemVersion] = useState(build?.buildSystemVersion ?? '')
+  const [buildFilePath, setBuildFilePath] = useState(build?.buildFilePath ?? '')
+  const [javaVersion, setJavaVersion] = useState(build?.javaVersion ?? '')
+  const [mavenVersion, setMavenVersion] = useState(build?.mavenVersion ?? '')
+  const [gradleVersion, setGradleVersion] = useState(build?.gradleVersion ?? '')
+  const [deprecated, setDeprecated] = useState(build?.deprecated ?? false)
+  const [requiredProject, setRequiredProject] = useState(build?.requiredProject ?? false)
+  const [projectVersion, setProjectVersion] = useState(build?.projectVersion ?? '')
+  const [systemProperties, setSystemProperties] = useState(build?.systemProperties ?? '')
+  const [buildTasks, setBuildTasks] = useState(build?.buildTasks ?? '')
+  const [requiredToolsInput, setRequiredToolsInput] = useState((baseRow?.requiredTools ?? []).join(', '))
 
   useEffect(() => {
-    const c = component.buildConfigurations[0]
-    setBuildSystem(c?.buildSystem ?? '')
-    setBuildFilePath(c?.buildFilePath ?? '')
-    setJavaVersion(c?.javaVersion ?? '')
-    setDeprecated(c?.deprecated ?? false)
-    setGradleVersion((c?.metadata?.gradleVersion as string | undefined) ?? '')
+    const br = selectBaseRow(component)
+    const b = br?.build
+    setBuildSystem(b?.buildSystem ?? '')
+    setBuildSystemVersion(b?.buildSystemVersion ?? '')
+    setBuildFilePath(b?.buildFilePath ?? '')
+    setJavaVersion(b?.javaVersion ?? '')
+    setMavenVersion(b?.mavenVersion ?? '')
+    setGradleVersion(b?.gradleVersion ?? '')
+    setDeprecated(b?.deprecated ?? false)
+    setRequiredProject(b?.requiredProject ?? false)
+    setProjectVersion(b?.projectVersion ?? '')
+    setSystemProperties(b?.systemProperties ?? '')
+    setBuildTasks(b?.buildTasks ?? '')
+    setRequiredToolsInput((br?.requiredTools ?? []).join(', '))
   }, [component])
 
   async function handleSave() {
     try {
-      // fetch-merge-send pattern: metadata save is wholesale REPLACE on the server
-      // (ComponentManagementServiceImpl.kt:179). We must merge our change into the
-      // full existing metadata bag to avoid wiping mavenVersion, buildTasks, tools,
-      // buildTools, and other keys.
-      const currentMetadata: Record<string, unknown> = bc?.metadata ?? {}
-      const mergedMetadata: Record<string, unknown> = { ...currentMetadata }
-      if (gradleVersion) {
-        mergedMetadata.gradleVersion = gradleVersion
-      } else {
-        delete mergedMetadata.gradleVersion
-      }
+      const requiredToolsArray = [...new Set(
+        requiredToolsInput.split(',').map((t) => t.trim()).filter(Boolean)
+      )]
+      // Guard against wiping server-side requiredTools when no BASE row was
+      // loaded yet. The form's requiredToolsInput would be '' (parsed to []),
+      // and BaseConfigurationRequest.requiredTools = [] is an explicit clear.
+      // Sending null = "don't touch" preserves whatever the server has.
+      const baseRowPresent = selectBaseRow(component) !== undefined
+      const requiredToolsPayload = baseRowPresent ? requiredToolsArray : null
 
       await updateMutation.mutateAsync({
         version: component.version,
-        buildConfiguration: {
-          buildSystem: buildSystem || undefined,
-          buildFilePath: buildFilePath || undefined,
-          javaVersion: javaVersion || undefined,
-          deprecated,
-          metadata: mergedMetadata,
+        clearGroup: false,
+        baseConfiguration: {
+          build: {
+            buildSystem: buildSystem || null,
+            buildSystemVersion: buildSystemVersion || null,
+            buildFilePath: buildFilePath || null,
+            javaVersion: javaVersion || null,
+            mavenVersion: mavenVersion || null,
+            gradleVersion: gradleVersion || null,
+            deprecated,
+            requiredProject,
+            projectVersion: projectVersion || null,
+            systemProperties: systemProperties || null,
+            buildTasks: buildTasks || null,
+          },
+          // requiredTools lives at the BaseConfigurationRequest level, not inside build
+          requiredTools: requiredToolsPayload,
         },
       })
       toast({ title: 'Build configuration saved' })
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        toast({ title: 'Conflict', description: 'Please refresh and try again.', variant: 'destructive' })
+      const conflict = await handleConflict(err)
+      if (conflict) {
+        toast({ ...conflict, variant: 'destructive' })
         return
       }
       toast({ title: 'Save failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' })
     }
   }
 
-  const buildTools = parseBuildTools(bc?.metadata?.buildTools)
-  const tools = Array.isArray(bc?.metadata?.tools)
-    ? (bc.metadata.tools as Array<Record<string, unknown>>)
-    : []
+  const parsedRequiredTools = [...new Set(
+    requiredToolsInput.split(',').map((t) => t.trim()).filter(Boolean)
+  )]
 
   return (
     <div className="space-y-6">
@@ -132,7 +113,17 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
             onValueChange={setBuildSystem}
             placeholder="Select build system"
           />
-          <FieldOverrideInline componentId={component.id} fieldPath="buildSystem" />
+          <FieldOverrideInline componentId={component.id} overriddenAttribute="build.buildSystem" />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>Build System Version</Label>
+          <Input
+            value={buildSystemVersion}
+            onChange={(e) => setBuildSystemVersion(e.target.value)}
+            placeholder="e.g. 3.9.6"
+          />
+          <FieldOverrideInline componentId={component.id} overriddenAttribute="build.buildSystemVersion" />
         </div>
 
         <div className="space-y-1.5">
@@ -142,7 +133,7 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
             onChange={(e) => setBuildFilePath(e.target.value)}
             placeholder="pom.xml / build.gradle"
           />
-          <FieldOverrideInline componentId={component.id} fieldPath="buildFilePath" />
+          <FieldOverrideInline componentId={component.id} overriddenAttribute="build.buildFilePath" />
         </div>
 
         <div className="space-y-1.5">
@@ -155,14 +146,54 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
         </div>
 
         <div className="space-y-1.5">
+          <Label>Maven Version</Label>
+          <Input
+            value={mavenVersion}
+            onChange={(e) => setMavenVersion(e.target.value)}
+            placeholder="3.9.6"
+          />
+          <FieldOverrideInline componentId={component.id} overriddenAttribute="build.mavenVersion" />
+        </div>
+
+        <div className="space-y-1.5">
           <Label>Gradle Version</Label>
           <Input
             value={gradleVersion}
             onChange={(e) => setGradleVersion(e.target.value)}
             placeholder="8.6"
           />
-          <FieldOverrideInline componentId={component.id} fieldPath="build.gradleVersion" />
+          <FieldOverrideInline componentId={component.id} overriddenAttribute="build.gradleVersion" />
         </div>
+
+        <div className="space-y-1.5">
+          <Label>Project Version</Label>
+          <Input
+            value={projectVersion}
+            onChange={(e) => setProjectVersion(e.target.value)}
+            placeholder="1.0.0"
+          />
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Build Tasks</Label>
+        <Input
+          value={buildTasks}
+          onChange={(e) => setBuildTasks(e.target.value)}
+          placeholder="clean install / assemble"
+        />
+        <FieldOverrideInline componentId={component.id} overriddenAttribute="build.buildTasks" />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>System Properties</Label>
+        <textarea
+          className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-y min-h-[80px]"
+          value={systemProperties}
+          onChange={(e) => setSystemProperties(e.target.value)}
+          placeholder="-Dproperty=value"
+          spellCheck={false}
+        />
       </div>
 
       <div className="flex items-center gap-3">
@@ -174,61 +205,30 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
         <Label htmlFor="build-deprecated" className="cursor-pointer">Deprecated</Label>
       </div>
 
-      {/* Build Tools — read-only display.
-          metadata.buildTools is a JSON-encoded String inside JSONB (EntityMappers.kt:582-584).
-          Discriminator is `type` (not @type) per BuildTool.java:17.
-          WAVE 1: read-only only. Full CRUD is backlog §7.x.X. */}
-      <div className="space-y-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Build Tools (read-only)
-        </span>
-        {buildTools.length === 0 ? (
-          <EmptyState message="No build tools configured." className="py-6" />
-        ) : (
-          <ul className="space-y-1.5">
-            {buildTools.map((item, idx) => {
-              const type = (item['type'] as string | undefined) ?? 'unknown'
-              const summary = buildToolSummary(item)
-              return (
-                <li key={idx} className="flex items-center gap-2 text-sm">
-                  {/* PR-2 (§7.0.5) keeps `secondary` intentionally; swap to `info`
-                      pending side-by-side review against component-detail.html. */}
-                  <Badge variant="secondary">{type}</Badge>
-                  {summary && <span className="text-muted-foreground">{summary}</span>}
-                </li>
-              )
-            })}
-          </ul>
-        )}
-        <p className="text-xs text-muted-foreground">
-          Build tools are managed via Git source. UI editing pending — see backlog §7.x.X.
-        </p>
+      <div className="flex items-center gap-3">
+        <Switch
+          id="build-required-project"
+          checked={requiredProject}
+          onCheckedChange={setRequiredProject}
+        />
+        <Label htmlFor="build-required-project" className="cursor-pointer">Required Project</Label>
       </div>
 
-      {/* Tools — read-only, only render if non-empty.
-          metadata.tools is a separate field with flat schema {name, escrowEnvironmentVariable,
-          sourceLocation, targetLocation, installScript}. Native JSON array (EntityMappers.kt:201-209). */}
-      {tools.length > 0 && (
-        <div className="space-y-2">
-          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Tools (read-only)
-          </span>
-          <ul className="space-y-1.5">
-            {tools.map((item, idx) => {
-              const name = (item['name'] as string | undefined) ?? `tool-${idx}`
-              const src = item['sourceLocation'] as string | undefined
-              const dst = item['targetLocation'] as string | undefined
-              const summary = src || dst ? `${src ?? '?'} → ${dst ?? '?'}` : ''
-              return (
-                <li key={idx} className="flex items-center gap-2 text-sm">
-                  <Badge variant="outline">{name}</Badge>
-                  {summary && <span className="text-muted-foreground">{summary}</span>}
-                </li>
-              )
-            })}
-          </ul>
-        </div>
-      )}
+      <div className="space-y-1.5">
+        <Label>Required Tools</Label>
+        <Input
+          value={requiredToolsInput}
+          onChange={(e) => setRequiredToolsInput(e.target.value)}
+          placeholder="tool-a, tool-b"
+        />
+        {parsedRequiredTools.length > 0 && (
+          <div className="flex flex-wrap gap-2 pt-1">
+            {parsedRequiredTools.map((tool) => (
+              <Badge key={tool} variant="outline">{tool}</Badge>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="flex justify-end">
         <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending}>

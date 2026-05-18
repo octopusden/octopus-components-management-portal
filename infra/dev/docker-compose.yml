@@ -26,7 +26,7 @@
 #
 # Open: http://localhost:5173
 # Login: e2e-admin / $E2E_ADMIN_PASSWORD  (roles: ADMIN)
-#        e2e-viewer / $E2E_VIEWER_PASSWORD (roles: REGISTRY_VIEWER)
+#        e2e-viewer / $E2E_VIEWER_PASSWORD (roles: COMPONENTS_REGISTRY_VIEWER)
 
 services:
   postgres:
@@ -71,7 +71,7 @@ services:
 
   crs:
     # Set CRS_DOCKER_REGISTRY to your internal registry (e.g. via .env file or shell export).
-    image: ${CRS_DOCKER_REGISTRY}/octopusden/components-registry-service:${CRS_VERSION:-2.0.84-3266}
+    image: ${CRS_DOCKER_REGISTRY}/octopusden/components-registry-service:${CRS_VERSION:-2.0.84-3519}
     platform: linux/amd64
     depends_on:
       postgres:

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import React, { type ReactElement } from 'react'
 import {
   useComponentDefaults,
   useUpdateComponentDefaults,
@@ -8,6 +10,13 @@ import {
 } from '@/hooks/useAdminConfig'
 import { useAdminMode } from '@/lib/adminModeStore'
 import { ComponentDefaultsForm } from './ComponentDefaultsForm'
+
+function renderWithQuery(ui: ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    React.createElement(QueryClientProvider, { client: queryClient }, ui),
+  )
+}
 
 // Regression for PR #8 P2: the new Admin-mode toggle in AppFooter is the
 // portal's "without weapons" mode for destructive admin actions. The Run
@@ -96,14 +105,14 @@ afterEach(() => {
 
 describe('ComponentDefaultsForm — Import from Git Admin-mode gate', () => {
   it('disables the Import from Git button when Admin mode is OFF and shows the helper text', () => {
-    render(<ComponentDefaultsForm />)
+    renderWithQuery(<ComponentDefaultsForm />)
     const importBtn = screen.getByRole('button', { name: /import from git/i })
     expect(importBtn).toBeDisabled()
     expect(screen.getByText(/Enable Admin mode in the footer/i)).toBeDefined()
   })
 
   it('enables Import from Git once Admin mode flips ON', () => {
-    render(<ComponentDefaultsForm />)
+    renderWithQuery(<ComponentDefaultsForm />)
     expect(screen.getByRole('button', { name: /import from git/i })).toBeDisabled()
 
     act(() => {
@@ -120,14 +129,14 @@ describe('ComponentDefaultsForm — Import from Git Admin-mode gate', () => {
     )
     useAdminMode.setState({ enabled: true })
 
-    render(<ComponentDefaultsForm />)
+    renderWithQuery(<ComponentDefaultsForm />)
     fireEvent.click(screen.getByRole('button', { name: /import from git/i }))
 
     expect(migrateMutation.mutate).toHaveBeenCalledOnce()
   })
 
   it('Save button stays available regardless of Admin mode (regular edit path is not destructive)', () => {
-    render(<ComponentDefaultsForm />)
+    renderWithQuery(<ComponentDefaultsForm />)
     // Admin mode is OFF here; the Save button must NOT be disabled by it.
     // It can still be disabled by mutation pending state, but we mocked
     // updateMutation as idle, so the only signal here is the gate.

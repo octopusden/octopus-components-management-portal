@@ -1,15 +1,13 @@
 import { useState } from 'react'
 import { Plus, Trash2, Pencil } from 'lucide-react'
 import { Button } from '../ui/button'
-import { Input } from '../ui/input'
-import { Label } from '../ui/label'
+import { Badge } from '../ui/badge'
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  DialogClose,
 } from '../ui/dialog'
 import {
   Table,
@@ -21,90 +19,38 @@ import {
 } from '../ui/table'
 import {
   useFieldOverrides,
-  useCreateFieldOverride,
-  useUpdateFieldOverride,
   useDeleteFieldOverride,
 } from '../../hooks/useComponent'
 import { EmptyState } from '../ui/empty-state'
 import { SkeletonBlock } from '../ui/skeleton-block'
 import { useToast } from '../../hooks/use-toast'
 import type { FieldOverride } from '../../lib/types'
+import { OverrideRowEditor } from './OverrideRowEditor'
 
 interface FieldOverridesProps {
   componentId: string
 }
 
-interface OverrideFormState {
-  fieldPath: string
-  versionRange: string
-  value: string
-}
-
-const emptyForm: OverrideFormState = {
-  fieldPath: '',
-  versionRange: '',
-  value: '',
-}
-
 export function FieldOverrides({ componentId }: FieldOverridesProps) {
   const { data: overrides, isLoading } = useFieldOverrides(componentId)
-  const createMutation = useCreateFieldOverride(componentId)
-  const updateMutation = useUpdateFieldOverride(componentId)
   const deleteMutation = useDeleteFieldOverride(componentId)
   const { toast } = useToast()
 
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [editingOverride, setEditingOverride] = useState<FieldOverride | null>(null)
-  const [form, setForm] = useState<OverrideFormState>(emptyForm)
+  const [editorOpen, setEditorOpen] = useState(false)
+  const [editorMode, setEditorMode] = useState<'create' | 'edit'>('create')
+  const [editingOverride, setEditingOverride] = useState<FieldOverride | undefined>(undefined)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
   function openCreate() {
-    setEditingOverride(null)
-    setForm(emptyForm)
-    setDialogOpen(true)
+    setEditorMode('create')
+    setEditingOverride(undefined)
+    setEditorOpen(true)
   }
 
   function openEdit(override: FieldOverride) {
+    setEditorMode('edit')
     setEditingOverride(override)
-    setForm({
-      fieldPath: override.fieldPath,
-      versionRange: override.versionRange,
-      value: typeof override.value === 'string' ? override.value : JSON.stringify(override.value),
-    })
-    setDialogOpen(true)
-  }
-
-  function parseValue(raw: string): unknown {
-    try {
-      return JSON.parse(raw)
-    } catch {
-      return raw
-    }
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    const payload = {
-      fieldPath: form.fieldPath,
-      versionRange: form.versionRange,
-      value: parseValue(form.value),
-    }
-    try {
-      if (editingOverride) {
-        await updateMutation.mutateAsync({ overrideId: editingOverride.id, ...payload })
-        toast({ title: 'Override updated' })
-      } else {
-        await createMutation.mutateAsync(payload)
-        toast({ title: 'Override created' })
-      }
-      setDialogOpen(false)
-    } catch (err) {
-      toast({
-        title: 'Error',
-        description: err instanceof Error ? err.message : String(err),
-        variant: 'destructive',
-      })
-    }
+    setEditorOpen(true)
   }
 
   async function handleDelete(overrideId: string) {
@@ -150,101 +96,70 @@ export function FieldOverrides({ componentId }: FieldOverridesProps) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Field Path</TableHead>
+                <TableHead>Attribute</TableHead>
+                <TableHead>Type</TableHead>
                 <TableHead>Version Range</TableHead>
                 <TableHead>Value</TableHead>
                 <TableHead className="w-24">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {overrides.map((override) => (
-                <TableRow key={override.id}>
-                  <TableCell className="font-mono text-xs">{override.fieldPath}</TableCell>
-                  <TableCell className="font-mono text-xs">{override.versionRange}</TableCell>
-                  <TableCell className="font-mono text-xs max-w-[200px] truncate">
-                    {typeof override.value === 'string'
-                      ? override.value
-                      : JSON.stringify(override.value)}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => openEdit(override)}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => setDeleteConfirm(override.id)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {overrides.map((override) => {
+                const isMarker = override.rowType === 'MARKER'
+                return (
+                  <TableRow key={override.id}>
+                    <TableCell className="font-mono text-xs">{override.overriddenAttribute}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-xs">
+                        {override.rowType}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">{override.versionRange}</TableCell>
+                    <TableCell className="font-mono text-xs max-w-[200px] truncate">
+                      {isMarker
+                        ? <span className="text-muted-foreground italic">marker — edit to view children</span>
+                        : typeof override.value === 'string'
+                          ? override.value
+                          : JSON.stringify(override.value)}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          aria-label="Edit override"
+                          onClick={() => openEdit(override)}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          aria-label="Delete override"
+                          onClick={() => setDeleteConfirm(override.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
             </TableBody>
           </Table>
         </div>
       )}
 
-      {/* Create / Edit dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editingOverride ? 'Edit Override' : 'Add Override'}</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="fieldPath">Field Path</Label>
-              <Input
-                id="fieldPath"
-                placeholder="e.g. buildConfigurations[0].javaVersion"
-                value={form.fieldPath}
-                onChange={(e) => setForm((f) => ({ ...f, fieldPath: e.target.value }))}
-                disabled={!!editingOverride}
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="versionRange">Version Range</Label>
-              <Input
-                id="versionRange"
-                placeholder="e.g. [1.0,2.0)"
-                value={form.versionRange}
-                onChange={(e) => setForm((f) => ({ ...f, versionRange: e.target.value }))}
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="value">Value (JSON or plain string)</Label>
-              <Input
-                id="value"
-                placeholder='e.g. "11" or true or {"key":"val"}'
-                value={form.value}
-                onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))}
-                required
-              />
-            </div>
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button type="button" variant="outline">Cancel</Button>
-              </DialogClose>
-              <Button
-                type="submit"
-                disabled={createMutation.isPending || updateMutation.isPending}
-              >
-                {editingOverride ? 'Update' : 'Create'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {/* Override row editor (create + edit) */}
+      <OverrideRowEditor
+        open={editorOpen}
+        onOpenChange={setEditorOpen}
+        componentId={componentId}
+        mode={editorMode}
+        override={editingOverride}
+      />
 
       {/* Delete confirm dialog */}
       <Dialog
