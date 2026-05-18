@@ -115,7 +115,7 @@ Clean. One defence-in-depth follow-up only:
 
 - `ConfigurationsTab.tsx:52-68` `scalarOverrideSummary`: server-supplied `overriddenAttribute` walks the prototype chain via `!(fieldKey in aspect)`. No XSS (React escapes), no prototype pollution (read-only path), but tighten to `Object.hasOwn(aspect, fieldKey)` + an allowlist matching `OverrideRowEditor`'s `SCALAR_BY_PATH`.
 
-Forbidden-token gate (`OpenWay|CARDS|DWH_DB|F1SC-`) — zero hits across diffed files, commit subjects, and PR title.
+Forbidden-token gate (see `feedback_no_domain_product_codes` + `feedback_no_internal_keys_in_github` memory for the actual token set) — zero hits across diffed files, commit subjects, and PR title.
 
 ## Action plan — commit-sized chunks
 
