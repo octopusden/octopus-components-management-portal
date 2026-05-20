@@ -13,9 +13,25 @@ vi.mock('../hooks/useOwners', () => ({
 }))
 
 // Stub useLabels — labels picker sources from /components/meta/labels.
+// Default returns a deterministic vocabulary; individual tests that need
+// to exercise loading / empty / no-match empty-states override via
+// `mockUseLabels.mockReturnValue(…)` inside the test body.
 vi.mock('../hooks/useLabels', () => ({
-  useLabels: () => ({ data: ['alpha', 'beta', 'gamma'], isLoading: false }),
+  useLabels: vi.fn(),
 }))
+
+import { useLabels } from '../hooks/useLabels'
+const mockUseLabels = vi.mocked(useLabels)
+
+function mockLabels(
+  data: string[] | undefined = ['alpha', 'beta', 'gamma'],
+  isLoading = false,
+) {
+  mockUseLabels.mockReturnValue({
+    data,
+    isLoading,
+  } as unknown as ReturnType<typeof useLabels>)
+}
 
 // Stub useCurrentUser — My Components checkbox needs the current user.
 vi.mock('../hooks/useCurrentUser', () => ({
@@ -60,6 +76,7 @@ describe('ComponentFilters', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockLabels()
     mockCurrentUser('testuser')
     mockFieldConfig([])
   })
@@ -114,6 +131,7 @@ describe('ComponentFilters archived filter (§7.0/2e)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockLabels()
     mockCurrentUser('testuser')
     mockFieldConfig([])
   })
@@ -157,6 +175,7 @@ describe('ComponentFilters My Components (§7.0/2e)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockLabels()
     mockFieldConfig([])
   })
 
@@ -213,6 +232,7 @@ describe('ComponentFilters owner dropdown (B7.1.1)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockLabels()
     mockCurrentUser('testuser')
     mockFieldConfig([])
   })
@@ -263,6 +283,7 @@ describe('ComponentFilters Build System select (Wave 2)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockLabels()
     mockCurrentUser('testuser')
     mockFieldConfig(['GRADLE', 'MAVEN'])
   })
@@ -313,6 +334,7 @@ describe('ComponentFilters labels multi-select', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockLabels()
     mockCurrentUser('testuser')
     mockFieldConfig([])
   })
@@ -399,5 +421,35 @@ describe('ComponentFilters labels multi-select', () => {
     gamma.focus()
     await userEvent.keyboard('{ArrowDown}')
     expect(document.activeElement).toBe(gamma)
+  })
+
+  it('shows "Loading…" while useLabels is fetching', async () => {
+    mockLabels(undefined, true)
+    render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
+    await userEvent.click(screen.getByRole('button', { name: /all labels/i }))
+    expect(screen.getByText('Loading…')).toBeDefined()
+    // No checkbox rows while loading.
+    expect(screen.queryByRole('checkbox', { name: 'alpha' })).toBeNull()
+  })
+
+  it('shows "No labels available" when the vocabulary is empty', async () => {
+    mockLabels([], false)
+    render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
+    await userEvent.click(screen.getByRole('button', { name: /all labels/i }))
+    expect(screen.getByText('No labels available')).toBeDefined()
+  })
+
+  it('shows the "No matches for <query>" hint when search filters out every option', async () => {
+    // Default mock (alpha/beta/gamma) is good — type a query no option contains.
+    render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
+    await userEvent.click(screen.getByRole('button', { name: /all labels/i }))
+
+    const searchInput = screen.getByPlaceholderText('Search labels...')
+    await userEvent.type(searchInput, 'zzz')
+
+    expect(screen.getByText('No matches for "zzz"')).toBeDefined()
+    // Crucially: the misleading "No labels available" must NOT appear here —
+    // the vocabulary is non-empty, only the current query has no matches.
+    expect(screen.queryByText('No labels available')).toBeNull()
   })
 })

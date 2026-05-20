@@ -112,10 +112,12 @@ export function LabelsMultiSelect({ value, onChange }: LabelsMultiSelectProps) {
           data-testid="labels-options-list"
         >
           {isLoading ? (
-            <div className="px-2 py-3 text-sm text-muted-foreground">Loading...</div>
+            <div className="px-2 py-3 text-sm text-muted-foreground">Loading…</div>
+          ) : options.length === 0 ? (
+            <div className="px-2 py-3 text-sm text-muted-foreground">No labels available</div>
           ) : filtered.length === 0 ? (
             <div className="px-2 py-3 text-sm text-muted-foreground">
-              {options.length === 0 ? 'No labels available' : 'No matches'}
+              No matches for "{search}"
             </div>
           ) : (
             filtered.map((label, idx) => {
