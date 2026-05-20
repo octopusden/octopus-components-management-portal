@@ -122,9 +122,11 @@ The P1 UI features rely on these CRS endpoints (all behind the `/rest/**` proxy 
 
 | Endpoint | Used by | CRS contract |
 |---|---|---|
-| `GET /components?owner=…&search=…&system=…&productType=…&buildSystem=…&archived=…&labels=…&page=…&size=…&sort=…` | List page filter sidebar (B7.1.1), parent autocomplete (B7.1.5) | `SYS-035` for `owner`; new CRS contract for `labels` (CSV, AND semantics); pagination + sort are Spring Data conventions |
-| `GET /components/meta/owners` | Owner picker on the list page (B7.1.1), people input on detail | existing |
-| `GET /components/meta/labels` | Labels multi-select on the list page | new CRS contract; mirrors `/meta/owners` |
+| `GET /components?search=…&archived=…&owner=…&system=…&buildSystem=…&labels=…&page=…&size=…&sort=…` | List page filter sidebar (B7.1.1), parent autocomplete (B7.1.5) | `owner`, `system`, `buildSystem` are CSV with OR semantics (companion CRS PR binds `List<String>?`); `labels` is CSV with AND semantics; `archived` defaults to `false` (active only); pagination + sort are Spring Data conventions. `SYS-035` for `owner` baseline. |
+| `GET /components/meta/owners` | Owner multi-select on the list page (B7.1.1), people input on detail | existing |
+| `GET /components/meta/labels` | Labels multi-select on the list page | new CRS contract; mirrors `/meta/owners` (junction-sourced, distinct labels in use) |
+| `GET /components/meta/systems` | System multi-select on the list page | new CRS contract; mirrors `/meta/owners` (junction-sourced, distinct systems in use) |
+| `GET /components/meta/build-systems` | Build System multi-select on the list page (fallback when admin field-config has no options) | existing CRS enum endpoint |
 | `GET /components/{idOrName}` | Detail page fetch (UUID first, name fallback) | existing |
 | `PATCH /components/{id}` with `name` | Rename (B7.1.4) | `canRenameComponent` SpEL |
 | `PATCH /components/{id}` with `parentComponentName` | Parent autocomplete save (B7.1.5) | `canEditComponent` |
