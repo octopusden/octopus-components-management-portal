@@ -21,7 +21,9 @@ export function useComponents({ filter, page = 0, size = 20, sort = 'componentKe
   params.set('page', String(page))
   params.set('size', String(size))
   params.set('sort', sort)
-  if (filter?.system) params.set('system', filter.system)
+  // CSV multi-value, OR semantics; CRS controller binds `List<String>?`
+  // via Spring's CSV binder (companion CRS PR mirroring buildSystem).
+  if (filter?.system?.length) params.set('system', filter.system.join(','))
   if (filter?.archived !== undefined) params.set('archived', String(filter.archived))
   if (filter?.search) params.set('search', filter.search)
   if (filter?.owner) params.set('owner', filter.owner)

@@ -25,11 +25,6 @@ interface ComponentFiltersProps {
   onFilterChange: (filter: ComponentFilter) => void
 }
 
-// Hardcoded system enum — can be extended later from API.
-const SYSTEM_OPTIONS = [
-  'ALFA', 'BRAVO', 'CHARLIE', 'DELTA', 'ECHO',
-]
-
 const ALL_VALUE = '__all__'
 
 export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersProps) {
@@ -49,8 +44,8 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
     }, 300)
   }
 
-  const handleSystemChange = (value: string) => {
-    onFilterChange({ ...filter, system: value === ALL_VALUE ? undefined : value })
+  const handleSystemChange = (next: string[]) => {
+    onFilterChange({ ...filter, system: next.length ? next : undefined })
   }
 
   const handleOwnerChange = (value: string) => {
@@ -83,7 +78,7 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
   // archived: false is the default — does not count as an active filter
   const hasActiveFilters =
     !!filter.search ||
-    !!filter.system ||
+    !!filter.system?.length ||
     !!filter.owner ||
     !!filter.buildSystem?.length ||
     !!filter.labels?.length ||
@@ -107,11 +102,21 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
   // field-config (currently buildSystem); System / Owner use a hardcoded
   // enum and /meta/owners respectively, so they ignore this signal.
   const { entry: buildSystemEntry } = useFieldConfigEntry('buildSystem')
-  // Sticky activation flags for the two multi-select pickers — flip
-  // true on first open and never back. Drive `enabled` on useLabels so
-  // the labels meta request only fires when the user expresses intent
-  // (avoids a page-mount 404 against a CRS that may not ship /meta/labels
-  // yet). useFieldOptions is cheap + cached, so we don't gate it.
+  // System options share the buildSystem pattern: admin field-config first,
+  // CRS /components/meta/systems fallback. Gated on `systemActivated` until
+  // first popover open because the meta endpoint may not exist on older CRS
+  // images and Playwright's console-error listener trips on the browser's
+  // native 404 log.
+  const [systemActivated, setSystemActivated] = useState(false)
+  const { options: systemOptions, isLoading: systemLoading } = useFieldOptions(
+    'system',
+    { enabled: systemActivated },
+  )
+  const { entry: systemEntry } = useFieldConfigEntry('system')
+  // Sticky activation flag for the labels picker — flips true on first
+  // open and never back. Drives `enabled` on useLabels so the labels
+  // meta request only fires when the user expresses intent (avoids a
+  // page-mount 404 against a CRS that may not ship /meta/labels yet).
   const [labelsActivated, setLabelsActivated] = useState(false)
   const { data: labelOptions = [], isLoading: labelsLoading } = useLabels({
     enabled: labelsActivated,
@@ -145,19 +150,19 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
         />
       </div>
 
-      <Select value={filter.system ?? ALL_VALUE} onValueChange={handleSystemChange}>
-        <SelectTrigger className="w-[160px]">
-          <SelectValue placeholder="All systems" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL_VALUE}>All systems</SelectItem>
-          {SYSTEM_OPTIONS.map((sys) => (
-            <SelectItem key={sys} value={sys}>
-              {sys}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {systemEntry.filterable !== false && (
+        <MultiSelectFilter
+          value={filter.system ?? []}
+          onChange={handleSystemChange}
+          options={systemOptions}
+          isLoading={systemLoading}
+          placeholder="All systems"
+          unitLabel="system"
+          onOpenChange={(open) => {
+            if (open) setSystemActivated(true)
+          }}
+        />
+      )}
 
       {buildSystemEntry.filterable !== false && (
         <MultiSelectFilter

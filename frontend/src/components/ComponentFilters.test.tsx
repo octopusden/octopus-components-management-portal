@@ -52,11 +52,12 @@ vi.mock('../hooks/useAdminConfig', () => ({
   useMigrateDefaults: vi.fn(),
 }))
 
-// Stub useFieldOptions — Build System dropdown reads its options here.
-// Default is an empty list (simulates "admin not configured AND meta
-// endpoint empty"); individual tests override via mockFieldOptions(…).
+// Stub useFieldOptions — Build System / System dropdowns read their options
+// here. The mock dispatches on fieldPath so per-field seeds don't collide;
+// the default is an empty list (simulates "admin not configured AND meta
+// endpoint empty") for any field that isn't explicitly seeded.
 vi.mock('../hooks/useFieldOptions', () => ({
-  useFieldOptions: vi.fn(() => ({ options: [], isLoading: false })),
+  useFieldOptions: vi.fn(),
 }))
 
 import { useFieldConfig } from '../hooks/useAdminConfig'
@@ -67,19 +68,39 @@ const mockUseFieldOptions = vi.mocked(useFieldOptions)
 
 import type { FieldConfigEntry } from '../hooks/useFieldConfig'
 
-// Seed buildSystem in admin field-config. The second arg is a partial
+// Per-fieldPath option seeds. Defaults to [] for any field not explicitly
+// set; mockFieldOptions(field, opts) overrides for one field at a time.
+const fieldOptionSeeds: Record<string, string[]> = {}
+function applyFieldOptionsMock() {
+  mockUseFieldOptions.mockImplementation((fieldPath: string) => ({
+    options: fieldOptionSeeds[fieldPath] ?? [],
+    isLoading: false,
+  }))
+}
+
+function mockFieldOptions(fieldPath: string, options: string[]) {
+  fieldOptionSeeds[fieldPath] = options
+  applyFieldOptionsMock()
+}
+
+// Seed an admin field-config entry. The second arg is a partial
 // FieldConfigEntry so individual cases can override visibility,
-// filterable, or any future flag without growing positional args.
-function mockFieldConfig(options: string[], entry: Partial<FieldConfigEntry> = {}) {
+// filterable, or any future flag without growing positional args. The
+// `field` arg names the field; ComponentFilters reads buildSystem and
+// system from useFieldConfigEntry(...) for filterable gating.
+function mockFieldConfig(
+  options: string[],
+  entry: Partial<FieldConfigEntry> = {},
+  field: 'buildSystem' | 'system' = 'buildSystem',
+) {
   mockUseFieldConfig.mockReturnValue({
-    data: { fields: { buildSystem: { options, ...entry } } },
+    data: { fields: { [field]: { options, ...entry } } },
     isLoading: false,
   } as unknown as ReturnType<typeof useFieldConfig>)
-  // Keep buildSystem options reachable from the new code path too —
-  // ComponentFilters now reads useFieldOptions('buildSystem'), so tests
-  // that previously seeded admin field-config get the same options out
-  // of the new hook with a single call.
-  mockUseFieldOptions.mockReturnValue({ options, isLoading: false })
+  // Keep field-options reachable from the new code path too —
+  // ComponentFilters reads useFieldOptions(field), so tests that seed
+  // admin field-config get the same options out of the new hook.
+  mockFieldOptions(field, options)
 }
 
 import { useCurrentUser } from '../hooks/useCurrentUser'
@@ -100,6 +121,10 @@ describe('ComponentFilters', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    // vi.clearAllMocks wipes the per-field useFieldOptions implementation;
+    // reset the seed map and re-install the dispatcher every test.
+    for (const k of Object.keys(fieldOptionSeeds)) delete fieldOptionSeeds[k]
+    applyFieldOptionsMock()
     mockLabels()
     mockCurrentUser('testuser')
     mockFieldConfig([])
@@ -140,7 +165,7 @@ describe('ComponentFilters', () => {
 
   it('resets all filters when Clear filters is clicked', async () => {
     render(
-      <ComponentFilters filter={{ search: 'foo', system: 'ALFA', archived: false }} onFilterChange={onFilterChange} />,
+      <ComponentFilters filter={{ search: 'foo', system: ['ALFA'], archived: false }} onFilterChange={onFilterChange} />,
     )
 
     await userEvent.click(screen.getByText('Clear filters'))
@@ -155,6 +180,10 @@ describe('ComponentFilters archived filter (§7.0/2e)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    // vi.clearAllMocks wipes the per-field useFieldOptions implementation;
+    // reset the seed map and re-install the dispatcher every test.
+    for (const k of Object.keys(fieldOptionSeeds)) delete fieldOptionSeeds[k]
+    applyFieldOptionsMock()
     mockLabels()
     mockCurrentUser('testuser')
     mockFieldConfig([])
@@ -199,6 +228,10 @@ describe('ComponentFilters My Components (§7.0/2e)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    // vi.clearAllMocks wipes the per-field useFieldOptions implementation;
+    // reset the seed map and re-install the dispatcher every test.
+    for (const k of Object.keys(fieldOptionSeeds)) delete fieldOptionSeeds[k]
+    applyFieldOptionsMock()
     mockLabels()
     mockFieldConfig([])
   })
@@ -256,6 +289,10 @@ describe('ComponentFilters owner dropdown (B7.1.1)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    // vi.clearAllMocks wipes the per-field useFieldOptions implementation;
+    // reset the seed map and re-install the dispatcher every test.
+    for (const k of Object.keys(fieldOptionSeeds)) delete fieldOptionSeeds[k]
+    applyFieldOptionsMock()
     mockLabels()
     mockCurrentUser('testuser')
     mockFieldConfig([])
@@ -307,6 +344,10 @@ describe('ComponentFilters Build System multi-select', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    // vi.clearAllMocks wipes the per-field useFieldOptions implementation;
+    // reset the seed map and re-install the dispatcher every test.
+    for (const k of Object.keys(fieldOptionSeeds)) delete fieldOptionSeeds[k]
+    applyFieldOptionsMock()
     mockLabels()
     mockCurrentUser('testuser')
     mockFieldConfig(['GRADLE', 'MAVEN'])
@@ -392,10 +433,7 @@ describe('ComponentFilters Build System multi-select', () => {
     // any explicit options, but useFieldOptions consults
     // /components/meta/build-systems and returns the CRS enum. The dropdown
     // must surface those options regardless of admin field-config state.
-    mockUseFieldOptions.mockReturnValue({
-      options: ['GRADLE', 'MAVEN'],
-      isLoading: false,
-    })
+    mockFieldOptions('buildSystem', ['GRADLE', 'MAVEN'])
     render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
     await userEvent.click(screen.getByRole('button', { name: /all build systems/i }))
     expect(screen.getByRole('checkbox', { name: 'GRADLE' })).toBeDefined()
@@ -435,6 +473,10 @@ describe('ComponentFilters labels multi-select', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    // vi.clearAllMocks wipes the per-field useFieldOptions implementation;
+    // reset the seed map and re-install the dispatcher every test.
+    for (const k of Object.keys(fieldOptionSeeds)) delete fieldOptionSeeds[k]
+    applyFieldOptionsMock()
     mockLabels()
     mockCurrentUser('testuser')
     mockFieldConfig([])
@@ -552,5 +594,106 @@ describe('ComponentFilters labels multi-select', () => {
     // Crucially: the misleading "No labels available" must NOT appear here —
     // the vocabulary is non-empty, only the current query has no matches.
     expect(screen.queryByText('No labels available')).toBeNull()
+  })
+})
+
+describe('ComponentFilters System multi-select', () => {
+  const onFilterChange = vi.fn()
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    for (const k of Object.keys(fieldOptionSeeds)) delete fieldOptionSeeds[k]
+    applyFieldOptionsMock()
+    mockLabels()
+    mockCurrentUser('testuser')
+    // Seed the system field with ALFA/BRAVO/CHARLIE so the picker has
+    // a deterministic vocabulary to drive interactions.
+    mockFieldOptions('system', ['ALFA', 'BRAVO', 'CHARLIE'])
+  })
+
+  it('renders a System picker trigger', () => {
+    render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
+    expect(screen.getByRole('button', { name: /all systems/i })).toBeDefined()
+  })
+
+  it('opens the picker and lists options sourced from useFieldOptions', async () => {
+    render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
+    await userEvent.click(screen.getByRole('button', { name: /all systems/i }))
+    expect(screen.getByRole('checkbox', { name: 'ALFA' })).toBeDefined()
+    expect(screen.getByRole('checkbox', { name: 'BRAVO' })).toBeDefined()
+    expect(screen.getByRole('checkbox', { name: 'CHARLIE' })).toBeDefined()
+  })
+
+  it('calls onFilterChange with a single-element system array when one option is picked', async () => {
+    render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
+    await userEvent.click(screen.getByRole('button', { name: /all systems/i }))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'ALFA' }))
+    const lastCall = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
+    expect(lastCall.system).toEqual(['ALFA'])
+  })
+
+  it('calls onFilterChange with both picked systems when two checkboxes are checked', async () => {
+    // Stateful wrapper so the picker's controlled state persists across clicks.
+    function Harness() {
+      const [filter, setFilter] = React.useState<{ system?: string[] }>({})
+      return (
+        <ComponentFilters
+          filter={filter}
+          onFilterChange={(f) => {
+            onFilterChange(f)
+            setFilter(f)
+          }}
+        />
+      )
+    }
+    render(<Harness />)
+    await userEvent.click(screen.getByRole('button', { name: /all systems/i }))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'ALFA' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'BRAVO' }))
+    const lastCall = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
+    expect(lastCall.system).toEqual(['ALFA', 'BRAVO'])
+  })
+
+  it('Clear filters drops system from the filter', async () => {
+    render(
+      <ComponentFilters
+        filter={{ system: ['ALFA'], archived: false }}
+        onFilterChange={onFilterChange}
+      />,
+    )
+    await userEvent.click(screen.getByText('Clear filters'))
+    expect(onFilterChange).toHaveBeenCalledWith({ archived: false })
+    const lastArg = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
+    expect(lastArg.system).toBeUndefined()
+  })
+
+  it('shows Clear filters when system is the only active filter', () => {
+    render(
+      <ComponentFilters
+        filter={{ system: ['ALFA'], archived: false }}
+        onFilterChange={onFilterChange}
+      />,
+    )
+    expect(screen.getByText('Clear filters')).toBeDefined()
+  })
+
+  it('does NOT render the System control when admin field-config marks it filterable: false', () => {
+    mockFieldConfig(['ALFA', 'BRAVO'], { filterable: false }, 'system')
+    render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
+    expect(screen.queryByRole('button', { name: /all systems/i })).toBeNull()
+  })
+
+  it('renders the System control when filterable is undefined (default true)', () => {
+    // Regression guard mirroring the buildSystem case — the default
+    // semantic is "show the filter"; only explicit filterable: false hides.
+    mockFieldConfig(['ALFA', 'BRAVO'], {}, 'system')
+    render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
+    expect(screen.getByRole('button', { name: /all systems/i })).toBeDefined()
+  })
+
+  it('renders the System control even when visibility=hidden (visibility is form-only)', () => {
+    mockFieldConfig(['ALFA', 'BRAVO'], { visibility: 'hidden' }, 'system')
+    render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
+    expect(screen.getByRole('button', { name: /all systems/i })).toBeDefined()
   })
 })

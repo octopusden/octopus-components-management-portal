@@ -50,11 +50,11 @@ describe('useComponents — URL params', () => {
     expect(calledUrl).toContain('sort=componentKey%2Casc')
   })
 
-  it('passes system filter when set', async () => {
+  it('passes system filter as a single-value CSV when one option is picked', async () => {
     mockApi.get.mockResolvedValue(emptyPage)
 
     const { result } = renderHook(
-      () => useComponents({ filter: { system: 'ALFA' } }),
+      () => useComponents({ filter: { system: ['ALFA'] } }),
       { wrapper: makeWrapper() },
     )
 
@@ -62,6 +62,21 @@ describe('useComponents — URL params', () => {
 
     const calledUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
     expect(calledUrl).toContain('system=ALFA')
+  })
+
+  it('passes system filter as a CSV when multiple options are picked', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+
+    const { result } = renderHook(
+      () => useComponents({ filter: { system: ['ALFA', 'BRAVO'] } }),
+      { wrapper: makeWrapper() },
+    )
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    const calledUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    // URLSearchParams percent-encodes the comma in a CSV value.
+    expect(calledUrl).toContain('system=ALFA%2CBRAVO')
   })
 
   it('passes archived filter when set', async () => {
@@ -85,6 +100,17 @@ describe('useComponents — URL params', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
+    const calledUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    expect(calledUrl).not.toContain('system=')
+  })
+
+  it('does not include system param when filter.system is an empty array', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result } = renderHook(
+      () => useComponents({ filter: { system: [] } }),
+      { wrapper: makeWrapper() },
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
     const calledUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
     expect(calledUrl).not.toContain('system=')
   })

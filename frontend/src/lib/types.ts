@@ -370,9 +370,9 @@ export interface ComponentUpdateRequest {
 
 export interface ComponentFilter {
   // Wire query param stays `?system=` (CRS ComponentControllerV4.kt:65 — the
-  // filter param did NOT rename even though the DTO field did). Kept as a
-  // singular field here because the filter UI is single-select.
-  system?: string
+  // filter param did NOT rename even though the DTO field did).
+  /** Exact-match OR across values (components can belong to multiple systems via systemJunctions). CSV on the wire. */
+  system?: string[]
   archived?: boolean
   search?: string
   /**
