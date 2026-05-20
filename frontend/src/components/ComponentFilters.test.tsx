@@ -38,8 +38,12 @@ vi.mock('../hooks/useCurrentUser', () => ({
   useCurrentUser: vi.fn(),
 }))
 
-// Stub useAdminConfig so useFieldConfigEntry (used by Build System select)
-// returns a deterministic options list without hitting the network.
+// Stub useAdminConfig so the indirect dependency chain (PeopleInput,
+// other admin-driven UI under ComponentFilters' tree) does not reach
+// for the network. Build System options no longer come from this hook
+// directly — they go through useFieldOptions (mocked below), which
+// internally consults admin field-config AND falls back to a CRS meta
+// endpoint when admin is empty.
 vi.mock('../hooks/useAdminConfig', () => ({
   useFieldConfig: vi.fn(),
   useUpdateFieldConfig: vi.fn(),
@@ -48,14 +52,29 @@ vi.mock('../hooks/useAdminConfig', () => ({
   useMigrateDefaults: vi.fn(),
 }))
 
+// Stub useFieldOptions — Build System dropdown reads its options here.
+// Default is an empty list (simulates "admin not configured AND meta
+// endpoint empty"); individual tests override via mockFieldOptions(…).
+vi.mock('../hooks/useFieldOptions', () => ({
+  useFieldOptions: vi.fn(() => ({ options: [], isLoading: false })),
+}))
+
 import { useFieldConfig } from '../hooks/useAdminConfig'
 const mockUseFieldConfig = vi.mocked(useFieldConfig)
+
+import { useFieldOptions } from '../hooks/useFieldOptions'
+const mockUseFieldOptions = vi.mocked(useFieldOptions)
 
 function mockFieldConfig(options: string[]) {
   mockUseFieldConfig.mockReturnValue({
     data: { fields: { buildSystem: { options } } },
     isLoading: false,
   } as unknown as ReturnType<typeof useFieldConfig>)
+  // Keep buildSystem options reachable from the new code path too —
+  // ComponentFilters now reads useFieldOptions('buildSystem'), so tests
+  // that previously seeded admin field-config get the same options out
+  // of the new hook with a single call.
+  mockUseFieldOptions.mockReturnValue({ options, isLoading: false })
 }
 
 import { useCurrentUser } from '../hooks/useCurrentUser'
@@ -326,6 +345,22 @@ describe('ComponentFilters Build System select (Wave 2)', () => {
     await userEvent.click(screen.getByRole('combobox', { name: /build system/i }))
     expect(screen.getByRole('option', { name: /all build systems/i })).toBeDefined()
     expect(screen.queryByRole('option', { name: 'GRADLE' })).toBeNull()
+  })
+
+  it('renders build system options from the meta-endpoint fallback when admin field-config is empty', async () => {
+    // Simulate the production scenario the fix targets: admin has not seeded
+    // any explicit options, but useFieldOptions consults
+    // /components/meta/build-systems and returns the CRS enum. The dropdown
+    // must surface those options regardless of admin field-config state.
+    mockUseFieldOptions.mockReturnValue({
+      options: ['GRADLE', 'MAVEN'],
+      isLoading: false,
+    })
+    render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
+    await userEvent.click(screen.getByRole('combobox', { name: /build system/i }))
+    expect(screen.getByRole('option', { name: 'GRADLE' })).toBeDefined()
+    expect(screen.getByRole('option', { name: 'MAVEN' })).toBeDefined()
+    expect(screen.getByRole('option', { name: /all build systems/i })).toBeDefined()
   })
 })
 
