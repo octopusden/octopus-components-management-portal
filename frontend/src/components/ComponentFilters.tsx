@@ -88,22 +88,25 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
     useFieldOptions('buildSystem')
   // Filterable gate for admin-config-driven filters. visibility is
   // form-level (editable/readonly/hidden); filterable controls list-page
-  // filter bar inclusion — admins may want one without the other. We
-  // only honour filterable on filters whose options come from admin
-  // field-config (currently buildSystem); System / Owner use a hardcoded
-  // enum and /meta/owners respectively, so they ignore this signal.
+  // filter bar inclusion — admins may want one without the other. Both
+  // System and Build System honour filterable (their options come from
+  // admin field-config with a CRS meta endpoint fallback); Owner uses
+  // /meta/owners which is not admin-configurable so it ignores the signal.
   const { entry: buildSystemEntry } = useFieldConfigEntry('buildSystem')
   // System options share the buildSystem pattern: admin field-config first,
-  // CRS /components/meta/systems fallback. Gated on `systemActivated` until
-  // first popover open because the meta endpoint may not exist on older CRS
-  // images and Playwright's console-error listener trips on the browser's
-  // native 404 log.
+  // CRS /components/meta/systems fallback. The field-config path is
+  // `component.systems` (sectioned) to match GeneralTab.tsx and
+  // ComponentDetailPage.tsx — using a different path here would silently
+  // diverge from the editor surface when admins edit field-config.
+  // Gated on `systemActivated` until first popover open because the meta
+  // endpoint may not exist on older CRS images and Playwright's
+  // console-error listener trips on the browser's native 404 log.
   const [systemActivated, setSystemActivated] = useState(false)
   const { options: systemOptions, isLoading: systemLoading } = useFieldOptions(
-    'system',
+    'component.systems',
     { enabled: systemActivated },
   )
-  const { entry: systemEntry } = useFieldConfigEntry('system')
+  const { entry: systemEntry } = useFieldConfigEntry('component.systems')
   // Sticky activation flag for the labels picker — flips true on first
   // open and never back. Drives `enabled` on useLabels so the labels
   // meta request only fires when the user expresses intent (avoids a

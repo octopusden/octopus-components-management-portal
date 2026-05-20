@@ -88,19 +88,32 @@ function mockFieldOptions(fieldPath: string, options: string[]) {
 // filterable, or any future flag without growing positional args. The
 // `field` arg names the field; ComponentFilters reads buildSystem and
 // system from useFieldConfigEntry(...) for filterable gating.
+//
+// Shapes intentionally mirror the production paths the resolver walks:
+//   - buildSystem → flat `data.fields.buildSystem` (matches BuildTab.tsx
+//     and ComponentFilters.tsx, both bare 'buildSystem' paths).
+//   - system     → sectioned `data.component.systems` (matches
+//     GeneralTab.tsx + ComponentDetailPage.tsx + ComponentFilters.tsx,
+//     all 'component.systems' paths). useFieldOptions seeds against the
+//     'component.systems' fieldPath key for the same reason.
 function mockFieldConfig(
   options: string[],
   entry: Partial<FieldConfigEntry> = {},
   field: 'buildSystem' | 'system' = 'buildSystem',
 ) {
+  const data =
+    field === 'buildSystem'
+      ? { fields: { buildSystem: { options, ...entry } } }
+      : { component: { systems: { options, ...entry } } }
   mockUseFieldConfig.mockReturnValue({
-    data: { fields: { [field]: { options, ...entry } } },
+    data,
     isLoading: false,
   } as unknown as ReturnType<typeof useFieldConfig>)
   // Keep field-options reachable from the new code path too —
-  // ComponentFilters reads useFieldOptions(field), so tests that seed
-  // admin field-config get the same options out of the new hook.
-  mockFieldOptions(field, options)
+  // ComponentFilters reads useFieldOptions(...) for both filters. The
+  // seed key matches the production fieldPath each filter uses.
+  const optionsKey = field === 'buildSystem' ? 'buildSystem' : 'component.systems'
+  mockFieldOptions(optionsKey, options)
 }
 
 import { useCurrentUser } from '../hooks/useCurrentUser'
@@ -605,6 +618,34 @@ describe('ComponentFilters labels multi-select', () => {
     expect(document.activeElement).toBe(gamma)
   })
 
+  it('ArrowDown walks the search-filtered subset (skips hidden options)', async () => {
+    // The picker's `filtered` list is what the user actually sees, so the
+    // ArrowDown handler must derive next/prev from `filtered`, not from
+    // the underlying `options`. With vocabulary [apple, banana, apricot]
+    // and search "ap", the visible list narrows to [apple, apricot] —
+    // ArrowDown from apple must jump to apricot (the next visible row),
+    // NOT to banana (which is no longer rendered). The previous
+    // index-keyed refs implementation would have routed to banana's
+    // stale slot.
+    mockLabels(['apple', 'banana', 'apricot'])
+    render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
+    await userEvent.click(screen.getByRole('button', { name: /all labels/i }))
+
+    const searchInput = screen.getByPlaceholderText('Search labels...')
+    await userEvent.type(searchInput, 'ap')
+
+    const apple = screen.getByRole('checkbox', { name: 'apple' }) as HTMLInputElement
+    const apricot = screen.getByRole('checkbox', { name: 'apricot' }) as HTMLInputElement
+    // banana does not contain 'ap' — filtered out entirely.
+    expect(screen.queryByRole('checkbox', { name: 'banana' })).toBeNull()
+
+    apple.focus()
+    expect(document.activeElement).toBe(apple)
+
+    await userEvent.keyboard('{ArrowDown}')
+    expect(document.activeElement).toBe(apricot)
+  })
+
   it('shows "Loading…" while useLabels is fetching', async () => {
     mockLabels(undefined, true)
     render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
@@ -646,8 +687,9 @@ describe('ComponentFilters System multi-select', () => {
     mockLabels()
     mockCurrentUser('testuser')
     // Seed the system field with ALFA/BRAVO/CHARLIE so the picker has
-    // a deterministic vocabulary to drive interactions.
-    mockFieldOptions('system', ['ALFA', 'BRAVO', 'CHARLIE'])
+    // a deterministic vocabulary to drive interactions. The fieldPath
+    // is 'component.systems' (sectioned) to match the production code.
+    mockFieldOptions('component.systems', ['ALFA', 'BRAVO', 'CHARLIE'])
   })
 
   it('renders a System picker trigger', () => {
@@ -734,5 +776,20 @@ describe('ComponentFilters System multi-select', () => {
     mockFieldConfig(['ALFA', 'BRAVO'], { visibility: 'hidden' }, 'system')
     render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
     expect(screen.getByRole('button', { name: /all systems/i })).toBeDefined()
+  })
+
+  it('reads filterable from the sectioned {component:{systems}} field-config shape', () => {
+    // Locks in the cross-surface field-config path contract: GeneralTab,
+    // ComponentDetailPage, and the filter bar all resolve "systems" via
+    // the sectioned path component.systems. Writing the sectioned shape
+    // directly (bypassing the helper) protects against a regression where
+    // someone "fixes" the filter to look up a flat 'system' key — admin
+    // edits would silently stop applying to one surface but not the other.
+    mockUseFieldConfig.mockReturnValue({
+      data: { component: { systems: { filterable: false } } },
+      isLoading: false,
+    } as unknown as ReturnType<typeof useFieldConfig>)
+    render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
+    expect(screen.queryByRole('button', { name: /all systems/i })).toBeNull()
   })
 })

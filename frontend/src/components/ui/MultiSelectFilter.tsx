@@ -57,10 +57,14 @@ export function MultiSelectFilter({
     onOpenChange?.(next)
   }
 
-  // Ref-by-index map: each <input>'s render-time ref callback writes its
-  // own slot, and unmount cleans it up. No render-time array mutation
-  // (which would be unsafe under StrictMode / concurrent rendering).
-  const optionRefs = useRef<Map<number, HTMLInputElement>>(new Map())
+  // Ref-by-option-value map: keyed on the stable option string instead of
+  // a render-time index. When the user types in the search input, `filtered`
+  // changes order and length, so an index-keyed Map would see the same
+  // option's row land at a new idx while the prior ref callback's closure
+  // still holds the OLD idx for cleanup → stale entries. Keying by value
+  // sidesteps the issue because each row's set + delete reference the
+  // same key (the option string).
+  const optionRefs = useRef<Map<string, HTMLInputElement>>(new Map())
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -69,23 +73,37 @@ export function MultiSelectFilter({
   }, [options, search])
 
   // Container-level Arrow handling — "stops at last" (matches native <select>).
-  // preventDefault so the popover doesn't scroll the page instead.
+  // preventDefault so the popover doesn't scroll the page instead. Navigation
+  // is derived from `filtered` (the visible list) so search-narrowed lists
+  // walk correctly: ArrowDown from the last visible item stays put even if
+  // the underlying `options` array has more entries that the search hid.
   const handleListKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
-    const map = optionRefs.current
-    if (map.size === 0) return
-    let idx = -1
-    for (const [i, el] of map) {
-      if (el === e.target) {
-        idx = i
+    if (filtered.length === 0) return
+    // Reverse-lookup the focused option's index in `filtered`. We compare
+    // the live `document.activeElement` against our refs Map (not against
+    // e.target — keyboard events from the popover surface sometimes
+    // bubble with e.target set to the scroll container, not the input).
+    const focused = document.activeElement
+    let currentIdx = -1
+    for (let i = 0; i < filtered.length; i++) {
+      if (optionRefs.current.get(filtered[i]!) === focused) {
+        currentIdx = i
         break
       }
     }
-    if (idx === -1) return
+    if (currentIdx < 0) {
+      // No row focused yet — seed focus on the first visible row.
+      e.preventDefault()
+      optionRefs.current.get(filtered[0]!)?.focus()
+      return
+    }
     e.preventDefault()
-    const lastIdx = filtered.length - 1
-    const nextIdx = e.key === 'ArrowDown' ? Math.min(idx + 1, lastIdx) : Math.max(idx - 1, 0)
-    map.get(nextIdx)?.focus()
+    const nextIdx =
+      e.key === 'ArrowDown'
+        ? Math.min(currentIdx + 1, filtered.length - 1)
+        : Math.max(currentIdx - 1, 0)
+    optionRefs.current.get(filtered[nextIdx]!)?.focus()
   }
 
   const pluralUnit = `${unitLabel}s`
@@ -150,7 +168,7 @@ export function MultiSelectFilter({
               No matches for "{search}"
             </div>
           ) : (
-            filtered.map((option, idx) => {
+            filtered.map((option) => {
               const checked = value.includes(option)
               return (
                 <label
@@ -161,8 +179,8 @@ export function MultiSelectFilter({
                 >
                   <input
                     ref={(el) => {
-                      if (el) optionRefs.current.set(idx, el)
-                      else optionRefs.current.delete(idx)
+                      if (el) optionRefs.current.set(option, el)
+                      else optionRefs.current.delete(option)
                     }}
                     type="checkbox"
                     aria-label={option}
