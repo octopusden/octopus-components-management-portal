@@ -14,10 +14,11 @@ import { Switch } from './ui/switch'
 import { Label } from './ui/label'
 import type { ComponentFilter } from '../lib/types'
 import { useOwners } from '../hooks/useOwners'
+import { useLabels } from '../hooks/useLabels'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useFieldOptions } from '../hooks/useFieldOptions'
 import { useFieldConfigEntry } from '../hooks/useFieldConfig'
-import { LabelsMultiSelect } from './ui/LabelsMultiSelect'
+import { MultiSelectFilter } from './ui/MultiSelectFilter'
 
 interface ComponentFiltersProps {
   filter: ComponentFilter
@@ -56,8 +57,8 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
     onFilterChange({ ...filter, owner: value === ALL_VALUE ? undefined : value })
   }
 
-  const handleBuildSystemChange = (value: string) => {
-    onFilterChange({ ...filter, buildSystem: value === ALL_VALUE ? undefined : value })
+  const handleBuildSystemChange = (next: string[]) => {
+    onFilterChange({ ...filter, buildSystem: next.length ? next : undefined })
   }
 
   const handleLabelsChange = (next: string[]) => {
@@ -84,7 +85,7 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
     !!filter.search ||
     !!filter.system ||
     !!filter.owner ||
-    !!filter.buildSystem ||
+    !!filter.buildSystem?.length ||
     !!filter.labels?.length ||
     filter.archived === undefined
 
@@ -97,12 +98,22 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
   // Build system options: admin field-config first, with a fallback to the
   // CRS enum at /components/meta/build-systems so the dropdown is useful
   // out of the box even when admin has not seeded explicit options.
-  const { options: buildSystemOptions } = useFieldOptions('buildSystem')
+  const { options: buildSystemOptions, isLoading: buildSystemLoading } =
+    useFieldOptions('buildSystem')
   // Visibility gate for admin-config-driven filters. We only honour
   // visibility on filters whose options come from admin field-config
   // (currently buildSystem); System / Owner use a hardcoded enum and
   // /meta/owners respectively, so they ignore this signal.
   const { entry: buildSystemEntry } = useFieldConfigEntry('buildSystem')
+  // Sticky activation flags for the two multi-select pickers — flip
+  // true on first open and never back. Drive `enabled` on useLabels so
+  // the labels meta request only fires when the user expresses intent
+  // (avoids a page-mount 404 against a CRS that may not ship /meta/labels
+  // yet). useFieldOptions is cheap + cached, so we don't gate it.
+  const [labelsActivated, setLabelsActivated] = useState(false)
+  const { data: labelOptions = [], isLoading: labelsLoading } = useLabels({
+    enabled: labelsActivated,
+  })
   const { data: currentUser } = useCurrentUser()
 
   // My Components: when checked, owner is pinned to the current user
@@ -147,24 +158,26 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
       </Select>
 
       {buildSystemEntry.visibility !== 'hidden' && (
-        <Select value={filter.buildSystem ?? ALL_VALUE} onValueChange={handleBuildSystemChange}>
-          <SelectTrigger className="w-[160px]" aria-label="Build System">
-            <SelectValue placeholder="All build systems" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL_VALUE}>All build systems</SelectItem>
-            {buildSystemOptions.map((bs) => (
-              <SelectItem key={bs} value={bs}>
-                {bs}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <MultiSelectFilter
+          value={filter.buildSystem ?? []}
+          onChange={handleBuildSystemChange}
+          options={buildSystemOptions}
+          isLoading={buildSystemLoading}
+          placeholder="All build systems"
+          unitLabel="build system"
+        />
       )}
 
-      <LabelsMultiSelect
+      <MultiSelectFilter
         value={filter.labels ?? []}
         onChange={handleLabelsChange}
+        options={labelOptions}
+        isLoading={labelsLoading}
+        placeholder="All labels"
+        unitLabel="label"
+        onOpenChange={(open) => {
+          if (open) setLabelsActivated(true)
+        }}
       />
 
       <Select

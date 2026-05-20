@@ -299,7 +299,7 @@ describe('ComponentFilters owner dropdown (B7.1.1)', () => {
   })
 })
 
-describe('ComponentFilters Build System select (Wave 2)', () => {
+describe('ComponentFilters Build System multi-select', () => {
   const onFilterChange = vi.fn()
 
   beforeEach(() => {
@@ -309,44 +309,79 @@ describe('ComponentFilters Build System select (Wave 2)', () => {
     mockFieldConfig(['GRADLE', 'MAVEN'])
   })
 
-  it('renders a Build System dropdown', () => {
+  it('renders a Build System picker trigger', () => {
     render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
-    expect(screen.getByRole('combobox', { name: /build system/i })).toBeDefined()
+    expect(screen.getByRole('button', { name: /all build systems/i })).toBeDefined()
   })
 
-  it('lists options sourced from field-config', async () => {
+  it('opens the picker and lists options sourced from field-config', async () => {
     render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
-    await userEvent.click(screen.getByRole('combobox', { name: /build system/i }))
-    expect(screen.getByRole('option', { name: 'GRADLE' })).toBeDefined()
-    expect(screen.getByRole('option', { name: 'MAVEN' })).toBeDefined()
-    expect(screen.getByRole('option', { name: /all build systems/i })).toBeDefined()
+    await userEvent.click(screen.getByRole('button', { name: /all build systems/i }))
+    expect(screen.getByRole('checkbox', { name: 'GRADLE' })).toBeDefined()
+    expect(screen.getByRole('checkbox', { name: 'MAVEN' })).toBeDefined()
   })
 
-  it('calls onFilterChange with buildSystem when an option is selected', async () => {
+  it('calls onFilterChange with a single-element buildSystem array when one option is picked', async () => {
     render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
-    await userEvent.click(screen.getByRole('combobox', { name: /build system/i }))
-    await userEvent.click(screen.getByRole('option', { name: 'GRADLE' }))
-    expect(onFilterChange).toHaveBeenCalledWith({ buildSystem: 'GRADLE' })
+    await userEvent.click(screen.getByRole('button', { name: /all build systems/i }))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'GRADLE' }))
+    const lastCall = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
+    expect(lastCall.buildSystem).toEqual(['GRADLE'])
   })
 
-  it('clears buildSystem when "All build systems" is selected', async () => {
-    render(<ComponentFilters filter={{ buildSystem: 'MAVEN' }} onFilterChange={onFilterChange} />)
-    await userEvent.click(screen.getByRole('combobox', { name: /build system/i }))
-    await userEvent.click(screen.getByRole('option', { name: /all build systems/i }))
-    expect(onFilterChange).toHaveBeenCalledWith({ buildSystem: undefined })
+  it('calls onFilterChange with both picked build systems when two checkboxes are checked', async () => {
+    // Stateful wrapper — the picker is controlled by filter.buildSystem, so we
+    // must persist updates between clicks for the second selection to extend
+    // the first instead of replacing it.
+    function Harness() {
+      const [filter, setFilter] = React.useState<{ buildSystem?: string[] }>({})
+      return (
+        <ComponentFilters
+          filter={filter}
+          onFilterChange={(f) => {
+            onFilterChange(f)
+            setFilter(f)
+          }}
+        />
+      )
+    }
+    render(<Harness />)
+    await userEvent.click(screen.getByRole('button', { name: /all build systems/i }))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'GRADLE' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'MAVEN' }))
+    const lastCall = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
+    expect(lastCall.buildSystem).toEqual(['GRADLE', 'MAVEN'])
+  })
+
+  it('Clear filters drops buildSystem from the filter', async () => {
+    render(
+      <ComponentFilters
+        filter={{ buildSystem: ['GRADLE'], archived: false }}
+        onFilterChange={onFilterChange}
+      />,
+    )
+    await userEvent.click(screen.getByText('Clear filters'))
+    expect(onFilterChange).toHaveBeenCalledWith({ archived: false })
+    const lastArg = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
+    expect(lastArg.buildSystem).toBeUndefined()
   })
 
   it('shows Clear filters when buildSystem is the only active filter', () => {
-    render(<ComponentFilters filter={{ buildSystem: 'GRADLE', archived: false }} onFilterChange={onFilterChange} />)
+    render(
+      <ComponentFilters
+        filter={{ buildSystem: ['GRADLE'], archived: false }}
+        onFilterChange={onFilterChange}
+      />,
+    )
     expect(screen.getByText('Clear filters')).toBeDefined()
   })
 
-  it('renders only "All build systems" when field-config has no options', async () => {
+  it('shows "No build systems available" when field-config has no options', async () => {
     mockFieldConfig([])
     render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
-    await userEvent.click(screen.getByRole('combobox', { name: /build system/i }))
-    expect(screen.getByRole('option', { name: /all build systems/i })).toBeDefined()
-    expect(screen.queryByRole('option', { name: 'GRADLE' })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: /all build systems/i }))
+    expect(screen.getByText('No build systems available')).toBeDefined()
+    expect(screen.queryByRole('checkbox', { name: 'GRADLE' })).toBeNull()
   })
 
   it('renders build system options from the meta-endpoint fallback when admin field-config is empty', async () => {
@@ -359,10 +394,9 @@ describe('ComponentFilters Build System select (Wave 2)', () => {
       isLoading: false,
     })
     render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
-    await userEvent.click(screen.getByRole('combobox', { name: /build system/i }))
-    expect(screen.getByRole('option', { name: 'GRADLE' })).toBeDefined()
-    expect(screen.getByRole('option', { name: 'MAVEN' })).toBeDefined()
-    expect(screen.getByRole('option', { name: /all build systems/i })).toBeDefined()
+    await userEvent.click(screen.getByRole('button', { name: /all build systems/i }))
+    expect(screen.getByRole('checkbox', { name: 'GRADLE' })).toBeDefined()
+    expect(screen.getByRole('checkbox', { name: 'MAVEN' })).toBeDefined()
   })
 
   it('does NOT render the Build System control when admin field-config marks it hidden', () => {
@@ -371,7 +405,7 @@ describe('ComponentFilters Build System select (Wave 2)', () => {
     // same visibility contract the editor tabs honour.
     mockFieldConfig(['GRADLE', 'MAVEN'], 'hidden')
     render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
-    expect(screen.queryByRole('combobox', { name: /build system/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /all build systems/i })).toBeNull()
   })
 })
 

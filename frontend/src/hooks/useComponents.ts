@@ -25,7 +25,10 @@ export function useComponents({ filter, page = 0, size = 20, sort = 'componentKe
   if (filter?.archived !== undefined) params.set('archived', String(filter.archived))
   if (filter?.search) params.set('search', filter.search)
   if (filter?.owner) params.set('owner', filter.owner)
-  if (filter?.buildSystem) params.set('buildSystem', filter.buildSystem)
+  // CSV multi-value; CRS controller binds `List<String>?` via Spring's
+  // CSV binder (companion CRS PR). Until that lands a single-value
+  // selection still wins because the wire param is still `?buildSystem=`.
+  if (filter?.buildSystem?.length) params.set('buildSystem', filter.buildSystem.join(','))
   // CSV; CRS normalises split-by-comma + trim + drop-empty server-side.
   // If labels ever need to contain commas, switch to repeatable params.
   if (filter?.labels?.length) params.set('labels', filter.labels.join(','))

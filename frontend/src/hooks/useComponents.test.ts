@@ -126,10 +126,10 @@ describe('useComponents — URL params', () => {
     expect(calledUrl).toContain('owner=alice%40example.com')
   })
 
-  it('passes buildSystem filter when set', async () => {
+  it('passes buildSystem filter as a single-value CSV when one option is picked', async () => {
     mockApi.get.mockResolvedValue(emptyPage)
     const { result } = renderHook(
-      () => useComponents({ filter: { buildSystem: 'GRADLE' } }),
+      () => useComponents({ filter: { buildSystem: ['GRADLE'] } }),
       { wrapper: makeWrapper() },
     )
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
@@ -137,9 +137,32 @@ describe('useComponents — URL params', () => {
     expect(calledUrl).toContain('buildSystem=GRADLE')
   })
 
-  it('does not include buildSystem param when filter is undefined', async () => {
+  it('passes buildSystem filter as a CSV when multiple options are picked', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result } = renderHook(
+      () => useComponents({ filter: { buildSystem: ['GRADLE', 'MAVEN'] } }),
+      { wrapper: makeWrapper() },
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const calledUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    // URLSearchParams percent-encodes the comma in a CSV value.
+    expect(calledUrl).toContain('buildSystem=GRADLE%2CMAVEN')
+  })
+
+  it('does not include buildSystem param when filter is undefined or empty', async () => {
     mockApi.get.mockResolvedValue(emptyPage)
     const { result } = renderHook(() => useComponents(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const calledUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    expect(calledUrl).not.toContain('buildSystem=')
+  })
+
+  it('does not include buildSystem param when filter.buildSystem is an empty array', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result } = renderHook(
+      () => useComponents({ filter: { buildSystem: [] } }),
+      { wrapper: makeWrapper() },
+    )
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     const calledUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
     expect(calledUrl).not.toContain('buildSystem=')

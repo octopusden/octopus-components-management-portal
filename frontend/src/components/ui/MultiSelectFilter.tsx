@@ -1,32 +1,50 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { Button } from './button'
 import { Input } from './input'
 import { Popover, PopoverContent, PopoverTrigger } from './popover'
 import { Badge } from './badge'
-import { useLabels } from '../../hooks/useLabels'
 import { cn } from '../../lib/utils'
 
-interface LabelsMultiSelectProps {
+interface MultiSelectFilterProps {
   value: string[]
   onChange: (next: string[]) => void
+  options: string[]
+  isLoading?: boolean
+  /** Trigger placeholder when no value is selected, e.g. "All labels". */
+  placeholder: string
+  /**
+   * Singular noun for trigger and empty-state copy, e.g. "label" or
+   * "build system". Pluralised with a trailing 's' — fine for the
+   * units used today; refine if a unit needs non-trivial pluralisation.
+   */
+  unitLabel: string
+  /**
+   * Called when the popover toggles open/closed. Callers use this to
+   * gate hooks behind a user-interaction-driven `enabled` flag (avoids
+   * page-mount fetches against endpoints that may not exist yet —
+   * Playwright's console-error listener trips on browser 404 logs
+   * before the React-Query catch can swallow them).
+   */
+  onOpenChange?: (open: boolean) => void
 }
 
-export function LabelsMultiSelect({ value, onChange }: LabelsMultiSelectProps) {
+export function MultiSelectFilter({
+  value,
+  onChange,
+  options,
+  isLoading,
+  placeholder,
+  unitLabel,
+  onOpenChange,
+}: MultiSelectFilterProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
-  // Sticky activation flag — flips true on first open and never back.
-  // Drives `useLabels({ enabled })` so the network request only fires once
-  // the user expresses intent (avoids a page-mount 404 against a CRS that
-  // does not yet ship /components/meta/labels — Playwright's console-error
-  // listener trips on the browser's native 404 log before our React-Query
-  // catch can swallow it).
-  const [activated, setActivated] = useState(false)
-  useEffect(() => {
-    if (open && !activated) setActivated(true)
-  }, [open, activated])
 
-  const { data: options = [], isLoading } = useLabels({ enabled: activated })
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next)
+    onOpenChange?.(next)
+  }
 
   // Ref-by-index map: each <input>'s render-time ref callback writes its
   // own slot, and unmount cleans it up. No render-time array mutation
@@ -45,9 +63,6 @@ export function LabelsMultiSelect({ value, onChange }: LabelsMultiSelectProps) {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
     const map = optionRefs.current
     if (map.size === 0) return
-    // Reverse-lookup the focused index from the Map. Iteration order on
-    // a Map is insertion order in practice, but we don't rely on that —
-    // we explicitly match the focused element to its index slot.
     let idx = -1
     for (const [i, el] of map) {
       if (el === e.target) {
@@ -62,27 +77,28 @@ export function LabelsMultiSelect({ value, onChange }: LabelsMultiSelectProps) {
     map.get(nextIdx)?.focus()
   }
 
+  const pluralUnit = `${unitLabel}s`
   const triggerLabel =
     value.length === 0
-      ? 'All labels'
+      ? placeholder
       : value.length === 1
         ? value[0]!
-        : `${value.length} labels`
+        : `${value.length} ${pluralUnit}`
 
-  const toggle = (label: string) => {
-    if (value.includes(label)) {
-      onChange(value.filter((v) => v !== label))
+  const toggle = (option: string) => {
+    if (value.includes(option)) {
+      onChange(value.filter((v) => v !== option))
     } else {
       // Preserve options order so selection order stays deterministic
       // (improves the readability of the CSV query string and the test).
-      onChange(options.filter((o) => value.includes(o) || o === label))
+      onChange(options.filter((o) => value.includes(o) || o === option))
     }
   }
 
   const clearAll = () => onChange([])
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -100,7 +116,7 @@ export function LabelsMultiSelect({ value, onChange }: LabelsMultiSelectProps) {
       <PopoverContent align="start" className="w-[260px] p-2">
         <div className="mb-2">
           <Input
-            placeholder="Search labels..."
+            placeholder={`Search ${pluralUnit}...`}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="h-8 text-sm"
@@ -109,22 +125,24 @@ export function LabelsMultiSelect({ value, onChange }: LabelsMultiSelectProps) {
         <div
           className="max-h-64 overflow-auto"
           onKeyDown={handleListKeyDown}
-          data-testid="labels-options-list"
+          data-testid="multi-select-options-list"
         >
           {isLoading ? (
             <div className="px-2 py-3 text-sm text-muted-foreground">Loading…</div>
           ) : options.length === 0 ? (
-            <div className="px-2 py-3 text-sm text-muted-foreground">No labels available</div>
+            <div className="px-2 py-3 text-sm text-muted-foreground">
+              No {pluralUnit} available
+            </div>
           ) : filtered.length === 0 ? (
             <div className="px-2 py-3 text-sm text-muted-foreground">
               No matches for "{search}"
             </div>
           ) : (
-            filtered.map((label, idx) => {
-              const checked = value.includes(label)
+            filtered.map((option, idx) => {
+              const checked = value.includes(option)
               return (
                 <label
-                  key={label}
+                  key={option}
                   className={cn(
                     'flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground',
                   )}
@@ -135,12 +153,12 @@ export function LabelsMultiSelect({ value, onChange }: LabelsMultiSelectProps) {
                       else optionRefs.current.delete(idx)
                     }}
                     type="checkbox"
-                    aria-label={label}
+                    aria-label={option}
                     className="accent-primary h-4 w-4 rounded"
                     checked={checked}
-                    onChange={() => toggle(label)}
+                    onChange={() => toggle(option)}
                   />
-                  <span className="truncate font-mono text-xs">{label}</span>
+                  <span className="truncate font-mono text-xs">{option}</span>
                 </label>
               )
             })
@@ -163,7 +181,7 @@ export function LabelsMultiSelect({ value, onChange }: LabelsMultiSelectProps) {
             variant="ghost"
             size="sm"
             className="h-7 text-xs"
-            onClick={() => setOpen(false)}
+            onClick={() => handleOpenChange(false)}
           >
             Done
           </Button>

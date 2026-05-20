@@ -380,7 +380,8 @@ export interface ComponentFilter {
    * `/components/meta/owners` for the autocomplete picker. SYS-035.
    */
   owner?: string
-  buildSystem?: string
+  /** Exact-match OR across values (a component has exactly one buildSystem). CSV on the wire. */
+  buildSystem?: string[]
   /** Exact-match AND across values; sourced from /components/meta/labels. CSV on the wire. */
   labels?: string[]
 }
