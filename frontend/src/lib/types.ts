@@ -382,6 +382,8 @@ export interface ComponentFilter {
    */
   owner?: string
   buildSystem?: string
+  /** Exact-match AND across values; sourced from /components/meta/labels. CSV on the wire. */
+  labels?: string[]
 }
 
 export interface Page<T> {

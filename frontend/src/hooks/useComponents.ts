@@ -27,6 +27,9 @@ export function useComponents({ filter, page = 0, size = 20, sort = 'componentKe
   if (filter?.search) params.set('search', filter.search)
   if (filter?.owner) params.set('owner', filter.owner)
   if (filter?.buildSystem) params.set('buildSystem', filter.buildSystem)
+  // CSV; CRS normalises split-by-comma + trim + drop-empty server-side.
+  // If labels ever need to contain commas, switch to repeatable params.
+  if (filter?.labels?.length) params.set('labels', filter.labels.join(','))
 
   return useQuery({
     queryKey: ['components', { filter, page, size, sort }],

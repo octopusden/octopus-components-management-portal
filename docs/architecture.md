@@ -122,8 +122,9 @@ The P1 UI features rely on these CRS endpoints (all behind the `/rest/**` proxy 
 
 | Endpoint | Used by | CRS contract |
 |---|---|---|
-| `GET /components?owner=…&search=…&productType=…&archived=…` | List page filter sidebar (B7.1.1), parent autocomplete (B7.1.5) | `SYS-035` for `owner` |
+| `GET /components?owner=…&search=…&productType=…&archived=…&labels=…` | List page filter sidebar (B7.1.1), parent autocomplete (B7.1.5) | `SYS-035` for `owner`; new CRS contract for `labels` (CSV, AND semantics) |
 | `GET /components/meta/owners` | Owner picker on the list page (B7.1.1), people input on detail | existing |
+| `GET /components/meta/labels` | Labels multi-select on the list page | new CRS contract; mirrors `/meta/owners` |
 | `GET /components/{idOrName}` | Detail page fetch (UUID first, name fallback) | existing |
 | `PATCH /components/{id}` with `name` | Rename (B7.1.4) | `canRenameComponent` SpEL |
 | `PATCH /components/{id}` with `parentComponentName` | Parent autocomplete save (B7.1.5) | `canEditComponent` |

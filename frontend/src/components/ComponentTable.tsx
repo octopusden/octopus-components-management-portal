@@ -18,10 +18,11 @@ import {
   TableHeader,
   TableRow,
 } from './ui/table'
-import { Badge } from './ui/badge'
+import { Badge, badgeVariants } from './ui/badge'
 import { EmptyState } from './ui/empty-state'
 import { SkeletonTable } from './ui/skeleton-table'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip'
+import { TooltipProvider } from './ui/tooltip'
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import { cn, safeHttpUrl } from '../lib/utils'
 import type { ComponentSummary, PortalLinks } from '../lib/types'
 import { usePortalLinks } from '../hooks/useInfo'
@@ -145,22 +146,29 @@ const columns = [
             </Badge>
           ))}
           {overflow.length > 0 && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                {/* Badge is a <div>; make it keyboard-focusable so the tooltip
-                    is reachable without a mouse, and label it for SR users. */}
-                <Badge
-                  variant="outline"
-                  className="text-xs cursor-default focus:outline-none focus:ring-2 focus:ring-ring"
-                  tabIndex={0}
-                  role="button"
-                  aria-label={`Show ${overflow.length} more label${overflow.length === 1 ? '' : 's'}`}
+            <Popover>
+              <PopoverTrigger asChild>
+                {/* Real <button> (not Badge: Badge renders a <div>, which is
+                    not reliably Enter/Space-activatable across AT). Styled
+                    with badgeVariants so the visual stays in sync. */}
+                <button
+                  type="button"
+                  className={cn(badgeVariants({ variant: 'outline' }), 'text-xs cursor-pointer')}
+                  aria-label={`Show all ${labels.length} labels`}
                 >
                   +{overflow.length}
-                </Badge>
-              </TooltipTrigger>
-              <TooltipContent>{overflow.join(', ')}</TooltipContent>
-            </Tooltip>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="start" side="bottom" className="w-auto max-w-xs">
+                <div className="flex flex-wrap gap-1">
+                  {labels.map((label, i) => (
+                    <Badge key={`${i}-${label}`} variant="secondary" className="text-xs font-mono">
+                      {label}
+                    </Badge>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
           )}
         </div>
       )

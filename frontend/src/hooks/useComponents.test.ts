@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 import { useComponents } from './useComponents'
 import { api } from '../lib/api'
-import type { Page, ComponentSummary } from '../lib/types'
+import type { Page, ComponentSummary, ComponentFilter } from '../lib/types'
 
 vi.mock('../lib/api', () => ({
   api: {
@@ -154,5 +154,30 @@ describe('useComponents — URL params', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     const calledUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
     expect(calledUrl).not.toContain('buildSystem=')
+  })
+
+  it('passes labels filter as CSV when set', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const filter: ComponentFilter = { labels: ['x', 'y'] }
+    const { result } = renderHook(
+      () => useComponents({ filter }),
+      { wrapper: makeWrapper() },
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const calledUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    // URLSearchParams percent-encodes the comma in a CSV value.
+    expect(calledUrl).toContain('labels=x%2Cy')
+  })
+
+  it('does not include labels param when filter.labels is empty or undefined', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const filter: ComponentFilter = { labels: [] }
+    const { result } = renderHook(
+      () => useComponents({ filter }),
+      { wrapper: makeWrapper() },
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const calledUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    expect(calledUrl).not.toContain('labels=')
   })
 })

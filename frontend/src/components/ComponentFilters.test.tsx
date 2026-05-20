@@ -1,3 +1,4 @@
+import React from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -9,6 +10,11 @@ import { ComponentFilters } from './ComponentFilters'
 // behaviour is independent of network state.
 vi.mock('../hooks/useOwners', () => ({
   useOwners: () => ({ data: ['alice', 'bob', 'carol'], isLoading: false }),
+}))
+
+// Stub useLabels — labels picker sources from /components/meta/labels.
+vi.mock('../hooks/useLabels', () => ({
+  useLabels: () => ({ data: ['alpha', 'beta', 'gamma'], isLoading: false }),
 }))
 
 // Stub useCurrentUser — My Components checkbox needs the current user.
@@ -299,5 +305,73 @@ describe('ComponentFilters Build System select (Wave 2)', () => {
     await userEvent.click(screen.getByRole('combobox', { name: /build system/i }))
     expect(screen.getByRole('option', { name: /all build systems/i })).toBeDefined()
     expect(screen.queryByRole('option', { name: 'GRADLE' })).toBeNull()
+  })
+})
+
+describe('ComponentFilters labels multi-select', () => {
+  const onFilterChange = vi.fn()
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockCurrentUser('testuser')
+    mockFieldConfig([])
+  })
+
+  it('opens the labels picker when the trigger is clicked', async () => {
+    render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
+    const trigger = screen.getByRole('button', { name: /all labels/i })
+    await userEvent.click(trigger)
+    // Once open, the option rows are rendered as checkboxes.
+    expect(screen.getByRole('checkbox', { name: 'alpha' })).toBeDefined()
+    expect(screen.getByRole('checkbox', { name: 'beta' })).toBeDefined()
+    expect(screen.getByRole('checkbox', { name: 'gamma' })).toBeDefined()
+  })
+
+  it('calls onFilterChange with the picked labels (AND list) when two checkboxes are checked', async () => {
+    // Stateful wrapper — the picker is controlled by `filter.labels`, so we
+    // must persist updates between clicks for the second selection to extend
+    // the first instead of replacing it.
+    function Harness() {
+      const [filter, setFilter] = React.useState<{ labels?: string[] }>({})
+      return (
+        <ComponentFilters
+          filter={filter}
+          onFilterChange={(f) => {
+            onFilterChange(f)
+            setFilter(f)
+          }}
+        />
+      )
+    }
+    render(<Harness />)
+    await userEvent.click(screen.getByRole('button', { name: /all labels/i }))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'alpha' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'gamma' }))
+    // Last call carries both selected labels.
+    const lastCall = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
+    expect(lastCall.labels).toEqual(['alpha', 'gamma'])
+  })
+
+  it('Clear filters drops labels from the filter', async () => {
+    render(
+      <ComponentFilters
+        filter={{ labels: ['alpha'], archived: false }}
+        onFilterChange={onFilterChange}
+      />,
+    )
+    await userEvent.click(screen.getByText('Clear filters'))
+    expect(onFilterChange).toHaveBeenCalledWith({ archived: false })
+    const lastArg = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
+    expect(lastArg.labels).toBeUndefined()
+  })
+
+  it('shows Clear filters when labels is the only active filter', () => {
+    render(
+      <ComponentFilters
+        filter={{ labels: ['alpha'], archived: false }}
+        onFilterChange={onFilterChange}
+      />,
+    )
+    expect(screen.getByText('Clear filters')).toBeDefined()
   })
 })

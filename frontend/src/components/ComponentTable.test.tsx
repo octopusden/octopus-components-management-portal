@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
@@ -182,8 +183,45 @@ describe('ComponentTable', () => {
       expect(screen.getByText('b')).toBeDefined()
       expect(screen.getByText('c')).toBeDefined()
       expect(screen.getByText('+1')).toBeDefined()
-      // 'd' is in the tooltip content — not rendered as a standalone chip
+      // 'd' lives in the (closed) popover — not in the document until opened
       expect(screen.queryByText('d')).toBeNull()
+    })
+
+    it('renders the +N indicator as a real <button> with a Show-all aria-label', () => {
+      renderTable([makeComponent({ labels: ['a', 'b', 'c', 'd', 'e'] })])
+      const btn = screen.getByRole('button', { name: /show all 5 labels/i })
+      expect(btn).toBeDefined()
+      expect((btn as HTMLElement).tagName).toBe('BUTTON')
+      expect(btn.textContent).toContain('+2')
+    })
+
+    it('clicking +N opens a popover containing every label as a chip', async () => {
+      renderTable([makeComponent({ labels: ['a', 'b', 'c', 'd', 'e'] })])
+      await userEvent.click(screen.getByRole('button', { name: /show all 5 labels/i }))
+      // After opening, all 5 labels must be reachable. The visible cell already
+      // renders a,b,c; d and e are exclusive to the popover content.
+      expect(screen.getAllByText('a').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('b').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('c').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getByText('d')).toBeDefined()
+      expect(screen.getByText('e')).toBeDefined()
+    })
+
+    it('Escape closes the +N popover', async () => {
+      renderTable([makeComponent({ labels: ['a', 'b', 'c', 'd', 'e'] })])
+      await userEvent.click(screen.getByRole('button', { name: /show all 5 labels/i }))
+      expect(screen.getByText('d')).toBeDefined()
+      await userEvent.keyboard('{Escape}')
+      // 'd' is exclusive to the popover content — it disappears once closed.
+      expect(screen.queryByText('d')).toBeNull()
+    })
+
+    it('Enter on the focused +N button opens the popover (keyboard activation)', async () => {
+      renderTable([makeComponent({ labels: ['a', 'b', 'c', 'd', 'e'] })])
+      const btn = screen.getByRole('button', { name: /show all 5 labels/i })
+      ;(btn as HTMLButtonElement).focus()
+      await userEvent.keyboard('{Enter}')
+      expect(screen.getByText('d')).toBeDefined()
     })
   })
 
