@@ -104,17 +104,6 @@ describe('useComponents — URL params', () => {
     expect(calledUrl).toContain('size=50')
   })
 
-  it('passes productType filter when set', async () => {
-    mockApi.get.mockResolvedValue(emptyPage)
-    const { result } = renderHook(
-      () => useComponents({ filter: { productType: 'LIBRARY' } }),
-      { wrapper: makeWrapper() },
-    )
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    const calledUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
-    expect(calledUrl).toContain('productType=LIBRARY')
-  })
-
   it('passes search filter when set', async () => {
     mockApi.get.mockResolvedValue(emptyPage)
     const { result } = renderHook(

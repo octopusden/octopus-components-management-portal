@@ -16,6 +16,7 @@ import type { ComponentFilter } from '../lib/types'
 import { useOwners } from '../hooks/useOwners'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useFieldOptions } from '../hooks/useFieldOptions'
+import { useFieldConfigEntry } from '../hooks/useFieldConfig'
 import { LabelsMultiSelect } from './ui/LabelsMultiSelect'
 
 interface ComponentFiltersProps {
@@ -23,13 +24,9 @@ interface ComponentFiltersProps {
   onFilterChange: (filter: ComponentFilter) => void
 }
 
-// Common system and product type values — can be extended later from API
+// Hardcoded system enum — can be extended later from API.
 const SYSTEM_OPTIONS = [
   'ALFA', 'BRAVO', 'CHARLIE', 'DELTA', 'ECHO',
-]
-
-const PRODUCT_TYPE_OPTIONS = [
-  'PRODUCT', 'COMPONENT', 'LIBRARY', 'SERVICE',
 ]
 
 const ALL_VALUE = '__all__'
@@ -53,10 +50,6 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
 
   const handleSystemChange = (value: string) => {
     onFilterChange({ ...filter, system: value === ALL_VALUE ? undefined : value })
-  }
-
-  const handleProductTypeChange = (value: string) => {
-    onFilterChange({ ...filter, productType: value === ALL_VALUE ? undefined : value })
   }
 
   const handleOwnerChange = (value: string) => {
@@ -90,7 +83,6 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
   const hasActiveFilters =
     !!filter.search ||
     !!filter.system ||
-    !!filter.productType ||
     !!filter.owner ||
     !!filter.buildSystem ||
     !!filter.labels?.length ||
@@ -106,6 +98,11 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
   // CRS enum at /components/meta/build-systems so the dropdown is useful
   // out of the box even when admin has not seeded explicit options.
   const { options: buildSystemOptions } = useFieldOptions('buildSystem')
+  // Visibility gate for admin-config-driven filters. We only honour
+  // visibility on filters whose options come from admin field-config
+  // (currently buildSystem); System / Owner use a hardcoded enum and
+  // /meta/owners respectively, so they ignore this signal.
+  const { entry: buildSystemEntry } = useFieldConfigEntry('buildSystem')
   const { data: currentUser } = useCurrentUser()
 
   // My Components: when checked, owner is pinned to the current user
@@ -149,33 +146,21 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
         </SelectContent>
       </Select>
 
-      <Select value={filter.productType ?? ALL_VALUE} onValueChange={handleProductTypeChange}>
-        <SelectTrigger className="w-[160px]">
-          <SelectValue placeholder="All types" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL_VALUE}>All types</SelectItem>
-          {PRODUCT_TYPE_OPTIONS.map((pt) => (
-            <SelectItem key={pt} value={pt}>
-              {pt}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Select value={filter.buildSystem ?? ALL_VALUE} onValueChange={handleBuildSystemChange}>
-        <SelectTrigger className="w-[160px]" aria-label="Build System">
-          <SelectValue placeholder="All build systems" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL_VALUE}>All build systems</SelectItem>
-          {buildSystemOptions.map((bs) => (
-            <SelectItem key={bs} value={bs}>
-              {bs}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {buildSystemEntry.visibility !== 'hidden' && (
+        <Select value={filter.buildSystem ?? ALL_VALUE} onValueChange={handleBuildSystemChange}>
+          <SelectTrigger className="w-[160px]" aria-label="Build System">
+            <SelectValue placeholder="All build systems" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_VALUE}>All build systems</SelectItem>
+            {buildSystemOptions.map((bs) => (
+              <SelectItem key={bs} value={bs}>
+                {bs}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
 
       <LabelsMultiSelect
         value={filter.labels ?? []}

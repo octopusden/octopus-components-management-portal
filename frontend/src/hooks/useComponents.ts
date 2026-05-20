@@ -22,7 +22,6 @@ export function useComponents({ filter, page = 0, size = 20, sort = 'componentKe
   params.set('size', String(size))
   params.set('sort', sort)
   if (filter?.system) params.set('system', filter.system)
-  if (filter?.productType) params.set('productType', filter.productType)
   if (filter?.archived !== undefined) params.set('archived', String(filter.archived))
   if (filter?.search) params.set('search', filter.search)
   if (filter?.owner) params.set('owner', filter.owner)

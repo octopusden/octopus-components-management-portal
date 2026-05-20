@@ -65,9 +65,11 @@ const mockUseFieldConfig = vi.mocked(useFieldConfig)
 import { useFieldOptions } from '../hooks/useFieldOptions'
 const mockUseFieldOptions = vi.mocked(useFieldOptions)
 
-function mockFieldConfig(options: string[]) {
+type Visibility = 'editable' | 'readonly' | 'hidden'
+
+function mockFieldConfig(options: string[], visibility: Visibility = 'editable') {
   mockUseFieldConfig.mockReturnValue({
-    data: { fields: { buildSystem: { options } } },
+    data: { fields: { buildSystem: { options, visibility } } },
     isLoading: false,
   } as unknown as ReturnType<typeof useFieldConfig>)
   // Keep buildSystem options reachable from the new code path too —
@@ -361,6 +363,15 @@ describe('ComponentFilters Build System select (Wave 2)', () => {
     expect(screen.getByRole('option', { name: 'GRADLE' })).toBeDefined()
     expect(screen.getByRole('option', { name: 'MAVEN' })).toBeDefined()
     expect(screen.getByRole('option', { name: /all build systems/i })).toBeDefined()
+  })
+
+  it('does NOT render the Build System control when admin field-config marks it hidden', () => {
+    // visibility:'hidden' is the registry-wide opt-out signal. The filter
+    // sources its options from admin field-config, so it must respect the
+    // same visibility contract the editor tabs honour.
+    mockFieldConfig(['GRADLE', 'MAVEN'], 'hidden')
+    render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
+    expect(screen.queryByRole('combobox', { name: /build system/i })).toBeNull()
   })
 })
 

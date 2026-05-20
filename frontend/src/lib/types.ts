@@ -373,7 +373,6 @@ export interface ComponentFilter {
   // filter param did NOT rename even though the DTO field did). Kept as a
   // singular field here because the filter UI is single-select.
   system?: string
-  productType?: string
   archived?: boolean
   search?: string
   /**
