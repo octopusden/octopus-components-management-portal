@@ -183,45 +183,91 @@ describe('ComponentTable', () => {
       expect(screen.getByText('b')).toBeDefined()
       expect(screen.getByText('c')).toBeDefined()
       expect(screen.getByText('+1')).toBeDefined()
-      // 'd' lives in the (closed) popover — not in the document until opened
+      // 'd' is overflow — not rendered until the +N toggle is clicked.
       expect(screen.queryByText('d')).toBeNull()
     })
 
-    it('renders the +N indicator as a real <button> with a Show-all aria-label', () => {
+    it('renders the +N toggle as a real <button> with Show-all aria-label + aria-expanded=false', () => {
       renderTable([makeComponent({ labels: ['a', 'b', 'c', 'd', 'e'] })])
       const btn = screen.getByRole('button', { name: /show all 5 labels/i })
       expect(btn).toBeDefined()
       expect((btn as HTMLElement).tagName).toBe('BUTTON')
       expect(btn.textContent).toContain('+2')
+      expect(btn.getAttribute('aria-expanded')).toBe('false')
     })
 
-    it('clicking +N opens a popover containing every label as a chip', async () => {
+    it('clicking +N expands the cell inline to render every label as a chip', async () => {
       renderTable([makeComponent({ labels: ['a', 'b', 'c', 'd', 'e'] })])
       await userEvent.click(screen.getByRole('button', { name: /show all 5 labels/i }))
-      // After opening, all 5 labels must be reachable. The visible cell already
-      // renders a,b,c; d and e are exclusive to the popover content.
-      expect(screen.getAllByText('a').length).toBeGreaterThanOrEqual(1)
-      expect(screen.getAllByText('b').length).toBeGreaterThanOrEqual(1)
-      expect(screen.getAllByText('c').length).toBeGreaterThanOrEqual(1)
+      // After expansion, all 5 labels render in-cell. d and e were
+      // overflow before; they must now be in the DOM.
+      expect(screen.getByText('a')).toBeDefined()
+      expect(screen.getByText('b')).toBeDefined()
+      expect(screen.getByText('c')).toBeDefined()
       expect(screen.getByText('d')).toBeDefined()
       expect(screen.getByText('e')).toBeDefined()
     })
 
-    it('Escape closes the +N popover', async () => {
+    it('after expanding, the toggle reads "show less" with aria-expanded=true', async () => {
+      renderTable([makeComponent({ labels: ['a', 'b', 'c', 'd', 'e'] })])
+      await userEvent.click(screen.getByRole('button', { name: /show all 5 labels/i }))
+      const collapse = screen.getByRole('button', { name: /show fewer labels/i })
+      expect(collapse).toBeDefined()
+      expect(collapse.textContent).toBe('show less')
+      expect(collapse.getAttribute('aria-expanded')).toBe('true')
+    })
+
+    it('clicking "show less" collapses back to the first 3 labels and restores the +N toggle', async () => {
       renderTable([makeComponent({ labels: ['a', 'b', 'c', 'd', 'e'] })])
       await userEvent.click(screen.getByRole('button', { name: /show all 5 labels/i }))
       expect(screen.getByText('d')).toBeDefined()
-      await userEvent.keyboard('{Escape}')
-      // 'd' is exclusive to the popover content — it disappears once closed.
+      await userEvent.click(screen.getByRole('button', { name: /show fewer labels/i }))
+      // d and e are overflow again — gone from the DOM.
       expect(screen.queryByText('d')).toBeNull()
+      expect(screen.queryByText('e')).toBeNull()
+      // The +N toggle is back with aria-expanded=false.
+      const reopen = screen.getByRole('button', { name: /show all 5 labels/i })
+      expect(reopen.getAttribute('aria-expanded')).toBe('false')
     })
 
-    it('Enter on the focused +N button opens the popover (keyboard activation)', async () => {
+    it('Enter on the focused +N button toggles expand/collapse (keyboard activation)', async () => {
       renderTable([makeComponent({ labels: ['a', 'b', 'c', 'd', 'e'] })])
       const btn = screen.getByRole('button', { name: /show all 5 labels/i })
       ;(btn as HTMLButtonElement).focus()
       await userEvent.keyboard('{Enter}')
       expect(screen.getByText('d')).toBeDefined()
+      // The collapse toggle should still hold focus; press Enter again.
+      await userEvent.keyboard('{Enter}')
+      expect(screen.queryByText('d')).toBeNull()
+    })
+
+    it('renders no toggle when labels.length <= 3', () => {
+      renderTable([makeComponent({ labels: ['a', 'b', 'c'] })])
+      expect(screen.queryByRole('button', { name: /show all|show fewer/i })).toBeNull()
+    })
+
+    it('renders no toggle when labels is empty', () => {
+      renderTable([makeComponent({ labels: [] })])
+      expect(screen.queryByRole('button', { name: /show all|show fewer/i })).toBeNull()
+      expect(cellForColumn('Labels').textContent).toContain('—')
+    })
+
+    it('expansion is per-row (expanding one row does not affect another)', async () => {
+      renderTable([
+        makeComponent({ id: 'r1', name: 'row-one', labels: ['a', 'b', 'c', 'd', 'e'] }),
+        makeComponent({ id: 'r2', name: 'row-two', labels: ['p', 'q', 'r', 's', 't'] }),
+      ])
+      // Two +N buttons, one per row — sanity-check.
+      const toggles = screen.getAllByRole('button', { name: /show all 5 labels/i })
+      expect(toggles).toHaveLength(2)
+      // Expand the first row only.
+      await userEvent.click(toggles[0]!)
+      // Row 1 fully rendered: d, e visible.
+      expect(screen.getByText('d')).toBeDefined()
+      expect(screen.getByText('e')).toBeDefined()
+      // Row 2 still collapsed: s, t absent.
+      expect(screen.queryByText('s')).toBeNull()
+      expect(screen.queryByText('t')).toBeNull()
     })
   })
 
