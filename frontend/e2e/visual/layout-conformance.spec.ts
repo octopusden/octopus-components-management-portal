@@ -8,6 +8,7 @@ import {
   mockComponentList,
   mockFieldConfig,
   mockOwners,
+  mockLabels,
 } from './_helpers'
 
 // PR-4 visual-acceptance: cross-page layout invariants. Filter rows
@@ -18,6 +19,7 @@ import {
 test.describe('layout conformance — FilterBar', () => {
   test('/components filter row is a single FilterBar with no card wrapper', async ({ page }) => {
     await mockComponentList(page, componentsFixture)
+    await mockLabels(page, [])
     await page.goto('/components')
 
     const bars = page.getByTestId('filter-bar')
@@ -55,6 +57,7 @@ test.describe('layout conformance — main container width', () => {
     page,
   }) => {
     await mockComponentList(page, componentsFixture)
+    await mockLabels(page, [])
     await page.goto('/components')
 
     const main = page.locator('main')

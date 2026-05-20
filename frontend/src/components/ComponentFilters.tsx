@@ -1,37 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
 import { Search } from 'lucide-react'
 import { Input } from './ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from './ui/select'
 import { Button } from './ui/button'
 import { FilterBar } from './ui/filter-bar'
 import { Switch } from './ui/switch'
 import { Label } from './ui/label'
 import type { ComponentFilter } from '../lib/types'
 import { useOwners } from '../hooks/useOwners'
+import { useLabels } from '../hooks/useLabels'
 import { useCurrentUser } from '../hooks/useCurrentUser'
+import { useFieldOptions } from '../hooks/useFieldOptions'
 import { useFieldConfigEntry } from '../hooks/useFieldConfig'
+import { MultiSelectFilter } from './ui/MultiSelectFilter'
 
 interface ComponentFiltersProps {
   filter: ComponentFilter
   onFilterChange: (filter: ComponentFilter) => void
 }
-
-// Common system and product type values — can be extended later from API
-const SYSTEM_OPTIONS = [
-  'ALFA', 'BRAVO', 'CHARLIE', 'DELTA', 'ECHO',
-]
-
-const PRODUCT_TYPE_OPTIONS = [
-  'PRODUCT', 'COMPONENT', 'LIBRARY', 'SERVICE',
-]
-
-const ALL_VALUE = '__all__'
 
 export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersProps) {
   const [searchValue, setSearchValue] = useState(filter.search ?? '')
@@ -50,20 +35,20 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
     }, 300)
   }
 
-  const handleSystemChange = (value: string) => {
-    onFilterChange({ ...filter, system: value === ALL_VALUE ? undefined : value })
+  const handleSystemChange = (next: string[]) => {
+    onFilterChange({ ...filter, system: next.length ? next : undefined })
   }
 
-  const handleProductTypeChange = (value: string) => {
-    onFilterChange({ ...filter, productType: value === ALL_VALUE ? undefined : value })
+  const handleOwnerChange = (next: string[]) => {
+    onFilterChange({ ...filter, owner: next.length ? next : undefined })
   }
 
-  const handleOwnerChange = (value: string) => {
-    onFilterChange({ ...filter, owner: value === ALL_VALUE ? undefined : value })
+  const handleBuildSystemChange = (next: string[]) => {
+    onFilterChange({ ...filter, buildSystem: next.length ? next : undefined })
   }
 
-  const handleBuildSystemChange = (value: string) => {
-    onFilterChange({ ...filter, buildSystem: value === ALL_VALUE ? undefined : value })
+  const handleLabelsChange = (next: string[]) => {
+    onFilterChange({ ...filter, labels: next.length ? next : undefined })
   }
 
   // Archived filter: 2-state cycle — false (active only, default) ↔ undefined (all)
@@ -84,10 +69,10 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
   // archived: false is the default — does not count as an active filter
   const hasActiveFilters =
     !!filter.search ||
-    !!filter.system ||
-    !!filter.productType ||
-    !!filter.owner ||
-    !!filter.buildSystem ||
+    !!filter.system?.length ||
+    !!filter.owner?.length ||
+    !!filter.buildSystem?.length ||
+    !!filter.labels?.length ||
     filter.archived === undefined
 
   // Owner list comes from /components/meta/owners (B7.1.1, SYS-035 backend).
@@ -95,19 +80,54 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
   // value flat — no virtualization, no search-as-you-type. If/when the list
   // grows beyond a few hundred we can switch to a typeahead picker matching
   // PeopleInput's pattern.
-  const { data: owners = [] } = useOwners()
-  // Build system options come from admin field-config, not a hardcoded enum —
-  // admin-driven options are the contract here. If not configured, only the
-  // "All" row is shown; the select is still visible so admins can discover
-  // the filter even before options are configured.
+  const { data: owners = [], isLoading: ownersLoading } = useOwners()
+  // Build system options: admin field-config first, with a fallback to the
+  // CRS enum at /components/meta/build-systems so the dropdown is useful
+  // out of the box even when admin has not seeded explicit options.
+  const { options: buildSystemOptions, isLoading: buildSystemLoading } =
+    useFieldOptions('buildSystem')
+  // Filterable gate for admin-config-driven filters. visibility is
+  // form-level (editable/readonly/hidden); filterable controls list-page
+  // filter bar inclusion — admins may want one without the other. Both
+  // System and Build System honour filterable (their options come from
+  // admin field-config with a CRS meta endpoint fallback); Owner uses
+  // /meta/owners which is not admin-configurable so it ignores the signal.
   const { entry: buildSystemEntry } = useFieldConfigEntry('buildSystem')
+  // System options share the buildSystem pattern: admin field-config first,
+  // CRS /components/meta/systems fallback. The field-config path is
+  // `component.systems` (sectioned) to match GeneralTab.tsx and
+  // ComponentDetailPage.tsx — using a different path here would silently
+  // diverge from the editor surface when admins edit field-config.
+  // Gated on `systemActivated` until first popover open because the meta
+  // endpoint may not exist on older CRS images and Playwright's
+  // console-error listener trips on the browser's native 404 log.
+  const [systemActivated, setSystemActivated] = useState(false)
+  const { options: systemOptions, isLoading: systemLoading } = useFieldOptions(
+    'component.systems',
+    { enabled: systemActivated },
+  )
+  const { entry: systemEntry } = useFieldConfigEntry('component.systems')
+  // Sticky activation flag for the labels picker — flips true on first
+  // open and never back. Drives `enabled` on useLabels so the labels
+  // meta request only fires when the user expresses intent (avoids a
+  // page-mount 404 against a CRS that may not ship /meta/labels yet).
+  const [labelsActivated, setLabelsActivated] = useState(false)
+  const { data: labelOptions = [], isLoading: labelsLoading } = useLabels({
+    enabled: labelsActivated,
+  })
   const { data: currentUser } = useCurrentUser()
 
-  // My Components: when checked, owner is pinned to the current user
-  const myComponentsChecked = !!currentUser && filter.owner === currentUser.username
+  // My Components: when checked, owner is pinned to a single-element array
+  // [currentUser.username]. The switch stays mutually exclusive with the
+  // owner picker — checked only when the owner array has exactly one entry
+  // and it matches the current user.
+  const myComponentsChecked =
+    !!currentUser &&
+    filter.owner?.length === 1 &&
+    filter.owner[0] === currentUser.username
   const handleMyComponentsChange = (checked: boolean) => {
     if (checked && currentUser) {
-      onFilterChange({ ...filter, owner: currentUser.username })
+      onFilterChange({ ...filter, owner: [currentUser.username] })
     } else {
       onFilterChange({ ...filter, owner: undefined })
     }
@@ -130,65 +150,52 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
         />
       </div>
 
-      <Select value={filter.system ?? ALL_VALUE} onValueChange={handleSystemChange}>
-        <SelectTrigger className="w-[160px]">
-          <SelectValue placeholder="All systems" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL_VALUE}>All systems</SelectItem>
-          {SYSTEM_OPTIONS.map((sys) => (
-            <SelectItem key={sys} value={sys}>
-              {sys}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {systemEntry.filterable !== false && (
+        <MultiSelectFilter
+          value={filter.system ?? []}
+          onChange={handleSystemChange}
+          options={systemOptions}
+          isLoading={systemLoading}
+          placeholder="All systems"
+          unitLabel="system"
+          onOpenChange={(open) => {
+            if (open) setSystemActivated(true)
+          }}
+        />
+      )}
 
-      <Select value={filter.productType ?? ALL_VALUE} onValueChange={handleProductTypeChange}>
-        <SelectTrigger className="w-[160px]">
-          <SelectValue placeholder="All types" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL_VALUE}>All types</SelectItem>
-          {PRODUCT_TYPE_OPTIONS.map((pt) => (
-            <SelectItem key={pt} value={pt}>
-              {pt}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {buildSystemEntry.filterable !== false && (
+        <MultiSelectFilter
+          value={filter.buildSystem ?? []}
+          onChange={handleBuildSystemChange}
+          options={buildSystemOptions}
+          isLoading={buildSystemLoading}
+          placeholder="All build systems"
+          unitLabel="build system"
+        />
+      )}
 
-      <Select value={filter.buildSystem ?? ALL_VALUE} onValueChange={handleBuildSystemChange}>
-        <SelectTrigger className="w-[160px]" aria-label="Build System">
-          <SelectValue placeholder="All build systems" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL_VALUE}>All build systems</SelectItem>
-          {(buildSystemEntry.options ?? []).map((bs) => (
-            <SelectItem key={bs} value={bs}>
-              {bs}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <MultiSelectFilter
+        value={filter.labels ?? []}
+        onChange={handleLabelsChange}
+        options={labelOptions}
+        isLoading={labelsLoading}
+        placeholder="All labels"
+        unitLabel="label"
+        onOpenChange={(open) => {
+          if (open) setLabelsActivated(true)
+        }}
+      />
 
-      <Select
-        value={filter.owner ?? ALL_VALUE}
-        onValueChange={handleOwnerChange}
+      <MultiSelectFilter
+        value={filter.owner ?? []}
+        onChange={handleOwnerChange}
+        options={owners}
+        isLoading={ownersLoading}
+        placeholder="All owners"
+        unitLabel="owner"
         disabled={myComponentsChecked}
-      >
-        <SelectTrigger className="w-[180px]" aria-label="Owner">
-          <SelectValue placeholder="All owners" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL_VALUE}>All owners</SelectItem>
-          {owners.map((owner) => (
-            <SelectItem key={owner} value={owner}>
-              {owner}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      />
 
       <div className="flex items-center gap-2">
         <Switch

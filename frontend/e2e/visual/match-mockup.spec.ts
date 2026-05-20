@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import componentsFixture from './fixtures/components-with-archived.json' with { type: 'json' }
 import fieldConfigFixture from './fixtures/field-config-mixed-visibility.json' with { type: 'json' }
-import { mockComponentDetail, mockComponentList, mockFieldConfig, mockOwners } from './_helpers'
+import { mockComponentDetail, mockComponentList, mockFieldConfig, mockLabels, mockOwners } from './_helpers'
 
 // §7.0.6 visual closeup: four runtime assertions that pin the prototype-
 // match work to behaviour the design specs called out as HIGH/MEDIUM
@@ -48,6 +48,7 @@ test.describe('§7.0.6 match mockup — PR-A tabs underline variant', () => {
 test.describe('§7.0.6 match mockup — PR-B 36px form controls', () => {
   test('/components filter-row Input renders at h-9 (36px)', async ({ page }) => {
     await mockComponentList(page, componentsFixture)
+    await mockLabels(page, [])
     await page.goto('/components')
 
     const filterBar = page.getByTestId('filter-bar')
@@ -81,6 +82,7 @@ test.describe('§7.0.6 match mockup — PR-D header initials avatar', () => {
     page,
   }) => {
     await mockComponentList(page, componentsFixture)
+    await mockLabels(page, [])
     await page.goto('/components')
 
     const header = page.locator('header')

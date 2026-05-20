@@ -21,12 +21,21 @@ export function useComponents({ filter, page = 0, size = 20, sort = 'componentKe
   params.set('page', String(page))
   params.set('size', String(size))
   params.set('sort', sort)
-  if (filter?.system) params.set('system', filter.system)
-  if (filter?.productType) params.set('productType', filter.productType)
+  // CSV multi-value, OR semantics; CRS controller binds `List<String>?`
+  // via Spring's CSV binder (companion CRS PR mirroring buildSystem).
+  if (filter?.system?.length) params.set('system', filter.system.join(','))
   if (filter?.archived !== undefined) params.set('archived', String(filter.archived))
   if (filter?.search) params.set('search', filter.search)
-  if (filter?.owner) params.set('owner', filter.owner)
-  if (filter?.buildSystem) params.set('buildSystem', filter.buildSystem)
+  // CSV multi-value, OR semantics; CRS controller binds `List<String>?`
+  // via Spring's CSV binder (companion CRS PR mirroring buildSystem/system).
+  if (filter?.owner?.length) params.set('owner', filter.owner.join(','))
+  // CSV multi-value; CRS controller binds `List<String>?` via Spring's
+  // CSV binder (companion CRS PR). Until that lands a single-value
+  // selection still wins because the wire param is still `?buildSystem=`.
+  if (filter?.buildSystem?.length) params.set('buildSystem', filter.buildSystem.join(','))
+  // CSV; CRS normalises split-by-comma + trim + drop-empty server-side.
+  // If labels ever need to contain commas, switch to repeatable params.
+  if (filter?.labels?.length) params.set('labels', filter.labels.join(','))
 
   return useQuery({
     queryKey: ['components', { filter, page, size, sort }],

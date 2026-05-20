@@ -370,18 +370,21 @@ export interface ComponentUpdateRequest {
 
 export interface ComponentFilter {
   // Wire query param stays `?system=` (CRS ComponentControllerV4.kt:65 — the
-  // filter param did NOT rename even though the DTO field did). Kept as a
-  // singular field here because the filter UI is single-select.
-  system?: string
-  productType?: string
+  // filter param did NOT rename even though the DTO field did).
+  /** Exact-match OR across values (components can belong to multiple systems via systemJunctions). CSV on the wire. */
+  system?: string[]
   archived?: boolean
   search?: string
   /**
    * Server-side exact-match filter on `componentOwner`. Sourced from
    * `/components/meta/owners` for the autocomplete picker. SYS-035.
    */
-  owner?: string
-  buildSystem?: string
+  /** Exact-match OR across values (each component has exactly one componentOwner). CSV on the wire. */
+  owner?: string[]
+  /** Exact-match OR across values (a component has exactly one buildSystem). CSV on the wire. */
+  buildSystem?: string[]
+  /** Exact-match AND across values; sourced from /components/meta/labels. CSV on the wire. */
+  labels?: string[]
 }
 
 export interface Page<T> {

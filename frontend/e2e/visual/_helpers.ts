@@ -14,6 +14,7 @@ const COMPONENTS_LIST = '**/rest/api/4/components?**'
 // strictly UUID-like (no slashes after /components/).
 const COMPONENTS_DETAIL = /\/rest\/api\/4\/components\/[^/?]+(?:\?.*)?$/
 const COMPONENTS_OWNERS = '**/rest/api/4/components/meta/owners'
+const COMPONENTS_LABELS = '**/rest/api/4/components/meta/labels'
 const AUDIT_RECENT = '**/rest/api/4/audit/recent?**'
 const FIELD_CONFIG = '**/rest/api/4/config/field-config'
 
@@ -50,6 +51,16 @@ export async function mockAuditRecent(page: Page, fixture: unknown) {
  */
 export async function mockOwners(page: Page, fixture: string[] = []) {
   await page.route(COMPONENTS_OWNERS, (route) => jsonRoute(route, 200, fixture))
+}
+
+/**
+ * Mock GET /components/meta/labels — used by useLabels for the labels picker
+ * on /components. Default fixture is an empty list, which keeps layout-only
+ * specs deterministic; pass a string[] to seed the picker for specs that
+ * exercise the open dropdown.
+ */
+export async function mockLabels(page: Page, fixture: string[] = []) {
+  await page.route(COMPONENTS_LABELS, (route) => jsonRoute(route, 200, fixture))
 }
 
 /** Mock GET /config/field-config with a sectioned-shape fixture. */

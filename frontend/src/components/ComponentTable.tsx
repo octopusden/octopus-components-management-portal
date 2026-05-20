@@ -18,10 +18,9 @@ import {
   TableHeader,
   TableRow,
 } from './ui/table'
-import { Badge } from './ui/badge'
+import { Badge, badgeVariants } from './ui/badge'
 import { EmptyState } from './ui/empty-state'
 import { SkeletonTable } from './ui/skeleton-table'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip'
 import { cn, safeHttpUrl } from '../lib/utils'
 import type { ComponentSummary, PortalLinks } from '../lib/types'
 import { usePortalLinks } from '../hooks/useInfo'
@@ -78,6 +77,53 @@ function IconLink({ href, label, icon: Icon }: IconLinkProps) {
   )
 }
 
+/**
+ * Labels cell with inline expand/collapse. Each row owns its own `expanded`
+ * state — independent across rows. When labels overflow the 3-visible default
+ * the cell renders a +N toggle that expands the chip list in place (row grows
+ * vertically); the previous popover implementation was replaced because the
+ * popover obscured adjacent rows and required focus-management that the user
+ * found heavier-weight than inline expansion.
+ */
+function LabelsCell({ labels }: { labels: string[] | null | undefined }) {
+  const [expanded, setExpanded] = useState(false)
+  if (!labels || labels.length === 0) return <span className="text-muted-foreground">—</span>
+
+  const overflowCount = labels.length - 3
+  const showToggle = overflowCount > 0
+  const visible = expanded ? labels : labels.slice(0, 3)
+
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {visible.map((label, i) => (
+        // Index-prefixed key — labels can legally repeat in the array (CRS
+        // dedup is a soft contract; defending against duplicates keeps React happy).
+        <Badge key={`${i}-${label}`} variant="secondary" className="text-xs font-mono">
+          {label}
+        </Badge>
+      ))}
+      {showToggle && (
+        // Real <button> (not Badge: Badge renders a <div>, which is not
+        // reliably Enter/Space-activatable across AT). Styled with
+        // badgeVariants so the visual stays in sync with the surrounding chips.
+        <button
+          type="button"
+          onClick={() => setExpanded((e) => !e)}
+          className={cn(badgeVariants({ variant: 'outline' }), 'text-xs cursor-pointer')}
+          aria-expanded={expanded}
+          aria-label={
+            expanded
+              ? `Show fewer labels (collapse to first 3 of ${labels.length})`
+              : `Show all ${labels.length} labels`
+          }
+        >
+          {expanded ? 'show less' : `+${overflowCount}`}
+        </button>
+      )}
+    </div>
+  )
+}
+
 const columns = [
   columnHelper.accessor('name', {
     header: ({ column }) => (
@@ -130,41 +176,7 @@ const columns = [
   }),
   columnHelper.accessor('labels', {
     header: 'Labels',
-    cell: ({ getValue }) => {
-      const labels = getValue()
-      if (!labels || labels.length === 0) return <span className="text-muted-foreground">—</span>
-      const visible = labels.slice(0, 3)
-      const overflow = labels.slice(3)
-      return (
-        <div className="flex flex-wrap gap-1">
-          {visible.map((label, i) => (
-            // Index-prefixed key — labels can legally repeat in the array (CRS dedup
-            // is a soft contract; defending against duplicates here keeps React happy).
-            <Badge key={`${i}-${label}`} variant="secondary" className="text-xs font-mono">
-              {label}
-            </Badge>
-          ))}
-          {overflow.length > 0 && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                {/* Badge is a <div>; make it keyboard-focusable so the tooltip
-                    is reachable without a mouse, and label it for SR users. */}
-                <Badge
-                  variant="outline"
-                  className="text-xs cursor-default focus:outline-none focus:ring-2 focus:ring-ring"
-                  tabIndex={0}
-                  role="button"
-                  aria-label={`Show ${overflow.length} more label${overflow.length === 1 ? '' : 's'}`}
-                >
-                  +{overflow.length}
-                </Badge>
-              </TooltipTrigger>
-              <TooltipContent>{overflow.join(', ')}</TooltipContent>
-            </Tooltip>
-          )}
-        </div>
-      )
-    },
+    cell: ({ getValue }) => <LabelsCell labels={getValue()} />,
     enableSorting: false,
   }),
   columnHelper.display({
@@ -326,41 +338,36 @@ export function ComponentTable({ data, isLoading }: ComponentTableProps) {
   }
 
   return (
-    // Single TooltipProvider wraps the table so per-cell Tooltip instances
-    // (labels overflow) share one context — instantiating a Provider per
-    // cell adds noticeable React work on long lists.
-    <TooltipProvider>
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead
-                    key={header.id}
-                    className={cn(header.column.getCanSort() && 'cursor-pointer select-none')}
-                  >
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows.map((row) => (
-              <TableRow key={row.id} className={cn(row.original.archived && 'opacity-50')}>
-                {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id}>
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-    </TooltipProvider>
+    <div className="rounded-md border">
+      <Table>
+        <TableHeader>
+          {table.getHeaderGroups().map((headerGroup) => (
+            <TableRow key={headerGroup.id}>
+              {headerGroup.headers.map((header) => (
+                <TableHead
+                  key={header.id}
+                  className={cn(header.column.getCanSort() && 'cursor-pointer select-none')}
+                >
+                  {header.isPlaceholder
+                    ? null
+                    : flexRender(header.column.columnDef.header, header.getContext())}
+                </TableHead>
+              ))}
+            </TableRow>
+          ))}
+        </TableHeader>
+        <TableBody>
+          {table.getRowModel().rows.map((row) => (
+            <TableRow key={row.id} className={cn(row.original.archived && 'opacity-50')}>
+              {row.getVisibleCells().map((cell) => (
+                <TableCell key={cell.id}>
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   )
 }
