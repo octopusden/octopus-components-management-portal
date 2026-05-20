@@ -14,7 +14,6 @@ import { Switch } from './ui/switch'
 import { Label } from './ui/label'
 import type { ComponentFilter } from '../lib/types'
 import { useOwners } from '../hooks/useOwners'
-import { useLabels } from '../hooks/useLabels'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useFieldConfigEntry } from '../hooks/useFieldConfig'
 import { LabelsMultiSelect } from './ui/LabelsMultiSelect'
@@ -103,7 +102,6 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
   // grows beyond a few hundred we can switch to a typeahead picker matching
   // PeopleInput's pattern.
   const { data: owners = [] } = useOwners()
-  const { data: labelOptions = [], isLoading: labelsLoading } = useLabels()
   // Build system options come from admin field-config, not a hardcoded enum —
   // admin-driven options are the contract here. If not configured, only the
   // "All" row is shown; the select is still visible so admins can discover
@@ -183,8 +181,6 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
       <LabelsMultiSelect
         value={filter.labels ?? []}
         onChange={handleLabelsChange}
-        options={labelOptions}
-        isLoading={labelsLoading}
       />
 
       <Select

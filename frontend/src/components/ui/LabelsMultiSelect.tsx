@@ -1,28 +1,37 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { Button } from './button'
 import { Input } from './input'
 import { Popover, PopoverContent, PopoverTrigger } from './popover'
 import { Badge } from './badge'
+import { useLabels } from '../../hooks/useLabels'
 import { cn } from '../../lib/utils'
 
 interface LabelsMultiSelectProps {
   value: string[]
   onChange: (next: string[]) => void
-  options: string[]
-  isLoading?: boolean
 }
 
-export function LabelsMultiSelect({ value, onChange, options, isLoading }: LabelsMultiSelectProps) {
+export function LabelsMultiSelect({ value, onChange }: LabelsMultiSelectProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
-  // One ref per rendered row — populated during render, used by the
-  // container-level ArrowUp/ArrowDown handler to move focus between
-  // checkboxes without reaching for `document.activeElement` (brittle
-  // under jsdom). Reset each render so stale entries from a prior
-  // option list never leak in.
-  const optionRefs = useRef<HTMLInputElement[]>([])
-  optionRefs.current = []
+  // Sticky activation flag — flips true on first open and never back.
+  // Drives `useLabels({ enabled })` so the network request only fires once
+  // the user expresses intent (avoids a page-mount 404 against a CRS that
+  // does not yet ship /components/meta/labels — Playwright's console-error
+  // listener trips on the browser's native 404 log before our React-Query
+  // catch can swallow it).
+  const [activated, setActivated] = useState(false)
+  useEffect(() => {
+    if (open && !activated) setActivated(true)
+  }, [open, activated])
+
+  const { data: options = [], isLoading } = useLabels({ enabled: activated })
+
+  // Ref-by-index map: each <input>'s render-time ref callback writes its
+  // own slot, and unmount cleans it up. No render-time array mutation
+  // (which would be unsafe under StrictMode / concurrent rendering).
+  const optionRefs = useRef<Map<number, HTMLInputElement>>(new Map())
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -34,13 +43,23 @@ export function LabelsMultiSelect({ value, onChange, options, isLoading }: Label
   // preventDefault so the popover doesn't scroll the page instead.
   const handleListKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
-    const refs = optionRefs.current
-    if (refs.length === 0) return
-    const idx = refs.findIndex((el) => el === e.target)
+    const map = optionRefs.current
+    if (map.size === 0) return
+    // Reverse-lookup the focused index from the Map. Iteration order on
+    // a Map is insertion order in practice, but we don't rely on that —
+    // we explicitly match the focused element to its index slot.
+    let idx = -1
+    for (const [i, el] of map) {
+      if (el === e.target) {
+        idx = i
+        break
+      }
+    }
     if (idx === -1) return
     e.preventDefault()
-    const next = e.key === 'ArrowDown' ? Math.min(idx + 1, refs.length - 1) : Math.max(idx - 1, 0)
-    refs[next]?.focus()
+    const lastIdx = filtered.length - 1
+    const nextIdx = e.key === 'ArrowDown' ? Math.min(idx + 1, lastIdx) : Math.max(idx - 1, 0)
+    map.get(nextIdx)?.focus()
   }
 
   const triggerLabel =
@@ -99,7 +118,7 @@ export function LabelsMultiSelect({ value, onChange, options, isLoading }: Label
               {options.length === 0 ? 'No labels available' : 'No matches'}
             </div>
           ) : (
-            filtered.map((label) => {
+            filtered.map((label, idx) => {
               const checked = value.includes(label)
               return (
                 <label
@@ -110,7 +129,8 @@ export function LabelsMultiSelect({ value, onChange, options, isLoading }: Label
                 >
                   <input
                     ref={(el) => {
-                      if (el) optionRefs.current.push(el)
+                      if (el) optionRefs.current.set(idx, el)
+                      else optionRefs.current.delete(idx)
                     }}
                     type="checkbox"
                     aria-label={label}

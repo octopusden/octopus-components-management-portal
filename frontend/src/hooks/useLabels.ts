@@ -1,9 +1,23 @@
 import { useQuery } from '@tanstack/react-query'
 import { ApiError, api } from '../lib/api'
 
-export function useLabels() {
+interface UseLabelsOptions {
+  /**
+   * Gate the network request behind a UI interaction. Defaults to `true` for
+   * backwards compatibility, but callers that mount before the user expresses
+   * intent (e.g. the labels picker which lives in the filter bar) should pass
+   * `false` and flip to `true` on first open. While CRS does not yet ship
+   * `/components/meta/labels` the page-mount fetch logs a native browser 404
+   * BEFORE our React-Query catch runs — Playwright's console-error listener
+   * picks it up and fails the smoke spec.
+   */
+  enabled?: boolean
+}
+
+export function useLabels({ enabled = true }: UseLabelsOptions = {}) {
   return useQuery({
     queryKey: ['meta', 'labels'],
+    enabled,
     queryFn: async () => {
       try {
         return await api.get<string[]>('/components/meta/labels')

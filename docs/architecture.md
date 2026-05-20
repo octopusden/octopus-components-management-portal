@@ -122,7 +122,7 @@ The P1 UI features rely on these CRS endpoints (all behind the `/rest/**` proxy 
 
 | Endpoint | Used by | CRS contract |
 |---|---|---|
-| `GET /components?owner=…&search=…&productType=…&archived=…&labels=…` | List page filter sidebar (B7.1.1), parent autocomplete (B7.1.5) | `SYS-035` for `owner`; new CRS contract for `labels` (CSV, AND semantics) |
+| `GET /components?owner=…&search=…&system=…&productType=…&buildSystem=…&archived=…&labels=…&page=…&size=…&sort=…` | List page filter sidebar (B7.1.1), parent autocomplete (B7.1.5) | `SYS-035` for `owner`; new CRS contract for `labels` (CSV, AND semantics); pagination + sort are Spring Data conventions |
 | `GET /components/meta/owners` | Owner picker on the list page (B7.1.1), people input on detail | existing |
 | `GET /components/meta/labels` | Labels multi-select on the list page | new CRS contract; mirrors `/meta/owners` |
 | `GET /components/{idOrName}` | Detail page fetch (UUID first, name fallback) | existing |

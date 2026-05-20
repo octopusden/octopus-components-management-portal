@@ -47,4 +47,17 @@ describe('useLabels', () => {
     expect(result.current.isError).toBe(false)
     expect(result.current.data).toEqual([])
   })
+
+  it('does not fire the request when enabled is false', async () => {
+    mockApi.get.mockResolvedValue(['alpha'])
+    const { result } = renderHook(() => useLabels({ enabled: false }), {
+      wrapper: makeWrapper(),
+    })
+    // Give React Query a chance to (incorrectly) fire — assert it didn't.
+    await new Promise((r) => setTimeout(r, 20))
+    expect(mockApi.get).not.toHaveBeenCalled()
+    // With `enabled: false`, the query stays in idle/pending state — the
+    // important contract is "no request fired", not the React Query status.
+    expect(result.current.data).toBeUndefined()
+  })
 })
