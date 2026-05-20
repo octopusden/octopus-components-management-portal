@@ -6,6 +6,7 @@ import {
   mockComponentListError,
   mockAuditRecent,
   mockAuditRecentError,
+  mockLabels,
 } from './_helpers'
 
 // PR-3 visual-acceptance: every page that previously inlined an empty /
@@ -32,12 +33,14 @@ test.describe('state primitives — /components', () => {
       // request hangs until the test ends.
       void route
     })
+    await mockLabels(page, [])
     await page.goto('/components')
     await expect(page.getByTestId('skeleton-table')).toBeVisible()
   })
 
   test('renders <EmptyState> when the list comes back empty', async ({ page }) => {
     await mockComponentList(page, EMPTY_LIST_FIXTURE)
+    await mockLabels(page, [])
     await page.goto('/components')
     const empty = page.getByTestId('empty-state')
     await expect(empty).toBeVisible()
@@ -46,6 +49,7 @@ test.describe('state primitives — /components', () => {
 
   test('renders <InlineError> when the list endpoint errors', async ({ page }) => {
     await mockComponentListError(page)
+    await mockLabels(page, [])
     await page.goto('/components')
     const err = page.getByTestId('inline-error')
     await expect(err).toBeVisible()
@@ -84,6 +88,7 @@ test.describe('state primitives — list with data', () => {
     page,
   }) => {
     await mockComponentList(page, componentsFixture)
+    await mockLabels(page, [])
     await page.goto('/components')
 
     // The fixture has one row with archived: true — find it by name and

@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
+import type { KeyboardEvent } from 'react'
 import { Button } from './button'
 import { Input } from './input'
 import { Popover, PopoverContent, PopoverTrigger } from './popover'
@@ -15,12 +16,32 @@ interface LabelsMultiSelectProps {
 export function LabelsMultiSelect({ value, onChange, options, isLoading }: LabelsMultiSelectProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
+  // One ref per rendered row — populated during render, used by the
+  // container-level ArrowUp/ArrowDown handler to move focus between
+  // checkboxes without reaching for `document.activeElement` (brittle
+  // under jsdom). Reset each render so stale entries from a prior
+  // option list never leak in.
+  const optionRefs = useRef<HTMLInputElement[]>([])
+  optionRefs.current = []
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return options
     return options.filter((o) => o.toLowerCase().includes(q))
   }, [options, search])
+
+  // Container-level Arrow handling — "stops at last" (matches native <select>).
+  // preventDefault so the popover doesn't scroll the page instead.
+  const handleListKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+    const refs = optionRefs.current
+    if (refs.length === 0) return
+    const idx = refs.findIndex((el) => el === e.target)
+    if (idx === -1) return
+    e.preventDefault()
+    const next = e.key === 'ArrowDown' ? Math.min(idx + 1, refs.length - 1) : Math.max(idx - 1, 0)
+    refs[next]?.focus()
+  }
 
   const triggerLabel =
     value.length === 0
@@ -66,7 +87,11 @@ export function LabelsMultiSelect({ value, onChange, options, isLoading }: Label
             className="h-8 text-sm"
           />
         </div>
-        <div className="max-h-64 overflow-auto">
+        <div
+          className="max-h-64 overflow-auto"
+          onKeyDown={handleListKeyDown}
+          data-testid="labels-options-list"
+        >
           {isLoading ? (
             <div className="px-2 py-3 text-sm text-muted-foreground">Loading...</div>
           ) : filtered.length === 0 ? (
@@ -84,6 +109,9 @@ export function LabelsMultiSelect({ value, onChange, options, isLoading }: Label
                   )}
                 >
                   <input
+                    ref={(el) => {
+                      if (el) optionRefs.current.push(el)
+                    }}
                     type="checkbox"
                     aria-label={label}
                     className="accent-primary h-4 w-4 rounded"

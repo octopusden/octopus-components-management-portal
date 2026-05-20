@@ -374,4 +374,30 @@ describe('ComponentFilters labels multi-select', () => {
     )
     expect(screen.getByText('Clear filters')).toBeDefined()
   })
+
+  it('ArrowDown / ArrowUp move focus between option rows (stops at last)', async () => {
+    render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
+    await userEvent.click(screen.getByRole('button', { name: /all labels/i }))
+
+    const alpha = screen.getByRole('checkbox', { name: 'alpha' }) as HTMLInputElement
+    const beta = screen.getByRole('checkbox', { name: 'beta' }) as HTMLInputElement
+    const gamma = screen.getByRole('checkbox', { name: 'gamma' }) as HTMLInputElement
+
+    // Seed focus on the first row (the test does not assert how the picker
+    // initially places focus on open — only that ArrowUp/ArrowDown navigate
+    // between rows once focus is inside the list).
+    alpha.focus()
+    expect(document.activeElement).toBe(alpha)
+
+    await userEvent.keyboard('{ArrowDown}')
+    expect(document.activeElement).toBe(beta)
+
+    await userEvent.keyboard('{ArrowUp}')
+    expect(document.activeElement).toBe(alpha)
+
+    // From last row, ArrowDown stops at last (parity with native <select>).
+    gamma.focus()
+    await userEvent.keyboard('{ArrowDown}')
+    expect(document.activeElement).toBe(gamma)
+  })
 })
