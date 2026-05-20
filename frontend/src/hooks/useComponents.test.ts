@@ -141,15 +141,38 @@ describe('useComponents — URL params', () => {
     expect(calledUrl).toContain('search=my-lib')
   })
 
-  it('passes owner filter when set', async () => {
+  it('passes owner filter as a single-value CSV when one option is picked', async () => {
     mockApi.get.mockResolvedValue(emptyPage)
     const { result } = renderHook(
-      () => useComponents({ filter: { owner: 'alice@example.com' } }),
+      () => useComponents({ filter: { owner: ['alice@example.com'] } }),
       { wrapper: makeWrapper() },
     )
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     const calledUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
     expect(calledUrl).toContain('owner=alice%40example.com')
+  })
+
+  it('passes owner filter as a CSV when multiple options are picked', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result } = renderHook(
+      () => useComponents({ filter: { owner: ['alice@example.com', 'bob@example.com'] } }),
+      { wrapper: makeWrapper() },
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const calledUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    // URLSearchParams percent-encodes both the comma in the CSV and the @ in each value.
+    expect(calledUrl).toContain('owner=alice%40example.com%2Cbob%40example.com')
+  })
+
+  it('does not include owner param when filter.owner is an empty array', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result } = renderHook(
+      () => useComponents({ filter: { owner: [] } }),
+      { wrapper: makeWrapper() },
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const calledUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    expect(calledUrl).not.toContain('owner=')
   })
 
   it('passes buildSystem filter as a single-value CSV when one option is picked', async () => {

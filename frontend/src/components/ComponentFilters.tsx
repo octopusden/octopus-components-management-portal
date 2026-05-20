@@ -1,13 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Search } from 'lucide-react'
 import { Input } from './ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from './ui/select'
 import { Button } from './ui/button'
 import { FilterBar } from './ui/filter-bar'
 import { Switch } from './ui/switch'
@@ -24,8 +17,6 @@ interface ComponentFiltersProps {
   filter: ComponentFilter
   onFilterChange: (filter: ComponentFilter) => void
 }
-
-const ALL_VALUE = '__all__'
 
 export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersProps) {
   const [searchValue, setSearchValue] = useState(filter.search ?? '')
@@ -48,8 +39,8 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
     onFilterChange({ ...filter, system: next.length ? next : undefined })
   }
 
-  const handleOwnerChange = (value: string) => {
-    onFilterChange({ ...filter, owner: value === ALL_VALUE ? undefined : value })
+  const handleOwnerChange = (next: string[]) => {
+    onFilterChange({ ...filter, owner: next.length ? next : undefined })
   }
 
   const handleBuildSystemChange = (next: string[]) => {
@@ -79,7 +70,7 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
   const hasActiveFilters =
     !!filter.search ||
     !!filter.system?.length ||
-    !!filter.owner ||
+    !!filter.owner?.length ||
     !!filter.buildSystem?.length ||
     !!filter.labels?.length ||
     filter.archived === undefined
@@ -89,7 +80,7 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
   // value flat — no virtualization, no search-as-you-type. If/when the list
   // grows beyond a few hundred we can switch to a typeahead picker matching
   // PeopleInput's pattern.
-  const { data: owners = [] } = useOwners()
+  const { data: owners = [], isLoading: ownersLoading } = useOwners()
   // Build system options: admin field-config first, with a fallback to the
   // CRS enum at /components/meta/build-systems so the dropdown is useful
   // out of the box even when admin has not seeded explicit options.
@@ -123,11 +114,17 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
   })
   const { data: currentUser } = useCurrentUser()
 
-  // My Components: when checked, owner is pinned to the current user
-  const myComponentsChecked = !!currentUser && filter.owner === currentUser.username
+  // My Components: when checked, owner is pinned to a single-element array
+  // [currentUser.username]. The switch stays mutually exclusive with the
+  // owner picker — checked only when the owner array has exactly one entry
+  // and it matches the current user.
+  const myComponentsChecked =
+    !!currentUser &&
+    filter.owner?.length === 1 &&
+    filter.owner[0] === currentUser.username
   const handleMyComponentsChange = (checked: boolean) => {
     if (checked && currentUser) {
-      onFilterChange({ ...filter, owner: currentUser.username })
+      onFilterChange({ ...filter, owner: [currentUser.username] })
     } else {
       onFilterChange({ ...filter, owner: undefined })
     }
@@ -187,23 +184,15 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
         }}
       />
 
-      <Select
-        value={filter.owner ?? ALL_VALUE}
-        onValueChange={handleOwnerChange}
+      <MultiSelectFilter
+        value={filter.owner ?? []}
+        onChange={handleOwnerChange}
+        options={owners}
+        isLoading={ownersLoading}
+        placeholder="All owners"
+        unitLabel="owner"
         disabled={myComponentsChecked}
-      >
-        <SelectTrigger className="w-[180px]" aria-label="Owner">
-          <SelectValue placeholder="All owners" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL_VALUE}>All owners</SelectItem>
-          {owners.map((owner) => (
-            <SelectItem key={owner} value={owner}>
-              {owner}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      />
 
       <div className="flex items-center gap-2">
         <Switch

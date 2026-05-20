@@ -249,42 +249,56 @@ describe('ComponentFilters My Components (§7.0/2e)', () => {
     expect(sw.disabled).toBe(true)
   })
 
-  it('checking My Components sets owner to currentUser.username', async () => {
+  it('checking My Components sets owner to a single-element array with currentUser.username', async () => {
     mockCurrentUser('alice')
     render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
     const sw = screen.getByLabelText('My Components')
     await userEvent.click(sw)
-    expect(onFilterChange).toHaveBeenCalledWith({ archived: false, owner: 'alice' })
+    expect(onFilterChange).toHaveBeenCalledWith({ archived: false, owner: ['alice'] })
   })
 
   it('unchecking My Components clears owner', async () => {
     mockCurrentUser('alice')
     render(
-      <ComponentFilters filter={{ archived: false, owner: 'alice' }} onFilterChange={onFilterChange} />,
+      <ComponentFilters filter={{ archived: false, owner: ['alice'] }} onFilterChange={onFilterChange} />,
     )
     const sw = screen.getByLabelText('My Components')
     await userEvent.click(sw)
     expect(onFilterChange).toHaveBeenCalledWith({ archived: false, owner: undefined })
   })
 
-  it('Owner dropdown is disabled when My Components is checked', () => {
+  it('Owner picker trigger is disabled when My Components is checked', () => {
     mockCurrentUser('alice')
     render(
-      <ComponentFilters filter={{ archived: false, owner: 'alice' }} onFilterChange={onFilterChange} />,
+      <ComponentFilters filter={{ archived: false, owner: ['alice'] }} onFilterChange={onFilterChange} />,
     )
-    const ownerTrigger = screen.getByRole('combobox', { name: /owner/i })
-    expect(ownerTrigger.hasAttribute('disabled') || ownerTrigger.getAttribute('aria-disabled') === 'true' || ownerTrigger.getAttribute('data-disabled') !== null).toBe(true)
+    const ownerTrigger = screen.getByRole('button', { name: /all owners|alice/i })
+    expect((ownerTrigger as HTMLButtonElement).disabled).toBe(true)
   })
 
-  it('Owner dropdown is enabled when My Components is not checked', () => {
+  it('Owner picker trigger is enabled when My Components is not checked', () => {
     mockCurrentUser('alice')
     render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
-    const ownerTrigger = screen.getByRole('combobox', { name: /owner/i })
-    expect(ownerTrigger.getAttribute('data-disabled')).toBeNull()
+    const ownerTrigger = screen.getByRole('button', { name: /all owners/i })
+    expect((ownerTrigger as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('My Components is NOT checked when owner array has multiple values, even if it includes the current user', () => {
+    // Multi-select means "alice + bob" is no longer "only my components" —
+    // the switch stays unchecked so it can be flipped on to reduce to ['alice'].
+    mockCurrentUser('alice')
+    render(
+      <ComponentFilters
+        filter={{ archived: false, owner: ['alice', 'bob'] }}
+        onFilterChange={onFilterChange}
+      />,
+    )
+    const sw = screen.getByLabelText('My Components') as HTMLButtonElement
+    expect(sw.getAttribute('data-state')).toBe('unchecked')
   })
 })
 
-describe('ComponentFilters owner dropdown (B7.1.1)', () => {
+describe('ComponentFilters Owner multi-select (B7.1.1)', () => {
   const onFilterChange = vi.fn()
 
   beforeEach(() => {
@@ -298,43 +312,68 @@ describe('ComponentFilters owner dropdown (B7.1.1)', () => {
     mockFieldConfig([])
   })
 
-  it('renders an owner dropdown with the values from /components/meta/owners', async () => {
+  it('renders the owner picker trigger', () => {
     render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
-
-    // The dropdown surfaces a placeholder until a value is picked. We click
-    // the trigger to open the listbox and assert the seeded owners appear.
-    const trigger = screen.getByRole('combobox', { name: /owner/i })
-    expect(trigger).toBeDefined()
-
-    await userEvent.click(trigger)
-
-    expect(screen.getByRole('option', { name: 'alice' })).toBeDefined()
-    expect(screen.getByRole('option', { name: 'bob' })).toBeDefined()
-    expect(screen.getByRole('option', { name: 'carol' })).toBeDefined()
-    // "All owners" sentinel — preserves the existing system/productType pattern.
-    expect(screen.getByRole('option', { name: /all owners/i })).toBeDefined()
+    expect(screen.getByRole('button', { name: /all owners/i })).toBeDefined()
   })
 
-  it('calls onFilterChange with owner when a value is picked', async () => {
+  it('opens the picker and lists owners from /components/meta/owners', async () => {
     render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
-
-    await userEvent.click(screen.getByRole('combobox', { name: /owner/i }))
-    await userEvent.click(screen.getByRole('option', { name: 'bob' }))
-
-    expect(onFilterChange).toHaveBeenCalledWith({ owner: 'bob' })
+    await userEvent.click(screen.getByRole('button', { name: /all owners/i }))
+    expect(screen.getByRole('checkbox', { name: 'alice' })).toBeDefined()
+    expect(screen.getByRole('checkbox', { name: 'bob' })).toBeDefined()
+    expect(screen.getByRole('checkbox', { name: 'carol' })).toBeDefined()
   })
 
-  it('clears owner when "All owners" is picked', async () => {
-    render(<ComponentFilters filter={{ owner: 'alice' }} onFilterChange={onFilterChange} />)
+  it('calls onFilterChange with a single-element owner array when one is picked', async () => {
+    render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
+    await userEvent.click(screen.getByRole('button', { name: /all owners/i }))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'bob' }))
+    const lastCall = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
+    expect(lastCall.owner).toEqual(['bob'])
+  })
 
-    await userEvent.click(screen.getByRole('combobox', { name: /owner/i }))
-    await userEvent.click(screen.getByRole('option', { name: /all owners/i }))
+  it('calls onFilterChange with both picked owners when two checkboxes are checked', async () => {
+    function Harness() {
+      const [filter, setFilter] = React.useState<{ owner?: string[] }>({})
+      return (
+        <ComponentFilters
+          filter={filter}
+          onFilterChange={(f) => {
+            onFilterChange(f)
+            setFilter(f)
+          }}
+        />
+      )
+    }
+    render(<Harness />)
+    await userEvent.click(screen.getByRole('button', { name: /all owners/i }))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'alice' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'bob' }))
+    const lastCall = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
+    expect(lastCall.owner).toEqual(['alice', 'bob'])
+  })
 
-    expect(onFilterChange).toHaveBeenCalledWith({ owner: undefined })
+  it('Clear filters drops owner from the filter', async () => {
+    render(
+      <ComponentFilters
+        filter={{ owner: ['alice'], archived: false }}
+        onFilterChange={onFilterChange}
+      />,
+    )
+    await userEvent.click(screen.getByText('Clear filters'))
+    expect(onFilterChange).toHaveBeenCalledWith({ archived: false })
+    const lastArg = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
+    expect(lastArg.owner).toBeUndefined()
   })
 
   it('shows Clear filters when owner is the only active filter', () => {
-    render(<ComponentFilters filter={{ owner: 'alice', archived: false }} onFilterChange={onFilterChange} />)
+    render(
+      <ComponentFilters
+        filter={{ owner: ['alice'], archived: false }}
+        onFilterChange={onFilterChange}
+      />,
+    )
     expect(screen.getByText('Clear filters')).toBeDefined()
   })
 })

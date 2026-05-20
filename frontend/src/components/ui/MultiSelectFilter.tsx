@@ -27,6 +27,13 @@ interface MultiSelectFilterProps {
    * before the React-Query catch can swallow them).
    */
   onOpenChange?: (open: boolean) => void
+  /**
+   * Disables the trigger button and blocks the popover from opening.
+   * Used by the Owner picker when the "My Components" switch pins owner
+   * to the current user — the picker is intentionally locked out so the
+   * two controls stay mutually exclusive.
+   */
+  disabled?: boolean
 }
 
 export function MultiSelectFilter({
@@ -37,11 +44,15 @@ export function MultiSelectFilter({
   placeholder,
   unitLabel,
   onOpenChange,
+  disabled,
 }: MultiSelectFilterProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
 
   const handleOpenChange = (next: boolean) => {
+    // When disabled, ignore open requests — keeps the popover from
+    // appearing even if a stray pointer event reaches the trigger.
+    if (disabled && next) return
     setOpen(next)
     onOpenChange?.(next)
   }
@@ -104,6 +115,7 @@ export function MultiSelectFilter({
           variant="outline"
           size="sm"
           className="w-[200px] justify-between font-normal"
+          disabled={disabled}
         >
           <span className="truncate">{triggerLabel}</span>
           {value.length > 0 && (
