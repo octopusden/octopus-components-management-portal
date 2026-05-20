@@ -100,10 +100,12 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
   // out of the box even when admin has not seeded explicit options.
   const { options: buildSystemOptions, isLoading: buildSystemLoading } =
     useFieldOptions('buildSystem')
-  // Visibility gate for admin-config-driven filters. We only honour
-  // visibility on filters whose options come from admin field-config
-  // (currently buildSystem); System / Owner use a hardcoded enum and
-  // /meta/owners respectively, so they ignore this signal.
+  // Filterable gate for admin-config-driven filters. visibility is
+  // form-level (editable/readonly/hidden); filterable controls list-page
+  // filter bar inclusion — admins may want one without the other. We
+  // only honour filterable on filters whose options come from admin
+  // field-config (currently buildSystem); System / Owner use a hardcoded
+  // enum and /meta/owners respectively, so they ignore this signal.
   const { entry: buildSystemEntry } = useFieldConfigEntry('buildSystem')
   // Sticky activation flags for the two multi-select pickers — flip
   // true on first open and never back. Drive `enabled` on useLabels so
@@ -157,7 +159,7 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
         </SelectContent>
       </Select>
 
-      {buildSystemEntry.visibility !== 'hidden' && (
+      {buildSystemEntry.filterable !== false && (
         <MultiSelectFilter
           value={filter.buildSystem ?? []}
           onChange={handleBuildSystemChange}

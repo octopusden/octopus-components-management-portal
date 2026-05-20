@@ -5,7 +5,15 @@ export type FieldVisibility = 'editable' | 'readonly' | 'hidden'
 export interface FieldConfigEntry {
   label?: string
   options?: string[]
+  /** Form-level behavior on the component detail/create/edit page. */
   visibility?: FieldVisibility
+  /**
+   * Whether the field is exposed in the /components list-page filter bar.
+   * `undefined` defaults to `true`; only `false` opts a field out.
+   * Distinct from `visibility` — admins may want a filter for an
+   * editor-hidden field, or hide a filter while keeping the field editable.
+   */
+  filterable?: boolean
   required?: boolean
   defaultValue?: string
   description?: string

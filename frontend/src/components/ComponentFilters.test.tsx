@@ -65,11 +65,14 @@ const mockUseFieldConfig = vi.mocked(useFieldConfig)
 import { useFieldOptions } from '../hooks/useFieldOptions'
 const mockUseFieldOptions = vi.mocked(useFieldOptions)
 
-type Visibility = 'editable' | 'readonly' | 'hidden'
+import type { FieldConfigEntry } from '../hooks/useFieldConfig'
 
-function mockFieldConfig(options: string[], visibility: Visibility = 'editable') {
+// Seed buildSystem in admin field-config. The second arg is a partial
+// FieldConfigEntry so individual cases can override visibility,
+// filterable, or any future flag without growing positional args.
+function mockFieldConfig(options: string[], entry: Partial<FieldConfigEntry> = {}) {
   mockUseFieldConfig.mockReturnValue({
-    data: { fields: { buildSystem: { options, visibility } } },
+    data: { fields: { buildSystem: { options, ...entry } } },
     isLoading: false,
   } as unknown as ReturnType<typeof useFieldConfig>)
   // Keep buildSystem options reachable from the new code path too —
@@ -399,13 +402,31 @@ describe('ComponentFilters Build System multi-select', () => {
     expect(screen.getByRole('checkbox', { name: 'MAVEN' })).toBeDefined()
   })
 
-  it('does NOT render the Build System control when admin field-config marks it hidden', () => {
-    // visibility:'hidden' is the registry-wide opt-out signal. The filter
-    // sources its options from admin field-config, so it must respect the
-    // same visibility contract the editor tabs honour.
-    mockFieldConfig(['GRADLE', 'MAVEN'], 'hidden')
+  it('does NOT render the Build System control when admin field-config marks it filterable: false', () => {
+    // `filterable` is the list-page opt-out knob. Distinct from
+    // `visibility`, which only describes editor-form behavior — admins
+    // may want one without the other.
+    mockFieldConfig(['GRADLE', 'MAVEN'], { filterable: false })
     render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
     expect(screen.queryByRole('button', { name: /all build systems/i })).toBeNull()
+  })
+
+  it('renders the Build System control when filterable is undefined (default true)', () => {
+    // Regression guard: the default semantic is "show the filter".
+    // Only an explicit filterable: false hides it. If the default ever
+    // flips silently, this case turns red.
+    mockFieldConfig(['GRADLE', 'MAVEN']) // no entry overrides — filterable is undefined
+    render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
+    expect(screen.getByRole('button', { name: /all build systems/i })).toBeDefined()
+  })
+
+  it('renders the Build System control even when visibility=hidden (visibility is form-only)', () => {
+    // visibility is form-level; it must NOT govern the filter bar. This
+    // case explicitly pins that contract — flip-side of the filterable
+    // case above.
+    mockFieldConfig(['GRADLE', 'MAVEN'], { visibility: 'hidden' })
+    render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
+    expect(screen.getByRole('button', { name: /all build systems/i })).toBeDefined()
   })
 })
 
