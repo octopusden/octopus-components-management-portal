@@ -8,7 +8,6 @@
     <ID>LongMethod:E2ETestcontainersDriver.kt:E2ETestcontainersDriver.Companion$private fun doStartStack</ID>
     <ID>LongMethod:PlaywrightContainer.kt:PlaywrightContainer$fun create: GenericContainer&lt;*&gt;</ID>
     <ID>MaxLineLength:SpaFallbackFilterTest.kt:SpaFallbackFilterTest$assertEquals(false, passedThrough.get(), "/admin is a SPA route — filter must serve index.html, not pass through.")</ID>
-    <ID>MaxLineLength:StaticResourcesTest.kt:StaticResourcesTest$assertTrue(body?.contains("""&lt;div id="root"&gt;""") == true, "Expected index.html with SPA mount point but got: $body")</ID>
     <ID>ReturnCount:SpaFallbackFilter.kt:SpaFallbackFilter$override fun filter: Mono&lt;Void&gt;</ID>
   </CurrentIssues>
 </SmellBaseline>

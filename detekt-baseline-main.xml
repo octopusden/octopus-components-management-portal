@@ -10,7 +10,5 @@
     <ID>ForbiddenVoid:SpaFallbackFilter.kt:SpaFallbackFilter$Void</ID>
     <ID>ReturnCount:SpaFallbackFilter.kt:SpaFallbackFilter$override fun filter: Mono&lt;Void&gt;</ID>
     <ID>SpreadOperator:ComponentsManagementPortalApplication.kt:(*args)</ID>
-    <ID>UseOrEmpty:PortalInfoController.kt:PortalInfoController$buildProperties.name ?: ""</ID>
-    <ID>UseOrEmpty:PortalInfoController.kt:PortalInfoController$buildProperties.version ?: ""</ID>
   </CurrentIssues>
 </SmellBaseline>

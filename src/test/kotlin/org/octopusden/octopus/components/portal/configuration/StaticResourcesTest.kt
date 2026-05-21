@@ -44,7 +44,10 @@ class StaticResourcesTest {
             .expectStatus().isOk
             .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_HTML)
             .expectBody(String::class.java).value { body ->
-                assertTrue(body?.contains("""<div id="root">""") == true, "Expected index.html with SPA mount point but got: $body")
+                assertTrue(
+                    body.orEmpty().contains("""<div id="root">"""),
+                    "Expected index.html with SPA mount point but got: $body",
+                )
             }
     }
 
@@ -55,7 +58,10 @@ class StaticResourcesTest {
             .expectStatus().isOk
             .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_HTML)
             .expectBody(String::class.java).value { body ->
-                assertTrue(body?.contains("""<div id="root">""") == true, "Expected index.html with SPA mount point but got: $body")
+                assertTrue(
+                    body.orEmpty().contains("""<div id="root">"""),
+                    "Expected index.html with SPA mount point but got: $body",
+                )
             }
     }
 
@@ -66,7 +72,7 @@ class StaticResourcesTest {
             .expectStatus().isOk
             .expectHeader().contentTypeCompatibleWith(MediaType.parseMediaType("text/javascript"))
             .expectBody(String::class.java).value { body ->
-                assertTrue(body?.contains("console.log") == true, "Expected JS content but got: $body")
+                assertTrue(body.orEmpty().contains("console.log"), "Expected JS content but got: $body")
             }
     }
 
@@ -77,7 +83,7 @@ class StaticResourcesTest {
             .expectStatus().isOk
             .expectHeader().contentTypeCompatibleWith(MediaType.parseMediaType("text/css"))
             .expectBody(String::class.java).value { body ->
-                assertTrue(body?.contains("margin") == true, "Expected CSS content but got: $body")
+                assertTrue(body.orEmpty().contains("margin"), "Expected CSS content but got: $body")
             }
     }
 
