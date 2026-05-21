@@ -15,8 +15,12 @@ class PortalInfoController(
 ) {
     @GetMapping("/info")
     fun info(): InfoResponse = InfoResponse(
-        name = buildProperties.name,
-        version = buildProperties.version,
+        // BuildProperties.name/version became @Nullable in Spring Boot 4 — fall back
+        // to empty strings so the SPA footer can still render without optional-chaining.
+        // springBoot { buildInfo() } in build.gradle.kts always writes both keys, so the
+        // fallback is defensive against missing build-info.properties in dev runs only.
+        name = buildProperties.name.orEmpty(),
+        version = buildProperties.version.orEmpty(),
     )
 
     @GetMapping("/links")

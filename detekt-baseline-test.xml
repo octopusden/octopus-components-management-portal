@@ -1,0 +1,12 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ForbiddenVoid:ClientAuthorizationRequiredIntegrationTest.kt:ClientAuthFailureSimulatorConfig.&lt;no name provided&gt;$Void</ID>
+    <ID>LongMethod:E2ETestcontainersDriver.kt:E2ETestcontainersDriver.Companion$private fun doStartStack</ID>
+    <ID>LongMethod:PlaywrightContainer.kt:PlaywrightContainer$fun create: GenericContainer&lt;*&gt;</ID>
+    <ID>LongParameterList:PlaywrightContainer.kt:PlaywrightContainer$fun create: GenericContainer&lt;*&gt;</ID>
+    <ID>LongParameterList:PortalContainer.kt:PortalContainer$fun create: GenericContainer&lt;*&gt;</ID>
+    <ID>MaxLineLength:SpaFallbackFilterTest.kt:SpaFallbackFilterTest$assertEquals(false, passedThrough.get(), "/admin is a SPA route — filter must serve index.html, not pass through.")</ID>
+  </CurrentIssues>
+</SmellBaseline>

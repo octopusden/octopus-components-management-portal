@@ -9,7 +9,7 @@ plugins {
     id("com.github.node-gradle.node")
     id("io.github.gradle-nexus.publish-plugin")
     id("com.bmuschko.docker-spring-boot-application")
-    id("io.gitlab.arturbosch.detekt")
+    id("dev.detekt")
     id("org.jlleitschuh.gradle.ktlint")
     id("org.jetbrains.kotlinx.kover")
     id("org.octopusden.octopus-quality")
@@ -52,6 +52,13 @@ kotlin {
     compilerOptions.jvmTarget = JvmTarget.JVM_21
 }
 
+// detekt 2.x splits its baselines per source set (detekt-baseline-main.xml / -test.xml)
+// for the type-resolution-enabled detektMain/detektTest tasks. The umbrella `detekt`
+// task — which `check` depends on by default — uses the shared file below.
+detekt {
+    baseline = file("detekt-baseline.xml")
+}
+
 idea.module {
     isDownloadJavadoc = true
     isDownloadSources = true
@@ -68,7 +75,7 @@ dependencies {
     implementation(platform("org.springframework.cloud:spring-cloud-dependencies:${project.property("spring-cloud.version")}"))
     implementation("org.springframework.cloud:spring-cloud-starter-bootstrap")
     implementation("org.springframework.cloud:spring-cloud-starter-config")
-    implementation("org.springframework.cloud:spring-cloud-starter-gateway")
+    implementation("org.springframework.cloud:spring-cloud-starter-gateway-server-webflux")
 
     implementation(platform("org.springframework.boot:spring-boot-dependencies:${project.properties["spring-boot.version"]}"))
     implementation("org.springframework.boot:spring-boot-starter-actuator")
@@ -79,6 +86,9 @@ dependencies {
 
     testImplementation(kotlin("test"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    // Boot 4 split WebTestClient autoconfig into its own module; @AutoConfigureWebTestClient
+    // is no longer transitively pulled by spring-boot-starter-test.
+    testImplementation("org.springframework.boot:spring-boot-webtestclient")
     testImplementation("org.springframework.security:spring-security-test")
 
     // E2E driver only (JUnit @Tag("e2e")). The default `test` task excludes
@@ -87,8 +97,10 @@ dependencies {
     // the same source-set (src/test/kotlin) as the unit tests.
     testImplementation(platform("org.testcontainers:testcontainers-bom:${project.property("testcontainers.version")}"))
     testImplementation("org.testcontainers:testcontainers")
-    testImplementation("org.testcontainers:junit-jupiter")
-    testImplementation("org.testcontainers:postgresql")
+    // Testcontainers 2.0 prefixed every module artifactId with `testcontainers-`
+    // (junit-jupiter -> testcontainers-junit-jupiter, postgresql -> testcontainers-postgresql, ...).
+    testImplementation("org.testcontainers:testcontainers-junit-jupiter")
+    testImplementation("org.testcontainers:testcontainers-postgresql")
     testImplementation("org.postgresql:postgresql")
 }
 

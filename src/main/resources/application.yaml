@@ -19,22 +19,24 @@ spring:
             redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
   cloud:
     gateway:
-      # TokenRelay is intentionally a default-filter (applied to every route): this is the
-      # core of the BFF pattern. Spring Security stores the OAuth2 access_token in the
-      # server-side session and TokenRelay copies it onto the proxied request as
-      # `Authorization: Bearer <token>` so downstream services (registry, auth) see an
-      # authenticated request without the SPA ever handling the token directly.
-      default-filters:
-        - TokenRelay
-      routes:
-        - id: components-registry-api
-          uri: ${COMPONENTS_REGISTRY_SERVICE_URL:http://localhost:4567}
-          predicates:
-            - Path=/rest/**
-        - id: components-registry-auth
-          uri: ${COMPONENTS_REGISTRY_SERVICE_URL:http://localhost:4567}
-          predicates:
-            - Path=/auth/**
+      server:
+        webflux:
+          # TokenRelay is intentionally a default-filter (applied to every route): this is the
+          # core of the BFF pattern. Spring Security stores the OAuth2 access_token in the
+          # server-side session and TokenRelay copies it onto the proxied request as
+          # `Authorization: Bearer <token>` so downstream services (registry, auth) see an
+          # authenticated request without the SPA ever handling the token directly.
+          default-filters:
+            - TokenRelay
+          routes:
+            - id: components-registry-api
+              uri: ${COMPONENTS_REGISTRY_SERVICE_URL:http://localhost:4567}
+              predicates:
+                - Path=/rest/**
+            - id: components-registry-auth
+              uri: ${COMPONENTS_REGISTRY_SERVICE_URL:http://localhost:4567}
+              predicates:
+                - Path=/auth/**
 
 # auth-server.* bind from AUTH_SERVER_URL, AUTH_SERVER_REALM, AUTH_SERVER_CLIENT_ID,
 # AUTH_SERVER_CLIENT_SECRET env vars via Spring Boot's relaxed binding. All four are

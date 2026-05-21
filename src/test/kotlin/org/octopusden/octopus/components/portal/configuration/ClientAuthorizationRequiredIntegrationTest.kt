@@ -50,9 +50,9 @@ open class ClientAuthFailureSimulatorConfig {
         object : WebFilter, Ordered {
             override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> =
                 when {
-                    exchange.request.headers.containsKey(TRIGGER_HEADER) ->
+                    exchange.request.headers.containsHeader(TRIGGER_HEADER) ->
                         Mono.error(ClientAuthorizationRequiredException("keycloak"))
-                    exchange.request.headers.containsKey(TRIGGER_HEADER_INVALID_GRANT) ->
+                    exchange.request.headers.containsHeader(TRIGGER_HEADER_INVALID_GRANT) ->
                         Mono.error(
                             ClientAuthorizationException(
                                 OAuth2Error("invalid_grant", "Token is not active", null),
