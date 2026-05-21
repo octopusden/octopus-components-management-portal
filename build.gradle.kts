@@ -97,8 +97,10 @@ dependencies {
     // the same source-set (src/test/kotlin) as the unit tests.
     testImplementation(platform("org.testcontainers:testcontainers-bom:${project.property("testcontainers.version")}"))
     testImplementation("org.testcontainers:testcontainers")
-    testImplementation("org.testcontainers:junit-jupiter")
-    testImplementation("org.testcontainers:postgresql")
+    // Testcontainers 2.0 prefixed every module artifactId with `testcontainers-`
+    // (junit-jupiter -> testcontainers-junit-jupiter, postgresql -> testcontainers-postgresql, ...).
+    testImplementation("org.testcontainers:testcontainers-junit-jupiter")
+    testImplementation("org.testcontainers:testcontainers-postgresql")
     testImplementation("org.postgresql:postgresql")
 }
 
