@@ -68,5 +68,8 @@
     "typescript-eslint": "^8.18.2",
     "vite": "^6.4.2",
     "vitest": "^4.1.5"
+  },
+  "overrides": {
+    "picomatch": "^4.0.4"
   }
 }
