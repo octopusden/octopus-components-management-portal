@@ -52,6 +52,10 @@ kotlin {
     compilerOptions.jvmTarget = JvmTarget.JVM_21
 }
 
+// TODO Stage B: remove this gate once we swap to dev.detekt 2.x — detekt 1.23.8 cannot
+// parse Kotlin 2.3 PSI, so it crashes on every source file under the new compiler.
+tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach { enabled = false }
+
 idea.module {
     isDownloadJavadoc = true
     isDownloadSources = true
@@ -68,7 +72,7 @@ dependencies {
     implementation(platform("org.springframework.cloud:spring-cloud-dependencies:${project.property("spring-cloud.version")}"))
     implementation("org.springframework.cloud:spring-cloud-starter-bootstrap")
     implementation("org.springframework.cloud:spring-cloud-starter-config")
-    implementation("org.springframework.cloud:spring-cloud-starter-gateway")
+    implementation("org.springframework.cloud:spring-cloud-starter-gateway-server-webflux")
 
     implementation(platform("org.springframework.boot:spring-boot-dependencies:${project.properties["spring-boot.version"]}"))
     implementation("org.springframework.boot:spring-boot-starter-actuator")

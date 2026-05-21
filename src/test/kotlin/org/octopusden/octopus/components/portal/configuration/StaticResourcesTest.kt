@@ -64,7 +64,7 @@ class StaticResourcesTest {
         webTestClient.get().uri("/assets/test.js")
             .exchange()
             .expectStatus().isOk
-            .expectHeader().contentTypeCompatibleWith(MediaType.parseMediaType("application/javascript"))
+            .expectHeader().contentTypeCompatibleWith(MediaType.parseMediaType("text/javascript"))
             .expectBody(String::class.java).value { body ->
                 assertTrue(body.contains("console.log"), "Expected JS content but got: $body")
             }
