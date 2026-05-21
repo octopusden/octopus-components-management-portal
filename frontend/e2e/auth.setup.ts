@@ -72,10 +72,18 @@ export async function authenticateRole(
   // the request leaves the portal origin and lands on the Keycloak host.
   // HTML entities (notably &amp;) need decoding because Keycloak inlines
   // session_code / execution / tab_id query params into action="...".
-  const formAction = match[1]
-    .replace(/&amp;/g, '&')
-    .replace(/&#x3d;/g, '=')
-    .replace(/&#x2f;/g, '/')
+  // Single-pass decode against the original string so an earlier entity
+  // can never produce a substring that a later pattern would re-match
+  // (CodeQL js/double-escaping).
+  const entityDecode: Record<string, string> = {
+    '&amp;': '&',
+    '&#x3d;': '=',
+    '&#x2f;': '/',
+  }
+  const formAction = match[1].replace(
+    /&amp;|&#x3d;|&#x2f;/g,
+    (m) => entityDecode[m] ?? m,
+  )
 
   // Step 2: post the credentials. Keycloak responds with a 302 back to
   // the portal's /login/oauth2/code/keycloak endpoint with the auth code.
