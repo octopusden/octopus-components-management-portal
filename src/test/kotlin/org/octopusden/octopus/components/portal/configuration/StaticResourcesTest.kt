@@ -3,7 +3,7 @@ package org.octopusden.octopus.components.portal.configuration
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient
+import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
@@ -44,7 +44,7 @@ class StaticResourcesTest {
             .expectStatus().isOk
             .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_HTML)
             .expectBody(String::class.java).value { body ->
-                assertTrue(body.contains("""<div id="root">"""), "Expected index.html with SPA mount point but got: $body")
+                assertTrue(body?.contains("""<div id="root">""") == true, "Expected index.html with SPA mount point but got: $body")
             }
     }
 
@@ -55,7 +55,7 @@ class StaticResourcesTest {
             .expectStatus().isOk
             .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_HTML)
             .expectBody(String::class.java).value { body ->
-                assertTrue(body.contains("""<div id="root">"""), "Expected index.html with SPA mount point but got: $body")
+                assertTrue(body?.contains("""<div id="root">""") == true, "Expected index.html with SPA mount point but got: $body")
             }
     }
 
@@ -66,7 +66,7 @@ class StaticResourcesTest {
             .expectStatus().isOk
             .expectHeader().contentTypeCompatibleWith(MediaType.parseMediaType("text/javascript"))
             .expectBody(String::class.java).value { body ->
-                assertTrue(body.contains("console.log"), "Expected JS content but got: $body")
+                assertTrue(body?.contains("console.log") == true, "Expected JS content but got: $body")
             }
     }
 
@@ -77,7 +77,7 @@ class StaticResourcesTest {
             .expectStatus().isOk
             .expectHeader().contentTypeCompatibleWith(MediaType.parseMediaType("text/css"))
             .expectBody(String::class.java).value { body ->
-                assertTrue(body.contains("margin"), "Expected CSS content but got: $body")
+                assertTrue(body?.contains("margin") == true, "Expected CSS content but got: $body")
             }
     }
 

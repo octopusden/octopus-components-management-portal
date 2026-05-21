@@ -9,7 +9,7 @@ plugins {
     id("com.github.node-gradle.node")
     id("io.github.gradle-nexus.publish-plugin")
     id("com.bmuschko.docker-spring-boot-application")
-    id("io.gitlab.arturbosch.detekt")
+    id("dev.detekt")
     id("org.jlleitschuh.gradle.ktlint")
     id("org.jetbrains.kotlinx.kover")
     id("org.octopusden.octopus-quality")
@@ -52,9 +52,12 @@ kotlin {
     compilerOptions.jvmTarget = JvmTarget.JVM_21
 }
 
-// TODO Stage B: remove this gate once we swap to dev.detekt 2.x — detekt 1.23.8 cannot
-// parse Kotlin 2.3 PSI, so it crashes on every source file under the new compiler.
-tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach { enabled = false }
+// detekt 2.x splits its baselines per source set (detekt-baseline-main.xml / -test.xml)
+// for the type-resolution-enabled detektMain/detektTest tasks. The umbrella `detekt`
+// task — which `check` depends on by default — uses the shared file below.
+detekt {
+    baseline = file("detekt-baseline.xml")
+}
 
 idea.module {
     isDownloadJavadoc = true
@@ -83,6 +86,9 @@ dependencies {
 
     testImplementation(kotlin("test"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    // Boot 4 split WebTestClient autoconfig into its own module; @AutoConfigureWebTestClient
+    // is no longer transitively pulled by spring-boot-starter-test.
+    testImplementation("org.springframework.boot:spring-boot-webtestclient")
     testImplementation("org.springframework.security:spring-security-test")
 
     // E2E driver only (JUnit @Tag("e2e")). The default `test` task excludes
