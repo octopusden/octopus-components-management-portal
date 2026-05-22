@@ -41,6 +41,6 @@ The owner dropdown is the only filter sourced from a live API rather than a stat
 
 ## Related
 
-- CRS `SYS-035` (owner filter contract) — `octopus-components-registry-service/docs/db-migration/requirements-common.md`.
+- CRS `SYS-035` (owner filter contract) — `octopus-components-registry-service/docs/registry/requirements-common.md`.
 - [`docs/features/component-detail.md`](component-detail.md) — what happens when you click a row.
 - [TD-002 OpenAPI types](../tech-debt/TD-002-openapi-types.md) — replaces hand-written enums (`SYSTEM_OPTIONS`, `PRODUCT_TYPE_OPTIONS`).

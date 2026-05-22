@@ -1,6 +1,6 @@
 // Brand-specific SVG icons used in the components-list Links column to
 // match the §7.0.6 mockup. The mockup HTML lives in the sister CRS repo:
-// `octopus-components-registry-service/_wt/docs-v3-actualization/docs/db-migration/prototypes/index.html`.
+// `octopus-components-registry-service/docs/registry/prototypes/index.html`.
 // lucide-react has no Atlassian/JetBrains-branded equivalents, so the SVG
 // paths are inlined here. Brand colors (Atlassian blue, JetBrains cyan)
 // are trademarked vendor colors and stay constant across themes — they

@@ -1,6 +1,6 @@
 # Portal Architecture
 
-> **Canonical decision:** CRS [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/db-migration/adr/012-portal-architecture.md). This document describes how Portal implements its side of that contract — what files and which choices, with pointers into the source.
+> **Canonical decision:** CRS [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/012-portal-architecture.md). This document describes how Portal implements its side of that contract — what files and which choices, with pointers into the source.
 
 ## Request flow
 
@@ -144,6 +144,6 @@ When a new endpoint is consumed, **add a row here** so the boundary stays review
 
 ## See also
 
-- CRS [ADR-012 — Portal architecture](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/db-migration/adr/012-portal-architecture.md) — canonical decision.
-- CRS [ADR-004 — Keycloak auth](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/db-migration/adr/004-auth-keycloak.md) — role/permission matrix on the resource-server side.
+- CRS [ADR-012 — Portal architecture](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/012-portal-architecture.md) — canonical decision.
+- CRS [ADR-004 — Keycloak auth](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/004-auth-keycloak.md) — role/permission matrix on the resource-server side.
 - [`docs/features/admin-migration.md`](features/admin-migration.md) — async migration UX, the most coupled feature.

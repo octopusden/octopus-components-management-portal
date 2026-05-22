@@ -58,6 +58,6 @@ This is the "atomic API+UI change" cost we accepted when extracting the Portal i
 
 ## References
 
-- CRS [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/db-migration/adr/012-portal-architecture.md) — Portal architecture; OpenAPI generation listed as a mitigation for separate-repo drift.
-- CRS `TD-003` (`docs/db-migration/tech-debt/003-openapi-v4-spec-generation.md` in `octopus-components-registry-service`) — the matching tech-debt entry on the CRS side.
+- CRS [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/012-portal-architecture.md) — Portal architecture; OpenAPI generation listed as a mitigation for separate-repo drift.
+- CRS `TD-003` (`docs/registry/tech-debt/003-openapi-v4-spec-generation.md` in `octopus-components-registry-service`) — the matching tech-debt entry on the CRS side.
 - Hand-written types today: [`frontend/src/lib/types.ts`](../../frontend/src/lib/types.ts).

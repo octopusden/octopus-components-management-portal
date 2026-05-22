@@ -18,7 +18,7 @@ Persistent footer rendered on every page (`AppFooter`):
 | Method | Path | Auth | Source |
 |---|---|---|---|
 | `GET` | `/portal/info` | Anonymous (`permitAll` on portal `SecurityConfig`). | Portal `PortalInfoController` (this app, served locally — not proxied). |
-| `GET` | `/rest/api/4/info` | Anonymous on **both** sides — Portal `permitAll` + CRS `permitAll`. | CRS `InfoControllerV4` (proxied via `/rest/**` Gateway route). Contract: CRS [SYS-033](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/db-migration/requirements-common.md). |
+| `GET` | `/rest/api/4/info` | Anonymous on **both** sides — Portal `permitAll` + CRS `permitAll`. | CRS `InfoControllerV4` (proxied via `/rest/**` Gateway route). Contract: CRS [SYS-033](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/requirements-common.md). |
 
 Both endpoints respond with the same shape:
 

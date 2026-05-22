@@ -4,7 +4,7 @@
 
 A **UX-only** switch that gates destructive actions in the SPA (e.g. "Run migration") for users who already have the backend permission. It exists to prevent fat-finger admin actions from a long-lived browser tab.
 
-It is **not a security boundary** — the actual authorization is enforced server-side by CRS `@PreAuthorize` on every admin endpoint (see [`admin-migration.md`](admin-migration.md) §"Auth gates" and CRS [ADR-004](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/db-migration/adr/004-auth-keycloak.md)).
+It is **not a security boundary** — the actual authorization is enforced server-side by CRS `@PreAuthorize` on every admin endpoint (see [`admin-migration.md`](admin-migration.md) §"Auth gates" and CRS [ADR-004](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/004-auth-keycloak.md)).
 
 ## How it works
 

@@ -89,6 +89,6 @@ When the user navigates `/components/A → /components/B`, React Router can reus
 
 ## Related
 
-- CRS [`ADR-004`](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/db-migration/adr/004-auth-keycloak.md) — role / permission matrix.
+- CRS [`ADR-004`](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/004-auth-keycloak.md) — role / permission matrix.
 - CRS technical-design `§6.3` `PermissionEvaluator` — method → permission table.
 - [`docs/features/audit-log.md`](audit-log.md) — what's behind the History tab.

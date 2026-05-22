@@ -10,7 +10,7 @@ A Spring Cloud Gateway (WebFlux) BFF that:
 - Hosts a React 19 + Vite SPA built into the same JAR (`/static/` resources) and serves it via `SpaFallbackFilter`.
 - Exposes its own anonymous build-info endpoint at `/portal/info`. The complementary CRS endpoint at `/rest/api/4/info` is proxied via `/rest/**` and is also anonymous on both sides — both feed the footer.
 
-The architectural rationale (why this lives in a separate repo from CRS, what each side owns) is in CRS [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/db-migration/adr/012-portal-architecture.md). A short Portal-side summary lives at [`docs/adr/001-spring-cloud-gateway-bff.md`](docs/adr/001-spring-cloud-gateway-bff.md).
+The architectural rationale (why this lives in a separate repo from CRS, what each side owns) is in CRS [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/012-portal-architecture.md). A short Portal-side summary lives at [`docs/adr/001-spring-cloud-gateway-bff.md`](docs/adr/001-spring-cloud-gateway-bff.md).
 
 ## Key features
 
@@ -35,7 +35,7 @@ The architectural rationale (why this lives in a separate repo from CRS, what ea
 The recommended dev loop is Vite HMR with a proxy to a local CRS backend. No Gradle in the inner loop.
 
 ```sh
-# 1) start CRS locally on :4567 (see CRS docs/db-migration/deployment/dev-run.md)
+# 1) start CRS locally on :4567 (see CRS docs/registry/deployment/dev-run.md)
 # 2) start the portal backend (gateway + security + /portal/info) on :8090
 ./gradlew bootRun
 
@@ -62,7 +62,7 @@ For a backend-only build (skips npm install/build):
 ## Documentation
 
 - [`docs/architecture.md`](docs/architecture.md) — request flow, BFF pattern, CSRF policy, SPA fallback.
-- [`docs/adr/`](docs/adr/) — Portal-specific ADRs (canonical decision is in CRS [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/db-migration/adr/012-portal-architecture.md)).
+- [`docs/adr/`](docs/adr/) — Portal-specific ADRs (canonical decision is in CRS [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/012-portal-architecture.md)).
 - [`docs/features/`](docs/features/) — feature docs (admin-migration, admin-mode, app-footer).
 - [`docs/onboarding/components-management-portal.md`](docs/onboarding/components-management-portal.md) — OKD/Vault/TeamCity deployment checklist.
 - [`docs/tech-debt/`](docs/tech-debt/) — open tech-debt items (TD-001 e2e fixture, TD-002 OpenAPI types, TD-003 session store, TD-004 TLS migration).

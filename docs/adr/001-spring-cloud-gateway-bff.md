@@ -1,7 +1,7 @@
 # Portal ADR-001: Spring Cloud Gateway BFF — Portal-side summary
 
 ## Status
-Accepted. **Canonical decision:** CRS [ADR-012 — Portal architecture](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/db-migration/adr/012-portal-architecture.md).
+Accepted. **Canonical decision:** CRS [ADR-012 — Portal architecture](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/012-portal-architecture.md).
 
 This document is **not a copy** of ADR-012. It is a short Portal-side summary that captures only what is specific to this repository — implementation choices, file paths, and obligations Portal accepts from the canonical decision. Rationale, trade-offs, and the Option-A-vs-B-vs-C analysis stay in CRS ADR-012.
 
@@ -19,9 +19,9 @@ This document is **not a copy** of ADR-012. It is a short Portal-side summary th
 Portal does **not** authorize. It assumes:
 
 - CRS validates the bearer token against the same Keycloak realm.
-- CRS enforces `@PreAuthorize` on every protected endpoint (CRS [ADR-004](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/db-migration/adr/004-auth-keycloak.md), `WebSecurityConfig.kt`).
-- CRS keeps `/rest/api/4/info` and `/auth/me` reachable on the contracts pinned in CRS [SYS-033](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/db-migration/requirements-common.md) and `SYS-034`.
-- CRS implements the async migration contract on the shape pinned in CRS [MIG-027](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/db-migration/requirements-migration.md).
+- CRS enforces `@PreAuthorize` on every protected endpoint (CRS [ADR-004](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/004-auth-keycloak.md), `WebSecurityConfig.kt`).
+- CRS keeps `/rest/api/4/info` and `/auth/me` reachable on the contracts pinned in CRS [SYS-033](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/requirements-common.md) and `SYS-034`.
+- CRS implements the async migration contract on the shape pinned in CRS [MIG-027](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/requirements-migration.md).
 
 If any of those contracts move on the CRS side, this Portal must move with them — drift is the most likely thing to break the BFF and is the main cost of the separate-repo decision.
 
@@ -37,4 +37,4 @@ For the following, read the canonical CRS ADR-012:
 
 - [`docs/architecture.md`](../architecture.md) — implementation guide with file paths.
 - [`docs/features/admin-migration.md`](../features/admin-migration.md) — most coupled feature.
-- CRS [ADR-004](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/db-migration/adr/004-auth-keycloak.md), [ADR-009](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/db-migration/adr/009-ui-repository-strategy.md) (Superseded), [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/db-migration/adr/012-portal-architecture.md).
+- CRS [ADR-004](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/004-auth-keycloak.md), [ADR-009](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/009-ui-repository-strategy.md) (Superseded), [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/012-portal-architecture.md).

@@ -38,7 +38,7 @@ Recommended: **Redis** (matches DMS pattern, lowest write cost), unless a strong
 ## Out of scope
 
 - Cross-cluster session replication (different problem).
-- Replacing the BFF pattern with a stateless JWT-on-cookie scheme (would also avoid this problem but is a much bigger architectural change — see CRS [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/db-migration/adr/012-portal-architecture.md) for why we're a BFF).
+- Replacing the BFF pattern with a stateless JWT-on-cookie scheme (would also avoid this problem but is a much bigger architectural change — see CRS [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/012-portal-architecture.md) for why we're a BFF).
 - Front-channel logout fan-out across multiple pods (Spring Session handles this if the chosen store is shared).
 
 ## Acceptance criteria
@@ -50,6 +50,6 @@ Recommended: **Redis** (matches DMS pattern, lowest write cost), unless a strong
 
 ## References
 
-- CRS [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/db-migration/adr/012-portal-architecture.md) §"Risks" — flags this gap.
+- CRS [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/012-portal-architecture.md) §"Risks" — flags this gap.
 - DMS service uses Redis for its own session store — pattern to copy.
 - Session config currently lives implicitly in Spring defaults (no explicit `spring.session.*` settings in `application.yaml`).
