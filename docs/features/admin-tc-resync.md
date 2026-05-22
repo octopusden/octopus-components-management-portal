@@ -4,7 +4,7 @@
 
 ## What it does
 
-Triggers `POST /rest/api/4/admin/teamcity-project-ids/sync` on CRS. The backend walks every DB-sourced component, queries the configured TeamCity for projects matching that component, and updates `components.teamcity_project_id` on each match. The result is a per-component report of `MATCHED`, `AMBIGUOUS_AUTO_RESOLVED`, `NO_MATCH`, or `ERROR`. The Portal renders the report as counter tiles when the job completes.
+Triggers `POST /rest/api/4/admin/teamcity-project-ids/sync` on CRS. The backend walks every DB-sourced component, queries the configured TeamCity for projects matching that component, and rewrites `components.teamcity_project_id` **and** `components.teamcity_project_url` where the match changes. The result wire shape (`TeamCityResyncResult` in `frontend/src/lib/types.ts`) is a counter object — `scanned`, `updated`, `unchanged`, `skipped_no_match`, `skipped_ambiguous`, optional `ambiguous_auto_resolved` — plus an `errors: string[]` list of per-component error messages. The Portal renders the counters as tiles when the job completes; the error list feeds the destructive banner.
 
 ## UI surface
 

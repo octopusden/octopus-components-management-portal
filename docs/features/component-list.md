@@ -11,23 +11,26 @@ Independently optional filters, ANDed server-side. Each filter resets pagination
 | Filter | Source / wire param | UI control | Notes |
 |---|---|---|---|
 | **Search** | `?search=…` (server-side ILIKE on `name` + `displayName`) | Debounced text input (300 ms) | |
-| **Product type** | `?productType=…` | Single-select `<Select>` from `PRODUCT \| COMPONENT \| LIBRARY \| SERVICE` | Static list — see [TD-002](../tech-debt/TD-002-openapi-types.md) for the proper enum source. |
 | **Owner** | `?owner=…` (CSV, OR semantics) | `MultiSelectFilter` populated from `GET /components/meta/owners` via [`useOwners`](../../frontend/src/hooks/useOwners.ts) | CRS `SYS-035` baseline; multi-value OR added in CRS PR #265. Multiple selections produce `?owner=a,b` and match `componentOwner IN (...)`. |
-| **System** | `?system=…` (CSV, OR semantics) | `MultiSelectFilter` populated from `GET /components/meta/systems` | CRS SYS-042. Server-side JOIN through `component_systems` + `IN (...)`. |
-| **Build system** | `?buildSystem=…` (CSV, OR semantics) | `MultiSelectFilter` populated from `GET /components/meta/build-systems` (fallback when admin field-config has no options) | CRS SYS-041. OR semantics against `component_configurations.build_system` on the base row. |
-| **Labels** | `?labels=…` (CSV, AND semantics) | `MultiSelectFilter` populated from `GET /components/meta/labels` | CRS SYS-040. Each selected label produces its own JOIN+predicate (component must carry ALL labels). |
+| **System** | `?system=…` (CSV, OR semantics) | `MultiSelectFilter` populated from `GET /components/meta/systems` via [`useFieldOptions('system')`](../../frontend/src/hooks/useFieldOptions.ts) | CRS SYS-042. Server-side JOIN through `component_systems` + `IN (...)`. |
+| **Build system** | `?buildSystem=…` (CSV, OR semantics) | `MultiSelectFilter` populated from `GET /components/meta/build-systems` via [`useFieldOptions('buildSystem')`](../../frontend/src/hooks/useFieldOptions.ts) (fallback when admin field-config has no options) | CRS SYS-041. OR semantics against `component_configurations.build_system` on the base row. |
+| **Labels** | `?labels=…` (CSV, AND semantics) | `MultiSelectFilter` populated from `GET /components/meta/labels` via [`useLabels`](../../frontend/src/hooks/useLabels.ts) | CRS SYS-040. Each selected label produces its own JOIN+predicate (component must carry ALL labels). |
 | **Archived** | `?archived=false` (default; omit for "all") | Two-state toggle cycling *Active only ↔ All* | The button label flips between *Show archived components* and *Hide archived components*. Default is `archived: false` (active only); "Clear filters" returns to that state, not to *All*. |
 
 The whole filter row lives in [`frontend/src/components/ui/filter-bar.tsx`](../../frontend/src/components/ui/filter-bar.tsx); the multi-selects use [`frontend/src/components/ui/MultiSelectFilter.tsx`](../../frontend/src/components/ui/MultiSelectFilter.tsx). A "Clear filters" button surfaces whenever any filter is active.
 
 ### Multi-select picker (`MultiSelectFilter`)
 
-Shared component used by the four CSV filters above. Each picker:
+Shared component used by the four CSV filters above. Common behaviour:
 
-- Loads options lazily on first popover open via `onOpenChange` — keeps page mount free of meta-endpoint fetches and prevents Playwright's console-error listener from tripping on browser 404 logs before React-Query catches them.
 - Closed trigger renders as `<placeholder>` (e.g. *All labels*) plus a small `Badge` with the **count** of current selections — not inline chips per selection. Open popover renders a search input + a checkable list of all known options.
 - Echoes selections back to the URL as a CSV (`?owner=a,b`), keeping the wire shape that CRS expects without N repeated query params.
 - Returns an empty array (not `undefined`) when cleared, so the call site omits the URL search param entirely instead of sending an empty string.
+
+Per-filter option-fetch timing differs:
+
+- **Owner** and **Build system** load options on first render — `useOwners()` and `useFieldOptions('buildSystem')` are called unconditionally from `ComponentFilters`.
+- **System** and **Labels** are lazy — `useFieldOptions('system', { enabled: systemActivated })` and `useLabels({ enabled: labelsActivated })` only fire after the user opens the popover for the first time (the `onOpenChange` handler flips the corresponding `*Activated` flag, which never goes back to `false`). This keeps page mount free of two meta-endpoint fetches and prevents Playwright's console-error listener from tripping on browser 404 logs before React-Query catches them on tenants where these endpoints are not yet wired.
 
 ### Per-tenant filter visibility
 

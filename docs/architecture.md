@@ -70,7 +70,7 @@ Practical implications:
 - **`/rest/**` and `/auth/**`** → `HttpStatusServerEntryPoint(401)`. The SPA's `frontend/src/lib/api.ts` 401-handler fires cleanly (e.g. surfaces a "session expired" toast / redirects via JS) without the noise of a `Location: /oauth2/authorization/keycloak` round-trip baked into a fetch response.
 - **anything else** → `RedirectServerAuthenticationEntryPoint("/oauth2/authorization/keycloak")`. Typed-URL navigations (`https://portal/components/foo`) start the OIDC dance.
 
-This is wired **after** `oauth2Login(Customizer.withDefaults())` so the delegating entry point overrides Spring Security's default redirect-everywhere behaviour. See `SecurityConfig.kt` — the `delegatingEntryPoint` is built at lines 67–77 and wired via `.exceptionHandling { … }` at lines 109–120.
+This is wired **after** `oauth2Login(Customizer.withDefaults())` so the delegating entry point overrides Spring Security's default redirect-everywhere behaviour. See `SecurityConfig.kt` — the `delegatingEntryPoint` is built starting at line 73 and wired via `.exceptionHandling { … }` at line 109.
 
 ## CSRF policy: plain double-submit, NOT XOR
 
