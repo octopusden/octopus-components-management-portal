@@ -53,6 +53,16 @@ The save handler in `ComponentDetailPage.handleSave` only sends `name` on a real
 
 If any of these fields is always sent, a non-admin's plain edit (only `displayName` or owner) would 403 because the server's PATCH SpEL guards `(#request.archived == null or canArchiveComponent(...))` etc.
 
+### Schema-v2 General-tab editors (PR #38 Wave B)
+
+With CRS schema v2 (`component_configurations` as the wide row), three child-collection editors live on the General tab next to the scalar fields:
+
+- **TeamCity projects** — `projectId` rows backed by the `component_teamcity_projects` child table. Sort order is preserved (server sorts by `sort_order`); the editor re-emits the full list on each save.
+- **Doc links** — `{ docComponentKey: string, majorVersion?: string | null }` rows backed by `component_doc_links`. Identifies the documentation source by component key and (optionally) the major version it documents (e.g. `3.x`); the editor maps a blank input to `null` on save.
+- **Artifact IDs** — `{ groupPattern: string, artifactPattern: string }` rows backed by `component_artifact_ids`. Order preserved; primary use is fuzzy-match by build artifact identifier in downstream Feign consumers.
+
+Each editor is a `useFieldArray` row list with inline add and per-row delete. They share the page-level `react-hook-form` state; the General tab Save button mutates them together with the scalar fields in one PATCH.
+
 ### Optimistic-locking conflict UX (B7.1.6)
 
 On `409 Conflict`:
@@ -89,6 +99,6 @@ When the user navigates `/components/A → /components/B`, React Router can reus
 
 ## Related
 
-- CRS [`ADR-004`](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/db-migration/adr/004-auth-keycloak.md) — role / permission matrix.
+- CRS [`ADR-004`](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/004-auth-keycloak.md) — role / permission matrix.
 - CRS technical-design `§6.3` `PermissionEvaluator` — method → permission table.
 - [`docs/features/audit-log.md`](audit-log.md) — what's behind the History tab.

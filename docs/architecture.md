@@ -1,6 +1,10 @@
 # Portal Architecture
 
-> **Canonical decision:** CRS [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/db-migration/adr/012-portal-architecture.md). This document describes how Portal implements its side of that contract — what files and which choices, with pointers into the source.
+> **Canonical decision:** CRS [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/012-portal-architecture.md). This document describes how Portal implements its side of that contract — what files and which choices, with pointers into the source.
+
+## Why this repo exists
+
+The Portal lives in its own repository because the UI was extracted from CRS in April 2026. Previously the React/Vite SPA lived as the `components-registry-ui/` Gradle module inside the CRS repo; in PR #147 (commit `26278f29`) the module was deleted from CRS and the UI moved here, with a Spring Cloud Gateway BFF in front. The reversal of the earlier "single-repo, embedded JAR" recommendation is explained in CRS [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/012-portal-architecture.md), which is the canonical decision record; CRS [ADR-009](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/009-ui-repository-strategy.md) (Superseded) carries the pre-reversal analysis.
 
 ## Request flow
 
@@ -66,7 +70,7 @@ Practical implications:
 - **`/rest/**` and `/auth/**`** → `HttpStatusServerEntryPoint(401)`. The SPA's `frontend/src/lib/api.ts` 401-handler fires cleanly (e.g. surfaces a "session expired" toast / redirects via JS) without the noise of a `Location: /oauth2/authorization/keycloak` round-trip baked into a fetch response.
 - **anything else** → `RedirectServerAuthenticationEntryPoint("/oauth2/authorization/keycloak")`. Typed-URL navigations (`https://portal/components/foo`) start the OIDC dance.
 
-This is wired **after** `oauth2Login(Customizer.withDefaults())` so the delegating entry point overrides Spring Security's default redirect-everywhere behaviour. See `SecurityConfig.kt` lines 51–93.
+This is wired **after** `oauth2Login(Customizer.withDefaults())` so the delegating entry point overrides Spring Security's default redirect-everywhere behaviour. See `SecurityConfig.kt` — the `delegatingEntryPoint` is built starting at line 73 and wired via `.exceptionHandling { … }` at line 109.
 
 ## CSRF policy: plain double-submit, NOT XOR
 
@@ -80,7 +84,7 @@ request → SpA reads XSRF-TOKEN cookie (HttpOnly=false)
 
 The handler is `ServerCsrfTokenRequestAttributeHandler` (the **plain** one), not `XorServerCsrfTokenRequestAttributeHandler` (the default since Spring Security 5.8 with BREACH mitigation).
 
-**Why plain, not XOR?** The XOR handler emits a different token in the cookie than it expects in the header — the SPA reading the cookie raw and echoing it raw would 403 on every non-safe request. The full inline rationale is in `SecurityConfig.kt` lines 96–107 — do not "modernize" that block back to the default.
+**Why plain, not XOR?** The XOR handler emits a different token in the cookie than it expects in the header — the SPA reading the cookie raw and echoing it raw would 403 on every non-safe request. The full inline rationale is in `SecurityConfig.kt` lines 124–131 (inside the `.csrf { csrf -> … }` block) — do not "modernize" that block back to the default.
 
 A `csrfCookieWebFilter` bean (also in `SecurityConfig.kt`) materialises the token on every request so the cookie is set on first load, before the SPA has anything to echo.
 
@@ -144,6 +148,6 @@ When a new endpoint is consumed, **add a row here** so the boundary stays review
 
 ## See also
 
-- CRS [ADR-012 — Portal architecture](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/db-migration/adr/012-portal-architecture.md) — canonical decision.
-- CRS [ADR-004 — Keycloak auth](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/db-migration/adr/004-auth-keycloak.md) — role/permission matrix on the resource-server side.
+- CRS [ADR-012 — Portal architecture](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/012-portal-architecture.md) — canonical decision.
+- CRS [ADR-004 — Keycloak auth](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/004-auth-keycloak.md) — role/permission matrix on the resource-server side.
 - [`docs/features/admin-migration.md`](features/admin-migration.md) — async migration UX, the most coupled feature.

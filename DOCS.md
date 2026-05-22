@@ -29,14 +29,13 @@ Read these in [`octopus-components-registry-service`](https://github.com/octopus
 
 | Concern | Doc (in CRS) | What it covers |
 |---|---|---|
-| **Product requirements** | `docs/db-migration/prd.md` | Goals, user stories, phases, milestones. |
-| **Functional spec** | `docs/db-migration/functional-spec.md` | What the API does — CRUD, search, audit, import, info, auth. |
-| **Non-functional spec** | `docs/db-migration/non-functional-spec.md` | Performance budgets, async-job SLAs, observability. |
-| **Technical design** | `docs/db-migration/technical-design.md` | Architecture, DB schema, JPA entities, API contracts, security. |
-| **Architecture decisions** | `docs/db-migration/adr/` | All ADRs — backend, data, security. Includes `ADR-012` (canonical decision for the Portal-CRS boundary). |
-| **Numbered requirements** | `docs/db-migration/requirements-{common,migration,resolver}.md` (`SYS-NNN`, `MIG-NNN`, `RES-NNN`) | Acceptance criteria + test pointers. RES-NNN pin parity between the DB resolver and the legacy Git resolver — relevant when Portal features depend on resolver behaviour. |
-| **Implementation status** | `docs/db-migration/implementation-progress.md` | Backend phases + what shipped when. |
-| **Backend tech-debt** | `docs/db-migration/tech-debt/` | Flyway rollout, OpenAPI spec generation. |
+| **Product requirements** | `docs/registry/prd.md` | Goals, user stories, phases, milestones. |
+| **Functional spec** | `docs/registry/functional-spec.md` | What the API does — CRUD, search, audit, import, info, auth. |
+| **Non-functional spec** | `docs/registry/non-functional-spec.md` | Performance budgets, async-job SLAs, observability. |
+| **Technical design** | `docs/registry/technical-design.md` | Architecture, DB schema, JPA entities, API contracts, security. |
+| **Architecture decisions** | `docs/registry/adr/` | All ADRs — backend, data, security. Includes `ADR-012` (canonical decision for the Portal-CRS boundary). |
+| **Numbered requirements** | `docs/registry/requirements-{common,migration,resolver}.md` (`SYS-NNN`, `MIG-NNN`, `RES-NNN`) | Acceptance criteria + test pointers. RES-NNN pin parity between the DB resolver and the legacy Git resolver — relevant when Portal features depend on resolver behaviour. |
+| **Backend tech-debt** | `docs/registry/tech-debt/` | Flyway rollout, OpenAPI spec generation. |
 
 ## Cross-repo concerns (read both)
 

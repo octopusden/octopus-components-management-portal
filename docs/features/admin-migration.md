@@ -2,6 +2,8 @@
 
 > Target users: registry admins (Keycloak realm role mapped to `IMPORT_DATA` permission, i.e. `ROLE_ADMIN` per CRS ADR-004).
 
+> Companion: [`admin-tc-resync.md`](admin-tc-resync.md) — the TeamCity-project resync is the second async-job admin action and shares this page's state machine.
+
 ## What it does
 
 Triggers a full Git → DB migration of the legacy components-registry DSL (Groovy/Kotlin) into the CRS PostgreSQL schema. After the cut-over the CRS resolver serves all components from DB rather than re-parsing Git on every restart.
@@ -71,7 +73,7 @@ GET /admin/migrate/job          POST /admin/migrate
 UX details to preserve:
 
 - **Fast path on 202:** if CRS hands back `state === 'COMPLETED'` directly (executor finished before the response was built — backend tests force this via `SyncTaskExecutor`, but a real production thread can win the race on small migrations), `useRunMigration.onSuccess` invalidates the `['migration', 'status']` and `['config', 'component-defaults']` query caches. The polling listener never sees the RUNNING → COMPLETED transition in that case, so this short-circuit is necessary.
-- **Pod restart during RUNNING:** the next `GET /admin/migrate/job` returns 404 (state was in-memory). The SPA falls back to IDLE. The user must re-run. Tracked in CRS [MIG-028](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/db-migration/requirements-migration.md).
+- **Pod restart during RUNNING:** the next `GET /admin/migrate/job` returns 404 (state was in-memory). The SPA falls back to IDLE. The user must re-run. Tracked in CRS [MIG-028](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/requirements-migration.md).
 - **Re-run after COMPLETED / FAILED:** allowed. CRS replaces the slot; the previous result is no longer reachable via `GET /admin/migrate/job`. The SPA never rendered a "history" of jobs, only the current one.
 
 ## Auth gates (real, not UX)
@@ -81,7 +83,7 @@ The "Run migration" button is gated in two layers:
 | Layer | What it checks | Authority |
 |---|---|---|
 | UX | User has `IMPORT_DATA` permission **and** Admin-mode is toggled in the footer. | UX hint only — not a security boundary. |
-| Backend | Class-level `@PreAuthorize("@permissionEvaluator.canImport()")` on `AdminControllerV4` + `WebSecurityConfig` `/rest/api/4/**` requires JWT. | The actual gate. CRS [MIG-024](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/db-migration/requirements-migration.md). |
+| Backend | Class-level `@PreAuthorize("@permissionEvaluator.canImport()")` on `AdminControllerV4` + `WebSecurityConfig` `/rest/api/4/**` requires JWT. | The actual gate. CRS [MIG-024](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/requirements-migration.md). |
 
 Removing the UX gate would not let a non-admin run a migration — the server would 403. The Admin-mode toggle exists to prevent the kind of fat-finger admin disaster that comes from a single-click migration in a browser tab someone opened a week ago.
 
