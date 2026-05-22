@@ -36,14 +36,19 @@ Matches the components-migration panel state machine (kept in sync with [`admin-
 
 The job state is in-memory on CRS (same caveat as the components-migration job — pod restart loses RUNNING state and the SPA falls back to IDLE).
 
-## Counter tiles + Auto-resolved tile
+## Counter tiles
 
-On COMPLETED the panel renders four `StatCard` tiles:
+On COMPLETED the panel renders seven `StatCard` tiles in a single row:
 
-- **Matched** — clean one-to-one match.
-- **Auto-resolved** — multiple TC projects matched; CRS picked the one whose name starts with `CDRelease-` (per CRS PR #188). The tile is the panel's way of surfacing that human verification of the picks is desirable — clicking the tile filters the list page for the affected components.
+- **Scanned** — total components considered.
+- **Updated** — `components.teamcity_project_id` rewritten because the match changed.
+- **Unchanged** — match agreed with the existing value; no write.
 - **No match** — no TC project found. Often a typo in component name or a project not yet created.
+- **Ambiguous** — multiple TC projects matched and the auto-resolution rule did not pick one. Listed in the detail banner for manual fix.
+- **Auto-resolved** — multiple TC projects matched and CRS picked the one whose name starts with `CDRelease-` (per CRS PR #188). Surface it so an operator can sanity-check the picks.
 - **Errors** — the underlying TC client failed (auth, 5xx, timeout). Component IDs are listed in the destructive banner below.
+
+Tiles are read-only — there is no click-through to a filtered list page.
 
 ## Cross-kind disable
 
