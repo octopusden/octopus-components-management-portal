@@ -2,6 +2,8 @@
 
 > Target users: registry admins (Keycloak realm role mapped to `IMPORT_DATA` permission, i.e. `ROLE_ADMIN` per CRS ADR-004).
 
+> Companion: [`admin-tc-resync.md`](admin-tc-resync.md) — the TeamCity-project resync is the second async-job admin action and shares this page's state machine.
+
 ## What it does
 
 Triggers a full Git → DB migration of the legacy components-registry DSL (Groovy/Kotlin) into the CRS PostgreSQL schema. After the cut-over the CRS resolver serves all components from DB rather than re-parsing Git on every restart.

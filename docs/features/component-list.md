@@ -6,26 +6,32 @@ The components list at `/components` is the SPA's main navigation surface — pa
 
 ## Filters
 
-Five independently optional filters, ANDed server-side. Each filter resets pagination to page 0 to avoid landing the user on an out-of-bounds page when the result set shrinks.
+Independently optional filters, ANDed server-side. Each filter resets pagination to page 0 to avoid landing the user on an out-of-bounds page when the result set shrinks.
 
 | Filter | Source / wire param | UI control | Notes |
 |---|---|---|---|
-| **Search** | `?search=…` (server-side ILIKE on `name` + `displayName`) | Debounced text input (300 ms) | The debounce keeps a fast typist from firing N requests per word. |
-| **Product type** | `?productType=…` | `<Select>` from a built-in option list (`PRODUCT`, `COMPONENT`, `LIBRARY`, `SERVICE`) | Static list today — see [TD-002](../tech-debt/TD-002-openapi-types.md) for the proper enum source. |
-| **Owner** | `?owner=…` (exact match on `componentOwner`) | `<Select>` populated from `GET /components/meta/owners` via [`useOwners`](../../frontend/src/hooks/useOwners.ts) | Backed by CRS `SYS-035`. The picker hands back canonical owner strings, so the server-side filter is a case-sensitive `cb.equal`. Without this, the SPA would have to download the full ~900-component list to filter client-side. |
-| **Archived** | `?archived=true|false` (omit for "all") | Tri-state toggle button cycling through *All → Archived only → Active only → All* | Tri-state matters because the default `archived` filter is "show everything"; the button has to express that explicitly to avoid the user thinking the toggle is broken. |
-| **System** | `?system=…` (intentionally rejected on the server today) | `<Select>` available but currently produces HTTP 400 | Kept in the UI for forward-compat; CRS `ComponentManagementServiceImpl.buildSpecification` rejects until the JPA + `text[]` story is sorted. |
+| **Search** | `?search=…` (server-side ILIKE on `name` + `displayName`) | Debounced text input (300 ms) | |
+| **Product type** | `?productType=…` | Single-select `<Select>` from `PRODUCT \| COMPONENT \| LIBRARY \| SERVICE` | Static list — see [TD-002](../tech-debt/TD-002-openapi-types.md) for the proper enum source. |
+| **Owner** | `?owner=…` (CSV, OR semantics) | `MultiSelectFilter` populated from `GET /components/meta/owners` via [`useOwners`](../../frontend/src/hooks/useOwners.ts) | CRS `SYS-035` baseline; multi-value OR added in CRS PR #265. Multiple selections produce `?owner=a,b` and match `componentOwner IN (...)`. |
+| **System** | `?system=…` (CSV, OR semantics) | `MultiSelectFilter` populated from `GET /components/meta/systems` | CRS SYS-042. Server-side JOIN through `component_systems` + `IN (...)`. |
+| **Build system** | `?buildSystem=…` (CSV, OR semantics) | `MultiSelectFilter` populated from `GET /components/meta/build-systems` (fallback when admin field-config has no options) | CRS SYS-041. OR semantics against `component_configurations.build_system` on the base row. |
+| **Labels** | `?labels=…` (CSV, AND semantics) | `MultiSelectFilter` populated from `GET /components/meta/labels` | CRS SYS-040. Each selected label produces its own JOIN+predicate (component must carry ALL labels). |
+| **Archived** | `?archived=true \| false` (omit for "all") | Tri-state toggle cycling *All → Archived → Active → All* | Default is "show everything"; the button expresses that state explicitly so the toggle never looks broken. |
 
-A "Clear filters" button surfaces whenever any filter is active and resets the whole filter object to `{}`.
+The whole filter row lives in [`frontend/src/components/ui/filter-bar.tsx`](../../frontend/src/components/ui/filter-bar.tsx); the multi-selects use [`frontend/src/components/ui/MultiSelectFilter.tsx`](../../frontend/src/components/ui/MultiSelectFilter.tsx). A "Clear filters" button surfaces whenever any filter is active.
 
-## Owner picker (B7.1.1)
+### Multi-select picker (`MultiSelectFilter`)
 
-The owner dropdown is the only filter sourced from a live API rather than a static enum. Implementation details that future readers tend to trip on:
+Shared component used by the four CSV filters above. Each picker:
 
-- Values come from `GET /rest/api/4/components/meta/owners`. The hook `useOwners` caches with `staleTime: 5 * 60_000`, so the picker doesn't refetch on every page mount.
-- The list is rendered flat — no virtualization, no search-as-you-type. Acceptable while the owner cardinality is in the low hundreds; if it grows past that, switch to a typeahead variant matching `PeopleInput`'s pattern.
-- An `__all__` sentinel value clears the filter (the same pattern `system` and `productType` use). Ranges back to `undefined` at the call site so the URL search param is omitted entirely, not sent as an empty string.
-- Width is `180px` (vs `160px` for system / productType) to fit realistic owner emails. Don't shrink without checking what the longest live owner string looks like.
+- Loads options lazily on first popover open via `onOpenChange` — keeps page mount free of meta-endpoint fetches and prevents Playwright's console-error listener from tripping on browser 404 logs before React-Query catches them.
+- Renders selected values as inline `Badge` chips next to the trigger. When more chips would fit than the trigger has room for, the surplus collapses into a `+N` chip; clicking `+N` expands the row in place so the user can see every selected value without losing the typeahead.
+- Echoes selections back to the URL as a CSV (`?owner=a,b`), keeping the wire shape that CRS expects without N repeated query params.
+- Returns an empty array (not `undefined`) when cleared, so the call site omits the URL search param entirely instead of sending an empty string.
+
+### Per-tenant filter visibility
+
+`AdminSettingsPage` writes a `FieldConfig` map that controls which filters are visible on the list page. The visibility check happens inside `ComponentFilters` against the same config the editor uses, so admins can hide filters that aren't relevant for their installation (e.g. tenants without a `system` taxonomy).
 
 ## Routing
 

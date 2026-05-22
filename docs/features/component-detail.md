@@ -53,6 +53,16 @@ The save handler in `ComponentDetailPage.handleSave` only sends `name` on a real
 
 If any of these fields is always sent, a non-admin's plain edit (only `displayName` or owner) would 403 because the server's PATCH SpEL guards `(#request.archived == null or canArchiveComponent(...))` etc.
 
+### Schema-v2 General-tab editors (PR #38 Wave B)
+
+With CRS schema v2 (`component_configurations` as the wide row), three child-collection editors live on the General tab next to the scalar fields:
+
+- **TeamCity projects** — list-of-strings editor backed by the `component_teamcity_projects` child table. Sort order is preserved (server sorts by `sort_order`); the editor re-emits the full list on each save. CRS contract: `componentTeamCityProjects[]` on the v4 `ComponentDetail` DTO.
+- **Doc links** — list of `{ kind: string, url: string }` rows backed by `component_doc_links`. The kind column is free-text today (no enum constraint) so misspellings on the wire are the editor's responsibility to surface.
+- **Artifact IDs** — list-of-strings (no JOIN-through table, just `component_artifact_ids`). Order preserved; primary use is fuzzy-match by build artifact identifier in downstream Feign consumers.
+
+Each editor is a generic chip/row list with inline add and per-row delete. They share the page-level `react-hook-form` state; the General tab Save button mutates them together with the scalar fields in one PATCH.
+
 ### Optimistic-locking conflict UX (B7.1.6)
 
 On `409 Conflict`:
