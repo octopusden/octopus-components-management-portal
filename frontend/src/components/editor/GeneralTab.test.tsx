@@ -100,8 +100,9 @@ function Harness({ component, formRef }: { component: ComponentDetail; formRef?:
       displayName: component.displayName ?? '',
       componentOwner: component.componentOwner ?? '',
       productType: component.productType ?? '',
-      // Task #14: system is single-select (scalar). Hydrate with the
-      // first stored value for legacy multi-element components.
+      // Task #14: system is single-select (scalar) in the domain. Hydrate
+      // from the first element of the array-shaped DTO until CRS task #7
+      // collapses `systems: string[]` → `system: string?`.
       system: component.systems?.[0] ?? '',
       labels: component.labels ?? [],
       clientCode: component.clientCode ?? '',
@@ -376,9 +377,10 @@ describe('GeneralTab system field hidden → form value contract (task #14)', ()
 
     // EnumSelect not rendered (hidden)
     expect(screen.queryByText(/^system$/i)).toBeNull()
-    // Task #14 single-select: hydrate to first stored value. The legacy
-    // multi-system tail (SYS2) lives only in the server snapshot until
-    // CRS task #7 collapses the wire shape.
+    // Task #14 single-select: hydrate the scalar form field from the
+    // first element of the array-shaped DTO. If a DTO ever carries more
+    // than one element (out-of-contract data), the extras stay on the
+    // server snapshot until CRS task #7 collapses the wire shape.
     const val = formRef.current?.getValues('system')
     expect(val).toBe('SYS1')
   })
@@ -785,12 +787,13 @@ describe('GeneralTab — system single-select + labels chips (task #14)', () => 
     expect(screen.getByRole('option', { name: 'SYS_NEW_DICT_ONLY' })).toBeDefined()
   })
 
-  it('legacy multi-system component warmstarts to the FIRST stored value (task #14 documented edge)', () => {
-    // CRS task #7 will collapse Component.systems Set<String> → String?,
-    // erasing the multi-element shape. Until then, legacy components
-    // saved before this UI flip may carry multiple values; the single-
-    // select hydrates to systems[0] and the rest live on the server
-    // snapshot until the user actively edits/clears the field.
+  it('hydrates from an array-shaped DTO with multiple elements via the first element (task #14)', () => {
+    // System is single-value in the domain. The current `systems:
+    // string[]` DTO is a wire-shape artifact that CRS task #7 will
+    // collapse to scalar. If a DTO ever carries more than one element
+    // — that's out-of-contract / malformed data, not a supported
+    // multi-value mode — the single-select hydrates from the first
+    // element and the rest stay on the server snapshot.
     setAllEditable()
     const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
     const component = baseComponent({ systems: ['SYS_A', 'SYS_B'] })

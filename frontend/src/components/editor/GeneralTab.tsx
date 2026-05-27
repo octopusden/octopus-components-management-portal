@@ -67,11 +67,12 @@ export interface GeneralFormValues {
   /** productType stays in GeneralFormValues (still part of the ComponentDetail
    *  DTO) but is rendered and saved from EscrowTab (§7.0/2c migration). */
   productType: string
-  // Task #14 bridge: System is a single-select dropdown (matches Build
-  // System UX) until CRS task #7 collapses systems Set<String> → system
-  // String?. The form holds a scalar; buildUpdateRequest wraps as
-  // `systems: [value]` on the wire so the existing array-shaped CRS
-  // contract keeps working. Labels remain `string[]` (chips UX, multi).
+  // Task #14: System is single-value in the domain (Build-System-style UX).
+  // The CRS v4 DTO currently exposes it as the array-shaped
+  // `systems: string[]`; the form holds a scalar and buildUpdateRequest
+  // wraps as `systems: [value]` on the wire. Drop the wrap once CRS task
+  // #7 collapses the DTO to scalar. Labels remain `string[]` (chips UX,
+  // which IS multi-value).
   system: string
   clientCode: string
   solution: boolean
@@ -221,12 +222,12 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
     setValue('displayName', component.displayName ?? '')
     setValue('componentOwner', component.componentOwner ?? '')
     setValue('productType', component.productType ?? '')
-    // Task #14: single-select form value. Legacy components with multiple
-    // systems (set before this UI flip) warmstart to the FIRST stored
-    // value — the other elements remain on the server snapshot until the
-    // user actively picks/clears the field, at which point the page-level
-    // save semantics take over. CRS task #7 will collapse the model to
-    // scalar and erase this asymmetry.
+    // Task #14: DTO is array-shaped today (`systems: string[]`), but the
+    // UI/domain contract is single-value. Hydrate the scalar form field
+    // from the first element of the array as the bridge until CRS task
+    // #7 removes the array shape. If a component's DTO carries more than
+    // one element that's out-of-contract / malformed data — not a
+    // supported multi-value mode.
     setValue('system', component.systems?.[0] ?? '')
     setValue('clientCode', component.clientCode ?? '')
     setValue('solution', component.solution ?? false)
@@ -546,10 +547,9 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                 default `useFieldOptions('component.systems')` fallback
                 — that fallback hits the in-use endpoint, which would
                 hide newly-defined dictionary values that no component is
-                attached to yet. CRS task #7 will eventually flip
-                Component.systems Set<String> → system String?; until
-                then buildUpdateRequest wraps the scalar form value as
-                `systems: [value]`. */}
+                attached to yet. The DTO stays array-shaped on the wire;
+                buildUpdateRequest wraps the scalar form value as
+                `systems: [value]` until CRS task #7 collapses to scalar. */}
             {systemEntry.visibility !== 'hidden' && (
               <div className="space-y-1.5">
                 <Label htmlFor="component-system">System</Label>
