@@ -26,7 +26,7 @@ The architectural rationale (why this lives in a separate repo from CRS, what ea
 | Layer | Choice |
 |---|---|
 | Backend | Kotlin + Spring Boot 3 / Spring Cloud Gateway (WebFlux) + Spring Security OAuth2 Client |
-| Frontend | React 19, Vite 6, TanStack Query 5, react-router 7, react-hook-form + zod, shadcn/ui (Radix) + TailwindCSS 4, zustand 5 |
+| Frontend | React 19, Vite 8, TanStack Query 5, react-router 7, react-hook-form + zod 4, shadcn/ui (Radix) + TailwindCSS 4, zustand 5 |
 | Tests | Vitest (unit), Playwright (e2e — limited; see [TD-001](docs/tech-debt/TD-001-playwright-keycloak-fixture.md)) |
 | Build | Gradle (single JAR; npm orchestrated via `./gradlew build`) |
 
