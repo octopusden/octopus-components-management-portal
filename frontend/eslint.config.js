@@ -21,7 +21,15 @@ export default tseslint.config(
       'react-refresh': reactRefresh,
     },
     rules: {
-      ...reactHooks.configs.recommended.rules,
+      // eslint-plugin-react-hooks v7 ships compiler-era rules in its flat
+      // recommended preset (set-state-in-effect, incompatible-library,
+      // immutability, purity, refs, …). They flag structural patterns —
+      // mirror-prop-into-state effects, TanStack Table-style state plumbing,
+      // and test-fixture ref usage — that need targeted refactors, not
+      // a deps bump. Stay on the v5 rule surface (rules-of-hooks +
+      // exhaustive-deps) and defer compiler-aware rules as TD.
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
       'react-refresh/only-export-components': [
         'warn',
         {
