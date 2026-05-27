@@ -215,4 +215,50 @@ describe('useFieldConfigEntry', () => {
     expect(result.current.entry.visibility).toBe('editable')
     expect(result.current.entry.required).toBe(false)
   })
+
+  // --- Error propagation ---
+
+  it('exposes isError when the underlying field-config query has failed', () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+    } as unknown as ReturnType<typeof useFieldConfig>)
+    const { result } = renderHook(
+      () => useFieldConfigEntry('component.groupId'),
+      { wrapper: makeWrapper() },
+    )
+    expect(result.current.isError).toBe(true)
+    // Still returns the graceful-defaults entry so consumers don't crash
+    expect(result.current.entry.visibility).toBe('editable')
+    expect(result.current.entry.required).toBe(false)
+  })
+
+  it('isError is false while loading', () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+    } as unknown as ReturnType<typeof useFieldConfig>)
+    const { result } = renderHook(
+      () => useFieldConfigEntry('component.groupId'),
+      { wrapper: makeWrapper() },
+    )
+    expect(result.current.isError).toBe(false)
+    expect(result.current.isLoading).toBe(true)
+  })
+
+  it('isError is false on successful load', () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: { component: { groupId: { defaultValue: 'com.example' } } },
+      isLoading: false,
+      isError: false,
+    } as unknown as ReturnType<typeof useFieldConfig>)
+    const { result } = renderHook(
+      () => useFieldConfigEntry('component.groupId'),
+      { wrapper: makeWrapper() },
+    )
+    expect(result.current.isError).toBe(false)
+    expect(result.current.entry.defaultValue).toBe('com.example')
+  })
 })

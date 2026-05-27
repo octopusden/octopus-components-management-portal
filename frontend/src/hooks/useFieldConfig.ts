@@ -49,11 +49,16 @@ const SECTION_ORDER = ['component', 'build', 'jira', 'escrow'] as const
 export function useFieldConfigEntry(fieldPath: string): {
   entry: FieldConfigEntry
   isLoading: boolean
+  isError: boolean
 } {
-  const { data, isLoading } = useFieldConfig()
+  const { data, isLoading, isError } = useFieldConfig()
 
   if (isLoading || !data) {
-    return { entry: { visibility: 'editable', required: false }, isLoading }
+    return {
+      entry: { visibility: 'editable', required: false },
+      isLoading,
+      isError: isError ?? false,
+    }
   }
 
   const config = data as FieldConfigData
@@ -93,7 +98,7 @@ export function useFieldConfigEntry(fieldPath: string): {
     ...found,
   }
 
-  return { entry, isLoading: false }
+  return { entry, isLoading: false, isError: isError ?? false }
 }
 
 /**

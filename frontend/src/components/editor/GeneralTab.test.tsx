@@ -17,6 +17,29 @@ vi.mock('../../hooks/useComponents', () => ({
   useComponents: vi.fn(() => ({ data: { content: [], totalElements: 0 } })),
 }))
 
+// Dictionary hooks behind the multi-select swap (ui-swift-sloth §4). Default
+// to small in-memory dictionaries so the popovers render their checkbox lists.
+// Tests that need empty dictionaries can override per-test.
+const mockUseSystemsDictionary = vi.fn(() => ({ data: ['SYS1', 'SYS2'], isLoading: false, isError: false }))
+const mockUseLabelsDictionary = vi.fn(() => ({ data: ['backend', 'internal', 'frontend'], isLoading: false, isError: false }))
+vi.mock('../../hooks/useSystemsDictionary', () => ({
+  useSystemsDictionary: () => mockUseSystemsDictionary(),
+}))
+vi.mock('../../hooks/useLabelsDictionary', () => ({
+  useLabelsDictionary: () => mockUseLabelsDictionary(),
+}))
+
+// Supported-groups hook for the editor group-key prefix gate. Default to a
+// permissive list; tests that exercise the disallowed-prefix path override.
+const mockUseSupportedGroups = vi.fn(() => ({
+  data: ['org.example', 'com.example'],
+  isLoading: false,
+  isError: false,
+}))
+vi.mock('../../hooks/useSupportedGroups', () => ({
+  useSupportedGroups: () => mockUseSupportedGroups(),
+}))
+
 // useFieldConfigEntry mock — controls visibility-gating per test.
 // Default: all fields 'editable'. Tests can override per field via mockReturnValue.
 const mockUseFieldConfigEntry = vi.fn()
@@ -61,7 +84,7 @@ function baseComponent(overrides: Partial<ComponentDetail> = {}): ComponentDetai
 
 /** Returns an entry object with the given visibility (defaults to editable). */
 function makeEntry(visibility: 'editable' | 'readonly' | 'hidden' = 'editable') {
-  return { entry: { visibility, required: false }, isLoading: false }
+  return { entry: { visibility, required: false }, isLoading: false, isError: false }
 }
 
 /** Default mock: all fields editable. */
@@ -76,11 +99,28 @@ function Harness({ component, formRef }: { component: ComponentDetail; formRef?:
       displayName: component.displayName ?? '',
       componentOwner: component.componentOwner ?? '',
       productType: component.productType ?? '',
-      system: (component.systems ?? []).join(', '),
+      // ui-swift-sloth §4: form values for system + labels are arrays.
+      system: component.systems ?? [],
+      labels: component.labels ?? [],
       clientCode: component.clientCode ?? '',
       solution: component.solution ?? false,
       archived: component.archived,
       parentComponentName: component.parentComponentName ?? '',
+      groupId: component.group?.groupKey ?? '',
+      groupIsFake: component.group?.isFake ?? false,
+      releaseManager: component.releaseManager ?? '',
+      securityChampion: component.securityChampion ?? '',
+      copyright: component.copyright ?? '',
+      releasesInDefaultBranch: component.releasesInDefaultBranch ?? false,
+      teamcityProjects: (component.teamcityProjects ?? []).map((tc) => ({ projectId: tc.projectId })),
+      docs: (component.docs ?? []).map((d) => ({
+        docComponentKey: d.docComponentKey,
+        majorVersion: d.majorVersion ?? '',
+      })),
+      artifactIds: (component.artifactIds ?? []).map((a) => ({
+        groupPattern: a.groupPattern,
+        artifactPattern: a.artifactPattern,
+      })),
     },
   })
   if (formRef) formRef.current = form
@@ -255,7 +295,7 @@ describe('GeneralTab visibility-gating', () => {
     expect(input.disabled).toBe(false)
   })
 
-  it('system hidden → System(s) input NOT rendered', () => {
+  it('system hidden → System(s) multi-select NOT rendered', () => {
     mockUseFieldConfigEntry.mockImplementation((path: string) => {
       if (path === 'component.systems') return makeEntry('hidden')
       return makeEntry('editable')
@@ -263,10 +303,10 @@ describe('GeneralTab visibility-gating', () => {
     const component = baseComponent({ systems: ['SYS1'] })
     renderWithProviders(<Harness component={component} />)
 
-    expect(screen.queryByLabelText(/system\(s\)/i)).toBeNull()
+    expect(screen.queryByText(/system\(s\)/i)).toBeNull()
   })
 
-  it('system readonly → System(s) input rendered disabled', () => {
+  it('system readonly → System(s) multi-select rendered disabled', () => {
     mockUseFieldConfigEntry.mockImplementation((path: string) => {
       if (path === 'component.systems') return makeEntry('readonly')
       return makeEntry('editable')
@@ -274,8 +314,10 @@ describe('GeneralTab visibility-gating', () => {
     const component = baseComponent({ systems: ['SYS1'] })
     renderWithProviders(<Harness component={component} />)
 
-    const input = screen.getByLabelText(/system\(s\)/i) as HTMLInputElement
-    expect(input.disabled).toBe(true)
+    // MultiSelectFilter renders the trigger via <Button>. Use the row's
+    // accessible name from the Label htmlFor="component-system" target.
+    const trigger = screen.getByRole('button', { name: /system\(s\)/i })
+    expect(trigger).toHaveProperty('disabled', true)
   })
 
   it('componentOwner hidden → Ownership section NOT rendered', () => {
@@ -317,7 +359,7 @@ describe('GeneralTab visibility-gating', () => {
 // responsible for mapping it to undefined. This test verifies the form renders
 // the expected structure so the page-level filter can operate correctly.
 describe('GeneralTab system field hidden → form value contract', () => {
-  it('when system is hidden, the form still initialises system from component.system join (page filters to undefined on save)', () => {
+  it('when system is hidden, the form still initialises system from component.systems array (page filters to undefined on save)', () => {
     mockUseFieldConfigEntry.mockImplementation((path: string) => {
       if (path === 'component.systems') return makeEntry('hidden')
       return makeEntry('editable')
@@ -326,12 +368,12 @@ describe('GeneralTab system field hidden → form value contract', () => {
     const component = baseComponent({ systems: ['SYS1', 'SYS2'] })
     renderWithProviders(<Harness component={component} formRef={formRef} />)
 
-    // Input not rendered (hidden)
-    expect(screen.queryByLabelText(/system\(s\)/i)).toBeNull()
+    // Multi-select not rendered (hidden)
+    expect(screen.queryByText(/system\(s\)/i)).toBeNull()
     // But form value is set from component (page logic uses this to build array for save)
     const val = formRef.current?.getValues('system')
-    // The form still has the joined string — page layer maps to undefined when hidden
-    expect(val).toBe('SYS1, SYS2')
+    // ui-swift-sloth §4: array stays unchanged through hydration.
+    expect(val).toEqual(['SYS1', 'SYS2'])
   })
 })
 
@@ -411,13 +453,35 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
     expect(screen.queryByLabelText(/releases in default branch/i)).toBeNull()
   })
 
-  it('labels editable → input rendered with comma-joined value', () => {
+  it('labels editable → chips UX renders one badge per stored label (task #9)', () => {
     setAllEditable()
     const component = baseComponent({ labels: ['backend', 'internal'] })
     renderWithProviders(<Harness component={component} />)
 
-    const input = screen.getByLabelText(/^labels$/i) as HTMLInputElement
-    expect(input.value).toBe('backend, internal')
+    // The chips primitive renders each value as a Badge plus an aria-
+    // labelled remove button. Two labels stored → two remove buttons.
+    expect(screen.getByRole('button', { name: /^remove backend$/i })).toBeDefined()
+    expect(screen.getByRole('button', { name: /^remove internal$/i })).toBeDefined()
+  })
+
+  it('labels readonly → × buttons + add control disabled (task #9 integration)', () => {
+    // Parity with the System readonly test: when field-config marks labels
+    // readonly, both the per-chip × buttons and the add control must be
+    // disabled. The integration path matters — ChipsInput's `disabled`
+    // unit test covers the prop, but the GeneralTab gate that wires
+    // `labelsEntry.visibility === 'readonly'` to that prop is what we're
+    // pinning here.
+    mockUseFieldConfigEntry.mockImplementation((path: string) => {
+      if (path === 'component.labels') return makeEntry('readonly')
+      return makeEntry('editable')
+    })
+    const component = baseComponent({ labels: ['backend'] })
+    renderWithProviders(<Harness component={component} />)
+
+    const removeBackend = screen.getByRole('button', { name: /^remove backend$/i }) as HTMLButtonElement
+    expect(removeBackend.disabled).toBe(true)
+    const addControl = screen.getByLabelText(/^add label$/i) as HTMLSelectElement
+    expect(addControl.disabled).toBe(true)
   })
 
   it('all SYS-039 entries hidden → none of the SYS-039 controls render', () => {
@@ -449,7 +513,8 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
     expect(screen.queryByLabelText(/security champion/i)).toBeNull()
     expect(screen.queryByLabelText(/copyright/i)).toBeNull()
     expect(screen.queryByLabelText(/releases in default branch/i)).toBeNull()
-    expect(screen.queryByLabelText(/^labels$/i)).toBeNull()
+    // labels — hidden hides both the <Label> and the multi-select.
+    expect(screen.queryByText(/^labels$/i)).toBeNull()
   })
 })
 
@@ -641,10 +706,10 @@ describe('GeneralTab server error display (S3.1a)', () => {
     })
   })
 
-  it('setError("system") renders the message instead of the hint text', async () => {
+  it('setError("system") renders the message under the multi-select', async () => {
     setAllEditable()
     const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
-    renderWithProviders(<Harness component={baseComponent({ systems: ['S1'] })} formRef={formRef} />)
+    renderWithProviders(<Harness component={baseComponent({ systems: ['SYS1'] })} formRef={formRef} />)
 
     await act(async () => {
       formRef.current?.setError('system', { type: 'server', message: 'must not be null' })
@@ -652,7 +717,6 @@ describe('GeneralTab server error display (S3.1a)', () => {
 
     await waitFor(() => {
       expect(screen.getByText('must not be null')).toBeDefined()
-      expect(screen.queryByText(/comma-separated list/i)).toBeNull()
     })
   })
 })
@@ -678,4 +742,153 @@ describe('GeneralTab — FieldOverrideInline gating (schema-v2 contract)', () =>
       ).toBeNull()
     },
   )
+})
+
+// ---------------------------------------------------------------------------
+// ui-swift-sloth §4: system + labels multi-select swap.
+// ---------------------------------------------------------------------------
+
+describe('GeneralTab — system + labels multi-select (ui-swift-sloth §4)', () => {
+  it('hydrates system multi-select from component.systems and untick narrows the array', async () => {
+    setAllEditable()
+    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    const component = baseComponent({ systems: ['SYS1', 'SYS2'] })
+    renderWithProviders(<Harness component={component} formRef={formRef} />)
+
+    // Open the system multi-select via its Button trigger (labelled by the
+    // outer "System(s)" label).
+    const trigger = screen.getByRole('button', { name: /system\(s\)/i })
+    await userEvent.click(trigger)
+
+    // Both options should be checked initially.
+    const sys1 = screen.getByRole('checkbox', { name: 'SYS1' }) as HTMLInputElement
+    expect(sys1.checked).toBe(true)
+    await userEvent.click(sys1)
+
+    await waitFor(() => {
+      expect(formRef.current?.getValues('system')).toEqual(['SYS2'])
+    })
+  })
+
+  it('hydrates labels chips from component.labels and clicking × removes the chip (task #9)', async () => {
+    setAllEditable()
+    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    const component = baseComponent({ labels: ['backend', 'internal'] })
+    renderWithProviders(<Harness component={component} formRef={formRef} />)
+
+    const removeBackend = screen.getByRole('button', { name: /^remove backend$/i })
+    await userEvent.click(removeBackend)
+
+    await waitFor(() => {
+      expect(formRef.current?.getValues('labels')).toEqual(['internal'])
+    })
+  })
+
+  it('picking a label from the add control appends to form value (task #9)', async () => {
+    setAllEditable()
+    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    const component = baseComponent({ labels: ['backend'] })
+    renderWithProviders(<Harness component={component} formRef={formRef} />)
+
+    const addControl = screen.getByLabelText(/^add label$/i) as HTMLSelectElement
+    await userEvent.selectOptions(addControl, 'frontend')
+
+    await waitFor(() => {
+      expect(formRef.current?.getValues('labels')).toEqual(['backend', 'frontend'])
+    })
+  })
+
+  it('renders an inline error below the System multi-select when form.setError("system") fires (PR #44 P2 systems)', async () => {
+    // ComponentDetailPage.handleSave is the source of truth for the
+    // "systems is required" guard, but the error needs to surface in
+    // GeneralTab's render tree — otherwise the user clicks Save, the page
+    // returns early, and the UI gives no visible feedback.
+    setAllEditable()
+    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    renderWithProviders(<Harness component={baseComponent({ systems: ['SYS1'] })} formRef={formRef} />)
+
+    await act(async () => {
+      formRef.current?.setError('system', { type: 'required', message: 'At least one system is required' })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText(/at least one system is required/i)).toBeDefined()
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// ui-swift-sloth §3.5: Group Key required + disallowed-prefix.
+// ---------------------------------------------------------------------------
+
+describe('GeneralTab — group key required marker + inline error (ui-swift-sloth §3.5)', () => {
+  it('renders a `*` required marker next to the Group Key label', () => {
+    setAllEditable()
+    renderWithProviders(<Harness component={baseComponent({ group: { groupKey: 'org.example.alpha', isFake: false, role: 'MEMBER' } })} />)
+    // The Group Key label contains a text "*". Looking up via the label's
+    // accessible name keeps the assertion robust to surrounding markup.
+    const label = screen.getByText(/group key/i)
+    expect(label.textContent).toContain('*')
+  })
+
+  it('clearing Group Key on blur surfaces an inline required error', async () => {
+    setAllEditable()
+    const component = baseComponent({ group: { groupKey: 'org.example.alpha', isFake: false, role: 'MEMBER' } })
+    renderWithProviders(<Harness component={component} />)
+
+    const input = screen.getByLabelText(/group key/i) as HTMLInputElement
+    await userEvent.clear(input)
+    // Wrap the synchronous .blur() in act() so React flushes the
+    // setGroupIdTouched(true) state update before assertion / teardown
+    // — silences the "not wrapped in act(...)" warning that otherwise
+    // fires on the synchronous DOM-blur path.
+    await act(async () => {
+      input.blur()
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText(/group key is required/i)).toBeDefined()
+    })
+  })
+
+  it('legacy non-matching groupKey does NOT show the prefix error before the user touches the field (PR #44 review)', () => {
+    // Admins reconfigured the supported-prefix list mid-life. A component
+    // with stored groupKey 'old.corp.foo' hits the editor: we must not blare
+    // a red error on mount, because the user hasn't touched the field and
+    // the save guard correctly lets unrelated changes through.
+    setAllEditable()
+    mockUseSupportedGroups.mockReturnValue({
+      data: ['com.example'],
+      isLoading: false,
+      isError: false,
+    })
+    const component = baseComponent({
+      group: { groupKey: 'old.legacy.example', isFake: false, role: 'MEMBER' },
+    })
+    renderWithProviders(<Harness component={component} />)
+
+    // No "must start with" red text on the untouched field.
+    expect(screen.queryByText(/must start with/i)).toBeNull()
+  })
+
+  it('entering a disallowed-prefix value surfaces an inline error', async () => {
+    setAllEditable()
+    mockUseSupportedGroups.mockReturnValue({
+      data: ['com.example'],
+      isLoading: false,
+      isError: false,
+    })
+    const component = baseComponent({ group: { groupKey: 'com.example.alpha', isFake: false, role: 'MEMBER' } })
+    renderWithProviders(<Harness component={component} />)
+
+    const input = screen.getByLabelText(/group key/i) as HTMLInputElement
+    await userEvent.clear(input)
+    await userEvent.type(input, 'com.someoneelse.foo')
+
+    await waitFor(() => {
+      // The inline error mentions the allowed prefix list so the user can
+      // recover without bouncing to docs.
+      expect(screen.getByText(/must start with/i)).toBeDefined()
+    })
+  })
 })

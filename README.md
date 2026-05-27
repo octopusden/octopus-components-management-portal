@@ -47,6 +47,8 @@ npm run dev   # → http://localhost:5173, proxies /rest/**, /auth/**, /login, /
               # build label only renders against the bundled JAR (./gradlew bootRun).
 ```
 
+**For the full local stack (Postgres + Keycloak + CRS image) plus the exact BFF env-var recipe and a smoke quick-check**, see the shipping comment block at the top of [`infra/dev/docker-compose.yml`](infra/dev/docker-compose.yml). It also documents the legacy `docker-compose` fallback, the Keycloak healthcheck quirk, `.env` propagation to git worktrees, Flyway migration churn, and the Spring-Cloud-Config opt-outs the BFF needs when launched outside a container.
+
 For a one-shot full build that mirrors CI:
 
 ```sh

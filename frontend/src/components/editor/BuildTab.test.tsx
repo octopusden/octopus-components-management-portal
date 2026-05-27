@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BuildTab } from './BuildTab'
@@ -12,13 +12,30 @@ vi.mock('./FieldOverrideInline', () => ({
   FieldOverrideInline: () => null,
 }))
 
-// Stub EnumSelect to avoid field-config fetch
+// Stub EnumSelect to avoid field-config fetch. The stub mirrors the props
+// surface real EnumSelect now exposes (id / aria-required / aria-invalid /
+// aria-describedby) so BuildTab can wire its required marker and inline
+// error without bumping into the stub.
 vi.mock('../ui/EnumSelect', () => ({
-  EnumSelect: ({ value, onValueChange, placeholder }: { value: string; onValueChange: (v: string) => void; placeholder?: string }) => (
+  EnumSelect: ({
+    value,
+    onValueChange,
+    placeholder,
+    id,
+    onBlur,
+  }: {
+    value: string
+    onValueChange: (v: string) => void
+    placeholder?: string
+    id?: string
+    onBlur?: () => void
+  }) => (
     <input
+      id={id}
       data-testid="enum-select"
       value={value}
       onChange={(e) => onValueChange(e.target.value)}
+      onBlur={() => onBlur?.()}
       placeholder={placeholder}
     />
   ),
@@ -148,7 +165,12 @@ describe('BuildTab — save path', () => {
 
   it('does not include legacy buildConfiguration key', async () => {
     const mutateFn = vi.fn().mockResolvedValue({})
-    const component = makeComponent()
+    // ui-swift-sloth §5: handleSave now blocks empty buildSystem with a 400
+    // pre-empt; seed a value so this test still exercises the wire-shape
+    // assertion that it actually cares about.
+    const component = makeComponent({
+      configurations: [makeBaseRow({ build: { buildSystem: 'MAVEN' } })],
+    })
 
     const { getByText } = renderTab(component, mutateFn)
     await userEvent.click(getByText('Save Build'))
@@ -186,7 +208,7 @@ describe('BuildTab — save path', () => {
     const component = makeComponent({
       configurations: [
         makeBaseRow({
-          build: { mavenVersion: '3.9.5' },
+          build: { buildSystem: 'MAVEN', mavenVersion: '3.9.5' },
         }),
       ],
     })
@@ -204,7 +226,7 @@ describe('BuildTab — save path', () => {
     const component = makeComponent({
       configurations: [
         makeBaseRow({
-          build: { buildSystemVersion: '3.8.0' },
+          build: { buildSystem: 'MAVEN', buildSystemVersion: '3.8.0' },
         }),
       ],
     })
@@ -225,7 +247,7 @@ describe('BuildTab — save path', () => {
     const mutateFn = vi.fn().mockResolvedValue({})
     const component = makeComponent({
       configurations: [
-        makeBaseRow({ build: { buildSystemVersion: '3.8.0' } }),
+        makeBaseRow({ build: { buildSystem: 'MAVEN', buildSystemVersion: '3.8.0' } }),
       ],
     })
 
@@ -241,7 +263,7 @@ describe('BuildTab — save path', () => {
     const mutateFn = vi.fn().mockResolvedValue({})
     const component = makeComponent({
       configurations: [
-        makeBaseRow({ build: { projectVersion: '1.2.3' } }),
+        makeBaseRow({ build: { buildSystem: 'MAVEN', projectVersion: '1.2.3' } }),
       ],
     })
 
@@ -261,7 +283,7 @@ describe('BuildTab — save path', () => {
     const mutateFn = vi.fn().mockResolvedValue({})
     const component = makeComponent({
       configurations: [
-        makeBaseRow({ build: { projectVersion: '1.0.0' } }),
+        makeBaseRow({ build: { buildSystem: 'MAVEN', projectVersion: '1.0.0' } }),
       ],
     })
 
@@ -277,7 +299,7 @@ describe('BuildTab — save path', () => {
     const mutateFn = vi.fn().mockResolvedValue({})
     const component = makeComponent({
       configurations: [
-        makeBaseRow({ build: { buildTasks: 'clean install' } }),
+        makeBaseRow({ build: { buildSystem: 'MAVEN', buildTasks: 'clean install' } }),
       ],
     })
 
@@ -297,7 +319,7 @@ describe('BuildTab — save path', () => {
     const mutateFn = vi.fn().mockResolvedValue({})
     const component = makeComponent({
       configurations: [
-        makeBaseRow({ build: { buildTasks: 'clean install' } }),
+        makeBaseRow({ build: { buildSystem: 'MAVEN', buildTasks: 'clean install' } }),
       ],
     })
 
@@ -313,7 +335,7 @@ describe('BuildTab — save path', () => {
     const mutateFn = vi.fn().mockResolvedValue({})
     const component = makeComponent({
       configurations: [
-        makeBaseRow({ build: { systemProperties: '-Dfoo=bar' } }),
+        makeBaseRow({ build: { buildSystem: 'MAVEN', systemProperties: '-Dfoo=bar' } }),
       ],
     })
 
@@ -333,7 +355,7 @@ describe('BuildTab — save path', () => {
     const mutateFn = vi.fn().mockResolvedValue({})
     const component = makeComponent({
       configurations: [
-        makeBaseRow({ build: { systemProperties: '-Dfoo=bar' } }),
+        makeBaseRow({ build: { buildSystem: 'MAVEN', systemProperties: '-Dfoo=bar' } }),
       ],
     })
 
@@ -349,7 +371,7 @@ describe('BuildTab — save path', () => {
     const mutateFn = vi.fn().mockResolvedValue({})
     const component = makeComponent({
       configurations: [
-        makeBaseRow({ build: { requiredProject: false } }),
+        makeBaseRow({ build: { buildSystem: 'MAVEN', requiredProject: false } }),
       ],
     })
 
@@ -393,7 +415,7 @@ describe('BuildTab — Required Tools editable section', () => {
   it('saves requiredTools as array at BASE row level, not inside build', async () => {
     const mutateFn = vi.fn().mockResolvedValue({})
     const component = makeComponent({
-      configurations: [makeBaseRow({ requiredTools: [] })],
+      configurations: [makeBaseRow({ build: { buildSystem: 'MAVEN' }, requiredTools: [] })],
     })
 
     const { getByPlaceholderText, getByText } = renderTab(component, mutateFn)
@@ -414,7 +436,7 @@ describe('BuildTab — Required Tools editable section', () => {
   it('saves empty array when requiredTools input is blank', async () => {
     const mutateFn = vi.fn().mockResolvedValue({})
     const component = makeComponent({
-      configurations: [makeBaseRow({ requiredTools: ['tool-x'] })],
+      configurations: [makeBaseRow({ build: { buildSystem: 'MAVEN' }, requiredTools: ['tool-x'] })],
     })
 
     const { getByPlaceholderText, getByText } = renderTab(component, mutateFn)
@@ -497,5 +519,83 @@ describe('BuildTab — existing structure preserved', () => {
     expect((screen.getByPlaceholderText('1.8 / 11 / 17 / 21') as HTMLInputElement).value).toBe('')
     expect((screen.getByPlaceholderText('3.9.6') as HTMLInputElement).value).toBe('')
     expect((screen.getByPlaceholderText('e.g. 3.9.6') as HTMLInputElement).value).toBe('')
+  })
+})
+
+// ─── 4. ui-swift-sloth §5 — buildSystem required UX ───────────────────────────
+describe('BuildTab — buildSystem required (ui-swift-sloth §5)', () => {
+  it('renders a `*` required marker next to the Build System label', () => {
+    renderTab(makeComponent({ configurations: [makeBaseRow({ build: { buildSystem: '' } })] }))
+    const label = screen.getByText('Build System')
+    // The required marker is text content "*" inside the same <Label>.
+    expect(label.textContent).toContain('*')
+  })
+
+  it('clearing buildSystem and blurring surfaces the inline required error', async () => {
+    const component = makeComponent({
+      configurations: [makeBaseRow({ build: { buildSystem: 'MAVEN' } })],
+    })
+    renderTab(component)
+
+    const enumSelect = screen.getByTestId('enum-select') as HTMLInputElement
+    await userEvent.clear(enumSelect)
+    // Wrap the synchronous .blur() in act() so React flushes the setState
+    // it triggers (setBuildSystemTouched) before the assertion runs and
+    // before the test exits — otherwise React emits an act-warning even
+    // though waitFor would have caught the state update.
+    await act(async () => {
+      enumSelect.blur()
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText(/build system is required/i)).toBeDefined()
+    })
+  })
+
+  it('clicking Save with empty buildSystem shows the error and does NOT call mutate', async () => {
+    const mutateFn = vi.fn()
+    const component = makeComponent({
+      configurations: [makeBaseRow({ build: { buildSystem: '' } })],
+    })
+    const { getByText } = renderTab(component, mutateFn)
+
+    await userEvent.click(getByText('Save Build'))
+
+    // Inline error surfaces deterministically even though the user never
+    // interacted with the field (the touched-on-blur flag is not the only
+    // gate — handleSave also runs the guard).
+    expect(screen.getByText(/build system is required/i)).toBeDefined()
+    expect(mutateFn).not.toHaveBeenCalled()
+  })
+
+  it('selecting a buildSystem value clears the error and Save succeeds', async () => {
+    const mutateFn = vi.fn().mockResolvedValue({})
+    const component = makeComponent({
+      configurations: [makeBaseRow({ build: { buildSystem: '' } })],
+    })
+    const { getByText, getByTestId } = renderTab(component, mutateFn)
+
+    // Trigger the empty-save error first.
+    await userEvent.click(getByText('Save Build'))
+    expect(screen.getByText(/build system is required/i)).toBeDefined()
+
+    // Now type a value; once selected the error disappears and Save runs.
+    const enumSelect = getByTestId('enum-select') as HTMLInputElement
+    await userEvent.type(enumSelect, 'MAVEN')
+    await userEvent.click(getByText('Save Build'))
+
+    expect(screen.queryByText(/build system is required/i)).toBeNull()
+    expect(mutateFn).toHaveBeenCalled()
+    const callArg = mutateFn.mock.calls.at(-1)![0] as { baseConfiguration?: { build?: { buildSystem?: string | null } } }
+    expect(callArg.baseConfiguration?.build?.buildSystem).toBe('MAVEN')
+  })
+
+  it('Save button stays clickable (not disabled) even with empty buildSystem', () => {
+    const component = makeComponent({
+      configurations: [makeBaseRow({ build: { buildSystem: '' } })],
+    })
+    renderTab(component)
+    const saveBtn = screen.getByRole('button', { name: /save build/i }) as HTMLButtonElement
+    expect(saveBtn.disabled).toBe(false)
   })
 })

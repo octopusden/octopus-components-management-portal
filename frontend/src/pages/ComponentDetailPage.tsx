@@ -39,6 +39,7 @@ import { selectBaseRow } from '../lib/api/baseRow'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../lib/auth'
 import { useFieldConfigEntry } from '../hooks/useFieldConfig'
+import { useSupportedGroups } from '../hooks/useSupportedGroups'
 import { parseServerFieldErrors } from '../lib/serverErrors'
 import { usePortalLinks } from '../hooks/useInfo'
 import { safeHttpUrl } from '../lib/utils'
@@ -85,6 +86,12 @@ export function ComponentDetailPage() {
   const { entry: labelsFc } = useFieldConfigEntry('component.labels')
   // TC link restoration — manual override pair. Hidden FC visibility skips
   // both fields on save (see handleSave below).
+  // ui-swift-sloth §3.5: pull the allowed groupId prefixes so the save guard
+  // mirrors the inline render-side check. Empty list (loading/errored) skips
+  // the prefix gate so a transient hook failure doesn't lock the user out
+  // of saving an already-valid groupId.
+  const supportedGroupsQuery = useSupportedGroups()
+  const supportedGroupsList = supportedGroupsQuery.data ?? []
   const { entry: teamcityProjectIdFc } = useFieldConfigEntry('component.teamcityProjectId')
   const { entry: teamcityProjectUrlFc } = useFieldConfigEntry('component.teamcityProjectUrl')
   // Race-guard: while field-config is still loading, every FC entry falls
@@ -107,7 +114,7 @@ export function ComponentDetailPage() {
       displayName: '',
       componentOwner: '',
       productType: '',
-      system: '',
+      system: [],
       clientCode: '',
       solution: false,
       archived: false,
@@ -122,7 +129,7 @@ export function ComponentDetailPage() {
       securityChampion: '',
       copyright: '',
       releasesInDefaultBranch: false,
-      labels: '',
+      labels: [],
       // schema-v2 list defaults — empty arrays so an early Save before useEffect
       // populates from `component` still produces a coherent form value.
       teamcityProjects: [],
@@ -130,6 +137,19 @@ export function ComponentDetailPage() {
       artifactIds: [],
     },
   })
+
+  // RHF v7's formState is a lazy proxy: dirtyFields / touchedFields only
+  // populate if a render-time read subscribes to them. handleSave runs
+  // outside the render path, so reading form.formState.dirtyFields there
+  // would silently return `{}`. Touch the proxy properties during render
+  // so the in-handleSave reads see live data. Confirmed behaviour, not
+  // micro-optimisation: without this, the systems guard's
+  // form.formState.dirtyFields.system === true check and the labels
+  // synth-dirty's form.formState.touchedFields.labels === true check
+  // would both always be false at handleSave time. `void` keeps TS happy
+  // about the otherwise-unused expressions.
+  void form.formState.dirtyFields
+  void form.formState.touchedFields
 
   async function handleSave() {
     if (!component) return
@@ -139,6 +159,77 @@ export function ComponentDetailPage() {
     // start of each save so a successful retry doesn't leave stale red
     // text behind.
     form.clearErrors()
+
+    // PR #44 P2 (systems): block save if the user emptied the Systems
+    // multi-select. systems is REQUIRED server-side, and buildUpdateRequest
+    // omits the field on empty (so we don't 400) — but that combination
+    // means the server keeps the prior list while the user just clicked
+    // "clear all". Surface the constraint inline so the user can recover
+    // (pick a value) or revert (re-add the prior selection) instead of
+    // walking away thinking their clear took.
+    //
+    // Gate semantics: compare form value against server `component.systems`
+    // rather than RHF's `dirtyFields.system`. RHF doesn't mark an array
+    // field dirty when setValue's new value equals defaultValues (and the
+    // form default IS `[]`), so a clear-all flow leaves the dirty flag
+    // false even though the user explicitly cleared the list. The
+    // "server had systems, form has none" comparison captures the same
+    // intent without depending on RHF's internals.
+    //
+    // Skip when field-config hides the field (admin can't fix it from the
+    // form). The narrow pre-hydration race — server has systems, form is
+    // still the `[]` default — fails closed: user re-clicks Save once
+    // GeneralTab's useEffect mirrors the server state.
+    if (systemFc.visibility !== 'hidden') {
+      const systemValue = form.getValues('system') ?? []
+      const priorSystems = component.systems ?? []
+      if (priorSystems.length > 0 && systemValue.length === 0) {
+        form.setError('system', {
+          type: 'required',
+          message: 'At least one system is required',
+        })
+        return
+      }
+    }
+
+    // ui-swift-sloth §3.5: block the save if the user typed something into
+    // Group Key that violates the contract — either by emptying a dirty
+    // field, or by entering a value with a disallowed prefix. Both would
+    // 400 server-side once the CRS strict contract lands.
+    //
+    // We deliberately only trip on a dirty field: an untouched empty form
+    // (pre-hydration race, or admin saving another tab without ever
+    // touching groupId) falls through, and buildGroupPatch's belt-and-
+    // braces simply omits the group key — server-side PATCH semantics
+    // keep the existing group untouched.
+    if (groupIdFc.visibility !== 'hidden') {
+      const trimmed = (form.getValues('groupId') ?? '').trim()
+      const groupIdDirty = form.formState.dirtyFields.groupId === true
+      if (groupIdDirty && trimmed === '') {
+        form.setError('groupId', { type: 'required', message: 'Group Key is required' })
+        return
+      }
+      // PR #44 comment (copilot-pull-request-reviewer, 2026-05-27): also
+      // gate the prefix check on `groupIdDirty`. Legacy components with a
+      // stored groupKey that doesn't match the current supported-prefix
+      // list (admin reconfigured the list mid-life) must remain saveable
+      // for unrelated field changes — otherwise the user can't fix a typo
+      // in displayName without first updating the groupKey.
+      if (groupIdDirty && trimmed !== '' && supportedGroupsList.length > 0) {
+        const v = trimmed.toLowerCase()
+        const ok = supportedGroupsList.some((p) => {
+          const lp = p.toLowerCase()
+          return v === lp || v.startsWith(lp + '.')
+        })
+        if (!ok) {
+          form.setError('groupId', {
+            type: 'prefix',
+            message: `Group Key must start with one of: ${supportedGroupsList.join(', ')}`,
+          })
+          return
+        }
+      }
+    }
 
     const request = buildUpdateRequest({
       component,
@@ -164,7 +255,35 @@ export function ComponentDetailPage() {
       dirtyFields: {
         releasesInDefaultBranch: form.formState.dirtyFields.releasesInDefaultBranch === true,
         solution: form.formState.dirtyFields.solution === true,
-        system: form.formState.dirtyFields.system === true,
+        // system / labels: RHF's TS types model array-field dirtiness as
+        // `boolean[] | undefined`, but at runtime setValue(..., {shouldDirty:
+        // true}) flips a single boolean. We narrow through `unknown` so the
+        // type system accepts the runtime contract; the === true check
+        // ignores both `undefined` and any future partial-dirty array shape.
+        system: (form.formState.dirtyFields.system as unknown) === true,
+        // labels: close the RHF clear-all blind-spot (PR #44 follow-up).
+        // RHF treats `setValue('labels', [])` as not-dirty when the form
+        // default is also `[]` — so a user who unchecks every label gets
+        // dirty=false even with shouldDirty:true. The chip UI uses
+        // shouldTouch:true to flip `touchedFields.labels`, which gives us
+        // a reliable "user interacted" signal independent of RHF's
+        // value-equality dirty check.
+        //
+        // Synth-dirty fires when ALL of these hold:
+        //   - field is not FC-hidden (admins who hid it can't fix the form),
+        //   - user has touched the field (touchedFields.labels === true) —
+        //     guards against the pre-hydration race where form is the []
+        //     default and component.labels is non-empty,
+        //   - server had labels (component.labels.length > 0),
+        //   - form has no labels now (form.getValues('labels').length === 0).
+        // The touched guard makes "fails closed" symmetric with the systems
+        // race: if the user hasn't touched labels, no synth → no PATCH wipe.
+        labels:
+          (form.formState.dirtyFields.labels as unknown) === true ||
+          (labelsFc.visibility !== 'hidden' &&
+            (form.formState.touchedFields.labels as unknown) === true &&
+            (component.labels?.length ?? 0) > 0 &&
+            (form.getValues('labels')?.length ?? 0) === 0),
         groupId: form.formState.dirtyFields.groupId === true,
         teamcityProjects: !!form.formState.dirtyFields.teamcityProjects,
         docs: !!form.formState.dirtyFields.docs,

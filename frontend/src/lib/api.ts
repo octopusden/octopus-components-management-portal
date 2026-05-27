@@ -3,6 +3,19 @@ import { readCookie } from './cookies'
 
 const API_BASE = `${import.meta.env.BASE_URL}rest/api/4`
 
+/**
+ * Build a URL under the deployment's BASE_URL but without the implicit
+ * /rest/api/4 prefix that `api.*` adds. Used by `fetchApiAbsolute` to reach
+ * endpoints that live in other namespaces (e.g. /rest/api/2/...).
+ *
+ * Strips a leading slash from the caller-supplied path so callers can pass
+ * either '/rest/api/2/foo' or 'rest/api/2/foo' interchangeably without
+ * producing a double slash.
+ */
+function buildAbsoluteUrl(absolutePath: string): string {
+  return `${import.meta.env.BASE_URL}${absolutePath.replace(/^\//, '')}`
+}
+
 export class ApiError extends Error {
   /** Raw response body text — always the full string from the server.
    *  Use this when you need to JSON.parse the structured error envelope
@@ -33,7 +46,7 @@ function isInsideOidcFlow(pathname: string): boolean {
   )
 }
 
-async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
+async function fetchAtUrl<T>(url: string, options?: RequestInit): Promise<T> {
   const method = (options?.method ?? 'GET').toUpperCase()
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -52,7 +65,7 @@ async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
     if (token) headers['X-XSRF-TOKEN'] = token
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(url, {
     credentials: 'include',
     ...options,
     headers,
@@ -93,6 +106,27 @@ async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
   return response.json()
 }
 
+/**
+ * Make a request to a path under `${BASE_URL}rest/api/4`. The vast majority of
+ * portal API calls use this — the registry's v4 surface is the default.
+ */
+async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
+  return fetchAtUrl<T>(`${API_BASE}${path}`, options)
+}
+
+/**
+ * Make a request to a path under `${BASE_URL}` directly — no implicit
+ * /rest/api/4 prefix. Used to reach endpoints that live in a different
+ * registry namespace (e.g. /rest/api/2/common/supported-groups). Preserves
+ * the same auth / CSRF / 401-redirect behaviour as `fetchApi`.
+ *
+ * Accepts paths with or without a leading slash; the helper normalises them
+ * so we never produce a double slash against BASE_URL.
+ */
+async function fetchApiAbsolute<T>(absolutePath: string, options?: RequestInit): Promise<T> {
+  return fetchAtUrl<T>(buildAbsoluteUrl(absolutePath), options)
+}
+
 export const api = {
   get: <T>(path: string) => fetchApi<T>(path),
   post: <T>(path: string, body?: unknown) =>
@@ -102,4 +136,20 @@ export const api = {
   put: <T>(path: string, body: unknown) =>
     fetchApi<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
   delete: <T>(path: string) => fetchApi<T>(path, { method: 'DELETE' }),
+}
+
+/**
+ * Companion to `api` for endpoints outside the /rest/api/4 namespace. Same
+ * auth / CSRF / 401-redirect semantics; the only difference is URL
+ * construction (`${BASE_URL}${path}` instead of `${BASE_URL}rest/api/4${path}`).
+ */
+export const apiAbsolute = {
+  get: <T>(path: string) => fetchApiAbsolute<T>(path),
+  post: <T>(path: string, body?: unknown) =>
+    fetchApiAbsolute<T>(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined }),
+  patch: <T>(path: string, body: unknown) =>
+    fetchApiAbsolute<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
+  put: <T>(path: string, body: unknown) =>
+    fetchApiAbsolute<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
+  delete: <T>(path: string) => fetchApiAbsolute<T>(path, { method: 'DELETE' }),
 }

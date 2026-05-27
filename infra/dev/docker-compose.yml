@@ -27,6 +27,62 @@
 # Open: http://localhost:5173
 # Login: e2e-admin / $E2E_ADMIN_PASSWORD  (roles: ADMIN)
 #        e2e-viewer / $E2E_VIEWER_PASSWORD (roles: COMPONENTS_REGISTRY_VIEWER)
+#
+# -----------------------------------------------------------------------------
+# Gotchas (from real-world local smoke runs):
+#
+# 1. `up.sh` invokes `docker compose` (the plugin). On hosts that only have
+#    legacy `docker-compose` (Docker Desktop pre-plugin, brewed installs), it
+#    fails with "unknown shorthand flag: 'd'". Workaround: run the realm-
+#    envsubst step manually (lines 41-48 of up.sh) then `docker-compose up -d`.
+#
+# 2. The Keycloak 24.0.3 image does NOT ship `curl`, so the dockerised
+#    healthcheck below always reports `(unhealthy)` even when the realm
+#    endpoint is reachable. As a result `docker-compose up -d` (which honours
+#    `depends_on: service_healthy`) hangs starting `crs`. Two ways out:
+#      a) Bring up CRS without the depends-on check:
+#           docker-compose up -d postgres keycloak
+#           # wait until `curl http://localhost:8080/realms/portal/.well-known/openid-configuration`
+#           # returns 200 (~70-100s; first cold start imports the realm)
+#           docker-compose up -d --no-deps crs
+#      b) Or replace the healthcheck with a TCP probe (separate cleanup PR).
+#
+# 3. Worktree workflows (`git worktree add ...`): `.env` is gitignored and
+#    does NOT propagate to a freshly-created worktree. Copy it explicitly:
+#      cp ../../infra/dev/.env _wt/<name>/infra/dev/.env
+#
+# 4. When CRS migrations change (any edit under
+#    `components-registry-service-server/src/main/resources/db/migration/`),
+#    Flyway will refuse to start against a Postgres volume that already
+#    applied the previous version: "Either revert the changes to the
+#    migration, or run repair". CRS is pre-prod (no migrations to preserve
+#    across deploys — databases are recreated from scratch), so the
+#    correct response is to nuke the local volume:
+#      docker-compose down -v && docker-compose up -d postgres keycloak
+#
+# 5. The Spring Cloud Config bootstrap fails on a host run (no config server
+#    on :8888). The CRS container disables it via env in this compose; the
+#    portal BFF needs the same env when launched locally:
+#      SPRING_CLOUD_CONFIG_ENABLED=false \
+#      SPRING_CLOUD_BOOTSTRAP_ENABLED=false \
+#      SPRING_CONFIG_IMPORT="" \
+#      EUREKA_CLIENT_ENABLED=false \
+#      ./gradlew bootRun
+#
+# 6. Smoke quick-check (after the stack is up, BFF on :8090, Vite on :5173):
+#    open http://localhost:5173 → login as e2e-admin → /components → click
+#    "+ New Component". Expected:
+#      * No Product Type field.
+#      * Group ID auto-fills with `<supportedGroupIds[0]>.<lowercased name>`
+#        after typing into Component Key (e.g. `my-svc` →
+#        `<prefix>.my.svc`).
+#      * Entering an unsupported groupId surfaces a red inline error and
+#        disables Create.
+#      * Build System is required (* marker); Explicit unchecked + External
+#        checked by default.
+#    The footer in the lower-right shows the CRS service version actually
+#    serving requests — verify it matches the image tag in .env, not a
+#    stale cached image.
 
 services:
   postgres:

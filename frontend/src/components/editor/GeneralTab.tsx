@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { UseFormReturn, useFieldArray } from 'react-hook-form'
 import { Plus, Trash2 } from 'lucide-react'
 import { Badge } from '../ui/badge'
@@ -8,10 +8,15 @@ import { Input } from '../ui/input'
 import { Switch } from '../ui/switch'
 import { PeopleInput } from '../ui/PeopleInput'
 import { ComponentSelect } from '../ui/ComponentSelect'
+import { MultiSelectFilter } from '../ui/MultiSelectFilter'
+import { ChipsInput } from '../ui/ChipsInput'
 import type { ComponentDetail } from '../../lib/types'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../../lib/auth'
 import { useFieldConfigEntry } from '../../hooks/useFieldConfig'
+import { useSystemsDictionary } from '../../hooks/useSystemsDictionary'
+import { useLabelsDictionary } from '../../hooks/useLabelsDictionary'
+import { useSupportedGroups } from '../../hooks/useSupportedGroups'
 
 /**
  * Canonical list of field names owned by GeneralTab — used by
@@ -56,7 +61,12 @@ export interface GeneralFormValues {
   /** productType stays in GeneralFormValues (still part of the ComponentDetail
    *  DTO) but is rendered and saved from EscrowTab (§7.0/2c migration). */
   productType: string
-  system: string
+  // ui-swift-sloth §4: system and labels are dictionary-backed multi-selects,
+  // not comma-separated strings. Hydration mirrors `component.systems` /
+  // `component.labels` arrays unchanged; buildUpdateRequest enforces the
+  // dirty-gate that prevents pre-hydration form defaults ([]) from clearing
+  // server data.
+  system: string[]
   clientCode: string
   solution: boolean
   archived: boolean
@@ -70,7 +80,7 @@ export interface GeneralFormValues {
   securityChampion: string
   copyright: string
   releasesInDefaultBranch: boolean
-  labels: string
+  labels: string[]
   // schema-v2 per-component child lists. Each list mirrors server state on
   // mount via useEffect; the save handler maps empty + had-prior → [] (clear),
   // empty + no-prior → omit (don't touch), non-empty → REPLACE.
@@ -102,6 +112,49 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
   const securityChampion = watch('securityChampion')
   const releasesInDefaultBranch = watch('releasesInDefaultBranch')
   const groupIsFake = watch('groupIsFake')
+  // ui-swift-sloth §4: system + labels are now controlled multi-selects, so
+  // we watch the current array value to drive MultiSelectFilter.
+  const systemValue = watch('system')
+  const labelsValue = watch('labels')
+  const groupIdValue = watch('groupId')
+
+  // Dictionaries powering the multi-select swap. 404/501 → [] (handled by
+  // the hook) so the popover renders a "No labels available" empty state
+  // instead of breaking the form before the CRS endpoint ships everywhere.
+  const systemsDict = useSystemsDictionary()
+  const labelsDict = useLabelsDictionary()
+
+  // Supported groupId prefixes — same loud error policy as the Create
+  // dialog. Empty list (loading/errored) → skip the prefix check so a
+  // transient hiccup doesn't lock the user out of saving an already-valid
+  // group; the required-marker guard still blocks blank inputs.
+  const supportedGroups = useSupportedGroups()
+  const supportedGroupsList = supportedGroups.data ?? []
+
+  // Group Key required-on-blur state. Tracked locally because the field is
+  // RHF-registered but the required check is not a Zod refinement — the
+  // editor surface composes its own validation around the page-level save.
+  const [groupIdTouched, setGroupIdTouched] = useState(false)
+  const trimmedGroupId = (groupIdValue ?? '').trim()
+  const groupIdRequiredError = groupIdTouched && trimmedGroupId === ''
+  // PR #44 review (Sonnet): also gate the prefix error on `groupIdTouched`.
+  // Legacy components whose stored groupKey doesn't match the current
+  // supported-prefix list would otherwise render a red inline error on
+  // page load, alarming users editing unrelated fields. The save-side
+  // guard in ComponentDetailPage.handleSave already gates on
+  // `groupIdDirty`, so the render-side mirror keeps the two layers
+  // consistent.
+  const groupIdPrefixError = (() => {
+    if (!groupIdTouched) return null
+    if (trimmedGroupId === '') return null
+    if (supportedGroupsList.length === 0) return null
+    const v = trimmedGroupId.toLowerCase()
+    const ok = supportedGroupsList.some((p) => {
+      const lp = p.toLowerCase()
+      return v === lp || v.startsWith(lp + '.')
+    })
+    return ok ? null : `Group Key must start with one of: ${supportedGroupsList.join(', ')}`
+  })()
 
   // schema-v2 list editors. useFieldArray provides stable `id` keys so row
   // re-renders don't blow away focus on text inputs.
@@ -160,7 +213,7 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
     setValue('displayName', component.displayName ?? '')
     setValue('componentOwner', component.componentOwner ?? '')
     setValue('productType', component.productType ?? '')
-    setValue('system', (component.systems ?? []).join(', '))
+    setValue('system', component.systems ?? [])
     setValue('clientCode', component.clientCode ?? '')
     setValue('solution', component.solution ?? false)
     setValue('archived', component.archived)
@@ -175,7 +228,12 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
     setValue('securityChampion', component.securityChampion ?? '')
     setValue('copyright', component.copyright ?? '')
     setValue('releasesInDefaultBranch', component.releasesInDefaultBranch ?? false)
-    setValue('labels', (component.labels ?? []).join(', '))
+    // Hydration MUST NOT set `shouldTouch:true` — the touched flag is the
+    // signal ComponentDetailPage.handleSave uses to distinguish a real
+    // user clear-all from the pre-hydration race (PR #44 follow-up).
+    // Only the ChipsInput onChange below sets shouldTouch, when the user
+    // actually interacts with the field.
+    setValue('labels', component.labels ?? [])
     // schema-v2 lists. setValue replaces the array wholesale; useFieldArray
     // picks up the new keys on the next render.
     setValue(
@@ -276,19 +334,59 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
           {/* schema-v2 group editor — typed ComponentGroup row.
               groupId = group.groupKey; isFake = group.isFake; role is
               server-derived (AGGREGATOR | MEMBER) and displayed as a readonly
-              badge so the user can see the resolved role without editing. */}
+              badge so the user can see the resolved role without editing.
+              ui-swift-sloth §3.5: Group Key is required server-side, surfaced
+              via the `*` marker, blur-empty inline error, and a disallowed-
+              prefix gate driven by useSupportedGroups(). */}
           {groupIdEntry.visibility !== 'hidden' && (
             <div className="space-y-1.5">
-              <Label htmlFor="groupId">Group Key</Label>
+              <Label htmlFor="groupId">
+                Group Key <span className="text-destructive">*</span>
+              </Label>
               <Input
                 id="groupId"
                 placeholder="org.example.product"
                 disabled={groupIdEntry.visibility === 'readonly'}
+                aria-required
+                aria-invalid={Boolean(errors.groupId || groupIdRequiredError || groupIdPrefixError)}
+                // PR #44 comment (copilot-pull-request-reviewer): associate
+                // the visible error <p> with the field so screen readers
+                // announce the actual message rather than just "invalid".
+                aria-describedby={
+                  errors.groupId
+                    ? 'groupId-server-error'
+                    : groupIdRequiredError
+                      ? 'groupId-required-error'
+                      : groupIdPrefixError
+                        ? 'groupId-prefix-error'
+                        : undefined
+                }
                 className={groupIdEntry.visibility === 'readonly' ? 'bg-muted' : undefined}
-                {...register('groupId')}
+                {...register('groupId', {
+                  onBlur: () => setGroupIdTouched(true),
+                  // Typing into the field is also "touched" — without this
+                  // the prefix-error would stay hidden until the user
+                  // explicitly tabs away, which is awkward when the user
+                  // is iterating on the value.
+                  onChange: () => {
+                    if (!groupIdTouched) setGroupIdTouched(true)
+                  },
+                })}
               />
               {errors.groupId && (
-                <p className="text-xs text-destructive">{errors.groupId.message}</p>
+                <p id="groupId-server-error" className="text-xs text-destructive">
+                  {errors.groupId.message}
+                </p>
+              )}
+              {!errors.groupId && groupIdRequiredError && (
+                <p id="groupId-required-error" className="text-xs text-destructive">
+                  Group Key is required
+                </p>
+              )}
+              {!errors.groupId && !groupIdRequiredError && groupIdPrefixError && (
+                <p id="groupId-prefix-error" className="text-xs text-destructive">
+                  {groupIdPrefixError}
+                </p>
               )}
               <div className="flex items-center gap-3 pt-1">
                 <Switch
@@ -428,21 +526,30 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
         <section data-testid="section-metadata">
           <h3 className="text-sm font-medium text-muted-foreground mb-3">Metadata</h3>
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            {/* System (comma-separated) */}
+            {/* System — dictionary-backed multi-select (ui-swift-sloth §4).
+                The dictionary hook returns [] on 404/501 so a missing endpoint
+                renders an empty popover instead of breaking the form. */}
             {systemEntry.visibility !== 'hidden' && (
               <div className="space-y-1.5">
-                <Label htmlFor="system">System(s)</Label>
-                <Input
-                  id="system"
-                  placeholder="SYSTEM1, SYSTEM2"
+                <Label htmlFor="component-system">System(s)</Label>
+                <MultiSelectFilter
+                  id="component-system"
+                  value={systemValue ?? []}
+                  onChange={(next) =>
+                    setValue('system', next, { shouldDirty: true })
+                  }
+                  options={systemsDict.data ?? []}
+                  isLoading={systemsDict.isLoading}
+                  placeholder="Select system(s)"
+                  unitLabel="system"
                   disabled={systemEntry.visibility === 'readonly'}
-                  className={systemEntry.visibility === 'readonly' ? 'bg-muted' : undefined}
-                  {...register('system')}
+                  aria-invalid={Boolean(errors.system)}
+                  aria-describedby={errors.system ? 'component-system-error' : undefined}
                 />
-                {errors.system ? (
-                  <p className="text-xs text-destructive">{errors.system.message}</p>
-                ) : (
-                  <p className="text-xs text-muted-foreground">Comma-separated list of systems.</p>
+                {errors.system && (
+                  <p id="component-system-error" className="text-xs text-destructive">
+                    {errors.system.message}
+                  </p>
                 )}
               </div>
             )}
@@ -481,22 +588,41 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
               </div>
             )}
 
-            {/* Labels — SYS-039. Comma-separated input matching the System
-                pattern; a real chips widget is backlog. */}
+            {/* Labels — chips/tags UX (task #9). Each value renders as a
+                shadcn Badge with an inline × close button; an inline
+                "Add label" picker offers the dictionary minus already-
+                added values. No free-text path — picks are restricted to
+                useLabelsDictionary(). Wire contract unchanged:
+                buildUpdateRequest still emits `labels: []` on dirty+
+                explicit-clear, omits on pre-hydration. */}
             {labelsEntry.visibility !== 'hidden' && (
               <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor="labels">Labels</Label>
-                <Input
-                  id="labels"
-                  placeholder="backend, internal, owned-by-platform"
+                <Label htmlFor="component-labels">Labels</Label>
+                <ChipsInput
+                  id="component-labels"
+                  value={labelsValue ?? []}
+                  onChange={(next) =>
+                    // shouldTouch:true marks the field as user-interacted
+                    // even when shouldDirty's value-equality check fails
+                    // (e.g. user removes the last chip and the new value
+                    // [] equals the form default []). ComponentDetailPage
+                    // reads `touchedFields.labels` to distinguish a real
+                    // clear-all from the pre-hydration race where the
+                    // form-default [] and a non-empty component.labels
+                    // would otherwise look identical to the value-compare.
+                    setValue('labels', next, { shouldDirty: true, shouldTouch: true })
+                  }
+                  options={labelsDict.data ?? []}
+                  isLoading={labelsDict.isLoading}
+                  placeholder="Add label"
                   disabled={labelsEntry.visibility === 'readonly'}
-                  className={labelsEntry.visibility === 'readonly' ? 'bg-muted' : undefined}
-                  {...register('labels')}
+                  ariaInvalid={Boolean(errors.labels)}
+                  ariaDescribedBy={errors.labels ? 'component-labels-error' : undefined}
                 />
-                {errors.labels ? (
-                  <p className="text-xs text-destructive">{errors.labels.message}</p>
-                ) : (
-                  <p className="text-xs text-muted-foreground">Comma-separated tags.</p>
+                {errors.labels && (
+                  <p id="component-labels-error" className="text-xs text-destructive">
+                    {errors.labels.message}
+                  </p>
                 )}
               </div>
             )}

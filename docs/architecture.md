@@ -131,11 +131,14 @@ The P1 UI features rely on these CRS endpoints (all behind the `/rest/**` proxy 
 | `GET /components/meta/labels` | Labels multi-select on the list page | new CRS contract; mirrors `/meta/owners` (junction-sourced, distinct labels in use) |
 | `GET /components/meta/systems` | System multi-select on the list page | new CRS contract; mirrors `/meta/owners` (junction-sourced, distinct systems in use) |
 | `GET /components/meta/build-systems` | Build System multi-select on the list page (fallback when admin field-config has no options) | existing CRS enum endpoint |
+| `GET /components/meta/systems/dictionary` | Editor multi-select on the detail page: full systems dictionary (not just in-use values) | new CRS contract; distinct from `/meta/systems` which surfaces junction-sourced in-use values for the filter bar |
+| `GET /components/meta/labels/dictionary` | Editor multi-select on the detail page: full labels dictionary (not just in-use values) | new CRS contract; distinct from `/meta/labels` which surfaces junction-sourced in-use values for the filter bar |
 | `GET /components/{idOrName}` | Detail page fetch (UUID first, name fallback) | existing |
 | `PATCH /components/{id}` with `name` | Rename (B7.1.4) | `canRenameComponent` SpEL |
 | `PATCH /components/{id}` with `parentComponentName` | Parent autocomplete save (B7.1.5) | `canEditComponent` |
 | `GET /audit/Component/{id}` | Per-component History tab (B7.1.2) | existing |
 | `GET /audit/recent?changedBy=&source=&action=&from=&to=` | Audit-log filter sidebar (B7.1.3) | `SYS-036` |
+| `GET /rest/api/2/common/supported-groups` | Create Component dialog: allowed groupId prefixes (auto-suggest + validation gate) | existing CRS v2 endpoint; lives outside `/rest/api/4`, reached via `apiAbsolute` helper |
 
 When a new endpoint is consumed, **add a row here** so the boundary stays reviewable. Cross-repo links between living indexes (this `architecture.md` and CRS docs) may use the active branch (`v3` for CRS, `develop` for Portal) per [`DOCS.md`](../DOCS.md) authoring rule #5.
 

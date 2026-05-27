@@ -34,7 +34,9 @@ function makeValues(overrides: Partial<GeneralFormValues> = {}): GeneralFormValu
     displayName: 'Service Alpha',
     componentOwner: 'alice',
     productType: 'TYPE_A',
-    system: 'SYS1',
+    // multi-select swap (ui-swift-sloth §4): system and labels are arrays,
+    // not comma-separated strings.
+    system: ['SYS1'],
     clientCode: '',
     solution: false,
     archived: false,
@@ -45,7 +47,7 @@ function makeValues(overrides: Partial<GeneralFormValues> = {}): GeneralFormValu
     securityChampion: '',
     copyright: '',
     releasesInDefaultBranch: false,
-    labels: '',
+    labels: [],
     teamcityProjects: [],
     docs: [],
     artifactIds: [],
@@ -97,7 +99,13 @@ describe('buildUpdateRequest — field-config hidden visibility', () => {
   it('hidden displayName + componentOwner + systems + clientCode + labels → fields omitted', () => {
     const req = buildUpdateRequest({
       component: makeComponent(),
-      values: makeValues({ displayName: 'X', componentOwner: 'Y', system: 'A,B', clientCode: 'C', labels: 'x,y' }),
+      values: makeValues({
+        displayName: 'X',
+        componentOwner: 'Y',
+        system: ['A', 'B'],
+        clientCode: 'C',
+        labels: ['x', 'y'],
+      }),
       visibilities: {
         ...EDITABLE,
         displayName: 'hidden',
@@ -106,7 +114,7 @@ describe('buildUpdateRequest — field-config hidden visibility', () => {
         clientCode: 'hidden',
         labels: 'hidden',
       },
-      dirtyFields: NO_DIRTY,
+      dirtyFields: { system: true, labels: true },
     })
     expect(req.displayName).toBeUndefined()
     expect(req.componentOwner).toBeUndefined()
@@ -129,11 +137,13 @@ describe('buildUpdateRequest — field-config hidden visibility', () => {
 
   it('hidden groupId visibility skips both group set and clearGroup-true', () => {
     const req = buildUpdateRequest({
-      component: makeComponent({ group: { groupKey: 'G1', isFake: false, role: 'MEMBER' } }),
+      component: makeComponent({ group: { groupKey: 'org.example.legacy', isFake: false, role: 'MEMBER' } }),
       values: makeValues({ groupId: '' }),
       visibilities: { ...EDITABLE, groupId: 'hidden' },
       dirtyFields: { groupId: true },
     })
+    // ui-swift-sloth §3.5: clearGroup is required-in-schema, always emitted
+    // as `false`; the UI never emits `true` after the group-mandatory pivot.
     expect(req.clearGroup).toBe(false)
     expect(req.group).toBeUndefined()
   })
@@ -187,27 +197,27 @@ describe('buildUpdateRequest — dirtyFields gating (pre-hydration safety)', () 
   it('systems form-default empty + had prior + NOT dirty → omits (pre-hydration guard)', () => {
     const req = buildUpdateRequest({
       component: makeComponent({ systems: ['SYS1', 'SYS2'] }),
-      values: makeValues({ system: '' }),
+      values: makeValues({ system: [] }),
       visibilities: EDITABLE,
       dirtyFields: {},
     })
     expect(req.systems).toBeUndefined()
   })
 
-  it('systems dirty + empty input → omits (would otherwise send [] which CRS rejects)', () => {
+  it('systems dirty + empty array → omits (would otherwise send [] which CRS rejects)', () => {
     const req = buildUpdateRequest({
       component: makeComponent({ systems: ['SYS1'] }),
-      values: makeValues({ system: '   ,  ,   ' }),
+      values: makeValues({ system: [] }),
       visibilities: EDITABLE,
       dirtyFields: { system: true },
     })
     expect(req.systems).toBeUndefined()
   })
 
-  it('systems populated + dirty → forwards parsed array', () => {
+  it('systems populated + dirty → forwards array unchanged', () => {
     const req = buildUpdateRequest({
       component: makeComponent({ systems: ['OLD'] }),
-      values: makeValues({ system: 'SYS1, SYS2' }),
+      values: makeValues({ system: ['SYS1', 'SYS2'] }),
       visibilities: EDITABLE,
       dirtyFields: { system: true },
     })
@@ -243,19 +253,24 @@ describe('buildUpdateRequest — dirtyFields gating (pre-hydration safety)', () 
   })
 })
 
-describe('buildUpdateRequest — clearGroup', () => {
-  it('blank groupId + dirty + prior group → clearGroup=true wins over default false', () => {
+describe('buildUpdateRequest — group patch (ui-swift-sloth §3.5)', () => {
+  // The group field is now mandatory server-side; the UI MUST NOT emit
+  // `clearGroup: true` — that would 400 every time. The render-side guard
+  // (required marker + inline error) blocks the empty-save path, but
+  // buildUpdateRequest also defensively omits the group key on blank input.
+
+  it('blank groupId + dirty + prior group → omits group key, clearGroup stays false', () => {
     const req = buildUpdateRequest({
-      component: makeComponent({ group: { groupKey: 'G1', isFake: false, role: 'MEMBER' } }),
+      component: makeComponent({ group: { groupKey: 'org.example.legacy', isFake: false, role: 'MEMBER' } }),
       values: makeValues({ groupId: '' }),
       visibilities: EDITABLE,
       dirtyFields: { groupId: true },
     })
-    expect(req.clearGroup).toBe(true)
+    expect(req.clearGroup).toBe(false)
     expect(req.group).toBeUndefined()
   })
 
-  it('blank groupId + dirty + NO prior group → omits clearGroup (falls back to false default)', () => {
+  it('blank groupId + dirty + NO prior group → omits group key, clearGroup stays false', () => {
     const req = buildUpdateRequest({
       component: makeComponent({ group: null }),
       values: makeValues({ groupId: '' }),
@@ -263,16 +278,43 @@ describe('buildUpdateRequest — clearGroup', () => {
       dirtyFields: { groupId: true },
     })
     expect(req.clearGroup).toBe(false)
+    expect(req.group).toBeUndefined()
   })
 
-  it('populated groupId + isFake=true → group object set, clearGroup stays default false', () => {
+  it('populated groupId + dirty → emits group object, clearGroup stays false', () => {
     const req = buildUpdateRequest({
       component: makeComponent({ group: null }),
-      values: makeValues({ groupId: 'my-group', groupIsFake: true }),
+      values: makeValues({ groupId: 'org.example.alpha', groupIsFake: false }),
       visibilities: EDITABLE,
       dirtyFields: { groupId: true },
     })
-    expect(req.group).toEqual({ groupKey: 'my-group', isFake: true })
+    expect(req.group).toEqual({ groupKey: 'org.example.alpha', isFake: false })
+    expect(req.clearGroup).toBe(false)
+  })
+
+  it('populated groupId + isFake=true → group object set with isFake', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({ group: null }),
+      values: makeValues({ groupId: 'org.example.synthetic', groupIsFake: true }),
+      visibilities: EDITABLE,
+      dirtyFields: { groupId: true },
+    })
+    expect(req.group).toEqual({ groupKey: 'org.example.synthetic', isFake: true })
+    expect(req.clearGroup).toBe(false)
+  })
+
+  it('populated groupId + clean (matches existing) → omits group key', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({
+        group: { groupKey: 'org.example.alpha', isFake: false, role: 'MEMBER' },
+      }),
+      values: makeValues({ groupId: 'org.example.alpha', groupIsFake: false }),
+      visibilities: EDITABLE,
+      dirtyFields: {},
+    })
+    // clean-match short-circuit: no group key on the wire when the value
+    // hasn't actually changed.
+    expect(req.group).toBeUndefined()
     expect(req.clearGroup).toBe(false)
   })
 })
@@ -377,24 +419,153 @@ describe('buildUpdateRequest — name / parentComponentName', () => {
   })
 })
 
-describe('buildUpdateRequest — labels dedup + scalar omit semantics', () => {
-  it('blank labels → undefined (don\'t touch), not [] (which would clear)', () => {
+describe('buildUpdateRequest — labels + systems dirty-gate matrix (ui-swift-sloth §4)', () => {
+  // After the multi-select swap labels mirrors systems' contract: the form
+  // mounts with `labels: []`, so emitting `labels: []` on every save would
+  // wipe server data before the hydration useEffect runs. A dirtyFields
+  // gate (identical to systems) blocks the pre-hydration clobber and the
+  // dirty-but-empty case.
+
+  it('(labels-a) form mounts with labels: [], untouched, save → labels omitted', () => {
     const req = buildUpdateRequest({
-      component: makeComponent({ labels: ['existing'] }),
-      values: makeValues({ labels: '' }),
+      component: makeComponent({ labels: ['backend', 'internal'] }),
+      values: makeValues({ labels: [] }),
       visibilities: EDITABLE,
       dirtyFields: {},
     })
     expect(req.labels).toBeUndefined()
   })
 
-  it('duplicate labels are deduped + trimmed', () => {
+  it('(labels-b) user toggles ALL labels off → dirty + empty → labels:[] (explicit clear, PR #44 P2 fix)', () => {
+    // Labels is OPTIONAL server-side (unlike systems which is required), so
+    // "clear all" is a valid user intent. The previous version silently
+    // dropped this case, producing the success-toast-but-server-unchanged
+    // bug. The dirty-gate still guards against the pre-hydration clobber
+    // (no-dirty + empty → omit), but dirty + empty now emits [] explicitly.
+    //
+    // PR #44 follow-up note: ComponentDetailPage.handleSave SYNTHESISES
+    // `dirtyFields.labels: true` for this case via the touched-gate +
+    // server-vs-form value-compare (RHF's own dirtyFields stays false
+    // when setValue('labels', []) hits the form-default []). This test
+    // pins buildUpdateRequest's half of the contract: given dirty:true +
+    // empty array, emit `labels: []` regardless of how the caller arrived
+    // at the dirty flag.
     const req = buildUpdateRequest({
-      component: makeComponent(),
-      values: makeValues({ labels: ' a , b , a , c , c ' }),
+      component: makeComponent({ labels: ['backend'] }),
+      values: makeValues({ labels: [] }),
+      visibilities: EDITABLE,
+      dirtyFields: { labels: true },
+    })
+    expect(req.labels).toEqual([])
+  })
+
+  it('(labels-c) user adds a label → dirty + non-empty → array forwarded', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({ labels: [] }),
+      values: makeValues({ labels: ['backend'] }),
+      visibilities: EDITABLE,
+      dirtyFields: { labels: true },
+    })
+    expect(req.labels).toEqual(['backend'])
+  })
+
+  it('(systems-a) form mounts with system: [], untouched, save → systems omitted', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({ systems: ['SYS1'] }),
+      values: makeValues({ system: [] }),
       visibilities: EDITABLE,
       dirtyFields: {},
     })
-    expect(req.labels).toEqual(['a', 'b', 'c'])
+    expect(req.systems).toBeUndefined()
   })
+
+  it('(systems-b) user removes the only system → dirty + empty → systems omitted', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({ systems: ['SYS1'] }),
+      values: makeValues({ system: [] }),
+      visibilities: EDITABLE,
+      dirtyFields: { system: true },
+    })
+    expect(req.systems).toBeUndefined()
+  })
+
+  it('(systems-c) user adds a system → dirty + non-empty → array forwarded', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({ systems: [] }),
+      values: makeValues({ system: ['SYS1'] }),
+      visibilities: EDITABLE,
+      dirtyFields: { system: true },
+    })
+    expect(req.systems).toEqual(['SYS1'])
+  })
+
+  it('non-empty labels untouched (clean) → omitted', () => {
+    // Symmetry with systems: not-dirty + non-empty also omits, because the
+    // pre-hydration form-default of [] would otherwise leak. The hydration
+    // useEffect populates labels from the server side before any real edit,
+    // so a real "user added labels" save always sets dirty.
+    const req = buildUpdateRequest({
+      component: makeComponent({ labels: ['backend'] }),
+      values: makeValues({ labels: ['backend'] }),
+      visibilities: EDITABLE,
+      dirtyFields: {},
+    })
+    expect(req.labels).toBeUndefined()
+  })
+})
+
+describe('buildUpdateRequest — clearGroup invariant (ui-swift-sloth §3.5)', () => {
+  // Hard guarantee: no UI path emits `clearGroup: true`. The wire contract
+  // still requires the field, so it stays present but is always `false`.
+  // We materialise a handful of representative request shapes and assert
+  // the invariant — a regression here would 400 every save with a
+  // group-mandatory server.
+  const fixtures = [
+    {
+      name: 'untouched form',
+      req: () =>
+        buildUpdateRequest({
+          component: makeComponent(),
+          values: makeValues(),
+          visibilities: EDITABLE,
+          dirtyFields: {},
+        }),
+    },
+    {
+      name: 'group set + dirty',
+      req: () =>
+        buildUpdateRequest({
+          component: makeComponent({ group: null }),
+          values: makeValues({ groupId: 'org.example.alpha' }),
+          visibilities: EDITABLE,
+          dirtyFields: { groupId: true },
+        }),
+    },
+    {
+      name: 'group cleared + dirty + prior group present',
+      req: () =>
+        buildUpdateRequest({
+          component: makeComponent({ group: { groupKey: 'org.example.legacy', isFake: false, role: 'MEMBER' } }),
+          values: makeValues({ groupId: '' }),
+          visibilities: EDITABLE,
+          dirtyFields: { groupId: true },
+        }),
+    },
+    {
+      name: 'group hidden via field-config',
+      req: () =>
+        buildUpdateRequest({
+          component: makeComponent({ group: { groupKey: 'org.example.legacy', isFake: false, role: 'MEMBER' } }),
+          values: makeValues({ groupId: '' }),
+          visibilities: { ...EDITABLE, groupId: 'hidden' },
+          dirtyFields: { groupId: true },
+        }),
+    },
+  ]
+  for (const fixture of fixtures) {
+    it(`never emits clearGroup:true — ${fixture.name}`, () => {
+      const req = fixture.req()
+      expect(req.clearGroup).toBe(false)
+    })
+  }
 })

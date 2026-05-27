@@ -11,7 +11,7 @@ vi.mock('./FieldOverrideInline', () => ({
 
 vi.mock('../../hooks/useFieldConfig', () => ({
   useFieldConfigOptions: () => ({ options: [], isLoading: false }),
-  useFieldConfigEntry: () => ({ entry: { visibility: 'editable', required: false }, isLoading: false }),
+  useFieldConfigEntry: () => ({ entry: { visibility: 'editable', required: false }, isLoading: false, isError: false }),
 }))
 
 function baseComponent(overrides: Partial<ComponentDetail> = {}): ComponentDetail {

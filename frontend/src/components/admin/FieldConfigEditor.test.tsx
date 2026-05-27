@@ -80,7 +80,10 @@ describe('FieldConfigEditor — catalog rows', () => {
 
   it('renders all expected component field rows', () => {
     renderEditor({})
-    const componentFields = ['name', 'displayName', 'solution', 'componentOwner', 'systems', 'productType', 'clientCode']
+    // ui-swift-sloth §3.5: groupId joins the catalog (locked) so admins can
+    // edit defaultValue / description but cannot flip visibility or required
+    // — backend now makes the group mandatory.
+    const componentFields = ['name', 'displayName', 'solution', 'componentOwner', 'systems', 'productType', 'clientCode', 'groupId']
     for (const field of componentFields) {
       // Each field label appears in the table (may appear in multiple cells/elements)
       const elements = screen.getAllByText(field)
@@ -97,9 +100,12 @@ describe('FieldConfigEditor — catalog rows', () => {
     }
   })
 
-  it('renders (locked) badge next to name field', () => {
+  it('renders (locked) badge next to locked fields', () => {
     renderEditor({})
-    expect(screen.getByText('(locked)')).toBeDefined()
+    // ui-swift-sloth §3.5: groupId joins `name` as a locked row, so the
+    // badge now appears at least twice.
+    const badges = screen.getAllByText('(locked)')
+    expect(badges.length).toBeGreaterThanOrEqual(2)
   })
 })
 
@@ -123,6 +129,66 @@ describe('FieldConfigEditor — locked rows', () => {
     // Use exact label to avoid matching 'displayName required'
     const checkbox = screen.getByRole('checkbox', { name: 'name required' })
     expect(checkbox).toBeDisabled()
+  })
+
+  it('groupId row is locked: visibility select + required checkbox disabled (ui-swift-sloth §3.5)', () => {
+    renderEditor({})
+    // Visibility combobox for groupId — locked → disabled.
+    const groupIdVisibility = screen.getByRole('combobox', { name: /groupId visibility/ })
+    expect(
+      groupIdVisibility.hasAttribute('disabled') ||
+        groupIdVisibility.getAttribute('data-disabled') !== null,
+    ).toBe(true)
+    const groupIdRequired = screen.getByRole('checkbox', { name: 'groupId required' })
+    expect(groupIdRequired).toBeDisabled()
+  })
+
+  it('locked rows force visibility=editable + required=true regardless of stored config (PR #44 P3)', () => {
+    // Fresh DB / empty field-config OR stale config with the wrong values:
+    // locked rows MUST display + serialise the contract values, not whatever
+    // the stored data happens to be. Previously the disabled cells just sat
+    // on whatever defaults `readEntry` produced (visibility=editable,
+    // required=false) so a fresh-DB Save wrote `required: false` for both
+    // `name` and `groupId`, contradicting the backend contract.
+    renderEditor({
+      component: {
+        // Stored stale: groupId hidden + not-required. The editor must
+        // ignore both and show the locked contract values.
+        groupId: { visibility: 'hidden', required: false },
+        // Also exercise the `name` row with a similarly bad stored shape.
+        name: { visibility: 'readonly', required: false },
+      },
+    })
+
+    // Visibility cells reflect the FORCED value, not the stored value.
+    const groupIdVisibility = screen.getByRole('combobox', { name: /groupId visibility/ })
+    expect(groupIdVisibility.getAttribute('data-visibility')).toBe('editable')
+    const nameVisibility = screen.getByRole('combobox', { name: /name visibility/ })
+    expect(nameVisibility.getAttribute('data-visibility')).toBe('editable')
+
+    // Required cells reflect the FORCED value too.
+    const groupIdRequired = screen.getByRole('checkbox', { name: 'groupId required' }) as HTMLInputElement
+    expect(groupIdRequired.checked).toBe(true)
+    const nameRequired = screen.getByRole('checkbox', { name: 'name required' }) as HTMLInputElement
+    expect(nameRequired.checked).toBe(true)
+  })
+
+  it('Save serialises locked-row contract values even with stale stored config (PR #44 P3)', () => {
+    renderEditor({
+      component: {
+        groupId: { visibility: 'hidden', required: false, defaultValue: 'org.example' },
+        name: { visibility: 'hidden', required: false },
+      },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /save/i }))
+    const payload = mutate.mock.calls[0]![0] as {
+      component: Record<string, { visibility: string; required: boolean; defaultValue?: string }>
+    }
+    expect(payload.component.groupId).toMatchObject({ visibility: 'editable', required: true })
+    // Editable cells survive the forcing — defaultValue is admin-owned, not
+    // contract-owned, so it must round-trip from stored data.
+    expect(payload.component.groupId!.defaultValue).toBe('org.example')
+    expect(payload.component.name).toMatchObject({ visibility: 'editable', required: true })
   })
 })
 
@@ -226,6 +292,7 @@ describe('FieldConfigEditor — save', () => {
     expect(payload.component).toHaveProperty('displayName')
     expect(payload.component).toHaveProperty('clientCode')
     expect(payload.component).toHaveProperty('productType')
+    expect(payload.component).toHaveProperty('groupId')
     // Build section fields
     expect(payload.build).toHaveProperty('buildSystem')
     expect(payload.build).toHaveProperty('javaVersion')
