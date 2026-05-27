@@ -45,7 +45,7 @@ object PlaywrightContainer {
             .withFileFromString(
                 "Dockerfile",
                 """
-                FROM mcr.microsoft.com/playwright:v1.59.1-jammy
+                FROM mcr.microsoft.com/playwright:v1.60.0-jammy
                 WORKDIR /work
                 COPY package.json package-lock.json /work/
                 # Pre-baked deps so the e2e gate doesn't pay 30s of npm ci on every run.

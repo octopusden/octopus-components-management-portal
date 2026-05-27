@@ -17,7 +17,7 @@ daemon and credentials for whichever registry hosts the CRS image.
 | Keycloak    | `quay.io/keycloak/keycloak:24.0.3`                 | `keycloak`       |
 | CRS         | `${crs.docker.registry}/.../components-registry-service:${crs.version}` | `crs` |
 | Portal      | `eclipse-temurin:21-jre` + bind-mounted bootJar    | `portal`         |
-| Playwright  | `mcr.microsoft.com/playwright:v1.59.1-jammy`       | (one-shot)       |
+| Playwright  | `mcr.microsoft.com/playwright:v1.60.0-jammy`       | (one-shot)       |
 
 The single canonical Keycloak URL — `http://keycloak:8080` — resolves
 identically for CRS, the portal, and the headless browser, because
