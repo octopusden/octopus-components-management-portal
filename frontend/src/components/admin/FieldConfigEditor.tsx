@@ -48,6 +48,11 @@ const CATALOG: CatalogRow[] = [
   { section: 'component', fieldName: 'systems',        label: 'systems'                      },
   { section: 'component', fieldName: 'productType',    label: 'productType'                  },
   { section: 'component', fieldName: 'clientCode',     label: 'clientCode'                   },
+  // ui-swift-sloth §3.5: groupId is locked because the backend now makes
+  // `group` mandatory. Admins keep defaultValue + description editing (used
+  // by the Create dialog auto-suggest) but cannot flip visibility/required
+  // away from the contract.
+  { section: 'component', fieldName: 'groupId',        label: 'groupId',        locked: true },
   // TC link restoration — manual override pair (admin-gated).
   { section: 'component', fieldName: 'teamcityProjectId',  label: 'teamcityProjectId'  },
   { section: 'component', fieldName: 'teamcityProjectUrl', label: 'teamcityProjectUrl' },

@@ -80,7 +80,10 @@ describe('FieldConfigEditor — catalog rows', () => {
 
   it('renders all expected component field rows', () => {
     renderEditor({})
-    const componentFields = ['name', 'displayName', 'solution', 'componentOwner', 'systems', 'productType', 'clientCode']
+    // ui-swift-sloth §3.5: groupId joins the catalog (locked) so admins can
+    // edit defaultValue / description but cannot flip visibility or required
+    // — backend now makes the group mandatory.
+    const componentFields = ['name', 'displayName', 'solution', 'componentOwner', 'systems', 'productType', 'clientCode', 'groupId']
     for (const field of componentFields) {
       // Each field label appears in the table (may appear in multiple cells/elements)
       const elements = screen.getAllByText(field)
@@ -97,9 +100,12 @@ describe('FieldConfigEditor — catalog rows', () => {
     }
   })
 
-  it('renders (locked) badge next to name field', () => {
+  it('renders (locked) badge next to locked fields', () => {
     renderEditor({})
-    expect(screen.getByText('(locked)')).toBeDefined()
+    // ui-swift-sloth §3.5: groupId joins `name` as a locked row, so the
+    // badge now appears at least twice.
+    const badges = screen.getAllByText('(locked)')
+    expect(badges.length).toBeGreaterThanOrEqual(2)
   })
 })
 
@@ -123,6 +129,18 @@ describe('FieldConfigEditor — locked rows', () => {
     // Use exact label to avoid matching 'displayName required'
     const checkbox = screen.getByRole('checkbox', { name: 'name required' })
     expect(checkbox).toBeDisabled()
+  })
+
+  it('groupId row is locked: visibility select + required checkbox disabled (ui-swift-sloth §3.5)', () => {
+    renderEditor({})
+    // Visibility combobox for groupId — locked → disabled.
+    const groupIdVisibility = screen.getByRole('combobox', { name: /groupId visibility/ })
+    expect(
+      groupIdVisibility.hasAttribute('disabled') ||
+        groupIdVisibility.getAttribute('data-disabled') !== null,
+    ).toBe(true)
+    const groupIdRequired = screen.getByRole('checkbox', { name: 'groupId required' })
+    expect(groupIdRequired).toBeDisabled()
   })
 })
 
@@ -226,6 +244,7 @@ describe('FieldConfigEditor — save', () => {
     expect(payload.component).toHaveProperty('displayName')
     expect(payload.component).toHaveProperty('clientCode')
     expect(payload.component).toHaveProperty('productType')
+    expect(payload.component).toHaveProperty('groupId')
     // Build section fields
     expect(payload.build).toHaveProperty('buildSystem')
     expect(payload.build).toHaveProperty('javaVersion')

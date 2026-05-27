@@ -127,6 +127,8 @@ The P1 UI features rely on these CRS endpoints (all behind the `/rest/**` proxy 
 | `GET /components/meta/labels` | Labels multi-select on the list page | new CRS contract; mirrors `/meta/owners` (junction-sourced, distinct labels in use) |
 | `GET /components/meta/systems` | System multi-select on the list page | new CRS contract; mirrors `/meta/owners` (junction-sourced, distinct systems in use) |
 | `GET /components/meta/build-systems` | Build System multi-select on the list page (fallback when admin field-config has no options) | existing CRS enum endpoint |
+| `GET /components/meta/systems/dictionary` | Editor multi-select on the detail page: full systems dictionary (not just in-use values) | new CRS contract; distinct from `/meta/systems` which surfaces junction-sourced in-use values for the filter bar |
+| `GET /components/meta/labels/dictionary` | Editor multi-select on the detail page: full labels dictionary (not just in-use values) | new CRS contract; distinct from `/meta/labels` which surfaces junction-sourced in-use values for the filter bar |
 | `GET /components/{idOrName}` | Detail page fetch (UUID first, name fallback) | existing |
 | `PATCH /components/{id}` with `name` | Rename (B7.1.4) | `canRenameComponent` SpEL |
 | `PATCH /components/{id}` with `parentComponentName` | Parent autocomplete save (B7.1.5) | `canEditComponent` |

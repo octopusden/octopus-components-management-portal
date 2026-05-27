@@ -25,6 +25,13 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
   const build = baseRow?.build
 
   const [buildSystem, setBuildSystem] = useState(build?.buildSystem ?? '')
+  // ui-swift-sloth §5: buildSystem is required server-side. Track touched
+  // state locally (BuildTab is plain `useState`, not RHF/Zod) so the inline
+  // error doesn't blare on initial mount with a legacy empty value.
+  const [buildSystemTouched, setBuildSystemTouched] = useState(false)
+  // localError is the surface for the handleSave guard — covers the case
+  // where the user clicks Save without ever interacting with the field.
+  const [localError, setLocalError] = useState<string | null>(null)
   const [buildSystemVersion, setBuildSystemVersion] = useState(build?.buildSystemVersion ?? '')
   const [buildFilePath, setBuildFilePath] = useState(build?.buildFilePath ?? '')
   const [javaVersion, setJavaVersion] = useState(build?.javaVersion ?? '')
@@ -55,6 +62,15 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
   }, [component])
 
   async function handleSave() {
+    // ui-swift-sloth §5: hard guard — empty buildSystem would 400 once the
+    // CRS strict contract lands. Surface the error inline (mirrors the
+    // touched-on-blur path) and bail before calling the mutation.
+    if (!buildSystem) {
+      setLocalError('Build System is required')
+      setBuildSystemTouched(true)
+      return
+    }
+    setLocalError(null)
     try {
       const requiredToolsArray = [...new Set(
         requiredToolsInput.split(',').map((t) => t.trim()).filter(Boolean)
@@ -106,13 +122,30 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label>Build System</Label>
+          <Label htmlFor="build-buildSystem">
+            Build System <span className="text-destructive">*</span>
+          </Label>
           <EnumSelect
             fieldPath="buildSystem"
             value={buildSystem}
-            onValueChange={setBuildSystem}
+            onValueChange={(v) => {
+              setBuildSystem(v)
+              if (v) setLocalError(null)
+            }}
+            onBlur={() => setBuildSystemTouched(true)}
             placeholder="Select build system"
+            id="build-buildSystem"
+            aria-required
+            aria-invalid={(buildSystemTouched && !buildSystem) || localError !== null}
+            aria-describedby={
+              (buildSystemTouched && !buildSystem) || localError ? 'build-buildSystem-error' : undefined
+            }
           />
+          {((buildSystemTouched && !buildSystem) || localError) && (
+            <p id="build-buildSystem-error" className="text-xs text-destructive">
+              {localError ?? 'Build System is required'}
+            </p>
+          )}
           <FieldOverrideInline componentId={component.id} overriddenAttribute="build.buildSystem" />
         </div>
 

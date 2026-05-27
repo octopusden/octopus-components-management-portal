@@ -39,6 +39,7 @@ import { selectBaseRow } from '../lib/api/baseRow'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../lib/auth'
 import { useFieldConfigEntry } from '../hooks/useFieldConfig'
+import { useSupportedGroups } from '../hooks/useSupportedGroups'
 import { parseServerFieldErrors } from '../lib/serverErrors'
 import { usePortalLinks } from '../hooks/useInfo'
 import { safeHttpUrl } from '../lib/utils'
@@ -85,6 +86,12 @@ export function ComponentDetailPage() {
   const { entry: labelsFc } = useFieldConfigEntry('component.labels')
   // TC link restoration — manual override pair. Hidden FC visibility skips
   // both fields on save (see handleSave below).
+  // ui-swift-sloth §3.5: pull the allowed groupId prefixes so the save guard
+  // mirrors the inline render-side check. Empty list (loading/errored) skips
+  // the prefix gate so a transient hook failure doesn't lock the user out
+  // of saving an already-valid groupId.
+  const supportedGroupsQuery = useSupportedGroups()
+  const supportedGroupsList = supportedGroupsQuery.data ?? []
   const { entry: teamcityProjectIdFc } = useFieldConfigEntry('component.teamcityProjectId')
   const { entry: teamcityProjectUrlFc } = useFieldConfigEntry('component.teamcityProjectUrl')
   // Race-guard: while field-config is still loading, every FC entry falls
@@ -107,7 +114,7 @@ export function ComponentDetailPage() {
       displayName: '',
       componentOwner: '',
       productType: '',
-      system: '',
+      system: [],
       clientCode: '',
       solution: false,
       archived: false,
@@ -122,7 +129,7 @@ export function ComponentDetailPage() {
       securityChampion: '',
       copyright: '',
       releasesInDefaultBranch: false,
-      labels: '',
+      labels: [],
       // schema-v2 list defaults — empty arrays so an early Save before useEffect
       // populates from `component` still produces a coherent form value.
       teamcityProjects: [],
@@ -139,6 +146,39 @@ export function ComponentDetailPage() {
     // start of each save so a successful retry doesn't leave stale red
     // text behind.
     form.clearErrors()
+
+    // ui-swift-sloth §3.5: block the save if the user typed something into
+    // Group Key that violates the contract — either by emptying a dirty
+    // field, or by entering a value with a disallowed prefix. Both would
+    // 400 server-side once the CRS strict contract lands.
+    //
+    // We deliberately only trip on a dirty field: an untouched empty form
+    // (pre-hydration race, or admin saving another tab without ever
+    // touching groupId) falls through, and buildGroupPatch's belt-and-
+    // braces simply omits the group key — server-side PATCH semantics
+    // keep the existing group untouched.
+    if (groupIdFc.visibility !== 'hidden') {
+      const trimmed = (form.getValues('groupId') ?? '').trim()
+      const groupIdDirty = form.formState.dirtyFields.groupId === true
+      if (groupIdDirty && trimmed === '') {
+        form.setError('groupId', { type: 'required', message: 'Group Key is required' })
+        return
+      }
+      if (trimmed !== '' && supportedGroupsList.length > 0) {
+        const v = trimmed.toLowerCase()
+        const ok = supportedGroupsList.some((p) => {
+          const lp = p.toLowerCase()
+          return v === lp || v.startsWith(lp + '.')
+        })
+        if (!ok) {
+          form.setError('groupId', {
+            type: 'prefix',
+            message: `Group Key must start with one of: ${supportedGroupsList.join(', ')}`,
+          })
+          return
+        }
+      }
+    }
 
     const request = buildUpdateRequest({
       component,
@@ -164,7 +204,13 @@ export function ComponentDetailPage() {
       dirtyFields: {
         releasesInDefaultBranch: form.formState.dirtyFields.releasesInDefaultBranch === true,
         solution: form.formState.dirtyFields.solution === true,
-        system: form.formState.dirtyFields.system === true,
+        // system / labels: RHF's TS types model array-field dirtiness as
+        // `boolean[] | undefined`, but at runtime setValue(..., {shouldDirty:
+        // true}) flips a single boolean. We narrow through `unknown` so the
+        // type system accepts the runtime contract; the === true check
+        // ignores both `undefined` and any future partial-dirty array shape.
+        system: (form.formState.dirtyFields.system as unknown) === true,
+        labels: (form.formState.dirtyFields.labels as unknown) === true,
         groupId: form.formState.dirtyFields.groupId === true,
         teamcityProjects: !!form.formState.dirtyFields.teamcityProjects,
         docs: !!form.formState.dirtyFields.docs,

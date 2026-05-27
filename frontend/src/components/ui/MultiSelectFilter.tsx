@@ -34,6 +34,20 @@ interface MultiSelectFilterProps {
    * two controls stay mutually exclusive.
    */
   disabled?: boolean
+  /**
+   * DOM id forwarded to the trigger button — lets an outer `<Label htmlFor>`
+   * target the multi-select for accessibility (ui-swift-sloth §4).
+   */
+  id?: string
+  /**
+   * Forwarded to the trigger; mark as required for assistive tech when the
+   * field has a `*` marker.
+   */
+  'aria-required'?: boolean
+  /** Forwarded to the trigger for inline-error association. */
+  'aria-invalid'?: boolean
+  /** Forwarded to the trigger so AT can locate the error/help text. */
+  'aria-describedby'?: string
 }
 
 export function MultiSelectFilter({
@@ -45,6 +59,10 @@ export function MultiSelectFilter({
   unitLabel,
   onOpenChange,
   disabled,
+  id,
+  'aria-required': ariaRequired,
+  'aria-invalid': ariaInvalid,
+  'aria-describedby': ariaDescribedBy,
 }: MultiSelectFilterProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -130,6 +148,10 @@ export function MultiSelectFilter({
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
+          id={id}
+          aria-required={ariaRequired}
+          aria-invalid={ariaInvalid}
+          aria-describedby={ariaDescribedBy}
           variant="outline"
           size="sm"
           className="w-[200px] justify-between font-normal"

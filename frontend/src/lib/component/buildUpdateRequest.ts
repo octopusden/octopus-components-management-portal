@@ -28,6 +28,10 @@ export interface DirtyFlags {
   releasesInDefaultBranch?: boolean
   solution?: boolean
   system?: boolean
+  // ui-swift-sloth §4: labels is now a multi-select array, and like systems
+  // it needs a dirty-gate to block the form-default `[]` from clobbering
+  // server data pre-hydration.
+  labels?: boolean
   groupId?: boolean
   teamcityProjects?: boolean
   docs?: boolean
@@ -56,22 +60,23 @@ export interface BuildUpdateRequestParams {
 export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentUpdateRequest {
   const { component, values, visibilities, dirtyFields } = params
 
-  const systemArray = values.system
-    ? values.system.split(',').map((s) => s.trim()).filter(Boolean)
-    : []
-
-  // labels: blank → undefined (don't touch), not [] (explicit clear).
-  // Dedup via Set until CRS adds a DB-level uniqueness constraint.
-  const labelsArray = values.labels
-    ? Array.from(
-        new Set(
-          values.labels
-            .split(',')
-            .map((s) => s.trim())
-            .filter(Boolean),
-        ),
-      )
-    : undefined
+  // ui-swift-sloth §4: system and labels arrive as arrays straight from the
+  // MultiSelectFilter — no comma splitting. Trim/dedup any defensive noise
+  // (the UI never produces it, but a paste-restore round-trip might).
+  const systemArray = Array.from(
+    new Set(
+      (values.system ?? [])
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ),
+  )
+  const labelsArray = Array.from(
+    new Set(
+      (values.labels ?? [])
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ),
+  )
 
   const releasesInDefaultBranchChanged = dirtyFields.releasesInDefaultBranch === true
   const solutionChanged = dirtyFields.solution === true
@@ -98,7 +103,7 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
         : trimmedParent
 
   const tcPatch = buildTcPatch(component, values, visibilities, dirtyFields)
-  const groupPatch = buildGroupPatch(component, values, visibilities, dirtyFields)
+  const groupPatch = buildGroupPatch(component, values, visibilities)
   const docsPatch = buildDocsPatch(component, values, dirtyFields)
   const artifactIdsPatch = buildArtifactIdsPatch(component, values, dirtyFields)
 
@@ -141,7 +146,20 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
       visibilities.releasesInDefaultBranch === 'hidden' || !releasesInDefaultBranchChanged
         ? undefined
         : values.releasesInDefaultBranch,
-    labels: visibilities.labels === 'hidden' ? undefined : labelsArray,
+    // Two guards on `labels` mirror systems (ui-swift-sloth §4):
+    //   - Pre-hydration: form mounts with `labels: []` BEFORE GeneralTab's
+    //     useEffect mirrors the server `labels` into the multi-select. The
+    //     dirty-gate blocks the unwanted clear.
+    //   - Empty-after-dirty: user dirties the field then unchecks every
+    //     label. We omit (UI silently no-ops the "clear all" intent rather
+    //     than wiping server data). Explicit "clear all labels" needs a
+    //     dedicated flag (`clearLabels: true`) — out of scope for this
+    //     iteration; UI ideally adds a minimum-one validation hint to
+    //     surface this to the user (deferred).
+    labels:
+      visibilities.labels === 'hidden' || dirtyFields.labels !== true || labelsArray.length === 0
+        ? undefined
+        : labelsArray,
     ...groupPatch,
     ...tcPatch,
     ...docsPatch,
@@ -172,18 +190,24 @@ function buildGroupPatch(
   component: ComponentDetail,
   values: GeneralFormValues,
   visibilities: FieldVisibilities,
-  dirtyFields: DirtyFlags,
-): { group?: { groupKey: string; isFake: boolean }; clearGroup?: boolean } {
+): { group?: { groupKey: string; isFake: boolean } } {
+  // ui-swift-sloth §3.5: group is now mandatory server-side. The UI must
+  //   - never emit `clearGroup: true` (CRS now rejects it with 400),
+  //   - never emit `group` when the input is blank (the render-side guard
+  //     blocks saving while empty; this is the belt-and-braces).
   if (visibilities.groupId === 'hidden') return {}
   const trimmedGroupId = (values.groupId || '').trim()
-  const dirty = dirtyFields.groupId === true
-  if (trimmedGroupId !== '') {
-    return { group: { groupKey: trimmedGroupId, isFake: values.groupIsFake ?? false } }
+  if (trimmedGroupId === '') return {}
+  // Value-match short-circuit: per plan §3.5, "non-empty + clean → omit".
+  // Compare against stored value rather than dirtyFields — a user who types
+  // their groupId back to the stored value is functionally clean even though
+  // RHF marks the field dirty.
+  const currentKey = component.group?.groupKey ?? ''
+  const currentIsFake = component.group?.isFake ?? false
+  if (trimmedGroupId === currentKey && (values.groupIsFake ?? false) === currentIsFake) {
+    return {}
   }
-  if (dirty && component.group) {
-    return { clearGroup: true }
-  }
-  return {}
+  return { group: { groupKey: trimmedGroupId, isFake: values.groupIsFake ?? false } }
 }
 
 function buildDocsPatch(

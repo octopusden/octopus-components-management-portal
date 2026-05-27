@@ -26,6 +26,13 @@ interface EnumSelectProps {
   'aria-required'?: boolean
   'aria-invalid'?: boolean
   'aria-describedby'?: string
+  /**
+   * Forwarded to the underlying trigger / free-text input. Used by BuildTab
+   * (ui-swift-sloth §5) to flip a `touched` flag on first blur so the
+   * required-marker error only appears after the user has acknowledged the
+   * field — not on mount with a legacy empty value.
+   */
+  onBlur?: () => void
 }
 
 export function EnumSelect({
@@ -39,6 +46,7 @@ export function EnumSelect({
   'aria-required': ariaRequired,
   'aria-invalid': ariaInvalid,
   'aria-describedby': ariaDescribedBy,
+  onBlur,
 }: EnumSelectProps) {
   const { options, isLoading } = useFieldOptions(fieldPath)
 
@@ -49,6 +57,7 @@ export function EnumSelect({
     'aria-required': ariaRequired,
     'aria-invalid': ariaInvalid,
     'aria-describedby': ariaDescribedBy,
+    onBlur,
   }
 
   if (isLoading) {
