@@ -55,8 +55,8 @@
 #    `components-registry-service-server/src/main/resources/db/migration/`),
 #    Flyway will refuse to start against a Postgres volume that already
 #    applied the previous version: "Either revert the changes to the
-#    migration, or run repair". CRS is pre-prod (see
-#    `~/.claude/projects/.../memory/project_db_fresh_on_deploy.md`), so the
+#    migration, or run repair". CRS is pre-prod (no migrations to preserve
+#    across deploys — databases are recreated from scratch), so the
 #    correct response is to nuke the local volume:
 #      docker-compose down -v && docker-compose up -d postgres keycloak
 #

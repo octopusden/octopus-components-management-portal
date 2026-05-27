@@ -768,6 +768,24 @@ describe('GeneralTab — system + labels multi-select (ui-swift-sloth §4)', () 
       expect(formRef.current?.getValues('labels')).toEqual(['internal'])
     })
   })
+
+  it('renders an inline error below the System multi-select when form.setError("system") fires (PR #44 P2 systems)', async () => {
+    // ComponentDetailPage.handleSave is the source of truth for the
+    // "systems is required" guard, but the error needs to surface in
+    // GeneralTab's render tree — otherwise the user clicks Save, the page
+    // returns early, and the UI gives no visible feedback.
+    setAllEditable()
+    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    renderWithProviders(<Harness component={baseComponent({ systems: ['SYS1'] })} formRef={formRef} />)
+
+    await act(async () => {
+      formRef.current?.setError('system', { type: 'required', message: 'At least one system is required' })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText(/at least one system is required/i)).toBeDefined()
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -791,12 +809,37 @@ describe('GeneralTab — group key required marker + inline error (ui-swift-slot
 
     const input = screen.getByLabelText(/group key/i) as HTMLInputElement
     await userEvent.clear(input)
-    // Blur to trigger the required check (mirrors the create dialog UX).
-    input.blur()
+    // Wrap the synchronous .blur() in act() so React flushes the
+    // setGroupIdTouched(true) state update before assertion / teardown
+    // — silences the "not wrapped in act(...)" warning that otherwise
+    // fires on the synchronous DOM-blur path.
+    await act(async () => {
+      input.blur()
+    })
 
     await waitFor(() => {
       expect(screen.getByText(/group key is required/i)).toBeDefined()
     })
+  })
+
+  it('legacy non-matching groupKey does NOT show the prefix error before the user touches the field (PR #44 review)', () => {
+    // Admins reconfigured the supported-prefix list mid-life. A component
+    // with stored groupKey 'old.corp.foo' hits the editor: we must not blare
+    // a red error on mount, because the user hasn't touched the field and
+    // the save guard correctly lets unrelated changes through.
+    setAllEditable()
+    mockUseSupportedGroups.mockReturnValue({
+      data: ['com.example'],
+      isLoading: false,
+      isError: false,
+    })
+    const component = baseComponent({
+      group: { groupKey: 'old.legacy.example', isFake: false, role: 'MEMBER' },
+    })
+    renderWithProviders(<Harness component={component} />)
+
+    // No "must start with" red text on the untouched field.
+    expect(screen.queryByText(/must start with/i)).toBeNull()
   })
 
   it('entering a disallowed-prefix value surfaces an inline error', async () => {

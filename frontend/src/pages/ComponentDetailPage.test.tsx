@@ -238,13 +238,19 @@ beforeEach(() => {
     isLoading: false,
     isError: false,
   }))
-  // Default GeneralTab stub — empty div. Individual tests can override
-  // (e.g. the populated-values save test mirrors the real component's
-  // useEffect setValue dance). Re-set every beforeEach because tests that
-  // call mockImplementation would otherwise leak across the suite.
-  vi.mocked(GeneralTab).mockImplementation(() =>
-    React.createElement('div', { 'data-testid': 'general-tab' }),
-  )
+  // Default GeneralTab stub. Hydrates `system` from `component.systems`
+  // so the page-level save guard (PR #44 P2 systems — "server had
+  // systems, form has none" blocks the save) doesn't false-positive on
+  // tests that never touch the systems field. Mirrors the real
+  // GeneralTab.useEffect mirror-server-into-form behavior.
+  // Individual tests can still override this implementation to test
+  // specific scenarios (e.g. the clear-all-systems guard).
+  vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+    useEffect(() => {
+      form.setValue('system', component.systems ?? [])
+    }, [component, form])
+    return React.createElement('div', { 'data-testid': 'general-tab' })
+  })
 })
 
 describe('ComponentDetailPage — Archive / Unarchive buttons', () => {
@@ -557,6 +563,9 @@ describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => 
     // form holds the seeded TC values when handleSave runs.
     vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
       useEffect(() => {
+        // Hydrate system too — the PR #44 P2 systems guard reads
+        // component.systems vs form.system and would otherwise block save.
+        form.setValue('system', component.systems ?? [])
         form.setValue(
           'teamcityProjects',
           (component.teamcityProjects ?? []).map((tc) => ({ projectId: tc.projectId })),
@@ -633,10 +642,12 @@ describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => 
     // Wave B list editor: rows with blank projectId after trim are dropped.
     // Used to be the "partial pair (tcId filled, tcUrl blank)" Wave A guard;
     // schema-v2 has no URL field, so the analogue is "blank row gets dropped".
-    vi.mocked(GeneralTab).mockImplementation(({ form }) => {
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
       useEffect(() => {
+        // Hydrate system so the PR #44 P2 systems guard doesn't block save.
+        form.setValue('system', component.systems ?? [])
         form.setValue('teamcityProjects', [{ projectId: 'OnlyId_Build' }, { projectId: '  ' }])
-      }, [form])
+      }, [component, form])
       return React.createElement('div', { 'data-testid': 'general-tab-partial' })
     })
     const updateMutateAsync = vi.fn(() => Promise.resolve())
@@ -674,6 +685,65 @@ describe('ComponentDetailPage — solution flag dirty-gate', () => {
     await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
     const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
     expect(payload['solution']).toBeUndefined()
+  })
+})
+
+describe('ComponentDetailPage — systems clear-blocks-save guard (PR #44 P2 systems)', () => {
+  it('user clears every system → save is blocked, no PATCH fires', async () => {
+    // The render-side guard surfaces the inline error in GeneralTab; this
+    // test pins the page-level half: handleSave sees dirty + empty system
+    // and returns early before calling the mutation. Without this guard the
+    // user would otherwise click Save, hit `buildUpdateRequest` (which
+    // correctly omits systems on dirty-empty), see a green toast, and walk
+    // away believing the clear took — when in fact the server is unchanged.
+    // Stub leaves the form's `system` at the [] default while the server
+    // (`baseComponent.systems = ['SYS1']`) has a non-empty list — the
+    // exact "user cleared all systems" shape. The guard reads
+    // component.systems vs form.system rather than the RHF dirty flag,
+    // because RHF doesn't mark an array dirty when setValue's new value
+    // equals the form default.
+    vi.mocked(GeneralTab).mockImplementation(() =>
+      React.createElement('div', { 'data-testid': 'general-tab-systems-cleared' }),
+    )
+    const updateMutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    renderPage(baseComponent, user, { updateMutation: { mutateAsync: updateMutateAsync } })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('general-tab-systems-cleared')).toBeDefined()
+    })
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+
+    // Give React-Query a tick to settle if the mutation were to fire.
+    await new Promise((r) => setTimeout(r, 50))
+    expect(updateMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('user clears every system but field-config hides the row → save still fires (guard skipped)', async () => {
+    // If admins configured the systems field as hidden via field-config,
+    // the empty-systems guard must NOT block: the field isn't user-visible,
+    // so we cannot demand the user select one. buildUpdateRequest already
+    // omits systems on hidden visibility.
+    mockedUseFieldConfigEntry.mockImplementation((path: string) => ({
+      entry: path === 'component.systems'
+        ? { visibility: 'hidden' as const, required: false }
+        : { visibility: 'editable' as const, required: false },
+      isLoading: false,
+      isError: false,
+    }))
+    vi.mocked(GeneralTab).mockImplementation(() =>
+      React.createElement('div', { 'data-testid': 'general-tab-systems-hidden' }),
+    )
+    const updateMutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    renderPage(baseComponent, user, { updateMutation: { mutateAsync: updateMutateAsync } })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('general-tab-systems-hidden')).toBeDefined()
+    })
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
   })
 })
 

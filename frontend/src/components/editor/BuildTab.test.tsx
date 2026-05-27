@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BuildTab } from './BuildTab'
@@ -539,7 +539,13 @@ describe('BuildTab — buildSystem required (ui-swift-sloth §5)', () => {
 
     const enumSelect = screen.getByTestId('enum-select') as HTMLInputElement
     await userEvent.clear(enumSelect)
-    enumSelect.blur()
+    // Wrap the synchronous .blur() in act() so React flushes the setState
+    // it triggers (setBuildSystemTouched) before the assertion runs and
+    // before the test exits — otherwise React emits an act-warning even
+    // though waitFor would have caught the state update.
+    await act(async () => {
+      enumSelect.blur()
+    })
 
     await waitFor(() => {
       expect(screen.getByText(/build system is required/i)).toBeDefined()

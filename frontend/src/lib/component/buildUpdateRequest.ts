@@ -146,18 +146,19 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
       visibilities.releasesInDefaultBranch === 'hidden' || !releasesInDefaultBranchChanged
         ? undefined
         : values.releasesInDefaultBranch,
-    // Two guards on `labels` mirror systems (ui-swift-sloth §4):
-    //   - Pre-hydration: form mounts with `labels: []` BEFORE GeneralTab's
-    //     useEffect mirrors the server `labels` into the multi-select. The
-    //     dirty-gate blocks the unwanted clear.
-    //   - Empty-after-dirty: user dirties the field then unchecks every
-    //     label. We omit (UI silently no-ops the "clear all" intent rather
-    //     than wiping server data). Explicit "clear all labels" needs a
-    //     dedicated flag (`clearLabels: true`) — out of scope for this
-    //     iteration; UI ideally adds a minimum-one validation hint to
-    //     surface this to the user (deferred).
+    // labels semantics diverge from systems (PR #44 P2 fix):
+    //   - Pre-hydration guard mirrors systems: !dirty → omit, so the
+    //     form-default `[]` doesn't wipe server data before GeneralTab's
+    //     useEffect hydrates from `component.labels`.
+    //   - Explicit clear IS supported: labels is OPTIONAL server-side, so
+    //     `dirty + empty` now emits `labels: []` (REPLACE-empty) rather than
+    //     omitting. Previously the empty branch silently dropped — user
+    //     unchecked every label, got "saved" toast, server unchanged.
+    // systems can't follow the same path because `systems: []` is rejected
+    // server-side; the UI blocks the empty-save case via a form-level
+    // guard in ComponentDetailPage.handleSave instead.
     labels:
-      visibilities.labels === 'hidden' || dirtyFields.labels !== true || labelsArray.length === 0
+      visibilities.labels === 'hidden' || dirtyFields.labels !== true
         ? undefined
         : labelsArray,
     ...groupPatch,

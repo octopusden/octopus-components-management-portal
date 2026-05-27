@@ -136,7 +136,15 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
   const [groupIdTouched, setGroupIdTouched] = useState(false)
   const trimmedGroupId = (groupIdValue ?? '').trim()
   const groupIdRequiredError = groupIdTouched && trimmedGroupId === ''
+  // PR #44 review (Sonnet): also gate the prefix error on `groupIdTouched`.
+  // Legacy components whose stored groupKey doesn't match the current
+  // supported-prefix list would otherwise render a red inline error on
+  // page load, alarming users editing unrelated fields. The save-side
+  // guard in ComponentDetailPage.handleSave already gates on
+  // `groupIdDirty`, so the render-side mirror keeps the two layers
+  // consistent.
   const groupIdPrefixError = (() => {
+    if (!groupIdTouched) return null
     if (trimmedGroupId === '') return null
     if (supportedGroupsList.length === 0) return null
     const v = trimmedGroupId.toLowerCase()
@@ -335,19 +343,44 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                 disabled={groupIdEntry.visibility === 'readonly'}
                 aria-required
                 aria-invalid={Boolean(errors.groupId || groupIdRequiredError || groupIdPrefixError)}
+                // PR #44 comment (copilot-pull-request-reviewer): associate
+                // the visible error <p> with the field so screen readers
+                // announce the actual message rather than just "invalid".
+                aria-describedby={
+                  errors.groupId
+                    ? 'groupId-server-error'
+                    : groupIdRequiredError
+                      ? 'groupId-required-error'
+                      : groupIdPrefixError
+                        ? 'groupId-prefix-error'
+                        : undefined
+                }
                 className={groupIdEntry.visibility === 'readonly' ? 'bg-muted' : undefined}
                 {...register('groupId', {
                   onBlur: () => setGroupIdTouched(true),
+                  // Typing into the field is also "touched" — without this
+                  // the prefix-error would stay hidden until the user
+                  // explicitly tabs away, which is awkward when the user
+                  // is iterating on the value.
+                  onChange: () => {
+                    if (!groupIdTouched) setGroupIdTouched(true)
+                  },
                 })}
               />
               {errors.groupId && (
-                <p className="text-xs text-destructive">{errors.groupId.message}</p>
+                <p id="groupId-server-error" className="text-xs text-destructive">
+                  {errors.groupId.message}
+                </p>
               )}
               {!errors.groupId && groupIdRequiredError && (
-                <p className="text-xs text-destructive">Group Key is required</p>
+                <p id="groupId-required-error" className="text-xs text-destructive">
+                  Group Key is required
+                </p>
               )}
               {!errors.groupId && !groupIdRequiredError && groupIdPrefixError && (
-                <p className="text-xs text-destructive">{groupIdPrefixError}</p>
+                <p id="groupId-prefix-error" className="text-xs text-destructive">
+                  {groupIdPrefixError}
+                </p>
               )}
               <div className="flex items-center gap-3 pt-1">
                 <Switch

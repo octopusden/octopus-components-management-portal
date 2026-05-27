@@ -436,14 +436,19 @@ describe('buildUpdateRequest — labels + systems dirty-gate matrix (ui-swift-sl
     expect(req.labels).toBeUndefined()
   })
 
-  it('(labels-b) user toggles a label off so dirty + empty → labels omitted (no explicit clear)', () => {
+  it('(labels-b) user toggles ALL labels off → dirty + empty → labels:[] (explicit clear, PR #44 P2 fix)', () => {
+    // Labels is OPTIONAL server-side (unlike systems which is required), so
+    // "clear all" is a valid user intent. The previous version silently
+    // dropped this case, producing the success-toast-but-server-unchanged
+    // bug. The dirty-gate still guards against the pre-hydration clobber
+    // (no-dirty + empty → omit), but dirty + empty now emits [] explicitly.
     const req = buildUpdateRequest({
       component: makeComponent({ labels: ['backend'] }),
       values: makeValues({ labels: [] }),
       visibilities: EDITABLE,
       dirtyFields: { labels: true },
     })
-    expect(req.labels).toBeUndefined()
+    expect(req.labels).toEqual([])
   })
 
   it('(labels-c) user adds a label → dirty + non-empty → array forwarded', () => {

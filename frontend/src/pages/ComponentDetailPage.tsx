@@ -147,6 +147,38 @@ export function ComponentDetailPage() {
     // text behind.
     form.clearErrors()
 
+    // PR #44 P2 (systems): block save if the user emptied the Systems
+    // multi-select. systems is REQUIRED server-side, and buildUpdateRequest
+    // omits the field on empty (so we don't 400) — but that combination
+    // means the server keeps the prior list while the user just clicked
+    // "clear all". Surface the constraint inline so the user can recover
+    // (pick a value) or revert (re-add the prior selection) instead of
+    // walking away thinking their clear took.
+    //
+    // Gate semantics: compare form value against server `component.systems`
+    // rather than RHF's `dirtyFields.system`. RHF doesn't mark an array
+    // field dirty when setValue's new value equals defaultValues (and the
+    // form default IS `[]`), so a clear-all flow leaves the dirty flag
+    // false even though the user explicitly cleared the list. The
+    // "server had systems, form has none" comparison captures the same
+    // intent without depending on RHF's internals.
+    //
+    // Skip when field-config hides the field (admin can't fix it from the
+    // form). The narrow pre-hydration race — server has systems, form is
+    // still the `[]` default — fails closed: user re-clicks Save once
+    // GeneralTab's useEffect mirrors the server state.
+    if (systemFc.visibility !== 'hidden') {
+      const systemValue = form.getValues('system') ?? []
+      const priorSystems = component.systems ?? []
+      if (priorSystems.length > 0 && systemValue.length === 0) {
+        form.setError('system', {
+          type: 'required',
+          message: 'At least one system is required',
+        })
+        return
+      }
+    }
+
     // ui-swift-sloth §3.5: block the save if the user typed something into
     // Group Key that violates the contract — either by emptying a dirty
     // field, or by entering a value with a disallowed prefix. Both would
@@ -164,7 +196,13 @@ export function ComponentDetailPage() {
         form.setError('groupId', { type: 'required', message: 'Group Key is required' })
         return
       }
-      if (trimmed !== '' && supportedGroupsList.length > 0) {
+      // PR #44 comment (copilot-pull-request-reviewer, 2026-05-27): also
+      // gate the prefix check on `groupIdDirty`. Legacy components with a
+      // stored groupKey that doesn't match the current supported-prefix
+      // list (admin reconfigured the list mid-life) must remain saveable
+      // for unrelated field changes — otherwise the user can't fix a typo
+      // in displayName without first updating the groupKey.
+      if (groupIdDirty && trimmed !== '' && supportedGroupsList.length > 0) {
         const v = trimmed.toLowerCase()
         const ok = supportedGroupsList.some((p) => {
           const lp = p.toLowerCase()

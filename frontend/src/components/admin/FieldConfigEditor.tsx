@@ -103,6 +103,21 @@ function readEntry(
     entry = flat.fields?.[`${row.section}.${row.fieldName}`] ?? flat.fields?.[row.fieldName]
   }
 
+  // PR #44 P3: locked rows pin visibility + required to the contract values.
+  // `locked: true` means the field is mandatory server-side; the disabled UI
+  // cells must reflect that truth regardless of stored data (fresh DB → no
+  // entry; stale config with `hidden` / `required: false` → ignore the stale
+  // values). defaultValue + description stay editable, so they round-trip
+  // through the stored entry.
+  if (row.locked) {
+    return {
+      visibility: 'editable',
+      required: true,
+      defaultValue: entry?.defaultValue ?? '',
+      description: entry?.description ?? '',
+    }
+  }
+
   return {
     visibility: entry?.visibility ?? 'editable',
     required: entry?.required ?? false,
@@ -120,9 +135,17 @@ function buildOutput(draft: DraftState): Record<string, unknown> {
     const d = draft[key]
     if (!d) continue
 
+    // PR #44 P3: belt-and-braces — locked rows serialise the contract
+    // values regardless of the draft. readEntry already forces these on
+    // load, but a manually-built/poisoned draft (or a future hook that
+    // mutates the draft outside the disabled cells) must still produce a
+    // contract-correct payload on Save.
+    const visibility: FieldVisibility = row.locked ? 'editable' : d.visibility
+    const required: boolean = row.locked ? true : d.required
+
     const entry: FieldConfigEntry = {
-      visibility: d.visibility,
-      required: d.required,
+      visibility,
+      required,
     }
     if (d.defaultValue) entry.defaultValue = d.defaultValue
     if (d.description) entry.description = d.description
