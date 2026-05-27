@@ -24,10 +24,13 @@ import { useSupportedGroups } from '../hooks/useSupportedGroups'
 import { ApiError } from '../lib/api'
 import { suggestGroupId } from '../lib/groupId'
 
-// Maven groupId charset — the same characters `suggestGroupId` is willing to
-// emit. We don't enforce length here; the supported-prefix check is the real
-// gate.
-const GROUP_ID_PATTERN = /^[a-zA-Z0-9._-]+$/
+// Maven groupId charset — exactly what `suggestGroupId` emits. PR #44 review
+// (Copilot): tightened from `[a-zA-Z0-9._-]+` to `[a-z0-9.]+` so the
+// validation regex matches the helper's output and rejects shapes the helper
+// would have collapsed (uppercase / `_` / `-`). Users who type a value with
+// rejected characters get a deterministic error instead of submitting a
+// groupId that doesn't round-trip through suggestGroupId.
+const GROUP_ID_PATTERN = /^[a-z0-9.]+$/
 
 const createSchema = z.object({
   name: z
@@ -38,7 +41,7 @@ const createSchema = z.object({
   groupId: z
     .string()
     .min(1, 'Group ID is required')
-    .regex(GROUP_ID_PATTERN, 'Group ID can only contain letters, digits, ., _, -'),
+    .regex(GROUP_ID_PATTERN, 'Group ID can only contain lowercase letters, digits, and dots'),
   buildSystem: z.string().min(1, 'Build System is required'),
   componentOwner: z.string().optional(),
   distributionExplicit: z.boolean(),
@@ -65,7 +68,15 @@ export function CreateComponentDialog({ open, onOpenChange }: CreateComponentDia
     isLoading: groupIdConfigLoading,
     isError: groupIdConfigError,
   } = useFieldConfigEntry('component.groupId')
-  const parentGroup = groupIdConfig.defaultValue ?? ''
+  // PR #44 review (Sonnet): lowercase the admin-configured parent before
+  // baking it into the auto-suggested groupId. The Zod regex (line 30)
+  // enforces lowercase-only output of `suggestGroupId`; if an admin
+  // configured `component.groupId.defaultValue` as e.g. `Org.Example`,
+  // the un-lowercased suggestion would auto-fill a value that fails the
+  // form-level regex, blocking submit on a value the user never typed.
+  // The supported-prefix check is already case-insensitive, so dropping
+  // case here only affects the visible suggestion, not the prefix match.
+  const parentGroup = (groupIdConfig.defaultValue ?? '').toLowerCase()
 
   // Allowed groupId prefixes — loud error policy: do NOT swallow failures.
   // While `isLoading` or `isError`, we keep Submit disabled and surface a

@@ -78,6 +78,11 @@ export function EnumSelect({
           value={value}
           onChange={(e) => onValueChange(e.target.value)}
           placeholder={placeholder}
+          // PR #44 review (Copilot): forward disabled to the free-text
+          // branch — consumers expect the same gating in all three render
+          // paths. Without this a `disabled` EnumSelect with an empty
+          // dictionary stays editable.
+          disabled={disabled}
           {...triggerA11y}
         />
       )

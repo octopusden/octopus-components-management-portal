@@ -179,6 +179,48 @@ describe('CreateComponentDialog — validation', () => {
     expect(mockMutateAsync).not.toHaveBeenCalled()
   })
 
+  it('rejects groupId with uppercase / underscore / hyphen (PR #44 review — tightened to match suggestGroupId output)', async () => {
+    // suggestGroupId only emits lowercase letters, digits, and dots — it
+    // collapses uppercase / underscore / hyphen runs into a dot. The
+    // pattern regex was previously [a-zA-Z0-9._-]+, which accepted shapes
+    // the helper would never produce, leading to drift between
+    // auto-suggested groupIds and manually-typed ones. The tightened
+    // regex `^[a-z0-9.]+$` matches the helper's output exactly and gives
+    // users a deterministic validation message.
+    setDefaultSupportedGroupsMock(['org.example'])
+    renderWithProviders(<CreateComponentButton />)
+    await openDialog()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    const groupId = screen.getByLabelText(/group id/i) as HTMLInputElement
+
+    // Uppercase rejected.
+    await userEvent.clear(groupId)
+    await userEvent.type(groupId, 'Org.Example.foo')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() =>
+      expect(screen.getByText(/lowercase letters, digits, and dots/i)).toBeDefined(),
+    )
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+
+    // Underscore rejected.
+    await userEvent.clear(groupId)
+    await userEvent.type(groupId, 'org.example.my_lib')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() =>
+      expect(screen.getByText(/lowercase letters, digits, and dots/i)).toBeDefined(),
+    )
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+
+    // Hyphen rejected.
+    await userEvent.clear(groupId)
+    await userEvent.type(groupId, 'org.example.my-lib')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() =>
+      expect(screen.getByText(/lowercase letters, digits, and dots/i)).toBeDefined(),
+    )
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+
   it('enforces the dot boundary when matching the allowed prefix', async () => {
     setDefaultSupportedGroupsMock(['com.example'])
     renderWithProviders(<CreateComponentButton />)
@@ -205,6 +247,22 @@ describe('CreateComponentDialog — groupId auto-suggest', () => {
     await waitFor(() =>
       expect(groupId.value).toBe('org.example.parent.widget.svc'),
     )
+  })
+
+  it('lowercases an uppercase-configured parent so the auto-suggested value passes the Zod regex (PR #44 review)', async () => {
+    // Admin configured the field-config defaultValue with mixed-case
+    // (helper docstring "parent passed through unchanged"). The tightened
+    // GROUP_ID_PATTERN rejects uppercase, so without the call-site
+    // lowercase normalisation the auto-suggested value would fail Zod
+    // and the user couldn't submit a value they never typed.
+    setDefaultFieldConfigMock({ groupIdDefault: 'Org.Example.Parent' })
+    renderWithProviders(<CreateComponentButton />)
+    await openDialog()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget-svc')
+    const groupId = screen.getByLabelText(/group id/i) as HTMLInputElement
+    await waitFor(() => expect(groupId.value).toBe('org.example.parent.widget.svc'))
+    // The auto-suggested value satisfies the regex — no inline error.
+    expect(screen.queryByText(/lowercase letters, digits, and dots/i)).toBeNull()
   })
 
   it('stops auto-suggesting once the user edits groupId manually', async () => {

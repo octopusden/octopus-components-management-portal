@@ -1,25 +1,22 @@
+import type { ChangeEvent } from 'react'
 import { X } from 'lucide-react'
 import { Badge } from './badge'
 import { cn } from '../../lib/utils'
 
 /**
  * Chips/tags multi-select primitive. Renders the current values as removable
- * badges + an inline "Add X" picker populated from `options - value`
+ * badges + a native `<select>` "Add X" picker populated from `options - value`
  * (dictionary-backed, no free-text path).
  *
- * Why a native `<select>` for the add control: shadcn/Radix Select renders
- * its option list in a portal that's awkward to drive deterministically
- * under jsdom (the `MultiSelectFilter` popover + EnumSelect tests both
- * have to special-case the trigger interaction). The native `<select>`
- * gives us:
- *   - a single accessible element a `<Label htmlFor>` can target via `id`,
+ * The add control is a native `<select>` rather than a Radix portal. Reasons:
+ *   - one accessible element a `<Label htmlFor>` can target via `id`,
  *   - first-class keyboard support without ARIA scaffolding,
- *   - trivially testable `userEvent.selectOptions` semantics.
- * The visual surface stays consistent with the rest of the editor because
- * we restyle the native control with the same input border + sizing classes
- * already used by `<Input>` / shadcn `<SelectTrigger>`. The CSS native-option
- * dropdown is a known visual divergence vs. a Radix popover; chosen here
- * for simplicity over per-test scaffolding.
+ *   - trivially testable via `userEvent.selectOptions`,
+ *   - visual surface restyled with the same input border + sizing classes
+ *     already used by `<Input>` / shadcn `<SelectTrigger>`.
+ * The native option-list visual is a known divergence vs. a Radix popover;
+ * chosen here for simplicity. Revisit if/when a shared Combobox primitive
+ * lands.
  *
  * Wire contract: parent owns the `value` array. ChipsInput never mutates
  * server state; it only emits a new array via `onChange`. The empty array
@@ -76,11 +73,16 @@ export function ChipsInput({
 }: ChipsInputProps) {
   const availableToAdd = options.filter((o) => !value.includes(o))
 
-  const handleRemove = (val: string) => {
-    onChange(value.filter((v) => v !== val))
+  // Remove-by-index (PR #44 review): if the value array ever holds
+  // duplicates (server-data malformed import / double-add bug), filtering
+  // by value would wipe every chip matching the clicked one. Removing by
+  // position keeps the duplicate-render and the click-target independent
+  // — each chip × removes exactly its own slot.
+  const handleRemove = (idx: number) => {
+    onChange(value.filter((_, i) => i !== idx))
   }
 
-  const handleAdd = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleAdd = (e: ChangeEvent<HTMLSelectElement>) => {
     const picked = e.target.value
     if (!picked) return
     // Pick-then-clear: reset the controlled select to '' so picking the
@@ -113,7 +115,7 @@ export function ChipsInput({
                 type="button"
                 aria-label={`Remove ${val}`}
                 disabled={disabled}
-                onClick={() => handleRemove(val)}
+                onClick={() => handleRemove(idx)}
                 className={cn(
                   'inline-flex h-4 w-4 items-center justify-center rounded-full',
                   'hover:bg-secondary-foreground/15 focus:outline-none focus:ring-2 focus:ring-ring',

@@ -209,4 +209,25 @@ describe('EnumSelect — accessibility props forwarded to the trigger', () => {
     expect(input).toHaveAttribute('id', 'buildSystem')
     expect(input).toHaveAttribute('aria-required', 'true')
   })
+
+  it('forwards `disabled` to the free-text Input branch (PR #44 review)', () => {
+    // The Select branches all honour `disabled` via Radix's disabled prop.
+    // The free-text Input fallback (`allowFreeText` + empty dictionary)
+    // also has to honour it — otherwise consumers can't reliably gate the
+    // control with `disabled`. Stream B nit that survived into the editor.
+    mockUseFieldOptions.mockReturnValue({ options: [], isLoading: false })
+
+    render(
+      <EnumSelect
+        fieldPath="buildSystem"
+        value=""
+        onValueChange={() => {}}
+        allowFreeText
+        disabled
+      />,
+    )
+
+    const input = screen.getByRole('textbox') as HTMLInputElement
+    expect(input.disabled).toBe(true)
+  })
 })

@@ -3,13 +3,11 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ChipsInput } from './ChipsInput'
 
-// Radix Select uses a popover that doesn't open under jsdom's pointer-event
-// stubs the same way it does in a real browser. The add-control test below
-// works around it by interacting with the underlying option list via the
-// `data-testid="chips-add-select"` native <select> fallback that
-// ChipsInput.tsx emits when running under jsdom (no Radix portal needed).
-// If a future implementation uses a Radix popover, switch these tests to
-// the same pattern the EnumSelect tests use (open trigger → click option).
+// ChipsInput's add control is a native <select> (see ChipsInput.tsx header
+// for the rationale). Tests drive it with userEvent.selectOptions and
+// assert via the testid `chips-add-select`. If the implementation ever
+// moves to a Radix popover trigger, switch these tests to the pattern the
+// EnumSelect tests use (open trigger → click option).
 
 describe('ChipsInput — rendering', () => {
   it('renders each value as a badge', () => {
@@ -177,6 +175,29 @@ describe('ChipsInput — interactions', () => {
     // Two chips must render even though both have the same value.
     const removeButtons = container.querySelectorAll('button[aria-label^="Remove "]')
     expect(removeButtons.length).toBe(2)
+  })
+
+  it('clicking × on a duplicate chip removes ONLY that one (remove-by-index, PR #44 review)', async () => {
+    // The defensive duplicate-render is wasted if handleRemove still
+    // filters by value — clicking one × would wipe every duplicate.
+    // Switch to remove-by-index so each chip is independently removable.
+    const onChange = vi.fn()
+    const { container } = render(
+      <ChipsInput
+        value={['a', 'a', 'b']}
+        onChange={onChange}
+        options={['a', 'b']}
+        placeholder="Add label"
+      />,
+    )
+    // Click the FIRST × button.
+    const removeButtons = container.querySelectorAll(
+      'button[aria-label^="Remove "]',
+    ) as NodeListOf<HTMLButtonElement>
+    await userEvent.click(removeButtons[0]!)
+    // Result keeps the second 'a' and the 'b' — not [['b']] (which the
+    // value-filter would produce).
+    expect(onChange).toHaveBeenCalledWith(['a', 'b'])
   })
 })
 
