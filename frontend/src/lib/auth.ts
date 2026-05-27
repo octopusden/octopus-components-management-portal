@@ -65,7 +65,7 @@ export function rememberContinuePath(path: string): void {
  * Returns the path we redirected to, or null if nothing to do.
  */
 export function restoreContinuePath(): string | null {
-  let stashed: string | null = null
+  let stashed: string | null
   try {
     stashed = sessionStorage.getItem(CONTINUE_PATH_STORAGE_KEY)
   } catch {
