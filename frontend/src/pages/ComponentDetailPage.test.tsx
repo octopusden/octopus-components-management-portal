@@ -106,7 +106,7 @@ const baseComponent: ComponentDetail = {
   displayName: 'My Component',
   componentOwner: 'alice',
   productType: 'TYPE_A',
-  systems: ['SYS1'],
+  system: 'SYS1',
   // ui-swift-sloth §3.5: group is required server-side, so the fixture seeds
   // a valid groupKey to exercise the post-guard save path. Tests that need to
   // hit the empty/disallowed-prefix code path override this per-call.
@@ -238,7 +238,7 @@ beforeEach(() => {
     isLoading: false,
     isError: false,
   }))
-  // Default GeneralTab stub. Hydrates `system` from `component.systems`
+  // Default GeneralTab stub. Hydrates `system` from `component.system`
   // so the page-level save guard (PR #44 P2 systems — "server had
   // systems, form has none" blocks the save) doesn't false-positive on
   // tests that never touch the systems field. Mirrors the real
@@ -247,7 +247,7 @@ beforeEach(() => {
   // specific scenarios (e.g. the clear-all-systems guard).
   vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
     useEffect(() => {
-      form.setValue('system', component.systems?.[0] ?? '')
+      form.setValue('system', component.system ?? '')
     }, [component, form])
     return React.createElement('div', { 'data-testid': 'general-tab' })
   })
@@ -346,7 +346,7 @@ describe('ComponentDetailPage — breadcrumb badges', () => {
 
   it('(e) System badge not rendered when system array is empty', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
-    renderPage({ ...baseComponent, systems: [] }, user)
+    renderPage({ ...baseComponent, system: null }, user)
     expect(screen.queryByText('SYS1')).toBeNull()
   })
 
@@ -564,8 +564,8 @@ describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => 
     vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
       useEffect(() => {
         // Hydrate system too — the PR #44 P2 systems guard reads
-        // component.systems vs form.system and would otherwise block save.
-        form.setValue('system', component.systems?.[0] ?? '')
+        // component.system vs form.system and would otherwise block save.
+        form.setValue('system', component.system ?? '')
         form.setValue(
           'teamcityProjects',
           (component.teamcityProjects ?? []).map((tc) => ({ projectId: tc.projectId })),
@@ -645,7 +645,7 @@ describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => 
     vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
       useEffect(() => {
         // Hydrate system so the PR #44 P2 systems guard doesn't block save.
-        form.setValue('system', component.systems?.[0] ?? '')
+        form.setValue('system', component.system ?? '')
         form.setValue('teamcityProjects', [{ projectId: 'OnlyId_Build' }, { projectId: '  ' }])
       }, [component, form])
       return React.createElement('div', { 'data-testid': 'general-tab-partial' })
@@ -697,7 +697,7 @@ describe('ComponentDetailPage — system clear-blocks-save guard (task #14 singl
     // green toast, and walk away thinking the clear took (server keeps
     // the original list since the field was absent on the wire).
     // Stub leaves form.system at the '' default while baseComponent
-    // (`systems: ['SYS1']`) has the prior list.
+    // (`system: 'SYS1'`) has the prior list.
     vi.mocked(GeneralTab).mockImplementation(() =>
       React.createElement('div', { 'data-testid': 'general-tab-systems-cleared' }),
     )
@@ -721,7 +721,7 @@ describe('ComponentDetailPage — system clear-blocks-save guard (task #14 singl
     // so we cannot demand the user select one. buildUpdateRequest already
     // omits systems on hidden visibility.
     mockedUseFieldConfigEntry.mockImplementation((path: string) => ({
-      entry: path === 'component.systems'
+      entry: path === 'component.system'
         ? { visibility: 'hidden' as const, required: false }
         : { visibility: 'editable' as const, required: false },
       isLoading: false,
@@ -768,7 +768,7 @@ describe('ComponentDetailPage — labels clear-all sends [] (PR #44 follow-up: c
         form.setValue('labels', component.labels ?? [])
         form.setValue('labels', [], { shouldDirty: true, shouldTouch: true })
         // Hydrate systems too so the unrelated systems guard doesn't trip.
-        form.setValue('system', component.systems?.[0] ?? '')
+        form.setValue('system', component.system ?? '')
       }, [component, form])
       return React.createElement('div', { 'data-testid': 'general-tab-labels-cleared' })
     })

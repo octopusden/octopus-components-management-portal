@@ -25,7 +25,7 @@ interface EnumSelectProps {
    * internal `useFieldOptions(fieldPath)` call and renders from this
    * array directly. Use case: the System editor (task #14) needs the
    * FULL dictionary (`/components/meta/systems/dictionary`) rather than
-   * the in-use-values endpoint that `useFieldOptions('component.systems')`
+   * the in-use-values endpoint that `useFieldOptions('component.system')`
    * falls back to — otherwise a newly-defined dictionary value with no
    * existing component assignment would be invisible in the editor.
    */

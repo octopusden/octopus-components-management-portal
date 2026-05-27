@@ -71,7 +71,7 @@ function baseComponent(overrides: Partial<ComponentDetail> = {}): ComponentDetai
     displayName: 'My Component',
     componentOwner: 'alice',
     productType: '',
-    systems: [],
+    system: null,
     clientCode: null,
     solution: false,
     parentComponentName: null,
@@ -100,10 +100,9 @@ function Harness({ component, formRef }: { component: ComponentDetail; formRef?:
       displayName: component.displayName ?? '',
       componentOwner: component.componentOwner ?? '',
       productType: component.productType ?? '',
-      // Task #14: system is single-select (scalar) in the domain. Hydrate
-      // from the first element of the array-shaped DTO until CRS task #7
-      // collapses `systems: string[]` → `system: string?`.
-      system: component.systems?.[0] ?? '',
+      // CRS PR #301: system is scalar `string | null` end-to-end (DTO +
+      // form). Hydrate directly; the array-wrap bridge from PR #45 is gone.
+      system: component.system ?? '',
       labels: component.labels ?? [],
       clientCode: component.clientCode ?? '',
       solution: component.solution ?? false,
@@ -300,10 +299,10 @@ describe('GeneralTab visibility-gating', () => {
 
   it('system hidden → System single-select NOT rendered (task #14)', () => {
     mockUseFieldConfigEntry.mockImplementation((path: string) => {
-      if (path === 'component.systems') return makeEntry('hidden')
+      if (path === 'component.system') return makeEntry('hidden')
       return makeEntry('editable')
     })
-    const component = baseComponent({ systems: ['SYS1'] })
+    const component = baseComponent({ system: 'SYS1' })
     renderWithProviders(<Harness component={component} />)
 
     // EnumSelect renders a SelectTrigger with role=combobox labelled
@@ -313,10 +312,10 @@ describe('GeneralTab visibility-gating', () => {
 
   it('system readonly → System single-select rendered disabled (task #14)', () => {
     mockUseFieldConfigEntry.mockImplementation((path: string) => {
-      if (path === 'component.systems') return makeEntry('readonly')
+      if (path === 'component.system') return makeEntry('readonly')
       return makeEntry('editable')
     })
-    const component = baseComponent({ systems: ['SYS1'] })
+    const component = baseComponent({ system: 'SYS1' })
     renderWithProviders(<Harness component={component} />)
 
     // EnumSelect renders a SelectTrigger (Radix) with role=combobox.
@@ -365,22 +364,19 @@ describe('GeneralTab visibility-gating', () => {
 // registered (setValue called with original value) but the save handler is
 // responsible for mapping it to undefined. This test verifies the form renders
 // the expected structure so the page-level filter can operate correctly.
-describe('GeneralTab system field hidden → form value contract (task #14)', () => {
-  it('when system is hidden, the form still initialises system from component.systems[0] (page filters to undefined on save)', () => {
+describe('GeneralTab system field hidden → form value contract (CRS #301)', () => {
+  it('when system is hidden, the form still initialises system from component.system (page filters to undefined on save)', () => {
     mockUseFieldConfigEntry.mockImplementation((path: string) => {
-      if (path === 'component.systems') return makeEntry('hidden')
+      if (path === 'component.system') return makeEntry('hidden')
       return makeEntry('editable')
     })
     const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
-    const component = baseComponent({ systems: ['SYS1', 'SYS2'] })
+    const component = baseComponent({ system: 'SYS1' })
     renderWithProviders(<Harness component={component} formRef={formRef} />)
 
     // EnumSelect not rendered (hidden)
     expect(screen.queryByText(/^system$/i)).toBeNull()
-    // Task #14 single-select: hydrate the scalar form field from the
-    // first element of the array-shaped DTO. If a DTO ever carries more
-    // than one element (out-of-contract data), the extras stay on the
-    // server snapshot until CRS task #7 collapses the wire shape.
+    // Scalar form field hydrates directly from `component.system`.
     const val = formRef.current?.getValues('system')
     expect(val).toBe('SYS1')
   })
@@ -718,7 +714,7 @@ describe('GeneralTab server error display (S3.1a)', () => {
   it('setError("system") renders the message under the System single-select', async () => {
     setAllEditable()
     const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
-    renderWithProviders(<Harness component={baseComponent({ systems: ['SYS1'] })} formRef={formRef} />)
+    renderWithProviders(<Harness component={baseComponent({ system: 'SYS1' })} formRef={formRef} />)
 
     await act(async () => {
       formRef.current?.setError('system', { type: 'server', message: 'must not be null' })
@@ -758,10 +754,10 @@ describe('GeneralTab — FieldOverrideInline gating (schema-v2 contract)', () =>
 // ---------------------------------------------------------------------------
 
 describe('GeneralTab — system single-select + labels chips (task #14)', () => {
-  it('hydrates system single-select from component.systems[0] (task #14)', () => {
+  it('hydrates system single-select from component.system[0] (task #14)', () => {
     setAllEditable()
     const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
-    const component = baseComponent({ systems: ['SYS1'] })
+    const component = baseComponent({ system: 'SYS1' })
     renderWithProviders(<Harness component={component} formRef={formRef} />)
     // Form value is the scalar 'SYS1', not ['SYS1'].
     expect(formRef.current?.getValues('system')).toBe('SYS1')
@@ -775,7 +771,7 @@ describe('GeneralTab — system single-select + labels chips (task #14)', () => 
     // useSystemsDictionary returns `SYS_NEW_DICT_ONLY` which has no
     // component reference — verify the dropdown still surfaces it.
     setAllEditable()
-    const component = baseComponent({ systems: ['SYS1'] })
+    const component = baseComponent({ system: 'SYS1' })
     renderWithProviders(<Harness component={component} />)
 
     // Open the single-select trigger and confirm the dictionary-only
@@ -787,16 +783,13 @@ describe('GeneralTab — system single-select + labels chips (task #14)', () => 
     expect(screen.getByRole('option', { name: 'SYS_NEW_DICT_ONLY' })).toBeDefined()
   })
 
-  it('hydrates from an array-shaped DTO with multiple elements via the first element (task #14)', () => {
-    // System is single-value in the domain. The current `systems:
-    // string[]` DTO is a wire-shape artifact that CRS task #7 will
-    // collapse to scalar. If a DTO ever carries more than one element
-    // — that's out-of-contract / malformed data, not a supported
-    // multi-value mode — the single-select hydrates from the first
-    // element and the rest stay on the server snapshot.
+  it('hydrates the single-select from the scalar component.system field (CRS #301)', () => {
+    // Single-value scalar both in the DTO (CRS PR #301) and in the form.
+    // The hydration useEffect mirrors `component.system` directly into
+    // the EnumSelect's controlled value.
     setAllEditable()
     const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
-    const component = baseComponent({ systems: ['SYS_A', 'SYS_B'] })
+    const component = baseComponent({ system: 'SYS_A' })
     renderWithProviders(<Harness component={component} formRef={formRef} />)
     expect(formRef.current?.getValues('system')).toBe('SYS_A')
   })
@@ -836,7 +829,7 @@ describe('GeneralTab — system single-select + labels chips (task #14)', () => 
     // returns early, and the UI gives no visible feedback.
     setAllEditable()
     const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
-    renderWithProviders(<Harness component={baseComponent({ systems: ['SYS1'] })} formRef={formRef} />)
+    renderWithProviders(<Harness component={baseComponent({ system: 'SYS1' })} formRef={formRef} />)
 
     await act(async () => {
       formRef.current?.setError('system', { type: 'required', message: 'At least one system is required' })

@@ -67,12 +67,9 @@ export interface GeneralFormValues {
   /** productType stays in GeneralFormValues (still part of the ComponentDetail
    *  DTO) but is rendered and saved from EscrowTab (§7.0/2c migration). */
   productType: string
-  // Task #14: System is single-value in the domain (Build-System-style UX).
-  // The CRS v4 DTO currently exposes it as the array-shaped
-  // `systems: string[]`; the form holds a scalar and buildUpdateRequest
-  // wraps as `systems: [value]` on the wire. Drop the wrap once CRS task
-  // #7 collapses the DTO to scalar. Labels remain `string[]` (chips UX,
-  // which IS multi-value).
+  // System is single-value per component (CRS PR #301 collapsed the
+  // legacy `systems: Set<String>` DTO to scalar). Build-System-style
+  // EnumSelect UX. Labels remain `string[]` (chips UX, multi-value).
   system: string
   clientCode: string
   solution: boolean
@@ -197,7 +194,7 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
   // Field-config visibility entries — section-prefixed paths per ADR-011
   const { entry: displayNameEntry } = useFieldConfigEntry('component.displayName')
   const { entry: componentOwnerEntry } = useFieldConfigEntry('component.componentOwner')
-  const { entry: systemEntry } = useFieldConfigEntry('component.systems')
+  const { entry: systemEntry } = useFieldConfigEntry('component.system')
   const { entry: clientCodeEntry } = useFieldConfigEntry('component.clientCode')
   // SYS-039 fields
   const { entry: groupIdEntry } = useFieldConfigEntry('component.groupId')
@@ -222,13 +219,9 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
     setValue('displayName', component.displayName ?? '')
     setValue('componentOwner', component.componentOwner ?? '')
     setValue('productType', component.productType ?? '')
-    // Task #14: DTO is array-shaped today (`systems: string[]`), but the
-    // UI/domain contract is single-value. Hydrate the scalar form field
-    // from the first element of the array as the bridge until CRS task
-    // #7 removes the array shape. If a component's DTO carries more than
-    // one element that's out-of-contract / malformed data — not a
-    // supported multi-value mode.
-    setValue('system', component.systems?.[0] ?? '')
+    // CRS PR #301: scalar DTO field, hydrate directly. The `?.[0]` bridge
+    // from task #14 is now obsolete.
+    setValue('system', component.system ?? '')
     setValue('clientCode', component.clientCode ?? '')
     setValue('solution', component.solution ?? false)
     setValue('archived', component.archived)
@@ -541,21 +534,19 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
         <section data-testid="section-metadata">
           <h3 className="text-sm font-medium text-muted-foreground mb-3">Metadata</h3>
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            {/* System — single-select EnumSelect (task #14). Matches the
-                Build System UX. We pass the FULL systems dictionary via
-                `optionsOverride` rather than relying on EnumSelect's
-                default `useFieldOptions('component.systems')` fallback
-                — that fallback hits the in-use endpoint, which would
-                hide newly-defined dictionary values that no component is
-                attached to yet. The DTO stays array-shaped on the wire;
-                buildUpdateRequest wraps the scalar form value as
-                `systems: [value]` until CRS task #7 collapses to scalar. */}
+            {/* System — single-select EnumSelect. Matches the Build System
+                UX. We pass the FULL systems dictionary via `optionsOverride`
+                rather than relying on EnumSelect's default
+                `useFieldOptions('component.system')` fallback — that
+                fallback hits the in-use endpoint, which would hide
+                newly-defined dictionary values that no component is
+                attached to yet. */}
             {systemEntry.visibility !== 'hidden' && (
               <div className="space-y-1.5">
                 <Label htmlFor="component-system">System</Label>
                 <EnumSelect
                   id="component-system"
-                  fieldPath="component.systems"
+                  fieldPath="component.system"
                   value={systemValue ?? ''}
                   onValueChange={(v) =>
                     setValue('system', v, { shouldDirty: true, shouldTouch: true })

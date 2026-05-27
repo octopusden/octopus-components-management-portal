@@ -10,7 +10,7 @@ function makeComponent(overrides: Partial<ComponentDetail> = {}): ComponentDetai
     displayName: 'Service Alpha',
     componentOwner: 'alice',
     productType: 'TYPE_A',
-    systems: ['SYS1'],
+    system: 'SYS1',
     clientCode: null,
     archived: false,
     solution: false,
@@ -34,9 +34,8 @@ function makeValues(overrides: Partial<GeneralFormValues> = {}): GeneralFormValu
     displayName: 'Service Alpha',
     componentOwner: 'alice',
     productType: 'TYPE_A',
-    // system: single-select bridge (task #14) — form holds a single string,
-    // buildUpdateRequest wraps as `systems: [value]` on the wire until CRS
-    // task #7 collapses the Set<String> to String?.
+    // system: scalar string both in the form and on the wire (CRS PR #301
+    // collapsed Component.systems Set<String> → Component.system String?).
     // labels stays string[] (multi-value via chips UX).
     system: 'SYS1',
     clientCode: '',
@@ -60,7 +59,7 @@ function makeValues(overrides: Partial<GeneralFormValues> = {}): GeneralFormValu
 const EDITABLE: FieldVisibilities = {
   displayName: 'editable',
   componentOwner: 'editable',
-  systems: 'editable',
+  system: 'editable',
   clientCode: 'editable',
   groupId: 'editable',
   releaseManager: 'editable',
@@ -112,7 +111,7 @@ describe('buildUpdateRequest — field-config hidden visibility', () => {
         ...EDITABLE,
         displayName: 'hidden',
         componentOwner: 'hidden',
-        systems: 'hidden',
+        system: 'hidden',
         clientCode: 'hidden',
         labels: 'hidden',
       },
@@ -120,7 +119,7 @@ describe('buildUpdateRequest — field-config hidden visibility', () => {
     })
     expect(req.displayName).toBeUndefined()
     expect(req.componentOwner).toBeUndefined()
-    expect(req.systems).toBeUndefined()
+    expect(req.system).toBeUndefined()
     expect(req.clientCode).toBeUndefined()
     expect(req.labels).toBeUndefined()
   })
@@ -198,15 +197,15 @@ describe('buildUpdateRequest — dirtyFields gating (pre-hydration safety)', () 
 
   it('systems form-default empty + had prior + NOT dirty → omits (pre-hydration guard)', () => {
     // Form default is `system: ''` (task #14 single-select). Without the
-    // dirty-gate a pre-hydration Save would emit `systems: []` and wipe the
+    // dirty-gate a pre-hydration Save would emit `system: null` and wipe the
     // server's list.
     const req = buildUpdateRequest({
-      component: makeComponent({ systems: ['SYS1', 'SYS2'] }),
+      component: makeComponent({ system: 'SYS1' }),
       values: makeValues({ system: '' }),
       visibilities: EDITABLE,
       dirtyFields: {},
     })
-    expect(req.systems).toBeUndefined()
+    expect(req.system).toBeUndefined()
   })
 
   it('systems dirty + empty string → omits (would otherwise send [] which CRS rejects)', () => {
@@ -214,25 +213,25 @@ describe('buildUpdateRequest — dirtyFields gating (pre-hydration safety)', () 
     // buildUpdateRequest is the belt-and-braces (omit on dirty-empty so a
     // bypassed guard still doesn't 400 the server).
     const req = buildUpdateRequest({
-      component: makeComponent({ systems: ['SYS1'] }),
+      component: makeComponent({ system: 'SYS1' }),
       values: makeValues({ system: '' }),
       visibilities: EDITABLE,
       dirtyFields: { system: true },
     })
-    expect(req.systems).toBeUndefined()
+    expect(req.system).toBeUndefined()
   })
 
-  it('systems populated + dirty → wraps single-string as systems:[value] (task #14 bridge)', () => {
-    // The form holds a single string; the wire still expects an array (CRS
-    // task #7 will collapse to scalar). buildUpdateRequest wraps on the way
-    // out so the existing CRS contract keeps working until task #7 lands.
+  it('system populated + dirty → forwards scalar string on the wire (CRS #301)', () => {
+    // CRS PR #301 collapsed Component.systems Set<String> → Component.system
+    // String?. The wire shape matches the form shape (scalar string), so
+    // buildUpdateRequest just forwards the value — no array wrap.
     const req = buildUpdateRequest({
-      component: makeComponent({ systems: ['OLD'] }),
+      component: makeComponent({ system: 'OLD' }),
       values: makeValues({ system: 'SYS1' }),
       visibilities: EDITABLE,
       dirtyFields: { system: true },
     })
-    expect(req.systems).toEqual(['SYS1'])
+    expect(req.system).toBe('SYS1')
   })
 
   it('systems dirty + whitespace-only value → omits (defensive trim, task #14)', () => {
@@ -240,12 +239,12 @@ describe('buildUpdateRequest — dirtyFields gating (pre-hydration safety)', () 
     // a paste-restore round-trip or a stale form snapshot could produce one.
     // Trim it away → effectively empty → omit (page guard blocks the save).
     const req = buildUpdateRequest({
-      component: makeComponent({ systems: ['SYS1'] }),
+      component: makeComponent({ system: 'SYS1' }),
       values: makeValues({ system: '   ' }),
       visibilities: EDITABLE,
       dirtyFields: { system: true },
     })
-    expect(req.systems).toBeUndefined()
+    expect(req.system).toBeUndefined()
   })
 
   it('empty docs + had prior + not dirty → omits; same for artifactIds', () => {
@@ -495,32 +494,32 @@ describe('buildUpdateRequest — labels + systems dirty-gate matrix (ui-swift-sl
 
   it('(systems-a) form mounts with system: \'\', untouched, save → systems omitted', () => {
     const req = buildUpdateRequest({
-      component: makeComponent({ systems: ['SYS1'] }),
+      component: makeComponent({ system: 'SYS1' }),
       values: makeValues({ system: '' }),
       visibilities: EDITABLE,
       dirtyFields: {},
     })
-    expect(req.systems).toBeUndefined()
+    expect(req.system).toBeUndefined()
   })
 
   it('(systems-b) user clears the system → dirty + empty → systems omitted (page guard blocks)', () => {
     const req = buildUpdateRequest({
-      component: makeComponent({ systems: ['SYS1'] }),
+      component: makeComponent({ system: 'SYS1' }),
       values: makeValues({ system: '' }),
       visibilities: EDITABLE,
       dirtyFields: { system: true },
     })
-    expect(req.systems).toBeUndefined()
+    expect(req.system).toBeUndefined()
   })
 
-  it('(systems-c) user picks a system → dirty + non-empty → systems:[value] wrap', () => {
+  it('(system-c) user picks a system → dirty + non-empty → scalar on the wire (CRS #301)', () => {
     const req = buildUpdateRequest({
-      component: makeComponent({ systems: [] }),
+      component: makeComponent({ system: null }),
       values: makeValues({ system: 'SYS1' }),
       visibilities: EDITABLE,
       dirtyFields: { system: true },
     })
-    expect(req.systems).toEqual(['SYS1'])
+    expect(req.system).toBe('SYS1')
   })
 
   it('non-empty labels untouched (clean) → omitted', () => {

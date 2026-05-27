@@ -214,7 +214,7 @@ describe('EnumSelect — accessibility props forwarded to the trigger', () => {
     // The override pattern lets a caller pin the data source — useful
     // when the field-config map for `fieldPath` would fall back to an
     // endpoint that returns the wrong slice of data (e.g. in-use values
-    // vs full dictionary for `component.systems`).
+    // vs full dictionary for `component.system`).
     // The mock here would return `['MAVEN', 'GRADLE']` if EnumSelect
     // consulted it, but the override of `['CUSTOM_A', 'CUSTOM_B']` wins.
     mockUseFieldOptions.mockReturnValue({

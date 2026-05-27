@@ -70,9 +70,9 @@ export function ComponentDetailPage() {
     useFieldConfigEntry('component.displayName')
   const { entry: componentOwnerFc, isLoading: componentOwnerFcLoading } =
     useFieldConfigEntry('component.componentOwner')
-  // field-config registry key is `component.systems` to match the v4 DTO
-  // field (plural). The legacy `component.system` key is migrated server-side.
-  const { entry: systemFc, isLoading: systemFcLoading } = useFieldConfigEntry('component.systems')
+  // CRS PR #301: scalar `component.system` field-config key (renamed
+  // from plural `component.systems` along with the DTO collapse).
+  const { entry: systemFc, isLoading: systemFcLoading } = useFieldConfigEntry('component.system')
   const { entry: clientCodeFc, isLoading: clientCodeFcLoading } =
     useFieldConfigEntry('component.clientCode')
   // SYS-039 FC entries
@@ -160,34 +160,29 @@ export function ComponentDetailPage() {
     // text behind.
     form.clearErrors()
 
-    // PR #44 P2 (systems): block save if the user emptied the Systems
-    // multi-select. systems is REQUIRED server-side, and buildUpdateRequest
-    // omits the field on empty (so we don't 400) — but that combination
-    // means the server keeps the prior list while the user just clicked
-    // "clear all". Surface the constraint inline so the user can recover
-    // (pick a value) or revert (re-add the prior selection) instead of
-    // walking away thinking their clear took.
+    // System is REQUIRED server-side (CRS PR #301 keeps the not-null
+    // constraint, just renamed). buildUpdateRequest omits the field on
+    // empty (so we don't 400), but that combination means the server
+    // keeps the prior value while the user just cleared the dropdown.
+    // Surface the constraint inline so the user can recover or revert
+    // instead of walking away thinking their clear took.
     //
-    // Gate semantics: compare form value against server `component.systems`
-    // rather than RHF's `dirtyFields.system`. RHF doesn't mark an array
-    // field dirty when setValue's new value equals defaultValues (and the
-    // form default IS `[]`), so a clear-all flow leaves the dirty flag
-    // false even though the user explicitly cleared the list. The
-    // "server had systems, form has none" comparison captures the same
-    // intent without depending on RHF's internals.
+    // Gate semantics: compare form value against the server's
+    // `component.system` rather than RHF's `dirtyFields.system`. RHF
+    // doesn't mark the field dirty when setValue's new value equals the
+    // form default ('' here), so a clear-then-save flow can leave the
+    // dirty flag false. The "server had a system, form has none"
+    // comparison captures the user intent without depending on RHF
+    // internals.
     //
-    // Skip when field-config hides the field (admin can't fix it from the
-    // form). The narrow pre-hydration race — server has systems, form is
-    // still the `[]` default — fails closed: user re-clicks Save once
-    // GeneralTab's useEffect mirrors the server state.
+    // Skip when field-config hides the field (admin can't fix it from
+    // the form). The narrow pre-hydration race — server has a system,
+    // form is still the `''` default — fails closed: user re-clicks
+    // Save once GeneralTab's useEffect mirrors the server state.
     if (systemFc.visibility !== 'hidden') {
-      // Task #14: `system` is a scalar string (single-select). Same intent
-      // as the previous multi-select guard — block save when the server had
-      // a system and the user emptied the form value, since `systems: []`
-      // would 400. Inline error rendered by GeneralTab via errors.system.
       const systemValue = (form.getValues('system') as string | undefined) ?? ''
-      const priorSystems = component.systems ?? []
-      if (priorSystems.length > 0 && systemValue === '') {
+      const priorSystem = component.system ?? ''
+      if (priorSystem !== '' && systemValue === '') {
         form.setError('system', {
           type: 'required',
           message: 'System is required',
@@ -245,7 +240,7 @@ export function ComponentDetailPage() {
       visibilities: {
         displayName: displayNameFc.visibility ?? 'editable',
         componentOwner: componentOwnerFc.visibility ?? 'editable',
-        systems: systemFc.visibility ?? 'editable',
+        system: systemFc.visibility ?? 'editable',
         clientCode: clientCodeFc.visibility ?? 'editable',
         groupId: groupIdFc.visibility ?? 'editable',
         releaseManager: releaseManagerFc.visibility ?? 'editable',
@@ -416,12 +411,12 @@ export function ComponentDetailPage() {
               {/* Breadcrumb badges: system + build system (schema-v2: read from BASE row). */}
               {(() => {
                 const baseRow = selectBaseRow(component)
-                const firstSystem = component.systems?.[0]
+                const system = component.system
                 const buildSystem = baseRow?.build?.buildSystem
                 const jiraProjectKey = baseRow?.jira?.projectKey
                 return (
                   <>
-                    {firstSystem && <Badge variant="outline">{firstSystem}</Badge>}
+                    {system && <Badge variant="outline">{system}</Badge>}
                     {buildSystem && <Badge variant="outline">{buildSystem}</Badge>}
                     {/* Quick-links: Jira (Atlassian) and Bitbucket. aria-label mirrors
                         the title so screen readers announce the icon-only link's

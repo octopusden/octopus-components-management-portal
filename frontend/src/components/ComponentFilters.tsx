@@ -95,18 +95,20 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
   const { entry: buildSystemEntry } = useFieldConfigEntry('buildSystem')
   // System options share the buildSystem pattern: admin field-config first,
   // CRS /components/meta/systems fallback. The field-config path is
-  // `component.systems` (sectioned) to match GeneralTab.tsx and
-  // ComponentDetailPage.tsx — using a different path here would silently
-  // diverge from the editor surface when admins edit field-config.
+  // `component.system` (sectioned, singular per CRS PR #301) to match
+  // GeneralTab.tsx and ComponentDetailPage.tsx — using a different path
+  // here would silently diverge from the editor surface when admins edit
+  // field-config. The FILTER PARAMETER stays multi-value (?system=A,B
+  // OR-semantic) even though each component's `system` is now scalar.
   // Gated on `systemActivated` until first popover open because the meta
   // endpoint may not exist on older CRS images and Playwright's
   // console-error listener trips on the browser's native 404 log.
   const [systemActivated, setSystemActivated] = useState(false)
   const { options: systemOptions, isLoading: systemLoading } = useFieldOptions(
-    'component.systems',
+    'component.system',
     { enabled: systemActivated },
   )
-  const { entry: systemEntry } = useFieldConfigEntry('component.systems')
+  const { entry: systemEntry } = useFieldConfigEntry('component.system')
   // Sticky activation flag for the labels picker — flips true on first
   // open and never back. Drives `enabled` on useLabels so the labels
   // meta request only fires when the user expresses intent (avoids a

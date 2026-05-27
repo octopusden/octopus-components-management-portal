@@ -13,7 +13,10 @@ export interface ComponentSummary {
   name: string
   displayName: string | null
   componentOwner: string | null
-  systems: string[]
+  // CRS PR #301 collapsed Component.systems Set<String> → Component.system
+  // String?. Single-value per component in the domain; the list page renders
+  // the scalar directly.
+  system: string | null
   productType: string | null
   archived: boolean
   updatedAt: string | null
@@ -35,7 +38,10 @@ export interface ComponentDetail {
   displayName: string | null
   componentOwner: string | null
   productType: string | null
-  systems: string[]
+  // CRS PR #301 collapsed Component.systems Set<String> → Component.system
+  // String?. Domain is single-value per component; the editor renders a
+  // single-select EnumSelect bound directly to this scalar.
+  system: string | null
   clientCode: string | null
   archived: boolean
   solution: boolean | null
@@ -304,7 +310,8 @@ export interface ComponentCreateRequest {
   displayName?: string | null
   componentOwner?: string | null
   productType?: string | null
-  systems?: string[]
+  // CRS PR #301: scalar field, optional/nullable.
+  system?: string | null
   clientCode?: string | null
   solution?: boolean | null
   parentComponentName?: string | null
@@ -336,7 +343,9 @@ export interface ComponentUpdateRequest {
   displayName?: string | null
   componentOwner?: string | null
   productType?: string | null
-  systems?: string[] | null
+  // CRS PR #301: scalar field, optional/nullable. PATCH semantics — omit
+  // to keep server value, set string to replace, set null to clear.
+  system?: string | null
   clientCode?: string | null
   solution?: boolean | null
   parentComponentName?: string | null

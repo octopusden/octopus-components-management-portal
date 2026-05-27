@@ -45,7 +45,7 @@ const CATALOG: CatalogRow[] = [
   { section: 'component', fieldName: 'displayName',    label: 'displayName'                  },
   { section: 'component', fieldName: 'solution',       label: 'solution'                     },
   { section: 'component', fieldName: 'componentOwner', label: 'componentOwner'               },
-  { section: 'component', fieldName: 'systems',        label: 'systems'                      },
+  { section: 'component', fieldName: 'system',         label: 'system'                       },
   { section: 'component', fieldName: 'productType',    label: 'productType'                  },
   { section: 'component', fieldName: 'clientCode',     label: 'clientCode'                   },
   // ui-swift-sloth §3.5: groupId is locked because the backend now makes

@@ -203,7 +203,11 @@ export function CreateComponentDialog({ open, onOpenChange }: CreateComponentDia
         componentOwner: values.componentOwner || undefined,
         group: { groupKey: values.groupId, isFake: false },
         baseConfiguration: { build: { buildSystem: values.buildSystem } },
-        systems: [],
+        // CRS PR #301: System is scalar `string | null`. The Create
+        // dialog doesn't expose the field yet (deferred per the original
+        // ui-swift-sloth plan); send `null` so the component starts
+        // without a system and the editor can set it later.
+        system: null,
         labels: [],
         docs: [],
         artifactIds: [],

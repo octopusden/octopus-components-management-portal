@@ -41,7 +41,7 @@ describe('useOptimisticConflict', () => {
       displayName: null,
       componentOwner: null,
       productType: null,
-      systems: [],
+      system: null,
       clientCode: null,
       archived: false,
       solution: null,
