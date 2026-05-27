@@ -61,7 +61,7 @@ function baseComponent(overrides: Partial<ComponentDetail> = {}): ComponentDetai
 
 /** Returns an entry object with the given visibility (defaults to editable). */
 function makeEntry(visibility: 'editable' | 'readonly' | 'hidden' = 'editable') {
-  return { entry: { visibility, required: false }, isLoading: false }
+  return { entry: { visibility, required: false }, isLoading: false, isError: false }
 }
 
 /** Default mock: all fields editable. */

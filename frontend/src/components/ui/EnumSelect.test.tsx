@@ -78,3 +78,135 @@ describe('EnumSelect — value display', () => {
     expect(screen.getByRole('combobox')).toBeDisabled()
   })
 })
+
+describe('EnumSelect — accessibility props forwarded to the trigger', () => {
+  it('forwards `id` to the trigger so an outer <Label htmlFor> resolves', () => {
+    mockUseFieldOptions.mockReturnValue({
+      options: ['MAVEN', 'GRADLE'],
+      isLoading: false,
+    })
+
+    render(
+      <EnumSelect
+        id="buildSystem"
+        fieldPath="buildSystem"
+        value="MAVEN"
+        onValueChange={() => {}}
+      />,
+    )
+
+    expect(screen.getByRole('combobox')).toHaveAttribute('id', 'buildSystem')
+  })
+
+  it('forwards aria-required to the trigger', () => {
+    mockUseFieldOptions.mockReturnValue({
+      options: ['MAVEN', 'GRADLE'],
+      isLoading: false,
+    })
+
+    render(
+      <EnumSelect
+        fieldPath="buildSystem"
+        value="MAVEN"
+        onValueChange={() => {}}
+        aria-required
+      />,
+    )
+
+    expect(screen.getByRole('combobox')).toHaveAttribute('aria-required', 'true')
+  })
+
+  it('forwards aria-invalid to the trigger', () => {
+    mockUseFieldOptions.mockReturnValue({
+      options: ['MAVEN', 'GRADLE'],
+      isLoading: false,
+    })
+
+    render(
+      <EnumSelect
+        fieldPath="buildSystem"
+        value=""
+        onValueChange={() => {}}
+        aria-invalid
+      />,
+    )
+
+    expect(screen.getByRole('combobox')).toHaveAttribute('aria-invalid', 'true')
+  })
+
+  it('forwards aria-describedby to the trigger so inline errors associate', () => {
+    mockUseFieldOptions.mockReturnValue({
+      options: ['MAVEN', 'GRADLE'],
+      isLoading: false,
+    })
+
+    render(
+      <EnumSelect
+        fieldPath="buildSystem"
+        value="MAVEN"
+        onValueChange={() => {}}
+        aria-describedby="buildSystem-error"
+      />,
+    )
+
+    expect(screen.getByRole('combobox')).toHaveAttribute(
+      'aria-describedby',
+      'buildSystem-error',
+    )
+  })
+
+  it('forwards id while in the loading branch (Label htmlFor must work before options arrive)', () => {
+    mockUseFieldOptions.mockReturnValue({ options: [], isLoading: true })
+
+    render(
+      <EnumSelect
+        id="buildSystem"
+        fieldPath="buildSystem"
+        value="MAVEN"
+        onValueChange={() => {}}
+        aria-required
+      />,
+    )
+
+    const trigger = screen.getByRole('combobox')
+    expect(trigger).toHaveAttribute('id', 'buildSystem')
+    expect(trigger).toHaveAttribute('aria-required', 'true')
+  })
+
+  it('forwards id when options are empty and we render the placeholder branch', () => {
+    mockUseFieldOptions.mockReturnValue({ options: [], isLoading: false })
+
+    render(
+      <EnumSelect
+        id="buildSystem"
+        fieldPath="buildSystem"
+        value=""
+        onValueChange={() => {}}
+        aria-invalid
+      />,
+    )
+
+    const trigger = screen.getByRole('combobox')
+    expect(trigger).toHaveAttribute('id', 'buildSystem')
+    expect(trigger).toHaveAttribute('aria-invalid', 'true')
+  })
+
+  it('forwards id to the free-text Input when options are empty and allowFreeText is true', () => {
+    mockUseFieldOptions.mockReturnValue({ options: [], isLoading: false })
+
+    render(
+      <EnumSelect
+        id="buildSystem"
+        fieldPath="buildSystem"
+        value=""
+        onValueChange={() => {}}
+        allowFreeText
+        aria-required
+      />,
+    )
+
+    const input = screen.getByRole('textbox')
+    expect(input).toHaveAttribute('id', 'buildSystem')
+    expect(input).toHaveAttribute('aria-required', 'true')
+  })
+})

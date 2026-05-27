@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach, afterAll } from 'vitest'
-import { api, ApiError } from './api'
+import { api, apiAbsolute, ApiError } from './api'
 import { CONTINUE_PATH_STORAGE_KEY, OIDC_AUTHORIZE_PATH } from './auth'
 
 // jsdom's default window.location.assign cannot be re-spied across tests, so swap the
@@ -291,5 +291,144 @@ describe('api — 401 handling', () => {
 
     expect(assignSpy).toHaveBeenCalledOnce()
     expect(assignSpy).toHaveBeenCalledWith(OIDC_AUTHORIZE_PATH)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// apiAbsolute — calls REST paths that don't live under /rest/api/4.
+// Reuses the same auth / CSRF / 401-redirect plumbing as `api`.
+// ---------------------------------------------------------------------------
+
+describe('apiAbsolute — URL construction', () => {
+  it('prefixes requests with BASE_URL (no rest/api/4 segment)', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(['com.example']), { status: 200 }),
+    )
+    vi.stubGlobal('fetch', mockFetch)
+
+    await apiAbsolute.get('/rest/api/2/common/supported-groups')
+
+    const calledUrl = mockFetch.mock.calls[0]![0] as string
+    expect(calledUrl).toBe(`${import.meta.env.BASE_URL}rest/api/2/common/supported-groups`)
+  })
+
+  it('respects deployment sub-path prefix in BASE_URL', async () => {
+    vi.stubEnv('BASE_URL', '/components-management-portal/')
+    vi.resetModules()
+    const { apiAbsolute: freshApi } = await import('./api')
+
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(['com.example']), { status: 200 }),
+    )
+    vi.stubGlobal('fetch', mockFetch)
+
+    await freshApi.get('/rest/api/2/common/supported-groups')
+
+    const calledUrl = mockFetch.mock.calls[0]![0] as string
+    expect(calledUrl).toBe('/components-management-portal/rest/api/2/common/supported-groups')
+  })
+
+  it('accepts paths without a leading slash', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(new Response('[]', { status: 200 }))
+    vi.stubGlobal('fetch', mockFetch)
+
+    await apiAbsolute.get('rest/api/2/common/supported-groups')
+
+    const calledUrl = mockFetch.mock.calls[0]![0] as string
+    expect(calledUrl).toBe(`${import.meta.env.BASE_URL}rest/api/2/common/supported-groups`)
+  })
+
+  it('throws ApiError on non-ok response', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response('boom', { status: 500 })),
+    )
+
+    const err = await apiAbsolute.get('/rest/api/2/anything').catch((e) => e) as ApiError
+    expect(err).toBeInstanceOf(ApiError)
+    expect(err.status).toBe(500)
+  })
+
+  it('sends credentials: include on every request (BFF session cookie)', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(new Response('[]', { status: 200 }))
+    vi.stubGlobal('fetch', mockFetch)
+
+    await apiAbsolute.get('/rest/api/2/common/supported-groups')
+
+    const init = mockFetch.mock.calls[0]![1] as RequestInit
+    expect(init.credentials).toBe('include')
+  })
+
+  it('sets X-Requested-With on every request (routes to API auth entry point)', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(new Response('[]', { status: 200 }))
+    vi.stubGlobal('fetch', mockFetch)
+
+    await apiAbsolute.get('/rest/api/2/common/supported-groups')
+
+    const headers = (mockFetch.mock.calls[0]![1] as RequestInit).headers as Record<string, string>
+    expect(headers['X-Requested-With']).toBe('XMLHttpRequest')
+  })
+})
+
+describe('apiAbsolute — CSRF double-submit', () => {
+  beforeEach(() => {
+    document.cookie = 'XSRF-TOKEN=tok-abs; path=/'
+  })
+
+  afterEach(() => {
+    document.cookie = 'XSRF-TOKEN=; path=/; max-age=0'
+  })
+
+  it('does NOT send X-XSRF-TOKEN on safe (GET) requests', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(new Response('[]', { status: 200 }))
+    vi.stubGlobal('fetch', mockFetch)
+
+    await apiAbsolute.get('/rest/api/2/common/supported-groups')
+
+    const headers = (mockFetch.mock.calls[0]![1] as RequestInit).headers as Record<string, string>
+    expect(headers['X-XSRF-TOKEN']).toBeUndefined()
+  })
+
+  it('sends X-XSRF-TOKEN on POST / PATCH / PUT / DELETE', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', mockFetch)
+
+    await apiAbsolute.post('/rest/api/2/anything', { a: 1 })
+    await apiAbsolute.patch('/rest/api/2/anything', { a: 1 })
+    await apiAbsolute.put('/rest/api/2/anything', { a: 1 })
+    await apiAbsolute.delete('/rest/api/2/anything')
+
+    for (const call of mockFetch.mock.calls) {
+      const headers = (call[1] as RequestInit).headers as Record<string, string>
+      expect(headers['X-XSRF-TOKEN']).toBe('tok-abs')
+    }
+  })
+})
+
+describe('apiAbsolute — 401 handling', () => {
+  it('on 401 redirects to the OIDC authorization entry point', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response('nope', { status: 401 })),
+    )
+
+    const err = await apiAbsolute.get('/rest/api/2/common/supported-groups').catch((e) => e) as ApiError
+
+    expect(err).toBeInstanceOf(ApiError)
+    expect(err.status).toBe(401)
+    expect(assignSpy).toHaveBeenCalledOnce()
+    expect(assignSpy).toHaveBeenCalledWith(OIDC_AUTHORIZE_PATH)
+  })
+
+  it('does NOT redirect when already inside the OIDC flow', async () => {
+    setPathname('/oauth2/authorization/keycloak')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response('nope', { status: 401 })),
+    )
+
+    await apiAbsolute.get('/rest/api/2/common/supported-groups').catch(() => {})
+
+    expect(assignSpy).not.toHaveBeenCalled()
   })
 })

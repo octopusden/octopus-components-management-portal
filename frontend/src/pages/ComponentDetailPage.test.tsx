@@ -222,6 +222,7 @@ beforeEach(() => {
   mockedUseFieldConfigEntry.mockImplementation(() => ({
     entry: { visibility: 'editable', required: false },
     isLoading: false,
+    isError: false,
   }))
   // Default GeneralTab stub — empty div. Individual tests can override
   // (e.g. the populated-values save test mirrors the real component's
@@ -594,9 +595,14 @@ describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => 
         return {
           entry: { visibility: 'hidden', required: false },
           isLoading: false,
+          isError: false,
         }
       }
-      return { entry: { visibility: 'editable', required: false }, isLoading: false }
+      return {
+        entry: { visibility: 'editable', required: false },
+        isLoading: false,
+        isError: false,
+      }
     })
     const updateMutateAsync = vi.fn(() => Promise.resolve())
     const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])

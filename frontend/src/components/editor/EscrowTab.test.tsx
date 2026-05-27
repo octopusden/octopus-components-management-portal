@@ -20,7 +20,7 @@ vi.mock('../../hooks/useFieldConfig', () => ({
 }))
 
 function makeEntry(visibility: 'editable' | 'readonly' | 'hidden' = 'editable') {
-  return { entry: { visibility, required: false }, isLoading: false }
+  return { entry: { visibility, required: false }, isLoading: false, isError: false }
 }
 
 function setProductTypeVisibility(vis: 'editable' | 'readonly' | 'hidden') {
