@@ -1058,7 +1058,6 @@ export interface components {
             displayName?: string;
             componentOwner?: string;
             productType?: string;
-            systems: string[];
             clientCode?: string;
             solution?: boolean;
             parentComponentName?: string;
@@ -1079,6 +1078,7 @@ export interface components {
             securityGroups: components["schemas"]["SecurityGroupRequest"][];
             teamcityProjects: components["schemas"]["TeamcityProjectRequest"][];
             baseConfiguration?: components["schemas"]["BaseConfigurationRequest"];
+            system?: string | null;
         };
         ComponentGroupRequest: {
             groupKey: string;
@@ -1186,7 +1186,6 @@ export interface components {
             displayName?: string;
             componentOwner?: string;
             productType?: string;
-            systems: string[];
             clientCode?: string;
             archived: boolean;
             solution?: boolean;
@@ -1213,6 +1212,7 @@ export interface components {
             securityGroups: components["schemas"]["SecurityGroupResponse"][];
             teamcityProjects: components["schemas"]["TeamcityProjectResponse"][];
             configurations: components["schemas"]["ComponentConfigurationResponse"][];
+            system?: string | null;
         };
         ComponentGroupResponse: {
             groupKey: string;
@@ -1554,7 +1554,6 @@ export interface components {
             displayName?: string;
             componentOwner?: string;
             productType?: string;
-            systems?: string[];
             clientCode?: string;
             solution?: boolean;
             parentComponentName?: string;
@@ -1576,6 +1575,7 @@ export interface components {
             securityGroups?: components["schemas"]["SecurityGroupRequest"][];
             teamcityProjects?: components["schemas"]["TeamcityProjectRequest"][];
             baseConfiguration?: components["schemas"]["BaseConfigurationRequest"];
+            system?: string | null;
         };
         FieldOverrideUpdateRequest: {
             versionRange?: string;
@@ -1599,7 +1599,6 @@ export interface components {
             name: string;
             displayName?: string;
             componentOwner?: string;
-            systems: string[];
             productType?: string;
             archived: boolean;
             /** Format: date-time */
@@ -1610,6 +1609,7 @@ export interface components {
             vcsPath?: string;
             teamcityProjectId?: string;
             teamcityProjectUrl?: string;
+            system?: string | null;
         };
         PageComponentSummaryResponse: {
             /** Format: int32 */

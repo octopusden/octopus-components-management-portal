@@ -92,10 +92,10 @@ function mockFieldOptions(fieldPath: string, options: string[]) {
 // Shapes intentionally mirror the production paths the resolver walks:
 //   - buildSystem → flat `data.fields.buildSystem` (matches BuildTab.tsx
 //     and ComponentFilters.tsx, both bare 'buildSystem' paths).
-//   - system     → sectioned `data.component.systems` (matches
+//   - system     → sectioned `data.component.system` (matches CRS PR #301 singular shape, matches
 //     GeneralTab.tsx + ComponentDetailPage.tsx + ComponentFilters.tsx,
-//     all 'component.systems' paths). useFieldOptions seeds against the
-//     'component.systems' fieldPath key for the same reason.
+//     all 'component.system' paths). useFieldOptions seeds against the
+//     'component.system' fieldPath key for the same reason.
 function mockFieldConfig(
   options: string[],
   entry: Partial<FieldConfigEntry> = {},
@@ -104,7 +104,7 @@ function mockFieldConfig(
   const data =
     field === 'buildSystem'
       ? { fields: { buildSystem: { options, ...entry } } }
-      : { component: { systems: { options, ...entry } } }
+      : { component: { system: { options, ...entry } } }
   mockUseFieldConfig.mockReturnValue({
     data,
     isLoading: false,
@@ -112,7 +112,7 @@ function mockFieldConfig(
   // Keep field-options reachable from the new code path too —
   // ComponentFilters reads useFieldOptions(...) for both filters. The
   // seed key matches the production fieldPath each filter uses.
-  const optionsKey = field === 'buildSystem' ? 'buildSystem' : 'component.systems'
+  const optionsKey = field === 'buildSystem' ? 'buildSystem' : 'component.system'
   mockFieldOptions(optionsKey, options)
 }
 
@@ -688,8 +688,8 @@ describe('ComponentFilters System multi-select', () => {
     mockCurrentUser('testuser')
     // Seed the system field with ALFA/BRAVO/CHARLIE so the picker has
     // a deterministic vocabulary to drive interactions. The fieldPath
-    // is 'component.systems' (sectioned) to match the production code.
-    mockFieldOptions('component.systems', ['ALFA', 'BRAVO', 'CHARLIE'])
+    // is 'component.system' (sectioned) to match the production code.
+    mockFieldOptions('component.system', ['ALFA', 'BRAVO', 'CHARLIE'])
   })
 
   it('renders a System picker trigger', () => {
@@ -778,15 +778,16 @@ describe('ComponentFilters System multi-select', () => {
     expect(screen.getByRole('button', { name: /all systems/i })).toBeDefined()
   })
 
-  it('reads filterable from the sectioned {component:{systems}} field-config shape', () => {
+  it('reads filterable from the sectioned {component:{system}} field-config shape (CRS PR #301)', () => {
     // Locks in the cross-surface field-config path contract: GeneralTab,
-    // ComponentDetailPage, and the filter bar all resolve "systems" via
-    // the sectioned path component.systems. Writing the sectioned shape
-    // directly (bypassing the helper) protects against a regression where
-    // someone "fixes" the filter to look up a flat 'system' key — admin
-    // edits would silently stop applying to one surface but not the other.
+    // ComponentDetailPage, and the filter bar all resolve "system" via
+    // the sectioned path component.system (singular per CRS PR #301).
+    // Writing the sectioned shape directly (bypassing the helper)
+    // protects against a regression where someone "fixes" the filter to
+    // look up a flat key — admin edits would silently stop applying to
+    // one surface but not the other.
     mockUseFieldConfig.mockReturnValue({
-      data: { component: { systems: { filterable: false } } },
+      data: { component: { system: { filterable: false } } },
       isLoading: false,
     } as unknown as ReturnType<typeof useFieldConfig>)
     render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)

@@ -5,11 +5,11 @@ import { useFieldConfigOptions } from './useFieldConfig'
 const META_ENDPOINTS: Record<string, string> = {
   buildSystem: '/components/meta/build-systems',
   // Sectioned path: aligns with GeneralTab.tsx + ComponentDetailPage.tsx
-  // which both read systems via useFieldConfigEntry('component.systems').
+  // which both read systems via useFieldConfigEntry('component.system').
   // Using the same key here keeps admin field-config edits effective on
   // the filter bar AND the editor surface — they'd otherwise resolve to
   // different entries and silently drift apart.
-  'component.systems': '/components/meta/systems',
+  'component.system': '/components/meta/systems',
   repositoryType: '/components/meta/repository-types',
   generation: '/components/meta/escrow-generations',
 }

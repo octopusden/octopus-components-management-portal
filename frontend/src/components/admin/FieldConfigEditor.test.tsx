@@ -83,7 +83,7 @@ describe('FieldConfigEditor — catalog rows', () => {
     // ui-swift-sloth §3.5: groupId joins the catalog (locked) so admins can
     // edit defaultValue / description but cannot flip visibility or required
     // — backend now makes the group mandatory.
-    const componentFields = ['name', 'displayName', 'solution', 'componentOwner', 'systems', 'productType', 'clientCode', 'groupId']
+    const componentFields = ['name', 'displayName', 'solution', 'componentOwner', 'system', 'productType', 'clientCode', 'groupId']
     for (const field of componentFields) {
       // Each field label appears in the table (may appear in multiple cells/elements)
       const elements = screen.getAllByText(field)

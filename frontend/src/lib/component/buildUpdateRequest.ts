@@ -2,13 +2,12 @@ import type { ComponentDetail, ComponentUpdateRequest } from '../types'
 import type { GeneralFormValues } from '../../components/editor/GeneralTab'
 import type { FieldVisibility } from '../../hooks/useFieldConfig'
 
-// Task #14 — System is single-value per component in the domain. The
-// CRS v4 DTO currently exposes it as `systems: string[]` (an array-shaped
-// wire artifact); the Portal form holds the scalar `system: string`
-// directly. buildUpdateRequest bridges the two shapes by wrapping the
-// scalar as `[value]` on the way out. CRS task #7 collapses the wire
-// shape to `system: string?`; once it ships and types regenerate, the
-// wrap can be deleted and `systems` here renames to `system`.
+// System is single-value per component. CRS PR #301 collapsed
+// `Component.systems Set<String>` → `Component.system String?`; the
+// Portal form holds a scalar `system: string` and buildUpdateRequest
+// forwards it unchanged to the wire. (Task #14 introduced a `[value]`
+// array-wrap bridge for the pre-#301 DTO — dropped now that the
+// scalar contract has shipped.)
 
 // Field-config visibility for every field-config-gated GeneralTab field.
 // Hidden fields are NEVER sent on the wire — CRS does not filter by FC
@@ -17,7 +16,8 @@ import type { FieldVisibility } from '../../hooks/useFieldConfig'
 export interface FieldVisibilities {
   displayName: FieldVisibility
   componentOwner: FieldVisibility
-  systems: FieldVisibility
+  // CRS PR #301: field-config key + DTO field renamed to singular.
+  system: FieldVisibility
   clientCode: FieldVisibility
   groupId: FieldVisibility
   releaseManager: FieldVisibility
@@ -68,11 +68,9 @@ export interface BuildUpdateRequestParams {
 export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentUpdateRequest {
   const { component, values, visibilities, dirtyFields } = params
 
-  // Task #14: form value is `string` (single-value, matching the domain).
-  // DTO is currently `systems: string[]`; wrap as `[value]` on the wire.
-  // Drop the wrap once CRS task #7 collapses to scalar.
+  // CRS PR #301 wire shape: `system: string | null`. Trim defensively
+  // (paste-restore round-trip could produce whitespace-only).
   const systemTrimmed = (values.system ?? '').trim()
-  const systemArray = systemTrimmed === '' ? [] : [systemTrimmed]
   const labelsArray = Array.from(
     new Set(
       (values.labels ?? [])
@@ -120,22 +118,19 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
     componentOwner:
       visibilities.componentOwner === 'hidden' ? undefined : (values.componentOwner || undefined),
     // productType is owned by EscrowTab — never sent from the General save.
-    // Two guards on `systems` (task #14 single-value form, array-shaped DTO):
-    //   - Pre-hydration: form mounts with `system: ''` → `systemArray = []`
-    //     BEFORE GeneralTab's useEffect hydrates from the array-shaped DTO
-    //     (`component.systems?.[0]`). The dirty-gate blocks the unwanted
-    //     clear.
+    // Two guards on `system`:
+    //   - Pre-hydration: form mounts with `system: ''` BEFORE GeneralTab's
+    //     useEffect hydrates from `component.system`. The dirty-gate
+    //     blocks the unwanted clear.
     //   - Empty-after-dirty: System is REQUIRED server-side. If the user
-    //     picks then clears the single-select, sending `systems: []` would
-    //     400. Omit instead — the page-level guard surfaces an inline
-    //     "System is required" error so the omit-then-re-edit cycle is
-    //     visible rather than silent.
-    // The output stays array-shaped (`[value]`) until CRS task #7 collapses
-    // the wire contract to scalar.
-    systems:
-      visibilities.systems === 'hidden' || dirtyFields.system !== true || systemArray.length === 0
+    //     picks then clears the single-select, sending `system: ''` /
+    //     `null` would 400. Omit instead — the page-level guard surfaces
+    //     an inline "System is required" error so the omit-then-re-edit
+    //     cycle is visible rather than silent.
+    system:
+      visibilities.system === 'hidden' || dirtyFields.system !== true || systemTrimmed === ''
         ? undefined
-        : systemArray,
+        : systemTrimmed,
     clientCode:
       visibilities.clientCode === 'hidden' ? undefined : (values.clientCode || undefined),
     solution: solutionChanged ? values.solution : undefined,
@@ -152,17 +147,17 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
       visibilities.releasesInDefaultBranch === 'hidden' || !releasesInDefaultBranchChanged
         ? undefined
         : values.releasesInDefaultBranch,
-    // labels semantics diverge from systems (PR #44 P2 fix):
-    //   - Pre-hydration guard mirrors systems: !dirty → omit, so the
+    // labels semantics diverge from system (PR #44 P2 fix):
+    //   - Pre-hydration guard mirrors system: !dirty → omit, so the
     //     form-default `[]` doesn't wipe server data before GeneralTab's
     //     useEffect hydrates from `component.labels`.
     //   - Explicit clear IS supported: labels is OPTIONAL server-side, so
     //     `dirty + empty` now emits `labels: []` (REPLACE-empty) rather than
     //     omitting. Previously the empty branch silently dropped — user
     //     unchecked every label, got "saved" toast, server unchanged.
-    // systems can't follow the same path because `systems: []` is rejected
-    // server-side; the UI blocks the empty-save case via a form-level
-    // guard in ComponentDetailPage.handleSave instead.
+    // system can't follow the same path because `system: ''`/`null` is
+    // rejected server-side; the UI blocks the empty-save case via a
+    // form-level guard in ComponentDetailPage.handleSave instead.
     labels:
       visibilities.labels === 'hidden' || dirtyFields.labels !== true
         ? undefined

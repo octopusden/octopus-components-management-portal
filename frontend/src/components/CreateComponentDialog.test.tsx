@@ -392,7 +392,9 @@ describe('CreateComponentDialog — submit payload', () => {
       name: 'widget',
       group: { groupKey: 'com.example.widget', isFake: false },
       baseConfiguration: { build: { buildSystem: 'MAVEN' } },
-      systems: [],
+      // CRS PR #301: scalar `system` field. The Create dialog doesn't
+      // expose it yet (deferred per the original plan); sends null.
+      system: null,
       labels: [],
       docs: [],
       artifactIds: [],
