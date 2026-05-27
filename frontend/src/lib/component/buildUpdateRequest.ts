@@ -2,6 +2,13 @@ import type { ComponentDetail, ComponentUpdateRequest } from '../types'
 import type { GeneralFormValues } from '../../components/editor/GeneralTab'
 import type { FieldVisibility } from '../../hooks/useFieldConfig'
 
+// Task #14 bridge: the form field `system` is a scalar string (single-select
+// dropdown UX), but the CRS v4 wire still expects `systems: string[]`.
+// buildUpdateRequest wraps the scalar as `[value]` on the way out until CRS
+// task #7 collapses `Component.systems Set<String>` → `Component.system
+// String?`. Once that ships and types regenerate, the wrap can be deleted
+// and `systems` here renames to `system`.
+
 // Field-config visibility for every field-config-gated GeneralTab field.
 // Hidden fields are NEVER sent on the wire — CRS does not filter by FC
 // server-side, so a hidden field reaching the request body would silently
@@ -60,16 +67,11 @@ export interface BuildUpdateRequestParams {
 export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentUpdateRequest {
   const { component, values, visibilities, dirtyFields } = params
 
-  // ui-swift-sloth §4: system and labels arrive as arrays straight from the
-  // MultiSelectFilter — no comma splitting. Trim/dedup any defensive noise
-  // (the UI never produces it, but a paste-restore round-trip might).
-  const systemArray = Array.from(
-    new Set(
-      (values.system ?? [])
-        .map((s) => s.trim())
-        .filter(Boolean),
-    ),
-  )
+  // Task #14: `system` is now a single string (EnumSelect single-select).
+  // Wrap as [value] on the wire to keep the v4 contract (CRS task #7 will
+  // collapse the wire shape to scalar — drop the wrap then).
+  const systemTrimmed = (values.system ?? '').trim()
+  const systemArray = systemTrimmed === '' ? [] : [systemTrimmed]
   const labelsArray = Array.from(
     new Set(
       (values.labels ?? [])
@@ -117,15 +119,17 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
     componentOwner:
       visibilities.componentOwner === 'hidden' ? undefined : (values.componentOwner || undefined),
     // productType is owned by EscrowTab — never sent from the General save.
-    // Two guards on `systems`:
+    // Two guards on `systems` (task #14 single-select bridge):
     //   - Pre-hydration: form mounts with `system: ''` → `systemArray = []`
-    //     BEFORE GeneralTab's useEffect mirrors the server `systems` into
-    //     the input. The dirty-gate blocks the unwanted clear.
+    //     BEFORE GeneralTab's useEffect mirrors the server's first value
+    //     into the EnumSelect. The dirty-gate blocks the unwanted clear.
     //   - Empty-after-dirty: `systems` is REQUIRED server-side. If the
-    //     user types into the input then deletes everything (RHF still
-    //     marks dirty on the round-trip), sending `systems: []` would 400.
-    //     Omit instead — server keeps the previous list; UI ideally adds
-    //     form validation to surface this to the user (deferred).
+    //     user picks then clears the single-select, sending `systems: []`
+    //     would 400. Omit instead — the page-level guard surfaces an
+    //     inline "System is required" error to the user so the omit-then-
+    //     re-edit cycle is visible rather than silent.
+    // The output is still array-shaped (`[value]`) until CRS task #7
+    // collapses the wire contract.
     systems:
       visibilities.systems === 'hidden' || dirtyFields.system !== true || systemArray.length === 0
         ? undefined

@@ -247,7 +247,7 @@ beforeEach(() => {
   // specific scenarios (e.g. the clear-all-systems guard).
   vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
     useEffect(() => {
-      form.setValue('system', component.systems ?? [])
+      form.setValue('system', component.systems?.[0] ?? '')
     }, [component, form])
     return React.createElement('div', { 'data-testid': 'general-tab' })
   })
@@ -565,7 +565,7 @@ describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => 
       useEffect(() => {
         // Hydrate system too — the PR #44 P2 systems guard reads
         // component.systems vs form.system and would otherwise block save.
-        form.setValue('system', component.systems ?? [])
+        form.setValue('system', component.systems?.[0] ?? '')
         form.setValue(
           'teamcityProjects',
           (component.teamcityProjects ?? []).map((tc) => ({ projectId: tc.projectId })),
@@ -645,7 +645,7 @@ describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => 
     vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
       useEffect(() => {
         // Hydrate system so the PR #44 P2 systems guard doesn't block save.
-        form.setValue('system', component.systems ?? [])
+        form.setValue('system', component.systems?.[0] ?? '')
         form.setValue('teamcityProjects', [{ projectId: 'OnlyId_Build' }, { projectId: '  ' }])
       }, [component, form])
       return React.createElement('div', { 'data-testid': 'general-tab-partial' })
@@ -688,20 +688,16 @@ describe('ComponentDetailPage — solution flag dirty-gate', () => {
   })
 })
 
-describe('ComponentDetailPage — systems clear-blocks-save guard (PR #44 P2 systems)', () => {
-  it('user clears every system → save is blocked, no PATCH fires', async () => {
-    // The render-side guard surfaces the inline error in GeneralTab; this
-    // test pins the page-level half: handleSave sees dirty + empty system
-    // and returns early before calling the mutation. Without this guard the
-    // user would otherwise click Save, hit `buildUpdateRequest` (which
-    // correctly omits systems on dirty-empty), see a green toast, and walk
-    // away believing the clear took — when in fact the server is unchanged.
-    // Stub leaves the form's `system` at the [] default while the server
-    // (`baseComponent.systems = ['SYS1']`) has a non-empty list — the
-    // exact "user cleared all systems" shape. The guard reads
-    // component.systems vs form.system rather than the RHF dirty flag,
-    // because RHF doesn't mark an array dirty when setValue's new value
-    // equals the form default.
+describe('ComponentDetailPage — system clear-blocks-save guard (task #14 single-select)', () => {
+  it('user clears the system → save is blocked, no PATCH fires', async () => {
+    // Task #14 single-select shape: form.system is a scalar string.
+    // The page-level guard fires when server had a system and form now
+    // has '' — without it the user would click Save, hit
+    // buildUpdateRequest (which omits systems on dirty-empty), see a
+    // green toast, and walk away thinking the clear took (server keeps
+    // the original list since the field was absent on the wire).
+    // Stub leaves form.system at the '' default while baseComponent
+    // (`systems: ['SYS1']`) has the prior list.
     vi.mocked(GeneralTab).mockImplementation(() =>
       React.createElement('div', { 'data-testid': 'general-tab-systems-cleared' }),
     )
@@ -719,9 +715,9 @@ describe('ComponentDetailPage — systems clear-blocks-save guard (PR #44 P2 sys
     expect(updateMutateAsync).not.toHaveBeenCalled()
   })
 
-  it('user clears every system but field-config hides the row → save still fires (guard skipped)', async () => {
+  it('user clears the system but field-config hides the row → save still fires (guard skipped)', async () => {
     // If admins configured the systems field as hidden via field-config,
-    // the empty-systems guard must NOT block: the field isn't user-visible,
+    // the empty-system guard must NOT block: the field isn't user-visible,
     // so we cannot demand the user select one. buildUpdateRequest already
     // omits systems on hidden visibility.
     mockedUseFieldConfigEntry.mockImplementation((path: string) => ({
@@ -772,7 +768,7 @@ describe('ComponentDetailPage — labels clear-all sends [] (PR #44 follow-up: c
         form.setValue('labels', component.labels ?? [])
         form.setValue('labels', [], { shouldDirty: true, shouldTouch: true })
         // Hydrate systems too so the unrelated systems guard doesn't trip.
-        form.setValue('system', component.systems ?? [])
+        form.setValue('system', component.systems?.[0] ?? '')
       }, [component, form])
       return React.createElement('div', { 'data-testid': 'general-tab-labels-cleared' })
     })
