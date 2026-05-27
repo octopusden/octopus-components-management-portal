@@ -114,7 +114,7 @@ export function ComponentDetailPage() {
       displayName: '',
       componentOwner: '',
       productType: '',
-      system: [],
+      system: '',
       clientCode: '',
       solution: false,
       archived: false,
@@ -181,12 +181,16 @@ export function ComponentDetailPage() {
     // still the `[]` default — fails closed: user re-clicks Save once
     // GeneralTab's useEffect mirrors the server state.
     if (systemFc.visibility !== 'hidden') {
-      const systemValue = form.getValues('system') ?? []
+      // Task #14: `system` is a scalar string (single-select). Same intent
+      // as the previous multi-select guard — block save when the server had
+      // a system and the user emptied the form value, since `systems: []`
+      // would 400. Inline error rendered by GeneralTab via errors.system.
+      const systemValue = (form.getValues('system') as string | undefined) ?? ''
       const priorSystems = component.systems ?? []
-      if (priorSystems.length > 0 && systemValue.length === 0) {
+      if (priorSystems.length > 0 && systemValue === '') {
         form.setError('system', {
           type: 'required',
-          message: 'At least one system is required',
+          message: 'System is required',
         })
         return
       }
@@ -255,12 +259,10 @@ export function ComponentDetailPage() {
       dirtyFields: {
         releasesInDefaultBranch: form.formState.dirtyFields.releasesInDefaultBranch === true,
         solution: form.formState.dirtyFields.solution === true,
-        // system / labels: RHF's TS types model array-field dirtiness as
-        // `boolean[] | undefined`, but at runtime setValue(..., {shouldDirty:
-        // true}) flips a single boolean. We narrow through `unknown` so the
-        // type system accepts the runtime contract; the === true check
-        // ignores both `undefined` and any future partial-dirty array shape.
-        system: (form.formState.dirtyFields.system as unknown) === true,
+        // system: scalar string (task #14 single-select). RHF dirty
+        // tracking for primitive strings is straightforward — `=== true`
+        // ignores the undefined/unset state.
+        system: form.formState.dirtyFields.system === true,
         // labels: close the RHF clear-all blind-spot (PR #44 follow-up).
         // RHF treats `setValue('labels', [])` as not-dirty when the form
         // default is also `[]` — so a user who unchecks every label gets

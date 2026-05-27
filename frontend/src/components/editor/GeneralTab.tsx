@@ -8,12 +8,18 @@ import { Input } from '../ui/input'
 import { Switch } from '../ui/switch'
 import { PeopleInput } from '../ui/PeopleInput'
 import { ComponentSelect } from '../ui/ComponentSelect'
-import { MultiSelectFilter } from '../ui/MultiSelectFilter'
 import { ChipsInput } from '../ui/ChipsInput'
+import { EnumSelect } from '../ui/EnumSelect'
 import type { ComponentDetail } from '../../lib/types'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../../lib/auth'
 import { useFieldConfigEntry } from '../../hooks/useFieldConfig'
+// Task #14: system is single-select but still needs the FULL dictionary
+// (not just in-use values). EnumSelect's default fallback hits
+// /components/meta/systems (in-use), so we override its options with
+// useSystemsDictionary() → /components/meta/systems/dictionary. The
+// filter bar deliberately keeps the in-use endpoint via useFieldOptions
+// (filter UX wants to offer values that exist).
 import { useSystemsDictionary } from '../../hooks/useSystemsDictionary'
 import { useLabelsDictionary } from '../../hooks/useLabelsDictionary'
 import { useSupportedGroups } from '../../hooks/useSupportedGroups'
@@ -61,12 +67,13 @@ export interface GeneralFormValues {
   /** productType stays in GeneralFormValues (still part of the ComponentDetail
    *  DTO) but is rendered and saved from EscrowTab (§7.0/2c migration). */
   productType: string
-  // ui-swift-sloth §4: system and labels are dictionary-backed multi-selects,
-  // not comma-separated strings. Hydration mirrors `component.systems` /
-  // `component.labels` arrays unchanged; buildUpdateRequest enforces the
-  // dirty-gate that prevents pre-hydration form defaults ([]) from clearing
-  // server data.
-  system: string[]
+  // Task #14: System is single-value in the domain (Build-System-style UX).
+  // The CRS v4 DTO currently exposes it as the array-shaped
+  // `systems: string[]`; the form holds a scalar and buildUpdateRequest
+  // wraps as `systems: [value]` on the wire. Drop the wrap once CRS task
+  // #7 collapses the DTO to scalar. Labels remain `string[]` (chips UX,
+  // which IS multi-value).
+  system: string
   clientCode: string
   solution: boolean
   archived: boolean
@@ -112,17 +119,19 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
   const securityChampion = watch('securityChampion')
   const releasesInDefaultBranch = watch('releasesInDefaultBranch')
   const groupIsFake = watch('groupIsFake')
-  // ui-swift-sloth §4: system + labels are now controlled multi-selects, so
-  // we watch the current array value to drive MultiSelectFilter.
+  // Task #14: `system` is a scalar string (single-select EnumSelect).
+  // `labels` stays an array (chips UX). Both watched so the controlled
+  // primitives receive the current value.
   const systemValue = watch('system')
   const labelsValue = watch('labels')
   const groupIdValue = watch('groupId')
 
-  // Dictionaries powering the multi-select swap. 404/501 → [] (handled by
-  // the hook) so the popover renders a "No labels available" empty state
-  // instead of breaking the form before the CRS endpoint ships everywhere.
-  const systemsDict = useSystemsDictionary()
+  // Labels dictionary powers the chips UX. Task #14: systems dictionary
+  // is needed too for the EnumSelect single-select — see note next to
+  // its render block for why we override EnumSelect's internal hook.
+  // 404/501 → [] (handled by the hooks).
   const labelsDict = useLabelsDictionary()
+  const systemsDict = useSystemsDictionary()
 
   // Supported groupId prefixes — same loud error policy as the Create
   // dialog. Empty list (loading/errored) → skip the prefix check so a
@@ -213,7 +222,13 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
     setValue('displayName', component.displayName ?? '')
     setValue('componentOwner', component.componentOwner ?? '')
     setValue('productType', component.productType ?? '')
-    setValue('system', component.systems ?? [])
+    // Task #14: DTO is array-shaped today (`systems: string[]`), but the
+    // UI/domain contract is single-value. Hydrate the scalar form field
+    // from the first element of the array as the bridge until CRS task
+    // #7 removes the array shape. If a component's DTO carries more than
+    // one element that's out-of-contract / malformed data — not a
+    // supported multi-value mode.
+    setValue('system', component.systems?.[0] ?? '')
     setValue('clientCode', component.clientCode ?? '')
     setValue('solution', component.solution ?? false)
     setValue('archived', component.archived)
@@ -526,23 +541,29 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
         <section data-testid="section-metadata">
           <h3 className="text-sm font-medium text-muted-foreground mb-3">Metadata</h3>
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            {/* System — dictionary-backed multi-select (ui-swift-sloth §4).
-                The dictionary hook returns [] on 404/501 so a missing endpoint
-                renders an empty popover instead of breaking the form. */}
+            {/* System — single-select EnumSelect (task #14). Matches the
+                Build System UX. We pass the FULL systems dictionary via
+                `optionsOverride` rather than relying on EnumSelect's
+                default `useFieldOptions('component.systems')` fallback
+                — that fallback hits the in-use endpoint, which would
+                hide newly-defined dictionary values that no component is
+                attached to yet. The DTO stays array-shaped on the wire;
+                buildUpdateRequest wraps the scalar form value as
+                `systems: [value]` until CRS task #7 collapses to scalar. */}
             {systemEntry.visibility !== 'hidden' && (
               <div className="space-y-1.5">
-                <Label htmlFor="component-system">System(s)</Label>
-                <MultiSelectFilter
+                <Label htmlFor="component-system">System</Label>
+                <EnumSelect
                   id="component-system"
-                  value={systemValue ?? []}
-                  onChange={(next) =>
-                    setValue('system', next, { shouldDirty: true })
+                  fieldPath="component.systems"
+                  value={systemValue ?? ''}
+                  onValueChange={(v) =>
+                    setValue('system', v, { shouldDirty: true, shouldTouch: true })
                   }
-                  options={systemsDict.data ?? []}
-                  isLoading={systemsDict.isLoading}
-                  placeholder="Select system(s)"
-                  unitLabel="system"
+                  placeholder="Select system"
                   disabled={systemEntry.visibility === 'readonly'}
+                  optionsOverride={systemsDict.data ?? []}
+                  isLoadingOverride={systemsDict.isLoading}
                   aria-invalid={Boolean(errors.system)}
                   aria-describedby={errors.system ? 'component-system-error' : undefined}
                 />

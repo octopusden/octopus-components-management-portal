@@ -9,12 +9,29 @@ import {
 import { useFieldOptions } from '../../hooks/useFieldOptions'
 
 interface EnumSelectProps {
+  /**
+   * Field-config path consumed by the internal `useFieldOptions` fallback.
+   * Ignored when `optionsOverride` is provided — pass any unique-ish string
+   * (or '' / the field id) so callers can opt out of the hook entirely.
+   */
   fieldPath: string
   value: string
   onValueChange: (value: string) => void
   placeholder?: string
   allowFreeText?: boolean
   disabled?: boolean
+  /**
+   * Caller-supplied option list. When provided, EnumSelect skips its
+   * internal `useFieldOptions(fieldPath)` call and renders from this
+   * array directly. Use case: the System editor (task #14) needs the
+   * FULL dictionary (`/components/meta/systems/dictionary`) rather than
+   * the in-use-values endpoint that `useFieldOptions('component.systems')`
+   * falls back to — otherwise a newly-defined dictionary value with no
+   * existing component assignment would be invisible in the editor.
+   */
+  optionsOverride?: string[]
+  /** Loading flag paired with `optionsOverride`. */
+  isLoadingOverride?: boolean
   /**
    * `id` and `aria-*` are forwarded to the underlying trigger (SelectTrigger,
    * or the free-text Input when `allowFreeText` is on and the dictionary is
@@ -47,8 +64,17 @@ export function EnumSelect({
   'aria-invalid': ariaInvalid,
   'aria-describedby': ariaDescribedBy,
   onBlur,
+  optionsOverride,
+  isLoadingOverride,
 }: EnumSelectProps) {
-  const { options, isLoading } = useFieldOptions(fieldPath)
+  // Conditional hook: when the caller supplies an override, we skip the
+  // internal data source entirely so it doesn't fire a no-op query. The
+  // pattern uses the same useFieldOptions hook for both branches via an
+  // `enabled` flag inside the hook (skipToken on the meta query) — caller
+  // override short-circuits the field-config read too.
+  const hookResult = useFieldOptions(fieldPath, { enabled: optionsOverride === undefined })
+  const options = optionsOverride ?? hookResult.options
+  const isLoading = optionsOverride !== undefined ? Boolean(isLoadingOverride) : hookResult.isLoading
 
   // Bundled here so all three render branches forward the same a11y set without
   // drift; spreading `triggerA11y` keeps the JSX below tidy.
