@@ -453,16 +453,35 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
     expect(screen.queryByLabelText(/releases in default branch/i)).toBeNull()
   })
 
-  it('labels editable → multi-select trigger reflects current selection count', () => {
+  it('labels editable → chips UX renders one badge per stored label (task #9)', () => {
     setAllEditable()
     const component = baseComponent({ labels: ['backend', 'internal'] })
     renderWithProviders(<Harness component={component} />)
 
-    // Two labels selected → "2 labelss" pluralisation (unitLabel="label"
-    // appended with a literal "s"). The trigger is a Button labelled by
-    // the outer <Label htmlFor>.
-    const trigger = screen.getByRole('button', { name: /^labels$/i })
-    expect(trigger.textContent).toMatch(/2/)
+    // The chips primitive renders each value as a Badge plus an aria-
+    // labelled remove button. Two labels stored → two remove buttons.
+    expect(screen.getByRole('button', { name: /^remove backend$/i })).toBeDefined()
+    expect(screen.getByRole('button', { name: /^remove internal$/i })).toBeDefined()
+  })
+
+  it('labels readonly → × buttons + add control disabled (task #9 integration)', () => {
+    // Parity with the System readonly test: when field-config marks labels
+    // readonly, both the per-chip × buttons and the add control must be
+    // disabled. The integration path matters — ChipsInput's `disabled`
+    // unit test covers the prop, but the GeneralTab gate that wires
+    // `labelsEntry.visibility === 'readonly'` to that prop is what we're
+    // pinning here.
+    mockUseFieldConfigEntry.mockImplementation((path: string) => {
+      if (path === 'component.labels') return makeEntry('readonly')
+      return makeEntry('editable')
+    })
+    const component = baseComponent({ labels: ['backend'] })
+    renderWithProviders(<Harness component={component} />)
+
+    const removeBackend = screen.getByRole('button', { name: /^remove backend$/i }) as HTMLButtonElement
+    expect(removeBackend.disabled).toBe(true)
+    const addControl = screen.getByLabelText(/^add label$/i) as HTMLSelectElement
+    expect(addControl.disabled).toBe(true)
   })
 
   it('all SYS-039 entries hidden → none of the SYS-039 controls render', () => {
@@ -751,21 +770,31 @@ describe('GeneralTab — system + labels multi-select (ui-swift-sloth §4)', () 
     })
   })
 
-  it('hydrates labels multi-select from component.labels and untick narrows the array', async () => {
+  it('hydrates labels chips from component.labels and clicking × removes the chip (task #9)', async () => {
     setAllEditable()
     const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
     const component = baseComponent({ labels: ['backend', 'internal'] })
     renderWithProviders(<Harness component={component} formRef={formRef} />)
 
-    const trigger = screen.getByRole('button', { name: /^labels$/i })
-    await userEvent.click(trigger)
-
-    const backend = screen.getByRole('checkbox', { name: 'backend' }) as HTMLInputElement
-    expect(backend.checked).toBe(true)
-    await userEvent.click(backend)
+    const removeBackend = screen.getByRole('button', { name: /^remove backend$/i })
+    await userEvent.click(removeBackend)
 
     await waitFor(() => {
       expect(formRef.current?.getValues('labels')).toEqual(['internal'])
+    })
+  })
+
+  it('picking a label from the add control appends to form value (task #9)', async () => {
+    setAllEditable()
+    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    const component = baseComponent({ labels: ['backend'] })
+    renderWithProviders(<Harness component={component} formRef={formRef} />)
+
+    const addControl = screen.getByLabelText(/^add label$/i) as HTMLSelectElement
+    await userEvent.selectOptions(addControl, 'frontend')
+
+    await waitFor(() => {
+      expect(formRef.current?.getValues('labels')).toEqual(['backend', 'frontend'])
     })
   })
 

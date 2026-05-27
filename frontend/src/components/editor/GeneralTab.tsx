@@ -9,6 +9,7 @@ import { Switch } from '../ui/switch'
 import { PeopleInput } from '../ui/PeopleInput'
 import { ComponentSelect } from '../ui/ComponentSelect'
 import { MultiSelectFilter } from '../ui/MultiSelectFilter'
+import { ChipsInput } from '../ui/ChipsInput'
 import type { ComponentDetail } from '../../lib/types'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../../lib/auth'
@@ -582,11 +583,17 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
               </div>
             )}
 
-            {/* Labels — dictionary-backed multi-select (ui-swift-sloth §4). */}
+            {/* Labels — chips/tags UX (task #9). Each value renders as a
+                shadcn Badge with an inline × close button; an inline
+                "Add label" picker offers the dictionary minus already-
+                added values. No free-text path — picks are restricted to
+                useLabelsDictionary(). Wire contract unchanged:
+                buildUpdateRequest still emits `labels: []` on dirty+
+                explicit-clear, omits on pre-hydration. */}
             {labelsEntry.visibility !== 'hidden' && (
               <div className="space-y-1.5 sm:col-span-2">
                 <Label htmlFor="component-labels">Labels</Label>
-                <MultiSelectFilter
+                <ChipsInput
                   id="component-labels"
                   value={labelsValue ?? []}
                   onChange={(next) =>
@@ -594,11 +601,10 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                   }
                   options={labelsDict.data ?? []}
                   isLoading={labelsDict.isLoading}
-                  placeholder="Select labels"
-                  unitLabel="label"
+                  placeholder="Add label"
                   disabled={labelsEntry.visibility === 'readonly'}
-                  aria-invalid={Boolean(errors.labels)}
-                  aria-describedby={errors.labels ? 'component-labels-error' : undefined}
+                  ariaInvalid={Boolean(errors.labels)}
+                  ariaDescribedBy={errors.labels ? 'component-labels-error' : undefined}
                 />
                 {errors.labels && (
                   <p id="component-labels-error" className="text-xs text-destructive">
