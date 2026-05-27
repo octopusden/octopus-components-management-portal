@@ -132,6 +132,7 @@ The P1 UI features rely on these CRS endpoints (all behind the `/rest/**` proxy 
 | `PATCH /components/{id}` with `parentComponentName` | Parent autocomplete save (B7.1.5) | `canEditComponent` |
 | `GET /audit/Component/{id}` | Per-component History tab (B7.1.2) | existing |
 | `GET /audit/recent?changedBy=&source=&action=&from=&to=` | Audit-log filter sidebar (B7.1.3) | `SYS-036` |
+| `GET /rest/api/2/common/supported-groups` | Create Component dialog: allowed groupId prefixes (auto-suggest + validation gate) | existing CRS v2 endpoint; lives outside `/rest/api/4`, reached via `apiAbsolute` helper |
 
 When a new endpoint is consumed, **add a row here** so the boundary stays reviewable. Cross-repo links between living indexes (this `architecture.md` and CRS docs) may use the active branch (`v3` for CRS, `develop` for Portal) per [`DOCS.md`](../DOCS.md) authoring rule #5.
 
