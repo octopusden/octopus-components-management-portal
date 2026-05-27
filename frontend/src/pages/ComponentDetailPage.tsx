@@ -138,6 +138,19 @@ export function ComponentDetailPage() {
     },
   })
 
+  // RHF v7's formState is a lazy proxy: dirtyFields / touchedFields only
+  // populate if a render-time read subscribes to them. handleSave runs
+  // outside the render path, so reading form.formState.dirtyFields there
+  // would silently return `{}`. Touch the proxy properties during render
+  // so the in-handleSave reads see live data. Confirmed behaviour, not
+  // micro-optimisation: without this, the systems guard's
+  // form.formState.dirtyFields.system === true check and the labels
+  // synth-dirty's form.formState.touchedFields.labels === true check
+  // would both always be false at handleSave time. `void` keeps TS happy
+  // about the otherwise-unused expressions.
+  void form.formState.dirtyFields
+  void form.formState.touchedFields
+
   async function handleSave() {
     if (!component) return
     // Server-side errors set on a previous failed submit don't auto-clear
@@ -248,7 +261,29 @@ export function ComponentDetailPage() {
         // type system accepts the runtime contract; the === true check
         // ignores both `undefined` and any future partial-dirty array shape.
         system: (form.formState.dirtyFields.system as unknown) === true,
-        labels: (form.formState.dirtyFields.labels as unknown) === true,
+        // labels: close the RHF clear-all blind-spot (PR #44 follow-up).
+        // RHF treats `setValue('labels', [])` as not-dirty when the form
+        // default is also `[]` — so a user who unchecks every label gets
+        // dirty=false even with shouldDirty:true. The chip UI uses
+        // shouldTouch:true to flip `touchedFields.labels`, which gives us
+        // a reliable "user interacted" signal independent of RHF's
+        // value-equality dirty check.
+        //
+        // Synth-dirty fires when ALL of these hold:
+        //   - field is not FC-hidden (admins who hid it can't fix the form),
+        //   - user has touched the field (touchedFields.labels === true) —
+        //     guards against the pre-hydration race where form is the []
+        //     default and component.labels is non-empty,
+        //   - server had labels (component.labels.length > 0),
+        //   - form has no labels now (form.getValues('labels').length === 0).
+        // The touched guard makes "fails closed" symmetric with the systems
+        // race: if the user hasn't touched labels, no synth → no PATCH wipe.
+        labels:
+          (form.formState.dirtyFields.labels as unknown) === true ||
+          (labelsFc.visibility !== 'hidden' &&
+            (form.formState.touchedFields.labels as unknown) === true &&
+            (component.labels?.length ?? 0) > 0 &&
+            (form.getValues('labels')?.length ?? 0) === 0),
         groupId: form.formState.dirtyFields.groupId === true,
         teamcityProjects: !!form.formState.dirtyFields.teamcityProjects,
         docs: !!form.formState.dirtyFields.docs,

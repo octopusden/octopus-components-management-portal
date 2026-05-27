@@ -442,6 +442,14 @@ describe('buildUpdateRequest — labels + systems dirty-gate matrix (ui-swift-sl
     // dropped this case, producing the success-toast-but-server-unchanged
     // bug. The dirty-gate still guards against the pre-hydration clobber
     // (no-dirty + empty → omit), but dirty + empty now emits [] explicitly.
+    //
+    // PR #44 follow-up note: ComponentDetailPage.handleSave SYNTHESISES
+    // `dirtyFields.labels: true` for this case via the touched-gate +
+    // server-vs-form value-compare (RHF's own dirtyFields stays false
+    // when setValue('labels', []) hits the form-default []). This test
+    // pins buildUpdateRequest's half of the contract: given dirty:true +
+    // empty array, emit `labels: []` regardless of how the caller arrived
+    // at the dirty flag.
     const req = buildUpdateRequest({
       component: makeComponent({ labels: ['backend'] }),
       values: makeValues({ labels: [] }),

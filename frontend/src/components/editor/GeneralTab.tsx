@@ -228,6 +228,11 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
     setValue('securityChampion', component.securityChampion ?? '')
     setValue('copyright', component.copyright ?? '')
     setValue('releasesInDefaultBranch', component.releasesInDefaultBranch ?? false)
+    // Hydration MUST NOT set `shouldTouch:true` — the touched flag is the
+    // signal ComponentDetailPage.handleSave uses to distinguish a real
+    // user clear-all from the pre-hydration race (PR #44 follow-up).
+    // Only the ChipsInput onChange below sets shouldTouch, when the user
+    // actually interacts with the field.
     setValue('labels', component.labels ?? [])
     // schema-v2 lists. setValue replaces the array wholesale; useFieldArray
     // picks up the new keys on the next render.
@@ -597,7 +602,15 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                   id="component-labels"
                   value={labelsValue ?? []}
                   onChange={(next) =>
-                    setValue('labels', next, { shouldDirty: true })
+                    // shouldTouch:true marks the field as user-interacted
+                    // even when shouldDirty's value-equality check fails
+                    // (e.g. user removes the last chip and the new value
+                    // [] equals the form default []). ComponentDetailPage
+                    // reads `touchedFields.labels` to distinguish a real
+                    // clear-all from the pre-hydration race where the
+                    // form-default [] and a non-empty component.labels
+                    // would otherwise look identical to the value-compare.
+                    setValue('labels', next, { shouldDirty: true, shouldTouch: true })
                   }
                   options={labelsDict.data ?? []}
                   isLoading={labelsDict.isLoading}

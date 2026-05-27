@@ -747,6 +747,122 @@ describe('ComponentDetailPage — systems clear-blocks-save guard (PR #44 P2 sys
   })
 })
 
+describe('ComponentDetailPage — labels clear-all sends [] (PR #44 follow-up: close RHF blind-spot)', () => {
+  // The systems guard (above) and the labels clear case both hit the same
+  // RHF quirk: setValue('field', []) does NOT mark the field dirty when
+  // the form default is also [], so `formState.dirtyFields.<field>` stays
+  // false even after a user-driven clear-all. For systems we BLOCK save
+  // (systems is required server-side). For labels we SEND `[]` (labels
+  // is OPTIONAL — clear-all is a valid intent that the previous code
+  // silently dropped because buildUpdateRequest's `dirtyFields.labels !==
+  // true` clause omitted the field).
+  //
+  // The fix synthesises a `dirtyFlags.labels` from the server-vs-form
+  // value compare and feeds that into buildUpdateRequest.
+
+  it('component had labels + user removes them all via chips × → PATCH body contains labels: []', async () => {
+    // Stub mimics the real GeneralTab + ChipsInput interaction: hydrate
+    // from component.labels, then simulate the chip × path which calls
+    // setValue with shouldDirty + shouldTouch. RHF's value-equality
+    // check keeps dirty=false (final value [] == default []), but
+    // touchedFields.labels flips to true — the signal handleSave's
+    // synth-dirty depends on.
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('labels', component.labels ?? [])
+        form.setValue('labels', [], { shouldDirty: true, shouldTouch: true })
+        // Hydrate systems too so the unrelated systems guard doesn't trip.
+        form.setValue('system', component.systems ?? [])
+      }, [component, form])
+      return React.createElement('div', { 'data-testid': 'general-tab-labels-cleared' })
+    })
+    const updateMutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    const seeded: ComponentDetail = { ...baseComponent, labels: ['backend', 'internal'] }
+    renderPage(seeded, user, { updateMutation: { mutateAsync: updateMutateAsync } })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('general-tab-labels-cleared')).toBeDefined()
+    })
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
+    const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
+    // The explicit `labels: []` clear must reach the wire — not undefined,
+    // not absent. PATCH semantics: present-and-empty-array == REPLACE
+    // with empty list.
+    expect(payload['labels']).toEqual([])
+  })
+
+  it('component had NO labels + form is empty + untouched → labels omitted (no-op-write guard)', async () => {
+    // The value-compare synthetic-dirty must NOT fire when the server
+    // had no labels to begin with — that case is "nothing to clear", and
+    // emitting labels:[] would be a no-op write the server doesn't need.
+    const updateMutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    const seeded: ComponentDetail = { ...baseComponent, labels: [] }
+    renderPage(seeded, user, { updateMutation: { mutateAsync: updateMutateAsync } })
+
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
+    const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
+    expect(payload['labels']).toBeUndefined()
+  })
+
+  it('PRE-HYDRATION RACE: component HAS labels, form not yet hydrated, untouched → labels omitted (fails closed)', async () => {
+    // The dangerous race: useComponent resolves → React renders → Save
+    // button is enabled → GeneralTab.useEffect has NOT fired → user
+    // clicks Save. form.getValues('labels') returns the form default [].
+    // Without the touched-gate, the value-compare would fire (server has
+    // ['backend'], form has []) and emit labels:[] — silently wiping the
+    // server data. The touched-gate `touchedFields.labels === true`
+    // makes this fail closed: synth-dirty stays false until the user
+    // actually interacts with the field.
+    //
+    // The default GeneralTab stub in beforeEach only hydrates `system`
+    // (per the systems guard's needs). Labels stays at the form default
+    // [], exactly modelling the pre-hydration window for this field.
+    const updateMutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    const seeded: ComponentDetail = { ...baseComponent, labels: ['backend', 'internal'] }
+    renderPage(seeded, user, { updateMutation: { mutateAsync: updateMutateAsync } })
+
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
+    const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
+    // Critical: the payload must NOT carry labels (omit, not []) because
+    // the user hasn't touched the field. The server keeps its existing
+    // ['backend', 'internal'] under PATCH no-op semantics.
+    expect(payload['labels']).toBeUndefined()
+  })
+
+  it('labels hidden via field-config → clear-all is NOT synthesised (defence-in-depth)', async () => {
+    // Admins who hid the labels field can't see or fix it from the form,
+    // so the save path must not force-emit []: that would let a hidden
+    // form snapshot overwrite the server value. The hidden gate must
+    // short-circuit before the value-compare runs.
+    mockedUseFieldConfigEntry.mockImplementation((path: string) => ({
+      entry: path === 'component.labels'
+        ? { visibility: 'hidden' as const, required: false }
+        : { visibility: 'editable' as const, required: false },
+      isLoading: false,
+      isError: false,
+    }))
+    const updateMutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    const seeded: ComponentDetail = { ...baseComponent, labels: ['backend'] }
+    renderPage(seeded, user, { updateMutation: { mutateAsync: updateMutateAsync } })
+
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
+    const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
+    expect(payload['labels']).toBeUndefined()
+  })
+})
+
 describe('ComponentDetailPage — confirmation dialog text', () => {
   it('dialog says "Archive Component" and "restore it later", not "cannot be undone"', async () => {
     const user = makeUser(['ACCESS_COMPONENTS', 'DELETE_COMPONENTS'])
