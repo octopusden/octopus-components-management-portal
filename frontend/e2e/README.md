@@ -16,7 +16,7 @@ daemon and credentials for whichever registry hosts the CRS image.
 | Postgres    | `postgres:16`                                      | `crs-postgres`   |
 | Keycloak    | `quay.io/keycloak/keycloak:24.0.3`                 | `keycloak`       |
 | CRS         | `${crs.docker.registry}/.../components-registry-service:${crs.version}` | `crs` |
-| Portal      | `eclipse-temurin:21-jre` + bind-mounted bootJar    | `portal`         |
+| Portal      | `eclipse-temurin:25-jdk` + bind-mounted bootJar    | `portal`         |
 | Playwright  | `mcr.microsoft.com/playwright:v1.60.0-jammy`       | (one-shot)       |
 
 The single canonical Keycloak URL — `http://keycloak:8080` — resolves

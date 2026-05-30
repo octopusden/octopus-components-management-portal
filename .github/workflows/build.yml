@@ -4,8 +4,8 @@ on: [push, pull_request, workflow_dispatch]
 
 jobs:
   run-build-and-deploy:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v2.2.0
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v2.3.4
     with:
       flow-type: hybrid
-      java-version: '21'
+      java-version: '25'
       docker-image: components-management-portal

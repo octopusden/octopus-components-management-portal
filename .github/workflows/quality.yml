@@ -15,5 +15,5 @@ jobs:
   quality:
     uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v2.3.4
     with:
-      java-version: '21'
+      java-version: '25'
     secrets: inherit

@@ -36,7 +36,7 @@ object PortalContainer {
     ): GenericContainer<*> {
         check(bootJar.toFile().isFile) { "bootJar not found at $bootJar — run :bootJar first" }
 
-        return GenericContainer(DockerImageName.parse("$dockerRegistry/eclipse-temurin:21-jre"))
+        return GenericContainer(DockerImageName.parse("$dockerRegistry/eclipse-temurin:25-jdk"))
             .withNetwork(network)
             .withNetworkAliases(NETWORK_ALIAS)
             .withExposedPorts(INTERNAL_PORT, MANAGEMENT_PORT)

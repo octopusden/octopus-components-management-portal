@@ -62,7 +62,7 @@ object id10CompileUtAuto : BuildType({
     name = "[1.0] Compile & UT [AUTO]"
 
     params {
-        param("env.JAVA_HOME", "%env.JDK_ZULU_21_x64%")
+        param("env.JAVA_HOME", "%env.JDK_ZULU_25_x64%")
         param("ARTIFACT_PATH", """
             build/reports/tests/** => reports/kotlin-tests
             build/reports/jacoco/** => reports/kotlin-coverage
@@ -115,7 +115,7 @@ object id15E2eAuto : BuildType({
     maxRunningBuilds = 2
 
     params {
-        param("env.JAVA_HOME", "%env.JDK_ZULU_21_x64%")
+        param("env.JAVA_HOME", "%env.JDK_ZULU_25_x64%")
         param("ARTIFACT_PATH", """
             build/reports/tests/e2eTest/** => reports/e2e
             build/test-results/e2eTest/** => test-results/e2e
