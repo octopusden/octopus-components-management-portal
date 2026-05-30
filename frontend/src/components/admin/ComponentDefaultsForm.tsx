@@ -20,9 +20,10 @@ interface DefaultsData {
   artifactIdPattern?: string
   groupIdPattern?: string
   componentDisplayName?: string
-  componentOwner?: string
-  releaseManager?: string
-  securityChampion?: string
+  // componentOwner / releaseManager / securityChampion are intentionally NOT
+  // part of the global component-defaults surface — the real Defaults.groovy
+  // never sets them. They are stripped on load and before save by
+  // sanitizeDefaults() (see below).
   // CRS PR #301 renamed the default key to singular alongside the DTO collapse.
   system?: string
   clientCode?: string
@@ -52,6 +53,20 @@ function getBool(obj: Record<string, unknown> | undefined, key: string): boolean
   return (obj?.[key] as boolean) ?? false
 }
 
+// People fields don't belong in the GLOBAL component-defaults blob — the real
+// Defaults.groovy never sets them. Strip them on load AND before every save
+// (form-view and raw-JSON) so any stale stored keys are actively removed the
+// next time defaults are persisted. Raw JSON is not an escape hatch.
+const PEOPLE_DEFAULT_KEYS = ['componentOwner', 'releaseManager', 'securityChampion'] as const
+
+function sanitizeDefaults<T extends Record<string, unknown>>(obj: T): T {
+  const next = { ...obj }
+  for (const key of PEOPLE_DEFAULT_KEYS) {
+    delete next[key]
+  }
+  return next
+}
+
 export function ComponentDefaultsForm() {
   const { data, isLoading, error } = useComponentDefaults()
   const updateMutation = useUpdateComponentDefaults()
@@ -71,8 +86,11 @@ export function ComponentDefaultsForm() {
 
   useEffect(() => {
     if (data) {
-      setDefaults(data as DefaultsData)
-      setJsonText(JSON.stringify(data, null, 2))
+      // Strip stale people keys on load so they never re-render (form or raw
+      // JSON) and never get re-persisted on the next save.
+      const sanitized = sanitizeDefaults(data as DefaultsData)
+      setDefaults(sanitized)
+      setJsonText(JSON.stringify(sanitized, null, 2))
     }
   }, [data])
 
@@ -89,8 +107,9 @@ export function ComponentDefaultsForm() {
 
   const handleReset = () => {
     if (data) {
-      setDefaults(data as DefaultsData)
-      setJsonText(JSON.stringify(data, null, 2))
+      const sanitized = sanitizeDefaults(data as DefaultsData)
+      setDefaults(sanitized)
+      setJsonText(JSON.stringify(sanitized, null, 2))
       setParseError(null)
     }
   }
@@ -109,6 +128,11 @@ export function ComponentDefaultsForm() {
     } else {
       toSave = defaults as Record<string, unknown>
     }
+
+    // Belt-and-braces: strip the people keys before persisting on BOTH the
+    // form-view and raw-JSON paths, so a stored blob that still carries them
+    // (or a raw-JSON edit that re-adds them) is cleaned on the next save.
+    toSave = sanitizeDefaults(toSave)
 
     updateMutation.mutate(toSave, {
       onSuccess: () => {
@@ -230,15 +254,10 @@ export function ComponentDefaultsForm() {
               <FieldInput label="Display Name">
                 <Input value={defaults.componentDisplayName ?? ''} onChange={(e) => setField('componentDisplayName', e.target.value || undefined)} />
               </FieldInput>
-              <FieldInput label="Component Owner">
-                <Input value={defaults.componentOwner ?? ''} onChange={(e) => setField('componentOwner', e.target.value || undefined)} />
-              </FieldInput>
-              <FieldInput label="Release Manager">
-                <Input value={defaults.releaseManager ?? ''} onChange={(e) => setField('releaseManager', e.target.value || undefined)} />
-              </FieldInput>
-              <FieldInput label="Security Champion">
-                <Input value={defaults.securityChampion ?? ''} onChange={(e) => setField('securityChampion', e.target.value || undefined)} />
-              </FieldInput>
+              {/* componentOwner / releaseManager / securityChampion removed:
+                  people fields are not part of the global component-defaults
+                  surface (the real Defaults.groovy never sets them, and they
+                  are now per-component multi-value editor fields). */}
               <FieldInput label="System">
                 <Input value={defaults.system ?? ''} onChange={(e) => setField('system', e.target.value || undefined)} />
               </FieldInput>

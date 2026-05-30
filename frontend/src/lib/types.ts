@@ -49,9 +49,11 @@ export interface ComponentDetail {
   version: number
   createdAt: string | null
   updatedAt: string | null
-  // SYS-039 retained scalars
-  releaseManager?: string | null
-  securityChampion?: string | null
+  // SYS-039 — releaseManager / securityChampion are now ordered multi-value
+  // lists (CRS v4 ordered child rows). componentOwner stays single-value.
+  // The server emits [] for empty, never omits the key (default emptyList()).
+  releaseManager?: string[]
+  securityChampion?: string[]
   copyright?: string | null
   releasesInDefaultBranch?: boolean | null
   labels: string[]
@@ -316,8 +318,11 @@ export interface ComponentCreateRequest {
   solution?: boolean | null
   parentComponentName?: string | null
   archived?: boolean
-  releaseManager?: string | null
-  securityChampion?: string | null
+  // Ordered multi-value lists on create. The CRS ComponentCreateRequest
+  // defaults them to emptyList(), so the field is optional here — the create
+  // dialog omits it entirely (people are added later via the editor).
+  releaseManager?: string[]
+  securityChampion?: string[]
   copyright?: string | null
   releasesInDefaultBranch?: boolean | null
   labels?: string[]
@@ -350,8 +355,10 @@ export interface ComponentUpdateRequest {
   solution?: boolean | null
   parentComponentName?: string | null
   archived?: boolean | null
-  releaseManager?: string | null
-  securityChampion?: string | null
+  // PATCH semantics mirror `labels`: omit / null = don't touch; a provided
+  // ordered list (including empty [] = clear) REPLACES the whole list.
+  releaseManager?: string[] | null
+  securityChampion?: string[] | null
   copyright?: string | null
   releasesInDefaultBranch?: boolean | null
   labels?: string[] | null

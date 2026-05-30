@@ -63,6 +63,18 @@ With CRS schema v2 (`component_configurations` as the wide row), three child-col
 
 Each editor is a `useFieldArray` row list with inline add and per-row delete. They share the page-level `react-hook-form` state; the General tab Save button mutates them together with the scalar fields in one PATCH.
 
+### Release Managers / Security Champions (SYS-039 — multi-value)
+
+`releaseManager` and `securityChampion` are **ordered multi-value** lists (first = primary), edited with [`PeopleListInput`](../../frontend/src/components/ui/PeopleListInput.tsx) — a reorderable people editor (add / remove / move-up / move-down) that reuses the single-value `PeopleInput` autocomplete for its add-row. `componentOwner` is **unchanged** — it stays a single-value `PeopleInput`.
+
+- **JSON field names stay singular** (`releaseManager`, `securityChampion`); only the type changed `string` → `string[]` in the v4 contract. Legacy v1/v2/v3 keep the comma-joined `String`.
+- **UI labels are plural** ("Release Managers" / "Security Champions"); the form field keys remain singular.
+- **Dedupe**: a username already present cannot be added again (keep-first), mirroring the server-side canonicalization (trim → drop-blank → keep-first dedupe).
+- **Save semantics mirror `labels`**: the `PeopleListInput.onChange` sets `{ shouldDirty: true, shouldTouch: true }`, and `ComponentDetailPage` synthesises a dirty flag for the clear-all case (touched + server-had-values + form-now-empty). `buildUpdateRequest` then dirty-gates a REPLACE: omit when not dirty (pre-hydration guard), emit the ordered canonicalized array when dirty (with `[]` = explicit clear).
+- The readonly field-config branch renders the joined list (comma-separated, disabled).
+
+> People fields are **not** part of the global **Component Defaults** admin form (`ComponentDefaultsForm`): the real `Defaults.groovy` never sets `componentOwner` / `releaseManager` / `securityChampion`, so those three inputs were removed and any stale stored keys are stripped on load and before every save (form-view and raw-JSON paths).
+
 ### Optimistic-locking conflict UX (B7.1.6)
 
 On `409 Conflict`:
@@ -86,13 +98,14 @@ This is the lighter path Plan §7.1.6 explicitly allowed. The full ConflictResol
 
 ## Navigation between detail pages
 
-When the user navigates `/components/A → /components/B`, React Router can reuse the page instance. The page-level `useForm` rehydrates via `useEffect([component, setValue])`, but `<ComponentSelect>` and `<PeopleInput>` keep internal state (`inputValue`) in their own `useState`. To prevent stale typed-but-unblurred input from leaking into the new component's form, we pass `key={component.id}` to `<GeneralTab>` so React tears down the subtree and remounts on navigation. See `ComponentDetailPage.tsx:282-289` for the rationale comment.
+When the user navigates `/components/A → /components/B`, React Router can reuse the page instance. The page-level `useForm` rehydrates via `useEffect([component, setValue])`, but `<ComponentSelect>`, `<PeopleInput>` and `<PeopleListInput>`'s add-row keep internal state (`inputValue`) in their own `useState`. To prevent stale typed-but-unblurred input from leaking into the new component's form, we pass `key={component.id}` to `<GeneralTab>` so React tears down the subtree and remounts on navigation. See `ComponentDetailPage.tsx:282-289` for the rationale comment.
 
 ## Files of interest
 
 - [`frontend/src/pages/ComponentDetailPage.tsx`](../../frontend/src/pages/ComponentDetailPage.tsx)
 - [`frontend/src/components/editor/GeneralTab.tsx`](../../frontend/src/components/editor/GeneralTab.tsx)
 - [`frontend/src/components/ui/ComponentSelect.tsx`](../../frontend/src/components/ui/ComponentSelect.tsx)
+- [`frontend/src/components/ui/PeopleListInput.tsx`](../../frontend/src/components/ui/PeopleListInput.tsx)
 - [`frontend/src/components/editor/ComponentHistoryTab.tsx`](../../frontend/src/components/editor/ComponentHistoryTab.tsx)
 - [`frontend/src/lib/conflict.ts`](../../frontend/src/lib/conflict.ts)
 - [`frontend/src/hooks/useComponent.ts`](../../frontend/src/hooks/useComponent.ts)

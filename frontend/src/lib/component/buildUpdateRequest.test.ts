@@ -44,8 +44,8 @@ function makeValues(overrides: Partial<GeneralFormValues> = {}): GeneralFormValu
     parentComponentName: '',
     groupId: '',
     groupIsFake: false,
-    releaseManager: '',
-    securityChampion: '',
+    releaseManager: [],
+    securityChampion: [],
     copyright: '',
     releasesInDefaultBranch: false,
     labels: [],
@@ -534,6 +534,84 @@ describe('buildUpdateRequest — labels + systems dirty-gate matrix (ui-swift-sl
       dirtyFields: {},
     })
     expect(req.labels).toBeUndefined()
+  })
+})
+
+describe('buildUpdateRequest — releaseManager / securityChampion multi-value (SYS-039)', () => {
+  // These mirror the labels dirty-gate exactly: !dirty → omit (pre-hydration
+  // clobber guard), dirty + non-empty → ordered/canonicalized REPLACE, dirty +
+  // [] → explicit clear, hidden → omit. Order is meaningful (first = primary).
+
+  it('pre-hydration no-clobber: form mounts [], NOT dirty, server had values → omitted', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({ releaseManager: ['alice', 'bob'], securityChampion: ['carol'] }),
+      values: makeValues({ releaseManager: [], securityChampion: [] }),
+      visibilities: EDITABLE,
+      dirtyFields: {},
+    })
+    expect(req.releaseManager).toBeUndefined()
+    expect(req.securityChampion).toBeUndefined()
+  })
+
+  it('edit: user adds people → dirty + non-empty → ordered array forwarded', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({ releaseManager: [] }),
+      values: makeValues({ releaseManager: ['alice', 'bob'] }),
+      visibilities: EDITABLE,
+      dirtyFields: { releaseManager: true },
+    })
+    expect(req.releaseManager).toEqual(['alice', 'bob'])
+  })
+
+  it('reorder: dirty + reordered array → order preserved on the wire', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({ releaseManager: ['alice', 'bob', 'carol'] }),
+      values: makeValues({ releaseManager: ['carol', 'alice', 'bob'] }),
+      visibilities: EDITABLE,
+      dirtyFields: { releaseManager: true },
+    })
+    expect(req.releaseManager).toEqual(['carol', 'alice', 'bob'])
+  })
+
+  it('explicit clear: dirty + [] + server had values → emits [] (REPLACE-empty)', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({ releaseManager: ['alice'], securityChampion: ['carol'] }),
+      values: makeValues({ releaseManager: [], securityChampion: [] }),
+      visibilities: EDITABLE,
+      dirtyFields: { releaseManager: true, securityChampion: true },
+    })
+    expect(req.releaseManager).toEqual([])
+    expect(req.securityChampion).toEqual([])
+  })
+
+  it('canonicalizes: trim + drop-blank + keep-first dedupe, order preserved', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({ releaseManager: [] }),
+      values: makeValues({ releaseManager: [' alice ', '', 'alice', 'bob', '  '] }),
+      visibilities: EDITABLE,
+      dirtyFields: { releaseManager: true },
+    })
+    expect(req.releaseManager).toEqual(['alice', 'bob'])
+  })
+
+  it('hidden visibility → omitted even when dirty + non-empty', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({ releaseManager: [] }),
+      values: makeValues({ releaseManager: ['alice'] }),
+      visibilities: { ...EDITABLE, releaseManager: 'hidden' },
+      dirtyFields: { releaseManager: true },
+    })
+    expect(req.releaseManager).toBeUndefined()
+  })
+
+  it('securityChampion mirrors releaseManager: edit forwards the ordered array', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({ securityChampion: [] }),
+      values: makeValues({ securityChampion: ['carol', 'dave'] }),
+      visibilities: EDITABLE,
+      dirtyFields: { securityChampion: true },
+    })
+    expect(req.securityChampion).toEqual(['carol', 'dave'])
   })
 })
 

@@ -1062,8 +1062,8 @@ export interface components {
             solution?: boolean;
             parentComponentName?: string;
             archived: boolean;
-            releaseManager?: string;
-            securityChampion?: string;
+            releaseManager: string[];
+            securityChampion: string[];
             copyright?: string;
             releasesInDefaultBranch?: boolean;
             labels: string[];
@@ -1196,8 +1196,8 @@ export interface components {
             createdAt?: string;
             /** Format: date-time */
             updatedAt?: string;
-            releaseManager?: string;
-            securityChampion?: string;
+            releaseManager: string[];
+            securityChampion: string[];
             copyright?: string;
             releasesInDefaultBranch?: boolean;
             labels: string[];
@@ -1558,8 +1558,8 @@ export interface components {
             solution?: boolean;
             parentComponentName?: string;
             archived?: boolean;
-            releaseManager?: string;
-            securityChampion?: string;
+            releaseManager?: string[];
+            securityChampion?: string[];
             copyright?: string;
             releasesInDefaultBranch?: boolean;
             labels?: string[];

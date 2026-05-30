@@ -143,3 +143,72 @@ describe('ComponentDefaultsForm — Import from Git Admin-mode gate', () => {
     expect(screen.getByRole('button', { name: /^save$/i })).not.toBeDisabled()
   })
 })
+
+// SYS-039 §6: people fields (componentOwner / releaseManager / securityChampion)
+// are removed from the global component-defaults surface entirely, AND any
+// stale stored keys are actively stripped on load and before every save (form
+// view + raw JSON) so they don't get re-persisted.
+describe('ComponentDefaultsForm — people fields removed + sanitized (SYS-039)', () => {
+  beforeEach(() => {
+    // Stored blob still carries the legacy people keys (pre-migration data).
+    mockUseComponentDefaults.mockReturnValue({
+      data: {
+        buildSystem: 'GRADLE',
+        componentOwner: 'alice',
+        releaseManager: 'bob',
+        securityChampion: 'carol',
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useComponentDefaults>)
+  })
+
+  it('does not render Component Owner / Release Manager / Security Champion inputs', () => {
+    renderWithQuery(<ComponentDefaultsForm />)
+    expect(screen.queryByText('Component Owner')).toBeNull()
+    expect(screen.queryByText('Release Manager')).toBeNull()
+    expect(screen.queryByText('Security Champion')).toBeNull()
+  })
+
+  it('strips the 3 people keys from the payload on Save (form view) but keeps the rest', () => {
+    const mutate = vi.fn()
+    mockUseUpdateComponentDefaults.mockReturnValue(
+      { ...idleMutation(), mutate } as unknown as ReturnType<typeof useUpdateComponentDefaults>,
+    )
+
+    renderWithQuery(<ComponentDefaultsForm />)
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+
+    expect(mutate).toHaveBeenCalledOnce()
+    const payload = mutate.mock.calls[0]![0] as Record<string, unknown>
+    expect(payload).not.toHaveProperty('componentOwner')
+    expect(payload).not.toHaveProperty('releaseManager')
+    expect(payload).not.toHaveProperty('securityChampion')
+    expect(payload).toHaveProperty('buildSystem', 'GRADLE')
+  })
+
+  it('strips the 3 people keys even when saving via the Raw JSON path', async () => {
+    const mutate = vi.fn()
+    mockUseUpdateComponentDefaults.mockReturnValue(
+      { ...idleMutation(), mutate } as unknown as ReturnType<typeof useUpdateComponentDefaults>,
+    )
+
+    renderWithQuery(<ComponentDefaultsForm />)
+    // Flip to Raw JSON and inject a blob that re-adds the people keys.
+    fireEvent.click(screen.getByRole('button', { name: /raw json/i }))
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
+    fireEvent.change(textarea, {
+      target: { value: JSON.stringify({ buildSystem: 'MAVEN', componentOwner: 'x', releaseManager: 'y', securityChampion: 'z' }) },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+
+    expect(mutate).toHaveBeenCalledOnce()
+    const payload = mutate.mock.calls[0]![0] as Record<string, unknown>
+    expect(payload).not.toHaveProperty('componentOwner')
+    expect(payload).not.toHaveProperty('releaseManager')
+    expect(payload).not.toHaveProperty('securityChampion')
+    expect(payload).toHaveProperty('buildSystem', 'MAVEN')
+  })
+})
