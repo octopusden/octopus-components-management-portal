@@ -7,6 +7,7 @@ import { Label } from '../ui/label'
 import { Input } from '../ui/input'
 import { Switch } from '../ui/switch'
 import { PeopleInput } from '../ui/PeopleInput'
+import { PeopleListInput } from '../ui/PeopleListInput'
 import { ComponentSelect } from '../ui/ComponentSelect'
 import { ChipsInput } from '../ui/ChipsInput'
 import { EnumSelect } from '../ui/EnumSelect'
@@ -80,8 +81,10 @@ export interface GeneralFormValues {
   // groupId + existing component.group → clearGroup:true on save.
   groupId: string
   groupIsFake: boolean
-  releaseManager: string
-  securityChampion: string
+  // SYS-039 → multi-value: ordered people lists (first = primary). The JSON
+  // field names stay singular; only the TS type changed string → string[].
+  releaseManager: string[]
+  securityChampion: string[]
   copyright: string
   releasesInDefaultBranch: boolean
   labels: string[]
@@ -111,7 +114,8 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
   const solution = watch('solution')
   const componentOwner = watch('componentOwner')
   const parentComponentName = watch('parentComponentName')
-  // SYS-039 watchers — PeopleInput / Switch are controlled, not register'd
+  // SYS-039 watchers — PeopleListInput (multi-value) / Switch are controlled,
+  // not register'd. releaseManager / securityChampion are ordered string[].
   const releaseManager = watch('releaseManager')
   const securityChampion = watch('securityChampion')
   const releasesInDefaultBranch = watch('releasesInDefaultBranch')
@@ -232,8 +236,11 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
     // the form.
     setValue('groupId', component.group?.groupKey ?? '')
     setValue('groupIsFake', component.group?.isFake ?? false)
-    setValue('releaseManager', component.releaseManager ?? '')
-    setValue('securityChampion', component.securityChampion ?? '')
+    // Multi-value lists. Like `labels`, hydration MUST NOT set shouldTouch —
+    // the touched flag is the signal ComponentDetailPage.handleSave uses to
+    // tell a real user clear-all from the pre-hydration race.
+    setValue('releaseManager', component.releaseManager ?? [])
+    setValue('securityChampion', component.securityChampion ?? [])
     setValue('copyright', component.copyright ?? '')
     setValue('releasesInDefaultBranch', component.releasesInDefaultBranch ?? false)
     // Hydration MUST NOT set `shouldTouch:true` — the touched flag is the
@@ -475,22 +482,30 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
               </div>
             )}
 
-            {/* Release Manager — SYS-039 */}
+            {/* Release Managers — SYS-039 multi-value (ordered list). Label is
+                plural; the form field key / JSON field name stays singular
+                `releaseManager`. */}
             {releaseManagerEntry.visibility !== 'hidden' && (
               <div className="space-y-1.5">
-                <Label htmlFor="releaseManager">Release Manager</Label>
+                <Label htmlFor="releaseManager">Release Managers</Label>
                 {releaseManagerEntry.visibility === 'readonly' ? (
                   <Input
                     id="releaseManager"
-                    value={releaseManager}
+                    value={(releaseManager ?? []).join(', ')}
                     disabled
                     className="bg-muted"
                     readOnly
                   />
                 ) : (
-                  <PeopleInput
-                    value={releaseManager}
-                    onChange={(val) => setValue('releaseManager', val)}
+                  <PeopleListInput
+                    value={releaseManager ?? []}
+                    // shouldTouch:true is essential: the form default is [], so
+                    // RHF's value-equality dirty check misses a clear-all. The
+                    // touched flag is the reliable "user interacted" signal
+                    // (mirrors the `labels` precedent for clear-all).
+                    onChange={(val) =>
+                      setValue('releaseManager', val, { shouldDirty: true, shouldTouch: true })
+                    }
                   />
                 )}
                 {errors.releaseManager && (
@@ -499,22 +514,26 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
               </div>
             )}
 
-            {/* Security Champion — SYS-039 */}
+            {/* Security Champions — SYS-039 multi-value (ordered list). Label is
+                plural; the form field key / JSON field name stays singular
+                `securityChampion`. */}
             {securityChampionEntry.visibility !== 'hidden' && (
               <div className="space-y-1.5">
-                <Label htmlFor="securityChampion">Security Champion</Label>
+                <Label htmlFor="securityChampion">Security Champions</Label>
                 {securityChampionEntry.visibility === 'readonly' ? (
                   <Input
                     id="securityChampion"
-                    value={securityChampion}
+                    value={(securityChampion ?? []).join(', ')}
                     disabled
                     className="bg-muted"
                     readOnly
                   />
                 ) : (
-                  <PeopleInput
-                    value={securityChampion}
-                    onChange={(val) => setValue('securityChampion', val)}
+                  <PeopleListInput
+                    value={securityChampion ?? []}
+                    onChange={(val) =>
+                      setValue('securityChampion', val, { shouldDirty: true, shouldTouch: true })
+                    }
                   />
                 )}
                 {errors.securityChampion && (

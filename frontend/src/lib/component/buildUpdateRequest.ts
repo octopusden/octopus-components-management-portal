@@ -40,6 +40,10 @@ export interface DirtyFlags {
   // it needs a dirty-gate to block the form-default `[]` from clobbering
   // server data pre-hydration.
   labels?: boolean
+  // SYS-039 multi-value: releaseManager / securityChampion are ordered arrays
+  // with the same form-default-`[]` clobber risk as labels — dirty-gated.
+  releaseManager?: boolean
+  securityChampion?: boolean
   groupId?: boolean
   teamcityProjects?: boolean
   docs?: boolean
@@ -74,6 +78,24 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
   const labelsArray = Array.from(
     new Set(
       (values.labels ?? [])
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ),
+  )
+  // SYS-039 ordered people lists. Keep-first dedupe + trim + drop blanks,
+  // ORDER PRESERVED (Set keeps insertion order) — mirrors the server-side
+  // canonicalization (`replace…Usernames`). `[]` is a meaningful explicit
+  // clear, gated by dirtyFields below.
+  const releaseManagerArray = Array.from(
+    new Set(
+      (values.releaseManager ?? [])
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ),
+  )
+  const securityChampionArray = Array.from(
+    new Set(
+      (values.securityChampion ?? [])
         .map((s) => s.trim())
         .filter(Boolean),
     ),
@@ -136,12 +158,20 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
     solution: solutionChanged ? values.solution : undefined,
     archived: archivedChanged ? values.archived : undefined,
     parentComponentName,
+    // releaseManager / securityChampion mirror `labels` exactly: dirty-gated
+    // REPLACE with explicit-empty-clear. !dirty → omit (blocks the pre-
+    // hydration form-default `[]` from wiping server data); dirty + [] → emit
+    // [] (clear); dirty + non-empty → emit the ordered, canonicalized list.
+    // The old `|| undefined` string-falsy collapse is gone (arrays are never
+    // falsy, and [] is now a meaningful clear).
     releaseManager:
-      visibilities.releaseManager === 'hidden' ? undefined : (values.releaseManager || undefined),
-    securityChampion:
-      visibilities.securityChampion === 'hidden'
+      visibilities.releaseManager === 'hidden' || dirtyFields.releaseManager !== true
         ? undefined
-        : (values.securityChampion || undefined),
+        : releaseManagerArray,
+    securityChampion:
+      visibilities.securityChampion === 'hidden' || dirtyFields.securityChampion !== true
+        ? undefined
+        : securityChampionArray,
     copyright: visibilities.copyright === 'hidden' ? undefined : (values.copyright || undefined),
     releasesInDefaultBranch:
       visibilities.releasesInDefaultBranch === 'hidden' || !releasesInDefaultBranchChanged

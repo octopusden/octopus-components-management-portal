@@ -125,8 +125,12 @@ export function ComponentDetailPage() {
       // friends and emit empty / wrong wire shapes.
       groupId: '',
       groupIsFake: false,
-      releaseManager: '',
-      securityChampion: '',
+      // Multi-value people lists — default [] (mirrors labels). An early Save
+      // before useEffect hydrates from `component` reads [] here; the dirty-
+      // gate in the dirtyFields assembly below blocks that from clobbering
+      // server data.
+      releaseManager: [],
+      securityChampion: [],
       copyright: '',
       releasesInDefaultBranch: false,
       labels: [],
@@ -281,6 +285,26 @@ export function ComponentDetailPage() {
             (form.formState.touchedFields.labels as unknown) === true &&
             (component.labels?.length ?? 0) > 0 &&
             (form.getValues('labels')?.length ?? 0) === 0),
+        // releaseManager / securityChampion: multi-value arrays whose form
+        // default is []. Same RHF clear-all blind-spot as labels — a user who
+        // removes every person gets dirty=false because the new value []
+        // equals the form default []. PeopleListInput sets shouldTouch:true on
+        // every change, so the synth-dirty fires when ALL of: not FC-hidden,
+        // touched, server had values, form now empty. (Add/reorder already set
+        // RHF dirty via the non-empty value, so the `=== true` branch covers
+        // those.)
+        releaseManager:
+          (form.formState.dirtyFields.releaseManager as unknown) === true ||
+          (releaseManagerFc.visibility !== 'hidden' &&
+            (form.formState.touchedFields.releaseManager as unknown) === true &&
+            (component.releaseManager?.length ?? 0) > 0 &&
+            (form.getValues('releaseManager')?.length ?? 0) === 0),
+        securityChampion:
+          (form.formState.dirtyFields.securityChampion as unknown) === true ||
+          (securityChampionFc.visibility !== 'hidden' &&
+            (form.formState.touchedFields.securityChampion as unknown) === true &&
+            (component.securityChampion?.length ?? 0) > 0 &&
+            (form.getValues('securityChampion')?.length ?? 0) === 0),
         groupId: form.formState.dirtyFields.groupId === true,
         teamcityProjects: !!form.formState.dirtyFields.teamcityProjects,
         docs: !!form.formState.dirtyFields.docs,

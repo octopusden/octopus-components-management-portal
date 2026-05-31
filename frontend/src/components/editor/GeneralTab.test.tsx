@@ -110,8 +110,8 @@ function Harness({ component, formRef }: { component: ComponentDetail; formRef?:
       parentComponentName: component.parentComponentName ?? '',
       groupId: component.group?.groupKey ?? '',
       groupIsFake: component.group?.isFake ?? false,
-      releaseManager: component.releaseManager ?? '',
-      securityChampion: component.securityChampion ?? '',
+      releaseManager: component.releaseManager ?? [],
+      securityChampion: component.securityChampion ?? [],
       copyright: component.copyright ?? '',
       releasesInDefaultBranch: component.releasesInDefaultBranch ?? false,
       teamcityProjects: (component.teamcityProjects ?? []).map((tc) => ({ projectId: tc.projectId })),
@@ -405,26 +405,38 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
     expect(screen.queryByLabelText(/group key/i)).toBeNull()
   })
 
-  it('releaseManager editable → PeopleInput rendered (Label text present, not Input)', () => {
+  it('releaseManager editable → PeopleListInput hydrates ordered rows from the array', () => {
     setAllEditable()
-    const component = baseComponent({ releaseManager: 'rm-user' })
+    const component = baseComponent({ releaseManager: ['rm-1', 'rm-2'] })
     renderWithProviders(<Harness component={component} />)
 
-    // Editable path renders PeopleInput (custom widget). The <Label htmlFor>
-    // does not bind to a single Input id, so fall back to text presence.
-    expect(screen.getByText(/release manager/i)).toBeDefined()
+    // PeopleListInput renders one row per person, each with an aria-labelled
+    // Remove button. Two people stored → two remove buttons.
+    expect(screen.getByRole('button', { name: /^remove rm-1$/i })).toBeDefined()
+    expect(screen.getByRole('button', { name: /^remove rm-2$/i })).toBeDefined()
   })
 
-  it('releaseManager readonly → input rendered disabled', () => {
+  it('renders PLURAL labels "Release Managers" / "Security Champions"', () => {
+    setAllEditable()
+    const component = baseComponent({ releaseManager: ['rm-1'], securityChampion: ['sc-1'] })
+    renderWithProviders(<Harness component={component} />)
+
+    // Exact plural text (field keys / JSON names stay singular; only labels change).
+    expect(screen.getByText('Release Managers')).toBeDefined()
+    expect(screen.getByText('Security Champions')).toBeDefined()
+  })
+
+  it('releaseManager readonly → joined comma list rendered disabled', () => {
     mockUseFieldConfigEntry.mockImplementation((path: string) => {
       if (path === 'component.releaseManager') return makeEntry('readonly')
       return makeEntry('editable')
     })
-    const component = baseComponent({ releaseManager: 'rm-user' })
+    const component = baseComponent({ releaseManager: ['rm-a', 'rm-b'] })
     renderWithProviders(<Harness component={component} />)
 
-    const input = screen.getByLabelText(/release manager/i) as HTMLInputElement
+    const input = screen.getByLabelText(/release managers/i) as HTMLInputElement
     expect(input.disabled).toBe(true)
+    expect(input.value).toBe('rm-a, rm-b')
   })
 
   it('securityChampion hidden → input NOT rendered', () => {
@@ -432,10 +444,23 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
       if (path === 'component.securityChampion') return makeEntry('hidden')
       return makeEntry('editable')
     })
-    const component = baseComponent({ securityChampion: 'sc-user' })
+    const component = baseComponent({ securityChampion: ['sc-user'] })
     renderWithProviders(<Harness component={component} />)
 
     expect(screen.queryByLabelText(/security champion/i)).toBeNull()
+  })
+
+  it('reordering a release manager updates the ordered form value (move down)', async () => {
+    setAllEditable()
+    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    const component = baseComponent({ releaseManager: ['rm-1', 'rm-2'] })
+    renderWithProviders(<Harness component={component} formRef={formRef} />)
+
+    await userEvent.click(screen.getByRole('button', { name: /^move rm-1 down$/i }))
+
+    await waitFor(() => {
+      expect(formRef.current?.getValues('releaseManager')).toEqual(['rm-2', 'rm-1'])
+    })
   })
 
   it('copyright editable → input rendered with current value', () => {
@@ -505,8 +530,8 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
     })
     const component = baseComponent({
       group: { groupKey: 'org.example', isFake: false, role: 'MEMBER' },
-      releaseManager: 'rm',
-      securityChampion: 'sc',
+      releaseManager: ['rm'],
+      securityChampion: ['sc'],
       copyright: '(c)',
       releasesInDefaultBranch: true,
       labels: ['x'],
