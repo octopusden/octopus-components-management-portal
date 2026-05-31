@@ -600,7 +600,12 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
           ) : (
             docsFieldArray.fields.map((field, index) => (
               <div key={field.id} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
-                {/* Doc target restricted to components carrying the `doc` label. */}
+                {/* Doc target restricted to components carrying the `doc` label.
+                    `strict` enforces the restriction: only a suggestion click
+                    (drawn from the doc-filtered list) commits — a free-typed
+                    non-doc key reverts on blur instead of being saved. Without
+                    it the `filter` only narrowed the suggestions while any typed
+                    key still committed. */}
                 <ComponentSelect
                   id={`docs-${index}-key`}
                   ariaLabel={`Doc link component key (row ${index + 1})`}
@@ -609,6 +614,7 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                     setValue(`docs.${index}.docComponentKey` as const, val, { shouldDirty: true })
                   }
                   filter={{ labels: ['doc'] }}
+                  strict
                   placeholder="docs-component-key"
                 />
                 <Input
