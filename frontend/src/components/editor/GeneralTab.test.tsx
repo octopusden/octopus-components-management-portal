@@ -30,17 +30,6 @@ vi.mock('../../hooks/useLabelsDictionary', () => ({
   useLabelsDictionary: () => mockUseLabelsDictionary(),
 }))
 
-// Supported-groups hook for the editor group-key prefix gate. Default to a
-// permissive list; tests that exercise the disallowed-prefix path override.
-const mockUseSupportedGroups = vi.fn(() => ({
-  data: ['org.example', 'com.example'],
-  isLoading: false,
-  isError: false,
-}))
-vi.mock('../../hooks/useSupportedGroups', () => ({
-  useSupportedGroups: () => mockUseSupportedGroups(),
-}))
-
 // useFieldConfigEntry mock — controls visibility-gating per test.
 // Default: all fields 'editable'. Tests can override per field via mockReturnValue.
 const mockUseFieldConfigEntry = vi.fn()
@@ -108,8 +97,7 @@ function Harness({ component, formRef }: { component: ComponentDetail; formRef?:
       solution: component.solution ?? false,
       archived: component.archived,
       parentComponentName: component.parentComponentName ?? '',
-      groupId: component.group?.groupKey ?? '',
-      groupIsFake: component.group?.isFake ?? false,
+      canBeParent: component.canBeParent ?? false,
       releaseManager: component.releaseManager ?? [],
       securityChampion: component.securityChampion ?? [],
       copyright: component.copyright ?? '',
@@ -381,7 +369,7 @@ describe('GeneralTab system field hidden → form value contract (CRS #301)', ()
 })
 
 describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
-  it('groupId editable → input rendered with current value', () => {
+  it('group key renders READ-ONLY with the derived group value (items 1/2)', () => {
     setAllEditable()
     const component = baseComponent({ group: { groupKey: 'org.example.alpha', isFake: false, role: 'MEMBER' } })
     renderWithProviders(<Harness component={component} />)
@@ -389,7 +377,8 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
     const input = screen.getByLabelText(/group key/i) as HTMLInputElement
     expect(input).toBeDefined()
     expect(input.value).toBe('org.example.alpha')
-    expect(input.disabled).toBe(false)
+    // Group is now server-derived → the field is read-only (no longer editable).
+    expect(input.disabled).toBe(true)
   })
 
   it('groupId hidden → input NOT rendered', () => {
@@ -742,74 +731,50 @@ describe('GeneralTab — system single-select + labels chips (task #14)', () => 
 // ui-swift-sloth §3.5: Group Key required + disallowed-prefix.
 // ---------------------------------------------------------------------------
 
-describe('GeneralTab — group key required marker + inline error (ui-swift-sloth §3.5)', () => {
-  it('renders a `*` required marker next to the Group Key label', () => {
+describe('GeneralTab — group key + canBeParent (items 1/2 + 4)', () => {
+  it('group key is read-only (no required `*` marker, no editable input)', () => {
     setAllEditable()
-    renderWithProviders(<Harness component={baseComponent({ group: { groupKey: 'org.example.alpha', isFake: false, role: 'MEMBER' } })} />)
-    // The Group Key label contains a text "*". Looking up via the label's
-    // accessible name keeps the assertion robust to surrounding markup.
+    renderWithProviders(
+      <Harness component={baseComponent({ group: { groupKey: 'org.example.alpha', isFake: false, role: 'MEMBER' } })} />,
+    )
     const label = screen.getByText(/group key/i)
-    expect(label.textContent).toContain('*')
-  })
-
-  it('clearing Group Key on blur surfaces an inline required error', async () => {
-    setAllEditable()
-    const component = baseComponent({ group: { groupKey: 'org.example.alpha', isFake: false, role: 'MEMBER' } })
-    renderWithProviders(<Harness component={component} />)
-
+    expect(label.textContent).not.toContain('*')
     const input = screen.getByLabelText(/group key/i) as HTMLInputElement
-    await userEvent.clear(input)
-    // Wrap the synchronous .blur() in act() so React flushes the
-    // setGroupIdTouched(true) state update before assertion / teardown
-    // — silences the "not wrapped in act(...)" warning that otherwise
-    // fires on the synchronous DOM-blur path.
-    await act(async () => {
-      input.blur()
-    })
-
-    await waitFor(() => {
-      expect(screen.getByText(/group key is required/i)).toBeDefined()
-    })
+    expect(input.disabled).toBe(true)
+    expect(input.value).toBe('org.example.alpha')
   })
 
-  it('legacy non-matching groupKey does NOT show the prefix error before the user touches the field (PR #44 review)', () => {
-    // Admins reconfigured the supported-prefix list mid-life. A component
-    // with stored groupKey 'old.corp.foo' hits the editor: we must not blare
-    // a red error on mount, because the user hasn't touched the field and
-    // the save guard correctly lets unrelated changes through.
+  it('canBeParent switch reflects the component flag and is editable', () => {
     setAllEditable()
-    mockUseSupportedGroups.mockReturnValue({
-      data: ['com.example'],
-      isLoading: false,
-      isError: false,
-    })
-    const component = baseComponent({
-      group: { groupKey: 'old.legacy.example', isFake: false, role: 'MEMBER' },
-    })
+    const component = baseComponent({ canBeParent: true })
     renderWithProviders(<Harness component={component} />)
-
-    // No "must start with" red text on the untouched field.
-    expect(screen.queryByText(/must start with/i)).toBeNull()
+    const sw = screen.getByLabelText(/can be a parent/i) as HTMLButtonElement
+    expect(sw).toBeDefined()
+    // Radix Switch exposes checked state via aria-checked / data-state.
+    expect(sw.getAttribute('aria-checked')).toBe('true')
   })
 
-  it('entering a disallowed-prefix value surfaces an inline error', async () => {
+  it('a canBeParent component with no parent: the parent picker is disabled', () => {
     setAllEditable()
-    mockUseSupportedGroups.mockReturnValue({
-      data: ['com.example'],
-      isLoading: false,
-      isError: false,
-    })
-    const component = baseComponent({ group: { groupKey: 'com.example.alpha', isFake: false, role: 'MEMBER' } })
+    const component = baseComponent({ canBeParent: true, parentComponentName: null })
     renderWithProviders(<Harness component={component} />)
+    // An aggregator may not gain a parent → the strict picker renders disabled.
+    const parentInput = screen.getByLabelText(/^parent component$/i) as HTMLInputElement
+    expect(parentInput.disabled).toBe(true)
+  })
 
-    const input = screen.getByLabelText(/group key/i) as HTMLInputElement
-    await userEvent.clear(input)
-    await userEvent.type(input, 'com.someoneelse.foo')
-
-    await waitFor(() => {
-      // The inline error mentions the allowed prefix list so the user can
-      // recover without bouncing to docs.
-      expect(screen.getByText(/must start with/i)).toBeDefined()
-    })
+  it('a grandfathered canBeParent component WITH a parent: read-only value + Clear button', async () => {
+    setAllEditable()
+    const formRef = React.createRef<
+      ReturnType<typeof useForm<GeneralFormValues>> | null
+    >() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    const component = baseComponent({ canBeParent: true, parentComponentName: 'legacy-parent' })
+    renderWithProviders(<Harness component={component} formRef={formRef} />)
+    const parentInput = screen.getByLabelText(/^parent component$/i) as HTMLInputElement
+    expect(parentInput.value).toBe('legacy-parent')
+    expect(parentInput.disabled).toBe(true)
+    // Only remediation offered: a Clear button that empties the parent.
+    await userEvent.click(screen.getByRole('button', { name: /^clear$/i }))
+    expect(formRef.current!.getValues('parentComponentName')).toBe('')
   })
 })

@@ -36,6 +36,7 @@ export function useComponents({ filter, page = 0, size = 20, sort = 'componentKe
   // CSV; CRS normalises split-by-comma + trim + drop-empty server-side.
   // If labels ever need to contain commas, switch to repeatable params.
   if (filter?.labels?.length) params.set('labels', filter.labels.join(','))
+  if (filter?.canBeParent !== undefined) params.set('canBeParent', String(filter.canBeParent))
 
   return useQuery({
     queryKey: ['components', { filter, page, size, sort }],

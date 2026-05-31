@@ -39,7 +39,6 @@ import { selectBaseRow } from '../lib/api/baseRow'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../lib/auth'
 import { useFieldConfigEntry } from '../hooks/useFieldConfig'
-import { useSupportedGroups } from '../hooks/useSupportedGroups'
 import { parseServerFieldErrors } from '../lib/serverErrors'
 import { usePortalLinks } from '../hooks/useInfo'
 import { safeHttpUrl } from '../lib/utils'
@@ -76,17 +75,11 @@ export function ComponentDetailPage() {
   const { entry: clientCodeFc, isLoading: clientCodeFcLoading } =
     useFieldConfigEntry('component.clientCode')
   // SYS-039 FC entries
-  const { entry: groupIdFc } = useFieldConfigEntry('component.groupId')
   const { entry: releaseManagerFc } = useFieldConfigEntry('component.releaseManager')
   const { entry: securityChampionFc } = useFieldConfigEntry('component.securityChampion')
   const { entry: copyrightFc } = useFieldConfigEntry('component.copyright')
+  const { entry: canBeParentFc } = useFieldConfigEntry('component.canBeParent')
   const { entry: labelsFc } = useFieldConfigEntry('component.labels')
-  // ui-swift-sloth §3.5: pull the allowed groupId prefixes so the save guard
-  // mirrors the inline render-side check. Empty list (loading/errored) skips
-  // the prefix gate so a transient hook failure doesn't lock the user out
-  // of saving an already-valid groupId.
-  const supportedGroupsQuery = useSupportedGroups()
-  const supportedGroupsList = supportedGroupsQuery.data ?? []
   // Race-guard: while field-config is still loading, every FC entry falls
   // back to visibility='editable', which would let a fast-clicking user
   // overwrite hidden/readonly fields with form defaults before the real
@@ -116,8 +109,7 @@ export function ComponentDetailPage() {
       // fields). Without these defaults, an early Save (before useEffect
       // populates from `component`) would read `undefined` for labels and
       // friends and emit empty / wrong wire shapes.
-      groupId: '',
-      groupIsFake: false,
+      canBeParent: false,
       // Multi-value people lists — default [] (mirrors labels). An early Save
       // before useEffect hydrates from `component` reads [] here; the dirty-
       // gate in the dirtyFields assembly below blocks that from clobbering
@@ -186,44 +178,9 @@ export function ComponentDetailPage() {
       }
     }
 
-    // ui-swift-sloth §3.5: block the save if the user typed something into
-    // Group Key that violates the contract — either by emptying a dirty
-    // field, or by entering a value with a disallowed prefix. Both would
-    // 400 server-side once the CRS strict contract lands.
-    //
-    // We deliberately only trip on a dirty field: an untouched empty form
-    // (pre-hydration race, or admin saving another tab without ever
-    // touching groupId) falls through, and buildGroupPatch's belt-and-
-    // braces simply omits the group key — server-side PATCH semantics
-    // keep the existing group untouched.
-    if (groupIdFc.visibility !== 'hidden') {
-      const trimmed = (form.getValues('groupId') ?? '').trim()
-      const groupIdDirty = form.formState.dirtyFields.groupId === true
-      if (groupIdDirty && trimmed === '') {
-        form.setError('groupId', { type: 'required', message: 'Group Key is required' })
-        return
-      }
-      // PR #44 comment (copilot-pull-request-reviewer, 2026-05-27): also
-      // gate the prefix check on `groupIdDirty`. Legacy components with a
-      // stored groupKey that doesn't match the current supported-prefix
-      // list (admin reconfigured the list mid-life) must remain saveable
-      // for unrelated field changes — otherwise the user can't fix a typo
-      // in displayName without first updating the groupKey.
-      if (groupIdDirty && trimmed !== '' && supportedGroupsList.length > 0) {
-        const v = trimmed.toLowerCase()
-        const ok = supportedGroupsList.some((p) => {
-          const lp = p.toLowerCase()
-          return v === lp || v.startsWith(lp + '.')
-        })
-        if (!ok) {
-          form.setError('groupId', {
-            type: 'prefix',
-            message: `Group Key must start with one of: ${supportedGroupsList.join(', ')}`,
-          })
-          return
-        }
-      }
-    }
+    // Group Key is now server-derived + read-only (items 1/2) — no group save
+    // guard. canBeParent invariants are enforced server-side; their 400s map
+    // inline via GENERAL_TAB_FIELDS below.
 
     const request = buildUpdateRequest({
       component,
@@ -237,10 +194,10 @@ export function ComponentDetailPage() {
         componentOwner: componentOwnerFc.visibility ?? 'editable',
         system: systemFc.visibility ?? 'editable',
         clientCode: clientCodeFc.visibility ?? 'editable',
-        groupId: groupIdFc.visibility ?? 'editable',
         releaseManager: releaseManagerFc.visibility ?? 'editable',
         securityChampion: securityChampionFc.visibility ?? 'editable',
         copyright: copyrightFc.visibility ?? 'editable',
+        canBeParent: canBeParentFc.visibility ?? 'editable',
         labels: labelsFc.visibility ?? 'editable',
       },
       dirtyFields: {
@@ -292,7 +249,6 @@ export function ComponentDetailPage() {
             (form.formState.touchedFields.securityChampion as unknown) === true &&
             (component.securityChampion?.length ?? 0) > 0 &&
             (form.getValues('securityChampion')?.length ?? 0) === 0),
-        groupId: form.formState.dirtyFields.groupId === true,
         docs: !!form.formState.dirtyFields.docs,
         artifactIds: !!form.formState.dirtyFields.artifactIds,
       },

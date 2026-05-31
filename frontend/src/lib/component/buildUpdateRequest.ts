@@ -19,10 +19,10 @@ export interface FieldVisibilities {
   // CRS PR #301: field-config key + DTO field renamed to singular.
   system: FieldVisibility
   clientCode: FieldVisibility
-  groupId: FieldVisibility
   releaseManager: FieldVisibility
   securityChampion: FieldVisibility
   copyright: FieldVisibility
+  canBeParent: FieldVisibility
   labels: FieldVisibility
 }
 
@@ -40,7 +40,6 @@ export interface DirtyFlags {
   // with the same form-default-`[]` clobber risk as labels — dirty-gated.
   releaseManager?: boolean
   securityChampion?: boolean
-  groupId?: boolean
   docs?: boolean
   artifactIds?: boolean
 }
@@ -119,13 +118,17 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
         ? null
         : trimmedParent
 
-  const groupPatch = buildGroupPatch(component, values, visibilities)
+  // canBeParent: value-compared (boolean, no null ambiguity) like `archived`.
+  const canBeParentChanged = (values.canBeParent ?? false) !== (component.canBeParent ?? false)
+  // Clearing a parent needs the explicit clearParent flag — `parentComponentName:
+  // null` reads as "don't touch" server-side. Fires only on non-empty → empty.
+  const clearParent = currentParent !== '' && trimmedParent === ''
   const docsPatch = buildDocsPatch(component, values, dirtyFields)
   const artifactIdsPatch = buildArtifactIdsPatch(component, values, dirtyFields)
 
   return {
     version: component.version,
-    // Required on the wire. Default to false; groupPatch may override.
+    // Required on the wire; group is now server-derived, never set/cleared here.
     clearGroup: false,
     name: renameField,
     displayName:
@@ -151,6 +154,9 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
     solution: solutionChanged ? values.solution : undefined,
     archived: archivedChanged ? values.archived : undefined,
     parentComponentName,
+    clearParent: clearParent ? true : undefined,
+    canBeParent:
+      visibilities.canBeParent === 'hidden' || !canBeParentChanged ? undefined : values.canBeParent,
     // releaseManager / securityChampion mirror `labels` exactly: dirty-gated
     // REPLACE with explicit-empty-clear. !dirty → omit (blocks the pre-
     // hydration form-default `[]` from wiping server data); dirty + [] → emit
@@ -181,34 +187,9 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
       visibilities.labels === 'hidden' || dirtyFields.labels !== true
         ? undefined
         : labelsArray,
-    ...groupPatch,
     ...docsPatch,
     ...artifactIdsPatch,
   }
-}
-
-function buildGroupPatch(
-  component: ComponentDetail,
-  values: GeneralFormValues,
-  visibilities: FieldVisibilities,
-): { group?: { groupKey: string; isFake: boolean } } {
-  // ui-swift-sloth §3.5: group is now mandatory server-side. The UI must
-  //   - never emit `clearGroup: true` (CRS now rejects it with 400),
-  //   - never emit `group` when the input is blank (the render-side guard
-  //     blocks saving while empty; this is the belt-and-braces).
-  if (visibilities.groupId === 'hidden') return {}
-  const trimmedGroupId = (values.groupId || '').trim()
-  if (trimmedGroupId === '') return {}
-  // Value-match short-circuit: per plan §3.5, "non-empty + clean → omit".
-  // Compare against stored value rather than dirtyFields — a user who types
-  // their groupId back to the stored value is functionally clean even though
-  // RHF marks the field dirty.
-  const currentKey = component.group?.groupKey ?? ''
-  const currentIsFake = component.group?.isFake ?? false
-  if (trimmedGroupId === currentKey && (values.groupIsFake ?? false) === currentIsFake) {
-    return {}
-  }
-  return { group: { groupKey: trimmedGroupId, isFake: values.groupIsFake ?? false } }
 }
 
 function buildDocsPatch(

@@ -19,6 +19,10 @@ export interface ComponentSummary {
   system: string | null
   productType: string | null
   archived: boolean
+  // Whether this component may be referenced as a parent (aggregator). Drives
+  // the parent picker filter. Optional on the TS type so existing fixtures
+  // need not set it; the server always emits it (default false).
+  canBeParent?: boolean
   updatedAt: string | null
   // Required on the wire per ComponentSummaryResponse — server emits []
   // for empty, never omits the key. Matches ComponentDetail.labels.
@@ -46,6 +50,9 @@ export interface ComponentDetail {
   archived: boolean
   solution: boolean | null
   parentComponentName: string | null
+  // Whether this component may itself be a parent. Editable (CAN_BE_PARENT
+  // switch); a component with canBeParent=true may not have a parent.
+  canBeParent?: boolean
   version: number
   createdAt: string | null
   updatedAt: string | null
@@ -354,6 +361,11 @@ export interface ComponentUpdateRequest {
   clientCode?: string | null
   solution?: boolean | null
   parentComponentName?: string | null
+  // canBeParent: editable flag. clearParent: explicit parent removal —
+  // `parentComponentName: null` reads as "don't touch" server-side, so clearing
+  // a parent (e.g. remediating a grandfathered parent-of-parent) needs its own flag.
+  canBeParent?: boolean | null
+  clearParent?: boolean
   archived?: boolean | null
   // PATCH semantics mirror `labels`: omit / null = don't touch; a provided
   // ordered list (including empty [] = clear) REPLACES the whole list.
@@ -401,6 +413,8 @@ export interface ComponentFilter {
   buildSystem?: string[]
   /** Exact-match AND across values; sourced from /components/meta/labels. CSV on the wire. */
   labels?: string[]
+  /** Filter on the `canBeParent` flag — the parent picker passes `true`. */
+  canBeParent?: boolean
 }
 
 export interface Page<T> {
