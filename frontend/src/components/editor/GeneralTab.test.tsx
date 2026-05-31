@@ -113,8 +113,6 @@ function Harness({ component, formRef }: { component: ComponentDetail; formRef?:
       releaseManager: component.releaseManager ?? [],
       securityChampion: component.securityChampion ?? [],
       copyright: component.copyright ?? '',
-      releasesInDefaultBranch: component.releasesInDefaultBranch ?? false,
-      teamcityProjects: (component.teamcityProjects ?? []).map((tc) => ({ projectId: tc.projectId })),
       docs: (component.docs ?? []).map((d) => ({
         docComponentKey: d.docComponentKey,
         majorVersion: d.majorVersion ?? '',
@@ -512,17 +510,6 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
     expect(input.value).toBe('(c) 2026 Acme Inc.')
   })
 
-  it('releasesInDefaultBranch hidden → switch NOT rendered', () => {
-    mockUseFieldConfigEntry.mockImplementation((path: string) => {
-      if (path === 'component.releasesInDefaultBranch') return makeEntry('hidden')
-      return makeEntry('editable')
-    })
-    const component = baseComponent({ releasesInDefaultBranch: true })
-    renderWithProviders(<Harness component={component} />)
-
-    expect(screen.queryByLabelText(/releases in default branch/i)).toBeNull()
-  })
-
   it('labels editable → chips UX renders one badge per stored label (task #9)', () => {
     setAllEditable()
     const component = baseComponent({ labels: ['backend', 'internal'] })
@@ -561,7 +548,6 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
         path === 'component.releaseManager' ||
         path === 'component.securityChampion' ||
         path === 'component.copyright' ||
-        path === 'component.releasesInDefaultBranch' ||
         path === 'component.labels'
       ) {
         return makeEntry('hidden')
@@ -573,7 +559,6 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
       releaseManager: ['rm'],
       securityChampion: ['sc'],
       copyright: '(c)',
-      releasesInDefaultBranch: true,
       labels: ['x'],
     })
     renderWithProviders(<Harness component={component} />)
@@ -582,161 +567,8 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
     expect(screen.queryByLabelText(/release manager/i)).toBeNull()
     expect(screen.queryByLabelText(/security champion/i)).toBeNull()
     expect(screen.queryByLabelText(/copyright/i)).toBeNull()
-    expect(screen.queryByLabelText(/releases in default branch/i)).toBeNull()
     // labels — hidden hides both the <Label> and the multi-select.
     expect(screen.queryByText(/^labels$/i)).toBeNull()
-  })
-})
-
-describe('GeneralTab TC link restoration fields (Portal PR-3)', () => {
-  it('teamcityProjects entry: input populated with projectId from server', () => {
-    setAllEditable()
-    const component = baseComponent({
-      teamcityProjects: [
-        {
-          id: 'tc-1',
-          projectId: 'MyProject_Build',
-          projectUrl: 'https://teamcity.example.com/project/MyProject_Build',
-          sortOrder: 0,
-        },
-      ],
-    })
-    renderWithProviders(<Harness component={component} />)
-
-    // Wave B: list editor with placeholder-keyed inputs (no aria-label per row).
-    const inputs = screen.getAllByPlaceholderText('MyProject_Build') as HTMLInputElement[]
-    expect(inputs.length).toBe(1)
-    expect(inputs[0]!.value).toBe('MyProject_Build')
-    expect(inputs[0]!.disabled).toBe(false)
-  })
-
-  it('teamcityProjects entry: server projectUrl rendered as static text (not editable)', () => {
-    setAllEditable()
-    const component = baseComponent({
-      teamcityProjects: [
-        {
-          id: 'tc-1',
-          projectId: 'MyProject_Build',
-          projectUrl: 'https://teamcity.example.com/project/MyProject_Build',
-          sortOrder: 0,
-        },
-      ],
-    })
-    renderWithProviders(<Harness component={component} />)
-
-    // schema-v2 TeamcityProjectRequest has only projectId; the URL is
-    // server-derived and shown as readonly text under the projectId input.
-    const urlText = screen.getByText(/URL:.*teamcity\.example\.com\/project\/MyProject_Build/)
-    expect(urlText).toBeDefined()
-  })
-
-  it('teamcityProjectId hidden → input NOT rendered AND entire TC section absent', () => {
-    mockUseFieldConfigEntry.mockImplementation((path: string) => {
-      if (path === 'component.teamcityProjectId') return makeEntry('hidden')
-      return makeEntry('editable')
-    })
-    const component = baseComponent({
-      teamcityProjects: [
-        {
-          id: 'tc-1',
-          projectId: 'X',
-          projectUrl: 'https://teamcity.example.com/project/X',
-          sortOrder: 0,
-        },
-      ],
-    })
-    const { container } = renderWithProviders(<Harness component={component} />)
-
-    // With the && guard, hiding either field hides the entire section.
-    expect(screen.queryByLabelText(/tc project id/i)).toBeNull()
-    expect(screen.queryByLabelText(/tc project url/i)).toBeNull()
-    expect(container.querySelector('[data-testid="section-teamcity"]')).toBeNull()
-  })
-
-  it('teamcityProjectUrl hidden → entire TC section NOT rendered', () => {
-    mockUseFieldConfigEntry.mockImplementation((path: string) => {
-      if (path === 'component.teamcityProjectUrl') return makeEntry('hidden')
-      return makeEntry('editable')
-    })
-    const component = baseComponent({
-      teamcityProjects: [
-        {
-          id: 'tc-1',
-          projectId: 'X',
-          projectUrl: 'https://teamcity.example.com/project/X',
-          sortOrder: 0,
-        },
-      ],
-    })
-    const { container } = renderWithProviders(<Harness component={component} />)
-
-    // Hiding the URL field alone must suppress the whole section (pair logic).
-    expect(screen.queryByLabelText(/tc project id/i)).toBeNull()
-    expect(screen.queryByLabelText(/tc project url/i)).toBeNull()
-    expect(container.querySelector('[data-testid="section-teamcity"]')).toBeNull()
-  })
-
-  it('both TC fields hidden → entire TeamCity section NOT rendered', () => {
-    mockUseFieldConfigEntry.mockImplementation((path: string) => {
-      if (
-        path === 'component.teamcityProjectId' ||
-        path === 'component.teamcityProjectUrl'
-      ) {
-        return makeEntry('hidden')
-      }
-      return makeEntry('editable')
-    })
-    const component = baseComponent({
-      teamcityProjects: [
-        {
-          id: 'tc-1',
-          projectId: 'X',
-          projectUrl: 'https://teamcity.example.com/project/X',
-          sortOrder: 0,
-        },
-      ],
-    })
-    const { container } = renderWithProviders(<Harness component={component} />)
-
-    expect(screen.queryByLabelText(/tc project id/i)).toBeNull()
-    expect(screen.queryByLabelText(/tc project url/i)).toBeNull()
-    expect(container.querySelector('[data-testid="section-teamcity"]')).toBeNull()
-  })
-
-  it('schema-v2: server projectUrl rendered as readonly text next to its row', () => {
-    setAllEditable()
-    const component = baseComponent({
-      teamcityProjects: [
-        {
-          id: 'tc-1',
-          projectId: 'X',
-          projectUrl: 'https://teamcity.example.com/project/X',
-          sortOrder: 0,
-        },
-      ],
-    })
-    renderWithProviders(<Harness component={component} />)
-    // URL is server-derived (TeamcityProjectRequest carries only projectId),
-    // so it's surfaced as static text below the input, not as an editable field.
-    expect(screen.getByText(/URL:.*teamcity\.example\.com\/project\/X/)).toBeDefined()
-  })
-
-  it('Add TC project appends a row whose projectId input populates the form', async () => {
-    setAllEditable()
-    const component = baseComponent()
-    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
-    renderWithProviders(<Harness component={component} formRef={formRef} />)
-
-    // Append a row, then type into its projectId input. The new row gets
-    // an empty value via append({ projectId: '' }) and is the only TC row.
-    await userEvent.click(screen.getByRole('button', { name: /add tc project/i }))
-
-    const inputs = screen.getAllByPlaceholderText('MyProject_Build') as HTMLInputElement[]
-    expect(inputs.length).toBe(1)
-    await userEvent.type(inputs[0]!, 'MyProject_Build')
-
-    const values = formRef.current!.getValues()
-    expect(values.teamcityProjects).toEqual([{ projectId: 'MyProject_Build' }])
   })
 })
 

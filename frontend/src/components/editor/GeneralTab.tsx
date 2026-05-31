@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { UseFormReturn, useFieldArray } from 'react-hook-form'
 import { Plus, Trash2 } from 'lucide-react'
 import { Badge } from '../ui/badge'
@@ -35,9 +35,9 @@ import { useSupportedGroups } from '../../hooks/useSupportedGroups'
  * an unrendered field while suppressing the toast, leaving the user with no
  * visible error. Intentionally excluded:
  *   - productType: rendered/saved by EscrowTab (§7.0/2c migration)
- *   - solution / archived / releasesInDefaultBranch: boolean Switches with
- *     no inline error display; let CRS business-rule violations like
- *     "cannot archive while children exist" surface as a toast.
+ *   - solution / archived: boolean Switches with no inline error display; let
+ *     CRS business-rule violations like "cannot archive while children exist"
+ *     surface as a toast. (releasesInDefaultBranch moved to the Jira tab.)
  */
 export const GENERAL_TAB_FIELDS = [
   'name',
@@ -86,12 +86,12 @@ export interface GeneralFormValues {
   releaseManager: string[]
   securityChampion: string[]
   copyright: string
-  releasesInDefaultBranch: boolean
   labels: string[]
   // schema-v2 per-component child lists. Each list mirrors server state on
   // mount via useEffect; the save handler maps empty + had-prior → [] (clear),
   // empty + no-prior → omit (don't touch), non-empty → REPLACE.
-  teamcityProjects: { projectId: string }[]
+  // (releasesInDefaultBranch moved to the Jira tab; teamcityProjects are now
+  // read-only header links, no longer edited here.)
   docs: { docComponentKey: string; majorVersion: string }[]
   artifactIds: { groupPattern: string; artifactPattern: string }[]
 }
@@ -118,7 +118,6 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
   // not register'd. releaseManager / securityChampion are ordered string[].
   const releaseManager = watch('releaseManager')
   const securityChampion = watch('securityChampion')
-  const releasesInDefaultBranch = watch('releasesInDefaultBranch')
   const groupIsFake = watch('groupIsFake')
   // Task #14: `system` is a scalar string (single-select EnumSelect).
   // `labels` stays an array (chips UX). Both watched so the controlled
@@ -168,22 +167,12 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
 
   // schema-v2 list editors. useFieldArray provides stable `id` keys so row
   // re-renders don't blow away focus on text inputs.
-  const tcFieldArray = useFieldArray({ control, name: 'teamcityProjects' })
   const docsFieldArray = useFieldArray({ control, name: 'docs' })
   const artifactIdsFieldArray = useFieldArray({ control, name: 'artifactIds' })
 
-  // Map projectId → server-side projectUrl so the per-row URL display stays
-  // correct after the user reorders or removes rows. The previous index-based
-  // lookup against component.teamcityProjects desynchronised once useFieldArray
-  // shuffled indices.
-  const tcUrlByProjectId = useMemo(() => {
-    const m = new Map<string, string>()
-    for (const tc of component.teamcityProjects ?? []) {
-      if (tc.projectId && tc.projectUrl) m.set(tc.projectId, tc.projectUrl)
-    }
-    return m
-  }, [component.teamcityProjects])
-  const watchedTcProjects = watch('teamcityProjects')
+  // Doc-link rows use a controlled ComponentSelect (filtered to label=doc), so
+  // watch the array to feed each row's current value.
+  const watchedDocs = watch('docs')
 
   // RENAME_COMPONENTS gates the Name input on the edit surface. The same
   // permission is enforced server-side in ComponentControllerV4's PATCH SpEL
@@ -205,13 +194,7 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
   const { entry: releaseManagerEntry } = useFieldConfigEntry('component.releaseManager')
   const { entry: securityChampionEntry } = useFieldConfigEntry('component.securityChampion')
   const { entry: copyrightEntry } = useFieldConfigEntry('component.copyright')
-  const { entry: releasesInDefaultBranchEntry } =
-    useFieldConfigEntry('component.releasesInDefaultBranch')
   const { entry: labelsEntry } = useFieldConfigEntry('component.labels')
-  // TC link restoration — manual override pair gated by field-config so
-  // admins can hide these from non-admin editors per role.
-  const { entry: teamcityProjectIdEntry } = useFieldConfigEntry('component.teamcityProjectId')
-  const { entry: teamcityProjectUrlEntry } = useFieldConfigEntry('component.teamcityProjectUrl')
 
   useEffect(() => {
     // Form mirrors server state unconditionally — hidden fields just stay
@@ -242,7 +225,6 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
     setValue('releaseManager', component.releaseManager ?? [])
     setValue('securityChampion', component.securityChampion ?? [])
     setValue('copyright', component.copyright ?? '')
-    setValue('releasesInDefaultBranch', component.releasesInDefaultBranch ?? false)
     // Hydration MUST NOT set `shouldTouch:true` — the touched flag is the
     // signal ComponentDetailPage.handleSave uses to distinguish a real
     // user clear-all from the pre-hydration race (PR #44 follow-up).
@@ -251,10 +233,6 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
     setValue('labels', component.labels ?? [])
     // schema-v2 lists. setValue replaces the array wholesale; useFieldArray
     // picks up the new keys on the next render.
-    setValue(
-      'teamcityProjects',
-      (component.teamcityProjects ?? []).map((tc) => ({ projectId: tc.projectId })),
-    )
     setValue(
       'docs',
       (component.docs ?? []).map((d) => ({
@@ -432,22 +410,6 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
             <Label htmlFor="solution" className="cursor-pointer">Solution</Label>
           </div>
 
-          {/* releasesInDefaultBranch toggle — SYS-039 */}
-          {releasesInDefaultBranchEntry.visibility !== 'hidden' && (
-            <div className="sm:col-span-2 flex items-center gap-3">
-              <Switch
-                id="releasesInDefaultBranch"
-                checked={releasesInDefaultBranch}
-                disabled={releasesInDefaultBranchEntry.visibility === 'readonly'}
-                onCheckedChange={(checked) =>
-                  setValue('releasesInDefaultBranch', checked, { shouldDirty: true })
-                }
-              />
-              <Label htmlFor="releasesInDefaultBranch" className="cursor-pointer">
-                Releases in default branch
-              </Label>
-            </div>
-          )}
         </div>
       </section>
 
@@ -661,66 +623,6 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
         </section>
       )}
 
-      {/* ── TeamCity Projects ─────────────────────────────────────────────────
-          schema-v2 list editor. The URL column is server-derived (CRS resync
-          fills it from TC project params); the portal can only supply the
-          projectId. Empty list + had-prior server data → save sends `[]`
-          (REPLACE clear). Empty list + no prior → omit (don't touch). The
-          legacy `teamcityProjectId`/`teamcityProjectUrl` FC entries gate
-          section visibility — either hidden → section absent. */}
-      {(teamcityProjectIdEntry.visibility !== 'hidden' &&
-        teamcityProjectUrlEntry.visibility !== 'hidden') && (
-        <section data-testid="section-teamcity">
-          <h3 className="text-sm font-medium text-muted-foreground mb-3">TeamCity Projects</h3>
-          <div className="space-y-2">
-            {tcFieldArray.fields.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No TeamCity projects configured.</p>
-            ) : (
-              tcFieldArray.fields.map((field, index) => {
-                const currentProjectId = watchedTcProjects?.[index]?.projectId
-                const serverUrl = currentProjectId ? tcUrlByProjectId.get(currentProjectId) : undefined
-                return (
-                  <div key={field.id} className="flex items-start gap-2">
-                    <div className="flex-1 space-y-1">
-                      <Input
-                        placeholder="MyProject_Build"
-                        disabled={teamcityProjectIdEntry.visibility === 'readonly'}
-                        aria-label={`TC project ID (row ${index + 1})`}
-                        {...register(`teamcityProjects.${index}.projectId` as const)}
-                      />
-                      {serverUrl && (
-                        <p className="text-xs text-muted-foreground truncate">URL: {serverUrl}</p>
-                      )}
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-9 w-9 text-destructive"
-                      disabled={teamcityProjectIdEntry.visibility === 'readonly'}
-                      onClick={() => tcFieldArray.remove(index)}
-                      aria-label="Remove TC project"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )
-              })
-            )}
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={teamcityProjectIdEntry.visibility === 'readonly'}
-              onClick={() => tcFieldArray.append({ projectId: '' })}
-            >
-              <Plus className="h-4 w-4" />
-              Add TC project
-            </Button>
-          </div>
-        </section>
-      )}
-
       {/* ── References (Doc Links + Artifact IDs) ─────────────────────────────
           Both are per-component child lists introduced by schema-v2. No
           field-config gates today; full visibility for all editors. */}
@@ -732,10 +634,16 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
           ) : (
             docsFieldArray.fields.map((field, index) => (
               <div key={field.id} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
-                <Input
+                {/* Doc target restricted to components carrying the `doc` label. */}
+                <ComponentSelect
+                  id={`docs-${index}-key`}
+                  ariaLabel={`Doc link component key (row ${index + 1})`}
+                  value={watchedDocs?.[index]?.docComponentKey ?? ''}
+                  onChange={(val) =>
+                    setValue(`docs.${index}.docComponentKey` as const, val, { shouldDirty: true })
+                  }
+                  filter={{ labels: ['doc'] }}
                   placeholder="docs-component-key"
-                  aria-label={`Doc link component key (row ${index + 1})`}
-                  {...register(`docs.${index}.docComponentKey` as const)}
                 />
                 <Input
                   placeholder="majorVersion (e.g. 3.x)"

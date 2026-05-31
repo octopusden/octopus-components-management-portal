@@ -23,17 +23,13 @@ export interface FieldVisibilities {
   releaseManager: FieldVisibility
   securityChampion: FieldVisibility
   copyright: FieldVisibility
-  releasesInDefaultBranch: FieldVisibility
   labels: FieldVisibility
-  teamcityProjectId: FieldVisibility
-  teamcityProjectUrl: FieldVisibility
 }
 
 // Subset of RHF `formState.dirtyFields` that drives clear/omit/REPLACE
 // decisions for fields where the form default (false / '' / []) overlaps
 // with a legitimate server value.
 export interface DirtyFlags {
-  releasesInDefaultBranch?: boolean
   solution?: boolean
   system?: boolean
   // ui-swift-sloth §4: labels is now a multi-select array, and like systems
@@ -45,7 +41,6 @@ export interface DirtyFlags {
   releaseManager?: boolean
   securityChampion?: boolean
   groupId?: boolean
-  teamcityProjects?: boolean
   docs?: boolean
   artifactIds?: boolean
 }
@@ -101,7 +96,6 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
     ),
   )
 
-  const releasesInDefaultBranchChanged = dirtyFields.releasesInDefaultBranch === true
   const solutionChanged = dirtyFields.solution === true
   // `archived` is value-compared rather than dirtyFields-gated: the field
   // is a boolean with no `null` server-side ambiguity, so a value compare
@@ -125,7 +119,6 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
         ? null
         : trimmedParent
 
-  const tcPatch = buildTcPatch(component, values, visibilities, dirtyFields)
   const groupPatch = buildGroupPatch(component, values, visibilities)
   const docsPatch = buildDocsPatch(component, values, dirtyFields)
   const artifactIdsPatch = buildArtifactIdsPatch(component, values, dirtyFields)
@@ -173,10 +166,6 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
         ? undefined
         : securityChampionArray,
     copyright: visibilities.copyright === 'hidden' ? undefined : (values.copyright || undefined),
-    releasesInDefaultBranch:
-      visibilities.releasesInDefaultBranch === 'hidden' || !releasesInDefaultBranchChanged
-        ? undefined
-        : values.releasesInDefaultBranch,
     // labels semantics diverge from system (PR #44 P2 fix):
     //   - Pre-hydration guard mirrors system: !dirty → omit, so the
     //     form-default `[]` doesn't wipe server data before GeneralTab's
@@ -193,29 +182,9 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
         ? undefined
         : labelsArray,
     ...groupPatch,
-    ...tcPatch,
     ...docsPatch,
     ...artifactIdsPatch,
   }
-}
-
-function buildTcPatch(
-  component: ComponentDetail,
-  values: GeneralFormValues,
-  visibilities: FieldVisibilities,
-  dirtyFields: DirtyFlags,
-): { teamcityProjects?: { projectId: string }[] } {
-  const visible =
-    visibilities.teamcityProjectId !== 'hidden' && visibilities.teamcityProjectUrl !== 'hidden'
-  if (!visible) return {}
-  const cleaned = (values.teamcityProjects ?? [])
-    .map((p) => ({ projectId: (p.projectId ?? '').trim() }))
-    .filter((p) => p.projectId !== '')
-  const hadPrior = component.teamcityProjects.length > 0
-  const dirty = !!dirtyFields.teamcityProjects
-  if (cleaned.length > 0) return { teamcityProjects: cleaned }
-  if (dirty && hadPrior) return { teamcityProjects: [] }
-  return {}
 }
 
 function buildGroupPatch(

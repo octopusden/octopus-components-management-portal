@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Input } from './input'
 import { useComponents } from '../../hooks/useComponents'
+import type { ComponentFilter } from '../../lib/types'
 
 interface ComponentSelectProps {
   /** Current component name selected (or empty string for "no parent"). */
@@ -15,6 +16,14 @@ interface ComponentSelectProps {
   excludeName?: string
   placeholder?: string
   id?: string
+  /** Forwarded to the inner input as `aria-label` (for icon-only / no-visible-label rows). */
+  ariaLabel?: string
+  /**
+   * Extra server-side filter merged into the suggestion query — e.g.
+   * `{ labels: ['doc'] }` to only offer doc-labelled components. Applied
+   * alongside the typed `search`.
+   */
+  filter?: Partial<ComponentFilter>
 }
 
 /**
@@ -35,6 +44,8 @@ export function ComponentSelect({
   excludeName,
   placeholder = 'Search components…',
   id,
+  ariaLabel,
+  filter,
 }: ComponentSelectProps) {
   const [open, setOpen] = useState(false)
   const [inputValue, setInputValue] = useState(value)
@@ -65,7 +76,7 @@ export function ComponentSelect({
   const trimmed = inputValue.trim()
   const enabled = trimmed.length >= 2
   const { data } = useComponents({
-    filter: enabled ? { search: trimmed } : undefined,
+    filter: enabled ? { search: trimmed, ...filter } : undefined,
     page: 0,
     size: 10,
   })
@@ -79,6 +90,7 @@ export function ComponentSelect({
     <div ref={wrapperRef} className="relative">
       <Input
         id={id}
+        aria-label={ariaLabel}
         value={inputValue}
         onChange={(e) => {
           setInputValue(e.target.value)

@@ -3,7 +3,6 @@ import { Save, Plus, Trash2 } from 'lucide-react'
 import { Label } from '../ui/label'
 import { Input } from '../ui/input'
 import { Button } from '../ui/button'
-import { EnumSelect } from '../ui/EnumSelect'
 import { Separator } from '../ui/separator'
 import type { ComponentDetail, VcsEntry } from '../../lib/types'
 import type { ComponentUpdateRequest } from '../../hooks/useComponent'
@@ -152,10 +151,11 @@ export function VcsTab({ component, updateMutation, toast }: VcsTabProps) {
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Repository Type</Label>
-                <EnumSelect fieldPath="repositoryType" value={entry.repositoryType} onValueChange={(val) => updateEntry(index, 'repositoryType', val)} placeholder="GIT" />
+                {/* Read-only: repository type is not user-editable (it follows the VCS host). */}
+                <Input value={entry.repositoryType} disabled readOnly className="bg-muted font-mono text-xs" placeholder="GIT" />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Branch</Label>
+                <Label className="text-xs">Production branch</Label>
                 <Input value={entry.branch} onChange={(e) => updateEntry(index, 'branch', e.target.value)} placeholder="Branch pattern" className="font-mono text-xs" />
               </div>
               <div className="space-y-1">

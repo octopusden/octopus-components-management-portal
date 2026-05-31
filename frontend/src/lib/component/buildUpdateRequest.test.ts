@@ -47,9 +47,7 @@ function makeValues(overrides: Partial<GeneralFormValues> = {}): GeneralFormValu
     releaseManager: [],
     securityChampion: [],
     copyright: '',
-    releasesInDefaultBranch: false,
     labels: [],
-    teamcityProjects: [],
     docs: [],
     artifactIds: [],
     ...overrides,
@@ -65,10 +63,7 @@ const EDITABLE: FieldVisibilities = {
   releaseManager: 'editable',
   securityChampion: 'editable',
   copyright: 'editable',
-  releasesInDefaultBranch: 'editable',
   labels: 'editable',
-  teamcityProjectId: 'editable',
-  teamcityProjectUrl: 'editable',
 }
 
 const NO_DIRTY: DirtyFlags = {}
@@ -83,13 +78,11 @@ describe('buildUpdateRequest — contract baseline', () => {
     })
     expect(req.version).toBe(1)
     expect(req.clearGroup).toBe(false)
-    // dirtyFields untouched → solution, releasesInDefaultBranch, archived, name omitted
+    // dirtyFields untouched → solution, archived, name omitted
     expect(req.solution).toBeUndefined()
-    expect(req.releasesInDefaultBranch).toBeUndefined()
     expect(req.archived).toBeUndefined()
     expect(req.name).toBeUndefined()
     // No prior lists → no list patches
-    expect(req.teamcityProjects).toBeUndefined()
     expect(req.docs).toBeUndefined()
     expect(req.artifactIds).toBeUndefined()
     expect(req.group).toBeUndefined()
@@ -122,18 +115,6 @@ describe('buildUpdateRequest — field-config hidden visibility', () => {
     expect(req.system).toBeUndefined()
     expect(req.clientCode).toBeUndefined()
     expect(req.labels).toBeUndefined()
-  })
-
-  it('hidden TC visibility skips the teamcityProjects patch even with dirty + prior data', () => {
-    const req = buildUpdateRequest({
-      component: makeComponent({
-        teamcityProjects: [{ id: 'tc-1', projectId: 'P1', projectUrl: 'http://x/P1', sortOrder: 0 }],
-      }),
-      values: makeValues({ teamcityProjects: [] }),
-      visibilities: { ...EDITABLE, teamcityProjectId: 'hidden' },
-      dirtyFields: { teamcityProjects: true },
-    })
-    expect(req.teamcityProjects).toBeUndefined()
   })
 
   it('hidden groupId visibility skips both group set and clearGroup-true', () => {
@@ -169,30 +150,6 @@ describe('buildUpdateRequest — dirtyFields gating (pre-hydration safety)', () 
       dirtyFields: { solution: true },
     })
     expect(req.solution).toBe(true)
-  })
-
-  it('empty teamcityProjects + had prior + not dirty → omits (pre-hydration guard)', () => {
-    const req = buildUpdateRequest({
-      component: makeComponent({
-        teamcityProjects: [{ id: 'tc-1', projectId: 'P1', projectUrl: 'http://x/P1', sortOrder: 0 }],
-      }),
-      values: makeValues({ teamcityProjects: [] }),
-      visibilities: EDITABLE,
-      dirtyFields: { teamcityProjects: false },
-    })
-    expect(req.teamcityProjects).toBeUndefined()
-  })
-
-  it('empty teamcityProjects + had prior + dirty → emits explicit clear ([])', () => {
-    const req = buildUpdateRequest({
-      component: makeComponent({
-        teamcityProjects: [{ id: 'tc-1', projectId: 'P1', projectUrl: 'http://x/P1', sortOrder: 0 }],
-      }),
-      values: makeValues({ teamcityProjects: [] }),
-      visibilities: EDITABLE,
-      dirtyFields: { teamcityProjects: true },
-    })
-    expect(req.teamcityProjects).toEqual([])
   })
 
   it('systems form-default empty + had prior + NOT dirty → omits (pre-hydration guard)', () => {
@@ -343,22 +300,6 @@ describe('buildUpdateRequest — group patch (ui-swift-sloth §3.5)', () => {
 })
 
 describe('buildUpdateRequest — list cleanup', () => {
-  it('teamcityProjects rows with blank projectId are dropped; whitespace trimmed', () => {
-    const req = buildUpdateRequest({
-      component: makeComponent(),
-      values: makeValues({
-        teamcityProjects: [
-          { projectId: '  P1  ' },
-          { projectId: '   ' },
-          { projectId: 'P2' },
-        ],
-      }),
-      visibilities: EDITABLE,
-      dirtyFields: { teamcityProjects: true },
-    })
-    expect(req.teamcityProjects).toEqual([{ projectId: 'P1' }, { projectId: 'P2' }])
-  })
-
   it('docs rows with blank docComponentKey are dropped; majorVersion blank → null', () => {
     const req = buildUpdateRequest({
       component: makeComponent(),

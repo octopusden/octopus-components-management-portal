@@ -463,7 +463,7 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
       },
       user,
     )
-    const link = screen.getByTitle('TeamCity: my-component') as HTMLAnchorElement
+    const link = screen.getByTitle('TeamCity: MyProject_Build') as HTMLAnchorElement
     expect(link).toBeDefined()
     expect(link.href).toBe('https://teamcity.example.com/project/MyProject_Build')
     expect(within(link).getByTestId('brand-icon-teamcity')).toBeDefined()
@@ -486,185 +486,28 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
     renderPage(baseComponent, user)
     expect(screen.queryByTitle(/teamcity/i)).toBeNull()
   })
-})
 
-describe('ComponentDetailPage — TC manual override save (Portal PR-3)', () => {
-  // These tests mount ComponentDetailPage with GeneralTab mocked out (the
-  // file-wide mock above), which means the form values stay at their
-  // useForm `defaultValues` — empty string for both TC fields. That's
-  // exactly the right surface to assert: save with unchanged defaults
-  // should NOT include the TC fields in the PATCH payload (empty → undefined),
-  // and we can flip FC visibility to 'hidden' to assert the gate works.
-
-  it('save with unchanged defaults does NOT include teamcityProjects in PATCH', async () => {
-    const updateMutateAsync = vi.fn(() => Promise.resolve())
-    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
-    renderPage(baseComponent, user, { updateMutation: { mutateAsync: updateMutateAsync } })
-
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
-
-    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
-    const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
-    // schema-v2: blank form fields → no teamcityProjects key in payload.
-    expect(payload['teamcityProjects']).toBeUndefined()
-  })
-
-  it('blank form values + prior TC project DO NOT clear (pre-hydration Save safety)', async () => {
-    // Race-condition guard: if Save fires before GeneralTab.useEffect has
-    // mirrored `component.teamcityProjects` into the form (form defaults
-    // are `[]`), naïve "blank + had prior → []" logic would wipe the
-    // server-side list. The dirty-fields gate in handleSave catches this:
-    // an untouched form (no useFieldArray append/remove → not dirty) MUST
-    // omit teamcityProjects from the patch even when the component has
-    // prior server data.
-    // Test exercise: GeneralTab is mocked as an empty stub, so the form's
-    // teamcityProjects stays at the default `[]` AND dirtyFields stays
-    // empty. Expected wire result: no teamcityProjects key in payload.
-    const updateMutateAsync = vi.fn(() => Promise.resolve())
-    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
-    const seeded: ComponentDetail = {
-      ...baseComponent,
-      teamcityProjects: [
-        {
-          id: 'tc-1',
-          projectId: 'MyProject_Build',
-          projectUrl: 'https://teamcity.example.com/project/MyProject_Build',
-          sortOrder: 0,
-        },
-      ],
-    }
-    renderPage(seeded, user, { updateMutation: { mutateAsync: updateMutateAsync } })
-
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
-
-    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
-    const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
-    expect(payload['teamcityProjects']).toBeUndefined()
-  })
-
-  // The positive-clear path (user removes all TC rows via useFieldArray
-  // → field dirty → Save emits `teamcityProjects: []`) is verified by the
-  // chromium-viewer Playwright spec against a real backend, not here.
-  // RHF's `setValue('teamcityProjects', [], { shouldDirty: true })` does
-  // not mark a field dirty when the new value matches the form default
-  // ([]), so the React-Testing-Library mock can't cleanly reproduce the
-  // dirty=true + value=[] state without dragging useFieldArray into the
-  // GeneralTab stub. The safety branch above already pins the load-bearing
-  // contract: a non-dirty form NEVER sends `[]`.
-
-  it('populated teamcity* values flow through to PATCH when the form mirrors server state', async () => {
-    // The previous test pins the contract for the *empty* GeneralTab stub:
-    // unchanged defaults emit nothing. This test exercises the populated
-    // branch of the `(values.teamcityProjectId || undefined)` helper at
-    // ComponentDetailPage.tsx:224-231 — a regression that swapped the
-    // truthy/falsy halves would still pass every undefined-asserting test
-    // above. Override the GeneralTab mock for this case only with a stub
-    // that mirrors the real component's `useEffect` setValue dance so the
-    // form holds the seeded TC values when handleSave runs.
-    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
-      useEffect(() => {
-        // Hydrate system too — the PR #44 P2 systems guard reads
-        // component.system vs form.system and would otherwise block save.
-        form.setValue('system', component.system ?? '')
-        form.setValue(
-          'teamcityProjects',
-          (component.teamcityProjects ?? []).map((tc) => ({ projectId: tc.projectId })),
-        )
-      }, [component, form])
-      return React.createElement('div', { 'data-testid': 'general-tab-mirrored' })
-    })
-    const updateMutateAsync = vi.fn(() => Promise.resolve())
-    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
-    const seeded: ComponentDetail = {
-      ...baseComponent,
-      teamcityProjects: [
-        {
-          id: 'tc-1',
-          projectId: 'Existing_Build',
-          projectUrl: 'https://teamcity.example.com/project/Existing_Build',
-          sortOrder: 0,
-        },
-      ],
-    }
-    renderPage(seeded, user, { updateMutation: { mutateAsync: updateMutateAsync } })
-
-    // Sanity check: the per-test mock rendered (not the default).
-    await waitFor(() => {
-      expect(screen.getByTestId('general-tab-mirrored')).toBeDefined()
-    })
-
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
-
-    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
-    const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
-    // schema-v2: TC link is now a list (single-element from the form). The URL
-    // is server-derived (TeamcityProjectRequest has only `projectId`), so the
-    // payload carries projectId only — URL is dropped at the boundary.
-    expect(payload['teamcityProjects']).toEqual([{ projectId: 'Existing_Build' }])
-  })
-
-  it('FC hidden skips teamcityProjects on save (defence-in-depth)', async () => {
-    // Even if the form somehow held a value, hidden FC visibility must
-    // make handleSave drop the list from the payload — server-side does
-    // NOT enforce field-config (CRS PR-2 spec note), so the SPA is the
-    // line of defence against an editor with a stale form snapshot
-    // overwriting a hidden field. Either FC entry hidden suppresses the
-    // whole section per the pair-visibility rule.
-    mockedUseFieldConfigEntry.mockImplementation((path: string) => {
-      if (
-        path === 'component.teamcityProjectId' ||
-        path === 'component.teamcityProjectUrl'
-      ) {
-        return {
-          entry: { visibility: 'hidden', required: false },
-          isLoading: false,
-          isError: false,
-        }
-      }
-      return {
-        entry: { visibility: 'editable', required: false },
-        isLoading: false,
-        isError: false,
-      }
-    })
-    const updateMutateAsync = vi.fn(() => Promise.resolve())
-    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
-    renderPage(baseComponent, user, { updateMutation: { mutateAsync: updateMutateAsync } })
-
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
-
-    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
-    const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
-    expect(payload['teamcityProjects']).toBeUndefined()
-  })
-
-  it('blank-row entries in teamcityProjects are filtered out before sending', async () => {
-    // Wave B list editor: rows with blank projectId after trim are dropped.
-    // Used to be the "partial pair (tcId filled, tcUrl blank)" Wave A guard;
-    // schema-v2 has no URL field, so the analogue is "blank row gets dropped".
-    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
-      useEffect(() => {
-        // Hydrate system so the PR #44 P2 systems guard doesn't block save.
-        form.setValue('system', component.system ?? '')
-        form.setValue('teamcityProjects', [{ projectId: 'OnlyId_Build' }, { projectId: '  ' }])
-      }, [component, form])
-      return React.createElement('div', { 'data-testid': 'general-tab-partial' })
-    })
-    const updateMutateAsync = vi.fn(() => Promise.resolve())
-    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
-    renderPage(baseComponent, user, { updateMutation: { mutateAsync: updateMutateAsync } })
-
-    await waitFor(() => {
-      expect(screen.getByTestId('general-tab-partial')).toBeDefined()
-    })
-
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
-
-    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
-    const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
-    // schema-v2 list: the trimmed-blank row is dropped at handleSave's
-    // .filter step, the populated row survives.
-    expect(payload['teamcityProjects']).toEqual([{ projectId: 'OnlyId_Build' }])
+  it('(g) renders one TeamCity link per project with a valid URL (item 6 multi-link)', () => {
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    renderPage(
+      {
+        ...baseComponent,
+        teamcityProjects: [
+          { id: 'tc-1', projectId: 'Build_A', projectUrl: 'https://teamcity.example.com/project/Build_A', sortOrder: 0 },
+          { id: 'tc-2', projectId: 'Build_B', projectUrl: 'https://teamcity.example.com/project/Build_B', sortOrder: 1 },
+          { id: 'tc-3', projectId: 'NoUrl', projectUrl: null, sortOrder: 2 },
+        ],
+      },
+      user,
+    )
+    // Two projects have valid URLs → two links; the null-URL row is skipped.
+    expect(screen.getAllByTitle(/^TeamCity: /).length).toBe(2)
+    expect((screen.getByTitle('TeamCity: Build_A') as HTMLAnchorElement).href).toBe(
+      'https://teamcity.example.com/project/Build_A',
+    )
+    expect((screen.getByTitle('TeamCity: Build_B') as HTMLAnchorElement).href).toBe(
+      'https://teamcity.example.com/project/Build_B',
+    )
   })
 })
 
