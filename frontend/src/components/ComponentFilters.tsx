@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { Search } from 'lucide-react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Search, SlidersHorizontal } from 'lucide-react'
 import { Input } from './ui/input'
 import { Button } from './ui/button'
 import { FilterBar } from './ui/filter-bar'
@@ -10,7 +10,12 @@ import { useOwners } from '../hooks/useOwners'
 import { useLabels } from '../hooks/useLabels'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useFieldOptions } from '../hooks/useFieldOptions'
-import { useFieldConfigEntry } from '../hooks/useFieldConfig'
+import {
+  useFieldConfigEntry,
+  searchabilityFor,
+  type Searchable,
+  type FieldConfigEntry,
+} from '../hooks/useFieldConfig'
 import { MultiSelectFilter } from './ui/MultiSelectFilter'
 
 interface ComponentFiltersProps {
@@ -18,14 +23,107 @@ interface ComponentFiltersProps {
   onFilterChange: (filter: ComponentFilter) => void
 }
 
+// Debounced free-text filter. Mirrors the main search box's 300ms debounce so
+// typing in an extended text filter doesn't fire a request per keystroke.
+function TextFilter({
+  label,
+  value,
+  placeholder,
+  onCommit,
+}: {
+  label: string
+  value: string
+  placeholder?: string
+  onCommit: (v: string) => void
+}) {
+  const [local, setLocal] = useState(value)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => setLocal(value), [value])
+  // Cancel a pending debounce if the control unmounts (e.g. the panel closes
+  // or an admin flips the field to searchable: None) so the timer can't fire
+  // onCommit against a stale closure after unmount.
+  useEffect(() => () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+  }, [])
+  return (
+    <div className="flex flex-col gap-1">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <Input
+        className="h-9 w-44"
+        value={local}
+        placeholder={placeholder}
+        aria-label={label}
+        onChange={(e) => {
+          const next = e.target.value
+          setLocal(next)
+          if (debounceRef.current) clearTimeout(debounceRef.current)
+          debounceRef.current = setTimeout(() => onCommit(next), 300)
+        }}
+      />
+    </div>
+  )
+}
+
+// Tri-state boolean filter (Any / Yes / No) → undefined / true / false.
+function TriStateFilter({
+  label,
+  value,
+  onChange,
+}: {
+  label: string
+  value: boolean | undefined
+  onChange: (v: boolean | undefined) => void
+}) {
+  const str = value === undefined ? '' : value ? 'true' : 'false'
+  return (
+    <div className="flex flex-col gap-1">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <select
+        aria-label={label}
+        className="h-9 w-28 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+        value={str}
+        onChange={(e) => {
+          const v = e.target.value
+          onChange(v === '' ? undefined : v === 'true')
+        }}
+      >
+        <option value="">Any</option>
+        <option value="true">Yes</option>
+        <option value="false">No</option>
+      </select>
+    </div>
+  )
+}
+
 export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersProps) {
   const [searchValue, setSearchValue] = useState(filter.search ?? '')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Extended-search mode (item 5): a toggle that reveals the Extended-placed
+  // filter controls. Auto-opens if an extended filter is already active so a
+  // shared/bookmarked URL doesn't hide its own active filters.
+  const extendedActive =
+    !!filter.clientCode ||
+    filter.solution !== undefined ||
+    !!filter.jiraProjectKey ||
+    filter.jiraTechnical !== undefined ||
+    !!filter.vcsPath ||
+    !!filter.productionBranch ||
+    !!filter.parentComponentName ||
+    filter.canBeParent !== undefined ||
+    !!filter.groupKey
+  const [extendedOpen, setExtendedOpen] = useState(extendedActive)
 
   // Sync external filter.search into local state when it changes from outside
   useEffect(() => {
     setSearchValue(filter.search ?? '')
   }, [filter.search])
+
+  // Open the panel (one-way) whenever an extended filter becomes active from
+  // outside — e.g. a future URL-synced filter prop arriving after mount. Never
+  // auto-closes, so it won't fight the user's explicit toggle.
+  useEffect(() => {
+    if (extendedActive) setExtendedOpen(true)
+  }, [extendedActive])
 
   const handleSearchChange = (value: string) => {
     setSearchValue(value)
@@ -62,7 +160,7 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
 
   const handleClearAll = () => {
     setSearchValue('')
-    // Reset to default: archived: false (active only)
+    // Reset to default: archived: false (active only). Extended filters cleared too.
     onFilterChange({ archived: false })
   }
 
@@ -73,56 +171,50 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
     !!filter.owner?.length ||
     !!filter.buildSystem?.length ||
     !!filter.labels?.length ||
-    filter.archived === undefined
+    filter.archived === undefined ||
+    extendedActive
 
-  // Owner list comes from /components/meta/owners (B7.1.1, SYS-035 backend).
-  // Cached for 5 minutes by useOwners; the list is small so we render every
-  // value flat — no virtualization, no search-as-you-type. If/when the list
-  // grows beyond a few hundred we can switch to a typeahead picker matching
-  // PeopleInput's pattern.
   const { data: owners = [], isLoading: ownersLoading } = useOwners()
-  // Build system options: admin field-config first, with a fallback to the
-  // CRS enum at /components/meta/build-systems so the dropdown is useful
-  // out of the box even when admin has not seeded explicit options.
   const { options: buildSystemOptions, isLoading: buildSystemLoading } =
     useFieldOptions('buildSystem')
-  // Filterable gate for admin-config-driven filters. visibility is
-  // form-level (editable/readonly/hidden); filterable controls list-page
-  // filter bar inclusion — admins may want one without the other. Both
-  // System and Build System honour filterable (their options come from
-  // admin field-config with a CRS meta endpoint fallback); Owner uses
-  // /meta/owners which is not admin-configurable so it ignores the signal.
   const { entry: buildSystemEntry } = useFieldConfigEntry('buildSystem')
-  // System options share the buildSystem pattern: admin field-config first,
-  // CRS /components/meta/systems fallback. The field-config path is
-  // `component.system` (sectioned, singular per CRS PR #301) to match
-  // GeneralTab.tsx and ComponentDetailPage.tsx — using a different path
-  // here would silently diverge from the editor surface when admins edit
-  // field-config. The FILTER PARAMETER stays multi-value (?system=A,B
-  // OR-semantic) even though each component's `system` is now scalar.
-  // Gated on `systemActivated` until first popover open because the meta
-  // endpoint may not exist on older CRS images and Playwright's
-  // console-error listener trips on the browser's native 404 log.
   const [systemActivated, setSystemActivated] = useState(false)
   const { options: systemOptions, isLoading: systemLoading } = useFieldOptions(
     'component.system',
     { enabled: systemActivated },
   )
   const { entry: systemEntry } = useFieldConfigEntry('component.system')
-  // Sticky activation flag for the labels picker — flips true on first
-  // open and never back. Drives `enabled` on useLabels so the labels
-  // meta request only fires when the user expresses intent (avoids a
-  // page-mount 404 against a CRS that may not ship /meta/labels yet).
   const [labelsActivated, setLabelsActivated] = useState(false)
   const { data: labelOptions = [], isLoading: labelsLoading } = useLabels({
     enabled: labelsActivated,
   })
   const { data: currentUser } = useCurrentUser()
 
-  // My Components: when checked, owner is pinned to a single-element array
-  // [currentUser.username]. The switch stays mutually exclusive with the
-  // owner picker — checked only when the owner array has exactly one entry
-  // and it matches the current user.
+  // Field-config entries for the extended filters — `searchabilityFor` resolves
+  // the effective placement (Main / Extended / None) per field, falling back to
+  // DEFAULT_SEARCHABILITY when no admin entry exists.
+  const { entry: clientCodeEntry } = useFieldConfigEntry('component.clientCode')
+  const { entry: solutionEntry } = useFieldConfigEntry('component.solution')
+  const { entry: jiraProjectKeyEntry } = useFieldConfigEntry('jira.projectKey')
+  const { entry: jiraTechnicalEntry } = useFieldConfigEntry('jira.technical')
+  const { entry: vcsPathEntry } = useFieldConfigEntry('vcs.vcsPath')
+  const { entry: productionBranchEntry } = useFieldConfigEntry('vcs.branch')
+  const { entry: parentEntry } = useFieldConfigEntry('component.parentComponentName')
+  const { entry: canBeParentEntry } = useFieldConfigEntry('component.canBeParent')
+  const { entry: groupKeyEntry } = useFieldConfigEntry('component.groupKey')
+  // The classic multi-select filters are placed by the SAME resolver, so an
+  // admin's Searchable setting governs them too (not just system/buildSystem).
+  const { entry: labelsFilterEntry } = useFieldConfigEntry('component.labels')
+  const { entry: ownerFilterEntry } = useFieldConfigEntry('component.componentOwner')
+
+  // A field's effective search placement; `'None'` hides the control entirely.
+  const place = (path: string, entry: FieldConfigEntry): Searchable =>
+    searchabilityFor(path, entry)
+  const systemPlace = place('component.system', systemEntry)
+  const buildSystemPlace = place('buildSystem', buildSystemEntry)
+  const labelsPlace = place('component.labels', labelsFilterEntry)
+  const ownerPlace = place('component.componentOwner', ownerFilterEntry)
+
   const myComponentsChecked =
     !!currentUser &&
     filter.owner?.length === 1 &&
@@ -136,24 +228,123 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
   }
 
   const archivedLabel =
-    filter.archived === false
-      ? 'Show archived components'
-      : 'Hide archived components'
+    filter.archived === false ? 'Show archived components' : 'Hide archived components'
 
-  return (
-    <FilterBar>
-      <div className="relative flex-1 min-w-[200px] max-w-xs">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search components..."
-          value={searchValue}
-          onChange={(e) => handleSearchChange(e.target.value)}
-          className="pl-9"
+  // Each extended control is defined once and placed by its searchability:
+  // 'None' → never rendered; 'Extended' → rendered in the toggle-gated row;
+  // 'Main' → rendered in the always-visible top bar (an admin-promoted field
+  // surfaces without opening the panel, matching the Main/Extended/None spec).
+  const extendedControls: { place: Searchable; node: ReactNode }[] = [
+    {
+      place: place('component.clientCode', clientCodeEntry),
+      node: (
+        <TextFilter
+          key="clientCode"
+          label="Client code"
+          value={filter.clientCode ?? ''}
+          onCommit={(v) => onFilterChange({ ...filter, clientCode: v || undefined })}
         />
-      </div>
+      ),
+    },
+    {
+      place: place('jira.projectKey', jiraProjectKeyEntry),
+      node: (
+        <TextFilter
+          key="jiraProjectKey"
+          label="Jira project key"
+          value={filter.jiraProjectKey ?? ''}
+          onCommit={(v) => onFilterChange({ ...filter, jiraProjectKey: v || undefined })}
+        />
+      ),
+    },
+    {
+      place: place('vcs.vcsPath', vcsPathEntry),
+      node: (
+        <TextFilter
+          key="vcsPath"
+          label="VCS path"
+          value={filter.vcsPath ?? ''}
+          onCommit={(v) => onFilterChange({ ...filter, vcsPath: v || undefined })}
+        />
+      ),
+    },
+    {
+      place: place('vcs.branch', productionBranchEntry),
+      node: (
+        <TextFilter
+          key="productionBranch"
+          label="Production branch"
+          value={filter.productionBranch ?? ''}
+          onCommit={(v) => onFilterChange({ ...filter, productionBranch: v || undefined })}
+        />
+      ),
+    },
+    {
+      place: place('component.parentComponentName', parentEntry),
+      node: (
+        <TextFilter
+          key="parentComponentName"
+          label="Parent component"
+          value={filter.parentComponentName ?? ''}
+          onCommit={(v) => onFilterChange({ ...filter, parentComponentName: v || undefined })}
+        />
+      ),
+    },
+    {
+      place: place('component.groupKey', groupKeyEntry),
+      node: (
+        <TextFilter
+          key="groupKey"
+          label="Group key"
+          value={filter.groupKey ?? ''}
+          onCommit={(v) => onFilterChange({ ...filter, groupKey: v || undefined })}
+        />
+      ),
+    },
+    {
+      place: place('component.solution', solutionEntry),
+      node: (
+        <TriStateFilter
+          key="solution"
+          label="Solution"
+          value={filter.solution}
+          onChange={(v) => onFilterChange({ ...filter, solution: v })}
+        />
+      ),
+    },
+    {
+      place: place('jira.technical', jiraTechnicalEntry),
+      node: (
+        <TriStateFilter
+          key="jiraTechnical"
+          label="Jira technical"
+          value={filter.jiraTechnical}
+          onChange={(v) => onFilterChange({ ...filter, jiraTechnical: v })}
+        />
+      ),
+    },
+    {
+      place: place('component.canBeParent', canBeParentEntry),
+      node: (
+        <TriStateFilter
+          key="canBeParent"
+          label="Can be parent"
+          value={filter.canBeParent}
+          onChange={(v) => onFilterChange({ ...filter, canBeParent: v })}
+        />
+      ),
+    },
+  ]
 
-      {systemEntry.filterable !== false && (
+  // The four classic multi-select filters, placed by the same resolver as the
+  // extended controls — so an admin can demote one to Extended (moves to the
+  // toggle row) or hide it with None, not just system/buildSystem.
+  const mainFilterControls: { place: Searchable; node: ReactNode }[] = [
+    {
+      place: systemPlace,
+      node: (
         <MultiSelectFilter
+          key="system"
           value={filter.system ?? []}
           onChange={handleSystemChange}
           options={systemOptions}
@@ -164,10 +355,13 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
             if (open) setSystemActivated(true)
           }}
         />
-      )}
-
-      {buildSystemEntry.filterable !== false && (
+      ),
+    },
+    {
+      place: buildSystemPlace,
+      node: (
         <MultiSelectFilter
+          key="buildSystem"
           value={filter.buildSystem ?? []}
           onChange={handleBuildSystemChange}
           options={buildSystemOptions}
@@ -175,52 +369,117 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
           placeholder="All build systems"
           unitLabel="build system"
         />
-      )}
-
-      <MultiSelectFilter
-        value={filter.labels ?? []}
-        onChange={handleLabelsChange}
-        options={labelOptions}
-        isLoading={labelsLoading}
-        placeholder="All labels"
-        unitLabel="label"
-        onOpenChange={(open) => {
-          if (open) setLabelsActivated(true)
-        }}
-      />
-
-      <MultiSelectFilter
-        value={filter.owner ?? []}
-        onChange={handleOwnerChange}
-        options={owners}
-        isLoading={ownersLoading}
-        placeholder="All owners"
-        unitLabel="owner"
-        disabled={myComponentsChecked}
-      />
-
-      <div className="flex items-center gap-2">
-        <Switch
-          id="my-components"
-          checked={myComponentsChecked}
-          onCheckedChange={handleMyComponentsChange}
-          disabled={!currentUser}
-          aria-label="My Components"
+      ),
+    },
+    {
+      place: labelsPlace,
+      node: (
+        <MultiSelectFilter
+          key="labels"
+          value={filter.labels ?? []}
+          onChange={handleLabelsChange}
+          options={labelOptions}
+          isLoading={labelsLoading}
+          placeholder="All labels"
+          unitLabel="label"
+          onOpenChange={(open) => {
+            if (open) setLabelsActivated(true)
+          }}
         />
-        <Label htmlFor="my-components" className="cursor-pointer text-sm">
-          My Components
-        </Label>
-      </div>
+      ),
+    },
+    {
+      place: ownerPlace,
+      node: (
+        <MultiSelectFilter
+          key="owner"
+          value={filter.owner ?? []}
+          onChange={handleOwnerChange}
+          options={owners}
+          isLoading={ownersLoading}
+          placeholder="All owners"
+          unitLabel="owner"
+          disabled={myComponentsChecked}
+        />
+      ),
+    },
+    {
+      // My Components is the owner-filter shortcut (it sets owner=[currentUser]),
+      // so it follows the OWNER field's placement rather than living in a fixed
+      // row: Main → main bar, Extended → moves into the toggle row beside the
+      // owner picker, None → hidden. Keeping it always-Main while the owner
+      // picker moved to Extended would half-honour the admin's setting.
+      place: ownerPlace,
+      node: (
+        <div key="my-components" className="flex items-center gap-2">
+          <Switch
+            id="my-components"
+            checked={myComponentsChecked}
+            onCheckedChange={handleMyComponentsChange}
+            disabled={!currentUser}
+            aria-label="My Components"
+          />
+          <Label htmlFor="my-components" className="cursor-pointer text-sm">
+            My Components
+          </Label>
+        </div>
+      ),
+    },
+  ]
 
-      <Button variant="outline" size="sm" onClick={handleArchivedToggle}>
-        {archivedLabel}
-      </Button>
+  // Unify classic + extended controls and split by placement, so ONE rule drives
+  // Main (always-visible top bar) vs Extended (toggle row) vs None (hidden).
+  const placeable = [...mainFilterControls, ...extendedControls]
+  const mainRow = placeable.filter((c) => c.place === 'Main')
+  const rowExtended = placeable.filter((c) => c.place === 'Extended')
 
-      {hasActiveFilters && (
-        <Button variant="ghost" size="sm" onClick={handleClearAll}>
-          Clear filters
+  return (
+    <div className="space-y-2">
+      <FilterBar>
+        <div className="relative flex-1 min-w-[200px] max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search components..."
+            value={searchValue}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+
+        {/* Every Main-placed control renders here: the classic multi-selects
+            (system / buildSystem / labels / owner), the My Components shortcut,
+            plus any admin-promoted extended field. None-placed are dropped;
+            Extended-placed move to the toggle row below. */}
+        {mainRow.map((c) => c.node)}
+
+        <Button variant="outline" size="sm" onClick={handleArchivedToggle}>
+          {archivedLabel}
         </Button>
+
+        {rowExtended.length > 0 && (
+          <Button
+            variant={extendedOpen ? 'secondary' : 'outline'}
+            size="sm"
+            onClick={() => setExtendedOpen((o) => !o)}
+            aria-expanded={extendedOpen}
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            Extended search
+          </Button>
+        )}
+
+        {hasActiveFilters && (
+          <Button variant="ghost" size="sm" onClick={handleClearAll}>
+            Clear filters
+          </Button>
+        )}
+      </FilterBar>
+
+      {extendedOpen && rowExtended.length > 0 && (
+        <FilterBar>
+          {rowExtended.map((c) => c.node)}
+        </FilterBar>
       )}
-    </FilterBar>
+    </div>
   )
 }

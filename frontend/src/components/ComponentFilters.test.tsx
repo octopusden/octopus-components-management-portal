@@ -794,3 +794,181 @@ describe('ComponentFilters System multi-select', () => {
     expect(screen.queryByRole('button', { name: /all systems/i })).toBeNull()
   })
 })
+
+describe('ComponentFilters extended search (items 5 / 10)', () => {
+  const onFilterChange = vi.fn()
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    for (const k of Object.keys(fieldOptionSeeds)) delete fieldOptionSeeds[k]
+    applyFieldOptionsMock()
+    mockLabels()
+    mockCurrentUser('testuser')
+    mockFieldConfig([])
+  })
+
+  it('renders an "Extended search" toggle button', () => {
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    expect(screen.getByRole('button', { name: /extended search/i })).toBeDefined()
+  })
+
+  it('extended controls are hidden until the toggle is clicked', async () => {
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    // Collapsed by default — no extended control in the DOM.
+    expect(screen.queryByLabelText('Client code')).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: /extended search/i }))
+    // Default field-config has no `searchable` entries, so each new field
+    // falls back to DEFAULT_SEARCHABILITY = 'Extended' and shows in the row.
+    expect(screen.getByLabelText('Client code')).toBeDefined()
+    expect(screen.getByLabelText('Jira project key')).toBeDefined()
+    expect(screen.getByLabelText('VCS path')).toBeDefined()
+    expect(screen.getByLabelText('Production branch')).toBeDefined()
+    expect(screen.getByLabelText('Parent component')).toBeDefined()
+    expect(screen.getByLabelText('Group key')).toBeDefined()
+    expect(screen.getByLabelText('Solution')).toBeDefined()
+    expect(screen.getByLabelText('Jira technical')).toBeDefined()
+    expect(screen.getByLabelText('Can be parent')).toBeDefined()
+  })
+
+  it('typing in an extended text filter calls onFilterChange after debounce', () => {
+    vi.useFakeTimers()
+    // Preset clientCode so extended search auto-opens (no toggle click needed,
+    // which keeps fake timers and userEvent from interfering).
+    render(
+      <ComponentFilters
+        filter={{ archived: false, clientCode: 'X' }}
+        onFilterChange={onFilterChange}
+      />,
+    )
+    const input = screen.getByLabelText('Client code')
+    fireEvent.change(input, { target: { value: 'ACME' } })
+    expect(onFilterChange).not.toHaveBeenCalled()
+    act(() => { vi.advanceTimersByTime(300) })
+    expect(onFilterChange).toHaveBeenCalledWith(
+      expect.objectContaining({ clientCode: 'ACME' }),
+    )
+    vi.useRealTimers()
+  })
+
+  it('selecting "Yes" on the Can-be-parent tri-state emits canBeParent: true', async () => {
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    await userEvent.click(screen.getByRole('button', { name: /extended search/i }))
+    const select = screen.getByLabelText('Can be parent')
+    fireEvent.change(select, { target: { value: 'true' } })
+    expect(onFilterChange).toHaveBeenCalledWith(
+      expect.objectContaining({ canBeParent: true }),
+    )
+  })
+
+  it('selecting "Any" on a tri-state clears the boolean back to undefined', async () => {
+    render(
+      <ComponentFilters
+        filter={{ archived: false, jiraTechnical: true }}
+        onFilterChange={onFilterChange}
+      />,
+    )
+    // jiraTechnical preset → row auto-opens.
+    const select = screen.getByLabelText('Jira technical')
+    fireEvent.change(select, { target: { value: '' } })
+    const lastArg = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
+    expect(lastArg.jiraTechnical).toBeUndefined()
+  })
+
+  it('hides an extended control whose field is configured searchable: None', async () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: { component: { clientCode: { searchable: 'None' } } },
+      isLoading: false,
+    } as unknown as ReturnType<typeof useFieldConfig>)
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    await userEvent.click(screen.getByRole('button', { name: /extended search/i }))
+    expect(screen.queryByLabelText('Client code')).toBeNull()
+    // A sibling extended field with no override still shows.
+    expect(screen.getByLabelText('Jira project key')).toBeDefined()
+  })
+
+  it('auto-opens extended search when an extended filter is already active', () => {
+    render(
+      <ComponentFilters
+        filter={{ archived: false, vcsPath: 'repo/x' }}
+        onFilterChange={onFilterChange}
+      />,
+    )
+    // No click — vcsPath being set forces the row open so a shared URL does
+    // not hide its own active filter.
+    expect(screen.getByLabelText('VCS path')).toBeDefined()
+  })
+
+  it('counts an active extended filter toward Clear filters and clears it', async () => {
+    render(
+      <ComponentFilters
+        filter={{ archived: false, groupKey: 'org.acme' }}
+        onFilterChange={onFilterChange}
+      />,
+    )
+    expect(screen.getByText('Clear filters')).toBeDefined()
+    await userEvent.click(screen.getByText('Clear filters'))
+    expect(onFilterChange).toHaveBeenCalledWith({ archived: false })
+  })
+
+  it('renders a searchable:Main extended field in the always-visible bar (no toggle needed)', () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: { component: { clientCode: { searchable: 'Main' } } },
+      isLoading: false,
+    } as unknown as ReturnType<typeof useFieldConfig>)
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    // Promoted to Main → visible without opening the Extended search panel.
+    expect(screen.getByLabelText('Client code')).toBeDefined()
+    // The toggle still exists for the remaining Extended-placed fields.
+    expect(screen.getByRole('button', { name: /extended search/i })).toBeDefined()
+  })
+
+  it('owner searchable:None hides the owner picker AND the My Components shortcut', () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: { component: { componentOwner: { searchable: 'None' } } },
+      isLoading: false,
+    } as unknown as ReturnType<typeof useFieldConfig>)
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    expect(screen.queryByRole('button', { name: /all owners/i })).toBeNull()
+    expect(screen.queryByLabelText('My Components')).toBeNull()
+    // A sibling classic filter with no override still renders (default Main).
+    expect(screen.getByRole('button', { name: /all systems/i })).toBeDefined()
+  })
+
+  it('a classic filter set searchable:Extended moves into the toggle-gated row', async () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: { component: { system: { searchable: 'Extended' } } },
+      isLoading: false,
+    } as unknown as ReturnType<typeof useFieldConfig>)
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    // System is no longer in the always-visible bar...
+    expect(screen.queryByRole('button', { name: /all systems/i })).toBeNull()
+    // ...it appears once Extended search is opened.
+    await userEvent.click(screen.getByRole('button', { name: /extended search/i }))
+    expect(screen.getByRole('button', { name: /all systems/i })).toBeDefined()
+  })
+
+  it('labels searchable:None hides the labels filter entirely', () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: { component: { labels: { searchable: 'None' } } },
+      isLoading: false,
+    } as unknown as ReturnType<typeof useFieldConfig>)
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    expect(screen.queryByRole('button', { name: /all labels/i })).toBeNull()
+  })
+
+  it('owner searchable:Extended moves BOTH the owner picker and My Components into the toggle row', async () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: { component: { componentOwner: { searchable: 'Extended' } } },
+      isLoading: false,
+    } as unknown as ReturnType<typeof useFieldConfig>)
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    // Collapsed: neither the owner picker nor the My Components shortcut sits in
+    // the always-visible bar — My Components follows the owner field's placement.
+    expect(screen.queryByRole('button', { name: /all owners/i })).toBeNull()
+    expect(screen.queryByLabelText('My Components')).toBeNull()
+    // Opening Extended search reveals both together.
+    await userEvent.click(screen.getByRole('button', { name: /extended search/i }))
+    expect(screen.getByRole('button', { name: /all owners/i })).toBeDefined()
+    expect(screen.getByLabelText('My Components')).toBeDefined()
+  })
+})

@@ -341,3 +341,92 @@ describe('FieldConfigEditor — save', () => {
     expect(screen.getByText(/Save failed reason/)).toBeDefined()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Searchable column + new jira/vcs sections (item 10)
+// ---------------------------------------------------------------------------
+
+describe('FieldConfigEditor — searchable column', () => {
+  it('renders a Searchable column header (once per section table)', () => {
+    renderEditor({})
+    expect(screen.getAllByText('Searchable').length).toBeGreaterThan(0)
+  })
+
+  it('renders the Jira Fields and VCS Fields section headings', () => {
+    renderEditor({})
+    expect(screen.getByText('Jira Fields')).toBeDefined()
+    expect(screen.getByText('VCS Fields')).toBeDefined()
+  })
+
+  it('renders the new relationship + jira + vcs catalog rows', () => {
+    renderEditor({})
+    for (const field of [
+      'parentComponentName',
+      'canBeParent',
+      'groupKey',
+      'projectKey',
+      'technical',
+      'vcsPath',
+      'branch',
+    ]) {
+      expect(screen.getAllByText(field).length).toBeGreaterThan(0)
+    }
+  })
+
+  it('emits data-searchable reflecting the stored searchable value', () => {
+    renderEditor({
+      component: { solution: { searchable: 'Main' } },
+    })
+    expect(
+      screen
+        .getByRole('combobox', { name: /solution searchable/ })
+        .getAttribute('data-searchable'),
+    ).toBe('Main')
+  })
+
+  it('defaults searchable from DEFAULT_SEARCHABILITY when no entry is stored', () => {
+    renderEditor({})
+    // system → Main (an always-visible filter); solution → Extended.
+    expect(
+      screen
+        .getByRole('combobox', { name: /^system searchable$/ })
+        .getAttribute('data-searchable'),
+    ).toBe('Main')
+    expect(
+      screen
+        .getByRole('combobox', { name: /solution searchable/ })
+        .getAttribute('data-searchable'),
+    ).toBe('Extended')
+  })
+
+  it('maps a legacy filterable:false entry to searchable None', () => {
+    renderEditor({
+      component: { clientCode: { filterable: false } },
+    })
+    expect(
+      screen
+        .getByRole('combobox', { name: /clientCode searchable/ })
+        .getAttribute('data-searchable'),
+    ).toBe('None')
+  })
+
+  it('save payload carries searchable on entries and includes jira + vcs sections', () => {
+    renderEditor({})
+    fireEvent.click(screen.getByRole('button', { name: /save/i }))
+    const payload = mutate.mock.calls[0]![0] as {
+      component: Record<string, { searchable?: string }>
+      build: Record<string, unknown>
+      jira: Record<string, unknown>
+      vcs: Record<string, unknown>
+    }
+    expect(payload).toHaveProperty('jira')
+    expect(payload).toHaveProperty('vcs')
+    expect(payload.jira).toHaveProperty('projectKey')
+    expect(payload.jira).toHaveProperty('technical')
+    expect(payload.vcs).toHaveProperty('vcsPath')
+    expect(payload.vcs).toHaveProperty('branch')
+    // Each entry now serialises its search placement.
+    expect(payload.component.solution!.searchable).toBe('Extended')
+    expect(payload.component.system!.searchable).toBe('Main')
+  })
+})

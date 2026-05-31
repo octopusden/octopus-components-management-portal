@@ -19,6 +19,24 @@ Independently optional filters, ANDed server-side. Each filter resets pagination
 
 The whole filter row lives in [`frontend/src/components/ui/filter-bar.tsx`](../../frontend/src/components/ui/filter-bar.tsx); the multi-selects use [`frontend/src/components/ui/MultiSelectFilter.tsx`](../../frontend/src/components/ui/MultiSelectFilter.tsx). A "Clear filters" button surfaces whenever any filter is active.
 
+### Extended search
+
+An **Extended search** toggle (next to the archived button) reveals a second filter row of single-value controls that back the less-common search dimensions. The toggle auto-opens when the current filter already carries an extended value (so a shared/bookmarked URL never hides its own active filters), and "Clear filters" clears the extended row along with everything else.
+
+| Filter | Wire param | Control | Match |
+|---|---|---|---|
+| **Client code** | `?clientCode=…` | text | scalar ILIKE |
+| **Solution** | `?solution=true\|false` | tri-state (Any/Yes/No) | scalar eq |
+| **Jira project key** | `?jiraProjectKey=…` | text | base-row config eq |
+| **Jira technical** | `?jiraTechnical=true\|false` | tri-state | base-row config eq |
+| **VCS path** | `?vcsPath=…` | text | VCS-entry ILIKE |
+| **Production branch** | `?productionBranch=…` | text | VCS-entry ILIKE on `branch` |
+| **Parent component** | `?parentComponentName=…` | text | parent-join eq on key |
+| **Can be parent** | `?canBeParent=true\|false` | tri-state | scalar eq |
+| **Group key** | `?groupKey=…` | text | group-join eq on `groupKey` |
+
+These params are added to [`useComponents`](../../frontend/src/hooks/useComponents.ts) and served by the CRS v4 `listComponents` controller (see `octopus-components-registry-service/docs/registry/functional-spec.md`). Each control is placed by the field's **Searchable** setting (below), not hard-coded into the row.
+
 ### Multi-select picker (`MultiSelectFilter`)
 
 Shared component used by the four CSV filters above. Common behaviour:
@@ -32,9 +50,17 @@ Per-filter option-fetch timing differs:
 - **Owner** and **Build system** load options on first render — `useOwners()` and `useFieldOptions('buildSystem')` are called unconditionally from `ComponentFilters`.
 - **System** and **Labels** are lazy — `useFieldOptions('system', { enabled: systemActivated })` and `useLabels({ enabled: labelsActivated })` only fire after the user opens the popover for the first time (the `onOpenChange` handler flips the corresponding `*Activated` flag, which never goes back to `false`). This keeps page mount free of two meta-endpoint fetches and prevents Playwright's console-error listener from tripping on browser 404 logs before React-Query catches them on tenants where these endpoints are not yet wired.
 
-### Per-tenant filter visibility
+### Per-tenant filter placement (`searchable`)
 
-`AdminSettingsPage` writes a `FieldConfig` map that controls which filters are visible on the list page. The visibility check happens inside `ComponentFilters` against the same config the editor uses, so admins can hide filters that aren't relevant for their installation (e.g. tenants without a `system` taxonomy).
+`AdminSettingsPage` writes a `FieldConfig` map that controls where each field appears in the list-page search. The check happens inside `ComponentFilters` against the same config the editor uses, so admins can place or hide filters per installation (e.g. tenants without a `system` taxonomy).
+
+Each field carries a **`searchable`** placement — one of:
+
+- **`Main`** — always-visible filter in the top row (today's defaults: `system`, `buildSystem`, `labels`, `componentOwner`).
+- **`Extended`** — only shown when the Extended search toggle is open (the default for the new single-value filters above).
+- **`None`** — not searchable; the control is never rendered.
+
+The effective placement is resolved by [`searchabilityFor`](../../frontend/src/hooks/useFieldConfig.ts): an explicit `searchable` wins; otherwise a legacy `filterable: false` maps to `None`; otherwise a central `DEFAULT_SEARCHABILITY` map applies; otherwise the field defaults to `Extended`. This means a fresh install (empty field-config) already places every filter correctly before an admin saves the catalog. `searchable` **supersedes** the older boolean `filterable` flag, which was never surfaced in the admin UI — `filterable: false` is still honoured (as `None`) for backward-compat. Placement is independent of the form-level `visibility` flag (a field can be editor-hidden yet searchable, or vice-versa).
 
 ## Routing
 

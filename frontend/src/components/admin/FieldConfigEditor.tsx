@@ -21,7 +21,12 @@ import { InlineError } from '../ui/inline-error'
 import { SkeletonBlock } from '../ui/skeleton-block'
 import { StatusBanner } from '../ui/status-banner'
 import { useFieldConfig, useUpdateFieldConfig } from '../../hooks/useAdminConfig'
-import type { FieldConfigEntry, FieldVisibility } from '../../hooks/useFieldConfig'
+import { searchabilityFor } from '../../hooks/useFieldConfig'
+import type {
+  FieldConfigEntry,
+  FieldVisibility,
+  Searchable,
+} from '../../hooks/useFieldConfig'
 import { cn } from '../../lib/utils'
 
 // ---------------------------------------------------------------------------
@@ -29,8 +34,8 @@ import { cn } from '../../lib/utils'
 // ---------------------------------------------------------------------------
 
 interface CatalogRow {
-  /** Section key for output JSON: component | build */
-  section: 'component' | 'build'
+  /** Section key for output JSON: component | build | jira | vcs */
+  section: 'component' | 'build' | 'jira' | 'vcs'
   /** Field name within the section */
   fieldName: string
   /** Display label */
@@ -53,10 +58,22 @@ const CATALOG: CatalogRow[] = [
   // by the Create dialog auto-suggest) but cannot flip visibility/required
   // away from the contract.
   { section: 'component', fieldName: 'groupId',        label: 'groupId',        locked: true },
+  // Relationship / aggregator fields (Portal items 1/2/4). `groupKey` is the
+  // server-derived aggregator-group key — read-only in the editor (locked) but
+  // still a useful search target, so its Searchable cell stays configurable.
+  { section: 'component', fieldName: 'parentComponentName', label: 'parentComponentName' },
+  { section: 'component', fieldName: 'canBeParent',         label: 'canBeParent'         },
+  { section: 'component', fieldName: 'groupKey',            label: 'groupKey', locked: true },
   // Build Fields — Appendix B
   { section: 'build', fieldName: 'buildSystem',   label: 'buildSystem'   },
   { section: 'build', fieldName: 'javaVersion',   label: 'javaVersion'   },
   { section: 'build', fieldName: 'gradleVersion', label: 'gradleVersion' },
+  // Jira Fields — extended-search targets (item 5/10)
+  { section: 'jira', fieldName: 'projectKey', label: 'projectKey' },
+  { section: 'jira', fieldName: 'technical',  label: 'technical'  },
+  // VCS Fields — extended-search targets (item 5/10)
+  { section: 'vcs', fieldName: 'vcsPath', label: 'vcsPath' },
+  { section: 'vcs', fieldName: 'branch',  label: 'branch'  },
 ]
 
 // ---------------------------------------------------------------------------
@@ -66,6 +83,8 @@ const CATALOG: CatalogRow[] = [
 type SectionedConfig = {
   component: Record<string, FieldConfigEntry>
   build: Record<string, FieldConfigEntry>
+  jira: Record<string, FieldConfigEntry>
+  vcs: Record<string, FieldConfigEntry>
 }
 
 type RowDraft = {
@@ -73,9 +92,19 @@ type RowDraft = {
   required: boolean
   defaultValue: string
   description: string
+  /** Where the field appears in the list-page search (item 10). */
+  searchable: Searchable
 }
 
 type DraftState = Record<string, RowDraft> // key = "section.fieldName"
+
+const EMPTY_DRAFT: RowDraft = {
+  visibility: 'editable',
+  required: false,
+  defaultValue: '',
+  description: '',
+  searchable: 'Extended',
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -100,18 +129,25 @@ function readEntry(
     entry = flat.fields?.[`${row.section}.${row.fieldName}`] ?? flat.fields?.[row.fieldName]
   }
 
+  // Effective search placement shares ONE resolver with the list page
+  // (`searchabilityFor`), so the editor displays exactly what ComponentFilters
+  // will honour: explicit `searchable` wins, then legacy `filterable === false`,
+  // then the DEFAULT_SEARCHABILITY map, then 'Extended'.
+  const searchable = searchabilityFor(rowKey(row), entry ?? {})
+
   // PR #44 P3: locked rows pin visibility + required to the contract values.
   // `locked: true` means the field is mandatory server-side; the disabled UI
   // cells must reflect that truth regardless of stored data (fresh DB → no
   // entry; stale config with `hidden` / `required: false` → ignore the stale
   // values). defaultValue + description stay editable, so they round-trip
-  // through the stored entry.
+  // through the stored entry. `searchable` is independent of `locked`.
   if (row.locked) {
     return {
       visibility: 'editable',
       required: true,
       defaultValue: entry?.defaultValue ?? '',
       description: entry?.description ?? '',
+      searchable,
     }
   }
 
@@ -120,12 +156,15 @@ function readEntry(
     required: entry?.required ?? false,
     defaultValue: entry?.defaultValue ?? '',
     description: entry?.description ?? '',
+    searchable,
   }
 }
 
 function buildOutput(draft: DraftState): Record<string, unknown> {
   const component: Record<string, FieldConfigEntry> = {}
   const build: Record<string, FieldConfigEntry> = {}
+  const jira: Record<string, FieldConfigEntry> = {}
+  const vcs: Record<string, FieldConfigEntry> = {}
 
   for (const row of CATALOG) {
     const key = rowKey(row)
@@ -143,18 +182,23 @@ function buildOutput(draft: DraftState): Record<string, unknown> {
     const entry: FieldConfigEntry = {
       visibility,
       required,
+      searchable: d.searchable,
     }
     if (d.defaultValue) entry.defaultValue = d.defaultValue
     if (d.description) entry.description = d.description
 
     if (row.section === 'component') {
       component[row.fieldName] = entry
-    } else {
+    } else if (row.section === 'build') {
       build[row.fieldName] = entry
+    } else if (row.section === 'jira') {
+      jira[row.fieldName] = entry
+    } else {
+      vcs[row.fieldName] = entry
     }
   }
 
-  return { component, build }
+  return { component, build, jira, vcs }
 }
 
 // ---------------------------------------------------------------------------
@@ -211,6 +255,42 @@ function VisibilitySelect({ value, onChange, disabled, fieldLabel }: VisibilityS
 }
 
 // ---------------------------------------------------------------------------
+// Searchable Select cell (item 10) — Main / Extended / None
+// ---------------------------------------------------------------------------
+
+const SEARCHABLE_VALUES: Searchable[] = ['Main', 'Extended', 'None']
+
+interface SearchableSelectProps {
+  value: Searchable
+  onChange: (v: Searchable) => void
+  /** Accessible name for the trigger, e.g. "solution searchable". */
+  fieldLabel: string
+}
+
+function SearchableSelect({ value, onChange, fieldLabel }: SearchableSelectProps) {
+  return (
+    <Select value={value} onValueChange={(v) => onChange(v as Searchable)}>
+      <SelectTrigger
+        className="h-8 w-32 text-xs"
+        aria-label={`${fieldLabel} searchable`}
+        data-searchable={value}
+      >
+        <SelectValue>
+          <span className="text-xs">{value}</span>
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        {SEARCHABLE_VALUES.map((v) => (
+          <SelectItem key={v} value={v}>
+            <span className="text-xs">{v}</span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Section table
 // ---------------------------------------------------------------------------
 
@@ -231,6 +311,7 @@ function SectionTable({ title, rows, draft, onDraftChange }: SectionTableProps) 
             <TableHead className="w-40">Field</TableHead>
             <TableHead className="w-36">Visibility</TableHead>
             <TableHead className="w-24">Required</TableHead>
+            <TableHead className="w-36">Searchable</TableHead>
             <TableHead className="w-40">Default Value</TableHead>
             <TableHead>Description</TableHead>
           </TableRow>
@@ -238,7 +319,7 @@ function SectionTable({ title, rows, draft, onDraftChange }: SectionTableProps) 
         <TableBody>
           {rows.map((row) => {
             const key = rowKey(row)
-            const d = draft[key] ?? { visibility: 'editable', required: false, defaultValue: '', description: '' }
+            const d = draft[key] ?? EMPTY_DRAFT
             return (
               <TableRow key={key}>
                 {/* Field name */}
@@ -274,6 +355,15 @@ function SectionTable({ title, rows, draft, onDraftChange }: SectionTableProps) 
                   />
                 </TableCell>
 
+                {/* Searchable */}
+                <TableCell>
+                  <SearchableSelect
+                    value={d.searchable}
+                    onChange={(v) => onDraftChange(key, { searchable: v })}
+                    fieldLabel={row.label}
+                  />
+                </TableCell>
+
                 {/* Default Value */}
                 <TableCell>
                   <Input
@@ -305,6 +395,8 @@ function SectionTable({ title, rows, draft, onDraftChange }: SectionTableProps) 
 
 const COMPONENT_ROWS = CATALOG.filter((r) => r.section === 'component')
 const BUILD_ROWS     = CATALOG.filter((r) => r.section === 'build')
+const JIRA_ROWS      = CATALOG.filter((r) => r.section === 'jira')
+const VCS_ROWS       = CATALOG.filter((r) => r.section === 'vcs')
 
 export function FieldConfigEditor() {
   const { data, isLoading, error } = useFieldConfig()
@@ -326,7 +418,7 @@ export function FieldConfigEditor() {
 
   const handleDraftChange = (key: string, patch: Partial<RowDraft>) => {
     setDraft((prev) => {
-      const existing = prev[key] ?? { visibility: 'editable' as FieldVisibility, required: false, defaultValue: '', description: '' }
+      const existing = prev[key] ?? EMPTY_DRAFT
       return { ...prev, [key]: { ...existing, ...patch } }
     })
   }
@@ -380,8 +472,8 @@ export function FieldConfigEditor() {
       {/* Toolbar */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          Configure visibility, required flag, and default values for each field.
-          Changes are written in sectioned format per ADR-011.
+          Configure visibility, required flag, searchability, and default values
+          for each field. Changes are written in sectioned format per ADR-011.
         </p>
         <div className="flex items-center gap-2">
           <Button
@@ -426,6 +518,22 @@ export function FieldConfigEditor() {
       <SectionTable
         title="Build Fields"
         rows={BUILD_ROWS}
+        draft={draft}
+        onDraftChange={handleDraftChange}
+      />
+
+      {/* Jira Fields table */}
+      <SectionTable
+        title="Jira Fields"
+        rows={JIRA_ROWS}
+        draft={draft}
+        onDraftChange={handleDraftChange}
+      />
+
+      {/* VCS Fields table */}
+      <SectionTable
+        title="VCS Fields"
+        rows={VCS_ROWS}
         draft={draft}
         onDraftChange={handleDraftChange}
       />
