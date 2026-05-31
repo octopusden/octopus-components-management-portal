@@ -211,4 +211,22 @@ describe('ComponentDefaultsForm — people fields removed + sanitized (SYS-039)'
     expect(payload).not.toHaveProperty('securityChampion')
     expect(payload).toHaveProperty('buildSystem', 'MAVEN')
   })
+
+  it('rejects a non-object Raw JSON payload (e.g. null) with a form error instead of crashing', () => {
+    const mutate = vi.fn()
+    mockUseUpdateComponentDefaults.mockReturnValue(
+      { ...idleMutation(), mutate } as unknown as ReturnType<typeof useUpdateComponentDefaults>,
+    )
+
+    renderWithQuery(<ComponentDefaultsForm />)
+    fireEvent.click(screen.getByRole('button', { name: /raw json/i }))
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
+    // Valid JSON, but `null` — would crash sanitizeDefaults' object-spread.
+    fireEvent.change(textarea, { target: { value: 'null' } })
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+
+    // No crash, no save; a form-level parse error is surfaced instead.
+    expect(mutate).not.toHaveBeenCalled()
+    expect(screen.getByText(/must be a JSON object/i)).toBeDefined()
+  })
 })

@@ -118,13 +118,21 @@ export function ComponentDefaultsForm() {
     let toSave: Record<string, unknown>
 
     if (showRawJson) {
+      let parsed: unknown
       try {
-        toSave = JSON.parse(jsonText)
-        setParseError(null)
+        parsed = JSON.parse(jsonText)
       } catch (e) {
         setParseError(e instanceof Error ? e.message : 'Invalid JSON')
         return
       }
+      // Valid JSON that isn't a plain object (null, array, primitive) would
+      // crash sanitizeDefaults' object-spread below — reject it as a form error.
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        setParseError('Defaults must be a JSON object')
+        return
+      }
+      toSave = parsed as Record<string, unknown>
+      setParseError(null)
     } else {
       toSave = defaults as Record<string, unknown>
     }
