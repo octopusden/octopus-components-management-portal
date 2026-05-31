@@ -182,7 +182,8 @@ test.describe('Editor — multi-value Release Managers / Security Champions (SYS
     const ownerField = peopleField(page, 'Component Owner')
     await expect(ownerField.getByRole('textbox')).toHaveCount(1)
     await expect(ownerField.getByTestId('people-list-rows')).toHaveCount(0)
-    await expect(ownerField.getByRole('button', { name: /^move /i })).toHaveCount(0)
+    // Single-value input → no reorderable list rows, hence no drag grips.
+    await expect(ownerField.getByRole('button', { name: /to reorder$/i })).toHaveCount(0)
 
     // RM/SC hydrate as ordered rows from the arrays.
     await expect(rowNames(page, 'Release Managers')).toHaveText(['rm-alice'])
@@ -201,8 +202,19 @@ test.describe('Editor — multi-value Release Managers / Security Champions (SYS
     await addPerson(page, 'Release Managers', 'rm-carol')
     await expect(rowNames(page, 'Release Managers')).toHaveText(['rm-alice', 'rm-bob', 'rm-carol'])
 
-    // Reorder: move rm-carol up → [rm-alice, rm-carol, rm-bob].
-    await page.getByRole('button', { name: 'Move rm-carol up' }).click()
+    // Reorder via the drag grip — keyboard path (the most reliable way to drive
+    // dnd-kit in Playwright): focus rm-carol's grip, Space to lift, ArrowUp to
+    // move it one slot, Space to drop → [rm-alice, rm-carol, rm-bob].
+    const carolGrip = peopleField(page, 'Release Managers').getByRole('button', {
+      name: 'Drag rm-carol to reorder',
+    })
+    await carolGrip.focus()
+    await page.keyboard.press('Space')
+    // Let dnd-kit's setTimeout(0) document keydown-listener register before the
+    // first move key (belt-and-suspenders; CDP latency usually covers this).
+    await page.waitForTimeout(50)
+    await page.keyboard.press('ArrowUp')
+    await page.keyboard.press('Space')
     await expect(rowNames(page, 'Release Managers')).toHaveText(['rm-alice', 'rm-carol', 'rm-bob'])
 
     // Remove rm-alice → [rm-carol, rm-bob].
