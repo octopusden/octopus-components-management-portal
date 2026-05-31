@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import React from 'react'
-import { render, screen, waitFor, act } from '@testing-library/react'
+import { render, screen, waitFor, act, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
@@ -450,17 +450,57 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
     expect(screen.queryByLabelText(/security champion/i)).toBeNull()
   })
 
-  it('reordering a release manager updates the ordered form value (move down)', async () => {
+  it('reordering a release manager updates the ordered form value (keyboard drag down)', async () => {
     setAllEditable()
     const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
     const component = baseComponent({ releaseManager: ['rm-1', 'rm-2'] })
     renderWithProviders(<Harness component={component} formRef={formRef} />)
 
-    await userEvent.click(screen.getByRole('button', { name: /^move rm-1 down$/i }))
+    // The arrow buttons are gone — reorder is now drag-and-drop via the row
+    // grip (dnd-kit). KeyboardSensor needs non-zero layout rects, which jsdom
+    // does not provide, so give each PeopleListInput row a vertical slot keyed
+    // off its data-testid.
+    const rectSpy = vi
+      .spyOn(Element.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: Element) {
+        const m = /^person-row-(\d+)$/.exec(this.getAttribute('data-testid') ?? '')
+        const top = m ? Number(m[1]) * 40 : 0
+        return {
+          x: 0,
+          y: top,
+          top,
+          bottom: top + (m ? 40 : 0),
+          left: 0,
+          right: 200,
+          width: m ? 200 : 0,
+          height: m ? 40 : 0,
+          toJSON: () => ({}),
+        } as DOMRect
+      })
+    try {
+      // Lift rm-1's grip (Space on the activator), ArrowDown, drop → [rm-2, rm-1].
+      const grip = screen.getByRole('button', { name: /^drag rm-1 to reorder$/i })
+      grip.focus()
+      fireEvent.keyDown(grip, { key: ' ', code: 'Space' })
+      // KeyboardSensor adds its document keydown listener on a setTimeout(0).
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 25))
+      })
+      fireEvent.keyDown(document.body, { key: 'ArrowDown', code: 'ArrowDown' })
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+      fireEvent.keyDown(document.body, { key: ' ', code: 'Space' })
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
 
-    await waitFor(() => {
-      expect(formRef.current?.getValues('releaseManager')).toEqual(['rm-2', 'rm-1'])
-    })
+      await waitFor(() => {
+        expect(formRef.current?.getValues('releaseManager')).toEqual(['rm-2', 'rm-1'])
+      })
+    } finally {
+      rectSpy.mockRestore()
+    }
   })
 
   it('copyright editable → input rendered with current value', () => {

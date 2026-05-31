@@ -182,7 +182,8 @@ test.describe('Editor — multi-value Release Managers / Security Champions (SYS
     const ownerField = peopleField(page, 'Component Owner')
     await expect(ownerField.getByRole('textbox')).toHaveCount(1)
     await expect(ownerField.getByTestId('people-list-rows')).toHaveCount(0)
-    await expect(ownerField.getByRole('button', { name: /^move /i })).toHaveCount(0)
+    // Single-value input → no reorderable list rows, hence no drag grips.
+    await expect(ownerField.getByRole('button', { name: /to reorder$/i })).toHaveCount(0)
 
     // RM/SC hydrate as ordered rows from the arrays.
     await expect(rowNames(page, 'Release Managers')).toHaveText(['rm-alice'])
@@ -201,8 +202,31 @@ test.describe('Editor — multi-value Release Managers / Security Champions (SYS
     await addPerson(page, 'Release Managers', 'rm-carol')
     await expect(rowNames(page, 'Release Managers')).toHaveText(['rm-alice', 'rm-bob', 'rm-carol'])
 
-    // Reorder: move rm-carol up → [rm-alice, rm-carol, rm-bob].
-    await page.getByRole('button', { name: 'Move rm-carol up' }).click()
+    // Reorder rm-carol up one slot via a real pointer drag on its grip.
+    // dnd-kit's PointerSensor has a 4px activation distance and tracks the
+    // sortable via pointermove, so a reliable drag is: press on the grip, a small
+    // move to pass the threshold, then a multi-step move onto the target row
+    // (rm-bob, currently index 1) before releasing → [rm-alice, rm-carol, rm-bob].
+    const carolGrip = peopleField(page, 'Release Managers').getByRole('button', {
+      name: 'Drag rm-carol to reorder',
+    })
+    const bobRow = peopleField(page, 'Release Managers').getByTestId('person-row-1')
+    const grip = await carolGrip.boundingBox()
+    const target = await bobRow.boundingBox()
+    if (!grip || !target) throw new Error('reorder: missing bounding box for grip/target')
+    await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2)
+    await page.mouse.down()
+    // Exceed the 4px PointerSensor activation distance.
+    await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2 - 8, { steps: 5 })
+    // Drag up onto rm-bob's row (many steps so dnd-kit tracks the collision),
+    // landing slightly above its centre so rm-carol inserts before rm-bob.
+    await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 20 })
+    await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2 - 6, { steps: 5 })
+    await page.mouse.up()
+    // dnd-kit swallows the first `click` after a drag via a capture-phase document
+    // listener it only removes ~50ms later (PointerSensor.detach → setTimeout(…, 50)).
+    // Wait it out so the following Remove / Save clicks actually fire.
+    await page.waitForTimeout(100)
     await expect(rowNames(page, 'Release Managers')).toHaveText(['rm-alice', 'rm-carol', 'rm-bob'])
 
     // Remove rm-alice → [rm-carol, rm-bob].
