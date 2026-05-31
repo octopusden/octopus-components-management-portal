@@ -223,6 +223,10 @@ test.describe('Editor — multi-value Release Managers / Security Champions (SYS
     await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 20 })
     await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2 - 6, { steps: 5 })
     await page.mouse.up()
+    // dnd-kit swallows the first `click` after a drag via a capture-phase document
+    // listener it only removes ~50ms later (PointerSensor.detach → setTimeout(…, 50)).
+    // Wait it out so the following Remove / Save clicks actually fire.
+    await page.waitForTimeout(100)
     await expect(rowNames(page, 'Release Managers')).toHaveText(['rm-alice', 'rm-carol', 'rm-bob'])
 
     // Remove rm-alice → [rm-carol, rm-bob].
