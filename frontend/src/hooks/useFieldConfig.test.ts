@@ -2,7 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
-import { useFieldConfigOptions, useFieldConfigEntry } from './useFieldConfig'
+import {
+  useFieldConfigOptions,
+  useFieldConfigEntry,
+  searchabilityFor,
+  DEFAULT_SEARCHABILITY,
+} from './useFieldConfig'
 import { useFieldConfig } from './useAdminConfig'
 
 vi.mock('./useAdminConfig', () => ({
@@ -260,5 +265,39 @@ describe('useFieldConfigEntry', () => {
     )
     expect(result.current.isError).toBe(false)
     expect(result.current.entry.defaultValue).toBe('com.example')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// searchabilityFor — effective Main/Extended/None placement (item 10)
+// ---------------------------------------------------------------------------
+
+describe('searchabilityFor', () => {
+  it('explicit searchable wins over filterable and the default map', () => {
+    // Even with a legacy filterable:false AND a default-map entry, an explicit
+    // searchable is authoritative.
+    expect(searchabilityFor('component.system', { searchable: 'None', filterable: false })).toBe('None')
+    expect(searchabilityFor('component.clientCode', { searchable: 'Main' })).toBe('Main')
+  })
+
+  it('maps legacy filterable:false to None when no explicit searchable', () => {
+    expect(searchabilityFor('component.clientCode', { filterable: false })).toBe('None')
+  })
+
+  it('falls back to DEFAULT_SEARCHABILITY when neither searchable nor filterable set', () => {
+    expect(searchabilityFor('component.system', {})).toBe('Main')
+    expect(searchabilityFor('component.solution', {})).toBe('Extended')
+    expect(searchabilityFor('buildSystem', {})).toBe('Main')
+  })
+
+  it('falls back to Extended for an unlisted path', () => {
+    expect(searchabilityFor('component.somethingNew', {})).toBe('Extended')
+  })
+
+  it('DEFAULT_SEARCHABILITY pins the always-visible (Main) filters', () => {
+    expect(DEFAULT_SEARCHABILITY['component.system']).toBe('Main')
+    expect(DEFAULT_SEARCHABILITY['buildSystem']).toBe('Main')
+    expect(DEFAULT_SEARCHABILITY['component.labels']).toBe('Main')
+    expect(DEFAULT_SEARCHABILITY['component.componentOwner']).toBe('Main')
   })
 })

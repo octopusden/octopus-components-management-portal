@@ -415,6 +415,16 @@ export interface ComponentFilter {
   labels?: string[]
   /** Filter on the `canBeParent` flag — the parent picker passes `true`. */
   canBeParent?: boolean
+  // ── Extended-search single-value filters (back the list-page "extended
+  //    search" mode; each maps to a CRS-PR2 query param). ──
+  clientCode?: string
+  solution?: boolean
+  jiraProjectKey?: string
+  jiraTechnical?: boolean
+  vcsPath?: string
+  productionBranch?: string
+  parentComponentName?: string
+  groupKey?: string
 }
 
 export interface Page<T> {

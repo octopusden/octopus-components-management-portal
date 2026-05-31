@@ -37,6 +37,16 @@ export function useComponents({ filter, page = 0, size = 20, sort = 'componentKe
   // If labels ever need to contain commas, switch to repeatable params.
   if (filter?.labels?.length) params.set('labels', filter.labels.join(','))
   if (filter?.canBeParent !== undefined) params.set('canBeParent', String(filter.canBeParent))
+  // Extended-search single-value filters (CRS-PR2). Empty strings are dropped
+  // (treated as no-filter); booleans are stringified.
+  if (filter?.clientCode) params.set('clientCode', filter.clientCode)
+  if (filter?.solution !== undefined) params.set('solution', String(filter.solution))
+  if (filter?.jiraProjectKey) params.set('jiraProjectKey', filter.jiraProjectKey)
+  if (filter?.jiraTechnical !== undefined) params.set('jiraTechnical', String(filter.jiraTechnical))
+  if (filter?.vcsPath) params.set('vcsPath', filter.vcsPath)
+  if (filter?.productionBranch) params.set('productionBranch', filter.productionBranch)
+  if (filter?.parentComponentName) params.set('parentComponentName', filter.parentComponentName)
+  if (filter?.groupKey) params.set('groupKey', filter.groupKey)
 
   return useQuery({
     queryKey: ['components', { filter, page, size, sort }],
