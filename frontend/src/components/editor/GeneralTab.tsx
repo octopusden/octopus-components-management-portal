@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { UseFormReturn, useFieldArray } from 'react-hook-form'
 import { Plus, Trash2 } from 'lucide-react'
 import { Badge } from '../ui/badge'
@@ -23,7 +23,6 @@ import { useFieldConfigEntry } from '../../hooks/useFieldConfig'
 // (filter UX wants to offer values that exist).
 import { useSystemsDictionary } from '../../hooks/useSystemsDictionary'
 import { useLabelsDictionary } from '../../hooks/useLabelsDictionary'
-import { useSupportedGroups } from '../../hooks/useSupportedGroups'
 
 /**
  * Canonical list of field names owned by GeneralTab — used by
@@ -46,7 +45,7 @@ export const GENERAL_TAB_FIELDS = [
   'system',
   'clientCode',
   'parentComponentName',
-  'groupId',
+  'canBeParent',
   'releaseManager',
   'securityChampion',
   'copyright',
@@ -76,11 +75,10 @@ export interface GeneralFormValues {
   solution: boolean
   archived: boolean
   parentComponentName: string
-  // schema-v2: groupId is the user-facing label for component.group.groupKey;
-  // groupIsFake checkboxes the typed ComponentGroupRequest.isFake flag. Blank
-  // groupId + existing component.group → clearGroup:true on save.
-  groupId: string
-  groupIsFake: boolean
+  // canBeParent — editable Switch (item 4). A canBeParent component may not have
+  // a parent (enforced server-side + in the UI). The aggregator `group` is now
+  // read-only (server-derived), so the old groupId/groupIsFake form fields are gone.
+  canBeParent: boolean
   // SYS-039 → multi-value: ordered people lists (first = primary). The JSON
   // field names stay singular; only the TS type changed string → string[].
   releaseManager: string[]
@@ -118,13 +116,12 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
   // not register'd. releaseManager / securityChampion are ordered string[].
   const releaseManager = watch('releaseManager')
   const securityChampion = watch('securityChampion')
-  const groupIsFake = watch('groupIsFake')
+  const canBeParent = watch('canBeParent')
   // Task #14: `system` is a scalar string (single-select EnumSelect).
   // `labels` stays an array (chips UX). Both watched so the controlled
   // primitives receive the current value.
   const systemValue = watch('system')
   const labelsValue = watch('labels')
-  const groupIdValue = watch('groupId')
 
   // Labels dictionary powers the chips UX. Task #14: systems dictionary
   // is needed too for the EnumSelect single-select — see note next to
@@ -132,38 +129,6 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
   // 404/501 → [] (handled by the hooks).
   const labelsDict = useLabelsDictionary()
   const systemsDict = useSystemsDictionary()
-
-  // Supported groupId prefixes — same loud error policy as the Create
-  // dialog. Empty list (loading/errored) → skip the prefix check so a
-  // transient hiccup doesn't lock the user out of saving an already-valid
-  // group; the required-marker guard still blocks blank inputs.
-  const supportedGroups = useSupportedGroups()
-  const supportedGroupsList = supportedGroups.data ?? []
-
-  // Group Key required-on-blur state. Tracked locally because the field is
-  // RHF-registered but the required check is not a Zod refinement — the
-  // editor surface composes its own validation around the page-level save.
-  const [groupIdTouched, setGroupIdTouched] = useState(false)
-  const trimmedGroupId = (groupIdValue ?? '').trim()
-  const groupIdRequiredError = groupIdTouched && trimmedGroupId === ''
-  // PR #44 review (Sonnet): also gate the prefix error on `groupIdTouched`.
-  // Legacy components whose stored groupKey doesn't match the current
-  // supported-prefix list would otherwise render a red inline error on
-  // page load, alarming users editing unrelated fields. The save-side
-  // guard in ComponentDetailPage.handleSave already gates on
-  // `groupIdDirty`, so the render-side mirror keeps the two layers
-  // consistent.
-  const groupIdPrefixError = (() => {
-    if (!groupIdTouched) return null
-    if (trimmedGroupId === '') return null
-    if (supportedGroupsList.length === 0) return null
-    const v = trimmedGroupId.toLowerCase()
-    const ok = supportedGroupsList.some((p) => {
-      const lp = p.toLowerCase()
-      return v === lp || v.startsWith(lp + '.')
-    })
-    return ok ? null : `Group Key must start with one of: ${supportedGroupsList.join(', ')}`
-  })()
 
   // schema-v2 list editors. useFieldArray provides stable `id` keys so row
   // re-renders don't blow away focus on text inputs.
@@ -194,6 +159,7 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
   const { entry: releaseManagerEntry } = useFieldConfigEntry('component.releaseManager')
   const { entry: securityChampionEntry } = useFieldConfigEntry('component.securityChampion')
   const { entry: copyrightEntry } = useFieldConfigEntry('component.copyright')
+  const { entry: canBeParentEntry } = useFieldConfigEntry('component.canBeParent')
   const { entry: labelsEntry } = useFieldConfigEntry('component.labels')
 
   useEffect(() => {
@@ -213,12 +179,7 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
     setValue('solution', component.solution ?? false)
     setValue('archived', component.archived)
     setValue('parentComponentName', component.parentComponentName ?? '')
-    // schema-v2: groupId is the typed component.group.groupKey; isFake mirrors
-    // ComponentGroup.isFake. The component.group.role is server-derived
-    // (AGGREGATOR | MEMBER) and rendered as a readonly badge — it never enters
-    // the form.
-    setValue('groupId', component.group?.groupKey ?? '')
-    setValue('groupIsFake', component.group?.isFake ?? false)
+    setValue('canBeParent', component.canBeParent ?? false)
     // Multi-value lists. Like `labels`, hydration MUST NOT set shouldTouch —
     // the touched flag is the signal ComponentDetailPage.handleSave uses to
     // tell a real user clear-all from the pre-hydration race.
@@ -302,96 +263,101 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
             </div>
           )}
 
-          {/* Parent Component — editable autocomplete (7.1.5). Backend stores the
-              canonical `name`, so the picker writes the same. Empty string maps to
-              "no parent" at save time (ComponentDetailPage hands the wire layer a
-              `null`, see useComponent.ts ComponentUpdateRequest). */}
+          {/* Parent Component — strict single-select limited to canBeParent
+              components (item 4). An aggregator (canBeParent) may not have a
+              parent: the picker is disabled when canBeParent && no parent; when
+              canBeParent && a (grandfathered) parent exists, only clearing is
+              offered for remediation. */}
           <div className="space-y-1.5 sm:col-span-2 sm:max-w-md">
             <Label htmlFor="parentComponentName">Parent Component</Label>
-            <ComponentSelect
-              id="parentComponentName"
-              value={parentComponentName ?? ''}
-              excludeName={component.name}
-              onChange={(val) => setValue('parentComponentName', val, { shouldDirty: true })}
-              placeholder="No parent (top-level component)"
-            />
+            {canBeParent && (parentComponentName ?? '') !== '' ? (
+              <div className="flex items-center gap-2">
+                <Input
+                  id="parentComponentName"
+                  value={parentComponentName ?? ''}
+                  disabled
+                  readOnly
+                  className="bg-muted"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setValue('parentComponentName', '', { shouldDirty: true })}
+                >
+                  Clear
+                </Button>
+              </div>
+            ) : (
+              <ComponentSelect
+                id="parentComponentName"
+                value={parentComponentName ?? ''}
+                excludeName={component.name}
+                onChange={(val) => setValue('parentComponentName', val, { shouldDirty: true })}
+                placeholder={
+                  canBeParent
+                    ? 'A can-be-parent component cannot have a parent'
+                    : 'No parent (top-level component)'
+                }
+                filter={{ canBeParent: true }}
+                strict
+                disabled={canBeParent}
+              />
+            )}
             {errors.parentComponentName ? (
               <p className="text-xs text-destructive">{errors.parentComponentName.message}</p>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Reference another component by name. Leave blank for a top-level component.
+                {canBeParent
+                  ? 'This component can be a parent, so it cannot itself have a parent.'
+                  : 'Pick a component marked “can be parent”. Leave blank for a top-level component.'}
               </p>
             )}
           </div>
 
-          {/* schema-v2 group editor — typed ComponentGroup row.
-              groupId = group.groupKey; isFake = group.isFake; role is
-              server-derived (AGGREGATOR | MEMBER) and displayed as a readonly
-              badge so the user can see the resolved role without editing.
-              ui-swift-sloth §3.5: Group Key is required server-side, surfaced
-              via the `*` marker, blur-empty inline error, and a disallowed-
-              prefix gate driven by useSupportedGroups(). */}
+          {/* CAN_BE_PARENT — whether this component may be referenced as a parent. */}
+          {canBeParentEntry.visibility !== 'hidden' && (
+            <div className="sm:col-span-2 flex items-center gap-3">
+              <Switch
+                id="canBeParent"
+                checked={canBeParent}
+                disabled={canBeParentEntry.visibility === 'readonly'}
+                onCheckedChange={(checked) =>
+                  setValue('canBeParent', checked, { shouldDirty: true, shouldTouch: true })
+                }
+              />
+              <Label htmlFor="canBeParent" className="cursor-pointer">Can be a parent (aggregator)</Label>
+              {errors.canBeParent && (
+                <p className="text-xs text-destructive">{errors.canBeParent.message}</p>
+              )}
+            </div>
+          )}
+
+          {/* Group Key + Synthetic group — READ-ONLY (items 1/2). The group is
+              the aggregator/"group" component's key, derived from the parent
+              relationship server-side: filled for members of a group, empty for
+              standalone components. Not user-editable here. */}
           {groupIdEntry.visibility !== 'hidden' && (
             <div className="space-y-1.5">
-              <Label htmlFor="groupId">
-                Group Key <span className="text-destructive">*</span>
-              </Label>
+              <Label htmlFor="groupId">Group Key</Label>
               <Input
                 id="groupId"
-                placeholder="org.example.product"
-                disabled={groupIdEntry.visibility === 'readonly'}
-                aria-required
-                aria-invalid={Boolean(errors.groupId || groupIdRequiredError || groupIdPrefixError)}
-                // PR #44 comment (copilot-pull-request-reviewer): associate
-                // the visible error <p> with the field so screen readers
-                // announce the actual message rather than just "invalid".
-                aria-describedby={
-                  errors.groupId
-                    ? 'groupId-server-error'
-                    : groupIdRequiredError
-                      ? 'groupId-required-error'
-                      : groupIdPrefixError
-                        ? 'groupId-prefix-error'
-                        : undefined
-                }
-                className={groupIdEntry.visibility === 'readonly' ? 'bg-muted' : undefined}
-                {...register('groupId', {
-                  onBlur: () => setGroupIdTouched(true),
-                  // Typing into the field is also "touched" — without this
-                  // the prefix-error would stay hidden until the user
-                  // explicitly tabs away, which is awkward when the user
-                  // is iterating on the value.
-                  onChange: () => {
-                    if (!groupIdTouched) setGroupIdTouched(true)
-                  },
-                })}
+                value={component.group?.groupKey ?? ''}
+                disabled
+                readOnly
+                className="bg-muted"
+                placeholder="(none — standalone component)"
               />
-              {errors.groupId && (
-                <p id="groupId-server-error" className="text-xs text-destructive">
-                  {errors.groupId.message}
-                </p>
-              )}
-              {!errors.groupId && groupIdRequiredError && (
-                <p id="groupId-required-error" className="text-xs text-destructive">
-                  Group Key is required
-                </p>
-              )}
-              {!errors.groupId && !groupIdRequiredError && groupIdPrefixError && (
-                <p id="groupId-prefix-error" className="text-xs text-destructive">
-                  {groupIdPrefixError}
-                </p>
-              )}
               <div className="flex items-center gap-3 pt-1">
-                <Switch
-                  id="groupIsFake"
-                  checked={groupIsFake}
-                  disabled={groupIdEntry.visibility === 'readonly'}
-                  onCheckedChange={(checked) => setValue('groupIsFake', checked, { shouldDirty: true })}
-                />
-                <Label htmlFor="groupIsFake" className="cursor-pointer text-xs">Synthetic group (isFake)</Label>
+                {component.group?.isFake && (
+                  <Badge variant="outline" className="text-xs">Synthetic group (isFake)</Badge>
+                )}
                 {component.group?.role && (
                   <Badge variant="outline" className="text-xs">{component.group.role}</Badge>
                 )}
+                <span className="text-xs text-muted-foreground">
+                  Derived from the parent relationship (read-only).
+                </span>
               </div>
             </div>
           )}

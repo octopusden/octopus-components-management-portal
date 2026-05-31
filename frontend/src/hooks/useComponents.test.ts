@@ -50,6 +50,24 @@ describe('useComponents — URL params', () => {
     expect(calledUrl).toContain('sort=componentKey%2Casc')
   })
 
+  it('passes canBeParent=true when set, and omits the param when unset', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result } = renderHook(
+      () => useComponents({ filter: { canBeParent: true } }),
+      { wrapper: makeWrapper() },
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const url = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    expect(url).toContain('canBeParent=true')
+
+    vi.clearAllMocks()
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result: r2 } = renderHook(() => useComponents(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(r2.current.isSuccess).toBe(true))
+    const url2 = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    expect(url2).not.toContain('canBeParent')
+  })
+
   it('passes system filter as a single-value CSV when one option is picked', async () => {
     mockApi.get.mockResolvedValue(emptyPage)
 

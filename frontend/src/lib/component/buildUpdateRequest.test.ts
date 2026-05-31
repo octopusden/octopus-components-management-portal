@@ -42,8 +42,7 @@ function makeValues(overrides: Partial<GeneralFormValues> = {}): GeneralFormValu
     solution: false,
     archived: false,
     parentComponentName: '',
-    groupId: '',
-    groupIsFake: false,
+    canBeParent: false,
     releaseManager: [],
     securityChampion: [],
     copyright: '',
@@ -59,10 +58,10 @@ const EDITABLE: FieldVisibilities = {
   componentOwner: 'editable',
   system: 'editable',
   clientCode: 'editable',
-  groupId: 'editable',
   releaseManager: 'editable',
   securityChampion: 'editable',
   copyright: 'editable',
+  canBeParent: 'editable',
   labels: 'editable',
 }
 
@@ -117,18 +116,6 @@ describe('buildUpdateRequest — field-config hidden visibility', () => {
     expect(req.labels).toBeUndefined()
   })
 
-  it('hidden groupId visibility skips both group set and clearGroup-true', () => {
-    const req = buildUpdateRequest({
-      component: makeComponent({ group: { groupKey: 'org.example.legacy', isFake: false, role: 'MEMBER' } }),
-      values: makeValues({ groupId: '' }),
-      visibilities: { ...EDITABLE, groupId: 'hidden' },
-      dirtyFields: { groupId: true },
-    })
-    // ui-swift-sloth §3.5: clearGroup is required-in-schema, always emitted
-    // as `false`; the UI never emits `true` after the group-mandatory pivot.
-    expect(req.clearGroup).toBe(false)
-    expect(req.group).toBeUndefined()
-  })
 })
 
 describe('buildUpdateRequest — dirtyFields gating (pre-hydration safety)', () => {
@@ -233,67 +220,81 @@ describe('buildUpdateRequest — dirtyFields gating (pre-hydration safety)', () 
   })
 })
 
-describe('buildUpdateRequest — group patch (ui-swift-sloth §3.5)', () => {
-  // The group field is now mandatory server-side; the UI MUST NOT emit
-  // `clearGroup: true` — that would 400 every time. The render-side guard
-  // (required marker + inline error) blocks the empty-save path, but
-  // buildUpdateRequest also defensively omits the group key on blank input.
+describe('buildUpdateRequest — canBeParent + clearParent (items 1/2 + 4)', () => {
+  // Group is server-derived now: the editor never sets or clears it. canBeParent
+  // is value-compared (boolean); clearing a parent needs the explicit clearParent
+  // flag because parentComponentName:null reads as "don't touch" server-side.
 
-  it('blank groupId + dirty + prior group → omits group key, clearGroup stays false', () => {
+  it('canBeParent unchanged → omitted', () => {
     const req = buildUpdateRequest({
-      component: makeComponent({ group: { groupKey: 'org.example.legacy', isFake: false, role: 'MEMBER' } }),
-      values: makeValues({ groupId: '' }),
-      visibilities: EDITABLE,
-      dirtyFields: { groupId: true },
-    })
-    expect(req.clearGroup).toBe(false)
-    expect(req.group).toBeUndefined()
-  })
-
-  it('blank groupId + dirty + NO prior group → omits group key, clearGroup stays false', () => {
-    const req = buildUpdateRequest({
-      component: makeComponent({ group: null }),
-      values: makeValues({ groupId: '' }),
-      visibilities: EDITABLE,
-      dirtyFields: { groupId: true },
-    })
-    expect(req.clearGroup).toBe(false)
-    expect(req.group).toBeUndefined()
-  })
-
-  it('populated groupId + dirty → emits group object, clearGroup stays false', () => {
-    const req = buildUpdateRequest({
-      component: makeComponent({ group: null }),
-      values: makeValues({ groupId: 'org.example.alpha', groupIsFake: false }),
-      visibilities: EDITABLE,
-      dirtyFields: { groupId: true },
-    })
-    expect(req.group).toEqual({ groupKey: 'org.example.alpha', isFake: false })
-    expect(req.clearGroup).toBe(false)
-  })
-
-  it('populated groupId + isFake=true → group object set with isFake', () => {
-    const req = buildUpdateRequest({
-      component: makeComponent({ group: null }),
-      values: makeValues({ groupId: 'org.example.synthetic', groupIsFake: true }),
-      visibilities: EDITABLE,
-      dirtyFields: { groupId: true },
-    })
-    expect(req.group).toEqual({ groupKey: 'org.example.synthetic', isFake: true })
-    expect(req.clearGroup).toBe(false)
-  })
-
-  it('populated groupId + clean (matches existing) → omits group key', () => {
-    const req = buildUpdateRequest({
-      component: makeComponent({
-        group: { groupKey: 'org.example.alpha', isFake: false, role: 'MEMBER' },
-      }),
-      values: makeValues({ groupId: 'org.example.alpha', groupIsFake: false }),
+      component: makeComponent({ canBeParent: true }),
+      values: makeValues({ canBeParent: true }),
       visibilities: EDITABLE,
       dirtyFields: {},
     })
-    // clean-match short-circuit: no group key on the wire when the value
-    // hasn't actually changed.
+    expect(req.canBeParent).toBeUndefined()
+  })
+
+  it('canBeParent toggled → emitted', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({ canBeParent: false }),
+      values: makeValues({ canBeParent: true }),
+      visibilities: EDITABLE,
+      dirtyFields: {},
+    })
+    expect(req.canBeParent).toBe(true)
+  })
+
+  it('clearing a parent emits clearParent:true (+ parentComponentName:null)', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({ parentComponentName: 'parent-svc' }),
+      values: makeValues({ parentComponentName: '' }),
+      visibilities: EDITABLE,
+      dirtyFields: {},
+    })
+    expect(req.clearParent).toBe(true)
+    expect(req.parentComponentName).toBeNull()
+  })
+
+  it('setting a parent does NOT emit clearParent', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({ parentComponentName: null }),
+      values: makeValues({ parentComponentName: 'parent-svc' }),
+      visibilities: EDITABLE,
+      dirtyFields: {},
+    })
+    expect(req.clearParent).toBeUndefined()
+    expect(req.parentComponentName).toBe('parent-svc')
+  })
+
+  it('no prior parent + empty value → neither clearParent nor parentComponentName', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({ parentComponentName: null }),
+      values: makeValues({ parentComponentName: '' }),
+      visibilities: EDITABLE,
+      dirtyFields: {},
+    })
+    expect(req.clearParent).toBeUndefined()
+    expect(req.parentComponentName).toBeUndefined()
+  })
+
+  it('FC-hidden canBeParent is never emitted even when changed', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({ canBeParent: false }),
+      values: makeValues({ canBeParent: true }),
+      visibilities: { ...EDITABLE, canBeParent: 'hidden' },
+      dirtyFields: {},
+    })
+    expect(req.canBeParent).toBeUndefined()
+  })
+
+  it('group is never set or cleared from the editor (server-derived)', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({ group: { groupKey: 'org.example.legacy', isFake: false, role: 'MEMBER' } }),
+      values: makeValues(),
+      visibilities: EDITABLE,
+      dirtyFields: {},
+    })
     expect(req.group).toBeUndefined()
     expect(req.clearGroup).toBe(false)
   })
@@ -574,33 +575,33 @@ describe('buildUpdateRequest — clearGroup invariant (ui-swift-sloth §3.5)', (
         }),
     },
     {
-      name: 'group set + dirty',
+      name: 'parent set',
       req: () =>
         buildUpdateRequest({
-          component: makeComponent({ group: null }),
-          values: makeValues({ groupId: 'org.example.alpha' }),
+          component: makeComponent({ parentComponentName: null }),
+          values: makeValues({ parentComponentName: 'parent-svc' }),
           visibilities: EDITABLE,
-          dirtyFields: { groupId: true },
+          dirtyFields: {},
         }),
     },
     {
-      name: 'group cleared + dirty + prior group present',
+      name: 'parent cleared (clearParent path)',
       req: () =>
         buildUpdateRequest({
-          component: makeComponent({ group: { groupKey: 'org.example.legacy', isFake: false, role: 'MEMBER' } }),
-          values: makeValues({ groupId: '' }),
+          component: makeComponent({ parentComponentName: 'parent-svc' }),
+          values: makeValues({ parentComponentName: '' }),
           visibilities: EDITABLE,
-          dirtyFields: { groupId: true },
+          dirtyFields: {},
         }),
     },
     {
-      name: 'group hidden via field-config',
+      name: 'component with an existing (server-derived) group, unchanged',
       req: () =>
         buildUpdateRequest({
           component: makeComponent({ group: { groupKey: 'org.example.legacy', isFake: false, role: 'MEMBER' } }),
-          values: makeValues({ groupId: '' }),
-          visibilities: { ...EDITABLE, groupId: 'hidden' },
-          dirtyFields: { groupId: true },
+          values: makeValues(),
+          visibilities: EDITABLE,
+          dirtyFields: {},
         }),
     },
   ]

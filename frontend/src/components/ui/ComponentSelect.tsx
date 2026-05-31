@@ -24,6 +24,14 @@ interface ComponentSelectProps {
    * alongside the typed `search`.
    */
   filter?: Partial<ComponentFilter>
+  /**
+   * Strict mode: only a suggestion click (or clearing to empty) commits a value;
+   * a free-typed string that matches no suggestion is reverted on blur. Used for
+   * the parent picker, which must reference a real `canBeParent` component.
+   */
+  strict?: boolean
+  /** Disable the input (e.g. an aggregator that may not have a parent). */
+  disabled?: boolean
 }
 
 /**
@@ -46,6 +54,8 @@ export function ComponentSelect({
   id,
   ariaLabel,
   filter,
+  strict = false,
+  disabled = false,
 }: ComponentSelectProps) {
   const [open, setOpen] = useState(false)
   const [inputValue, setInputValue] = useState(value)
@@ -92,16 +102,24 @@ export function ComponentSelect({
         id={id}
         aria-label={ariaLabel}
         value={inputValue}
+        disabled={disabled}
         onChange={(e) => {
           setInputValue(e.target.value)
           setOpen(true)
         }}
         onFocus={() => setOpen(true)}
         onBlur={() => {
-          // Commit raw input on blur so a user can clear the field by deleting
-          // the value or type a name we've not seen in suggestions yet (the
-          // backend will validate; if it rejects, the save returns 400).
-          onChange(inputValue.trim())
+          const next = inputValue.trim()
+          if (strict && next !== '' && next !== value && !suggestions.includes(next)) {
+            // Strict: a free-typed non-match reverts to the committed value.
+            // Only a suggestion click (handled in onMouseDown) or clearing to
+            // empty changes the value.
+            setInputValue(value)
+            return
+          }
+          // Non-strict (and strict-clear / strict-exact-match): commit raw input.
+          // The backend validates; an invalid value returns 400 on save.
+          onChange(next)
         }}
         placeholder={placeholder}
       />
