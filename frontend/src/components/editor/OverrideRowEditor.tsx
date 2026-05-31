@@ -658,10 +658,11 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
                         </div>
                         <div className="space-y-1">
                           <Label className="text-xs">Repository Type</Label>
-                          <Input value={entry.repositoryType} onChange={(e) => updateVcs(i, 'repositoryType', e.target.value)} placeholder="GIT" className="text-xs" />
+                          {/* Read-only: repository type is not user-editable (follows the VCS host). */}
+                          <Input value={entry.repositoryType} disabled readOnly placeholder="GIT" className="bg-muted text-xs" />
                         </div>
                         <div className="space-y-1">
-                          <Label className="text-xs">Branch</Label>
+                          <Label className="text-xs">Production branch</Label>
                           <Input value={entry.branch} onChange={(e) => updateVcs(i, 'branch', e.target.value)} placeholder="Branch pattern" className="font-mono text-xs" />
                         </div>
                         <div className="space-y-1">

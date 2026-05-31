@@ -53,9 +53,6 @@ const CATALOG: CatalogRow[] = [
   // by the Create dialog auto-suggest) but cannot flip visibility/required
   // away from the contract.
   { section: 'component', fieldName: 'groupId',        label: 'groupId',        locked: true },
-  // TC link restoration — manual override pair (admin-gated).
-  { section: 'component', fieldName: 'teamcityProjectId',  label: 'teamcityProjectId'  },
-  { section: 'component', fieldName: 'teamcityProjectUrl', label: 'teamcityProjectUrl' },
   // Build Fields — Appendix B
   { section: 'build', fieldName: 'buildSystem',   label: 'buildSystem'   },
   { section: 'build', fieldName: 'javaVersion',   label: 'javaVersion'   },

@@ -10,6 +10,7 @@ import type { ComponentUpdateRequest } from '../../hooks/useComponent'
 import type { UseMutationResult } from '@tanstack/react-query'
 import { useOptimisticConflict } from '../../hooks/useOptimisticConflict'
 import { selectBaseRow } from '../../lib/api/baseRow'
+import { useFieldConfigEntry } from '../../hooks/useFieldConfig'
 
 interface JiraTabProps {
   component: ComponentDetail
@@ -21,6 +22,11 @@ export function JiraTab({ component, updateMutation, toast }: JiraTabProps) {
   const handleConflict = useOptimisticConflict(component.id)
   const baseRow = selectBaseRow(component)
   const jira = baseRow?.jira
+  // releasesInDefaultBranch moved here from the General tab — it gates release
+  // behaviour, which sits naturally beside the Jira version configuration.
+  const { entry: releasesInDefaultBranchEntry } = useFieldConfigEntry(
+    'component.releasesInDefaultBranch',
+  )
 
   const [projectKey, setProjectKey] = useState(jira?.projectKey ?? '')
   const [displayName, setDisplayName] = useState(component.jiraDisplayName ?? '')
@@ -32,6 +38,9 @@ export function JiraTab({ component, updateMutation, toast }: JiraTabProps) {
   const [lineVersionFormat, setLineVersionFormat] = useState(jira?.lineVersionFormat ?? '')
   const [versionPrefix, setVersionPrefix] = useState(jira?.versionPrefix ?? '')
   const [versionFormat, setVersionFormat] = useState(jira?.versionFormat ?? '')
+  const [releasesInDefaultBranch, setReleasesInDefaultBranch] = useState(
+    component.releasesInDefaultBranch ?? false,
+  )
 
   useEffect(() => {
     const base = selectBaseRow(component)
@@ -46,6 +55,7 @@ export function JiraTab({ component, updateMutation, toast }: JiraTabProps) {
     setLineVersionFormat(j?.lineVersionFormat ?? '')
     setVersionPrefix(j?.versionPrefix ?? '')
     setVersionFormat(j?.versionFormat ?? '')
+    setReleasesInDefaultBranch(component.releasesInDefaultBranch ?? false)
   }, [component])
 
   async function handleSave() {
@@ -53,6 +63,14 @@ export function JiraTab({ component, updateMutation, toast }: JiraTabProps) {
       await updateMutation.mutateAsync({
         version: component.version,
         clearGroup: false,
+        // Send-gate: include only when FC-visible AND actually changed from the
+        // server value. A bare equality-with-default check avoids clobbering a
+        // server `null` with `false` on a Jira save that only touched, say, the
+        // project key (mirrors the General tab's old dirty-gate intent).
+        ...(releasesInDefaultBranchEntry.visibility !== 'hidden' &&
+        releasesInDefaultBranch !== (component.releasesInDefaultBranch ?? false)
+          ? { releasesInDefaultBranch }
+          : {}),
         jiraDisplayName: displayName || null,
         jiraHotfixVersionFormat: hotfixVersionFormat || null,
         baseConfiguration: {
@@ -110,6 +128,20 @@ export function JiraTab({ component, updateMutation, toast }: JiraTabProps) {
         />
         <Label htmlFor="jira-technical" className="cursor-pointer">Technical</Label>
       </div>
+
+      {releasesInDefaultBranchEntry.visibility !== 'hidden' && (
+        <div className="flex items-center gap-3">
+          <Switch
+            id="releasesInDefaultBranch"
+            checked={releasesInDefaultBranch}
+            disabled={releasesInDefaultBranchEntry.visibility === 'readonly'}
+            onCheckedChange={setReleasesInDefaultBranch}
+          />
+          <Label htmlFor="releasesInDefaultBranch" className="cursor-pointer">
+            Releases in default branch
+          </Label>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">

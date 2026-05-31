@@ -80,20 +80,13 @@ export function ComponentDetailPage() {
   const { entry: releaseManagerFc } = useFieldConfigEntry('component.releaseManager')
   const { entry: securityChampionFc } = useFieldConfigEntry('component.securityChampion')
   const { entry: copyrightFc } = useFieldConfigEntry('component.copyright')
-  const { entry: releasesInDefaultBranchFc } = useFieldConfigEntry(
-    'component.releasesInDefaultBranch',
-  )
   const { entry: labelsFc } = useFieldConfigEntry('component.labels')
-  // TC link restoration — manual override pair. Hidden FC visibility skips
-  // both fields on save (see handleSave below).
   // ui-swift-sloth §3.5: pull the allowed groupId prefixes so the save guard
   // mirrors the inline render-side check. Empty list (loading/errored) skips
   // the prefix gate so a transient hook failure doesn't lock the user out
   // of saving an already-valid groupId.
   const supportedGroupsQuery = useSupportedGroups()
   const supportedGroupsList = supportedGroupsQuery.data ?? []
-  const { entry: teamcityProjectIdFc } = useFieldConfigEntry('component.teamcityProjectId')
-  const { entry: teamcityProjectUrlFc } = useFieldConfigEntry('component.teamcityProjectUrl')
   // Race-guard: while field-config is still loading, every FC entry falls
   // back to visibility='editable', which would let a fast-clicking user
   // overwrite hidden/readonly fields with form defaults before the real
@@ -132,11 +125,9 @@ export function ComponentDetailPage() {
       releaseManager: [],
       securityChampion: [],
       copyright: '',
-      releasesInDefaultBranch: false,
       labels: [],
       // schema-v2 list defaults — empty arrays so an early Save before useEffect
       // populates from `component` still produces a coherent form value.
-      teamcityProjects: [],
       docs: [],
       artifactIds: [],
     },
@@ -250,13 +241,9 @@ export function ComponentDetailPage() {
         releaseManager: releaseManagerFc.visibility ?? 'editable',
         securityChampion: securityChampionFc.visibility ?? 'editable',
         copyright: copyrightFc.visibility ?? 'editable',
-        releasesInDefaultBranch: releasesInDefaultBranchFc.visibility ?? 'editable',
         labels: labelsFc.visibility ?? 'editable',
-        teamcityProjectId: teamcityProjectIdFc.visibility ?? 'editable',
-        teamcityProjectUrl: teamcityProjectUrlFc.visibility ?? 'editable',
       },
       dirtyFields: {
-        releasesInDefaultBranch: form.formState.dirtyFields.releasesInDefaultBranch === true,
         solution: form.formState.dirtyFields.solution === true,
         // system: scalar string (task #14 single-select). RHF dirty
         // tracking for primitive strings is straightforward — `=== true`
@@ -306,7 +293,6 @@ export function ComponentDetailPage() {
             (component.securityChampion?.length ?? 0) > 0 &&
             (form.getValues('securityChampion')?.length ?? 0) === 0),
         groupId: form.formState.dirtyFields.groupId === true,
-        teamcityProjects: !!form.formState.dirtyFields.teamcityProjects,
         docs: !!form.formState.dirtyFields.docs,
         artifactIds: !!form.formState.dirtyFields.artifactIds,
       },
@@ -482,30 +468,25 @@ export function ComponentDetailPage() {
                   </a>
                 )
               })()}
-              {/* TeamCity quick-link — gated on the per-component webUrl
-                  persisted by CRS PR-2. Same affordance/aria pattern as the
-                  Jira and Bitbucket links above. The URL is rendered
-                  verbatim; the SPA does NOT template it from tcBaseUrl.
-                  safeHttpUrl allowlists http/https before the URL reaches
-                  an <a href> — prevents javascript: or data: URIs. */}
-              {(() => {
-                // schema-v2: TC link moved to component.teamcityProjects[]; surface the first
-                // row (matches ComponentSummaryResponse's derived list-view badge).
-                const safeTcUrl = safeHttpUrl(component.teamcityProjects?.[0]?.projectUrl ?? null)
-                if (!safeTcUrl) return null
-                return (
+              {/* TeamCity quick-links — one icon per project with a valid http(s)
+                  URL (safeHttpUrl allowlists the scheme). Read-only header links;
+                  the edit form no longer manages TeamCity projects (item 6). */}
+              {(component.teamcityProjects ?? [])
+                .map((tc) => ({ tc, url: safeHttpUrl(tc.projectUrl ?? null) }))
+                .filter((x) => x.url)
+                .map(({ tc, url }) => (
                   <a
-                    href={safeTcUrl}
+                    key={tc.id}
+                    href={url!}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 text-sm hover:opacity-80 transition-opacity"
-                    title={`TeamCity: ${component.name}`}
-                    aria-label={`TeamCity: ${component.name}`}
+                    title={`TeamCity: ${tc.projectId}`}
+                    aria-label={`TeamCity: ${tc.projectId}`}
                   >
                     <TeamCityIcon className="h-4 w-4" />
                   </a>
-                )
-              })()}
+                ))}
             </div>
             {component.displayName && (
               <p className="text-sm text-muted-foreground">{component.displayName}</p>
