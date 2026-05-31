@@ -202,12 +202,18 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
   const { entry: parentEntry } = useFieldConfigEntry('component.parentComponentName')
   const { entry: canBeParentEntry } = useFieldConfigEntry('component.canBeParent')
   const { entry: groupKeyEntry } = useFieldConfigEntry('component.groupKey')
+  // The classic multi-select filters are placed by the SAME resolver, so an
+  // admin's Searchable setting governs them too (not just system/buildSystem).
+  const { entry: labelsFilterEntry } = useFieldConfigEntry('component.labels')
+  const { entry: ownerFilterEntry } = useFieldConfigEntry('component.componentOwner')
 
   // A field's effective search placement; `'None'` hides the control entirely.
   const place = (path: string, entry: FieldConfigEntry): Searchable =>
     searchabilityFor(path, entry)
   const systemPlace = place('component.system', systemEntry)
   const buildSystemPlace = place('buildSystem', buildSystemEntry)
+  const labelsPlace = place('component.labels', labelsFilterEntry)
+  const ownerPlace = place('component.componentOwner', ownerFilterEntry)
 
   const myComponentsChecked =
     !!currentUser &&
@@ -329,10 +335,81 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
       ),
     },
   ]
-  // Main-placed controls live in the always-visible top bar; Extended-placed
-  // controls live in the toggle-gated row. 'None' is dropped entirely.
-  const mainExtended = extendedControls.filter((c) => c.place === 'Main')
-  const rowExtended = extendedControls.filter((c) => c.place === 'Extended')
+
+  // The four classic multi-select filters, placed by the same resolver as the
+  // extended controls — so an admin can demote one to Extended (moves to the
+  // toggle row) or hide it with None, not just system/buildSystem.
+  const mainFilterControls: { place: Searchable; node: ReactNode }[] = [
+    {
+      place: systemPlace,
+      node: (
+        <MultiSelectFilter
+          key="system"
+          value={filter.system ?? []}
+          onChange={handleSystemChange}
+          options={systemOptions}
+          isLoading={systemLoading}
+          placeholder="All systems"
+          unitLabel="system"
+          onOpenChange={(open) => {
+            if (open) setSystemActivated(true)
+          }}
+        />
+      ),
+    },
+    {
+      place: buildSystemPlace,
+      node: (
+        <MultiSelectFilter
+          key="buildSystem"
+          value={filter.buildSystem ?? []}
+          onChange={handleBuildSystemChange}
+          options={buildSystemOptions}
+          isLoading={buildSystemLoading}
+          placeholder="All build systems"
+          unitLabel="build system"
+        />
+      ),
+    },
+    {
+      place: labelsPlace,
+      node: (
+        <MultiSelectFilter
+          key="labels"
+          value={filter.labels ?? []}
+          onChange={handleLabelsChange}
+          options={labelOptions}
+          isLoading={labelsLoading}
+          placeholder="All labels"
+          unitLabel="label"
+          onOpenChange={(open) => {
+            if (open) setLabelsActivated(true)
+          }}
+        />
+      ),
+    },
+    {
+      place: ownerPlace,
+      node: (
+        <MultiSelectFilter
+          key="owner"
+          value={filter.owner ?? []}
+          onChange={handleOwnerChange}
+          options={owners}
+          isLoading={ownersLoading}
+          placeholder="All owners"
+          unitLabel="owner"
+          disabled={myComponentsChecked}
+        />
+      ),
+    },
+  ]
+
+  // Unify classic + extended controls and split by placement, so ONE rule drives
+  // Main (always-visible top bar) vs Extended (toggle row) vs None (hidden).
+  const placeable = [...mainFilterControls, ...extendedControls]
+  const mainRow = placeable.filter((c) => c.place === 'Main')
+  const rowExtended = placeable.filter((c) => c.place === 'Extended')
 
   return (
     <div className="space-y-2">
@@ -347,68 +424,28 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
           />
         </div>
 
-        {systemPlace !== 'None' && (
-          <MultiSelectFilter
-            value={filter.system ?? []}
-            onChange={handleSystemChange}
-            options={systemOptions}
-            isLoading={systemLoading}
-            placeholder="All systems"
-            unitLabel="system"
-            onOpenChange={(open) => {
-              if (open) setSystemActivated(true)
-            }}
-          />
+        {/* Every Main-placed filter renders here: the classic multi-selects
+            (system / buildSystem / labels / owner) plus any admin-promoted
+            extended field. None-placed are dropped; Extended-placed move to the
+            toggle row below. */}
+        {mainRow.map((c) => c.node)}
+
+        {/* My Components is the owner-filter shortcut, so it follows the owner
+            field's placement: hidden when owner search is turned off (None). */}
+        {ownerPlace !== 'None' && (
+          <div className="flex items-center gap-2">
+            <Switch
+              id="my-components"
+              checked={myComponentsChecked}
+              onCheckedChange={handleMyComponentsChange}
+              disabled={!currentUser}
+              aria-label="My Components"
+            />
+            <Label htmlFor="my-components" className="cursor-pointer text-sm">
+              My Components
+            </Label>
+          </div>
         )}
-
-        {buildSystemPlace !== 'None' && (
-          <MultiSelectFilter
-            value={filter.buildSystem ?? []}
-            onChange={handleBuildSystemChange}
-            options={buildSystemOptions}
-            isLoading={buildSystemLoading}
-            placeholder="All build systems"
-            unitLabel="build system"
-          />
-        )}
-
-        <MultiSelectFilter
-          value={filter.labels ?? []}
-          onChange={handleLabelsChange}
-          options={labelOptions}
-          isLoading={labelsLoading}
-          placeholder="All labels"
-          unitLabel="label"
-          onOpenChange={(open) => {
-            if (open) setLabelsActivated(true)
-          }}
-        />
-
-        <MultiSelectFilter
-          value={filter.owner ?? []}
-          onChange={handleOwnerChange}
-          options={owners}
-          isLoading={ownersLoading}
-          placeholder="All owners"
-          unitLabel="owner"
-          disabled={myComponentsChecked}
-        />
-
-        {/* Admin-promoted (searchable: Main) extended filters — always visible. */}
-        {mainExtended.map((c) => c.node)}
-
-        <div className="flex items-center gap-2">
-          <Switch
-            id="my-components"
-            checked={myComponentsChecked}
-            onCheckedChange={handleMyComponentsChange}
-            disabled={!currentUser}
-            aria-label="My Components"
-          />
-          <Label htmlFor="my-components" className="cursor-pointer text-sm">
-            My Components
-          </Label>
-        </div>
 
         <Button variant="outline" size="sm" onClick={handleArchivedToggle}>
           {archivedLabel}

@@ -921,4 +921,38 @@ describe('ComponentFilters extended search (items 5 / 10)', () => {
     // The toggle still exists for the remaining Extended-placed fields.
     expect(screen.getByRole('button', { name: /extended search/i })).toBeDefined()
   })
+
+  it('owner searchable:None hides the owner picker AND the My Components shortcut', () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: { component: { componentOwner: { searchable: 'None' } } },
+      isLoading: false,
+    } as unknown as ReturnType<typeof useFieldConfig>)
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    expect(screen.queryByRole('button', { name: /all owners/i })).toBeNull()
+    expect(screen.queryByLabelText('My Components')).toBeNull()
+    // A sibling classic filter with no override still renders (default Main).
+    expect(screen.getByRole('button', { name: /all systems/i })).toBeDefined()
+  })
+
+  it('a classic filter set searchable:Extended moves into the toggle-gated row', async () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: { component: { system: { searchable: 'Extended' } } },
+      isLoading: false,
+    } as unknown as ReturnType<typeof useFieldConfig>)
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    // System is no longer in the always-visible bar...
+    expect(screen.queryByRole('button', { name: /all systems/i })).toBeNull()
+    // ...it appears once Extended search is opened.
+    await userEvent.click(screen.getByRole('button', { name: /extended search/i }))
+    expect(screen.getByRole('button', { name: /all systems/i })).toBeDefined()
+  })
+
+  it('labels searchable:None hides the labels filter entirely', () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: { component: { labels: { searchable: 'None' } } },
+      isLoading: false,
+    } as unknown as ReturnType<typeof useFieldConfig>)
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    expect(screen.queryByRole('button', { name: /all labels/i })).toBeNull()
+  })
 })
