@@ -159,7 +159,7 @@ springBoot {
 
 node {
     nodeProjectDir.set(project.rootDir.resolve("frontend"))
-    version.set("22.22.2")
+    version.set("24.16.0")
     download.set(true)
 }
 
