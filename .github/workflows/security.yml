@@ -16,7 +16,7 @@ jobs:
   security:
     uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v2.3.4
     with:
-      java-version: '21'
+      java-version: '25'
       codeql-languages: java-kotlin,javascript-typescript
       codeql-category: /language:java-kotlin
       codeql-continue-on-error: true

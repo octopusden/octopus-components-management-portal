@@ -42,14 +42,31 @@ group = "org.octopusden.octopus.components.portal"
 java {
     withJavadocJar()
     withSourcesJar()
-    JavaVersion.VERSION_21.let {
-        sourceCompatibility = it
-        targetCompatibility = it
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
     }
 }
 
 kotlin {
-    compilerOptions.jvmTarget = JvmTarget.JVM_21
+    jvmToolchain(25)
+    compilerOptions.jvmTarget = JvmTarget.JVM_25
+}
+
+jacoco {
+    // Gradle's bundled JaCoCo may still treat Java 25 (class file v69) as experimental;
+    // 0.8.14 is the first release with official Java 25 support.
+    toolVersion = "0.8.14"
+}
+
+// octopus-quality applies SpotBugs transitively, pinned to 4.8.6 (ASM 9.7 / BCEL 6.9),
+// which can't read Java 25 (class file v69) and silently aborts analysis with exit code 4.
+// The `spotbugs` configuration is created late (in the quality plugin's afterEvaluate),
+// so hook it lazily via configureEach and force the engine to 4.9.8 — which ships
+// ASM 9.9.x + BCEL 6.12 with real Java 25 support.
+configurations.configureEach {
+    if (name == "spotbugs") {
+        resolutionStrategy.force("com.github.spotbugs:spotbugs:4.9.8")
+    }
 }
 
 // detekt 2.x splits its baselines per source set (detekt-baseline-main.xml / -test.xml)
@@ -337,7 +354,7 @@ signing {
 
 docker {
     springBootApplication {
-        baseImage.set("${"dockerRegistry".getExt()}/eclipse-temurin:21-jdk")
+        baseImage.set("${"dockerRegistry".getExt()}/eclipse-temurin:25-jdk")
         ports.set(listOf(8080))
         images.set(setOf("${"octopusGithubDockerRegistry".getExt()}/octopusden/${project.name}:${project.version}"))
     }

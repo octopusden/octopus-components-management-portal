@@ -13,7 +13,7 @@ jobs:
   build:
     uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v2.3.4
     with:
-      java-version: '21'
+      java-version: '25'
       flow-type: 'hybrid'
       docker-image: components-management-portal
     secrets: inherit
@@ -21,13 +21,13 @@ jobs:
   quality:
     uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v2.3.4
     with:
-      java-version: '21'
+      java-version: '25'
     secrets: inherit
 
   security:
     uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v2.3.4
     with:
-      java-version: '21'
+      java-version: '25'
       enable-codeql: false
       trivy-continue-on-error: true
     secrets: inherit

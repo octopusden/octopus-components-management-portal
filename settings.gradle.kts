@@ -13,3 +13,8 @@ pluginManagement {
         id("org.jetbrains.kotlinx.kover") version "0.9.8"
     }
 }
+
+plugins {
+    // Auto-provisions a JDK 25 toolchain (build.gradle.kts) when one isn't installed locally.
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
+}
