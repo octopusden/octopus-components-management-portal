@@ -955,4 +955,20 @@ describe('ComponentFilters extended search (items 5 / 10)', () => {
     render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
     expect(screen.queryByRole('button', { name: /all labels/i })).toBeNull()
   })
+
+  it('owner searchable:Extended moves BOTH the owner picker and My Components into the toggle row', async () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: { component: { componentOwner: { searchable: 'Extended' } } },
+      isLoading: false,
+    } as unknown as ReturnType<typeof useFieldConfig>)
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    // Collapsed: neither the owner picker nor the My Components shortcut sits in
+    // the always-visible bar — My Components follows the owner field's placement.
+    expect(screen.queryByRole('button', { name: /all owners/i })).toBeNull()
+    expect(screen.queryByLabelText('My Components')).toBeNull()
+    // Opening Extended search reveals both together.
+    await userEvent.click(screen.getByRole('button', { name: /extended search/i }))
+    expect(screen.getByRole('button', { name: /all owners/i })).toBeDefined()
+    expect(screen.getByLabelText('My Components')).toBeDefined()
+  })
 })

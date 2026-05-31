@@ -403,6 +403,28 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
         />
       ),
     },
+    {
+      // My Components is the owner-filter shortcut (it sets owner=[currentUser]),
+      // so it follows the OWNER field's placement rather than living in a fixed
+      // row: Main → main bar, Extended → moves into the toggle row beside the
+      // owner picker, None → hidden. Keeping it always-Main while the owner
+      // picker moved to Extended would half-honour the admin's setting.
+      place: ownerPlace,
+      node: (
+        <div key="my-components" className="flex items-center gap-2">
+          <Switch
+            id="my-components"
+            checked={myComponentsChecked}
+            onCheckedChange={handleMyComponentsChange}
+            disabled={!currentUser}
+            aria-label="My Components"
+          />
+          <Label htmlFor="my-components" className="cursor-pointer text-sm">
+            My Components
+          </Label>
+        </div>
+      ),
+    },
   ]
 
   // Unify classic + extended controls and split by placement, so ONE rule drives
@@ -424,28 +446,11 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
           />
         </div>
 
-        {/* Every Main-placed filter renders here: the classic multi-selects
-            (system / buildSystem / labels / owner) plus any admin-promoted
-            extended field. None-placed are dropped; Extended-placed move to the
-            toggle row below. */}
+        {/* Every Main-placed control renders here: the classic multi-selects
+            (system / buildSystem / labels / owner), the My Components shortcut,
+            plus any admin-promoted extended field. None-placed are dropped;
+            Extended-placed move to the toggle row below. */}
         {mainRow.map((c) => c.node)}
-
-        {/* My Components is the owner-filter shortcut, so it follows the owner
-            field's placement: hidden when owner search is turned off (None). */}
-        {ownerPlace !== 'None' && (
-          <div className="flex items-center gap-2">
-            <Switch
-              id="my-components"
-              checked={myComponentsChecked}
-              onCheckedChange={handleMyComponentsChange}
-              disabled={!currentUser}
-              aria-label="My Components"
-            />
-            <Label htmlFor="my-components" className="cursor-pointer text-sm">
-              My Components
-            </Label>
-          </div>
-        )}
 
         <Button variant="outline" size="sm" onClick={handleArchivedToggle}>
           {archivedLabel}
