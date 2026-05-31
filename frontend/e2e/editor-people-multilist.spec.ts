@@ -202,19 +202,27 @@ test.describe('Editor — multi-value Release Managers / Security Champions (SYS
     await addPerson(page, 'Release Managers', 'rm-carol')
     await expect(rowNames(page, 'Release Managers')).toHaveText(['rm-alice', 'rm-bob', 'rm-carol'])
 
-    // Reorder via the drag grip — keyboard path (the most reliable way to drive
-    // dnd-kit in Playwright): focus rm-carol's grip, Space to lift, ArrowUp to
-    // move it one slot, Space to drop → [rm-alice, rm-carol, rm-bob].
+    // Reorder rm-carol up one slot via a real pointer drag on its grip.
+    // dnd-kit's PointerSensor has a 4px activation distance and tracks the
+    // sortable via pointermove, so a reliable drag is: press on the grip, a small
+    // move to pass the threshold, then a multi-step move onto the target row
+    // (rm-bob, currently index 1) before releasing → [rm-alice, rm-carol, rm-bob].
     const carolGrip = peopleField(page, 'Release Managers').getByRole('button', {
       name: 'Drag rm-carol to reorder',
     })
-    await carolGrip.focus()
-    await page.keyboard.press('Space')
-    // Let dnd-kit's setTimeout(0) document keydown-listener register before the
-    // first move key (belt-and-suspenders; CDP latency usually covers this).
-    await page.waitForTimeout(50)
-    await page.keyboard.press('ArrowUp')
-    await page.keyboard.press('Space')
+    const bobRow = peopleField(page, 'Release Managers').getByTestId('person-row-1')
+    const grip = await carolGrip.boundingBox()
+    const target = await bobRow.boundingBox()
+    if (!grip || !target) throw new Error('reorder: missing bounding box for grip/target')
+    await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2)
+    await page.mouse.down()
+    // Exceed the 4px PointerSensor activation distance.
+    await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2 - 8, { steps: 5 })
+    // Drag up onto rm-bob's row (many steps so dnd-kit tracks the collision),
+    // landing slightly above its centre so rm-carol inserts before rm-bob.
+    await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 20 })
+    await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2 - 6, { steps: 5 })
+    await page.mouse.up()
     await expect(rowNames(page, 'Release Managers')).toHaveText(['rm-alice', 'rm-carol', 'rm-bob'])
 
     // Remove rm-alice → [rm-carol, rm-bob].
