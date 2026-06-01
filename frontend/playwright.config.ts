@@ -14,7 +14,12 @@ export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
   workers: 1,
-  retries: 0,
+  // CI retries 2× to absorb a known, agent-dependent flake: the bundled
+  // chromium-headless-shell #GPs (SIGSEGV) on its FIRST launch on Oracle Linux
+  // 8/10 podman agents (it passes on RL9). The next launch in the same warm
+  // container succeeds, so a retry recovers. Locally we keep retries: 0 so real
+  // failures surface immediately. (Root-cause container fix tracked separately.)
+  retries: process.env.CI ? 2 : 0,
   // List reporter for human-readable streaming into Gradle stdout, plus
   // JUnit + HTML so TeamCity (and a debugging engineer) get per-spec
   // results and screenshots on failure. Output paths are stable — the

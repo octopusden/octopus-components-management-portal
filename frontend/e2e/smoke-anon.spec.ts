@@ -4,8 +4,10 @@ import { test, expect } from '@playwright/test'
 // runs without cookies so we exercise the gateway's permitAll set and the
 // 302 → OIDC redirect for protected routes.
 test.describe('Components Management Portal – anonymous smoke', () => {
-  test('portal/info is reachable anonymously', async ({ page }) => {
-    const resp = await page.request.get('/portal/info')
+  test('portal/info is reachable anonymously', async ({ request }) => {
+    // Use the `request` fixture (API-only, no browser launch) — this avoids the
+    // chromium-headless-shell first-launch #GP on OL8/OL10 podman agents entirely.
+    const resp = await request.get('/portal/info')
     expect(resp.ok()).toBeTruthy()
   })
 
