@@ -579,4 +579,45 @@ describe('FieldConfigEditor — single-option auto-config (item D)', () => {
       screen.getByRole('combobox', { name: /productType visibility/ }).getAttribute('data-visibility'),
     ).toBe('editable')
   })
+
+  it('applies single-option auto-config when the dictionary recovers AFTER first render (late vocab)', () => {
+    // Regression guard (Copilot PR #60): the systems dictionary first settles
+    // empty — e.g. a transient error or an undefined payload — so Phase 2 runs
+    // (enumOptionsLoading is already false) with NO vocabulary and there is
+    // nothing to auto-config yet. The field-config `data` reference never
+    // changes; only the vocabulary does on refetch. Keying the run-once guard on
+    // `data` alone would lock auto-config out forever.
+    mockUseSystemsDictionary.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+    } as unknown as ReturnType<typeof useSystemsDictionary>)
+    mockUseFieldConfig.mockReturnValue({
+      data: {},
+      isLoading: false,
+      error: null,
+    } as unknown as ReturnType<typeof useFieldConfig>)
+    const { rerender } = render(<FieldConfigEditor />, { wrapper: makeWrapper() })
+    // Nothing to auto-config yet — system stays at its editable baseline.
+    expect(
+      screen.getByRole('combobox', { name: /system visibility/ }).getAttribute('data-visibility'),
+    ).toBe('editable')
+
+    // The dictionary recovers on refetch with a single value; `data` is unchanged.
+    mockUseSystemsDictionary.mockReturnValue({
+      data: ['ONLY_SYS'],
+      isLoading: false,
+      isError: false,
+    } as unknown as ReturnType<typeof useSystemsDictionary>)
+    rerender(<FieldConfigEditor />)
+
+    // Single-option auto-config must now apply even though `data` did not change.
+    expect(
+      screen.getByRole('combobox', { name: /^system searchable$/ }).getAttribute('data-searchable'),
+    ).toBe('None')
+    expect(
+      screen.getByRole('combobox', { name: /system visibility/ }).getAttribute('data-visibility'),
+    ).toBe('readonly')
+    expect((screen.getByLabelText('system default value') as HTMLSelectElement).value).toBe('ONLY_SYS')
+  })
 })
