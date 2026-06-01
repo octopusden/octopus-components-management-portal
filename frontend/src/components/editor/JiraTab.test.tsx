@@ -130,6 +130,6 @@ describe('JiraTab — inline override coverage', () => {
 
   it.each(overridablePaths)('renders FieldOverrideInline under %s', (path) => {
     renderTab(makeComponent())
-    expect(screen.getByTestId(`field-override-inline-${path}`)).toBeDefined()
+    expect(screen.getByTestId(`field-override-inline-${path}`)).toBeInTheDocument()
   })
 })

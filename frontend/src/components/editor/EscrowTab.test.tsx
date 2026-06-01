@@ -371,6 +371,6 @@ describe('EscrowTab — inline override coverage', () => {
     renderWithProviders(
       <EscrowTab component={baseComponent()} updateMutation={makeMutation()} toast={makeToast()} />
     )
-    expect(screen.getByTestId(`field-override-inline-${path}`)).toBeDefined()
+    expect(screen.getByTestId(`field-override-inline-${path}`)).toBeInTheDocument()
   })
 })
