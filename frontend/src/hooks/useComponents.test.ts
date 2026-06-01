@@ -259,4 +259,68 @@ describe('useComponents — URL params', () => {
     const calledUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
     expect(calledUrl).not.toContain('labels=')
   })
+
+  it('passes multi-value clientCode as CSV (SYS-046)', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result } = renderHook(
+      () => useComponents({ filter: { clientCode: ['ACME-PORTAL', 'OTHER-CC'] } }),
+      { wrapper: makeWrapper() },
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const url = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    // URLSearchParams percent-encodes the CSV comma.
+    expect(url).toContain('clientCode=ACME-PORTAL%2COTHER-CC')
+  })
+
+  it('omits clientCode when the array is empty', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result } = renderHook(
+      () => useComponents({ filter: { clientCode: [] } }),
+      { wrapper: makeWrapper() },
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const url = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    expect(url).not.toContain('clientCode=')
+  })
+
+  it('passes multi-value jiraProjectKey / parentComponentName / groupKey as CSV (SYS-046)', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result } = renderHook(
+      () =>
+        useComponents({
+          filter: {
+            jiraProjectKey: ['AAA', 'BBB'],
+            parentComponentName: ['p1', 'p2'],
+            groupKey: ['org.a', 'org.b'],
+          },
+        }),
+      { wrapper: makeWrapper() },
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const url = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    expect(url).toContain('jiraProjectKey=AAA%2CBBB')
+    expect(url).toContain('parentComponentName=p1%2Cp2')
+    expect(url).toContain('groupKey=org.a%2Corg.b')
+  })
+
+  it('passes distributionExplicit / distributionExternal booleans (SYS-045)', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result } = renderHook(
+      () => useComponents({ filter: { distributionExplicit: true, distributionExternal: false } }),
+      { wrapper: makeWrapper() },
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const url = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    expect(url).toContain('distributionExplicit=true')
+    expect(url).toContain('distributionExternal=false')
+  })
+
+  it('omits distribution params when unset', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result } = renderHook(() => useComponents(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const url = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    expect(url).not.toContain('distributionExplicit')
+    expect(url).not.toContain('distributionExternal')
+  })
 })

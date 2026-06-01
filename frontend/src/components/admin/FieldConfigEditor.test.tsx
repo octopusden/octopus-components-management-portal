@@ -82,7 +82,7 @@ describe('FieldConfigEditor — catalog rows', () => {
     renderEditor({})
     // groupId remains in the catalog (locked). R1: `group` is no longer mandatory
     // and is migration-owned; the row is retained pending the R3 admin UX rework.
-    const componentFields = ['name', 'displayName', 'solution', 'componentOwner', 'system', 'productType', 'clientCode', 'groupId']
+    const componentFields = ['name', 'displayName', 'solution', 'componentOwner', 'system', 'productType', 'clientCode', 'groupId', 'distributionExplicit', 'distributionExternal']
     for (const field of componentFields) {
       // Each field label appears in the table (may appear in multiple cells/elements)
       const elements = screen.getAllByText(field)

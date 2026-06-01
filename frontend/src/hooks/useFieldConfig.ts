@@ -140,6 +140,8 @@ export const DEFAULT_SEARCHABILITY: Record<string, Searchable> = {
   'component.parentComponentName': 'Extended',
   'component.canBeParent': 'Extended',
   'component.groupKey': 'Extended',
+  'component.distributionExplicit': 'Extended',
+  'component.distributionExternal': 'Extended',
   'jira.projectKey': 'Extended',
   'jira.technical': 'Extended',
   'vcs.vcsPath': 'Extended',
