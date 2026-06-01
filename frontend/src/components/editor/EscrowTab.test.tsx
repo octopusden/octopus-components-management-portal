@@ -364,6 +364,7 @@ describe('EscrowTab — inline override coverage', () => {
     'escrow.gradleIncludeConfigurations',
     'escrow.gradleExcludeConfigurations',
     'escrow.gradleIncludeTestConfigurations',
+    'escrow.buildTask',
   ]
 
   it.each(overridablePaths)('renders FieldOverrideInline under %s', (path) => {

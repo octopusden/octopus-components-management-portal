@@ -182,14 +182,25 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <Switch
-          id="escrow-gradle-include-test"
-          checked={gradleIncludeTestConfigurations}
-          onCheckedChange={setGradleIncludeTestConfigurations}
-        />
-        <Label htmlFor="escrow-gradle-include-test" className="cursor-pointer">Gradle Include Test Configurations</Label>
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-3">
+          <Switch
+            id="escrow-gradle-include-test"
+            checked={gradleIncludeTestConfigurations}
+            onCheckedChange={setGradleIncludeTestConfigurations}
+          />
+          <Label htmlFor="escrow-gradle-include-test" className="cursor-pointer">Gradle Include Test Configurations</Label>
+        </div>
         <FieldOverrideInline componentId={component.id} overriddenAttribute="escrow.gradleIncludeTestConfigurations" />
+      </div>
+
+      {/* Build Task is registered in CRS SCALAR_ATTRIBUTE_PATHS and overridable
+          per-version, but the generated v4 EscrowAspectRequest does not yet
+          expose it — no BASE input here until the CRS contract is widened.
+          Inline override remains available as the entry point. */}
+      <div className="space-y-1.5">
+        <Label>Build Task</Label>
+        <FieldOverrideInline componentId={component.id} overriddenAttribute="escrow.buildTask" />
       </div>
 
       <div className="flex justify-end">
