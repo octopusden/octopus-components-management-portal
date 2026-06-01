@@ -53,14 +53,15 @@ const CATALOG: CatalogRow[] = [
   { section: 'component', fieldName: 'system',         label: 'system'                       },
   { section: 'component', fieldName: 'productType',    label: 'productType'                  },
   { section: 'component', fieldName: 'clientCode',     label: 'clientCode'                   },
-  // ui-swift-sloth §3.5: groupId is locked because the backend now makes
-  // `group` mandatory. Admins keep defaultValue + description editing (used
-  // by the Create dialog auto-suggest) but cannot flip visibility/required
-  // away from the contract.
+  // `groupId` is locked (admins cannot flip its visibility/required). NOTE (R1):
+  // `group` is no longer mandatory and is migration-owned aggregator membership;
+  // the Create dialog no longer auto-suggests or sends a groupId. This catalog row
+  // is retained for now; the FieldConfigEditor admin UX rework (R3) will revisit it.
   { section: 'component', fieldName: 'groupId',        label: 'groupId',        locked: true },
-  // Relationship / aggregator fields (Portal items 1/2/4). `groupKey` is the
-  // server-derived aggregator-group key — read-only in the editor (locked) but
-  // still a useful search target, so its Searchable cell stays configurable.
+  // Relationship + group fields. `parentComponentName` / `canBeParent` are the flat
+  // parent-picker relationship; `groupKey` is the aggregator-group key (a
+  // `components { }` owner's group, migration-owned) — read-only in the editor
+  // (locked) but still a useful search target, so its Searchable cell stays configurable.
   { section: 'component', fieldName: 'parentComponentName', label: 'parentComponentName' },
   { section: 'component', fieldName: 'canBeParent',         label: 'canBeParent'         },
   { section: 'component', fieldName: 'groupKey',            label: 'groupKey', locked: true },

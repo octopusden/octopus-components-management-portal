@@ -80,9 +80,8 @@ describe('FieldConfigEditor — catalog rows', () => {
 
   it('renders all expected component field rows', () => {
     renderEditor({})
-    // ui-swift-sloth §3.5: groupId joins the catalog (locked) so admins can
-    // edit defaultValue / description but cannot flip visibility or required
-    // — backend now makes the group mandatory.
+    // groupId remains in the catalog (locked). R1: `group` is no longer mandatory
+    // and is migration-owned; the row is retained pending the R3 admin UX rework.
     const componentFields = ['name', 'displayName', 'solution', 'componentOwner', 'system', 'productType', 'clientCode', 'groupId']
     for (const field of componentFields) {
       // Each field label appears in the table (may appear in multiple cells/elements)
