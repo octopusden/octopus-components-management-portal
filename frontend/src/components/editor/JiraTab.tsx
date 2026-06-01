@@ -120,13 +120,16 @@ export function JiraTab({ component, updateMutation, toast }: JiraTabProps) {
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <Switch
-          id="jira-technical"
-          checked={technical}
-          onCheckedChange={setTechnical}
-        />
-        <Label htmlFor="jira-technical" className="cursor-pointer">Technical</Label>
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-3">
+          <Switch
+            id="jira-technical"
+            checked={technical}
+            onCheckedChange={setTechnical}
+          />
+          <Label htmlFor="jira-technical" className="cursor-pointer">Technical</Label>
+        </div>
+        <FieldOverrideInline componentId={component.id} overriddenAttribute="jira.technical" />
       </div>
 
       {releasesInDefaultBranchEntry.visibility !== 'hidden' && (
@@ -160,6 +163,7 @@ export function JiraTab({ component, updateMutation, toast }: JiraTabProps) {
             onChange={(e) => setVersionPrefix(e.target.value)}
             placeholder="e.g. v"
           />
+          <FieldOverrideInline componentId={component.id} overriddenAttribute="jira.versionPrefix" />
         </div>
 
         <div className="space-y-1.5">
@@ -169,6 +173,7 @@ export function JiraTab({ component, updateMutation, toast }: JiraTabProps) {
             onChange={(e) => setMajorVersionFormat(e.target.value)}
             placeholder="e.g. {major}.0.0"
           />
+          <FieldOverrideInline componentId={component.id} overriddenAttribute="jira.majorVersionFormat" />
         </div>
 
         <div className="space-y-1.5">
@@ -178,6 +183,7 @@ export function JiraTab({ component, updateMutation, toast }: JiraTabProps) {
             onChange={(e) => setReleaseVersionFormat(e.target.value)}
             placeholder="e.g. {major}.{minor}.0"
           />
+          <FieldOverrideInline componentId={component.id} overriddenAttribute="jira.releaseVersionFormat" />
         </div>
 
         <div className="space-y-1.5">
@@ -187,6 +193,7 @@ export function JiraTab({ component, updateMutation, toast }: JiraTabProps) {
             onChange={(e) => setBuildVersionFormat(e.target.value)}
             placeholder="e.g. {major}.{minor}.{patch}"
           />
+          <FieldOverrideInline componentId={component.id} overriddenAttribute="jira.buildVersionFormat" />
         </div>
 
         <div className="space-y-1.5">
@@ -196,6 +203,7 @@ export function JiraTab({ component, updateMutation, toast }: JiraTabProps) {
             onChange={(e) => setLineVersionFormat(e.target.value)}
             placeholder="e.g. {major}.{minor}.x"
           />
+          <FieldOverrideInline componentId={component.id} overriddenAttribute="jira.lineVersionFormat" />
         </div>
 
         <div className="space-y-1.5 sm:col-span-2">
@@ -205,6 +213,7 @@ export function JiraTab({ component, updateMutation, toast }: JiraTabProps) {
             onChange={(e) => setVersionFormat(e.target.value)}
             placeholder="Generic version format"
           />
+          <FieldOverrideInline componentId={component.id} overriddenAttribute="jira.versionFormat" />
         </div>
       </div>
 
