@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Save, RotateCcw } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -21,6 +21,8 @@ import { InlineError } from '../ui/inline-error'
 import { SkeletonBlock } from '../ui/skeleton-block'
 import { StatusBanner } from '../ui/status-banner'
 import { useFieldConfig, useUpdateFieldConfig } from '../../hooks/useAdminConfig'
+import { useFieldOptions } from '../../hooks/useFieldOptions'
+import { useSystemsDictionary } from '../../hooks/useSystemsDictionary'
 import { searchabilityFor } from '../../hooks/useFieldConfig'
 import type {
   FieldConfigEntry,
@@ -42,6 +44,15 @@ interface CatalogRow {
   label: string
   /** Locked rows (FC=partial) — visibility/required cells are disabled */
   locked?: boolean
+  /**
+   * Scalar enum field whose Default Value is constrained to a fixed vocabulary
+   * (item E): the Default Value cell renders a dropdown of the FULL option list
+   * (the dictionary / enum, not the in-use subset) instead of free text. The
+   * editor cannot otherwise tell an enum (`system`/`buildSystem`/`productType`)
+   * from free-text scalars like `javaVersion`. Multi-value fields (labels) are
+   * NOT enum scalars and get no such dropdown.
+   */
+  enumField?: boolean
 }
 
 const CATALOG: CatalogRow[] = [
@@ -50,8 +61,8 @@ const CATALOG: CatalogRow[] = [
   { section: 'component', fieldName: 'displayName',    label: 'displayName'                  },
   { section: 'component', fieldName: 'solution',       label: 'solution'                     },
   { section: 'component', fieldName: 'componentOwner', label: 'componentOwner'               },
-  { section: 'component', fieldName: 'system',         label: 'system'                       },
-  { section: 'component', fieldName: 'productType',    label: 'productType'                  },
+  { section: 'component', fieldName: 'system',         label: 'system',      enumField: true },
+  { section: 'component', fieldName: 'productType',    label: 'productType', enumField: true },
   { section: 'component', fieldName: 'clientCode',     label: 'clientCode'                   },
   // `groupId` is locked (admins cannot flip its visibility/required). NOTE (R1):
   // `group` is no longer mandatory and is migration-owned aggregator membership;
@@ -66,7 +77,7 @@ const CATALOG: CatalogRow[] = [
   { section: 'component', fieldName: 'canBeParent',         label: 'canBeParent'         },
   { section: 'component', fieldName: 'groupKey',            label: 'groupKey', locked: true },
   // Build Fields — Appendix B
-  { section: 'build', fieldName: 'buildSystem',   label: 'buildSystem'   },
+  { section: 'build', fieldName: 'buildSystem',   label: 'buildSystem', enumField: true },
   { section: 'build', fieldName: 'javaVersion',   label: 'javaVersion'   },
   { section: 'build', fieldName: 'gradleVersion', label: 'gradleVersion' },
   // Jira Fields — extended-search targets (item 5/10)
@@ -159,6 +170,48 @@ function readEntry(
     description: entry?.description ?? '',
     searchable,
   }
+}
+
+/** True when the server config carries an explicit entry for this row (sectioned or flat). */
+function storedEntryExists(data: Record<string, unknown>, row: CatalogRow): boolean {
+  const sectioned = data as Partial<SectionedConfig>
+  if (sectioned[row.section]?.[row.fieldName]) return true
+  const flat = data as { fields?: Record<string, FieldConfigEntry> }
+  return Boolean(flat.fields?.[`${row.section}.${row.fieldName}`] ?? flat.fields?.[row.fieldName])
+}
+
+/**
+ * Initial draft for a row, applying the single-option auto-config (item D): for an
+ * UNCONFIGURED enum field (no stored entry) whose option list has exactly one value,
+ * derive `searchable=None`, `visibility=readonly`, `defaultValue=`that value — a
+ * one-time default. It NEVER overwrites saved admin config (a stored entry
+ * short-circuits to `readEntry`) and does not re-trigger after a Save persists the
+ * entry. For all other rows it is exactly `readEntry`.
+ */
+function computeInitialDraft(
+  data: Record<string, unknown>,
+  row: CatalogRow,
+  optionsByKey: Record<string, string[]>,
+): RowDraft {
+  const base = readEntry(data, row)
+  if (!row.enumField || storedEntryExists(data, row)) return base
+  const opts = optionsByKey[rowKey(row)] ?? []
+  const only = opts[0]
+  if (opts.length === 1 && only !== undefined) {
+    return { ...base, searchable: 'None', visibility: 'readonly', defaultValue: only }
+  }
+  return base
+}
+
+/** Field-wise equality of two drafts (used to detect an untouched row). */
+function draftsEqual(a: RowDraft, b: RowDraft): boolean {
+  return (
+    a.visibility === b.visibility &&
+    a.required === b.required &&
+    a.defaultValue === b.defaultValue &&
+    a.description === b.description &&
+    a.searchable === b.searchable
+  )
 }
 
 function buildOutput(draft: DraftState): Record<string, unknown> {
@@ -292,6 +345,54 @@ function SearchableSelect({ value, onChange, fieldLabel }: SearchableSelectProps
 }
 
 // ---------------------------------------------------------------------------
+// Default Value cell — enum fields (item E) get a dropdown of the full option
+// vocabulary (dictionary / enum); everything else stays free-text.
+// ---------------------------------------------------------------------------
+
+interface DefaultValueCellProps {
+  row: CatalogRow
+  value: string
+  options: string[]
+  onChange: (value: string) => void
+}
+
+function DefaultValueCell({ row, value, options, onChange }: DefaultValueCellProps) {
+  if (!row.enumField) {
+    return (
+      <Input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-8 text-xs"
+        placeholder="—"
+      />
+    )
+  }
+  // Native <select> (like the Required checkbox cell): it handles the empty
+  // "no default" option cleanly, which a Radix SelectItem cannot. A stored value
+  // missing from the current vocabulary is still shown (labelled) so a Save never
+  // silently drops it.
+  const valueMissingFromOptions = value !== '' && !options.includes(value)
+  return (
+    <select
+      aria-label={`${row.label} default value`}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+    >
+      <option value="">— (no default)</option>
+      {options.map((opt) => (
+        <option key={opt} value={opt}>
+          {opt}
+        </option>
+      ))}
+      {valueMissingFromOptions && (
+        <option value={value}>{value} (not in vocabulary)</option>
+      )}
+    </select>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Section table
 // ---------------------------------------------------------------------------
 
@@ -300,9 +401,11 @@ interface SectionTableProps {
   rows: CatalogRow[]
   draft: DraftState
   onDraftChange: (key: string, patch: Partial<RowDraft>) => void
+  /** Full option vocabulary per rowKey, for enum-field Default Value dropdowns (item E). */
+  enumOptionsByKey: Record<string, string[]>
 }
 
-function SectionTable({ title, rows, draft, onDraftChange }: SectionTableProps) {
+function SectionTable({ title, rows, draft, onDraftChange, enumOptionsByKey }: SectionTableProps) {
   return (
     <div className="space-y-2">
       <h3 className="text-sm font-semibold">{title}</h3>
@@ -367,11 +470,11 @@ function SectionTable({ title, rows, draft, onDraftChange }: SectionTableProps) 
 
                 {/* Default Value */}
                 <TableCell>
-                  <Input
+                  <DefaultValueCell
+                    row={row}
                     value={d.defaultValue}
-                    onChange={(e) => onDraftChange(key, { defaultValue: e.target.value })}
-                    className="h-8 text-xs"
-                    placeholder="—"
+                    options={enumOptionsByKey[key] ?? []}
+                    onChange={(v) => onDraftChange(key, { defaultValue: v })}
                   />
                 </TableCell>
 
@@ -403,12 +506,40 @@ export function FieldConfigEditor() {
   const { data, isLoading, error } = useFieldConfig()
   const updateMutation = useUpdateFieldConfig()
 
+  // Full option vocabularies for the enum-field Default Value dropdowns (item E)
+  // and the single-option auto-config (item D). `system` uses the master
+  // dictionary (/meta/systems/dictionary) — NOT the in-use /meta/systems subset;
+  // buildSystem / productType use their fixed enum / field-config options.
+  const systemsDict = useSystemsDictionary()
+  const buildSystemOptions = useFieldOptions('buildSystem')
+  const productTypeOptions = useFieldOptions('productType')
+  // Array.isArray guard: `systemsDict.data` is the raw query payload, so a
+  // malformed/non-array API response (or an empty `{}`) must not reach the
+  // dropdown's `.map` — degrade to no options rather than white-screen the page.
+  const enumOptionsByKey = useMemo<Record<string, string[]>>(
+    () => ({
+      'component.system': Array.isArray(systemsDict.data) ? systemsDict.data : [],
+      'build.buildSystem': Array.isArray(buildSystemOptions.options) ? buildSystemOptions.options : [],
+      'component.productType': Array.isArray(productTypeOptions.options) ? productTypeOptions.options : [],
+    }),
+    [systemsDict.data, buildSystemOptions.options, productTypeOptions.options],
+  )
+  const enumOptionsLoading =
+    systemsDict.isLoading || buildSystemOptions.isLoading || productTypeOptions.isLoading
+
   const [draft, setDraft] = useState<DraftState>({})
   const [savedFeedback, setSavedFeedback] = useState(false)
 
-  // Initialise / reset draft from server data
+  // Phase 1 — initialise the draft from server data (via readEntry) as soon as the
+  // config loads, WITHOUT waiting on the enum option vocabularies, so a slow/hanging
+  // /meta dictionary endpoint can't wedge the whole editor. `initRef` pins it to once
+  // per server-data reference (an `enumOptionsByKey` re-render won't re-run it and
+  // discard edits).
+  const initRef = useRef<unknown>(null)
   useEffect(() => {
     if (data === undefined) return
+    if (initRef.current === data) return
+    initRef.current = data
     const rawData = data as Record<string, unknown>
     const initial: DraftState = {}
     for (const row of CATALOG) {
@@ -416,6 +547,42 @@ export function FieldConfigEditor() {
     }
     setDraft(initial)
   }, [data])
+
+  // Phase 2 — item D: once the option vocabularies load, apply the single-option
+  // auto-config for UNCONFIGURED enum fields. Runs once per (server-data, vocabulary)
+  // state (`autoConfigRef`) and only overwrites a row still at its readEntry baseline,
+  // so it never clobbers an edit made before the vocabularies arrived, and never
+  // re-applies after a Save (a stored entry makes computeInitialDraft a no-op).
+  const autoConfigRef = useRef<{ data: unknown; options: unknown }>({ data: null, options: null })
+  useEffect(() => {
+    if (data === undefined || enumOptionsLoading) return
+    // Re-key the run-once guard on BOTH `data` and the loaded vocabularies: a
+    // dictionary that first settled empty (transient error / undefined payload, with
+    // enumOptionsLoading already false) and later recovered on refetch changes
+    // `enumOptionsByKey` but NOT `data`, so a `data`-only guard would lock
+    // single-option auto-config out forever (Copilot PR #60).
+    if (autoConfigRef.current.data === data && autoConfigRef.current.options === enumOptionsByKey) return
+    autoConfigRef.current = { data, options: enumOptionsByKey }
+    const rawData = data as Record<string, unknown>
+    setDraft((prev) => {
+      let changed = false
+      const next = { ...prev }
+      for (const row of CATALOG) {
+        if (!row.enumField || storedEntryExists(rawData, row)) continue
+        const baseline = readEntry(rawData, row)
+        const auto = computeInitialDraft(rawData, row, enumOptionsByKey)
+        const key = rowKey(row)
+        const current = prev[key]
+        // `auto !== baseline` only when the single-option rule fired; apply it iff
+        // the row is still untouched (current equals the readEntry baseline).
+        if (current && !draftsEqual(auto, baseline) && draftsEqual(current, baseline)) {
+          next[key] = auto
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [data, enumOptionsLoading, enumOptionsByKey])
 
   const handleDraftChange = (key: string, patch: Partial<RowDraft>) => {
     setDraft((prev) => {
@@ -429,7 +596,7 @@ export function FieldConfigEditor() {
     const rawData = data as Record<string, unknown>
     const reset: DraftState = {}
     for (const row of CATALOG) {
-      reset[rowKey(row)] = readEntry(rawData, row)
+      reset[rowKey(row)] = computeInitialDraft(rawData, row, enumOptionsByKey)
     }
     setDraft(reset)
   }
@@ -444,7 +611,10 @@ export function FieldConfigEditor() {
     })
   }
 
-  // ----- Loading state -----
+  // ----- Loading state ----- (gated ONLY on the field-config load; the enum option
+  // vocabularies load independently — Phase 2 applies item D when they arrive, and
+  // the Default Value dropdowns fill in as they resolve — so a slow /meta dictionary
+  // endpoint never blocks the editor).
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -513,6 +683,7 @@ export function FieldConfigEditor() {
         rows={COMPONENT_ROWS}
         draft={draft}
         onDraftChange={handleDraftChange}
+        enumOptionsByKey={enumOptionsByKey}
       />
 
       {/* Build Fields table */}
@@ -521,6 +692,7 @@ export function FieldConfigEditor() {
         rows={BUILD_ROWS}
         draft={draft}
         onDraftChange={handleDraftChange}
+        enumOptionsByKey={enumOptionsByKey}
       />
 
       {/* Jira Fields table */}
@@ -529,6 +701,7 @@ export function FieldConfigEditor() {
         rows={JIRA_ROWS}
         draft={draft}
         onDraftChange={handleDraftChange}
+        enumOptionsByKey={enumOptionsByKey}
       />
 
       {/* VCS Fields table */}
@@ -537,6 +710,7 @@ export function FieldConfigEditor() {
         rows={VCS_ROWS}
         draft={draft}
         onDraftChange={handleDraftChange}
+        enumOptionsByKey={enumOptionsByKey}
       />
     </div>
   )

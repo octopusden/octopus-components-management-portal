@@ -4,14 +4,27 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { FieldConfigEditor } from './FieldConfigEditor'
 import { useFieldConfig, useUpdateFieldConfig } from '../../hooks/useAdminConfig'
+import { useSystemsDictionary } from '../../hooks/useSystemsDictionary'
+import { useFieldOptions } from '../../hooks/useFieldOptions'
 
 vi.mock('../../hooks/useAdminConfig', () => ({
   useFieldConfig: vi.fn(),
   useUpdateFieldConfig: vi.fn(),
 }))
 
+// R3: the editor reads full option vocabularies for the enum-field Default Value
+// dropdowns (item E) + the single-option auto-config (item D). Mock them loaded.
+vi.mock('../../hooks/useSystemsDictionary', () => ({
+  useSystemsDictionary: vi.fn(),
+}))
+vi.mock('../../hooks/useFieldOptions', () => ({
+  useFieldOptions: vi.fn(),
+}))
+
 const mockUseFieldConfig = vi.mocked(useFieldConfig)
 const mockUseUpdateFieldConfig = vi.mocked(useUpdateFieldConfig)
+const mockUseSystemsDictionary = vi.mocked(useSystemsDictionary)
+const mockUseFieldOptions = vi.mocked(useFieldOptions)
 
 function makeWrapper() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -28,6 +41,18 @@ beforeEach(() => {
     isPending: false,
     error: null,
   } as unknown as ReturnType<typeof useUpdateFieldConfig>)
+  // Multi-value vocabularies by default so the single-option auto-config (item D)
+  // does NOT fire for unrelated tests; the D tests override useSystemsDictionary.
+  mockUseSystemsDictionary.mockReturnValue({
+    data: ['NONE', 'CLASSIC', 'ALFA'],
+    isLoading: false,
+    isError: false,
+  } as unknown as ReturnType<typeof useSystemsDictionary>)
+  mockUseFieldOptions.mockImplementation((fieldPath: string) => {
+    if (fieldPath === 'buildSystem') return { options: ['MAVEN', 'GRADLE'], isLoading: false }
+    if (fieldPath === 'productType') return { options: ['PT_A', 'PT_B'], isLoading: false }
+    return { options: [], isLoading: false }
+  })
 })
 
 function renderEditor(data: Record<string, unknown> = {}) {
@@ -427,5 +452,172 @@ describe('FieldConfigEditor — searchable column', () => {
     // Each entry now serialises its search placement.
     expect(payload.component.solution!.searchable).toBe('Extended')
     expect(payload.component.system!.searchable).toBe('Main')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Item E — enum-field Default Value dropdown
+// ---------------------------------------------------------------------------
+
+describe('FieldConfigEditor — enum Default Value dropdown (item E)', () => {
+  it('renders a dropdown for enum fields sourced from the full vocabulary', () => {
+    renderEditor({})
+    // system → systems DICTIONARY (full master list, not the in-use subset).
+    const systemDefault = screen.getByLabelText('system default value') as HTMLSelectElement
+    expect(systemDefault.tagName).toBe('SELECT')
+    const sysOpts = Array.from(systemDefault.options).map((o) => o.value)
+    expect(sysOpts).toContain('CLASSIC')
+    expect(sysOpts).toContain('') // the "(no default)" sentinel
+    // buildSystem → build-system enum; productType → its field-config options.
+    expect(
+      Array.from(
+        (screen.getByLabelText('buildSystem default value') as HTMLSelectElement).options,
+      ).map((o) => o.value),
+    ).toContain('MAVEN')
+    expect(screen.getByLabelText('productType default value')).toBeDefined()
+  })
+
+  it('keeps a free-text Default Value for non-enum scalars (e.g. javaVersion)', () => {
+    renderEditor({})
+    // javaVersion is not an enum field → plain Input, no aria-labelled select.
+    expect(screen.queryByLabelText('javaVersion default value')).toBeNull()
+  })
+
+  it('saves the chosen enum default in the payload', () => {
+    renderEditor({})
+    fireEvent.change(screen.getByLabelText('system default value'), { target: { value: 'ALFA' } })
+    fireEvent.click(screen.getByRole('button', { name: /save/i }))
+    const payload = mutate.mock.calls[0]![0] as {
+      component: Record<string, { defaultValue?: string }>
+    }
+    expect(payload.component.system!.defaultValue).toBe('ALFA')
+  })
+
+  it('preserves a stored default value missing from the current vocabulary (Save round-trips it)', () => {
+    // default systems dict = [NONE, CLASSIC, ALFA]; the stored default is a retired value.
+    renderEditor({ component: { system: { defaultValue: 'RETIRED_SYS' } } })
+    const systemDefault = screen.getByLabelText('system default value') as HTMLSelectElement
+    // The retired value is added to the option list so it isn't silently dropped.
+    expect(Array.from(systemDefault.options).map((o) => o.value)).toContain('RETIRED_SYS')
+    expect(systemDefault.value).toBe('RETIRED_SYS')
+    fireEvent.click(screen.getByRole('button', { name: /save/i }))
+    const payload = mutate.mock.calls[0]![0] as {
+      component: Record<string, { defaultValue?: string }>
+    }
+    expect(payload.component.system!.defaultValue).toBe('RETIRED_SYS')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Item D — single-option auto-config (guarded, one-time)
+// ---------------------------------------------------------------------------
+
+describe('FieldConfigEditor — single-option auto-config (item D)', () => {
+  function setSingleSystemOption() {
+    mockUseSystemsDictionary.mockReturnValue({
+      data: ['ONLY_SYS'],
+      isLoading: false,
+      isError: false,
+    } as unknown as ReturnType<typeof useSystemsDictionary>)
+  }
+
+  it('auto-configures an unconfigured single-option enum field (None / readonly / default = the value)', () => {
+    setSingleSystemOption()
+    renderEditor({}) // no stored system entry
+    expect(
+      screen.getByRole('combobox', { name: /^system searchable$/ }).getAttribute('data-searchable'),
+    ).toBe('None')
+    expect(
+      screen.getByRole('combobox', { name: /system visibility/ }).getAttribute('data-visibility'),
+    ).toBe('readonly')
+    expect((screen.getByLabelText('system default value') as HTMLSelectElement).value).toBe('ONLY_SYS')
+  })
+
+  it('persists the auto-config in the Save payload', () => {
+    setSingleSystemOption()
+    renderEditor({})
+    fireEvent.click(screen.getByRole('button', { name: /save/i }))
+    const payload = mutate.mock.calls[0]![0] as {
+      component: Record<string, { visibility?: string; searchable?: string; defaultValue?: string }>
+    }
+    expect(payload.component.system).toMatchObject({
+      visibility: 'readonly',
+      searchable: 'None',
+      defaultValue: 'ONLY_SYS',
+    })
+  })
+
+  it('does NOT auto-config when the admin already stored an entry (saved config wins)', () => {
+    setSingleSystemOption()
+    renderEditor({ component: { system: { visibility: 'editable', searchable: 'Main' } } })
+    expect(
+      screen.getByRole('combobox', { name: /system visibility/ }).getAttribute('data-visibility'),
+    ).toBe('editable')
+    expect(
+      screen.getByRole('combobox', { name: /^system searchable$/ }).getAttribute('data-searchable'),
+    ).toBe('Main')
+  })
+
+  it('does NOT auto-config a multi-option enum field', () => {
+    // default mock: systems has 3 values → no single-option derivation.
+    renderEditor({})
+    expect(
+      screen.getByRole('combobox', { name: /system visibility/ }).getAttribute('data-visibility'),
+    ).toBe('editable')
+  })
+
+  it('does NOT auto-config an empty-vocabulary enum field (dropdown shows only the "no default" option)', () => {
+    // productType with zero options: length 0 ≠ 1, so no auto-config.
+    mockUseFieldOptions.mockImplementation((fieldPath: string) => {
+      if (fieldPath === 'buildSystem') return { options: ['MAVEN', 'GRADLE'], isLoading: false }
+      return { options: [], isLoading: false } // productType empty
+    })
+    renderEditor({})
+    const ptDefault = screen.getByLabelText('productType default value') as HTMLSelectElement
+    expect(Array.from(ptDefault.options).map((o) => o.value)).toEqual([''])
+    expect(
+      screen.getByRole('combobox', { name: /productType visibility/ }).getAttribute('data-visibility'),
+    ).toBe('editable')
+  })
+
+  it('applies single-option auto-config when the dictionary recovers AFTER first render (late vocab)', () => {
+    // Regression guard (Copilot PR #60): the systems dictionary first settles
+    // empty — e.g. a transient error or an undefined payload — so Phase 2 runs
+    // (enumOptionsLoading is already false) with NO vocabulary and there is
+    // nothing to auto-config yet. The field-config `data` reference never
+    // changes; only the vocabulary does on refetch. Keying the run-once guard on
+    // `data` alone would lock auto-config out forever.
+    mockUseSystemsDictionary.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+    } as unknown as ReturnType<typeof useSystemsDictionary>)
+    mockUseFieldConfig.mockReturnValue({
+      data: {},
+      isLoading: false,
+      error: null,
+    } as unknown as ReturnType<typeof useFieldConfig>)
+    const { rerender } = render(<FieldConfigEditor />, { wrapper: makeWrapper() })
+    // Nothing to auto-config yet — system stays at its editable baseline.
+    expect(
+      screen.getByRole('combobox', { name: /system visibility/ }).getAttribute('data-visibility'),
+    ).toBe('editable')
+
+    // The dictionary recovers on refetch with a single value; `data` is unchanged.
+    mockUseSystemsDictionary.mockReturnValue({
+      data: ['ONLY_SYS'],
+      isLoading: false,
+      isError: false,
+    } as unknown as ReturnType<typeof useSystemsDictionary>)
+    rerender(<FieldConfigEditor />)
+
+    // Single-option auto-config must now apply even though `data` did not change.
+    expect(
+      screen.getByRole('combobox', { name: /^system searchable$/ }).getAttribute('data-searchable'),
+    ).toBe('None')
+    expect(
+      screen.getByRole('combobox', { name: /system visibility/ }).getAttribute('data-visibility'),
+    ).toBe('readonly')
+    expect((screen.getByLabelText('system default value') as HTMLSelectElement).value).toBe('ONLY_SYS')
   })
 })
