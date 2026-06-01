@@ -165,10 +165,10 @@ describe('OverrideRowEditor — create mode', () => {
     expect(markerTab.getAttribute('data-state')).toBe('inactive')
   })
 
-  it('renders version range input with default value (,0),[0,)', () => {
+  it('renders version range input empty by default in create mode (D5)', () => {
     renderEditor()
-    const input = screen.getByPlaceholderText('(,0),[0,)') as HTMLInputElement
-    expect(input.value).toBe('(,0),[0,)')
+    const input = screen.getByLabelText('Version Range') as HTMLInputElement
+    expect(input.value).toBe('')
   })
 
   it('selecting Marker type shows marker attribute list', async () => {
@@ -273,7 +273,7 @@ describe('OverrideRowEditor — create mode', () => {
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
     await userEvent.selectOptions(select, 'build.javaVersion')
 
-    const versionInput = screen.getByPlaceholderText('(,0),[0,)') as HTMLInputElement
+    const versionInput = screen.getByLabelText('Version Range') as HTMLInputElement
     fireEvent.change(versionInput, { target: { value: '[11,12)' } })
 
     const valueInput = screen.getByPlaceholderText('Value for Java Version')
@@ -302,6 +302,7 @@ describe('OverrideRowEditor — create mode', () => {
     const toolsInput = screen.getByPlaceholderText('tool-a, tool-b')
     await userEvent.type(toolsInput, 'tool-a, tool-b, tool-a')
 
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1.0,2.0)' } })
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
     await waitFor(() => {
@@ -326,6 +327,7 @@ describe('OverrideRowEditor — create mode', () => {
     const switches = screen.getAllByRole('switch')
     await userEvent.click(switches[0]!)
 
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1.0,2.0)' } })
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
     await waitFor(() => {
@@ -363,7 +365,7 @@ describe('OverrideRowEditor — edit mode (scalar)', () => {
 
   it('pre-fills version range from existing override', () => {
     renderEditor({ mode: 'edit', override: makeScalarOverride() })
-    const input = screen.getByPlaceholderText('(,0),[0,)') as HTMLInputElement
+    const input = screen.getByLabelText('Version Range') as HTMLInputElement
     expect(input.value).toBe('[11,12)')
   })
 
@@ -393,7 +395,7 @@ describe('OverrideRowEditor — edit mode (scalar)', () => {
     mockUpdateMutateAsync.mockResolvedValue({})
     renderEditor({ mode: 'edit', override: makeScalarOverride() })
 
-    const versionInput = screen.getByPlaceholderText('(,0),[0,)') as HTMLInputElement
+    const versionInput = screen.getByLabelText('Version Range') as HTMLInputElement
     fireEvent.change(versionInput, { target: { value: '[17,18)' } })
 
     const valueInput = screen.getByPlaceholderText('Value for Java Version')
@@ -514,6 +516,7 @@ describe('OverrideRowEditor — marker child trim + blank-row filter', () => {
     const vcsPathInputs2 = await screen.findAllByPlaceholderText('ssh://git@...')
     await userEvent.type(vcsPathInputs2[1]!, '   ')
 
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1.0,2.0)' } })
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
     await waitFor(() => {
@@ -546,6 +549,7 @@ describe('OverrideRowEditor — marker child trim + blank-row filter', () => {
     await userEvent.type(groupInputs2[1]!, 'org.example.beta')
     await userEvent.type(artifactInputs2[1]!, '   ')
 
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1.0,2.0)' } })
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
     await waitFor(() => {
@@ -587,6 +591,7 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
     const urlInputs = await screen.findAllByPlaceholderText('https://artifacts.example.com/...')
     await userEvent.type(urlInputs[0]!, 'https://example.com/dist.tar.gz')
 
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1.0,2.0)' } })
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
     await waitFor(() => {
@@ -611,6 +616,7 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
     const imageInputs = await screen.findAllByPlaceholderText('my-org/my-image')
     await userEvent.type(imageInputs[0]!, 'my-org/svc')
 
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1.0,2.0)' } })
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
     await waitFor(() => {
@@ -637,6 +643,7 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
     await userEvent.type(typeInputs[0]!, 'rpm')
     await userEvent.type(nameInputs[0]!, 'my-svc')
 
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1.0,2.0)' } })
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
     await waitFor(() => {
@@ -647,6 +654,52 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
       expect(body.markerChildren.packages).toEqual([
         { packageType: 'rpm', packageName: 'my-svc' },
       ])
+    })
+  })
+})
+
+describe('OverrideRowEditor — D5 closed-range enforcement', () => {
+  beforeEach(() => {
+    mockCreateMutateAsync.mockReset()
+    mockUpdateMutateAsync.mockReset()
+    mockToast.mockReset()
+  })
+
+  it('does not call createMutation when version range is empty', async () => {
+    renderEditor()
+    const select = screen.getByTestId('attr-select') as HTMLSelectElement
+    await userEvent.selectOptions(select, 'build.javaVersion')
+    const valueInput = screen.getByPlaceholderText('Value for Java Version')
+    await userEvent.type(valueInput, '11')
+    // Range left empty — submit should be blocked
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    expect(mockCreateMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('does not call createMutation when version range is open-upward [X,)', async () => {
+    renderEditor()
+    const select = screen.getByTestId('attr-select') as HTMLSelectElement
+    await userEvent.selectOptions(select, 'build.javaVersion')
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[2.0,)' } })
+    const valueInput = screen.getByPlaceholderText('Value for Java Version')
+    await userEvent.type(valueInput, '17')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    expect(mockCreateMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('renders inline error when range is open-upward', async () => {
+    renderEditor()
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[2.0,)' } })
+    await waitFor(() => {
+      expect(screen.getByText(/edit the base field instead/i)).toBeDefined()
+    })
+  })
+
+  it('renders inline error when range is syntactically invalid', async () => {
+    renderEditor()
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: 'garbage' } })
+    await waitFor(() => {
+      expect(screen.getByText(/invalid version range syntax/i)).toBeDefined()
     })
   })
 })

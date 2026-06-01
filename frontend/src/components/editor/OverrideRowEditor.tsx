@@ -27,6 +27,7 @@ import {
   useUpdateFieldOverride,
 } from '../../hooks/useComponent'
 import { useToast } from '../../hooks/use-toast'
+import { isValidVersionRange, isClosedVersionRange } from '../../lib/versionRange'
 import type { FieldOverride, MarkerChildrenPayload, VcsEntryRequest, MavenArtifactRequest, FileUrlArtifactRequest, DockerImageRequest, PackageRequest } from '../../lib/types'
 
 // ---------------------------------------------------------------------------
@@ -162,7 +163,7 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
   }, [mode, override])
 
   const initialAttribute = mode === 'edit' && override ? override.overriddenAttribute : ''
-  const initialVersionRange = mode === 'edit' && override ? override.versionRange : '(,0),[0,)'
+  const initialVersionRange = mode === 'edit' && override ? override.versionRange : ''
 
   // ---------------------------------------------------------------------------
   // Controlled state — reset when dialog opens
@@ -258,7 +259,7 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
     })()
     setOverrideType(t)
     setAttribute(mode === 'edit' && override ? override.overriddenAttribute : '')
-    setVersionRange(mode === 'edit' && override ? override.versionRange : '(,0),[0,)')
+    setVersionRange(mode === 'edit' && override ? override.versionRange : '')
 
     if (mode === 'edit' && override) {
       setScalarStringValue(override.value !== null && override.value !== undefined
@@ -460,6 +461,17 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
       toast({ title: 'Unknown marker attribute', description: attribute, variant: 'destructive' })
       return
     }
+    // D5: field-override ranges must be closed (or historical-left-unbounded);
+    // universal and open-upward forms belong to BASE. Reject client-side.
+    if (!isClosedVersionRange(versionRange)) {
+      toast({
+        title: isValidVersionRange(versionRange)
+          ? 'Open-upward range — edit the BASE field instead'
+          : 'Invalid version range',
+        variant: 'destructive',
+      })
+      return
+    }
     try {
       if (mode === 'edit' && override) {
         if (overrideType === 'scalar') {
@@ -593,12 +605,20 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
             <Label htmlFor="versionRange">Version Range</Label>
             <Input
               id="versionRange"
-              placeholder="(,0),[0,)"
+              placeholder="[1.0,2.0)"
               value={versionRange}
               onChange={(e) => setVersionRange(e.target.value)}
               className="font-mono"
               required
+              aria-invalid={versionRange.trim() !== '' && !isClosedVersionRange(versionRange)}
             />
+            {versionRange.trim() !== '' && !isClosedVersionRange(versionRange) && (
+              <p className="text-xs text-destructive">
+                {isValidVersionRange(versionRange)
+                  ? 'Open-upward range — edit the BASE field instead'
+                  : 'Invalid version range syntax'}
+              </p>
+            )}
           </div>
 
           {/* ── Value / Marker child editor ── */}
