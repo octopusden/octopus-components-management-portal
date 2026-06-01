@@ -25,8 +25,8 @@ import { test, expect } from '@playwright/test'
 // Runs under the viewer storageState (ACCESS_COMPONENTS is sufficient).
 
 test.describe('Contract: GET /rest/api/4/components list endpoint', () => {
-  test('default SPA query (sort=componentKey,asc) returns 200 with a Page body', async ({ page }) => {
-    const resp = await page.request.get(
+  test('default SPA query (sort=componentKey,asc) returns 200 with a Page body', async ({ request }) => {
+    const resp = await request.get(
       '/rest/api/4/components?page=0&size=20&sort=componentKey,asc',
     )
     if (resp.status() !== 200) {
@@ -44,11 +44,11 @@ test.describe('Contract: GET /rest/api/4/components list endpoint', () => {
     expect(json).toHaveProperty('totalElements')
   })
 
-  test('bare list call (no query string) returns 200', async ({ page }) => {
+  test('bare list call (no query string) returns 200', async ({ request }) => {
     // Pageable parameters are optional on the controller; the endpoint
     // defaults to page=0 / size=20 / unsorted. Asserts the endpoint
     // itself is reachable independently of the sort param.
-    const resp = await page.request.get('/rest/api/4/components')
+    const resp = await request.get('/rest/api/4/components')
     if (resp.status() !== 200) {
       const body = await resp.text().catch(() => '<no body>')
       throw new Error(
