@@ -190,6 +190,7 @@ describe('OverrideRowEditor — create mode', () => {
     const optionValues = Array.from(select.options).map((o) => o.value)
     expect(optionValues).toContain('build.javaVersion')
     expect(optionValues).toContain('escrow.reusable')
+    expect(optionValues).toContain('escrow.buildTask')
     expect(optionValues).toContain('jira.projectKey')
   })
 

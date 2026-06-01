@@ -63,12 +63,7 @@ const SCALAR_ATTRS: ScalarAttr[] = [
   { path: 'escrow.gradleIncludeConfigurations', label: 'Gradle Include Configurations', type: 'string' },
   { path: 'escrow.gradleExcludeConfigurations', label: 'Gradle Exclude Configurations', type: 'string' },
   { path: 'escrow.gradleIncludeTestConfigurations', label: 'Gradle Include Test Configurations', type: 'boolean' },
-  // NOTE: `escrow.buildTask` is intentionally omitted from this catalogue.
-  // The DB column exists (`escrow_build_task`, distinct from
-  // `build.buildTasks`), but CRS's `ConfigurationRowAccessors.SCALAR_ATTRIBUTE_PATHS`
-  // does not yet register the path — `applyScalarValue()` would throw
-  // → 400 on any override attempt. Add back once the CRS-side path is
-  // registered (tracked in `docs/tech-debt/TD-005-schema-v2-followups.md`).
+  { path: 'escrow.buildTask', label: 'Build Task', type: 'string' },
   // Jira
   { path: 'jira.projectKey', label: 'Project Key', type: 'string' },
   { path: 'jira.technical', label: 'Technical', type: 'boolean' },
