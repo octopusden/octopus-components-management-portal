@@ -75,9 +75,11 @@ export interface GeneralFormValues {
   solution: boolean
   archived: boolean
   parentComponentName: string
-  // canBeParent — editable Switch (item 4). A canBeParent component may not have
-  // a parent (enforced server-side + in the UI). The aggregator `group` is now
-  // read-only (server-derived), so the old groupId/groupIsFake form fields are gone.
+  // canBeParent — editable Switch: whether this component may be picked as another
+  // component's parent. A canBeParent component may not itself have a parent (single
+  // level, enforced server-side + in the UI). NOTE: this is NOT the same as an
+  // aggregator (a DSL `components { }` owner that forms a group). The `group` is
+  // read-only (migration-owned), so the old groupId/groupIsFake form fields are gone.
   canBeParent: boolean
   // SYS-039 → multi-value: ordered people lists (first = primary). The JSON
   // field names stay singular; only the TS type changed string → string[].
@@ -264,9 +266,9 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
           )}
 
           {/* Parent Component — strict single-select limited to canBeParent
-              components (item 4). An aggregator (canBeParent) may not have a
-              parent: the picker is disabled when canBeParent && no parent; when
-              canBeParent && a (grandfathered) parent exists, only clearing is
+              components. A can-be-parent component may not itself have a parent
+              (single-level): the picker is disabled when canBeParent && no parent;
+              when canBeParent && a (grandfathered) parent exists, only clearing is
               offered for remediation. */}
           <div className="space-y-1.5 sm:col-span-2 sm:max-w-md">
             <Label htmlFor="parentComponentName">Parent Component</Label>
@@ -326,17 +328,20 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                   setValue('canBeParent', checked, { shouldDirty: true, shouldTouch: true })
                 }
               />
-              <Label htmlFor="canBeParent" className="cursor-pointer">Can be a parent (aggregator)</Label>
+              <Label htmlFor="canBeParent" className="cursor-pointer">Can be a parent</Label>
+              <span className="text-xs text-muted-foreground">
+                May be selected as another component&apos;s parent (not an aggregator).
+              </span>
               {errors.canBeParent && (
                 <p className="text-xs text-destructive">{errors.canBeParent.message}</p>
               )}
             </div>
           )}
 
-          {/* Group Key + Synthetic group — READ-ONLY (items 1/2). The group is
-              the aggregator/"group" component's key, derived from the parent
-              relationship server-side: filled for members of a group, empty for
-              standalone components. Not user-editable here. */}
+          {/* Group Key + Synthetic group — READ-ONLY. The group is the DSL aggregator
+              this component belongs to (an aggregator owns a `components { }` block):
+              filled for aggregator members, empty for standalone components. Set by the
+              migration/import path only, never via the API — not user-editable here. */}
           {groupIdEntry.visibility !== 'hidden' && (
             <div className="space-y-1.5">
               <Label htmlFor="groupId">Group Key</Label>
@@ -356,7 +361,7 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                   <Badge variant="outline" className="text-xs">{component.group.role}</Badge>
                 )}
                 <span className="text-xs text-muted-foreground">
-                  Derived from the parent relationship (read-only).
+                  Aggregator membership (read-only; set by migration).
                 </span>
               </div>
             </div>

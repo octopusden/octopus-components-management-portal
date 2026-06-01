@@ -30,7 +30,7 @@ interface ComponentSelectProps {
    * the parent picker, which must reference a real `canBeParent` component.
    */
   strict?: boolean
-  /** Disable the input (e.g. an aggregator that may not have a parent). */
+  /** Disable the input (e.g. a can-be-parent component, which may not itself have a parent). */
   disabled?: boolean
 }
 

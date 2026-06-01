@@ -19,7 +19,8 @@ export interface ComponentSummary {
   system: string | null
   productType: string | null
   archived: boolean
-  // Whether this component may be referenced as a parent (aggregator). Drives
+  // Whether this component may be referenced as a parent (parent-picker
+  // eligibility — NOT an aggregator, which is a `components { }` owner). Drives
   // the parent picker filter. Optional on the TS type so existing fixtures
   // need not set it; the server always emits it (default false).
   canBeParent?: boolean
@@ -347,8 +348,9 @@ export interface ComponentCreateRequest {
 }
 
 // JSON Merge Patch semantics: null scalar = "don't touch"; present collection
-// = REPLACE. `clearGroup` disambiguates "clear group" from "don't touch group"
-// because `group: null` already means the latter.
+// = REPLACE. NOTE (R1): `group` / `clearGroup` are kept on the wire for backward
+// compatibility but are accepted-and-IGNORED by the API — a group is
+// migration-owned aggregator membership and is never modified via PATCH.
 export interface ComponentUpdateRequest {
   version: number
   name?: string | null
@@ -379,11 +381,11 @@ export interface ComponentUpdateRequest {
   vcsExternalRegistry?: string | null
   distributionExplicit?: boolean | null
   distributionExternal?: boolean | null
+  // R1: `group` and `clearGroup` are accepted-and-IGNORED by the API (a group is
+  // migration-owned, never modified via PATCH). Kept on the wire for backward
+  // compatibility; `clearGroup` stays required in the CRS v4 OpenAPI, so the save
+  // handlers still send `clearGroup: false`.
   group?: ComponentGroupRequest | null
-  // Required on the wire (ComponentUpdateRequest.required in CRS v4
-  // OpenAPI). Disambiguates "clear group" (true) from "don't touch" (false)
-  // when `group` is omitted. Every PATCH must send false unless explicitly
-  // clearing — see GeneralTab/ComponentDetailPage save handlers.
   clearGroup: boolean
   docs?: DocLinkRequest[] | null
   artifactIds?: ArtifactIdRequest[] | null

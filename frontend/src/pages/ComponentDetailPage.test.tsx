@@ -34,16 +34,6 @@ vi.mock('../hooks/useFieldConfig', () => ({
   useFieldConfigEntry: vi.fn(),
   useFieldConfigOptions: () => ({ options: [], isLoading: false }),
 }))
-// ui-swift-sloth §3.5: ComponentDetailPage gates the save on the supported
-// group-prefix list. Stub with a permissive list so the existing tests
-// continue to exercise the post-prefix-check code path.
-vi.mock('../hooks/useSupportedGroups', () => ({
-  useSupportedGroups: () => ({
-    data: ['org.example', 'com.example'],
-    isLoading: false,
-    isError: false,
-  }),
-}))
 // Editor tabs — stub so only the header/action-area is tested here.
 // GeneralTab also exports GENERAL_TAB_FIELDS, which ComponentDetailPage imports
 // for the 400-error routing. importActual preserves real exports so any future
@@ -107,9 +97,9 @@ const baseComponent: ComponentDetail = {
   componentOwner: 'alice',
   productType: 'TYPE_A',
   system: 'SYS1',
-  // ui-swift-sloth §3.5: group is required server-side, so the fixture seeds
-  // a valid groupKey to exercise the post-guard save path. Tests that need to
-  // hit the empty/disallowed-prefix code path override this per-call.
+  // Fixture group for the read-only Group Key display + role badge. R1: a group is
+  // migration-owned aggregator membership, not API-editable — just display data here;
+  // there is no save-guard / prefix-check path anymore.
   group: { groupKey: 'org.example.alpha', isFake: false, role: 'MEMBER' },
   clientCode: null,
   archived: false,

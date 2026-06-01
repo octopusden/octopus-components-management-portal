@@ -860,6 +860,32 @@ describe('ComponentFilters extended search (items 5 / 10)', () => {
     )
   })
 
+  it('selecting "No" on the Can-be-parent tri-state emits canBeParent: false', async () => {
+    // The false branch is the easy-to-miss case: an empty result on a `false`
+    // selection previously read as a phantom bug, so pin it explicitly.
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    await userEvent.click(screen.getByRole('button', { name: /extended search/i }))
+    const select = screen.getByLabelText('Can be parent')
+    fireEvent.change(select, { target: { value: 'false' } })
+    expect(onFilterChange).toHaveBeenCalledWith(
+      expect.objectContaining({ canBeParent: false }),
+    )
+  })
+
+  it('selecting "Any" on the Can-be-parent tri-state clears it back to undefined', async () => {
+    render(
+      <ComponentFilters
+        filter={{ archived: false, canBeParent: true }}
+        onFilterChange={onFilterChange}
+      />,
+    )
+    // canBeParent preset → extended row auto-opens (extendedActive).
+    const select = screen.getByLabelText('Can be parent')
+    fireEvent.change(select, { target: { value: '' } })
+    const lastArg = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
+    expect(lastArg.canBeParent).toBeUndefined()
+  })
+
   it('selecting "Any" on a tri-state clears the boolean back to undefined', async () => {
     render(
       <ComponentFilters

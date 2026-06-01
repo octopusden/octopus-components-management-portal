@@ -752,13 +752,18 @@ describe('GeneralTab — group key + canBeParent (items 1/2 + 4)', () => {
     expect(sw).toBeDefined()
     // Radix Switch exposes checked state via aria-checked / data-state.
     expect(sw.getAttribute('aria-checked')).toBe('true')
+    // R1: the label drops the misleading "(aggregator)" suffix, and the field is
+    // explicitly disambiguated from an aggregator (a `components { }` owner).
+    expect(screen.getByText('Can be a parent')).toBeDefined()
+    expect(screen.queryByText(/can be a parent \(aggregator\)/i)).toBeNull()
+    expect(screen.getByText(/not an aggregator/i)).toBeDefined()
   })
 
   it('a canBeParent component with no parent: the parent picker is disabled', () => {
     setAllEditable()
     const component = baseComponent({ canBeParent: true, parentComponentName: null })
     renderWithProviders(<Harness component={component} />)
-    // An aggregator may not gain a parent → the strict picker renders disabled.
+    // A can-be-parent component may not gain a parent → the strict picker renders disabled.
     const parentInput = screen.getByLabelText(/^parent component$/i) as HTMLInputElement
     expect(parentInput.disabled).toBe(true)
   })
