@@ -7,9 +7,14 @@ import type { ComponentDetail, ComponentConfiguration } from '../../lib/types'
 import type { UseMutationResult } from '@tanstack/react-query'
 import type { ComponentUpdateRequest } from '../../hooks/useComponent'
 
-// Stub FieldOverrideInline so tests don't need the overrides API
+// Visible stub: each FieldOverrideInline renders a div tagged with the
+// overriddenAttribute so coverage tests can assert per-field inline placement.
+// Empty <div> is functionally equivalent to null for the legacy save-path
+// tests that don't query for these elements.
 vi.mock('./FieldOverrideInline', () => ({
-  FieldOverrideInline: () => null,
+  FieldOverrideInline: ({ overriddenAttribute }: { overriddenAttribute: string }) => (
+    <div data-testid={`field-override-inline-${overriddenAttribute}`} />
+  ),
 }))
 
 // Stub EnumSelect to avoid field-config fetch. The stub mirrors the props
@@ -597,5 +602,26 @@ describe('BuildTab — buildSystem required (ui-swift-sloth §5)', () => {
     renderTab(component)
     const saveBtn = screen.getByRole('button', { name: /save build/i }) as HTMLButtonElement
     expect(saveBtn.disabled).toBe(false)
+  })
+})
+
+describe('BuildTab — inline override coverage', () => {
+  const overridablePaths = [
+    'build.buildSystem',
+    'build.buildSystemVersion',
+    'build.buildFilePath',
+    'build.javaVersion',
+    'build.mavenVersion',
+    'build.gradleVersion',
+    'build.projectVersion',
+    'build.systemProperties',
+    'build.buildTasks',
+    'build.deprecated',
+    'build.requiredProject',
+  ]
+
+  it.each(overridablePaths)('renders FieldOverrideInline under %s', (path) => {
+    renderTab(makeComponent())
+    expect(screen.getByTestId(`field-override-inline-${path}`)).toBeDefined()
   })
 })

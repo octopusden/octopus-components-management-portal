@@ -176,6 +176,7 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
             onChange={(e) => setJavaVersion(e.target.value)}
             placeholder="1.8 / 11 / 17 / 21"
           />
+          <FieldOverrideInline componentId={component.id} overriddenAttribute="build.javaVersion" />
         </div>
 
         <div className="space-y-1.5">
@@ -205,6 +206,7 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
             onChange={(e) => setProjectVersion(e.target.value)}
             placeholder="1.0.0"
           />
+          <FieldOverrideInline componentId={component.id} overriddenAttribute="build.projectVersion" />
         </div>
       </div>
 
@@ -227,24 +229,31 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
           placeholder="-Dproperty=value"
           spellCheck={false}
         />
+        <FieldOverrideInline componentId={component.id} overriddenAttribute="build.systemProperties" />
       </div>
 
-      <div className="flex items-center gap-3">
-        <Switch
-          id="build-deprecated"
-          checked={deprecated}
-          onCheckedChange={setDeprecated}
-        />
-        <Label htmlFor="build-deprecated" className="cursor-pointer">Deprecated</Label>
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-3">
+          <Switch
+            id="build-deprecated"
+            checked={deprecated}
+            onCheckedChange={setDeprecated}
+          />
+          <Label htmlFor="build-deprecated" className="cursor-pointer">Deprecated</Label>
+        </div>
+        <FieldOverrideInline componentId={component.id} overriddenAttribute="build.deprecated" />
       </div>
 
-      <div className="flex items-center gap-3">
-        <Switch
-          id="build-required-project"
-          checked={requiredProject}
-          onCheckedChange={setRequiredProject}
-        />
-        <Label htmlFor="build-required-project" className="cursor-pointer">Required Project</Label>
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-3">
+          <Switch
+            id="build-required-project"
+            checked={requiredProject}
+            onCheckedChange={setRequiredProject}
+          />
+          <Label htmlFor="build-required-project" className="cursor-pointer">Required Project</Label>
+        </div>
+        <FieldOverrideInline componentId={component.id} overriddenAttribute="build.requiredProject" />
       </div>
 
       <div className="space-y-1.5">
