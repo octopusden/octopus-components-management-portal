@@ -112,6 +112,7 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
             onValueChange={setGeneration}
             placeholder="Select generation"
           />
+          <FieldOverrideInline componentId={component.id} overriddenAttribute="escrow.generation" />
         </div>
 
         <div className="space-y-1.5">
@@ -121,16 +122,20 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
             onChange={(e) => setDiskSpace(e.target.value)}
             placeholder="e.g. 10GB"
           />
+          <FieldOverrideInline componentId={component.id} overriddenAttribute="escrow.diskSpace" />
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <Switch
-          id="escrow-reusable"
-          checked={reusable}
-          onCheckedChange={setReusable}
-        />
-        <Label htmlFor="escrow-reusable" className="cursor-pointer">Reusable</Label>
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-3">
+          <Switch
+            id="escrow-reusable"
+            checked={reusable}
+            onCheckedChange={setReusable}
+          />
+          <Label htmlFor="escrow-reusable" className="cursor-pointer">Reusable</Label>
+        </div>
+        <FieldOverrideInline componentId={component.id} overriddenAttribute="escrow.reusable" />
       </div>
 
       <div className="space-y-1.5">
@@ -142,6 +147,7 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
           spellCheck={false}
           placeholder="Comma-separated list of provided dependencies"
         />
+        <FieldOverrideInline componentId={component.id} overriddenAttribute="escrow.providedDependencies" />
       </div>
 
       <div className="space-y-1.5">
