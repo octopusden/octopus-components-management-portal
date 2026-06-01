@@ -23,6 +23,30 @@ vi.mock('../hooks/useLabels', () => ({
 import { useLabels } from '../hooks/useLabels'
 const mockUseLabels = vi.mocked(useLabels)
 
+// Stub the four in-use meta hooks (SYS-046) backing the extended-search
+// multi-selects. Default to an empty vocabulary; `metaState` is hoisted so the
+// vi.mock factories can read it, and a test can seed options for a pick
+// interaction by assigning to it. Plain factories (not vi.fn) so they survive
+// the per-describe vi.clearAllMocks() without needing re-installation.
+const metaState = vi.hoisted(() => ({
+  clientCodes: [] as string[],
+  jiraProjectKeys: [] as string[],
+  parentComponentNames: [] as string[],
+  groupKeys: [] as string[],
+}))
+vi.mock('../hooks/useClientCodes', () => ({
+  useClientCodes: () => ({ data: metaState.clientCodes, isLoading: false }),
+}))
+vi.mock('../hooks/useJiraProjectKeys', () => ({
+  useJiraProjectKeys: () => ({ data: metaState.jiraProjectKeys, isLoading: false }),
+}))
+vi.mock('../hooks/useParentComponentNames', () => ({
+  useParentComponentNames: () => ({ data: metaState.parentComponentNames, isLoading: false }),
+}))
+vi.mock('../hooks/useGroupKeys', () => ({
+  useGroupKeys: () => ({ data: metaState.groupKeys, isLoading: false }),
+}))
+
 function mockLabels(
   data: string[] | undefined = ['alpha', 'beta', 'gamma'],
   isLoading = false,
@@ -828,24 +852,28 @@ describe('ComponentFilters extended search (items 5 / 10)', () => {
     expect(screen.getByLabelText('Solution')).toBeDefined()
     expect(screen.getByLabelText('Jira technical')).toBeDefined()
     expect(screen.getByLabelText('Can be parent')).toBeDefined()
+    expect(screen.getByLabelText('Distribution explicit')).toBeDefined()
+    expect(screen.getByLabelText('Distribution external')).toBeDefined()
   })
 
   it('typing in an extended text filter calls onFilterChange after debounce', () => {
     vi.useFakeTimers()
-    // Preset clientCode so extended search auto-opens (no toggle click needed,
-    // which keeps fake timers and userEvent from interfering).
+    // Preset vcsPath so extended search auto-opens (no toggle click needed,
+    // which keeps fake timers and userEvent from interfering). vcsPath stays a
+    // free-text TextFilter after SYS-046 — only clientCode / jiraProjectKey /
+    // parentComponentName / groupKey became multi-selects.
     render(
       <ComponentFilters
-        filter={{ archived: false, clientCode: 'X' }}
+        filter={{ archived: false, vcsPath: 'X' }}
         onFilterChange={onFilterChange}
       />,
     )
-    const input = screen.getByLabelText('Client code')
-    fireEvent.change(input, { target: { value: 'ACME' } })
+    const input = screen.getByLabelText('VCS path')
+    fireEvent.change(input, { target: { value: 'repo/acme' } })
     expect(onFilterChange).not.toHaveBeenCalled()
     act(() => { vi.advanceTimersByTime(300) })
     expect(onFilterChange).toHaveBeenCalledWith(
-      expect.objectContaining({ clientCode: 'ACME' }),
+      expect.objectContaining({ vcsPath: 'repo/acme' }),
     )
     vi.useRealTimers()
   })
@@ -927,7 +955,7 @@ describe('ComponentFilters extended search (items 5 / 10)', () => {
   it('counts an active extended filter toward Clear filters and clears it', async () => {
     render(
       <ComponentFilters
-        filter={{ archived: false, groupKey: 'org.acme' }}
+        filter={{ archived: false, groupKey: ['org.acme'] }}
         onFilterChange={onFilterChange}
       />,
     )
@@ -996,5 +1024,71 @@ describe('ComponentFilters extended search (items 5 / 10)', () => {
     await userEvent.click(screen.getByRole('button', { name: /extended search/i }))
     expect(screen.getByRole('button', { name: /all owners/i })).toBeDefined()
     expect(screen.getByLabelText('My Components')).toBeDefined()
+  })
+})
+
+describe('ComponentFilters multi-value extended filters + distribution (SYS-045/046)', () => {
+  const onFilterChange = vi.fn()
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    for (const k of Object.keys(fieldOptionSeeds)) delete fieldOptionSeeds[k]
+    applyFieldOptionsMock()
+    mockLabels()
+    mockCurrentUser('testuser')
+    mockFieldConfig([])
+    metaState.clientCodes = []
+    metaState.jiraProjectKeys = []
+    metaState.parentComponentNames = []
+    metaState.groupKeys = []
+  })
+
+  it('renders clientCode as a multi-select dropdown (button, not a text input) in the extended row', async () => {
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    await userEvent.click(screen.getByRole('button', { name: /extended search/i }))
+    const trigger = screen.getByLabelText('Client code')
+    expect(trigger.tagName).toBe('BUTTON')
+  })
+
+  it('picking a client code emits a single-element clientCode array', async () => {
+    metaState.clientCodes = ['ACME-PORTAL', 'OTHER-CC']
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    await userEvent.click(screen.getByRole('button', { name: /extended search/i }))
+    await userEvent.click(screen.getByLabelText('Client code'))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'ACME-PORTAL' }))
+    const lastCall = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
+    expect(lastCall.clientCode).toEqual(['ACME-PORTAL'])
+  })
+
+  it('auto-opens extended search when a multi-value extended filter is active', () => {
+    render(
+      <ComponentFilters
+        filter={{ archived: false, groupKey: ['org.acme'] }}
+        onFilterChange={onFilterChange}
+      />,
+    )
+    // No toggle click — a populated groupKey array forces the row open.
+    expect(screen.getByLabelText('Group key')).toBeDefined()
+    expect(screen.getByText('Clear filters')).toBeDefined()
+  })
+
+  it('selecting "Yes" on the Distribution explicit tri-state emits distributionExplicit: true', async () => {
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    await userEvent.click(screen.getByRole('button', { name: /extended search/i }))
+    const select = screen.getByLabelText('Distribution explicit')
+    fireEvent.change(select, { target: { value: 'true' } })
+    expect(onFilterChange).toHaveBeenCalledWith(
+      expect.objectContaining({ distributionExplicit: true }),
+    )
+  })
+
+  it('selecting "No" on the Distribution external tri-state emits distributionExternal: false', async () => {
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    await userEvent.click(screen.getByRole('button', { name: /extended search/i }))
+    const select = screen.getByLabelText('Distribution external')
+    fireEvent.change(select, { target: { value: 'false' } })
+    expect(onFilterChange).toHaveBeenCalledWith(
+      expect.objectContaining({ distributionExternal: false }),
+    )
   })
 })

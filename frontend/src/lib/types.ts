@@ -417,16 +417,27 @@ export interface ComponentFilter {
   labels?: string[]
   /** Filter on the `canBeParent` flag — the parent picker passes `true`. */
   canBeParent?: boolean
-  // ── Extended-search single-value filters (back the list-page "extended
-  //    search" mode; each maps to a CRS-PR2 query param). ──
-  clientCode?: string
+  // ── Extended-search filters (back the list-page "extended search" mode; each
+  //    maps to a CRS v4 query param). clientCode / jiraProjectKey /
+  //    parentComponentName / groupKey are multi-value exact-IN (SYS-046, CSV on
+  //    the wire, sourced from the matching /components/meta/* dropdown); the
+  //    rest stay single-value. ──
+  /** Exact-match OR across values; sourced from /components/meta/client-codes. CSV on the wire. */
+  clientCode?: string[]
   solution?: boolean
-  jiraProjectKey?: string
+  /** Exact-match OR across BASE-row values; sourced from /components/meta/jira-project-keys. CSV on the wire. */
+  jiraProjectKey?: string[]
   jiraTechnical?: boolean
   vcsPath?: string
   productionBranch?: string
-  parentComponentName?: string
-  groupKey?: string
+  /** Exact-match OR across values; sourced from /components/meta/parent-component-names. CSV on the wire. */
+  parentComponentName?: string[]
+  /** Exact-match OR across values; sourced from /components/meta/group-keys. CSV on the wire. */
+  groupKey?: string[]
+  // Distribution boolean filters (SYS-045). `=false` matches only rows explicitly
+  // set false — rows where the column is NULL (never set) are excluded server-side.
+  distributionExplicit?: boolean
+  distributionExternal?: boolean
 }
 
 export interface Page<T> {

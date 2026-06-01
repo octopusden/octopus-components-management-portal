@@ -8,6 +8,10 @@ import { Label } from './ui/label'
 import type { ComponentFilter } from '../lib/types'
 import { useOwners } from '../hooks/useOwners'
 import { useLabels } from '../hooks/useLabels'
+import { useClientCodes } from '../hooks/useClientCodes'
+import { useJiraProjectKeys } from '../hooks/useJiraProjectKeys'
+import { useParentComponentNames } from '../hooks/useParentComponentNames'
+import { useGroupKeys } from '../hooks/useGroupKeys'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useFieldOptions } from '../hooks/useFieldOptions'
 import {
@@ -102,15 +106,17 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
   // filter controls. Auto-opens if an extended filter is already active so a
   // shared/bookmarked URL doesn't hide its own active filters.
   const extendedActive =
-    !!filter.clientCode ||
+    !!filter.clientCode?.length ||
     filter.solution !== undefined ||
-    !!filter.jiraProjectKey ||
+    !!filter.jiraProjectKey?.length ||
     filter.jiraTechnical !== undefined ||
     !!filter.vcsPath ||
     !!filter.productionBranch ||
-    !!filter.parentComponentName ||
+    !!filter.parentComponentName?.length ||
     filter.canBeParent !== undefined ||
-    !!filter.groupKey
+    !!filter.groupKey?.length ||
+    filter.distributionExplicit !== undefined ||
+    filter.distributionExternal !== undefined
   const [extendedOpen, setExtendedOpen] = useState(extendedActive)
 
   // Sync external filter.search into local state when it changes from outside
@@ -147,6 +153,23 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
 
   const handleLabelsChange = (next: string[]) => {
     onFilterChange({ ...filter, labels: next.length ? next : undefined })
+  }
+
+  // Multi-value extended filters (SYS-046) — empty selection clears the field.
+  const handleClientCodeChange = (next: string[]) => {
+    onFilterChange({ ...filter, clientCode: next.length ? next : undefined })
+  }
+
+  const handleJiraProjectKeyChange = (next: string[]) => {
+    onFilterChange({ ...filter, jiraProjectKey: next.length ? next : undefined })
+  }
+
+  const handleParentComponentNameChange = (next: string[]) => {
+    onFilterChange({ ...filter, parentComponentName: next.length ? next : undefined })
+  }
+
+  const handleGroupKeyChange = (next: string[]) => {
+    onFilterChange({ ...filter, groupKey: next.length ? next : undefined })
   }
 
   // Archived filter: 2-state cycle — false (active only, default) ↔ undefined (all)
@@ -188,6 +211,25 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
   const { data: labelOptions = [], isLoading: labelsLoading } = useLabels({
     enabled: labelsActivated,
   })
+  // Multi-value extended-filter dropdowns (SYS-046). Each is gated behind first
+  // open (lazy) so a CRS that hasn't shipped the /meta/* endpoint yet doesn't
+  // log a page-mount 404 (Playwright's console-error listener trips on it).
+  const [clientCodesActivated, setClientCodesActivated] = useState(false)
+  const { data: clientCodeOptions = [], isLoading: clientCodesLoading } = useClientCodes({
+    enabled: clientCodesActivated,
+  })
+  const [jiraProjectKeysActivated, setJiraProjectKeysActivated] = useState(false)
+  const { data: jiraProjectKeyOptions = [], isLoading: jiraProjectKeysLoading } = useJiraProjectKeys({
+    enabled: jiraProjectKeysActivated,
+  })
+  const [parentNamesActivated, setParentNamesActivated] = useState(false)
+  const { data: parentComponentNameOptions = [], isLoading: parentNamesLoading } = useParentComponentNames({
+    enabled: parentNamesActivated,
+  })
+  const [groupKeysActivated, setGroupKeysActivated] = useState(false)
+  const { data: groupKeyOptions = [], isLoading: groupKeysLoading } = useGroupKeys({
+    enabled: groupKeysActivated,
+  })
   const { data: currentUser } = useCurrentUser()
 
   // Field-config entries for the extended filters — `searchabilityFor` resolves
@@ -202,6 +244,8 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
   const { entry: parentEntry } = useFieldConfigEntry('component.parentComponentName')
   const { entry: canBeParentEntry } = useFieldConfigEntry('component.canBeParent')
   const { entry: groupKeyEntry } = useFieldConfigEntry('component.groupKey')
+  const { entry: distributionExplicitEntry } = useFieldConfigEntry('component.distributionExplicit')
+  const { entry: distributionExternalEntry } = useFieldConfigEntry('component.distributionExternal')
   // The classic multi-select filters are placed by the SAME resolver, so an
   // admin's Searchable setting governs them too (not just system/buildSystem).
   const { entry: labelsFilterEntry } = useFieldConfigEntry('component.labels')
@@ -238,23 +282,45 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
     {
       place: place('component.clientCode', clientCodeEntry),
       node: (
-        <TextFilter
-          key="clientCode"
-          label="Client code"
-          value={filter.clientCode ?? ''}
-          onCommit={(v) => onFilterChange({ ...filter, clientCode: v || undefined })}
-        />
+        <div key="clientCode" className="flex flex-col gap-1">
+          <Label htmlFor="filter-clientCode" className="text-xs text-muted-foreground">
+            Client code
+          </Label>
+          <MultiSelectFilter
+            id="filter-clientCode"
+            value={filter.clientCode ?? []}
+            onChange={handleClientCodeChange}
+            options={clientCodeOptions}
+            isLoading={clientCodesLoading}
+            placeholder="All client codes"
+            unitLabel="client code"
+            onOpenChange={(open) => {
+              if (open) setClientCodesActivated(true)
+            }}
+          />
+        </div>
       ),
     },
     {
       place: place('jira.projectKey', jiraProjectKeyEntry),
       node: (
-        <TextFilter
-          key="jiraProjectKey"
-          label="Jira project key"
-          value={filter.jiraProjectKey ?? ''}
-          onCommit={(v) => onFilterChange({ ...filter, jiraProjectKey: v || undefined })}
-        />
+        <div key="jiraProjectKey" className="flex flex-col gap-1">
+          <Label htmlFor="filter-jiraProjectKey" className="text-xs text-muted-foreground">
+            Jira project key
+          </Label>
+          <MultiSelectFilter
+            id="filter-jiraProjectKey"
+            value={filter.jiraProjectKey ?? []}
+            onChange={handleJiraProjectKeyChange}
+            options={jiraProjectKeyOptions}
+            isLoading={jiraProjectKeysLoading}
+            placeholder="All Jira keys"
+            unitLabel="Jira key"
+            onOpenChange={(open) => {
+              if (open) setJiraProjectKeysActivated(true)
+            }}
+          />
+        </div>
       ),
     },
     {
@@ -282,23 +348,45 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
     {
       place: place('component.parentComponentName', parentEntry),
       node: (
-        <TextFilter
-          key="parentComponentName"
-          label="Parent component"
-          value={filter.parentComponentName ?? ''}
-          onCommit={(v) => onFilterChange({ ...filter, parentComponentName: v || undefined })}
-        />
+        <div key="parentComponentName" className="flex flex-col gap-1">
+          <Label htmlFor="filter-parentComponentName" className="text-xs text-muted-foreground">
+            Parent component
+          </Label>
+          <MultiSelectFilter
+            id="filter-parentComponentName"
+            value={filter.parentComponentName ?? []}
+            onChange={handleParentComponentNameChange}
+            options={parentComponentNameOptions}
+            isLoading={parentNamesLoading}
+            placeholder="All parents"
+            unitLabel="parent"
+            onOpenChange={(open) => {
+              if (open) setParentNamesActivated(true)
+            }}
+          />
+        </div>
       ),
     },
     {
       place: place('component.groupKey', groupKeyEntry),
       node: (
-        <TextFilter
-          key="groupKey"
-          label="Group key"
-          value={filter.groupKey ?? ''}
-          onCommit={(v) => onFilterChange({ ...filter, groupKey: v || undefined })}
-        />
+        <div key="groupKey" className="flex flex-col gap-1">
+          <Label htmlFor="filter-groupKey" className="text-xs text-muted-foreground">
+            Group key
+          </Label>
+          <MultiSelectFilter
+            id="filter-groupKey"
+            value={filter.groupKey ?? []}
+            onChange={handleGroupKeyChange}
+            options={groupKeyOptions}
+            isLoading={groupKeysLoading}
+            placeholder="All groups"
+            unitLabel="group"
+            onOpenChange={(open) => {
+              if (open) setGroupKeysActivated(true)
+            }}
+          />
+        </div>
       ),
     },
     {
@@ -331,6 +419,28 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
           label="Can be parent"
           value={filter.canBeParent}
           onChange={(v) => onFilterChange({ ...filter, canBeParent: v })}
+        />
+      ),
+    },
+    {
+      place: place('component.distributionExplicit', distributionExplicitEntry),
+      node: (
+        <TriStateFilter
+          key="distributionExplicit"
+          label="Distribution explicit"
+          value={filter.distributionExplicit}
+          onChange={(v) => onFilterChange({ ...filter, distributionExplicit: v })}
+        />
+      ),
+    },
+    {
+      place: place('component.distributionExternal', distributionExternalEntry),
+      node: (
+        <TriStateFilter
+          key="distributionExternal"
+          label="Distribution external"
+          value={filter.distributionExternal}
+          onChange={(v) => onFilterChange({ ...filter, distributionExternal: v })}
         />
       ),
     },

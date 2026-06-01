@@ -76,6 +76,9 @@ const CATALOG: CatalogRow[] = [
   { section: 'component', fieldName: 'parentComponentName', label: 'parentComponentName' },
   { section: 'component', fieldName: 'canBeParent',         label: 'canBeParent'         },
   { section: 'component', fieldName: 'groupKey',            label: 'groupKey', locked: true },
+  // Distribution flags — extended-search targets (SYS-045)
+  { section: 'component', fieldName: 'distributionExplicit', label: 'distributionExplicit' },
+  { section: 'component', fieldName: 'distributionExternal', label: 'distributionExternal' },
   // Build Fields — Appendix B
   { section: 'build', fieldName: 'buildSystem',   label: 'buildSystem', enumField: true },
   { section: 'build', fieldName: 'javaVersion',   label: 'javaVersion'   },
