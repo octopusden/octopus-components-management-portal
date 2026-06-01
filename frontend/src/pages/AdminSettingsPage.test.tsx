@@ -85,6 +85,15 @@ vi.mock('@/hooks/useAdminConfig', () => ({
   useUpdateComponentDefaults: vi.fn(() => idleMutation),
   useMigrateDefaults: vi.fn(() => idleMutation),
 }))
+// FieldConfigEditor (the default tab) now reads enum option vocabularies for its
+// Default Value dropdowns (R3). Stub them loaded-and-empty so the page renders
+// without depending on the fetch stub's shape.
+vi.mock('@/hooks/useSystemsDictionary', () => ({
+  useSystemsDictionary: vi.fn(() => ({ data: [], isLoading: false, isError: false })),
+}))
+vi.mock('@/hooks/useFieldOptions', () => ({
+  useFieldOptions: vi.fn(() => ({ options: [], isLoading: false })),
+}))
 
 const mockUseCurrentUser = vi.mocked(useCurrentUser)
 const mockUseMigrationStatus = vi.mocked(useMigrationStatus)
