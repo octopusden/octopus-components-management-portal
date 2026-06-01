@@ -549,15 +549,20 @@ export function FieldConfigEditor() {
   }, [data])
 
   // Phase 2 — item D: once the option vocabularies load, apply the single-option
-  // auto-config for UNCONFIGURED enum fields. Runs once per server-data load
-  // (`autoConfigRef`) and only overwrites a row still at its readEntry baseline, so
-  // it never clobbers an edit made before the vocabularies arrived, and never
+  // auto-config for UNCONFIGURED enum fields. Runs once per (server-data, vocabulary)
+  // state (`autoConfigRef`) and only overwrites a row still at its readEntry baseline,
+  // so it never clobbers an edit made before the vocabularies arrived, and never
   // re-applies after a Save (a stored entry makes computeInitialDraft a no-op).
-  const autoConfigRef = useRef<unknown>(null)
+  const autoConfigRef = useRef<{ data: unknown; options: unknown }>({ data: null, options: null })
   useEffect(() => {
     if (data === undefined || enumOptionsLoading) return
-    if (autoConfigRef.current === data) return
-    autoConfigRef.current = data
+    // Re-key the run-once guard on BOTH `data` and the loaded vocabularies: a
+    // dictionary that first settled empty (transient error / undefined payload, with
+    // enumOptionsLoading already false) and later recovered on refetch changes
+    // `enumOptionsByKey` but NOT `data`, so a `data`-only guard would lock
+    // single-option auto-config out forever (Copilot PR #60).
+    if (autoConfigRef.current.data === data && autoConfigRef.current.options === enumOptionsByKey) return
+    autoConfigRef.current = { data, options: enumOptionsByKey }
     const rawData = data as Record<string, unknown>
     setDraft((prev) => {
       let changed = false
