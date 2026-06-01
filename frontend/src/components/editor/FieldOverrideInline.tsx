@@ -46,21 +46,33 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
   const [editRange, setEditRange] = useState('')
   const [editValue, setEditValue] = useState('')
 
-  // Inline error for the add form: shown when the user has typed something
-  // that's syntactically broken OR open-upward (which would override the
-  // current/future state — that's BASE's job).
-  const newRangeError =
-    newRange.trim() !== '' && !isClosedVersionRange(newRange)
-      ? isValidVersionRange(newRange)
-        ? 'Open-upward range — edit the BASE field above instead'
-        : 'Invalid version range syntax'
-      : null
-  const editRangeError =
-    editRange.trim() !== '' && !isClosedVersionRange(editRange)
-      ? isValidVersionRange(editRange)
-        ? 'Open-upward range — edit the BASE field above instead'
-        : 'Invalid version range syntax'
-      : null
+  // Inline error for the add form. Three states:
+  //   - empty             → "required" (button disabled silently for empty is
+  //                          confusing; show the requirement explicitly only
+  //                          if the user has tried to interact — for now we
+  //                          gate by tracking whether the form has been
+  //                          touched in any way).
+  //   - syntactically broken → invalid-syntax error
+  //   - open-upward      → "edit BASE instead" error
+  // Button is disabled in all three cases.
+  function rangeError(range: string, valueTouched: boolean): string | null {
+    const trimmed = range.trim()
+    if (trimmed === '') {
+      return valueTouched ? 'Version range is required' : null
+    }
+    if (!isValidVersionRange(range)) return 'Invalid version range syntax'
+    if (!isClosedVersionRange(range)) {
+      return 'Open-upward range — edit the BASE field above instead'
+    }
+    return null
+  }
+  const newRangeError = rangeError(newRange, newValue.trim() !== '')
+  const editRangeError = rangeError(editRange, true)
+  // Disabled state — separate from the visible error so the empty-untouched
+  // case still blocks submit (no false visual nag for an unmodified blank
+  // form).
+  const newRangeBlocks = !isClosedVersionRange(newRange)
+  const editRangeBlocks = !isClosedVersionRange(editRange)
 
   function handleAdd() {
     if (!isClosedVersionRange(newRange)) return
@@ -153,7 +165,7 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
                     aria-label={`Override value for ${overriddenAttribute}`}
                   />
                 )}
-                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleUpdate} disabled={updateMutation.isPending || editRangeError !== null}>
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleUpdate} disabled={updateMutation.isPending || editRangeBlocks}>
                   <Check className="h-3 w-3" />
                 </Button>
                 <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditingId(null)}>
@@ -217,7 +229,7 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
                 aria-label={`New override value for ${overriddenAttribute}`}
               />
             )}
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleAdd} disabled={createMutation.isPending || newRangeError !== null}>
+            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleAdd} disabled={createMutation.isPending || newRangeBlocks}>
               <Check className="h-3 w-3" />
             </Button>
             <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setAdding(false)}>

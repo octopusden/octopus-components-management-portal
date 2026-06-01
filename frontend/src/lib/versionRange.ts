@@ -18,13 +18,19 @@ export function isValidVersionRange(range: string): boolean {
 
 /**
  * Returns true when `range` is allowed as a field-override range under D5:
- * syntactically valid AND not open-upward (`[X,)` / `(X,)`) anywhere in its
- * last segment. Open-upward and universal forms (`(,)`, `(,0),[0,)`) all end
- * with `,)` and belong to BASE, not overrides.
+ * syntactically valid AND not open-upward in its trailing segment. Universal
+ * forms (`(,)`, `(,0),[0,)`) and simple open-upward (`[X,)` / `(X,)`) end
+ * with `,)` and are rejected — they belong to BASE, not overrides.
  *
  * Allowed: closed (`[X,Y)`, `[X,Y]`, `(X,Y)`, `(X,Y]`) and
- * historical-left-unbounded (`(,X)`, `(,X]`), plus composites whose last
+ * historical-left-unbounded (`(,X)`, `(,X]`), plus composites whose trailing
  * segment satisfies the same rule.
+ *
+ * Known limitation: composites with open-upward in a non-terminal segment
+ * (e.g. `[1.0,),[2.0,3.0]`) slip past this check because the string ends in
+ * `]`. CRS-side validation (D5 enforcement on POST/PATCH, PR-A step 5) is
+ * the authoritative backstop; a parser-backed Portal check is tracked as
+ * P-Releng (R2) in the plan.
  */
 export function isClosedVersionRange(range: string): boolean {
   if (!isValidVersionRange(range)) return false

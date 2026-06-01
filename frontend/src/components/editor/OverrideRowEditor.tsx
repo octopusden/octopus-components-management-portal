@@ -519,6 +519,7 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
   }
 
   const isPending = createMutation.isPending || updateMutation.isPending
+  const versionRangeInvalid = !isClosedVersionRange(versionRange)
 
   // ---------------------------------------------------------------------------
   // Render
@@ -866,7 +867,7 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
             <DialogClose asChild>
               <Button type="button" variant="outline">Cancel</Button>
             </DialogClose>
-            <Button type="submit" disabled={isPending}>
+            <Button type="submit" disabled={isPending || versionRangeInvalid}>
               {isPending ? 'Saving...' : mode === 'edit' ? 'Update' : 'Create'}
             </Button>
           </DialogFooter>
