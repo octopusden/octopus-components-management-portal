@@ -432,3 +432,33 @@ describe('apiAbsolute — 401 handling', () => {
     expect(assignSpy).not.toHaveBeenCalled()
   })
 })
+
+describe('api.getText — text/plain bodies', () => {
+  it('returns the raw text body and asks for text/plain (no JSON content-type)', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response('bcomponent {\n}\n', { status: 200, headers: { 'Content-Type': 'text/plain' } }),
+    )
+    vi.stubGlobal('fetch', mockFetch)
+
+    const body = await api.getText('/components/c1/as-code')
+
+    expect(body).toBe('bcomponent {\n}\n')
+    const calledUrl = mockFetch.mock.calls[0]![0] as string
+    expect(calledUrl).toBe(`${import.meta.env.BASE_URL}rest/api/4/components/c1/as-code`)
+    const headers = (mockFetch.mock.calls[0]![1] as RequestInit).headers as Record<string, string>
+    expect(headers['Accept']).toBe('text/plain')
+    expect(headers['Content-Type']).toBeUndefined()
+  })
+
+  it('throws ApiError with status + raw body on a non-OK text response', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response('component not found', { status: 404 })),
+    )
+
+    const err = (await api.getText('/components/ghost/as-code').catch((e) => e)) as ApiError
+    expect(err).toBeInstanceOf(ApiError)
+    expect(err.status).toBe(404)
+    expect(err.rawBody).toBe('component not found')
+  })
+})
