@@ -206,6 +206,55 @@ describe('FieldOverrideInline — overlap detection (pre-save)', () => {
     expect(screen.queryByText(/overlaps with existing override/i)).toBeNull()
     expect(screen.getByRole('button', { name: 'Confirm new override' })).toBeDisabled()
   })
+
+  it('rejects a new range that fully contains an existing override', async () => {
+    // User-reported: existing [1.0,2.0], adding [0,3.0] (which contains it).
+    // Version 1.5 would match both overrides → ambiguous → must be blocked.
+    mockOverrides = [
+      {
+        id: 'existing-1',
+        overriddenAttribute: 'build.javaVersion',
+        versionRange: '[1.0,2.0]',
+        rowType: 'SCALAR_OVERRIDE',
+        value: '17',
+        markerChildren: null,
+        createdAt: null,
+        updatedAt: null,
+      },
+    ]
+    renderInline('build.javaVersion')
+    await userEvent.click(screen.getByRole('button', { name: /add override/i }))
+    const rangeInput = screen.getByLabelText(/new override version range/i) as HTMLInputElement
+    fireEvent.change(rangeInput, { target: { value: '[0,3.0]' } })
+    await waitFor(() => {
+      expect(screen.getByText(/overlaps with existing override \[1\.0,2\.0\]/i)).toBeInTheDocument()
+    })
+    expect(screen.getByRole('button', { name: 'Confirm new override' })).toBeDisabled()
+  })
+
+  it('rejects a new range that is fully contained in an existing override', async () => {
+    // Mirror direction: existing [0,3.0], adding the narrower [1.0,2.0].
+    mockOverrides = [
+      {
+        id: 'existing-1',
+        overriddenAttribute: 'build.javaVersion',
+        versionRange: '[0,3.0]',
+        rowType: 'SCALAR_OVERRIDE',
+        value: '18',
+        markerChildren: null,
+        createdAt: null,
+        updatedAt: null,
+      },
+    ]
+    renderInline('build.javaVersion')
+    await userEvent.click(screen.getByRole('button', { name: /add override/i }))
+    const rangeInput = screen.getByLabelText(/new override version range/i) as HTMLInputElement
+    fireEvent.change(rangeInput, { target: { value: '[1.0,2.0]' } })
+    await waitFor(() => {
+      expect(screen.getByText(/overlaps with existing override \[0,3\.0\]/i)).toBeInTheDocument()
+    })
+    expect(screen.getByRole('button', { name: 'Confirm new override' })).toBeDisabled()
+  })
 })
 
 describe('FieldOverrideInline — list ordering', () => {

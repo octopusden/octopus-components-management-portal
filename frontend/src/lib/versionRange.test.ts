@@ -184,18 +184,19 @@ describe('rangesOverlap', () => {
     expect(rangesOverlap('(,1.0)', '[0.5,3.0)')).toBe(true)
   })
 
-  it('handles unbounded left side (,X) — containment is allowed', () => {
-    // (,1.0) is contained in (,2.0) — strict containment per schema-spec §3.5.
-    expect(rangesOverlap('(,1.0)', '(,2.0)')).toBe(false)
+  it('handles unbounded left side (,X) — containment is a conflict', () => {
+    // (,1.0) is contained in (,2.0). A version like 0.5 matches both, so the
+    // overlap is ambiguous and must be rejected (disjoint-only rule).
+    expect(rangesOverlap('(,1.0)', '(,2.0)')).toBe(true)
   })
 
   it('handles unbounded right side [X,) — disjoint', () => {
     expect(rangesOverlap('[5.0,)', '[1.0,2.0)')).toBe(false)
   })
 
-  it('handles unbounded right side [X,) — containment is allowed', () => {
-    // [5.0,) is contained in [1.0,) — strict containment per schema-spec §3.5.
-    expect(rangesOverlap('[1.0,)', '[5.0,)')).toBe(false)
+  it('handles unbounded right side [X,) — containment is a conflict', () => {
+    // [5.0,) is contained in [1.0,) — a version like 6.0 matches both.
+    expect(rangesOverlap('[1.0,)', '[5.0,)')).toBe(true)
   })
 
   it('returns "unknown" for composite ranges', () => {
@@ -212,15 +213,17 @@ describe('rangesOverlap', () => {
     expect(rangesOverlap('[1.0-SNAPSHOT,2.0)', '[1.5,3.0)')).toBe('unknown')
   })
 
-  // Per schema-spec §3.5: only PARTIAL overlap is rejected at write-time.
-  // Strict containment is explicitly allowed; equal ranges blocked by UNIQUE.
-  it('returns false for strict containment (outer fully contains inner)', () => {
-    expect(rangesOverlap('[1.0,3.0)', '[1.0,2.0)')).toBe(false)
-    expect(rangesOverlap('[1.0,2.0)', '[1.0,3.0)')).toBe(false)
+  // Disjoint-only rule: any intersection between two overrides on the same
+  // attribute is a conflict, because a version in the overlap would match both
+  // and the resolved value is ambiguous. Strict containment is therefore a
+  // conflict too (the inner range's versions match both overrides).
+  it('returns true for strict containment (outer fully contains inner)', () => {
+    expect(rangesOverlap('[1.0,3.0)', '[1.0,2.0)')).toBe(true)
+    expect(rangesOverlap('[1.0,2.0)', '[1.0,3.0)')).toBe(true)
   })
 
-  it('returns false for strict containment with different left bounds', () => {
-    expect(rangesOverlap('[1.0,4.0)', '[2.0,3.0)')).toBe(false)
+  it('returns true for strict containment with different left bounds', () => {
+    expect(rangesOverlap('[1.0,4.0)', '[2.0,3.0)')).toBe(true)
   })
 
   it('returns true for exact-equal ranges (semantic duplicate)', () => {
@@ -246,11 +249,12 @@ describe('rangesOverlap', () => {
   })
 })
 
-// classifyRangeConflict refines rangesOverlap's boolean `true` into the two
-// distinct cases the UI needs different copy for: a genuine partial overlap
-// vs a semantically-equal duplicate (which the DB UNIQUE constraint would
-// miss across whitespace / trailing-zero differences). 'none' = disjoint or
-// strict containment (both allowed); 'unknown' = unparseable (defer to CRS).
+// classifyRangeConflict refines rangesOverlap's boolean `true` into the
+// distinct cases the UI needs different copy for: a partial overlap, a
+// strict containment, and a semantically-equal duplicate (which the DB
+// UNIQUE constraint would miss across whitespace / trailing-zero
+// differences). All three block a write. 'none' = disjoint (the only
+// allowed relationship); 'unknown' = unparseable (defer to CRS).
 describe('classifyRangeConflict', () => {
   it('classifies partial overlap as "partial"', () => {
     expect(classifyRangeConflict('[1.0,3.0)', '[2.0,4.0)')).toBe('partial')
@@ -272,9 +276,23 @@ describe('classifyRangeConflict', () => {
     expect(classifyRangeConflict('[1.0,2.0)', '[3.0,4.0)')).toBe('none')
   })
 
-  it('classifies strict containment as "none"', () => {
-    expect(classifyRangeConflict('[1.0,4.0)', '[2.0,3.0)')).toBe('none')
-    expect(classifyRangeConflict('[2.0,3.0)', '[1.0,4.0)')).toBe('none')
+  it('classifies strict containment as "contains"', () => {
+    expect(classifyRangeConflict('[1.0,4.0)', '[2.0,3.0)')).toBe('contains')
+    expect(classifyRangeConflict('[2.0,3.0)', '[1.0,4.0)')).toBe('contains')
+  })
+
+  it('classifies same-endpoint mixed-inclusivity containment as "contains", not "equal"', () => {
+    // [1.0,2.0] (includes 2.0) strictly contains [1.0,2.0) (excludes 2.0) —
+    // they share endpoints but are NOT semantically equal.
+    expect(classifyRangeConflict('[1.0,2.0]', '[1.0,2.0)')).toBe('contains')
+    expect(classifyRangeConflict('[1.0,2.0)', '[1.0,2.0]')).toBe('contains')
+  })
+
+  it('classifies the reported [1.0,2.0] vs [0,3.0] case as "contains"', () => {
+    // User-reported: [0,3.0] fully contains [1.0,2.0]; version 1.5 matches
+    // both overrides, so this must be flagged, not silently allowed.
+    expect(classifyRangeConflict('[1.0,2.0]', '[0,3.0]')).toBe('contains')
+    expect(classifyRangeConflict('[0,3.0]', '[1.0,2.0]')).toBe('contains')
   })
 
   it('classifies composites / unparseable bounds as "unknown"', () => {
@@ -288,13 +306,14 @@ describe('classifyRangeConflict', () => {
       ['[1.0,2.0)', '[1.0,2.0)'],
       ['[1.0,2.0)', '[3.0,4.0)'],
       ['[1.0,4.0)', '[2.0,3.0)'],
+      ['[1.0,2.0]', '[0,3.0]'],
       ['(,1.0),[2.0,)', '[1.5,3.0]'],
     ]
     for (const [a, b] of cases) {
       const kind = classifyRangeConflict(a, b)
       const overlap = rangesOverlap(a, b)
       if (kind === 'unknown') expect(overlap).toBe('unknown')
-      else expect(overlap).toBe(kind === 'partial' || kind === 'equal')
+      else expect(overlap).toBe(kind === 'partial' || kind === 'equal' || kind === 'contains')
     }
   })
 })
