@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatVersionRange, isValidVersionRange, isClosedVersionRange } from './versionRange'
+import { formatVersionRange, isValidVersionRange, isClosedVersionRange, rangesOverlap } from './versionRange'
 
 describe('formatVersionRange', () => {
   it('formats (,) as "All versions"', () => {
@@ -111,5 +111,56 @@ describe('isClosedVersionRange', () => {
 
   it('accepts composite of closed segments', () => {
     expect(isClosedVersionRange('(,1.0),(2.0,3.0]')).toBe(true)
+  })
+})
+
+// rangesOverlap: simple-segment overlap detector. Composites and
+// unparseable forms return 'unknown' so the server-side check (P-Overlap
+// in CRS) remains the authoritative backstop.
+describe('rangesOverlap', () => {
+  it('detects overlap between [1.0,2.0] and [1.0.107,)', () => {
+    expect(rangesOverlap('[1.0,2.0]', '[1.0.107,)')).toBe(true)
+  })
+
+  it('is symmetric', () => {
+    expect(rangesOverlap('[1.0.107,)', '[1.0,2.0]')).toBe(true)
+  })
+
+  it('detects disjoint ranges as non-overlapping', () => {
+    expect(rangesOverlap('[1.0,2.0)', '[3.0,4.0)')).toBe(false)
+    expect(rangesOverlap('(,1.0)', '[2.0,3.0)')).toBe(false)
+  })
+
+  it('treats touching boundaries as non-overlap when one side is exclusive', () => {
+    expect(rangesOverlap('[1.0,2.0)', '[2.0,3.0)')).toBe(false)
+    expect(rangesOverlap('(1.0,2.0)', '(2.0,3.0)')).toBe(false)
+  })
+
+  it('treats touching boundaries as overlap when both sides are inclusive', () => {
+    expect(rangesOverlap('[1.0,2.0]', '[2.0,3.0)')).toBe(true)
+  })
+
+  it('handles unbounded left side (,X)', () => {
+    expect(rangesOverlap('(,1.0)', '(,2.0)')).toBe(true)
+    expect(rangesOverlap('(,1.0)', '[0.5,3.0)')).toBe(true)
+  })
+
+  it('handles unbounded right side [X,)', () => {
+    expect(rangesOverlap('[1.0,)', '[5.0,)')).toBe(true)
+    expect(rangesOverlap('[5.0,)', '[1.0,2.0)')).toBe(false)
+  })
+
+  it('returns "unknown" for composite ranges', () => {
+    expect(rangesOverlap('(,1.0),[2.0,)', '[1.5,3.0]')).toBe('unknown')
+    expect(rangesOverlap('[1.0,2.0]', '(,1.0),[2.0,)')).toBe('unknown')
+  })
+
+  it('returns "unknown" for syntactically invalid input', () => {
+    expect(rangesOverlap('garbage', '[1.0,2.0)')).toBe('unknown')
+    expect(rangesOverlap('[1.0,2.0)', '')).toBe('unknown')
+  })
+
+  it('returns "unknown" for non-numeric version bounds', () => {
+    expect(rangesOverlap('[1.0-SNAPSHOT,2.0)', '[1.5,3.0)')).toBe('unknown')
   })
 })
