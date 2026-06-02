@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { FieldOverrides } from './FieldOverrides'
 import type { FieldOverride } from '../../lib/types'
+import type { User } from '../../lib/auth'
 
 // ---------------------------------------------------------------------------
 // Mock hooks
@@ -26,6 +27,20 @@ const mockToast = vi.fn()
 vi.mock('../../hooks/use-toast', () => ({
   useToast: () => ({ toast: mockToast }),
 }))
+
+// FieldOverrides gates its edit surface on the ADMIN_DATA permission, read via
+// useCurrentUser. Default to an admin in beforeEach so existing tests keep
+// seeing the actions; gating tests override with a non-admin user.
+const mockUser = vi.fn<() => { data: User | null }>()
+vi.mock('../../hooks/useCurrentUser', () => ({
+  useCurrentUser: () => mockUser(),
+}))
+
+function makeUser(permissions: string[]): User {
+  return { username: 'u', roles: [{ name: 'r', permissions }], groups: [] }
+}
+const ADMIN_USER = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS', 'ADMIN_DATA'])
+const EDITOR_USER = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
 
 // Stub OverrideRowEditor so FieldOverrides tests focus on the table/buttons,
 // not on the editor internals. The stub renders a sentinel element when open
@@ -105,6 +120,7 @@ describe('FieldOverrides', () => {
     mockDeleteMutateAsync.mockReset()
     mockToast.mockReset()
     mockOverrides.mockReturnValue({ data: [], isLoading: false })
+    mockUser.mockReturnValue({ data: ADMIN_USER })
   })
 
   it('renders Add Override button when loaded', () => {
@@ -227,5 +243,54 @@ describe('FieldOverrides', () => {
     const { container } = renderComponent()
     // SkeletonBlock renders an animated div — check for absence of the table
     expect(container.querySelector('table')).toBeNull()
+  })
+})
+
+describe('FieldOverrides — ADMIN_DATA gating', () => {
+  beforeEach(() => {
+    mockDeleteMutateAsync.mockReset()
+    mockToast.mockReset()
+    mockOverrides.mockReturnValue({ data: [makeScalarOverride()], isLoading: false })
+  })
+
+  it('admin (ADMIN_DATA) sees Add Override and per-row edit/delete actions', () => {
+    mockUser.mockReturnValue({ data: ADMIN_USER })
+    renderComponent()
+    expect(screen.getByRole('button', { name: /add override/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /edit override/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /delete override/i })).toBeInTheDocument()
+  })
+
+  it('non-admin sees a read-only table — no Add Override, no row actions, no Actions column', () => {
+    mockUser.mockReturnValue({ data: EDITOR_USER })
+    renderComponent()
+    // Row data still renders (read-only audit view)...
+    expect(screen.getByText('build.javaVersion')).toBeInTheDocument()
+    // ...but no edit surface.
+    expect(screen.queryByRole('button', { name: /add override/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /edit override/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /delete override/i })).toBeNull()
+    expect(screen.queryByText('Actions')).toBeNull()
+  })
+
+  it('treats a null user (unauthenticated/loading) as non-admin', () => {
+    mockUser.mockReturnValue({ data: null })
+    renderComponent()
+    expect(screen.queryByRole('button', { name: /add override/i })).toBeNull()
+  })
+
+  it('shows a neutral marker hint to non-admins (no misleading "edit to view children")', () => {
+    mockUser.mockReturnValue({ data: EDITOR_USER })
+    mockOverrides.mockReturnValue({ data: [makeMarkerOverride()], isLoading: false })
+    renderComponent()
+    expect(screen.getByText('marker')).toBeInTheDocument()
+    expect(screen.queryByText(/edit to view children/i)).toBeNull()
+  })
+
+  it('keeps the "edit to view children" marker hint for admins', () => {
+    mockUser.mockReturnValue({ data: ADMIN_USER })
+    mockOverrides.mockReturnValue({ data: [makeMarkerOverride()], isLoading: false })
+    renderComponent()
+    expect(screen.getByText(/marker — edit to view children/i)).toBeInTheDocument()
   })
 })
