@@ -60,16 +60,21 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
   //   - syntactically broken → invalid-syntax error
   //   - open-upward      → "edit BASE instead" error
   // Button is disabled in all three cases regardless of the value-typed gate.
-  // Walk siblings on the same attribute for a write-blocking conflict. Both a
-  // partial overlap and a semantic-equal duplicate block submit, but they get
-  // different copy (see rangeError); the kind is carried alongside the range.
-  type Conflict = { range: string; kind: 'partial' | 'equal' }
+  // Walk siblings on the same attribute for a write-blocking conflict. Partial
+  // overlap, strict containment, and semantic-equal duplicates all block submit
+  // (overrides must be disjoint); equal gets distinct copy (see rangeError).
+  // The kind is carried alongside the conflicting range.
+  // NOTE: CRS validateFieldOverrideRange (PR #314) still allows containment
+  // server-side, so this preview is currently stricter than the server.
+  type Conflict = { range: string; kind: 'partial' | 'contains' | 'equal' }
   function findConflict(range: string, excludeId: string | null): Conflict | null {
     if (!isClosedVersionRange(range)) return null
     for (const o of overrides) {
       if (o.id === excludeId) continue
       const kind = classifyRangeConflict(range, o.versionRange)
-      if (kind === 'partial' || kind === 'equal') return { range: o.versionRange, kind }
+      if (kind === 'partial' || kind === 'contains' || kind === 'equal') {
+        return { range: o.versionRange, kind }
+      }
     }
     return null
   }

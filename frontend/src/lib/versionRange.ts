@@ -56,10 +56,13 @@ export function isClosedVersionRange(range: string): boolean {
 // 'unknown'; the UI then suppresses the inline error and defers to the
 // CRS-side overlap check (R3 / P-Overlap) — which uses the full releng API.
 //
-// Per schema-spec.md §3.5 only PARTIAL overlap is forbidden — strict
-// containment is explicitly allowed, equal ranges are blocked by the DB
-// UNIQUE constraint. rangesOverlap returns `true` only when the two ranges
-// intersect AND neither strictly contains the other.
+// Disjoint-only rule: two overrides on the same attribute must not intersect
+// at all. Any intersection — partial overlap, strict containment, or exact
+// equality — is a conflict, because a version inside the intersection matches
+// both overrides and the resolved value would be ambiguous. rangesOverlap
+// returns `true` for any of those three cases and `false` only when the ranges
+// are disjoint. (This is stricter than the original schema-spec.md §3.5, which
+// allowed strict containment; see classifyRangeConflict.)
 
 interface SimpleRange {
   lo: number[] | null
@@ -130,22 +133,28 @@ function containsRange(outer: SimpleRange, inner: SimpleRange): boolean {
 
 /**
  * The relationship between two version ranges, from the write-validation point
- * of view (CRS schema-spec.md §3.5):
- *   - `'partial'` — they intersect but neither contains the other → rejected.
- *   - `'equal'`   — semantically the same range (modulo whitespace / trailing
- *                   zeros) → rejected as a duplicate (the DB UNIQUE constraint
- *                   only catches exact-string equality, so `[1.0,2.0)` vs
- *                   `[1,2)` / `[1.0, 2.0)` would otherwise slip through).
- *   - `'none'`    — disjoint or one strictly contains the other → allowed.
- *   - `'unknown'` — either side can't be parsed (composites, non-numeric
- *                   bounds); caller defers to the CRS-side check.
+ * of view. Overrides on one attribute must be DISJOINT, so every intersecting
+ * relationship is a conflict:
+ *   - `'partial'`  — they intersect but neither contains the other → rejected.
+ *   - `'contains'` — one strictly contains the other → rejected. A version in
+ *                    the inner range matches both overrides, so the resolved
+ *                    value is ambiguous. (Stricter than the original
+ *                    schema-spec.md §3.5, which allowed containment.)
+ *   - `'equal'`    — semantically the same range (modulo whitespace / trailing
+ *                    zeros) → rejected as a duplicate (the DB UNIQUE constraint
+ *                    only catches exact-string equality, so `[1.0,2.0)` vs
+ *                    `[1,2)` / `[1.0, 2.0)` would otherwise slip through).
+ *   - `'none'`     — disjoint → allowed (the only allowed relationship).
+ *   - `'unknown'`  — either side can't be parsed (composites, non-numeric
+ *                    bounds); caller defers to the CRS-side check.
  */
-export type RangeConflict = 'partial' | 'equal' | 'none' | 'unknown'
+export type RangeConflict = 'partial' | 'contains' | 'equal' | 'none' | 'unknown'
 
 /**
  * Classifies how `a` relates to `b` (see {@link RangeConflict}). This is the
  * refinement {@link rangesOverlap}'s boolean `true` collapses together —
- * `'partial'` and `'equal'` both block a write but want different UI copy.
+ * `'partial'`, `'contains'`, and `'equal'` all block a write; `'partial'` and
+ * `'contains'` share "Overlaps with…" copy, `'equal'` gets distinct copy.
  */
 export function classifyRangeConflict(a: string, b: string): RangeConflict {
   const ra = parseSimpleSegment(a)
@@ -164,27 +173,25 @@ export function classifyRangeConflict(a: string, b: string): RangeConflict {
     if (cmp === 0 && !(rb.loIncl && ra.hiIncl)) return 'none'
   }
   // They intersect. Each-contains-other → equal; exactly-one-contains →
-  // strict containment (allowed); neither → partial overlap.
+  // strict containment; neither → partial overlap. All three are conflicts.
   const aContainsB = containsRange(ra, rb)
   const bContainsA = containsRange(rb, ra)
   if (aContainsB && bContainsA) return 'equal'
-  if (aContainsB || bContainsA) return 'none'
+  if (aContainsB || bContainsA) return 'contains'
   return 'partial'
 }
 
 /**
- * Returns `true` when `a` and `b` PARTIALLY overlap OR are semantically equal,
- * `false` when disjoint or one strictly contains the other, `'unknown'` when
- * either side can't be parsed. Thin wrapper over {@link classifyRangeConflict}
- * for call sites that only need the block / allow / defer decision.
- *
- * Aligns with CRS schema-spec.md §3.5: equal ranges blocked by UNIQUE,
- * strict containment and disjoint allowed, partial overlap rejected.
+ * Returns `true` when `a` and `b` intersect in any way (partial overlap,
+ * strict containment, or semantic equality), `false` when disjoint,
+ * `'unknown'` when either side can't be parsed. Thin wrapper over
+ * {@link classifyRangeConflict} for call sites that only need the
+ * block / allow / defer decision.
  */
 export function rangesOverlap(a: string, b: string): true | false | 'unknown' {
   const kind = classifyRangeConflict(a, b)
   if (kind === 'unknown') return 'unknown'
-  return kind === 'partial' || kind === 'equal'
+  return kind === 'partial' || kind === 'contains' || kind === 'equal'
 }
 
 // ─── Ordering (simple-segment, numeric lower-bound aware) ────────────────────

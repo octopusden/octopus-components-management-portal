@@ -534,17 +534,20 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
   const isPending = createMutation.isPending || updateMutation.isPending
   const versionRangeInvalid = !isClosedVersionRange(versionRange)
   // Walk existing overrides on the same attribute for client-side conflict
-  // preview. A partial overlap and a semantic-equal duplicate both block the
-  // write but get different copy. Composites/qualifier bounds short-circuit to
-  // "unknown" inside classifyRangeConflict and are skipped here — CRS-side
-  // P-Overlap is the backstop.
-  const overlapConflict: { range: string; kind: 'partial' | 'equal' } | null = (() => {
+  // preview. Partial overlap, strict containment, and semantic-equal duplicates
+  // all block the write (overrides must be disjoint); equal gets distinct copy.
+  // Composites/qualifier bounds short-circuit to "unknown" inside
+  // classifyRangeConflict and are skipped here — CRS-side P-Overlap is the
+  // backstop. NOTE: CRS validateFieldOverrideRange (PR #314) still ALLOWS
+  // containment server-side, so this preview is currently stricter than the
+  // server until a matching CRS change lands.
+  const overlapConflict: { range: string; kind: 'partial' | 'contains' | 'equal' } | null = (() => {
     if (versionRangeInvalid) return null
     for (const o of allOverrides) {
       if (o.overriddenAttribute !== attribute) continue
       if (mode === 'edit' && override && o.id === override.id) continue
       const kind = classifyRangeConflict(versionRange, o.versionRange)
-      if (kind === 'partial' || kind === 'equal') {
+      if (kind === 'partial' || kind === 'contains' || kind === 'equal') {
         return { range: o.versionRange, kind }
       }
     }

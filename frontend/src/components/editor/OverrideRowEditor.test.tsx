@@ -822,4 +822,27 @@ describe('OverrideRowEditor — overlap detection (pre-save)', () => {
     })
     expect(screen.queryByText(/overlaps with existing override/i)).toBeNull()
   })
+
+  it('rejects a range that fully contains an existing override (containment)', async () => {
+    mockOverridesList = [
+      {
+        id: 'existing-1',
+        overriddenAttribute: 'build.javaVersion',
+        versionRange: '[1.0,2.0]',
+        rowType: 'SCALAR_OVERRIDE',
+        value: '17',
+        markerChildren: null,
+        createdAt: null,
+        updatedAt: null,
+      },
+    ]
+    renderEditor()
+    const select = screen.getByTestId('attr-select') as HTMLSelectElement
+    await userEvent.selectOptions(select, 'build.javaVersion')
+    // [0,3.0] strictly contains the existing [1.0,2.0] → conflict.
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[0,3.0]' } })
+    await waitFor(() => {
+      expect(screen.getByText(/overlaps with existing override \[1\.0,2\.0\]/i)).toBeInTheDocument()
+    })
+  })
 })
