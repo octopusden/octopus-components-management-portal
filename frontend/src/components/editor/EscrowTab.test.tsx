@@ -5,9 +5,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { EscrowTab } from './EscrowTab'
 import type { ComponentDetail } from '../../lib/types'
 
-// Stub FieldOverrideInline so it doesn't trigger real hook calls in unit tests
+// Visible stub: each FieldOverrideInline renders a div tagged with the
+// overriddenAttribute so coverage tests can assert per-field inline placement.
 vi.mock('./FieldOverrideInline', () => ({
-  FieldOverrideInline: () => null,
+  FieldOverrideInline: ({ overriddenAttribute }: { overriddenAttribute: string }) => (
+    <div data-testid={`field-override-inline-${overriddenAttribute}`} />
+  ),
 }))
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
@@ -348,5 +351,26 @@ describe('EscrowTab new fields save', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const escrow = (mutateAsync.mock.calls[0]![0] as any).baseConfiguration.escrow
     expect(escrow.gradleIncludeTestConfigurations).toBe(true)
+  })
+})
+
+describe('EscrowTab — inline override coverage', () => {
+  const overridablePaths = [
+    'escrow.providedDependencies',
+    'escrow.reusable',
+    'escrow.generation',
+    'escrow.diskSpace',
+    'escrow.additionalSources',
+    'escrow.gradleIncludeConfigurations',
+    'escrow.gradleExcludeConfigurations',
+    'escrow.gradleIncludeTestConfigurations',
+    'escrow.buildTask',
+  ]
+
+  it.each(overridablePaths)('renders FieldOverrideInline under %s', (path) => {
+    renderWithProviders(
+      <EscrowTab component={baseComponent()} updateMutation={makeMutation()} toast={makeToast()} />
+    )
+    expect(screen.getByTestId(`field-override-inline-${path}`)).toBeInTheDocument()
   })
 })

@@ -5,7 +5,7 @@ import { Input } from '../ui/input'
 import { Switch } from '../ui/switch'
 import { Badge } from '../ui/badge'
 import { useFieldOverrides, useCreateFieldOverride, useUpdateFieldOverride, useDeleteFieldOverride } from '../../hooks/useComponent'
-import { formatVersionRange, isValidVersionRange } from '../../lib/versionRange'
+import { formatVersionRange, isValidVersionRange, isClosedVersionRange, rangesOverlap } from '../../lib/versionRange'
 import type { FieldOverride } from '../../lib/types'
 
 // Scalar override paths whose column type is boolean (from CRS
@@ -37,14 +37,61 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
   const isBoolean = BOOLEAN_OVERRIDE_PATHS.has(overriddenAttribute)
 
   const [adding, setAdding] = useState(false)
-  const [newRange, setNewRange] = useState('(,)')
+  // D5: field-override ranges must be closed; no universal default. User
+  // enters an explicit closed range like `[1.0,2.0)` or historical-left-
+  // unbounded `(,1.0)`. Open-upward / universal forms belong to BASE.
+  const [newRange, setNewRange] = useState('')
   const [newValue, setNewValue] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editRange, setEditRange] = useState('')
   const [editValue, setEditValue] = useState('')
 
+  // Inline error for the add form. Three states:
+  //   - empty             → "required" (shown only after the user has typed
+  //                          something into the value input — i.e. once
+  //                          `newValue.trim() !== ''` — so a freshly-opened
+  //                          add form doesn't nag with an error before the
+  //                          user has interacted).
+  //   - syntactically broken → invalid-syntax error
+  //   - open-upward      → "edit BASE instead" error
+  // Button is disabled in all three cases regardless of the value-typed gate.
+  function findOverlapping(range: string, excludeId: string | null): string | null {
+    if (!isClosedVersionRange(range)) return null
+    for (const o of overrides) {
+      if (o.id === excludeId) continue
+      if (rangesOverlap(range, o.versionRange) === true) return o.versionRange
+    }
+    return null
+  }
+  // Compute once per render and feed both the visible error message and the
+  // disabled-state — avoids walking the overrides list twice (and avoids the
+  // cargo-cult risk of the next reader splitting the cases by accident).
+  const newOverlap = findOverlapping(newRange, null)
+  const editOverlap = findOverlapping(editRange, editingId)
+  function rangeError(range: string, valueTouched: boolean, overlap: string | null): string | null {
+    const trimmed = range.trim()
+    if (trimmed === '') {
+      return valueTouched ? 'Version range is required' : null
+    }
+    if (!isValidVersionRange(range)) return 'Invalid version range syntax'
+    if (!isClosedVersionRange(range)) {
+      return 'Open-upward range — edit the BASE field above instead'
+    }
+    if (overlap !== null) {
+      return `Overlaps with existing override ${overlap}`
+    }
+    return null
+  }
+  const newRangeError = rangeError(newRange, newValue.trim() !== '', newOverlap)
+  const editRangeError = rangeError(editRange, true, editOverlap)
+  // Disabled state — separate from the visible error so the empty-untouched
+  // case still blocks submit (no false visual nag for an unmodified blank
+  // form).
+  const newRangeBlocks = !isClosedVersionRange(newRange) || newOverlap !== null
+  const editRangeBlocks = !isClosedVersionRange(editRange) || editOverlap !== null
+
   function handleAdd() {
-    if (!isValidVersionRange(newRange)) return
+    if (newRangeBlocks) return
     // Boolean paths: send the JSON primitive `true` / `false`; the local string
     // state is `"true"` / `"false"` driven by the Switch. String paths: trim
     // and reject empty (preserves the prior validation).
@@ -60,7 +107,7 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
       {
         onSuccess: () => {
           setAdding(false)
-          setNewRange('(,)')
+          setNewRange('')
           setNewValue('')
         },
       },
@@ -80,7 +127,7 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
   }
 
   function handleUpdate() {
-    if (!editingId || !isValidVersionRange(editRange)) return
+    if (!editingId || editRangeBlocks) return
     const wireValue: unknown = isBoolean ? editValue === 'true' : editValue
     updateMutation.mutate(
       { overrideId: editingId, versionRange: editRange, value: wireValue },
@@ -110,34 +157,40 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
       {overrides.map((override) => (
         <div key={override.id}>
           {editingId === override.id ? (
-            <div className="flex items-center gap-1.5">
-              <Input
-                value={editRange}
-                onChange={(e) => setEditRange(e.target.value)}
-                className="h-6 w-24 text-xs font-mono px-1"
-                placeholder="(,)"
-                aria-label={`Override version range for ${overriddenAttribute}`}
-              />
-              {isBoolean ? (
-                <Switch
-                  checked={editValue === 'true'}
-                  onCheckedChange={(c) => setEditValue(c ? 'true' : 'false')}
-                  aria-label={`Override value for ${overriddenAttribute}`}
-                />
-              ) : (
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5">
                 <Input
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
-                  className="h-6 flex-1 text-xs px-1"
-                  aria-label={`Override value for ${overriddenAttribute}`}
+                  value={editRange}
+                  onChange={(e) => setEditRange(e.target.value)}
+                  className="h-6 w-24 text-xs font-mono px-1"
+                  placeholder="[1.0,2.0)"
+                  aria-label={`Override version range for ${overriddenAttribute}`}
+                  aria-invalid={editRangeError !== null}
                 />
+                {isBoolean ? (
+                  <Switch
+                    checked={editValue === 'true'}
+                    onCheckedChange={(c) => setEditValue(c ? 'true' : 'false')}
+                    aria-label={`Override value for ${overriddenAttribute}`}
+                  />
+                ) : (
+                  <Input
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    className="h-6 flex-1 text-xs px-1"
+                    aria-label={`Override value for ${overriddenAttribute}`}
+                  />
+                )}
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleUpdate} disabled={updateMutation.isPending || editRangeBlocks} aria-label="Save override edit">
+                  <Check className="h-3 w-3" />
+                </Button>
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditingId(null)} aria-label="Cancel override edit">
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+              {editRangeError && (
+                <p className="text-xs text-destructive">{editRangeError}</p>
               )}
-              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleUpdate} disabled={updateMutation.isPending}>
-                <Check className="h-3 w-3" />
-              </Button>
-              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditingId(null)}>
-                <X className="h-3 w-3" />
-              </Button>
             </div>
           ) : (
             <div className="flex items-center gap-1.5 group">
@@ -150,6 +203,7 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
                 type="button"
                 onClick={() => startEdit(override)}
                 className="hidden group-hover:inline-flex h-4 w-4 items-center justify-center text-muted-foreground hover:text-foreground"
+                aria-label={`Edit override ${override.versionRange}`}
               >
                 <Pencil className="h-3 w-3" />
               </button>
@@ -157,6 +211,7 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
                 type="button"
                 onClick={() => handleDelete(override.id)}
                 className="hidden group-hover:inline-flex h-4 w-4 items-center justify-center text-destructive hover:text-destructive"
+                aria-label={`Delete override ${override.versionRange}`}
               >
                 <X className="h-3 w-3" />
               </button>
@@ -166,36 +221,42 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
       ))}
 
       {adding ? (
-        <div className="flex items-center gap-1.5">
-          <Input
-            value={newRange}
-            onChange={(e) => setNewRange(e.target.value)}
-            className="h-6 w-24 text-xs font-mono px-1"
-            placeholder="(,)"
-            autoFocus
-            aria-label={`New override version range for ${overriddenAttribute}`}
-          />
-          {isBoolean ? (
-            <Switch
-              checked={newValue === 'true'}
-              onCheckedChange={(c) => setNewValue(c ? 'true' : 'false')}
-              aria-label={`New override value for ${overriddenAttribute}`}
-            />
-          ) : (
+        <div className="space-y-1">
+          <div className="flex items-center gap-1.5">
             <Input
-              value={newValue}
-              onChange={(e) => setNewValue(e.target.value)}
-              className="h-6 flex-1 text-xs px-1"
-              placeholder="Override value"
-              aria-label={`New override value for ${overriddenAttribute}`}
+              value={newRange}
+              onChange={(e) => setNewRange(e.target.value)}
+              className="h-6 w-24 text-xs font-mono px-1"
+              placeholder="[1.0,2.0)"
+              autoFocus
+              aria-label={`New override version range for ${overriddenAttribute}`}
+              aria-invalid={newRangeError !== null}
             />
+            {isBoolean ? (
+              <Switch
+                checked={newValue === 'true'}
+                onCheckedChange={(c) => setNewValue(c ? 'true' : 'false')}
+                aria-label={`New override value for ${overriddenAttribute}`}
+              />
+            ) : (
+              <Input
+                value={newValue}
+                onChange={(e) => setNewValue(e.target.value)}
+                className="h-6 flex-1 text-xs px-1"
+                placeholder="Override value"
+                aria-label={`New override value for ${overriddenAttribute}`}
+              />
+            )}
+            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleAdd} disabled={createMutation.isPending || newRangeBlocks} aria-label="Confirm new override">
+              <Check className="h-3 w-3" />
+            </Button>
+            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setAdding(false)} aria-label="Cancel new override">
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+          {newRangeError && (
+            <p className="text-xs text-destructive">{newRangeError}</p>
           )}
-          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleAdd} disabled={createMutation.isPending}>
-            <Check className="h-3 w-3" />
-          </Button>
-          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setAdding(false)}>
-            <X className="h-3 w-3" />
-          </Button>
         </div>
       ) : (
         <button

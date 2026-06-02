@@ -5,22 +5,17 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { OverrideRowEditor } from './OverrideRowEditor'
 import type { FieldOverride } from '../../lib/types'
 
-// jsdom does not implement ResizeObserver but Radix Switch uses it.
-if (typeof window !== 'undefined' && !('ResizeObserver' in window)) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ;(window as any).ResizeObserver = class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Mock hooks
 // ---------------------------------------------------------------------------
 
 const mockCreateMutateAsync = vi.fn()
 const mockUpdateMutateAsync = vi.fn()
+
+// Mutable list of existing field-overrides for overlap-detection tests.
+// Tests that need preset overrides assign to this array; useFieldOverrides
+// mock reads it lazily.
+let mockOverridesList: FieldOverride[] = []
 
 vi.mock('../../hooks/useComponent', () => ({
   useCreateFieldOverride: vi.fn(() => ({
@@ -31,6 +26,7 @@ vi.mock('../../hooks/useComponent', () => ({
     mutateAsync: mockUpdateMutateAsync,
     isPending: false,
   })),
+  useFieldOverrides: vi.fn(() => ({ data: mockOverridesList })),
 }))
 
 const mockToast = vi.fn()
@@ -150,6 +146,7 @@ describe('OverrideRowEditor — create mode', () => {
     mockCreateMutateAsync.mockReset()
     mockUpdateMutateAsync.mockReset()
     mockToast.mockReset()
+    mockOverridesList = []
   })
 
   it('renders with "Add Override" title', () => {
@@ -165,10 +162,10 @@ describe('OverrideRowEditor — create mode', () => {
     expect(markerTab.getAttribute('data-state')).toBe('inactive')
   })
 
-  it('renders version range input with default value (,0),[0,)', () => {
+  it('renders version range input empty by default in create mode (D5)', () => {
     renderEditor()
-    const input = screen.getByPlaceholderText('(,0),[0,)') as HTMLInputElement
-    expect(input.value).toBe('(,0),[0,)')
+    const input = screen.getByLabelText('Version Range') as HTMLInputElement
+    expect(input.value).toBe('')
   })
 
   it('selecting Marker type shows marker attribute list', async () => {
@@ -190,6 +187,7 @@ describe('OverrideRowEditor — create mode', () => {
     const optionValues = Array.from(select.options).map((o) => o.value)
     expect(optionValues).toContain('build.javaVersion')
     expect(optionValues).toContain('escrow.reusable')
+    expect(optionValues).toContain('escrow.buildTask')
     expect(optionValues).toContain('jira.projectKey')
   })
 
@@ -272,7 +270,7 @@ describe('OverrideRowEditor — create mode', () => {
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
     await userEvent.selectOptions(select, 'build.javaVersion')
 
-    const versionInput = screen.getByPlaceholderText('(,0),[0,)') as HTMLInputElement
+    const versionInput = screen.getByLabelText('Version Range') as HTMLInputElement
     fireEvent.change(versionInput, { target: { value: '[11,12)' } })
 
     const valueInput = screen.getByPlaceholderText('Value for Java Version')
@@ -301,6 +299,7 @@ describe('OverrideRowEditor — create mode', () => {
     const toolsInput = screen.getByPlaceholderText('tool-a, tool-b')
     await userEvent.type(toolsInput, 'tool-a, tool-b, tool-a')
 
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1.0,2.0)' } })
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
     await waitFor(() => {
@@ -325,6 +324,7 @@ describe('OverrideRowEditor — create mode', () => {
     const switches = screen.getAllByRole('switch')
     await userEvent.click(switches[0]!)
 
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1.0,2.0)' } })
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
     await waitFor(() => {
@@ -346,6 +346,7 @@ describe('OverrideRowEditor — edit mode (scalar)', () => {
     mockCreateMutateAsync.mockReset()
     mockUpdateMutateAsync.mockReset()
     mockToast.mockReset()
+    mockOverridesList = []
   })
 
   it('renders "Edit Override" title', () => {
@@ -362,7 +363,7 @@ describe('OverrideRowEditor — edit mode (scalar)', () => {
 
   it('pre-fills version range from existing override', () => {
     renderEditor({ mode: 'edit', override: makeScalarOverride() })
-    const input = screen.getByPlaceholderText('(,0),[0,)') as HTMLInputElement
+    const input = screen.getByLabelText('Version Range') as HTMLInputElement
     expect(input.value).toBe('[11,12)')
   })
 
@@ -392,7 +393,7 @@ describe('OverrideRowEditor — edit mode (scalar)', () => {
     mockUpdateMutateAsync.mockResolvedValue({})
     renderEditor({ mode: 'edit', override: makeScalarOverride() })
 
-    const versionInput = screen.getByPlaceholderText('(,0),[0,)') as HTMLInputElement
+    const versionInput = screen.getByLabelText('Version Range') as HTMLInputElement
     fireEvent.change(versionInput, { target: { value: '[17,18)' } })
 
     const valueInput = screen.getByPlaceholderText('Value for Java Version')
@@ -421,6 +422,7 @@ describe('OverrideRowEditor — edit mode (marker)', () => {
     mockCreateMutateAsync.mockReset()
     mockUpdateMutateAsync.mockReset()
     mockToast.mockReset()
+    mockOverridesList = []
   })
 
   it('renders marker override attribute as readonly text — no select', () => {
@@ -491,6 +493,7 @@ describe('OverrideRowEditor — marker child trim + blank-row filter', () => {
     mockCreateMutateAsync.mockReset()
     mockUpdateMutateAsync.mockReset()
     mockToast.mockReset()
+    mockOverridesList = []
   })
 
   it('vcs.settings: whitespace-only vcsPath row is dropped, surviving row is trimmed', async () => {
@@ -513,6 +516,7 @@ describe('OverrideRowEditor — marker child trim + blank-row filter', () => {
     const vcsPathInputs2 = await screen.findAllByPlaceholderText('ssh://git@...')
     await userEvent.type(vcsPathInputs2[1]!, '   ')
 
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1.0,2.0)' } })
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
     await waitFor(() => {
@@ -545,6 +549,7 @@ describe('OverrideRowEditor — marker child trim + blank-row filter', () => {
     await userEvent.type(groupInputs2[1]!, 'org.example.beta')
     await userEvent.type(artifactInputs2[1]!, '   ')
 
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1.0,2.0)' } })
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
     await waitFor(() => {
@@ -571,6 +576,7 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
     mockCreateMutateAsync.mockReset()
     mockUpdateMutateAsync.mockReset()
     mockToast.mockReset()
+    mockOverridesList = []
   })
 
   it('calls useCreateFieldOverride with correct marker body for distribution.fileUrl', async () => {
@@ -586,6 +592,7 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
     const urlInputs = await screen.findAllByPlaceholderText('https://artifacts.example.com/...')
     await userEvent.type(urlInputs[0]!, 'https://example.com/dist.tar.gz')
 
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1.0,2.0)' } })
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
     await waitFor(() => {
@@ -610,6 +617,7 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
     const imageInputs = await screen.findAllByPlaceholderText('my-org/my-image')
     await userEvent.type(imageInputs[0]!, 'my-org/svc')
 
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1.0,2.0)' } })
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
     await waitFor(() => {
@@ -636,6 +644,7 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
     await userEvent.type(typeInputs[0]!, 'rpm')
     await userEvent.type(nameInputs[0]!, 'my-svc')
 
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1.0,2.0)' } })
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
     await waitFor(() => {
@@ -647,5 +656,143 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
         { packageType: 'rpm', packageName: 'my-svc' },
       ])
     })
+  })
+})
+
+describe('OverrideRowEditor — D5 closed-range enforcement', () => {
+  beforeEach(() => {
+    mockCreateMutateAsync.mockReset()
+    mockUpdateMutateAsync.mockReset()
+    mockToast.mockReset()
+    mockOverridesList = []
+  })
+
+  it('does not call createMutation when version range is empty', async () => {
+    renderEditor()
+    const select = screen.getByTestId('attr-select') as HTMLSelectElement
+    await userEvent.selectOptions(select, 'build.javaVersion')
+    const valueInput = screen.getByPlaceholderText('Value for Java Version')
+    await userEvent.type(valueInput, '11')
+    // Range left empty — submit should be blocked
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    expect(mockCreateMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('does not call createMutation when version range is open-upward [X,)', async () => {
+    renderEditor()
+    const select = screen.getByTestId('attr-select') as HTMLSelectElement
+    await userEvent.selectOptions(select, 'build.javaVersion')
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[2.0,)' } })
+    const valueInput = screen.getByPlaceholderText('Value for Java Version')
+    await userEvent.type(valueInput, '17')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    expect(mockCreateMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('renders inline error when range is open-upward', async () => {
+    renderEditor()
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[2.0,)' } })
+    await waitFor(() => {
+      expect(screen.getByText(/edit the base field instead/i)).toBeDefined()
+    })
+  })
+
+  it('renders inline error when range is syntactically invalid', async () => {
+    renderEditor()
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: 'garbage' } })
+    await waitFor(() => {
+      expect(screen.getByText(/invalid version range syntax/i)).toBeDefined()
+    })
+  })
+})
+
+describe('OverrideRowEditor — overlap detection (pre-save)', () => {
+  beforeEach(() => {
+    mockCreateMutateAsync.mockReset()
+    mockUpdateMutateAsync.mockReset()
+    mockToast.mockReset()
+    mockOverridesList = []
+  })
+
+  it('surfaces inline error when entered range overlaps a sibling on the same attribute', async () => {
+    mockOverridesList = [
+      {
+        id: 'existing-1',
+        overriddenAttribute: 'build.javaVersion',
+        versionRange: '[1.0.107,)',
+        rowType: 'SCALAR_OVERRIDE',
+        value: '17',
+        markerChildren: null,
+        createdAt: null,
+        updatedAt: null,
+      },
+    ]
+    renderEditor()
+    const select = screen.getByTestId('attr-select') as HTMLSelectElement
+    await userEvent.selectOptions(select, 'build.javaVersion')
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1.0,2.0]' } })
+    await waitFor(() => {
+      expect(screen.getByText(/overlaps with existing override \[1\.0\.107,\)/i)).toBeDefined()
+    })
+  })
+
+  it('does not call createMutation when overlap is present', async () => {
+    mockOverridesList = [
+      {
+        id: 'existing-1',
+        overriddenAttribute: 'build.javaVersion',
+        versionRange: '[1.0.107,)',
+        rowType: 'SCALAR_OVERRIDE',
+        value: '17',
+        markerChildren: null,
+        createdAt: null,
+        updatedAt: null,
+      },
+    ]
+    renderEditor()
+    const select = screen.getByTestId('attr-select') as HTMLSelectElement
+    await userEvent.selectOptions(select, 'build.javaVersion')
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1.0,2.0]' } })
+    const valueInput = screen.getByPlaceholderText('Value for Java Version')
+    await userEvent.type(valueInput, '11')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    expect(mockCreateMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('ignores existing overrides on a different attribute', async () => {
+    mockOverridesList = [
+      {
+        id: 'existing-1',
+        overriddenAttribute: 'jira.releaseVersionFormat',
+        versionRange: '[1.0,2.0)',
+        rowType: 'SCALAR_OVERRIDE',
+        value: 'x',
+        markerChildren: null,
+        createdAt: null,
+        updatedAt: null,
+      },
+    ]
+    renderEditor()
+    const select = screen.getByTestId('attr-select') as HTMLSelectElement
+    await userEvent.selectOptions(select, 'build.javaVersion')
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1.0,2.0]' } })
+    expect(screen.queryByText(/overlaps with existing override/i)).toBeNull()
+  })
+
+  it('excludes the row being edited from the overlap walk', async () => {
+    const existing: FieldOverride = {
+      id: 'fo-edit',
+      overriddenAttribute: 'build.javaVersion',
+      versionRange: '[1.0,2.0)',
+      rowType: 'SCALAR_OVERRIDE',
+      value: '11',
+      markerChildren: null,
+      createdAt: null,
+      updatedAt: null,
+    }
+    mockOverridesList = [existing]
+    renderEditor({ mode: 'edit', override: existing })
+    // Range unchanged → must not trigger overlap with self.
+    expect(screen.queryByText(/overlaps with existing override/i)).toBeNull()
   })
 })
