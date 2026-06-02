@@ -28,7 +28,7 @@ import {
   useFieldOverrides,
 } from '../../hooks/useComponent'
 import { useToast } from '../../hooks/use-toast'
-import { isValidVersionRange, isClosedVersionRange, rangesOverlap } from '../../lib/versionRange'
+import { isValidVersionRange, isClosedVersionRange, classifyRangeConflict } from '../../lib/versionRange'
 import type { FieldOverride, MarkerChildrenPayload, VcsEntryRequest, MavenArtifactRequest, FileUrlArtifactRequest, DockerImageRequest, PackageRequest } from '../../lib/types'
 
 // ---------------------------------------------------------------------------
@@ -75,6 +75,7 @@ const SCALAR_ATTRS: ScalarAttr[] = [
   { path: 'jira.lineVersionFormat', label: 'Line Version Format', type: 'string' },
   { path: 'jira.versionPrefix', label: 'Version Prefix', type: 'string' },
   { path: 'jira.versionFormat', label: 'Version Format', type: 'string' },
+  { path: 'jira.hotfixVersionFormat', label: 'Hotfix Version Format', type: 'string' },
 ]
 
 const SCALAR_BY_PATH = new Map(SCALAR_ATTRS.map((a) => [a.path, a]))
@@ -474,12 +475,12 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
       })
       return
     }
-    // R3 client-side preview: prevent submission of a range that overlaps
-    // a sibling override on the same attribute. CRS-side P-Overlap will
-    // catch the unknown-parse cases this skips.
-    if (overlappingExisting !== null) {
+    // R3 client-side preview: prevent submission of a range that overlaps or
+    // duplicates a sibling override on the same attribute. CRS-side P-Overlap
+    // will catch the unknown-parse cases this skips.
+    if (conflictMessage !== null) {
       toast({
-        title: `Overlaps with existing override ${overlappingExisting}`,
+        title: conflictMessage,
         variant: 'destructive',
       })
       return
@@ -532,21 +533,29 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
 
   const isPending = createMutation.isPending || updateMutation.isPending
   const versionRangeInvalid = !isClosedVersionRange(versionRange)
-  // Walk existing overrides on the same attribute for client-side overlap
-  // preview. Composites/qualifier bounds short-circuit to "unknown" inside
-  // rangesOverlap and are skipped here — CRS-side P-Overlap is the backstop.
-  const overlappingExisting: string | null = (() => {
+  // Walk existing overrides on the same attribute for client-side conflict
+  // preview. A partial overlap and a semantic-equal duplicate both block the
+  // write but get different copy. Composites/qualifier bounds short-circuit to
+  // "unknown" inside classifyRangeConflict and are skipped here — CRS-side
+  // P-Overlap is the backstop.
+  const overlapConflict: { range: string; kind: 'partial' | 'equal' } | null = (() => {
     if (versionRangeInvalid) return null
     for (const o of allOverrides) {
       if (o.overriddenAttribute !== attribute) continue
       if (mode === 'edit' && override && o.id === override.id) continue
-      if (rangesOverlap(versionRange, o.versionRange) === true) {
-        return o.versionRange
+      const kind = classifyRangeConflict(versionRange, o.versionRange)
+      if (kind === 'partial' || kind === 'equal') {
+        return { range: o.versionRange, kind }
       }
     }
     return null
   })()
-  const versionRangeBlocks = versionRangeInvalid || overlappingExisting !== null
+  const conflictMessage = overlapConflict === null
+    ? null
+    : overlapConflict.kind === 'equal'
+      ? `Semantically equal to existing override ${overlapConflict.range}`
+      : `Overlaps with existing override ${overlapConflict.range}`
+  const versionRangeBlocks = versionRangeInvalid || overlapConflict !== null
 
   // ---------------------------------------------------------------------------
   // Render
@@ -640,7 +649,7 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
               required
               aria-invalid={
                 (versionRange.trim() !== '' && !isClosedVersionRange(versionRange)) ||
-                overlappingExisting !== null
+                overlapConflict !== null
               }
             />
             {versionRange.trim() !== '' && !isClosedVersionRange(versionRange) && (
@@ -650,9 +659,9 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
                   : 'Invalid version range syntax'}
               </p>
             )}
-            {!versionRangeInvalid && overlappingExisting !== null && (
+            {!versionRangeInvalid && conflictMessage !== null && (
               <p className="text-xs text-destructive">
-                Overlaps with existing override {overlappingExisting}
+                {conflictMessage}
               </p>
             )}
           </div>
