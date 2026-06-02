@@ -6,16 +6,6 @@ import type { ComponentDetail, ComponentConfiguration } from '../../lib/types'
 import type { UseMutationResult } from '@tanstack/react-query'
 import type { ComponentUpdateRequest } from '../../hooks/useComponent'
 
-// jsdom does not implement ResizeObserver but Radix Switch uses it.
-if (typeof window !== 'undefined' && !('ResizeObserver' in window)) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ;(window as any).ResizeObserver = class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  }
-}
-
 // Visible stub: each FieldOverrideInline renders a div tagged with the
 // overriddenAttribute so tests can assert per-field inline coverage.
 vi.mock('./FieldOverrideInline', () => ({

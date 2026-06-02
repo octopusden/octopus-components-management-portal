@@ -57,6 +57,37 @@ describe('isValidVersionRange', () => {
   it('accepts range with no lower bound (,2.0)', () => {
     expect(isValidVersionRange('(,2.0)')).toBe(true)
   })
+
+  it('rejects extra closing bracket [1.0.107,2.0))', () => {
+    expect(isValidVersionRange('[1.0.107,2.0))')).toBe(false)
+  })
+
+  it('rejects extra opening bracket ((1.0,2.0)', () => {
+    expect(isValidVersionRange('((1.0,2.0)')).toBe(false)
+  })
+
+  it('rejects extra closing square bracket [1.0,2.0]]', () => {
+    expect(isValidVersionRange('[1.0,2.0]]')).toBe(false)
+  })
+
+  it('rejects trailing garbage after closing bracket', () => {
+    expect(isValidVersionRange('[1.0,2.0]garbage')).toBe(false)
+  })
+
+  it('rejects bracket characters inside the version body', () => {
+    expect(isValidVersionRange('[1.0],2.0)')).toBe(false)
+    expect(isValidVersionRange('[1.0,(2.0)')).toBe(false)
+  })
+
+  it('accepts composite of two segments', () => {
+    expect(isValidVersionRange('(,0),[0,)')).toBe(true)
+    expect(isValidVersionRange('(,1.0],[2.0,3.0)')).toBe(true)
+  })
+
+  it('rejects composite with malformed segment', () => {
+    expect(isValidVersionRange('(,1.0],[2.0,3.0))')).toBe(false)
+    expect(isValidVersionRange('(,1.0]],[2.0,3.0)')).toBe(false)
+  })
 })
 
 // D5: field-overrides must be closed (or historical-left-unbounded);
@@ -112,6 +143,14 @@ describe('isClosedVersionRange', () => {
   it('accepts composite of closed segments', () => {
     expect(isClosedVersionRange('(,1.0),(2.0,3.0]')).toBe(true)
   })
+
+  it('rejects composite with open-upward non-terminal segment [1.0,),[2.0,3.0]', () => {
+    expect(isClosedVersionRange('[1.0,),[2.0,3.0]')).toBe(false)
+  })
+
+  it('rejects open-upward with whitespace before closing paren [1.0, )', () => {
+    expect(isClosedVersionRange('[1.0, )')).toBe(false)
+  })
 })
 
 // rangesOverlap: simple-segment overlap detector. Composites and
@@ -140,14 +179,23 @@ describe('rangesOverlap', () => {
     expect(rangesOverlap('[1.0,2.0]', '[2.0,3.0)')).toBe(true)
   })
 
-  it('handles unbounded left side (,X)', () => {
-    expect(rangesOverlap('(,1.0)', '(,2.0)')).toBe(true)
+  it('handles unbounded left side (,X) — partial overlap', () => {
+    // (,1.0) and [0.5,3.0) — intersect on [0.5,1.0); neither contains the other.
     expect(rangesOverlap('(,1.0)', '[0.5,3.0)')).toBe(true)
   })
 
-  it('handles unbounded right side [X,)', () => {
-    expect(rangesOverlap('[1.0,)', '[5.0,)')).toBe(true)
+  it('handles unbounded left side (,X) — containment is allowed', () => {
+    // (,1.0) is contained in (,2.0) — strict containment per schema-spec §3.5.
+    expect(rangesOverlap('(,1.0)', '(,2.0)')).toBe(false)
+  })
+
+  it('handles unbounded right side [X,) — disjoint', () => {
     expect(rangesOverlap('[5.0,)', '[1.0,2.0)')).toBe(false)
+  })
+
+  it('handles unbounded right side [X,) — containment is allowed', () => {
+    // [5.0,) is contained in [1.0,) — strict containment per schema-spec §3.5.
+    expect(rangesOverlap('[1.0,)', '[5.0,)')).toBe(false)
   })
 
   it('returns "unknown" for composite ranges', () => {
@@ -162,5 +210,24 @@ describe('rangesOverlap', () => {
 
   it('returns "unknown" for non-numeric version bounds', () => {
     expect(rangesOverlap('[1.0-SNAPSHOT,2.0)', '[1.5,3.0)')).toBe('unknown')
+  })
+
+  // Per schema-spec §3.5: only PARTIAL overlap is rejected at write-time.
+  // Strict containment is explicitly allowed; equal ranges blocked by UNIQUE.
+  it('returns false for strict containment (outer fully contains inner)', () => {
+    expect(rangesOverlap('[1.0,3.0)', '[1.0,2.0)')).toBe(false)
+    expect(rangesOverlap('[1.0,2.0)', '[1.0,3.0)')).toBe(false)
+  })
+
+  it('returns false for strict containment with different left bounds', () => {
+    expect(rangesOverlap('[1.0,4.0)', '[2.0,3.0)')).toBe(false)
+  })
+
+  it('returns false for equal ranges (UNIQUE catches at DB)', () => {
+    expect(rangesOverlap('[1.0,2.0)', '[1.0,2.0)')).toBe(false)
+  })
+
+  it('returns true for partial overlap with shifted left and right bounds', () => {
+    expect(rangesOverlap('[1.0,3.0)', '[2.0,4.0)')).toBe(true)
   })
 })

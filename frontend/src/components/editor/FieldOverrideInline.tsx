@@ -181,10 +181,10 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
                     aria-label={`Override value for ${overriddenAttribute}`}
                   />
                 )}
-                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleUpdate} disabled={updateMutation.isPending || editRangeBlocks}>
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleUpdate} disabled={updateMutation.isPending || editRangeBlocks} aria-label="Save override edit">
                   <Check className="h-3 w-3" />
                 </Button>
-                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditingId(null)}>
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditingId(null)} aria-label="Cancel override edit">
                   <X className="h-3 w-3" />
                 </Button>
               </div>
@@ -203,6 +203,7 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
                 type="button"
                 onClick={() => startEdit(override)}
                 className="hidden group-hover:inline-flex h-4 w-4 items-center justify-center text-muted-foreground hover:text-foreground"
+                aria-label={`Edit override ${override.versionRange}`}
               >
                 <Pencil className="h-3 w-3" />
               </button>
@@ -210,6 +211,7 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
                 type="button"
                 onClick={() => handleDelete(override.id)}
                 className="hidden group-hover:inline-flex h-4 w-4 items-center justify-center text-destructive hover:text-destructive"
+                aria-label={`Delete override ${override.versionRange}`}
               >
                 <X className="h-3 w-3" />
               </button>
@@ -245,10 +247,10 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
                 aria-label={`New override value for ${overriddenAttribute}`}
               />
             )}
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleAdd} disabled={createMutation.isPending || newRangeBlocks}>
+            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleAdd} disabled={createMutation.isPending || newRangeBlocks} aria-label="Confirm new override">
               <Check className="h-3 w-3" />
             </Button>
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setAdding(false)}>
+            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setAdding(false)} aria-label="Cancel new override">
               <X className="h-3 w-3" />
             </Button>
           </div>

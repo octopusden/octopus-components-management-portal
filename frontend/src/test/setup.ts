@@ -18,4 +18,15 @@ if (typeof window !== 'undefined') {
   if (!Element.prototype.scrollIntoView) {
     Element.prototype.scrollIntoView = vi.fn()
   }
+  // Radix Switch (and other Radix primitives that observe size) calls
+  // ResizeObserver during mount; jsdom doesn't ship one. Stub it once
+  // here so individual test files don't duplicate the polyfill.
+  if (!('ResizeObserver' in window)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(window as any).ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  }
 }

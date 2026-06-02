@@ -3,38 +3,46 @@ export function formatVersionRange(range: string): string {
   return range
 }
 
+// One segment of a Maven version range: `[X,Y)` and variants. Body chars must
+// not include another bracket/paren or comma (those are structural). Trailing
+// whitespace is stripped by callers via normalize() before this matches.
+const SEGMENT_RE_SRC = '[[(][^()\\[\\],]*,[^()\\[\\],]*[\\])]'
+const FULL_RANGE_RE = new RegExp(`^${SEGMENT_RE_SRC}(,${SEGMENT_RE_SRC})*$`)
+const SEGMENT_GLOBAL = new RegExp(SEGMENT_RE_SRC, 'g')
+
+function normalize(range: string): string {
+  return range.trim().replace(/\s+/g, '')
+}
+
 export function isValidVersionRange(range: string): boolean {
   if (!range) return false
-  // Basic validation: must start with ( or [ and end with ) or ]
-  const trimmed = range.trim()
-  if (trimmed.length < 3) return false
-  const first = trimmed[0]
-  const last = trimmed[trimmed.length - 1]
-  if ((first !== '(' && first !== '[') || (last !== ')' && last !== ']')) return false
-  // Must contain a comma
-  if (!trimmed.includes(',')) return false
-  return true
+  const compact = normalize(range)
+  if (compact.length < 3) return false
+  return FULL_RANGE_RE.test(compact)
 }
 
 /**
  * Returns true when `range` is allowed as a field-override range under D5:
- * syntactically valid AND not open-upward in its trailing segment. Universal
- * forms (`(,)`, `(,0),[0,)`) and simple open-upward (`[X,)` / `(X,)`) end
- * with `,)` and are rejected — they belong to BASE, not overrides.
+ * syntactically valid AND every segment has a non-empty upper bound (no
+ * `,)` suffix in any segment).
+ *
+ * Universal (`(,)`, `(,0),[0,)`) and any open-upward segment are rejected —
+ * they belong to BASE, not overrides. Composite ranges are walked per
+ * segment so a non-terminal open-upward segment is also rejected.
  *
  * Allowed: closed (`[X,Y)`, `[X,Y]`, `(X,Y)`, `(X,Y]`) and
- * historical-left-unbounded (`(,X)`, `(,X]`), plus composites whose trailing
+ * historical-left-unbounded (`(,X)`, `(,X]`), plus composites whose every
  * segment satisfies the same rule.
- *
- * Known limitation: composites with open-upward in a non-terminal segment
- * (e.g. `[1.0,),[2.0,3.0]`) slip past this check because the string ends in
- * `]`. CRS-side validation (D5 enforcement on POST/PATCH, PR-A step 5) is
- * the authoritative backstop; a parser-backed Portal check is tracked as
- * P-Releng (R2) in the plan.
  */
 export function isClosedVersionRange(range: string): boolean {
   if (!isValidVersionRange(range)) return false
-  return !range.trim().endsWith(',)')
+  const compact = normalize(range)
+  const segments = compact.match(SEGMENT_GLOBAL) ?? []
+  if (segments.length === 0) return false
+  for (const seg of segments) {
+    if (seg.endsWith(',)')) return false
+  }
+  return true
 }
 
 // ─── Overlap detection (simple-segment best-effort) ──────────────────────────
@@ -43,10 +51,15 @@ export function isClosedVersionRange(range: string): boolean {
 // (qualifiers, snapshots, composites). The releng Kotlin/Java library exposes
 // `VersionRange.isIntersect()`; we don't have a port. To give the user
 // early-feedback before save, we parse simple single-segment ranges with
-// dot-numeric bounds and compute overlap directly. Anything we can't parse
-// confidently (composites, unparseable bounds, qualifiers) returns 'unknown';
-// the UI then suppresses the inline error and defers to the CRS-side
-// P-Overlap check (which uses the full releng API).
+// dot-numeric bounds and compute partial-overlap directly. Anything we can't
+// parse confidently (composites, unparseable bounds, qualifiers) returns
+// 'unknown'; the UI then suppresses the inline error and defers to the
+// CRS-side overlap check (R3 / P-Overlap) — which uses the full releng API.
+//
+// Per schema-spec.md §3.5 only PARTIAL overlap is forbidden — strict
+// containment is explicitly allowed, equal ranges are blocked by the DB
+// UNIQUE constraint. rangesOverlap returns `true` only when the two ranges
+// intersect AND neither strictly contains the other.
 
 interface SimpleRange {
   lo: number[] | null
@@ -73,34 +86,63 @@ function parseDotNumeric(s: string): number[] | null {
 }
 
 function parseSimpleSegment(range: string): SimpleRange | null {
-  const trimmed = range.trim()
-  if (trimmed === '') return null
-  // Composite ranges contain segment separators like `),(`, `],[` etc.
-  if (/[\])][\s]*,[\s]*[[(]/.test(trimmed)) return null
-  const m = /^([[(])([^,]*),([^,]*)([\])])$/.exec(trimmed)
+  const compact = normalize(range)
+  if (compact === '') return null
+  // Reject composites — must be a single segment.
+  if (/[\])][\s]*,[\s]*[[(]/.test(compact)) return null
+  const m = /^([[(])([^,]*),([^,]*)([\])])$/.exec(compact)
   if (!m) return null
   const [, openBracket, loStr, hiStr, closeBracket] = m
+  // Bracket body characters can't themselves contain extra brackets/parens.
+  if (/[()[\]]/.test(loStr!) || /[()[\]]/.test(hiStr!)) return null
   const lo = loStr!.trim() === '' ? null : parseDotNumeric(loStr!)
   const hi = hiStr!.trim() === '' ? null : parseDotNumeric(hiStr!)
-  // If a bound was provided but not parseable as dot-numeric, bail out.
   if (loStr!.trim() !== '' && lo === null) return null
   if (hiStr!.trim() !== '' && hi === null) return null
   return { lo, loIncl: openBracket === '[', hi, hiIncl: closeBracket === ']' }
 }
 
+// Outer covers inner's left edge iff outer extends at least as far left
+// as inner. Whitespace-irrelevant: callers normalize first.
+function leftCoversLeft(outer: SimpleRange, inner: SimpleRange): boolean {
+  if (outer.lo === null) return true
+  if (inner.lo === null) return false
+  const cmp = compareVersionArrays(outer.lo, inner.lo)
+  if (cmp < 0) return true
+  if (cmp > 0) return false
+  // Equal endpoint: outer's inclusive bound covers inner's; outer's
+  // exclusive bound covers inner's only if inner is also exclusive.
+  return outer.loIncl || !inner.loIncl
+}
+
+function rightCoversRight(outer: SimpleRange, inner: SimpleRange): boolean {
+  if (outer.hi === null) return true
+  if (inner.hi === null) return false
+  const cmp = compareVersionArrays(outer.hi, inner.hi)
+  if (cmp > 0) return true
+  if (cmp < 0) return false
+  return outer.hiIncl || !inner.hiIncl
+}
+
+function containsRange(outer: SimpleRange, inner: SimpleRange): boolean {
+  return leftCoversLeft(outer, inner) && rightCoversRight(outer, inner)
+}
+
 /**
- * Returns `true` when `a` and `b` overlap, `false` when they're disjoint,
- * `'unknown'` when either side can't be confidently parsed (composites,
- * non-numeric bounds). Caller should treat `'unknown'` as "defer to server".
+ * Returns `true` when `a` and `b` PARTIALLY overlap (intersect AND neither
+ * fully contains the other), `false` when disjoint or one strictly contains
+ * the other, `'unknown'` when either side can't be parsed (composites,
+ * non-numeric bounds). Caller treats `'unknown'` as "defer to server".
+ *
+ * Aligns with CRS schema-spec.md §3.5: equal ranges blocked by UNIQUE,
+ * strict containment and disjoint allowed, partial overlap rejected.
  */
 export function rangesOverlap(a: string, b: string): true | false | 'unknown' {
   const ra = parseSimpleSegment(a)
   const rb = parseSimpleSegment(b)
   if (!ra || !rb) return 'unknown'
 
-  // Two intervals are disjoint when one ends before the other starts.
-  // Compare ra.lo against rb.hi: if ra.lo > rb.hi → disjoint;
-  //   if ra.lo == rb.hi and either end is exclusive → disjoint (touching).
+  // Disjoint check.
   if (ra.lo !== null && rb.hi !== null) {
     const cmp = compareVersionArrays(ra.lo, rb.hi)
     if (cmp > 0) return false
@@ -111,5 +153,8 @@ export function rangesOverlap(a: string, b: string): true | false | 'unknown' {
     if (cmp > 0) return false
     if (cmp === 0 && !(rb.loIncl && ra.hiIncl)) return false
   }
+  // They intersect. Strict containment is allowed by schema-spec §3.5; only
+  // flag the case where neither range fully contains the other.
+  if (containsRange(ra, rb) || containsRange(rb, ra)) return false
   return true
 }

@@ -5,16 +5,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { OverrideRowEditor } from './OverrideRowEditor'
 import type { FieldOverride } from '../../lib/types'
 
-// jsdom does not implement ResizeObserver but Radix Switch uses it.
-if (typeof window !== 'undefined' && !('ResizeObserver' in window)) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ;(window as any).ResizeObserver = class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Mock hooks
 // ---------------------------------------------------------------------------
