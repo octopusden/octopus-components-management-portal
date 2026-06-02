@@ -8,7 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from '../ui/table'
-import { compareVersionRanges } from '../../lib/versionRange'
+import { compareVersionRanges, rangesOverlap } from '../../lib/versionRange'
 import type { ComponentDetail, ComponentConfiguration } from '../../lib/types'
 
 interface ConfigurationsTabProps {
@@ -88,6 +88,29 @@ function rowSummary(row: ComponentConfiguration): string {
   return markerSummary(row)
 }
 
+// Override rows (SCALAR_OVERRIDE / MARKER) on the same attribute must be
+// disjoint; any pair that overlaps, contains, or equals is a conflict. Returns
+// the ids of every row involved in at least one such conflict so the table can
+// flag them. 'unknown' (composite / qualifier) pairs are left to the server.
+function conflictingRowIds(rows: ComponentConfiguration[]): Set<string> {
+  const overrides = rows.filter(
+    (r) => r.rowType === 'SCALAR_OVERRIDE' || r.rowType === 'MARKER',
+  )
+  const ids = new Set<string>()
+  for (let i = 0; i < overrides.length; i++) {
+    for (let j = i + 1; j < overrides.length; j++) {
+      const a = overrides[i]!
+      const b = overrides[j]!
+      if (!a.overriddenAttribute || a.overriddenAttribute !== b.overriddenAttribute) continue
+      if (rangesOverlap(a.versionRange, b.versionRange) === true) {
+        ids.add(a.id)
+        ids.add(b.id)
+      }
+    }
+  }
+  return ids
+}
+
 function rowTypeBadgeVariant(rowType: string): 'default' | 'secondary' | 'outline' {
   if (rowType === 'BASE') return 'default'
   if (rowType === 'SCALAR_OVERRIDE') return 'secondary'
@@ -119,6 +142,10 @@ export function ConfigurationsTab({ component }: ConfigurationsTabProps) {
   // unconditionally on every render (React rules of hooks).
   const sorted = useMemo(
     () => sortedConfigurations(configurations ?? []),
+    [configurations],
+  )
+  const conflicts = useMemo(
+    () => conflictingRowIds(configurations ?? []),
     [configurations],
   )
 
@@ -156,11 +183,22 @@ export function ConfigurationsTab({ component }: ConfigurationsTabProps) {
                 {rowSummary(row)}
               </TableCell>
               <TableCell>
-                {row.isSyntheticBase && (
-                  <Badge variant="warning" className="text-xs">
-                    synthetic
-                  </Badge>
-                )}
+                <div className="flex flex-wrap gap-1">
+                  {row.isSyntheticBase && (
+                    <Badge variant="warning" className="text-xs">
+                      synthetic
+                    </Badge>
+                  )}
+                  {conflicts.has(row.id) && (
+                    <Badge
+                      variant="destructive"
+                      className="text-xs"
+                      title="Overlaps another override on the same attribute — ranges must be disjoint"
+                    >
+                      overlaps
+                    </Badge>
+                  )}
+                </div>
               </TableCell>
             </TableRow>
           ))}

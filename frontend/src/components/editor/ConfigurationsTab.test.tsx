@@ -317,3 +317,62 @@ describe('ConfigurationsTab — unknown marker fallback', () => {
     expect(screen.getAllByText('—').length).toBeGreaterThan(0)
   })
 })
+
+describe('ConfigurationsTab — overlap conflict badge', () => {
+  it('flags override rows that overlap a sibling on the same attribute', () => {
+    const component = makeComponent({
+      configurations: [
+        makeConfig({ id: 'base', rowType: 'BASE' }),
+        makeConfig({
+          id: 'o-inner',
+          rowType: 'SCALAR_OVERRIDE',
+          versionRange: '[1.0,2.0]',
+          overriddenAttribute: 'build.javaVersion',
+          build: { javaVersion: '17' },
+        }),
+        makeConfig({
+          id: 'o-outer',
+          rowType: 'SCALAR_OVERRIDE',
+          versionRange: '[0,3.0]',
+          overriddenAttribute: 'build.javaVersion',
+          build: { javaVersion: '18' },
+        }),
+      ],
+    })
+    render(<ConfigurationsTab component={component} />)
+    // Both conflicting rows carry an "overlaps" marker.
+    expect(screen.getAllByText(/overlaps/i)).toHaveLength(2)
+  })
+
+  it('does not flag disjoint overrides or rows on different attributes', () => {
+    const component = makeComponent({
+      configurations: [
+        makeConfig({ id: 'base', rowType: 'BASE' }),
+        makeConfig({
+          id: 'o-a',
+          rowType: 'SCALAR_OVERRIDE',
+          versionRange: '[1.0,2.0)',
+          overriddenAttribute: 'build.javaVersion',
+          build: { javaVersion: '17' },
+        }),
+        makeConfig({
+          id: 'o-b',
+          rowType: 'SCALAR_OVERRIDE',
+          versionRange: '[5.0,6.0)',
+          overriddenAttribute: 'build.javaVersion',
+          build: { javaVersion: '18' },
+        }),
+        // Same range as o-a but a DIFFERENT attribute — not a conflict.
+        makeConfig({
+          id: 'o-c',
+          rowType: 'SCALAR_OVERRIDE',
+          versionRange: '[1.0,2.0)',
+          overriddenAttribute: 'jira.releaseVersionFormat',
+          jira: { releaseVersionFormat: 'x' },
+        }),
+      ],
+    })
+    render(<ConfigurationsTab component={component} />)
+    expect(screen.queryByText(/overlaps/i)).toBeNull()
+  })
+})
