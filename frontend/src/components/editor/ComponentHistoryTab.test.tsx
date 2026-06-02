@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import React from 'react'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ComponentHistoryTab } from './ComponentHistoryTab'
@@ -85,5 +86,19 @@ describe('ComponentHistoryTab (B7.1.2)', () => {
     renderWithProviders(<ComponentHistoryTab componentId="c-fresh" />)
 
     expect(screen.getByText(/no audit log entries/i)).toBeDefined()
+  })
+
+  it('hides migration rows by default and requests them when the toggle is on', async () => {
+    mockUseEntityAuditLog.mockReturnValue({ data: makePage([]), isLoading: false, isError: false })
+
+    renderWithProviders(<ComponentHistoryTab componentId="c-uuid-42" />)
+
+    // Default: includeMigrated is false.
+    expect(mockUseEntityAuditLog.mock.calls.at(-1)![2]).toMatchObject({ includeMigrated: false })
+
+    await userEvent.click(screen.getByRole('switch', { name: /show migration/i }))
+
+    // After toggling: the hook is re-invoked with includeMigrated = true.
+    expect(mockUseEntityAuditLog.mock.calls.at(-1)![2]).toMatchObject({ includeMigrated: true })
   })
 })

@@ -21,6 +21,12 @@ export interface RecentAuditLogFilter {
   from?: string
   /** ISO-8601 instant; upper bound is open (`< to`). */
   to?: string
+  /**
+   * Surface git-history baseline rows (`action = MIGRATED`), which CRS hides by
+   * default. Backs the "Show migration" toggle (SYS-049). Omitted unless `true`,
+   * so the server default (hide) applies.
+   */
+  includeMigrated?: boolean
 }
 
 interface UseRecentAuditLogParams extends UseAuditLogParams {
@@ -43,6 +49,7 @@ export function useRecentAuditLog({
   if (filter?.action) params.set('action', filter.action)
   if (filter?.from) params.set('from', filter.from)
   if (filter?.to) params.set('to', filter.to)
+  if (filter?.includeMigrated) params.set('includeMigrated', 'true')
 
   return useQuery({
     queryKey: ['audit', 'recent', { page, size, filter }],
@@ -53,15 +60,16 @@ export function useRecentAuditLog({
 export function useEntityAuditLog(
   entityType: string,
   entityId: string,
-  { page = 0, size = 20 }: UseAuditLogParams = {}
+  { page = 0, size = 20, includeMigrated = false }: UseAuditLogParams & { includeMigrated?: boolean } = {}
 ) {
   const params = new URLSearchParams()
   params.set('page', String(page))
   params.set('size', String(size))
   params.set('sort', 'changedAt,desc')
+  if (includeMigrated) params.set('includeMigrated', 'true')
 
   return useQuery({
-    queryKey: ['audit', entityType, entityId, { page, size }],
+    queryKey: ['audit', entityType, entityId, { page, size, includeMigrated }],
     queryFn: () =>
       api.get<Page<AuditLogEntry>>(`/audit/${entityType}/${entityId}?${params.toString()}`),
     enabled: !!entityType && !!entityId,

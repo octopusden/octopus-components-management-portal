@@ -24,13 +24,16 @@ interface AuditLogTableProps {
 }
 
 // Action → semantic Badge variant. CRS emits CREATE/UPDATE/DELETE/RENAME
-// (see ComponentManagementServiceImpl + GitHistoryImportServiceImpl).
-// MIGRATE/ARCHIVE are intentionally absent — CRS does not emit them.
+// (see ComponentManagementServiceImpl) and MIGRATED for the git-history
+// baseline (GitHistoryImportServiceImpl, SYS-049). MIGRATED gets the muted
+// `secondary` variant — it is migration noise, hidden by default and only
+// shown via the "Show migration" toggle.
 const ACTION_BADGE_VARIANT: Record<string, BadgeProps['variant']> = {
   CREATE: 'success',
   UPDATE: 'warning',
   DELETE: 'destructive',
   RENAME: 'warning',
+  MIGRATED: 'secondary',
 }
 
 function formatDate(dateStr: string): string {

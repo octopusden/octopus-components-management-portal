@@ -182,4 +182,10 @@ describe('AuditLogTable', () => {
     const badge = screen.getByText('RENAME').closest('[data-variant]')
     expect(badge?.getAttribute('data-variant')).toBe('warning')
   })
+
+  it('applies the muted secondary Badge variant for MIGRATED action', () => {
+    render(<AuditLogTable data={[makeEntry({ action: 'MIGRATED' })]} isLoading={false} />)
+    const badge = screen.getByText('MIGRATED').closest('[data-variant]')
+    expect(badge?.getAttribute('data-variant')).toBe('secondary')
+  })
 })
