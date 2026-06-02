@@ -502,22 +502,66 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
 })
 
 describe('ComponentDetailPage — solution flag dirty-gate', () => {
-  it('untouched solution toggle on a component with server null does NOT send false', async () => {
-    // Race-condition guard analogous to the TC pre-hydration safety test
-    // above. Form default is `false`; server `solution` is `null` ("unknown").
-    // Without the dirtyFields gate, a Save fired before the user touches
-    // the toggle would send `solution: false` and wipe the stored null
-    // (JSON merge-patch treats present-and-false as a real write).
+  it('untouched form (server solution=null) → Save is disabled, so no clobbering PATCH can fire', async () => {
+    // Stronger guarantee than the old "untouched save omits solution" assertion:
+    // with the Save dirty-gate, an untouched General form leaves Save DISABLED,
+    // so the JSON-merge-patch clobber (`solution: false` overwriting the stored
+    // null) cannot happen at all. The omit semantics themselves remain unit-
+    // tested in buildUpdateRequest.test.ts.
     const updateMutateAsync = vi.fn(() => Promise.resolve())
     const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
     const seeded: ComponentDetail = { ...baseComponent, solution: null }
     renderPage(seeded, user, { updateMutation: { mutateAsync: updateMutateAsync } })
 
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+    // Wait for GeneralTab's hydration useEffect to settle (system mirrored from
+    // the server) — the gate then sees a pristine form and disables Save.
+    await waitFor(() => {
+      const btn = screen.getByRole('button', { name: /^save$/i }) as HTMLButtonElement
+      expect(btn.disabled).toBe(true)
+    })
 
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+    await new Promise((r) => setTimeout(r, 50))
+    expect(updateMutateAsync).not.toHaveBeenCalled()
+  })
+})
+
+describe('ComponentDetailPage — Save dirty-gate', () => {
+  it('Save is disabled on a pristine form, enables after a real edit, then PATCHes', async () => {
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('system', component.system ?? '')
+      }, [component, form])
+      return React.createElement(
+        'button',
+        {
+          'data-testid': 'edit-display-name',
+          onClick: () => form.setValue('displayName', 'New Name', { shouldDirty: true }),
+        },
+        'edit',
+      )
+    })
+    const updateMutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    renderPage(baseComponent, user, { updateMutation: { mutateAsync: updateMutateAsync } })
+
+    // Pristine (system hydrated, nothing else changed) → Save disabled.
+    await waitFor(() => {
+      const btn = screen.getByRole('button', { name: /^save$/i }) as HTMLButtonElement
+      expect(btn.disabled).toBe(true)
+    })
+
+    // A real edit → Save enables.
+    fireEvent.click(screen.getByTestId('edit-display-name'))
+    await waitFor(() => {
+      const btn = screen.getByRole('button', { name: /^save$/i }) as HTMLButtonElement
+      expect(btn.disabled).toBe(false)
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
     await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
     const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
-    expect(payload['solution']).toBeUndefined()
+    expect(payload['displayName']).toBe('New Name')
   })
 })
 
@@ -548,11 +592,14 @@ describe('ComponentDetailPage — system clear-blocks-save guard (task #14 singl
     expect(updateMutateAsync).not.toHaveBeenCalled()
   })
 
-  it('user clears the system but field-config hides the row → save still fires (guard skipped)', async () => {
-    // If admins configured the systems field as hidden via field-config,
-    // the empty-system guard must NOT block: the field isn't user-visible,
-    // so we cannot demand the user select one. buildUpdateRequest already
-    // omits systems on hidden visibility.
+  it('system hidden + a real edit elsewhere → save fires, empty-system guard skipped', async () => {
+    // If admins configured the systems field as hidden via field-config, the
+    // empty-system guard must NOT block: the field isn't user-visible, so we
+    // cannot demand the user select one. We make a real visible change
+    // (displayName) so the Save dirty-gate enables the button, then assert the
+    // save fires despite the form's system being empty — proving the guard is
+    // skipped when the field is hidden. (buildUpdateRequest still omits system
+    // on hidden visibility.)
     mockedUseFieldConfigEntry.mockImplementation((path: string) => ({
       entry: path === 'component.system'
         ? { visibility: 'hidden' as const, required: false }
@@ -560,9 +607,14 @@ describe('ComponentDetailPage — system clear-blocks-save guard (task #14 singl
       isLoading: false,
       isError: false,
     }))
-    vi.mocked(GeneralTab).mockImplementation(() =>
-      React.createElement('div', { 'data-testid': 'general-tab-systems-hidden' }),
-    )
+    vi.mocked(GeneralTab).mockImplementation(({ form }) => {
+      useEffect(() => {
+        // A real, visible change so the dirty-gate enables Save; system left at
+        // the '' default to model the hidden-and-empty case.
+        form.setValue('displayName', 'Edited While System Hidden', { shouldDirty: true })
+      }, [form])
+      return React.createElement('div', { 'data-testid': 'general-tab-systems-hidden' })
+    })
     const updateMutateAsync = vi.fn(() => Promise.resolve())
     const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
     renderPage(baseComponent, user, { updateMutation: { mutateAsync: updateMutateAsync } })
@@ -623,55 +675,52 @@ describe('ComponentDetailPage — labels clear-all sends [] (PR #44 follow-up: c
     expect(payload['labels']).toEqual([])
   })
 
-  it('component had NO labels + form is empty + untouched → labels omitted (no-op-write guard)', async () => {
-    // The value-compare synthetic-dirty must NOT fire when the server
-    // had no labels to begin with — that case is "nothing to clear", and
-    // emitting labels:[] would be a no-op write the server doesn't need.
+  it('component had NO labels + form is empty + untouched → Save disabled (no no-op write)', async () => {
+    // The server had no labels — there is nothing to clear, so an untouched
+    // form is pristine and Save stays disabled. (The "labels:[] would be a
+    // no-op write" omit is unit-tested in buildUpdateRequest.test.ts.)
     const updateMutateAsync = vi.fn(() => Promise.resolve())
     const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
     const seeded: ComponentDetail = { ...baseComponent, labels: [] }
     renderPage(seeded, user, { updateMutation: { mutateAsync: updateMutateAsync } })
 
+    await waitFor(() => {
+      const btn = screen.getByRole('button', { name: /^save$/i }) as HTMLButtonElement
+      expect(btn.disabled).toBe(true)
+    })
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
-
-    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
-    const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
-    expect(payload['labels']).toBeUndefined()
+    await new Promise((r) => setTimeout(r, 50))
+    expect(updateMutateAsync).not.toHaveBeenCalled()
   })
 
-  it('PRE-HYDRATION RACE: component HAS labels, form not yet hydrated, untouched → labels omitted (fails closed)', async () => {
-    // The dangerous race: useComponent resolves → React renders → Save
-    // button is enabled → GeneralTab.useEffect has NOT fired → user
-    // clicks Save. form.getValues('labels') returns the form default [].
-    // Without the touched-gate, the value-compare would fire (server has
-    // ['backend'], form has []) and emit labels:[] — silently wiping the
-    // server data. The touched-gate `touchedFields.labels === true`
-    // makes this fail closed: synth-dirty stays false until the user
-    // actually interacts with the field.
+  it('PRE-HYDRATION / untouched labels (server HAS labels) → Save disabled (fails closed)', async () => {
+    // The dangerous race the dirty-gate now closes structurally: server has
+    // labels, the user has NOT touched the labels field, so the form must not
+    // be able to emit labels:[] and wipe the server data. With Save disabled
+    // on a pristine form, the clobbering PATCH cannot fire at all. (The
+    // touched-gate value-compare itself is unit-tested in buildUpdateRequest.)
     //
-    // The default GeneralTab stub in beforeEach only hydrates `system`
-    // (per the systems guard's needs). Labels stays at the form default
-    // [], exactly modelling the pre-hydration window for this field.
+    // The default GeneralTab stub hydrates only `system`; labels stays at the
+    // form default [], modelling the untouched / pre-hydration window.
     const updateMutateAsync = vi.fn(() => Promise.resolve())
     const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
     const seeded: ComponentDetail = { ...baseComponent, labels: ['backend', 'internal'] }
     renderPage(seeded, user, { updateMutation: { mutateAsync: updateMutateAsync } })
 
+    await waitFor(() => {
+      const btn = screen.getByRole('button', { name: /^save$/i }) as HTMLButtonElement
+      expect(btn.disabled).toBe(true)
+    })
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
-
-    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
-    const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
-    // Critical: the payload must NOT carry labels (omit, not []) because
-    // the user hasn't touched the field. The server keeps its existing
-    // ['backend', 'internal'] under PATCH no-op semantics.
-    expect(payload['labels']).toBeUndefined()
+    await new Promise((r) => setTimeout(r, 50))
+    expect(updateMutateAsync).not.toHaveBeenCalled()
   })
 
-  it('labels hidden via field-config → clear-all is NOT synthesised (defence-in-depth)', async () => {
-    // Admins who hid the labels field can't see or fix it from the form,
-    // so the save path must not force-emit []: that would let a hidden
-    // form snapshot overwrite the server value. The hidden gate must
-    // short-circuit before the value-compare runs.
+  it('labels hidden via field-config + untouched form → Save disabled (defence-in-depth)', async () => {
+    // Admins who hid the labels field can't see or fix it from the form, so the
+    // save path must not force-emit [] and overwrite the server value. An
+    // untouched form keeps Save disabled, so nothing can be emitted. (The
+    // hidden-visibility omit short-circuit is unit-tested in buildUpdateRequest.)
     mockedUseFieldConfigEntry.mockImplementation((path: string) => ({
       entry: path === 'component.labels'
         ? { visibility: 'hidden' as const, required: false }
@@ -684,11 +733,13 @@ describe('ComponentDetailPage — labels clear-all sends [] (PR #44 follow-up: c
     const seeded: ComponentDetail = { ...baseComponent, labels: ['backend'] }
     renderPage(seeded, user, { updateMutation: { mutateAsync: updateMutateAsync } })
 
+    await waitFor(() => {
+      const btn = screen.getByRole('button', { name: /^save$/i }) as HTMLButtonElement
+      expect(btn.disabled).toBe(true)
+    })
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
-
-    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
-    const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
-    expect(payload['labels']).toBeUndefined()
+    await new Promise((r) => setTimeout(r, 50))
+    expect(updateMutateAsync).not.toHaveBeenCalled()
   })
 })
 
