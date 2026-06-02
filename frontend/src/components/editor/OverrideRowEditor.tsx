@@ -25,9 +25,10 @@ import { Tabs, TabsList, TabsTrigger } from '../ui/tabs'
 import {
   useCreateFieldOverride,
   useUpdateFieldOverride,
+  useFieldOverrides,
 } from '../../hooks/useComponent'
 import { useToast } from '../../hooks/use-toast'
-import { isValidVersionRange, isClosedVersionRange } from '../../lib/versionRange'
+import { isValidVersionRange, isClosedVersionRange, rangesOverlap } from '../../lib/versionRange'
 import type { FieldOverride, MarkerChildrenPayload, VcsEntryRequest, MavenArtifactRequest, FileUrlArtifactRequest, DockerImageRequest, PackageRequest } from '../../lib/types'
 
 // ---------------------------------------------------------------------------
@@ -130,6 +131,7 @@ export interface OverrideRowEditorProps {
 export function OverrideRowEditor({ open, onOpenChange, componentId, mode, override }: OverrideRowEditorProps) {
   const createMutation = useCreateFieldOverride(componentId)
   const updateMutation = useUpdateFieldOverride(componentId)
+  const { data: allOverrides = [] } = useFieldOverrides(componentId)
   const { toast } = useToast()
 
   // Determine initial type and attribute from existing override in edit mode
@@ -472,6 +474,16 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
       })
       return
     }
+    // R3 client-side preview: prevent submission of a range that overlaps
+    // a sibling override on the same attribute. CRS-side P-Overlap will
+    // catch the unknown-parse cases this skips.
+    if (overlappingExisting !== null) {
+      toast({
+        title: `Overlaps with existing override ${overlappingExisting}`,
+        variant: 'destructive',
+      })
+      return
+    }
     try {
       if (mode === 'edit' && override) {
         if (overrideType === 'scalar') {
@@ -520,6 +532,21 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
 
   const isPending = createMutation.isPending || updateMutation.isPending
   const versionRangeInvalid = !isClosedVersionRange(versionRange)
+  // Walk existing overrides on the same attribute for client-side overlap
+  // preview. Composites/qualifier bounds short-circuit to "unknown" inside
+  // rangesOverlap and are skipped here — CRS-side P-Overlap is the backstop.
+  const overlappingExisting: string | null = (() => {
+    if (versionRangeInvalid) return null
+    for (const o of allOverrides) {
+      if (o.overriddenAttribute !== attribute) continue
+      if (mode === 'edit' && override && o.id === override.id) continue
+      if (rangesOverlap(versionRange, o.versionRange) === true) {
+        return o.versionRange
+      }
+    }
+    return null
+  })()
+  const versionRangeBlocks = versionRangeInvalid || overlappingExisting !== null
 
   // ---------------------------------------------------------------------------
   // Render
@@ -611,13 +638,21 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
               onChange={(e) => setVersionRange(e.target.value)}
               className="font-mono"
               required
-              aria-invalid={versionRange.trim() !== '' && !isClosedVersionRange(versionRange)}
+              aria-invalid={
+                (versionRange.trim() !== '' && !isClosedVersionRange(versionRange)) ||
+                overlappingExisting !== null
+              }
             />
             {versionRange.trim() !== '' && !isClosedVersionRange(versionRange) && (
               <p className="text-xs text-destructive">
                 {isValidVersionRange(versionRange)
                   ? 'Open-upward range — edit the BASE field instead'
                   : 'Invalid version range syntax'}
+              </p>
+            )}
+            {!versionRangeInvalid && overlappingExisting !== null && (
+              <p className="text-xs text-destructive">
+                Overlaps with existing override {overlappingExisting}
               </p>
             )}
           </div>
@@ -867,7 +902,7 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
             <DialogClose asChild>
               <Button type="button" variant="outline">Cancel</Button>
             </DialogClose>
-            <Button type="submit" disabled={isPending || versionRangeInvalid}>
+            <Button type="submit" disabled={isPending || versionRangeBlocks}>
               {isPending ? 'Saving...' : mode === 'edit' ? 'Update' : 'Create'}
             </Button>
           </DialogFooter>

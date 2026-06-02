@@ -22,6 +22,11 @@ if (typeof window !== 'undefined' && !('ResizeObserver' in window)) {
 const mockCreateMutateAsync = vi.fn()
 const mockUpdateMutateAsync = vi.fn()
 
+// Mutable list of existing field-overrides for overlap-detection tests.
+// Tests that need preset overrides assign to this array; useFieldOverrides
+// mock reads it lazily.
+let mockOverridesList: FieldOverride[] = []
+
 vi.mock('../../hooks/useComponent', () => ({
   useCreateFieldOverride: vi.fn(() => ({
     mutateAsync: mockCreateMutateAsync,
@@ -31,6 +36,7 @@ vi.mock('../../hooks/useComponent', () => ({
     mutateAsync: mockUpdateMutateAsync,
     isPending: false,
   })),
+  useFieldOverrides: vi.fn(() => ({ data: mockOverridesList })),
 }))
 
 const mockToast = vi.fn()
@@ -150,6 +156,7 @@ describe('OverrideRowEditor — create mode', () => {
     mockCreateMutateAsync.mockReset()
     mockUpdateMutateAsync.mockReset()
     mockToast.mockReset()
+    mockOverridesList = []
   })
 
   it('renders with "Add Override" title', () => {
@@ -349,6 +356,7 @@ describe('OverrideRowEditor — edit mode (scalar)', () => {
     mockCreateMutateAsync.mockReset()
     mockUpdateMutateAsync.mockReset()
     mockToast.mockReset()
+    mockOverridesList = []
   })
 
   it('renders "Edit Override" title', () => {
@@ -424,6 +432,7 @@ describe('OverrideRowEditor — edit mode (marker)', () => {
     mockCreateMutateAsync.mockReset()
     mockUpdateMutateAsync.mockReset()
     mockToast.mockReset()
+    mockOverridesList = []
   })
 
   it('renders marker override attribute as readonly text — no select', () => {
@@ -494,6 +503,7 @@ describe('OverrideRowEditor — marker child trim + blank-row filter', () => {
     mockCreateMutateAsync.mockReset()
     mockUpdateMutateAsync.mockReset()
     mockToast.mockReset()
+    mockOverridesList = []
   })
 
   it('vcs.settings: whitespace-only vcsPath row is dropped, surviving row is trimmed', async () => {
@@ -576,6 +586,7 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
     mockCreateMutateAsync.mockReset()
     mockUpdateMutateAsync.mockReset()
     mockToast.mockReset()
+    mockOverridesList = []
   })
 
   it('calls useCreateFieldOverride with correct marker body for distribution.fileUrl', async () => {
@@ -663,6 +674,7 @@ describe('OverrideRowEditor — D5 closed-range enforcement', () => {
     mockCreateMutateAsync.mockReset()
     mockUpdateMutateAsync.mockReset()
     mockToast.mockReset()
+    mockOverridesList = []
   })
 
   it('does not call createMutation when version range is empty', async () => {
@@ -701,5 +713,96 @@ describe('OverrideRowEditor — D5 closed-range enforcement', () => {
     await waitFor(() => {
       expect(screen.getByText(/invalid version range syntax/i)).toBeDefined()
     })
+  })
+})
+
+describe('OverrideRowEditor — overlap detection (pre-save)', () => {
+  beforeEach(() => {
+    mockCreateMutateAsync.mockReset()
+    mockUpdateMutateAsync.mockReset()
+    mockToast.mockReset()
+    mockOverridesList = []
+  })
+
+  it('surfaces inline error when entered range overlaps a sibling on the same attribute', async () => {
+    mockOverridesList = [
+      {
+        id: 'existing-1',
+        overriddenAttribute: 'build.javaVersion',
+        versionRange: '[1.0.107,)',
+        rowType: 'SCALAR_OVERRIDE',
+        value: '17',
+        markerChildren: null,
+        createdAt: null,
+        updatedAt: null,
+      },
+    ]
+    renderEditor()
+    const select = screen.getByTestId('attr-select') as HTMLSelectElement
+    await userEvent.selectOptions(select, 'build.javaVersion')
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1.0,2.0]' } })
+    await waitFor(() => {
+      expect(screen.getByText(/overlaps with existing override \[1\.0\.107,\)/i)).toBeDefined()
+    })
+  })
+
+  it('does not call createMutation when overlap is present', async () => {
+    mockOverridesList = [
+      {
+        id: 'existing-1',
+        overriddenAttribute: 'build.javaVersion',
+        versionRange: '[1.0.107,)',
+        rowType: 'SCALAR_OVERRIDE',
+        value: '17',
+        markerChildren: null,
+        createdAt: null,
+        updatedAt: null,
+      },
+    ]
+    renderEditor()
+    const select = screen.getByTestId('attr-select') as HTMLSelectElement
+    await userEvent.selectOptions(select, 'build.javaVersion')
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1.0,2.0]' } })
+    const valueInput = screen.getByPlaceholderText('Value for Java Version')
+    await userEvent.type(valueInput, '11')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    expect(mockCreateMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('ignores existing overrides on a different attribute', async () => {
+    mockOverridesList = [
+      {
+        id: 'existing-1',
+        overriddenAttribute: 'jira.releaseVersionFormat',
+        versionRange: '[1.0,2.0)',
+        rowType: 'SCALAR_OVERRIDE',
+        value: 'x',
+        markerChildren: null,
+        createdAt: null,
+        updatedAt: null,
+      },
+    ]
+    renderEditor()
+    const select = screen.getByTestId('attr-select') as HTMLSelectElement
+    await userEvent.selectOptions(select, 'build.javaVersion')
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1.0,2.0]' } })
+    expect(screen.queryByText(/overlaps with existing override/i)).toBeNull()
+  })
+
+  it('excludes the row being edited from the overlap walk', async () => {
+    const existing: FieldOverride = {
+      id: 'fo-edit',
+      overriddenAttribute: 'build.javaVersion',
+      versionRange: '[1.0,2.0)',
+      rowType: 'SCALAR_OVERRIDE',
+      value: '11',
+      markerChildren: null,
+      createdAt: null,
+      updatedAt: null,
+    }
+    mockOverridesList = [existing]
+    renderEditor({ mode: 'edit', override: existing })
+    // Range unchanged → must not trigger overlap with self.
+    expect(screen.queryByText(/overlaps with existing override/i)).toBeNull()
   })
 })
