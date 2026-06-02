@@ -538,9 +538,8 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
   // all block the write (overrides must be disjoint); equal gets distinct copy.
   // Composites/qualifier bounds short-circuit to "unknown" inside
   // classifyRangeConflict and are skipped here — CRS-side P-Overlap is the
-  // backstop. NOTE: CRS validateFieldOverrideRange (PR #314) still ALLOWS
-  // containment server-side, so this preview is currently stricter than the
-  // server until a matching CRS change lands.
+  // backstop. CRS #316 enforces the same disjoint-only rule server-side, so
+  // this preview and the server agree.
   const overlapConflict: { range: string; kind: 'partial' | 'contains' | 'equal' } | null = (() => {
     if (versionRangeInvalid) return null
     for (const o of allOverrides) {
