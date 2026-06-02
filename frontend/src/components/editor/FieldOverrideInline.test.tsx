@@ -180,4 +180,68 @@ describe('FieldOverrideInline — overlap detection (pre-save)', () => {
     fireEvent.change(rangeInput, { target: { value: '[1.5,2.5)' } })
     expect(screen.queryByText(/overlaps with existing override/i)).toBeNull()
   })
+
+  it('labels a semantically-equal duplicate distinctly from a partial overlap', async () => {
+    mockOverrides = [
+      {
+        id: 'existing-1',
+        overriddenAttribute: 'jira.releaseVersionFormat',
+        versionRange: '[1.0,2.0)',
+        rowType: 'SCALAR_OVERRIDE',
+        value: 'x',
+        markerChildren: null,
+        createdAt: null,
+        updatedAt: null,
+      },
+    ]
+    renderInline()
+    await userEvent.click(screen.getByRole('button', { name: /add override/i }))
+    const rangeInput = screen.getByLabelText(/new override version range/i) as HTMLInputElement
+    // Whitespace-equal to the existing override — a true duplicate, not a
+    // partial overlap. Copy must say "Semantically equal", not "Overlaps".
+    fireEvent.change(rangeInput, { target: { value: '[1.0, 2.0)' } })
+    await waitFor(() => {
+      expect(screen.getByText(/semantically equal to existing override \[1\.0,2\.0\)/i)).toBeInTheDocument()
+    })
+    expect(screen.queryByText(/overlaps with existing override/i)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Confirm new override' })).toBeDisabled()
+  })
+})
+
+describe('FieldOverrideInline — list ordering', () => {
+  beforeEach(() => {
+    mockCreateMutate.mockReset()
+    mockUpdateMutate.mockReset()
+    mockDeleteMutate.mockReset()
+    mockOverrides = []
+  })
+
+  it('lists overrides ordered by numeric lower bound, not lexically', () => {
+    mockOverrides = [
+      {
+        id: 'o-ten',
+        overriddenAttribute: 'jira.releaseVersionFormat',
+        versionRange: '[10.0,11.0)',
+        rowType: 'SCALAR_OVERRIDE',
+        value: 'ten',
+        markerChildren: null,
+        createdAt: null,
+        updatedAt: null,
+      },
+      {
+        id: 'o-two',
+        overriddenAttribute: 'jira.releaseVersionFormat',
+        versionRange: '[2.0,3.0)',
+        rowType: 'SCALAR_OVERRIDE',
+        value: 'two',
+        markerChildren: null,
+        createdAt: null,
+        updatedAt: null,
+      },
+    ]
+    renderInline()
+    const editButtons = screen.getAllByRole('button', { name: /edit override/i })
+    expect(editButtons[0]!.getAttribute('aria-label')).toBe('Edit override [2.0,3.0)')
+    expect(editButtons[1]!.getAttribute('aria-label')).toBe('Edit override [10.0,11.0)')
+  })
 })

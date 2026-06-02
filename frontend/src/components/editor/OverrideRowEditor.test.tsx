@@ -189,6 +189,9 @@ describe('OverrideRowEditor — create mode', () => {
     expect(optionValues).toContain('escrow.reusable')
     expect(optionValues).toContain('escrow.buildTask')
     expect(optionValues).toContain('jira.projectKey')
+    // P-HotfixVersionFormat: CRS registers jira.hotfixVersionFormat as a
+    // scalar override path (ConfigurationRowAccessors.kt); Portal must too.
+    expect(optionValues).toContain('jira.hotfixVersionFormat')
   })
 
   it('selecting a string attribute renders an Input for value', async () => {
@@ -793,6 +796,30 @@ describe('OverrideRowEditor — overlap detection (pre-save)', () => {
     mockOverridesList = [existing]
     renderEditor({ mode: 'edit', override: existing })
     // Range unchanged → must not trigger overlap with self.
+    expect(screen.queryByText(/overlaps with existing override/i)).toBeNull()
+  })
+
+  it('labels a semantically-equal duplicate distinctly from a partial overlap', async () => {
+    mockOverridesList = [
+      {
+        id: 'existing-1',
+        overriddenAttribute: 'build.javaVersion',
+        versionRange: '[1.0,2.0)',
+        rowType: 'SCALAR_OVERRIDE',
+        value: '17',
+        markerChildren: null,
+        createdAt: null,
+        updatedAt: null,
+      },
+    ]
+    renderEditor()
+    const select = screen.getByTestId('attr-select') as HTMLSelectElement
+    await userEvent.selectOptions(select, 'build.javaVersion')
+    // Trailing-zero-equal to the existing override — duplicate, not overlap.
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1,2)' } })
+    await waitFor(() => {
+      expect(screen.getByText(/semantically equal to existing override \[1\.0,2\.0\)/i)).toBeInTheDocument()
+    })
     expect(screen.queryByText(/overlaps with existing override/i)).toBeNull()
   })
 })

@@ -116,6 +116,7 @@ describe('JiraTab — inline override coverage', () => {
     'jira.lineVersionFormat',
     'jira.versionPrefix',
     'jira.versionFormat',
+    'jira.hotfixVersionFormat',
   ]
 
   it.each(overridablePaths)('renders FieldOverrideInline under %s', (path) => {

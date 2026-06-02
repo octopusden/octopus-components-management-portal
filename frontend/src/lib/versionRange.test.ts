@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatVersionRange, isValidVersionRange, isClosedVersionRange, rangesOverlap } from './versionRange'
+import { formatVersionRange, isValidVersionRange, isClosedVersionRange, rangesOverlap, classifyRangeConflict, compareVersionRanges } from './versionRange'
 
 describe('formatVersionRange', () => {
   it('formats (,) as "All versions"', () => {
@@ -243,5 +243,100 @@ describe('rangesOverlap', () => {
 
   it('returns true for partial overlap with shifted left and right bounds', () => {
     expect(rangesOverlap('[1.0,3.0)', '[2.0,4.0)')).toBe(true)
+  })
+})
+
+// classifyRangeConflict refines rangesOverlap's boolean `true` into the two
+// distinct cases the UI needs different copy for: a genuine partial overlap
+// vs a semantically-equal duplicate (which the DB UNIQUE constraint would
+// miss across whitespace / trailing-zero differences). 'none' = disjoint or
+// strict containment (both allowed); 'unknown' = unparseable (defer to CRS).
+describe('classifyRangeConflict', () => {
+  it('classifies partial overlap as "partial"', () => {
+    expect(classifyRangeConflict('[1.0,3.0)', '[2.0,4.0)')).toBe('partial')
+  })
+
+  it('classifies exact-equal ranges as "equal"', () => {
+    expect(classifyRangeConflict('[1.0,2.0)', '[1.0,2.0)')).toBe('equal')
+  })
+
+  it('classifies whitespace-differing-but-equal ranges as "equal"', () => {
+    expect(classifyRangeConflict('[1.0,2.0)', '[1.0, 2.0)')).toBe('equal')
+  })
+
+  it('classifies trailing-zero-differing-but-equal ranges as "equal"', () => {
+    expect(classifyRangeConflict('[1,2)', '[1.0,2.0)')).toBe('equal')
+  })
+
+  it('classifies disjoint ranges as "none"', () => {
+    expect(classifyRangeConflict('[1.0,2.0)', '[3.0,4.0)')).toBe('none')
+  })
+
+  it('classifies strict containment as "none"', () => {
+    expect(classifyRangeConflict('[1.0,4.0)', '[2.0,3.0)')).toBe('none')
+    expect(classifyRangeConflict('[2.0,3.0)', '[1.0,4.0)')).toBe('none')
+  })
+
+  it('classifies composites / unparseable bounds as "unknown"', () => {
+    expect(classifyRangeConflict('(,1.0),[2.0,)', '[1.5,3.0]')).toBe('unknown')
+    expect(classifyRangeConflict('[1.0-SNAPSHOT,2.0)', '[1.5,3.0)')).toBe('unknown')
+  })
+
+  it('stays consistent with rangesOverlap', () => {
+    const cases: Array<[string, string]> = [
+      ['[1.0,3.0)', '[2.0,4.0)'],
+      ['[1.0,2.0)', '[1.0,2.0)'],
+      ['[1.0,2.0)', '[3.0,4.0)'],
+      ['[1.0,4.0)', '[2.0,3.0)'],
+      ['(,1.0),[2.0,)', '[1.5,3.0]'],
+    ]
+    for (const [a, b] of cases) {
+      const kind = classifyRangeConflict(a, b)
+      const overlap = rangesOverlap(a, b)
+      if (kind === 'unknown') expect(overlap).toBe('unknown')
+      else expect(overlap).toBe(kind === 'partial' || kind === 'equal')
+    }
+  })
+})
+
+// compareVersionRanges sorts by lower bound numerically (then upper bound),
+// fixing the localeCompare bug where `[10.0,)` sorts before `[2.0,)`.
+describe('compareVersionRanges', () => {
+  it('orders by numeric lower bound, not lexically', () => {
+    // localeCompare would put "[10..." before "[2..." — numeric must not.
+    expect(compareVersionRanges('[2.0,3.0)', '[10.0,11.0)')).toBeLessThan(0)
+    expect(compareVersionRanges('[10.0,11.0)', '[2.0,3.0)')).toBeGreaterThan(0)
+  })
+
+  it('returns 0 for identical ranges', () => {
+    expect(compareVersionRanges('[1.0,2.0)', '[1.0,2.0)')).toBe(0)
+  })
+
+  it('breaks ties on the upper bound when lower bounds are equal', () => {
+    expect(compareVersionRanges('[1.0,2.0)', '[1.0,3.0)')).toBeLessThan(0)
+  })
+
+  it('sorts an unbounded lower edge before any concrete lower bound', () => {
+    expect(compareVersionRanges('(,1.0)', '[0.0,5.0)')).toBeLessThan(0)
+  })
+
+  it('sorts an inclusive lower edge before an exclusive one at the same value', () => {
+    expect(compareVersionRanges('[1.0,2.0)', '(1.0,2.0)')).toBeLessThan(0)
+  })
+
+  it('sorts an unbounded upper edge after a bounded one at the same lower', () => {
+    expect(compareVersionRanges('[1.0,2.0)', '[1.0,)')).toBeLessThan(0)
+  })
+
+  it('falls back to localeCompare for unparseable / composite ranges', () => {
+    expect(compareVersionRanges('garbage', '[1.0,2.0)')).toBe('garbage'.localeCompare('[1.0,2.0)'))
+    const a = '(,1.0),[2.0,)'
+    const b = '(,3.0),[4.0,)'
+    expect(compareVersionRanges(a, b)).toBe(a.localeCompare(b))
+  })
+
+  it('produces a correct numeric ordering when used as Array.sort comparator', () => {
+    const sorted = ['[10.0,)', '[2.0,3.0)', '(,1.0)', '[1.0,2.0)'].sort(compareVersionRanges)
+    expect(sorted).toEqual(['(,1.0)', '[1.0,2.0)', '[2.0,3.0)', '[10.0,)'])
   })
 })

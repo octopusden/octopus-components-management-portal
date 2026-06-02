@@ -8,6 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from '../ui/table'
+import { compareVersionRanges } from '../../lib/versionRange'
 import type { ComponentDetail, ComponentConfiguration } from '../../lib/types'
 
 interface ConfigurationsTabProps {
@@ -96,20 +97,19 @@ function rowTypeBadgeVariant(rowType: string): 'default' | 'secondary' | 'outlin
 function sortedConfigurations(rows: ComponentConfiguration[]): ComponentConfiguration[] {
   const base = rows.filter((r) => r.rowType === 'BASE')
   // invariant: there should be exactly one BASE row per component
+  // Within an attribute, order by version range numerically (compareVersionRanges
+  // handles `[10.0,)` vs `[2.0,)`) rather than lexically.
+  const byAttrThenRange = (a: ComponentConfiguration, b: ComponentConfiguration) => {
+    const attrCmp = (a.overriddenAttribute ?? '').localeCompare(b.overriddenAttribute ?? '')
+    if (attrCmp !== 0) return attrCmp
+    return compareVersionRanges(a.versionRange, b.versionRange)
+  }
   const scalar = rows
     .filter((r) => r.rowType === 'SCALAR_OVERRIDE')
-    .sort((a, b) => {
-      const attrCmp = (a.overriddenAttribute ?? '').localeCompare(b.overriddenAttribute ?? '')
-      if (attrCmp !== 0) return attrCmp
-      return a.versionRange.localeCompare(b.versionRange)
-    })
+    .sort(byAttrThenRange)
   const marker = rows
     .filter((r) => r.rowType === 'MARKER')
-    .sort((a, b) => {
-      const attrCmp = (a.overriddenAttribute ?? '').localeCompare(b.overriddenAttribute ?? '')
-      if (attrCmp !== 0) return attrCmp
-      return a.versionRange.localeCompare(b.versionRange)
-    })
+    .sort(byAttrThenRange)
   return [...base, ...scalar, ...marker]
 }
 

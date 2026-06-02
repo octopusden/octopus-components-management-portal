@@ -5,7 +5,7 @@ import { Input } from '../ui/input'
 import { Switch } from '../ui/switch'
 import { Badge } from '../ui/badge'
 import { useFieldOverrides, useCreateFieldOverride, useUpdateFieldOverride, useDeleteFieldOverride } from '../../hooks/useComponent'
-import { formatVersionRange, isValidVersionRange, isClosedVersionRange, rangesOverlap } from '../../lib/versionRange'
+import { formatVersionRange, isValidVersionRange, isClosedVersionRange, classifyRangeConflict, compareVersionRanges } from '../../lib/versionRange'
 import type { FieldOverride } from '../../lib/types'
 
 // Scalar override paths whose column type is boolean (from CRS
@@ -33,7 +33,12 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
   const updateMutation = useUpdateFieldOverride(componentId)
   const deleteMutation = useDeleteFieldOverride(componentId)
 
-  const overrides = allOverrides.filter((o) => o.overriddenAttribute === overriddenAttribute)
+  // Ordered by numeric lower bound (compareVersionRanges) so `[2.0,)` lists
+  // before `[10.0,)` rather than lexically. filter() returns a fresh array,
+  // so the in-place sort is side-effect-free.
+  const overrides = allOverrides
+    .filter((o) => o.overriddenAttribute === overriddenAttribute)
+    .sort((a, b) => compareVersionRanges(a.versionRange, b.versionRange))
   const isBoolean = BOOLEAN_OVERRIDE_PATHS.has(overriddenAttribute)
 
   const [adding, setAdding] = useState(false)
@@ -55,20 +60,25 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
   //   - syntactically broken → invalid-syntax error
   //   - open-upward      → "edit BASE instead" error
   // Button is disabled in all three cases regardless of the value-typed gate.
-  function findOverlapping(range: string, excludeId: string | null): string | null {
+  // Walk siblings on the same attribute for a write-blocking conflict. Both a
+  // partial overlap and a semantic-equal duplicate block submit, but they get
+  // different copy (see rangeError); the kind is carried alongside the range.
+  type Conflict = { range: string; kind: 'partial' | 'equal' }
+  function findConflict(range: string, excludeId: string | null): Conflict | null {
     if (!isClosedVersionRange(range)) return null
     for (const o of overrides) {
       if (o.id === excludeId) continue
-      if (rangesOverlap(range, o.versionRange) === true) return o.versionRange
+      const kind = classifyRangeConflict(range, o.versionRange)
+      if (kind === 'partial' || kind === 'equal') return { range: o.versionRange, kind }
     }
     return null
   }
   // Compute once per render and feed both the visible error message and the
   // disabled-state — avoids walking the overrides list twice (and avoids the
   // cargo-cult risk of the next reader splitting the cases by accident).
-  const newOverlap = findOverlapping(newRange, null)
-  const editOverlap = findOverlapping(editRange, editingId)
-  function rangeError(range: string, valueTouched: boolean, overlap: string | null): string | null {
+  const newConflict = findConflict(newRange, null)
+  const editConflict = findConflict(editRange, editingId)
+  function rangeError(range: string, valueTouched: boolean, conflict: Conflict | null): string | null {
     const trimmed = range.trim()
     if (trimmed === '') {
       return valueTouched ? 'Version range is required' : null
@@ -77,18 +87,20 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
     if (!isClosedVersionRange(range)) {
       return 'Open-upward range — edit the BASE field above instead'
     }
-    if (overlap !== null) {
-      return `Overlaps with existing override ${overlap}`
+    if (conflict !== null) {
+      return conflict.kind === 'equal'
+        ? `Semantically equal to existing override ${conflict.range}`
+        : `Overlaps with existing override ${conflict.range}`
     }
     return null
   }
-  const newRangeError = rangeError(newRange, newValue.trim() !== '', newOverlap)
-  const editRangeError = rangeError(editRange, true, editOverlap)
+  const newRangeError = rangeError(newRange, newValue.trim() !== '', newConflict)
+  const editRangeError = rangeError(editRange, true, editConflict)
   // Disabled state — separate from the visible error so the empty-untouched
   // case still blocks submit (no false visual nag for an unmodified blank
   // form).
-  const newRangeBlocks = !isClosedVersionRange(newRange) || newOverlap !== null
-  const editRangeBlocks = !isClosedVersionRange(editRange) || editOverlap !== null
+  const newRangeBlocks = !isClosedVersionRange(newRange) || newConflict !== null
+  const editRangeBlocks = !isClosedVersionRange(editRange) || editConflict !== null
 
   function handleAdd() {
     if (newRangeBlocks) return

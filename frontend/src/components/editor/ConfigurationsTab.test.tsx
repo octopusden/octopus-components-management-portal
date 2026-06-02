@@ -191,6 +191,34 @@ describe('ConfigurationsTab — sort order', () => {
     expect(rows[2]!.textContent).toContain('[1.0,2.0)')
     expect(rows[3]!.textContent).toContain('[2.0,3.0)')
   })
+
+  it('orders same-attribute ranges by numeric lower bound, not lexically', () => {
+    // Regression for R5: a raw localeCompare puts "[10.0,..." before
+    // "[2.0,..." because "1" < "2"; the version-aware comparator must not.
+    const component = makeComponent({
+      configurations: [
+        makeConfig({
+          id: 's-ten',
+          rowType: 'SCALAR_OVERRIDE',
+          versionRange: '[10.0,11.0)',
+          overriddenAttribute: 'build.javaVersion',
+          build: { javaVersion: '21' },
+        }),
+        makeConfig({
+          id: 's-two',
+          rowType: 'SCALAR_OVERRIDE',
+          versionRange: '[2.0,3.0)',
+          overriddenAttribute: 'build.javaVersion',
+          build: { javaVersion: '17' },
+        }),
+        makeConfig({ id: 'base', rowType: 'BASE' }),
+      ],
+    })
+    render(<ConfigurationsTab component={component} />)
+    const rows = screen.getAllByRole('row')
+    expect(rows[2]!.textContent).toContain('[2.0,3.0)')
+    expect(rows[3]!.textContent).toContain('[10.0,11.0)')
+  })
 })
 
 describe('ConfigurationsTab — build.requiredTools marker', () => {

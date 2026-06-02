@@ -154,6 +154,7 @@ export function JiraTab({ component, updateMutation, toast }: JiraTabProps) {
             onChange={(e) => setHotfixVersionFormat(e.target.value)}
             placeholder="e.g. {major}.{minor}.{patch}.{hotfix}"
           />
+          <FieldOverrideInline componentId={component.id} overriddenAttribute="jira.hotfixVersionFormat" />
         </div>
 
         <div className="space-y-1.5">

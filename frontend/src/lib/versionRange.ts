@@ -129,15 +129,25 @@ function containsRange(outer: SimpleRange, inner: SimpleRange): boolean {
 }
 
 /**
- * Returns `true` when `a` and `b` PARTIALLY overlap (intersect AND neither
- * fully contains the other), `false` when disjoint or one strictly contains
- * the other, `'unknown'` when either side can't be parsed (composites,
- * non-numeric bounds). Caller treats `'unknown'` as "defer to server".
- *
- * Aligns with CRS schema-spec.md §3.5: equal ranges blocked by UNIQUE,
- * strict containment and disjoint allowed, partial overlap rejected.
+ * The relationship between two version ranges, from the write-validation point
+ * of view (CRS schema-spec.md §3.5):
+ *   - `'partial'` — they intersect but neither contains the other → rejected.
+ *   - `'equal'`   — semantically the same range (modulo whitespace / trailing
+ *                   zeros) → rejected as a duplicate (the DB UNIQUE constraint
+ *                   only catches exact-string equality, so `[1.0,2.0)` vs
+ *                   `[1,2)` / `[1.0, 2.0)` would otherwise slip through).
+ *   - `'none'`    — disjoint or one strictly contains the other → allowed.
+ *   - `'unknown'` — either side can't be parsed (composites, non-numeric
+ *                   bounds); caller defers to the CRS-side check.
  */
-export function rangesOverlap(a: string, b: string): true | false | 'unknown' {
+export type RangeConflict = 'partial' | 'equal' | 'none' | 'unknown'
+
+/**
+ * Classifies how `a` relates to `b` (see {@link RangeConflict}). This is the
+ * refinement {@link rangesOverlap}'s boolean `true` collapses together —
+ * `'partial'` and `'equal'` both block a write but want different UI copy.
+ */
+export function classifyRangeConflict(a: string, b: string): RangeConflict {
   const ra = parseSimpleSegment(a)
   const rb = parseSimpleSegment(b)
   if (!ra || !rb) return 'unknown'
@@ -145,26 +155,81 @@ export function rangesOverlap(a: string, b: string): true | false | 'unknown' {
   // Disjoint check.
   if (ra.lo !== null && rb.hi !== null) {
     const cmp = compareVersionArrays(ra.lo, rb.hi)
-    if (cmp > 0) return false
-    if (cmp === 0 && !(ra.loIncl && rb.hiIncl)) return false
+    if (cmp > 0) return 'none'
+    if (cmp === 0 && !(ra.loIncl && rb.hiIncl)) return 'none'
   }
   if (rb.lo !== null && ra.hi !== null) {
     const cmp = compareVersionArrays(rb.lo, ra.hi)
-    if (cmp > 0) return false
-    if (cmp === 0 && !(rb.loIncl && ra.hiIncl)) return false
+    if (cmp > 0) return 'none'
+    if (cmp === 0 && !(rb.loIncl && ra.hiIncl)) return 'none'
   }
-  // They intersect. Distinguish three cases:
-  //   - each contains the other → semantically EQUAL → flag as conflict
-  //     (the DB UNIQUE constraint catches exact-string equality, but
-  //     `[1.0,2.0)` vs `[1,2)` or `[1.0, 2.0)` slip past raw-string
-  //     comparison; we want both Portal and CRS to reject duplicates
-  //     consistently regardless of trailing-zero / whitespace differences).
-  //   - exactly one contains the other → strict containment → allowed
-  //     per schema-spec §3.5.
-  //   - neither contains → partial overlap → rejected.
+  // They intersect. Each-contains-other → equal; exactly-one-contains →
+  // strict containment (allowed); neither → partial overlap.
   const aContainsB = containsRange(ra, rb)
   const bContainsA = containsRange(rb, ra)
-  if (aContainsB && bContainsA) return true
-  if (aContainsB || bContainsA) return false
-  return true
+  if (aContainsB && bContainsA) return 'equal'
+  if (aContainsB || bContainsA) return 'none'
+  return 'partial'
+}
+
+/**
+ * Returns `true` when `a` and `b` PARTIALLY overlap OR are semantically equal,
+ * `false` when disjoint or one strictly contains the other, `'unknown'` when
+ * either side can't be parsed. Thin wrapper over {@link classifyRangeConflict}
+ * for call sites that only need the block / allow / defer decision.
+ *
+ * Aligns with CRS schema-spec.md §3.5: equal ranges blocked by UNIQUE,
+ * strict containment and disjoint allowed, partial overlap rejected.
+ */
+export function rangesOverlap(a: string, b: string): true | false | 'unknown' {
+  const kind = classifyRangeConflict(a, b)
+  if (kind === 'unknown') return 'unknown'
+  return kind === 'partial' || kind === 'equal'
+}
+
+// ─── Ordering (simple-segment, numeric lower-bound aware) ────────────────────
+//
+// `localeCompare` orders range strings lexically, so `[10.0,)` sorts before
+// `[2.0,)` ("1" < "2"). compareVersionRanges sorts by lower bound numerically,
+// then upper bound, so consumers (e.g. ConfigurationsTab) list ranges in true
+// version order. Anything we can't parse as a single dot-numeric segment falls
+// back to localeCompare so the ordering stays total and deterministic.
+
+// A null bound means "unbounded": unbounded-left sorts first, unbounded-right
+// sorts last. At an equal value, an inclusive lower edge (`[`) starts at-or-
+// before an exclusive one (`(`), and an exclusive upper edge (`)`) ends before
+// an inclusive one (`]`).
+function compareLowerEdge(a: SimpleRange, b: SimpleRange): number {
+  if (a.lo === null && b.lo === null) return 0
+  if (a.lo === null) return -1
+  if (b.lo === null) return 1
+  const cmp = compareVersionArrays(a.lo, b.lo)
+  if (cmp !== 0) return cmp
+  if (a.loIncl === b.loIncl) return 0
+  return a.loIncl ? -1 : 1
+}
+
+function compareUpperEdge(a: SimpleRange, b: SimpleRange): number {
+  if (a.hi === null && b.hi === null) return 0
+  if (a.hi === null) return 1
+  if (b.hi === null) return -1
+  const cmp = compareVersionArrays(a.hi, b.hi)
+  if (cmp !== 0) return cmp
+  if (a.hiIncl === b.hiIncl) return 0
+  return a.hiIncl ? 1 : -1
+}
+
+/**
+ * Comparator for version-range strings, suitable for `Array.prototype.sort`.
+ * Orders by lower bound (numeric, dot-segment aware) then upper bound, so
+ * `[2.0,)` precedes `[10.0,)`. Ranges that aren't a single dot-numeric segment
+ * (composites, qualifiers, garbage) fall back to `localeCompare`.
+ */
+export function compareVersionRanges(a: string, b: string): number {
+  const ra = parseSimpleSegment(a)
+  const rb = parseSimpleSegment(b)
+  if (!ra || !rb) return a.localeCompare(b)
+  const loCmp = compareLowerEdge(ra, rb)
+  if (loCmp !== 0) return loCmp
+  return compareUpperEdge(ra, rb)
 }
