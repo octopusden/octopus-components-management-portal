@@ -18,8 +18,22 @@ const mockCreateMutate = vi.fn()
 const mockUpdateMutate = vi.fn()
 const mockDeleteMutate = vi.fn()
 
+// Mutable list of existing field-overrides used to drive overlap-detection
+// tests. Each test that needs preset overrides assigns to this array; the
+// useFieldOverrides mock reads it lazily.
+let mockOverrides: Array<{
+  id: string
+  overriddenAttribute: string
+  versionRange: string
+  rowType: 'SCALAR_OVERRIDE' | 'MARKER'
+  value: unknown
+  markerChildren: null
+  createdAt: null
+  updatedAt: null
+}> = []
+
 vi.mock('../../hooks/useComponent', () => ({
-  useFieldOverrides: () => ({ data: [] }),
+  useFieldOverrides: () => ({ data: mockOverrides }),
   useCreateFieldOverride: () => ({ mutate: mockCreateMutate, isPending: false }),
   useUpdateFieldOverride: () => ({ mutate: mockUpdateMutate, isPending: false }),
   useDeleteFieldOverride: () => ({ mutate: mockDeleteMutate, isPending: false }),
@@ -39,6 +53,7 @@ describe('FieldOverrideInline — D5 closed-range enforcement', () => {
     mockCreateMutate.mockReset()
     mockUpdateMutate.mockReset()
     mockDeleteMutate.mockReset()
+    mockOverrides = []
   })
 
   it('does not default the range input to a universal value like (,) on add', async () => {
@@ -98,5 +113,88 @@ describe('FieldOverrideInline — D5 closed-range enforcement', () => {
       versionRange: '[2.0,3.0)',
       value: 'some-value',
     })
+  })
+})
+
+describe('FieldOverrideInline — overlap detection (pre-save)', () => {
+  beforeEach(() => {
+    mockCreateMutate.mockReset()
+    mockUpdateMutate.mockReset()
+    mockDeleteMutate.mockReset()
+    mockOverrides = []
+  })
+
+  it('rejects an overlapping range and surfaces an inline error', async () => {
+    mockOverrides = [
+      {
+        id: 'existing-1',
+        overriddenAttribute: 'jira.releaseVersionFormat',
+        versionRange: '[1.0.107,)',
+        rowType: 'SCALAR_OVERRIDE',
+        value: '$major.$minor.$service-$fix',
+        markerChildren: null,
+        createdAt: null,
+        updatedAt: null,
+      },
+    ]
+    renderInline()
+    await userEvent.click(screen.getByRole('button', { name: /add override/i }))
+    const rangeInput = screen.getByLabelText(/new override version range/i) as HTMLInputElement
+    fireEvent.change(rangeInput, { target: { value: '[1.0,2.0]' } })
+    const valueInput = screen.getByLabelText(/new override value/i)
+    await userEvent.type(valueInput, '$major.$minor')
+    await waitFor(() => {
+      expect(screen.getByText(/overlaps with existing override/i)).toBeInTheDocument()
+    })
+    const buttons = screen.getAllByRole('button')
+    const confirm = buttons[buttons.length - 2]
+    if (confirm) fireEvent.click(confirm)
+    expect(mockCreateMutate).not.toHaveBeenCalled()
+  })
+
+  it('accepts a disjoint range when overlap is unambiguous', async () => {
+    mockOverrides = [
+      {
+        id: 'existing-1',
+        overriddenAttribute: 'jira.releaseVersionFormat',
+        versionRange: '[5.0,6.0)',
+        rowType: 'SCALAR_OVERRIDE',
+        value: 'x',
+        markerChildren: null,
+        createdAt: null,
+        updatedAt: null,
+      },
+    ]
+    renderInline()
+    await userEvent.click(screen.getByRole('button', { name: /add override/i }))
+    const rangeInput = screen.getByLabelText(/new override version range/i) as HTMLInputElement
+    fireEvent.change(rangeInput, { target: { value: '[1.0,2.0)' } })
+    const valueInput = screen.getByLabelText(/new override value/i)
+    await userEvent.type(valueInput, 'v')
+    expect(screen.queryByText(/overlaps with existing override/i)).toBeNull()
+    const buttons = screen.getAllByRole('button')
+    const confirm = buttons[buttons.length - 2]
+    if (confirm) fireEvent.click(confirm)
+    expect(mockCreateMutate).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not surface an overlap error when the helper cannot parse (composite vs simple)', async () => {
+    mockOverrides = [
+      {
+        id: 'existing-1',
+        overriddenAttribute: 'jira.releaseVersionFormat',
+        versionRange: '(,1.0),[2.0,3.0)',  // composite → helper returns "unknown"
+        rowType: 'SCALAR_OVERRIDE',
+        value: 'x',
+        markerChildren: null,
+        createdAt: null,
+        updatedAt: null,
+      },
+    ]
+    renderInline()
+    await userEvent.click(screen.getByRole('button', { name: /add override/i }))
+    const rangeInput = screen.getByLabelText(/new override version range/i) as HTMLInputElement
+    fireEvent.change(rangeInput, { target: { value: '[1.5,2.5)' } })
+    expect(screen.queryByText(/overlaps with existing override/i)).toBeNull()
   })
 })

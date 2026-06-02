@@ -5,7 +5,7 @@ import { Input } from '../ui/input'
 import { Switch } from '../ui/switch'
 import { Badge } from '../ui/badge'
 import { useFieldOverrides, useCreateFieldOverride, useUpdateFieldOverride, useDeleteFieldOverride } from '../../hooks/useComponent'
-import { formatVersionRange, isValidVersionRange, isClosedVersionRange } from '../../lib/versionRange'
+import { formatVersionRange, isValidVersionRange, isClosedVersionRange, rangesOverlap } from '../../lib/versionRange'
 import type { FieldOverride } from '../../lib/types'
 
 // Scalar override paths whose column type is boolean (from CRS
@@ -55,7 +55,15 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
   //   - syntactically broken → invalid-syntax error
   //   - open-upward      → "edit BASE instead" error
   // Button is disabled in all three cases.
-  function rangeError(range: string, valueTouched: boolean): string | null {
+  function findOverlapping(range: string, excludeId: string | null): string | null {
+    if (!isClosedVersionRange(range)) return null
+    for (const o of overrides) {
+      if (o.id === excludeId) continue
+      if (rangesOverlap(range, o.versionRange) === true) return o.versionRange
+    }
+    return null
+  }
+  function rangeError(range: string, valueTouched: boolean, excludeId: string | null): string | null {
     const trimmed = range.trim()
     if (trimmed === '') {
       return valueTouched ? 'Version range is required' : null
@@ -64,18 +72,24 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
     if (!isClosedVersionRange(range)) {
       return 'Open-upward range — edit the BASE field above instead'
     }
+    const overlapping = findOverlapping(range, excludeId)
+    if (overlapping !== null) {
+      return `Overlaps with existing override ${overlapping}`
+    }
     return null
   }
-  const newRangeError = rangeError(newRange, newValue.trim() !== '')
-  const editRangeError = rangeError(editRange, true)
+  const newRangeError = rangeError(newRange, newValue.trim() !== '', null)
+  const editRangeError = rangeError(editRange, true, editingId)
   // Disabled state — separate from the visible error so the empty-untouched
   // case still blocks submit (no false visual nag for an unmodified blank
   // form).
-  const newRangeBlocks = !isClosedVersionRange(newRange)
-  const editRangeBlocks = !isClosedVersionRange(editRange)
+  const newRangeBlocks =
+    !isClosedVersionRange(newRange) || findOverlapping(newRange, null) !== null
+  const editRangeBlocks =
+    !isClosedVersionRange(editRange) || findOverlapping(editRange, editingId) !== null
 
   function handleAdd() {
-    if (!isClosedVersionRange(newRange)) return
+    if (newRangeBlocks) return
     // Boolean paths: send the JSON primitive `true` / `false`; the local string
     // state is `"true"` / `"false"` driven by the Switch. String paths: trim
     // and reject empty (preserves the prior validation).
@@ -111,7 +125,7 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
   }
 
   function handleUpdate() {
-    if (!editingId || !isClosedVersionRange(editRange)) return
+    if (!editingId || editRangeBlocks) return
     const wireValue: unknown = isBoolean ? editValue === 'true' : editValue
     updateMutation.mutate(
       { overrideId: editingId, versionRange: editRange, value: wireValue },
