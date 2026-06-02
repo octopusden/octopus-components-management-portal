@@ -27,9 +27,9 @@ export const PERMISSIONS = {
   DELETE_COMPONENTS: 'DELETE_COMPONENTS',
   IMPORT_DATA: 'IMPORT_DATA',
   ACCESS_AUDIT: 'ACCESS_AUDIT',
-  // Admin-tier data administration — gates the raw Field-Overrides edit surface
-  // (CRS maps it to ROLE_ADMIN in octopus-security.roles).
-  ADMIN_DATA: 'ADMIN_DATA',
+  // Edit component-configuration metadata — gates the raw Field-Overrides edit
+  // surface (CRS maps it to ROLE_ADMIN in octopus-security.roles).
+  EDIT_METADATA: 'EDIT_METADATA',
 } as const
 
 // Must match Spring Security's registration id on the portal gateway:

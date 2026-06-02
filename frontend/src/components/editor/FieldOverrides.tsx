@@ -66,11 +66,11 @@ export function FieldOverrides({ componentId }: FieldOverridesProps) {
   const { data: overrides, isLoading } = useFieldOverrides(componentId)
   const deleteMutation = useDeleteFieldOverride(componentId)
   const { toast } = useToast()
-  // This raw edit surface (add / edit / delete, incl. marker editing) is an
-  // admin-tier escape hatch — regular users edit scalars inline on the
-  // parameter tabs. Non-admins get a read-only audit view. Gated on ADMIN_DATA.
+  // This raw edit surface (add / edit / delete, incl. marker editing) is a
+  // power-user / escape-hatch — regular users edit scalars inline on the
+  // parameter tabs. Non-admins get a read-only audit view. Gated on EDIT_METADATA.
   const { data: user } = useCurrentUser()
-  const canAdmin = hasPermission(user, PERMISSIONS.ADMIN_DATA)
+  const canAdmin = hasPermission(user, PERMISSIONS.EDIT_METADATA)
 
   const [editorOpen, setEditorOpen] = useState(false)
   const [editorMode, setEditorMode] = useState<'create' | 'edit'>('create')
