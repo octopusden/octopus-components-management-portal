@@ -58,9 +58,10 @@ describe('FieldOverrideInline — D5 closed-range enforcement', () => {
     await userEvent.click(screen.getByRole('button', { name: /add override/i }))
     const valueInput = screen.getByLabelText(/new override value/i)
     await userEvent.type(valueInput, 'some-value')
-    // Click confirm — value present, range empty → must not POST
-    const confirmBtn = screen.getAllByRole('button').find((b) => b.textContent === '' && b.querySelector('svg'))
-    if (confirmBtn !== undefined) await userEvent.click(confirmBtn)
+    // Confirm button is disabled when the range is empty — the click is a no-op.
+    const confirmBtn = screen.getByRole('button', { name: 'Confirm new override' })
+    expect(confirmBtn).toBeDisabled()
+    fireEvent.click(confirmBtn)
     expect(mockCreateMutate).not.toHaveBeenCalled()
   })
 
@@ -71,9 +72,7 @@ describe('FieldOverrideInline — D5 closed-range enforcement', () => {
     fireEvent.change(rangeInput, { target: { value: '[2.0,)' } })
     const valueInput = screen.getByLabelText(/new override value/i)
     await userEvent.type(valueInput, 'some-value')
-    const buttons = screen.getAllByRole('button')
-    const confirm = buttons[buttons.length - 2]
-    if (confirm) fireEvent.click(confirm)
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm new override' }))
     expect(mockCreateMutate).not.toHaveBeenCalled()
   })
 
@@ -94,9 +93,7 @@ describe('FieldOverrideInline — D5 closed-range enforcement', () => {
     fireEvent.change(rangeInput, { target: { value: '[2.0,3.0)' } })
     const valueInput = screen.getByLabelText(/new override value/i)
     await userEvent.type(valueInput, 'some-value')
-    const buttons = screen.getAllByRole('button')
-    const confirm = buttons[buttons.length - 2]
-    if (confirm) fireEvent.click(confirm)
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm new override' }))
     expect(mockCreateMutate).toHaveBeenCalledTimes(1)
     expect(mockCreateMutate.mock.calls[0]?.[0]).toMatchObject({
       overriddenAttribute: 'jira.releaseVersionFormat',
@@ -136,9 +133,7 @@ describe('FieldOverrideInline — overlap detection (pre-save)', () => {
     await waitFor(() => {
       expect(screen.getByText(/overlaps with existing override/i)).toBeInTheDocument()
     })
-    const buttons = screen.getAllByRole('button')
-    const confirm = buttons[buttons.length - 2]
-    if (confirm) fireEvent.click(confirm)
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm new override' }))
     expect(mockCreateMutate).not.toHaveBeenCalled()
   })
 
@@ -162,9 +157,7 @@ describe('FieldOverrideInline — overlap detection (pre-save)', () => {
     const valueInput = screen.getByLabelText(/new override value/i)
     await userEvent.type(valueInput, 'v')
     expect(screen.queryByText(/overlaps with existing override/i)).toBeNull()
-    const buttons = screen.getAllByRole('button')
-    const confirm = buttons[buttons.length - 2]
-    if (confirm) fireEvent.click(confirm)
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm new override' }))
     expect(mockCreateMutate).toHaveBeenCalledTimes(1)
   })
 

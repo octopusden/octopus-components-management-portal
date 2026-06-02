@@ -47,14 +47,14 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
   const [editValue, setEditValue] = useState('')
 
   // Inline error for the add form. Three states:
-  //   - empty             → "required" (button disabled silently for empty is
-  //                          confusing; show the requirement explicitly only
-  //                          if the user has tried to interact — for now we
-  //                          gate by tracking whether the form has been
-  //                          touched in any way).
+  //   - empty             → "required" (shown only after the user has typed
+  //                          something into the value input — i.e. once
+  //                          `newValue.trim() !== ''` — so a freshly-opened
+  //                          add form doesn't nag with an error before the
+  //                          user has interacted).
   //   - syntactically broken → invalid-syntax error
   //   - open-upward      → "edit BASE instead" error
-  // Button is disabled in all three cases.
+  // Button is disabled in all three cases regardless of the value-typed gate.
   function findOverlapping(range: string, excludeId: string | null): string | null {
     if (!isClosedVersionRange(range)) return null
     for (const o of overrides) {
