@@ -294,3 +294,71 @@ describe('FieldOverrideInline — list ordering', () => {
     expect(editButtons[1]!.getAttribute('aria-label')).toBe('Edit override [10.0,11.0)')
   })
 })
+
+describe('FieldOverrideInline — existing-conflict warning', () => {
+  beforeEach(() => {
+    mockCreateMutate.mockReset()
+    mockUpdateMutate.mockReset()
+    mockDeleteMutate.mockReset()
+    mockOverrides = []
+  })
+
+  it('flags already-saved overrides that overlap a sibling (create-time validation cannot catch legacy data)', () => {
+    // The reported pair: [1.0,2.0] and [0,3.0] (containment). Both are already
+    // persisted (legacy / DSL-import / pre-rule), so each row must surface a
+    // conflict marker even though the add form would now block creating them.
+    mockOverrides = [
+      {
+        id: 'o-inner',
+        overriddenAttribute: 'build.javaVersion',
+        versionRange: '[1.0,2.0]',
+        rowType: 'SCALAR_OVERRIDE',
+        value: '17',
+        markerChildren: null,
+        createdAt: null,
+        updatedAt: null,
+      },
+      {
+        id: 'o-outer',
+        overriddenAttribute: 'build.javaVersion',
+        versionRange: '[0,3.0]',
+        rowType: 'SCALAR_OVERRIDE',
+        value: '18',
+        markerChildren: null,
+        createdAt: null,
+        updatedAt: null,
+      },
+    ]
+    renderInline('build.javaVersion')
+    // Each row names the sibling it clashes with.
+    expect(screen.getByText(/overlaps \[0,3\.0\]/i)).toBeInTheDocument()
+    expect(screen.getByText(/overlaps \[1\.0,2\.0\]/i)).toBeInTheDocument()
+  })
+
+  it('does not flag disjoint existing overrides', () => {
+    mockOverrides = [
+      {
+        id: 'o-a',
+        overriddenAttribute: 'build.javaVersion',
+        versionRange: '[1.0,2.0)',
+        rowType: 'SCALAR_OVERRIDE',
+        value: '17',
+        markerChildren: null,
+        createdAt: null,
+        updatedAt: null,
+      },
+      {
+        id: 'o-b',
+        overriddenAttribute: 'build.javaVersion',
+        versionRange: '[5.0,6.0)',
+        rowType: 'SCALAR_OVERRIDE',
+        value: '18',
+        markerChildren: null,
+        createdAt: null,
+        updatedAt: null,
+      },
+    ]
+    renderInline('build.javaVersion')
+    expect(screen.queryByText(/overlaps \[/i)).toBeNull()
+  })
+})

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, X, Pencil, Check } from 'lucide-react'
+import { Plus, X, Pencil, Check, AlertTriangle } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Switch } from '../ui/switch'
@@ -63,9 +63,8 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
   // Walk siblings on the same attribute for a write-blocking conflict. Partial
   // overlap, strict containment, and semantic-equal duplicates all block submit
   // (overrides must be disjoint); equal gets distinct copy (see rangeError).
-  // The kind is carried alongside the conflicting range.
-  // NOTE: CRS validateFieldOverrideRange (PR #314) still allows containment
-  // server-side, so this preview is currently stricter than the server.
+  // The kind is carried alongside the conflicting range. CRS #316 enforces the
+  // same disjoint-only rule server-side, so this preview and the server agree.
   type Conflict = { range: string; kind: 'partial' | 'contains' | 'equal' }
   function findConflict(range: string, excludeId: string | null): Conflict | null {
     if (!isClosedVersionRange(range)) return null
@@ -77,6 +76,31 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
       }
     }
     return null
+  }
+  // For an already-saved row: the range of any sibling it conflicts with.
+  // Create/edit is blocked on conflict, but legacy / DSL-imported / pre-rule
+  // data can still hold overlapping pairs — surface them so the user can see
+  // and clean them up. (CRS #316 enforces the same disjoint-only rule on write.)
+  function rowConflictRange(override: FieldOverride): string | null {
+    for (const o of overrides) {
+      if (o.id === override.id) continue
+      const kind = classifyRangeConflict(override.versionRange, o.versionRange)
+      if (kind === 'partial' || kind === 'contains' || kind === 'equal') return o.versionRange
+    }
+    return null
+  }
+  function renderConflictBadge(override: FieldOverride) {
+    const conflict = rowConflictRange(override)
+    if (!conflict) return null
+    return (
+      <span
+        className="inline-flex items-center gap-0.5 text-xs text-destructive"
+        title={`Overlaps existing override ${conflict} — overrides on one attribute must be disjoint`}
+      >
+        <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+        {`overlaps ${conflict}`}
+      </span>
+    )
   }
   // Compute once per render and feed both the visible error message and the
   // disabled-state — avoids walking the overrides list twice (and avoids the
@@ -216,6 +240,7 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
               </Badge>
               <span className="text-xs text-muted-foreground">&rarr;</span>
               <span className="text-xs">{String(override.value)}</span>
+              {renderConflictBadge(override)}
               <button
                 type="button"
                 onClick={() => startEdit(override)}
