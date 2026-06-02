@@ -26,6 +26,7 @@ import { JiraTab } from '../components/editor/JiraTab'
 import { EscrowTab } from '../components/editor/EscrowTab'
 import { FieldOverrides } from '../components/editor/FieldOverrides'
 import { ConfigurationsTab } from '../components/editor/ConfigurationsTab'
+import { AsCodeTab } from '../components/editor/AsCodeTab'
 import { ComponentHistoryTab } from '../components/editor/ComponentHistoryTab'
 import { useComponent, useUpdateComponent, useDeleteComponent, type ComponentUpdateRequest } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
@@ -529,6 +530,7 @@ export function ComponentDetailPage() {
                 )
               })()}
             </TabsTrigger>
+            <TabsTrigger value="as-code">As Code</TabsTrigger>
             <TabsTrigger value="overrides">Overrides</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
           </TabsList>
@@ -566,6 +568,10 @@ export function ComponentDetailPage() {
 
             <TabsContent value="configurations">
               <ConfigurationsTab component={component} />
+            </TabsContent>
+
+            <TabsContent value="as-code">
+              <AsCodeTab component={component} />
             </TabsContent>
 
             <TabsContent value="overrides">

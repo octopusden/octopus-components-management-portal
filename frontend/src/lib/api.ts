@@ -46,10 +46,18 @@ function isInsideOidcFlow(pathname: string): boolean {
   )
 }
 
-async function fetchAtUrl<T>(url: string, options?: RequestInit): Promise<T> {
+async function fetchAtUrl<T>(
+  url: string,
+  options?: RequestInit,
+  responseType: 'json' | 'text' = 'json',
+): Promise<T> {
   const method = (options?.method ?? 'GET').toUpperCase()
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    // JSON requests advertise a JSON body; text requests ask for text/plain so
+    // content negotiation picks the as-code endpoint's text representation.
+    ...(responseType === 'text'
+      ? { Accept: 'text/plain' }
+      : { 'Content-Type': 'application/json' }),
     // Signals the portal gateway to route this through the API auth entry point
     // (HTTP 401) instead of the browser OIDC redirect (302). The path-matcher in
     // SecurityConfig already covers /rest/**, so this header is belt-and-braces.
@@ -103,15 +111,19 @@ async function fetchAtUrl<T>(url: string, options?: RequestInit): Promise<T> {
     throw new ApiError(response.status, message, errorBody)
   }
   if (response.status === 204) return undefined as T
-  return response.json()
+  return (responseType === 'text' ? await response.text() : await response.json()) as T
 }
 
 /**
  * Make a request to a path under `${BASE_URL}rest/api/4`. The vast majority of
  * portal API calls use this — the registry's v4 surface is the default.
  */
-async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
-  return fetchAtUrl<T>(`${API_BASE}${path}`, options)
+async function fetchApi<T>(
+  path: string,
+  options?: RequestInit,
+  responseType: 'json' | 'text' = 'json',
+): Promise<T> {
+  return fetchAtUrl<T>(`${API_BASE}${path}`, options, responseType)
 }
 
 /**
@@ -129,6 +141,8 @@ async function fetchApiAbsolute<T>(absolutePath: string, options?: RequestInit):
 
 export const api = {
   get: <T>(path: string) => fetchApi<T>(path),
+  /** GET a text/plain body (e.g. the as-code view). Same auth/CSRF/401 handling. */
+  getText: (path: string) => fetchApi<string>(path, undefined, 'text'),
   post: <T>(path: string, body?: unknown) =>
     fetchApi<T>(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined }),
   patch: <T>(path: string, body: unknown) =>

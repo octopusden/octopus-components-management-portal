@@ -143,6 +143,26 @@ describe('FieldOverrides', () => {
     })
   })
 
+  it('shows a read-only inline summary of marker children (no need to open the editor)', () => {
+    mockOverrides.mockReturnValue({
+      data: [
+        makeMarkerOverride({
+          overriddenAttribute: 'vcs.settings',
+          markerChildren: {
+            vcsEntries: [
+              { name: 'main', vcsPath: 'org/main' },
+              { name: 'ui', vcsPath: 'org/ui' },
+            ],
+          },
+        }),
+      ],
+      isLoading: false,
+    })
+    renderComponent()
+    expect(screen.getByText('main, ui')).toBeDefined()
+    expect(screen.queryByText(/edit to view children/i)).toBeNull()
+  })
+
   it('renders override rows in a table when overrides exist', () => {
     mockOverrides.mockReturnValue({
       data: [makeScalarOverride()],
@@ -279,18 +299,40 @@ describe('FieldOverrides — ADMIN_DATA gating', () => {
     expect(screen.queryByRole('button', { name: /add override/i })).toBeNull()
   })
 
-  it('shows a neutral marker hint to non-admins (no misleading "edit to view children")', () => {
+  it('shows the read-only marker child summary to non-admins (not the editor-only placeholder)', () => {
     mockUser.mockReturnValue({ data: EDITOR_USER })
-    mockOverrides.mockReturnValue({ data: [makeMarkerOverride()], isLoading: false })
+    mockOverrides.mockReturnValue({
+      data: [
+        makeMarkerOverride({
+          overriddenAttribute: 'vcs.settings',
+          markerChildren: {
+            vcsEntries: [
+              { name: 'main', vcsPath: 'org/main' },
+              { name: 'ui', vcsPath: 'org/ui' },
+            ],
+          },
+        }),
+      ],
+      isLoading: false,
+    })
     renderComponent()
-    expect(screen.getByText('marker')).toBeInTheDocument()
+    expect(screen.getByText('main, ui')).toBeInTheDocument()
     expect(screen.queryByText(/edit to view children/i)).toBeNull()
   })
 
-  it('keeps the "edit to view children" marker hint for admins', () => {
+  it('shows the same read-only marker child summary to admins (no editor-only placeholder)', () => {
     mockUser.mockReturnValue({ data: ADMIN_USER })
-    mockOverrides.mockReturnValue({ data: [makeMarkerOverride()], isLoading: false })
+    mockOverrides.mockReturnValue({
+      data: [
+        makeMarkerOverride({
+          overriddenAttribute: 'distribution.maven',
+          markerChildren: { mavenArtifacts: [{ groupPattern: 'org.acme', artifactPattern: 'svc' }] },
+        }),
+      ],
+      isLoading: false,
+    })
     renderComponent()
-    expect(screen.getByText(/marker — edit to view children/i)).toBeInTheDocument()
+    expect(screen.getByText('org.acme:svc')).toBeInTheDocument()
+    expect(screen.queryByText(/edit to view children/i)).toBeNull()
   })
 })
