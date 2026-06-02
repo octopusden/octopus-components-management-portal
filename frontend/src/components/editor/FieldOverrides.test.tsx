@@ -127,6 +127,26 @@ describe('FieldOverrides', () => {
     })
   })
 
+  it('shows a read-only inline summary of marker children (no need to open the editor)', () => {
+    mockOverrides.mockReturnValue({
+      data: [
+        makeMarkerOverride({
+          overriddenAttribute: 'vcs.settings',
+          markerChildren: {
+            vcsEntries: [
+              { name: 'main', vcsPath: 'org/main' },
+              { name: 'ui', vcsPath: 'org/ui' },
+            ],
+          },
+        }),
+      ],
+      isLoading: false,
+    })
+    renderComponent()
+    expect(screen.getByText('main, ui')).toBeDefined()
+    expect(screen.queryByText(/edit to view children/i)).toBeNull()
+  })
+
   it('renders override rows in a table when overrides exist', () => {
     mockOverrides.mockReturnValue({
       data: [makeScalarOverride()],

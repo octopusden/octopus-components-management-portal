@@ -31,6 +31,35 @@ interface FieldOverridesProps {
   componentId: string
 }
 
+/**
+ * Neutral, read-only one-line summary of a marker override's children. The API
+ * already returns `markerChildren`, so we render the actual child identifiers
+ * inline rather than forcing the user to open the editor — important for
+ * read-only viewers who never open the edit dialog. (The full structured view
+ * is also available on the "As Code" tab.)
+ */
+function markerSummary(override: FieldOverride): string {
+  const mc = override.markerChildren
+  if (!mc) return 'marker'
+  const join = (xs: Array<string | null | undefined>) => xs.filter((x): x is string => !!x).join(', ')
+  switch (override.overriddenAttribute) {
+    case 'vcs.settings':
+      return join((mc.vcsEntries ?? []).map((e) => e.name?.trim() || e.vcsPath)) || 'vcs settings'
+    case 'distribution.maven':
+      return join((mc.mavenArtifacts ?? []).map((a) => `${a.groupPattern}:${a.artifactPattern}`)) || 'maven'
+    case 'distribution.fileUrl':
+      return join((mc.fileUrlArtifacts ?? []).map((a) => a.url)) || 'file urls'
+    case 'distribution.docker':
+      return join((mc.dockerImages ?? []).map((a) => (a.flavor ? `${a.imageName}:${a.flavor}` : a.imageName))) || 'docker'
+    case 'distribution.packages':
+      return join((mc.packages ?? []).map((a) => `${a.packageType} ${a.packageName}`)) || 'packages'
+    case 'build.requiredTools':
+      return join(mc.requiredTools ?? []) || 'required tools'
+    default:
+      return 'marker'
+  }
+}
+
 export function FieldOverrides({ componentId }: FieldOverridesProps) {
   const { data: overrides, isLoading } = useFieldOverrides(componentId)
   const deleteMutation = useDeleteFieldOverride(componentId)
@@ -115,9 +144,12 @@ export function FieldOverrides({ componentId }: FieldOverridesProps) {
                       </Badge>
                     </TableCell>
                     <TableCell className="font-mono text-xs">{override.versionRange}</TableCell>
-                    <TableCell className="font-mono text-xs max-w-[200px] truncate">
+                    <TableCell
+                      className="font-mono text-xs max-w-[200px] truncate"
+                      title={isMarker ? markerSummary(override) : undefined}
+                    >
                       {isMarker
-                        ? <span className="text-muted-foreground italic">marker — edit to view children</span>
+                        ? markerSummary(override)
                         : typeof override.value === 'string'
                           ? override.value
                           : JSON.stringify(override.value)}
