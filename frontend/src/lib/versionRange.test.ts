@@ -223,8 +223,22 @@ describe('rangesOverlap', () => {
     expect(rangesOverlap('[1.0,4.0)', '[2.0,3.0)')).toBe(false)
   })
 
-  it('returns false for equal ranges (UNIQUE catches at DB)', () => {
-    expect(rangesOverlap('[1.0,2.0)', '[1.0,2.0)')).toBe(false)
+  it('returns true for exact-equal ranges (semantic duplicate)', () => {
+    expect(rangesOverlap('[1.0,2.0)', '[1.0,2.0)')).toBe(true)
+  })
+
+  it('returns true for whitespace-differing-but-equal ranges', () => {
+    // Normalisation inside parseSimpleSegment strips whitespace before
+    // comparison so the DB-level UNIQUE constraint (which is exact-string)
+    // does not silently accept what is the same range.
+    expect(rangesOverlap('[1.0,2.0)', '[1.0, 2.0)')).toBe(true)
+  })
+
+  it('returns true for trailing-zero-differing-but-equal ranges', () => {
+    // DefaultArtifactVersion treats `1` and `1.0` as equal; we do the same
+    // via compareVersionArrays padding so user-typed `[1,2)` and stored
+    // `[1.0,2.0)` are flagged as duplicates.
+    expect(rangesOverlap('[1,2)', '[1.0,2.0)')).toBe(true)
   })
 
   it('returns true for partial overlap with shifted left and right bounds', () => {

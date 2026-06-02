@@ -153,8 +153,18 @@ export function rangesOverlap(a: string, b: string): true | false | 'unknown' {
     if (cmp > 0) return false
     if (cmp === 0 && !(rb.loIncl && ra.hiIncl)) return false
   }
-  // They intersect. Strict containment is allowed by schema-spec §3.5; only
-  // flag the case where neither range fully contains the other.
-  if (containsRange(ra, rb) || containsRange(rb, ra)) return false
+  // They intersect. Distinguish three cases:
+  //   - each contains the other → semantically EQUAL → flag as conflict
+  //     (the DB UNIQUE constraint catches exact-string equality, but
+  //     `[1.0,2.0)` vs `[1,2)` or `[1.0, 2.0)` slip past raw-string
+  //     comparison; we want both Portal and CRS to reject duplicates
+  //     consistently regardless of trailing-zero / whitespace differences).
+  //   - exactly one contains the other → strict containment → allowed
+  //     per schema-spec §3.5.
+  //   - neither contains → partial overlap → rejected.
+  const aContainsB = containsRange(ra, rb)
+  const bContainsA = containsRange(rb, ra)
+  if (aContainsB && bContainsA) return true
+  if (aContainsB || bContainsA) return false
   return true
 }
