@@ -63,7 +63,12 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
     }
     return null
   }
-  function rangeError(range: string, valueTouched: boolean, excludeId: string | null): string | null {
+  // Compute once per render and feed both the visible error message and the
+  // disabled-state — avoids walking the overrides list twice (and avoids the
+  // cargo-cult risk of the next reader splitting the cases by accident).
+  const newOverlap = findOverlapping(newRange, null)
+  const editOverlap = findOverlapping(editRange, editingId)
+  function rangeError(range: string, valueTouched: boolean, overlap: string | null): string | null {
     const trimmed = range.trim()
     if (trimmed === '') {
       return valueTouched ? 'Version range is required' : null
@@ -72,21 +77,18 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
     if (!isClosedVersionRange(range)) {
       return 'Open-upward range — edit the BASE field above instead'
     }
-    const overlapping = findOverlapping(range, excludeId)
-    if (overlapping !== null) {
-      return `Overlaps with existing override ${overlapping}`
+    if (overlap !== null) {
+      return `Overlaps with existing override ${overlap}`
     }
     return null
   }
-  const newRangeError = rangeError(newRange, newValue.trim() !== '', null)
-  const editRangeError = rangeError(editRange, true, editingId)
+  const newRangeError = rangeError(newRange, newValue.trim() !== '', newOverlap)
+  const editRangeError = rangeError(editRange, true, editOverlap)
   // Disabled state — separate from the visible error so the empty-untouched
   // case still blocks submit (no false visual nag for an unmodified blank
   // form).
-  const newRangeBlocks =
-    !isClosedVersionRange(newRange) || findOverlapping(newRange, null) !== null
-  const editRangeBlocks =
-    !isClosedVersionRange(editRange) || findOverlapping(editRange, editingId) !== null
+  const newRangeBlocks = !isClosedVersionRange(newRange) || newOverlap !== null
+  const editRangeBlocks = !isClosedVersionRange(editRange) || editOverlap !== null
 
   function handleAdd() {
     if (newRangeBlocks) return
