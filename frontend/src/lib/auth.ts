@@ -28,8 +28,10 @@ export const PERMISSIONS = {
   IMPORT_DATA: 'IMPORT_DATA',
   ACCESS_AUDIT: 'ACCESS_AUDIT',
   // Admin-tier data administration — gates the raw Field-Overrides edit surface
-  // (CRS maps it to ROLE_ADMIN in octopus-security.roles).
-  ADMIN_DATA: 'ADMIN_DATA',
+  // (CRS maps it to ROLE_ADMIN in octopus-security.roles). Renamed from the legacy
+  // ADMIN_DATA to match CRS PR #322; the old token no longer maps to any role, so
+  // the raw-overrides gate was silently false for everyone until this fix.
+  EDIT_METADATA: 'EDIT_METADATA',
 } as const
 
 // Must match Spring Security's registration id on the portal gateway:

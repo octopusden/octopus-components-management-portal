@@ -5,6 +5,7 @@ import { Input } from '../ui/input'
 import { Switch } from '../ui/switch'
 import { Button } from '../ui/button'
 import { FieldOverrideInline } from './FieldOverrideInline'
+import { CANNOT_EDIT_TITLE } from './editPermission'
 import type { ComponentDetail } from '../../lib/types'
 import type { ComponentUpdateRequest } from '../../hooks/useComponent'
 import type { UseMutationResult } from '@tanstack/react-query'
@@ -16,9 +17,10 @@ interface JiraTabProps {
   component: ComponentDetail
   updateMutation: UseMutationResult<ComponentDetail, Error, ComponentUpdateRequest>
   toast: (opts: { title: string; description?: string; variant?: 'default' | 'destructive' }) => void
+  canEdit: boolean
 }
 
-export function JiraTab({ component, updateMutation, toast }: JiraTabProps) {
+export function JiraTab({ component, updateMutation, toast, canEdit }: JiraTabProps) {
   const handleConflict = useOptimisticConflict(component.id)
   const baseRow = selectBaseRow(component)
   const jira = baseRow?.jira
@@ -59,6 +61,7 @@ export function JiraTab({ component, updateMutation, toast }: JiraTabProps) {
   }, [component])
 
   async function handleSave() {
+    if (!canEdit) return // Save is disabled when !canEdit; guard the handler too (backend also 403s).
     try {
       await updateMutation.mutateAsync({
         version: component.version,
@@ -107,7 +110,7 @@ export function JiraTab({ component, updateMutation, toast }: JiraTabProps) {
             onChange={(e) => setProjectKey(e.target.value)}
             placeholder="JIRA project key"
           />
-          <FieldOverrideInline componentId={component.id} overriddenAttribute="jira.projectKey" />
+          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="jira.projectKey" />
         </div>
 
         <div className="space-y-1.5">
@@ -129,7 +132,7 @@ export function JiraTab({ component, updateMutation, toast }: JiraTabProps) {
           />
           <Label htmlFor="jira-technical" className="cursor-pointer">Technical</Label>
         </div>
-        <FieldOverrideInline componentId={component.id} overriddenAttribute="jira.technical" />
+        <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="jira.technical" />
       </div>
 
       {releasesInDefaultBranchEntry.visibility !== 'hidden' && (
@@ -154,7 +157,7 @@ export function JiraTab({ component, updateMutation, toast }: JiraTabProps) {
             onChange={(e) => setHotfixVersionFormat(e.target.value)}
             placeholder="e.g. {major}.{minor}.{patch}.{hotfix}"
           />
-          <FieldOverrideInline componentId={component.id} overriddenAttribute="jira.hotfixVersionFormat" />
+          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="jira.hotfixVersionFormat" />
         </div>
 
         <div className="space-y-1.5">
@@ -164,7 +167,7 @@ export function JiraTab({ component, updateMutation, toast }: JiraTabProps) {
             onChange={(e) => setVersionPrefix(e.target.value)}
             placeholder="e.g. v"
           />
-          <FieldOverrideInline componentId={component.id} overriddenAttribute="jira.versionPrefix" />
+          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="jira.versionPrefix" />
         </div>
 
         <div className="space-y-1.5">
@@ -174,7 +177,7 @@ export function JiraTab({ component, updateMutation, toast }: JiraTabProps) {
             onChange={(e) => setMajorVersionFormat(e.target.value)}
             placeholder="e.g. {major}.0.0"
           />
-          <FieldOverrideInline componentId={component.id} overriddenAttribute="jira.majorVersionFormat" />
+          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="jira.majorVersionFormat" />
         </div>
 
         <div className="space-y-1.5">
@@ -184,7 +187,7 @@ export function JiraTab({ component, updateMutation, toast }: JiraTabProps) {
             onChange={(e) => setReleaseVersionFormat(e.target.value)}
             placeholder="e.g. {major}.{minor}.0"
           />
-          <FieldOverrideInline componentId={component.id} overriddenAttribute="jira.releaseVersionFormat" />
+          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="jira.releaseVersionFormat" />
         </div>
 
         <div className="space-y-1.5">
@@ -194,7 +197,7 @@ export function JiraTab({ component, updateMutation, toast }: JiraTabProps) {
             onChange={(e) => setBuildVersionFormat(e.target.value)}
             placeholder="e.g. {major}.{minor}.{patch}"
           />
-          <FieldOverrideInline componentId={component.id} overriddenAttribute="jira.buildVersionFormat" />
+          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="jira.buildVersionFormat" />
         </div>
 
         <div className="space-y-1.5">
@@ -204,7 +207,7 @@ export function JiraTab({ component, updateMutation, toast }: JiraTabProps) {
             onChange={(e) => setLineVersionFormat(e.target.value)}
             placeholder="e.g. {major}.{minor}.x"
           />
-          <FieldOverrideInline componentId={component.id} overriddenAttribute="jira.lineVersionFormat" />
+          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="jira.lineVersionFormat" />
         </div>
 
         <div className="space-y-1.5 sm:col-span-2">
@@ -214,12 +217,17 @@ export function JiraTab({ component, updateMutation, toast }: JiraTabProps) {
             onChange={(e) => setVersionFormat(e.target.value)}
             placeholder="Generic version format"
           />
-          <FieldOverrideInline componentId={component.id} overriddenAttribute="jira.versionFormat" />
+          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="jira.versionFormat" />
         </div>
       </div>
 
       <div className="flex justify-end">
-        <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending}>
+        <Button
+          size="sm"
+          onClick={handleSave}
+          disabled={updateMutation.isPending || !canEdit}
+          title={!canEdit ? CANNOT_EDIT_TITLE : undefined}
+        >
           <Save className="h-4 w-4" />
           {updateMutation.isPending ? 'Saving...' : 'Save Jira'}
         </Button>

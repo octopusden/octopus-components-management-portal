@@ -7,6 +7,7 @@ import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
 import { EnumSelect } from '../ui/EnumSelect'
 import { FieldOverrideInline } from './FieldOverrideInline'
+import { CANNOT_EDIT_TITLE } from './editPermission'
 import { selectBaseRow } from '../../lib/api/baseRow'
 import type { ComponentDetail } from '../../lib/types'
 import type { ComponentUpdateRequest } from '../../hooks/useComponent'
@@ -17,9 +18,10 @@ interface BuildTabProps {
   component: ComponentDetail
   updateMutation: UseMutationResult<ComponentDetail, Error, ComponentUpdateRequest>
   toast: (opts: { title: string; description?: string; variant?: 'default' | 'destructive' }) => void
+  canEdit: boolean
 }
 
-export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
+export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTabProps) {
   const handleConflict = useOptimisticConflict(component.id)
   const baseRow = selectBaseRow(component)
   const build = baseRow?.build
@@ -62,6 +64,7 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
   }, [component])
 
   async function handleSave() {
+    if (!canEdit) return // Save is disabled when !canEdit; guard the handler too (backend also 403s).
     // ui-swift-sloth §5: hard guard — empty buildSystem would 400 once the
     // CRS strict contract lands. Surface the error inline (mirrors the
     // touched-on-blur path) and bail before calling the mutation.
@@ -146,7 +149,7 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
               {localError ?? 'Build System is required'}
             </p>
           )}
-          <FieldOverrideInline componentId={component.id} overriddenAttribute="build.buildSystem" />
+          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.buildSystem" />
         </div>
 
         <div className="space-y-1.5">
@@ -156,7 +159,7 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
             onChange={(e) => setBuildSystemVersion(e.target.value)}
             placeholder="e.g. 3.9.6"
           />
-          <FieldOverrideInline componentId={component.id} overriddenAttribute="build.buildSystemVersion" />
+          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.buildSystemVersion" />
         </div>
 
         <div className="space-y-1.5">
@@ -166,7 +169,7 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
             onChange={(e) => setBuildFilePath(e.target.value)}
             placeholder="pom.xml / build.gradle"
           />
-          <FieldOverrideInline componentId={component.id} overriddenAttribute="build.buildFilePath" />
+          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.buildFilePath" />
         </div>
 
         <div className="space-y-1.5">
@@ -176,7 +179,7 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
             onChange={(e) => setJavaVersion(e.target.value)}
             placeholder="1.8 / 11 / 17 / 21"
           />
-          <FieldOverrideInline componentId={component.id} overriddenAttribute="build.javaVersion" />
+          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.javaVersion" />
         </div>
 
         <div className="space-y-1.5">
@@ -186,7 +189,7 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
             onChange={(e) => setMavenVersion(e.target.value)}
             placeholder="3.9.6"
           />
-          <FieldOverrideInline componentId={component.id} overriddenAttribute="build.mavenVersion" />
+          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.mavenVersion" />
         </div>
 
         <div className="space-y-1.5">
@@ -196,7 +199,7 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
             onChange={(e) => setGradleVersion(e.target.value)}
             placeholder="8.6"
           />
-          <FieldOverrideInline componentId={component.id} overriddenAttribute="build.gradleVersion" />
+          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.gradleVersion" />
         </div>
 
         <div className="space-y-1.5">
@@ -206,7 +209,7 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
             onChange={(e) => setProjectVersion(e.target.value)}
             placeholder="1.0.0"
           />
-          <FieldOverrideInline componentId={component.id} overriddenAttribute="build.projectVersion" />
+          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.projectVersion" />
         </div>
       </div>
 
@@ -217,7 +220,7 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
           onChange={(e) => setBuildTasks(e.target.value)}
           placeholder="clean install / assemble"
         />
-        <FieldOverrideInline componentId={component.id} overriddenAttribute="build.buildTasks" />
+        <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.buildTasks" />
       </div>
 
       <div className="space-y-1.5">
@@ -229,7 +232,7 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
           placeholder="-Dproperty=value"
           spellCheck={false}
         />
-        <FieldOverrideInline componentId={component.id} overriddenAttribute="build.systemProperties" />
+        <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.systemProperties" />
       </div>
 
       <div className="space-y-1.5">
@@ -241,7 +244,7 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
           />
           <Label htmlFor="build-deprecated" className="cursor-pointer">Deprecated</Label>
         </div>
-        <FieldOverrideInline componentId={component.id} overriddenAttribute="build.deprecated" />
+        <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.deprecated" />
       </div>
 
       <div className="space-y-1.5">
@@ -253,7 +256,7 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
           />
           <Label htmlFor="build-required-project" className="cursor-pointer">Required Project</Label>
         </div>
-        <FieldOverrideInline componentId={component.id} overriddenAttribute="build.requiredProject" />
+        <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.requiredProject" />
       </div>
 
       <div className="space-y-1.5">
@@ -273,7 +276,12 @@ export function BuildTab({ component, updateMutation, toast }: BuildTabProps) {
       </div>
 
       <div className="flex justify-end">
-        <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending}>
+        <Button
+          size="sm"
+          onClick={handleSave}
+          disabled={updateMutation.isPending || !canEdit}
+          title={!canEdit ? CANNOT_EDIT_TITLE : undefined}
+        >
           <Save className="h-4 w-4" />
           {updateMutation.isPending ? 'Saving...' : 'Save Build'}
         </Button>

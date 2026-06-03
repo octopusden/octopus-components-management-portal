@@ -95,13 +95,13 @@ function makeMutation(mutateFn = vi.fn()) {
   } as unknown as UseMutationResult<ComponentDetail, Error, ComponentUpdateRequest>
 }
 
-function renderTab(component: ComponentDetail) {
+function renderTab(component: ComponentDetail, canEdit = true) {
   const toast = vi.fn()
   const mutation = makeMutation()
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
-      <JiraTab component={component} updateMutation={mutation} toast={toast} />
+      <JiraTab component={component} updateMutation={mutation} toast={toast} canEdit={canEdit} />
     </QueryClientProvider>,
   )
 }

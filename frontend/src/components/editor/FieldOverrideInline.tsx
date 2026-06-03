@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, X, Pencil, Check, AlertTriangle } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -25,9 +25,14 @@ const BOOLEAN_OVERRIDE_PATHS = new Set([
 interface FieldOverrideInlineProps {
   componentId: string
   overriddenAttribute: string
+  // When false, the inline editor is read-only: the existing overrides still render
+  // (badges + values + overlap warnings) but "Add override" and the per-row edit /
+  // delete controls are hidden. The backend gates these field-override endpoints on
+  // component ownership, so a non-owner would otherwise just hit a 403 on click.
+  canEdit: boolean
 }
 
-export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldOverrideInlineProps) {
+export function FieldOverrideInline({ componentId, overriddenAttribute, canEdit }: FieldOverrideInlineProps) {
   const { data: allOverrides = [] } = useFieldOverrides(componentId)
   const createMutation = useCreateFieldOverride(componentId)
   const updateMutation = useUpdateFieldOverride(componentId)
@@ -50,6 +55,16 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editRange, setEditRange] = useState('')
   const [editValue, setEditValue] = useState('')
+
+  // If edit rights are revoked mid-session (e.g. a background re-fetch returns a
+  // component the user no longer owns), close any open add/edit form so a stale
+  // Confirm button can't fire a now-forbidden mutation.
+  useEffect(() => {
+    if (!canEdit) {
+      setAdding(false)
+      setEditingId(null)
+    }
+  }, [canEdit])
 
   // Inline error for the add form. Three states:
   //   - empty             → "required" (shown only after the user has typed
@@ -132,7 +147,7 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
   const editRangeBlocks = !isClosedVersionRange(editRange) || editConflict !== null
 
   function handleAdd() {
-    if (newRangeBlocks) return
+    if (!canEdit || newRangeBlocks) return
     // Boolean paths: send the JSON primitive `true` / `false`; the local string
     // state is `"true"` / `"false"` driven by the Switch. String paths: trim
     // and reject empty (preserves the prior validation).
@@ -168,7 +183,7 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
   }
 
   function handleUpdate() {
-    if (!editingId || editRangeBlocks) return
+    if (!canEdit || !editingId || editRangeBlocks) return
     const wireValue: unknown = isBoolean ? editValue === 'true' : editValue
     updateMutation.mutate(
       { overrideId: editingId, versionRange: editRange, value: wireValue },
@@ -177,10 +192,13 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
   }
 
   function handleDelete(id: string) {
+    if (!canEdit) return
     deleteMutation.mutate(id)
   }
 
   if (overrides.length === 0 && !adding) {
+    // Read-only with nothing to show → render nothing at all.
+    if (!canEdit) return null
     return (
       <button
         type="button"
@@ -241,22 +259,26 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
               <span className="text-xs text-muted-foreground">&rarr;</span>
               <span className="text-xs">{String(override.value)}</span>
               {renderConflictBadge(override)}
-              <button
-                type="button"
-                onClick={() => startEdit(override)}
-                className="hidden group-hover:inline-flex h-4 w-4 items-center justify-center text-muted-foreground hover:text-foreground"
-                aria-label={`Edit override ${override.versionRange}`}
-              >
-                <Pencil className="h-3 w-3" />
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDelete(override.id)}
-                className="hidden group-hover:inline-flex h-4 w-4 items-center justify-center text-destructive hover:text-destructive"
-                aria-label={`Delete override ${override.versionRange}`}
-              >
-                <X className="h-3 w-3" />
-              </button>
+              {canEdit && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => startEdit(override)}
+                    className="hidden group-hover:inline-flex h-4 w-4 items-center justify-center text-muted-foreground hover:text-foreground"
+                    aria-label={`Edit override ${override.versionRange}`}
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(override.id)}
+                    className="hidden group-hover:inline-flex h-4 w-4 items-center justify-center text-destructive hover:text-destructive"
+                    aria-label={`Delete override ${override.versionRange}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -300,7 +322,7 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
             <p className="text-xs text-destructive">{newRangeError}</p>
           )}
         </div>
-      ) : (
+      ) : canEdit ? (
         <button
           type="button"
           onClick={() => setAdding(true)}
@@ -309,7 +331,7 @@ export function FieldOverrideInline({ componentId, overriddenAttribute }: FieldO
           <Plus className="h-3 w-3" />
           Add override
         </button>
-      )}
+      ) : null}
     </div>
   )
 }

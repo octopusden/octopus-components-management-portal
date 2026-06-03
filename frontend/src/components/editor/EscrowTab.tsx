@@ -6,6 +6,7 @@ import { Switch } from '../ui/switch'
 import { Button } from '../ui/button'
 import { EnumSelect } from '../ui/EnumSelect'
 import { FieldOverrideInline } from './FieldOverrideInline'
+import { CANNOT_EDIT_TITLE } from './editPermission'
 import type { ComponentDetail } from '../../lib/types'
 import type { ComponentUpdateRequest } from '../../hooks/useComponent'
 import type { UseMutationResult } from '@tanstack/react-query'
@@ -17,9 +18,10 @@ interface EscrowTabProps {
   component: ComponentDetail
   updateMutation: UseMutationResult<ComponentDetail, Error, ComponentUpdateRequest>
   toast: (opts: { title: string; description?: string; variant?: 'default' | 'destructive' }) => void
+  canEdit: boolean
 }
 
-export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) {
+export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowTabProps) {
   const handleConflict = useOptimisticConflict(component.id)
   const baseRow = selectBaseRow(component)
   const escrow = baseRow?.escrow
@@ -54,6 +56,7 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
   }, [component])
 
   async function handleSave() {
+    if (!canEdit) return // Save is disabled when !canEdit; guard the handler too (backend also 403s).
     try {
       await updateMutation.mutateAsync({
         version: component.version,
@@ -112,7 +115,7 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
             onValueChange={setGeneration}
             placeholder="Select generation"
           />
-          <FieldOverrideInline componentId={component.id} overriddenAttribute="escrow.generation" />
+          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="escrow.generation" />
         </div>
 
         <div className="space-y-1.5">
@@ -122,7 +125,7 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
             onChange={(e) => setDiskSpace(e.target.value)}
             placeholder="e.g. 10GB"
           />
-          <FieldOverrideInline componentId={component.id} overriddenAttribute="escrow.diskSpace" />
+          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="escrow.diskSpace" />
         </div>
       </div>
 
@@ -135,7 +138,7 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
           />
           <Label htmlFor="escrow-reusable" className="cursor-pointer">Reusable</Label>
         </div>
-        <FieldOverrideInline componentId={component.id} overriddenAttribute="escrow.reusable" />
+        <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="escrow.reusable" />
       </div>
 
       <div className="space-y-1.5">
@@ -147,7 +150,7 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
           spellCheck={false}
           placeholder="Comma-separated list of provided dependencies"
         />
-        <FieldOverrideInline componentId={component.id} overriddenAttribute="escrow.providedDependencies" />
+        <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="escrow.providedDependencies" />
       </div>
 
       <div className="space-y-1.5">
@@ -157,7 +160,7 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
           onChange={(e) => setAdditionalSources(e.target.value)}
           placeholder="Additional source paths"
         />
-        <FieldOverrideInline componentId={component.id} overriddenAttribute="escrow.additionalSources" />
+        <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="escrow.additionalSources" />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -168,7 +171,7 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
             onChange={(e) => setGradleIncludeConfigurations(e.target.value)}
             placeholder="e.g. compile,runtimeClasspath"
           />
-          <FieldOverrideInline componentId={component.id} overriddenAttribute="escrow.gradleIncludeConfigurations" />
+          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="escrow.gradleIncludeConfigurations" />
         </div>
 
         <div className="space-y-1.5">
@@ -178,7 +181,7 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
             onChange={(e) => setGradleExcludeConfigurations(e.target.value)}
             placeholder="e.g. testCompile,testRuntime"
           />
-          <FieldOverrideInline componentId={component.id} overriddenAttribute="escrow.gradleExcludeConfigurations" />
+          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="escrow.gradleExcludeConfigurations" />
         </div>
       </div>
 
@@ -191,7 +194,7 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
           />
           <Label htmlFor="escrow-gradle-include-test" className="cursor-pointer">Gradle Include Test Configurations</Label>
         </div>
-        <FieldOverrideInline componentId={component.id} overriddenAttribute="escrow.gradleIncludeTestConfigurations" />
+        <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="escrow.gradleIncludeTestConfigurations" />
       </div>
 
       {/* Build Task is registered in CRS SCALAR_ATTRIBUTE_PATHS and overridable
@@ -200,11 +203,16 @@ export function EscrowTab({ component, updateMutation, toast }: EscrowTabProps) 
           Inline override remains available as the entry point. */}
       <div className="space-y-1.5">
         <Label>Build Task</Label>
-        <FieldOverrideInline componentId={component.id} overriddenAttribute="escrow.buildTask" />
+        <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="escrow.buildTask" />
       </div>
 
       <div className="flex justify-end">
-        <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending}>
+        <Button
+          size="sm"
+          onClick={handleSave}
+          disabled={updateMutation.isPending || !canEdit}
+          title={!canEdit ? CANNOT_EDIT_TITLE : undefined}
+        >
           <Save className="h-4 w-4" />
           {updateMutation.isPending ? 'Saving...' : 'Save Escrow'}
         </Button>

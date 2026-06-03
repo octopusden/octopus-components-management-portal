@@ -24,6 +24,7 @@ import { VcsTab } from '../components/editor/VcsTab'
 import { DistributionTab } from '../components/editor/DistributionTab'
 import { JiraTab } from '../components/editor/JiraTab'
 import { EscrowTab } from '../components/editor/EscrowTab'
+import { CANNOT_EDIT_TITLE } from '../components/editor/editPermission'
 import { FieldOverrides } from '../components/editor/FieldOverrides'
 import { ConfigurationsTab } from '../components/editor/ConfigurationsTab'
 import { AsCodeTab } from '../components/editor/AsCodeTab'
@@ -60,6 +61,12 @@ export function ComponentDetailPage() {
 
   const canArchive = hasPermission(user, PERMISSIONS.DELETE_COMPONENTS)
   const canUnarchive = hasPermission(user, PERMISSIONS.ARCHIVE_COMPONENTS)
+
+  // Per-component edit gate. CRS returns `canEdit` on the detail response (true for
+  // the component's owner/RM/SC or an admin); fall back to the global EDIT_COMPONENTS
+  // permission when an older backend omits the flag. Drives the Save buttons and the
+  // inline field-override controls so non-owners don't act and then hit a 403.
+  const canEdit = component?.canEdit ?? hasPermission(user, PERMISSIONS.EDIT_COMPONENTS)
 
   // Field-config visibility — used to filter hidden fields from the save payload.
   // Portal-side enforcement is required because CRS server-side does NOT filter
@@ -141,6 +148,10 @@ export function ComponentDetailPage() {
 
   async function handleSave() {
     if (!component) return
+    // Defense-in-depth: the Save button is disabled when !canEdit, but guard the
+    // handler too so a programmatic invocation can't bypass the gate (the backend
+    // would 403 regardless).
+    if (!canEdit) return
     // Server-side errors set on a previous failed submit don't auto-clear
     // when the user fixes the input or when the next save succeeds (RHF
     // only clears errors on its own validation passes). Wipe them at the
@@ -476,8 +487,14 @@ export function ComponentDetailPage() {
             <Button
               size="sm"
               onClick={handleSave}
-              disabled={updateMutation.isPending || fieldConfigLoading}
-              title={fieldConfigLoading ? 'Loading field configuration…' : undefined}
+              disabled={updateMutation.isPending || fieldConfigLoading || !canEdit}
+              title={
+                !canEdit
+                  ? CANNOT_EDIT_TITLE
+                  : fieldConfigLoading
+                    ? 'Loading field configuration…'
+                    : undefined
+              }
             >
               <Save className="h-4 w-4" />
               {updateMutation.isPending ? 'Saving…' : 'Save'}
@@ -547,23 +564,23 @@ export function ComponentDetailPage() {
             </TabsContent>
 
             <TabsContent value="build">
-              <BuildTab component={component} updateMutation={updateMutation} toast={toast} />
+              <BuildTab component={component} updateMutation={updateMutation} toast={toast} canEdit={canEdit} />
             </TabsContent>
 
             <TabsContent value="vcs">
-              <VcsTab component={component} updateMutation={updateMutation} toast={toast} />
+              <VcsTab component={component} updateMutation={updateMutation} toast={toast} canEdit={canEdit} />
             </TabsContent>
 
             <TabsContent value="distribution">
-              <DistributionTab component={component} updateMutation={updateMutation} toast={toast} />
+              <DistributionTab component={component} updateMutation={updateMutation} toast={toast} canEdit={canEdit} />
             </TabsContent>
 
             <TabsContent value="jira">
-              <JiraTab component={component} updateMutation={updateMutation} toast={toast} />
+              <JiraTab component={component} updateMutation={updateMutation} toast={toast} canEdit={canEdit} />
             </TabsContent>
 
             <TabsContent value="escrow">
-              <EscrowTab component={component} updateMutation={updateMutation} toast={toast} />
+              <EscrowTab component={component} updateMutation={updateMutation} toast={toast} canEdit={canEdit} />
             </TabsContent>
 
             <TabsContent value="configurations">

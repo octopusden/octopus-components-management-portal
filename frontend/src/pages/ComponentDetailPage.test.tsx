@@ -243,6 +243,36 @@ beforeEach(() => {
   })
 })
 
+describe('ComponentDetailPage — Save gating on canEdit', () => {
+  // The header Save button is the only "Save" (tab-specific saves like "Save Build"
+  // live in inactive, unmounted tabs); match its exact accessible name.
+  const SAVE = { name: 'Save' } as const
+
+  it('Save is enabled when component.canEdit is true', () => {
+    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    renderPage({ ...baseComponent, canEdit: true }, user)
+    expect(screen.getByRole('button', SAVE)).not.toBeDisabled()
+  })
+
+  it('Save is disabled when component.canEdit is false (even with EDIT_COMPONENTS)', () => {
+    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    renderPage({ ...baseComponent, canEdit: false }, user)
+    expect(screen.getByRole('button', SAVE)).toBeDisabled()
+  })
+
+  it('absent canEdit falls back to EDIT_COMPONENTS — enabled with the permission', () => {
+    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    renderPage(baseComponent, user) // baseComponent has no canEdit
+    expect(screen.getByRole('button', SAVE)).not.toBeDisabled()
+  })
+
+  it('absent canEdit falls back to EDIT_COMPONENTS — disabled without the permission', () => {
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    renderPage(baseComponent, user)
+    expect(screen.getByRole('button', SAVE)).toBeDisabled()
+  })
+})
+
 describe('ComponentDetailPage — Archive / Unarchive buttons', () => {
   it('(a) Archive button renders for user with DELETE_COMPONENTS, archived=false', () => {
     const user = makeUser(['ACCESS_COMPONENTS', 'DELETE_COMPONENTS'])

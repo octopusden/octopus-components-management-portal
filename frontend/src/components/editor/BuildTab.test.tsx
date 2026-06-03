@@ -107,13 +107,13 @@ function makeMutation(mutateFn = vi.fn()) {
   } as unknown as UseMutationResult<ComponentDetail, Error, ComponentUpdateRequest>
 }
 
-function renderTab(component: ComponentDetail, mutateAsync = vi.fn()) {
+function renderTab(component: ComponentDetail, mutateAsync = vi.fn(), canEdit = true) {
   const toast = vi.fn()
   const mutation = makeMutation(mutateAsync)
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const utils = render(
     <QueryClientProvider client={queryClient}>
-      <BuildTab component={component} updateMutation={mutation} toast={toast} />
+      <BuildTab component={component} updateMutation={mutation} toast={toast} canEdit={canEdit} />
     </QueryClientProvider>
   )
   return { toast, mutateAsync, ...utils }
