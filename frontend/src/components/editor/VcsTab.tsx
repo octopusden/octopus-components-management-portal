@@ -9,11 +9,13 @@ import type { ComponentUpdateRequest } from '../../hooks/useComponent'
 import type { UseMutationResult } from '@tanstack/react-query'
 import { useOptimisticConflict } from '../../hooks/useOptimisticConflict'
 import { selectBaseRow } from '../../lib/api/baseRow'
+import { CANNOT_EDIT_TITLE } from './editPermission'
 
 interface VcsTabProps {
   component: ComponentDetail
   updateMutation: UseMutationResult<ComponentDetail, Error, ComponentUpdateRequest>
   toast: (opts: { title: string; description?: string; variant?: 'default' | 'destructive' }) => void
+  canEdit: boolean
 }
 
 interface EntryState {
@@ -38,7 +40,7 @@ function toEntryState(e: VcsEntry): EntryState {
   }
 }
 
-export function VcsTab({ component, updateMutation, toast }: VcsTabProps) {
+export function VcsTab({ component, updateMutation, toast, canEdit }: VcsTabProps) {
   const handleConflict = useOptimisticConflict(component.id)
   const [externalRegistry, setExternalRegistry] = useState(component.vcsExternalRegistry ?? '')
   const [entries, setEntries] = useState<EntryState[]>(
@@ -66,6 +68,7 @@ export function VcsTab({ component, updateMutation, toast }: VcsTabProps) {
   }
 
   async function handleSave() {
+    if (!canEdit) return // Save is disabled when !canEdit; guard the handler too (backend also 403s).
     // Drop rows whose required `vcsPath` is still blank — the wire shape's
     // required string would otherwise hit the server as an empty value and
     // 400. Save is a button click (not a form submit), so HTML `required`
@@ -126,7 +129,7 @@ export function VcsTab({ component, updateMutation, toast }: VcsTabProps) {
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold">VCS Entries</h3>
-          <Button variant="outline" size="sm" onClick={addEntry}>
+          <Button variant="outline" size="sm" onClick={addEntry} disabled={!canEdit}>
             <Plus className="h-4 w-4" />
             Add Entry
           </Button>
@@ -136,7 +139,7 @@ export function VcsTab({ component, updateMutation, toast }: VcsTabProps) {
           <div key={index} className="rounded-md border p-3 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-muted-foreground">Entry {index + 1}</span>
-              <Button variant="ghost" size="sm" onClick={() => removeEntry(index)} className="h-7 text-destructive hover:text-destructive">
+              <Button variant="ghost" size="sm" onClick={() => removeEntry(index)} disabled={!canEdit} className="h-7 text-destructive hover:text-destructive">
                 <Trash2 className="h-3 w-3" />
               </Button>
             </div>
@@ -178,10 +181,14 @@ export function VcsTab({ component, updateMutation, toast }: VcsTabProps) {
       </div>
 
       <div className="flex justify-end">
-        <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending}>
-          <Save className="h-4 w-4" />
-          {updateMutation.isPending ? 'Saving...' : 'Save VCS'}
-        </Button>
+        {/* title on the wrapping span: a disabled Button has pointer-events-none, so a
+            title on it would never show on hover. */}
+        <span className="inline-flex" title={!canEdit ? CANNOT_EDIT_TITLE : undefined}>
+          <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending || !canEdit}>
+            <Save className="h-4 w-4" />
+            {updateMutation.isPending ? 'Saving...' : 'Save VCS'}
+          </Button>
+        </span>
       </div>
     </div>
   )

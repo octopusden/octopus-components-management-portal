@@ -92,7 +92,7 @@ describe('DistributionTab — blank-row filter on save', () => {
   it('drops a freshly-added blank Maven row and does not include it in the payload', async () => {
     const mutateAsync = vi.fn().mockResolvedValue({})
     renderWithProviders(
-      <DistributionTab component={baseComponent()} updateMutation={makeMutation(mutateAsync)} toast={vi.fn()} />,
+      <DistributionTab component={baseComponent()} updateMutation={makeMutation(mutateAsync)} toast={vi.fn()} canEdit={true} />,
     )
 
     // Two "Add" sections share the same "Add" label — Maven is the first.
@@ -111,7 +111,7 @@ describe('DistributionTab — blank-row filter on save', () => {
   it('drops a freshly-added blank Docker row', async () => {
     const mutateAsync = vi.fn().mockResolvedValue({})
     renderWithProviders(
-      <DistributionTab component={baseComponent()} updateMutation={makeMutation(mutateAsync)} toast={vi.fn()} />,
+      <DistributionTab component={baseComponent()} updateMutation={makeMutation(mutateAsync)} toast={vi.fn()} canEdit={true} />,
     )
 
     // Click the third Add button (Docker section is the third sub-section).
@@ -130,7 +130,7 @@ describe('DistributionTab — blank-row filter on save', () => {
   it('preserves a Maven row when both required identity fields are populated', async () => {
     const mutateAsync = vi.fn().mockResolvedValue({})
     renderWithProviders(
-      <DistributionTab component={baseComponent()} updateMutation={makeMutation(mutateAsync)} toast={vi.fn()} />,
+      <DistributionTab component={baseComponent()} updateMutation={makeMutation(mutateAsync)} toast={vi.fn()} canEdit={true} />,
     )
 
     const addButtons = screen.getAllByRole('button', { name: /^Add$/ })
@@ -152,5 +152,17 @@ describe('DistributionTab — blank-row filter on save', () => {
     expect(payload.baseConfiguration?.mavenArtifacts).toHaveLength(1)
     expect(payload.baseConfiguration?.mavenArtifacts?.[0]?.groupPattern).toBe('com.example')
     expect(payload.baseConfiguration?.mavenArtifacts?.[0]?.artifactPattern).toBe('my-app')
+  })
+})
+
+describe('DistributionTab — canEdit gating', () => {
+  it('disables Save and every section Add button when canEdit is false', () => {
+    renderWithProviders(
+      <DistributionTab component={baseComponent()} updateMutation={makeMutation(vi.fn())} toast={vi.fn()} canEdit={false} />,
+    )
+    expect(screen.getByRole('button', { name: /Save Distribution/i })).toBeDisabled()
+    const addButtons = screen.getAllByRole('button', { name: /^Add$/ })
+    expect(addButtons.length).toBeGreaterThan(0)
+    for (const btn of addButtons) expect(btn).toBeDisabled()
   })
 })

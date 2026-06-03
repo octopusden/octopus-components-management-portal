@@ -29,11 +29,11 @@ vi.mock('../../hooks/useComponent', () => ({
   useDeleteFieldOverride: () => ({ mutate: mockDeleteMutate, isPending: false }),
 }))
 
-function renderInline(overriddenAttribute = 'jira.releaseVersionFormat') {
+function renderInline(overriddenAttribute = 'jira.releaseVersionFormat', canEdit = true) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
-      <FieldOverrideInline componentId="c-1" overriddenAttribute={overriddenAttribute} />
+      <FieldOverrideInline componentId="c-1" overriddenAttribute={overriddenAttribute} canEdit={canEdit} />
     </QueryClientProvider>,
   )
 }
@@ -360,5 +360,42 @@ describe('FieldOverrideInline — existing-conflict warning', () => {
     ]
     renderInline('build.javaVersion')
     expect(screen.queryByText(/overlaps \[/i)).toBeNull()
+  })
+})
+
+describe('FieldOverrideInline — read-only (canEdit=false)', () => {
+  beforeEach(() => {
+    mockCreateMutate.mockReset()
+    mockUpdateMutate.mockReset()
+    mockDeleteMutate.mockReset()
+    mockOverrides = []
+  })
+
+  it('renders nothing when there are no overrides and the user cannot edit', () => {
+    const { container } = renderInline('build.javaVersion', false)
+    expect(screen.queryByText(/add override/i)).toBeNull()
+    expect(container).toBeEmptyDOMElement()
+  })
+
+  it('shows existing overrides read-only: no Add, no per-row edit/delete controls', () => {
+    mockOverrides = [
+      {
+        id: 'o-ro',
+        overriddenAttribute: 'build.javaVersion',
+        versionRange: '[1.0,2.0)',
+        rowType: 'SCALAR_OVERRIDE',
+        value: '17',
+        markerChildren: null,
+        createdAt: null,
+        updatedAt: null,
+      },
+    ]
+    renderInline('build.javaVersion', false)
+    // The existing override value is still visible…
+    expect(screen.getByText('17')).toBeInTheDocument()
+    // …but every mutating affordance is gone.
+    expect(screen.queryByText(/add override/i)).toBeNull()
+    expect(screen.queryByLabelText(/edit override/i)).toBeNull()
+    expect(screen.queryByLabelText(/delete override/i)).toBeNull()
   })
 })

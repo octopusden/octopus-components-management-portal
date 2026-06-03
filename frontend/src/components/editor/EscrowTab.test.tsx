@@ -123,7 +123,7 @@ describe('EscrowTab productType render (§7.0/2c)', () => {
     setProductTypeVisibility('editable')
     const component = baseComponent({ productType: 'TYPE_A' })
     renderWithProviders(
-      <EscrowTab component={component} updateMutation={makeMutation()} toast={makeToast()} />
+      <EscrowTab component={component} updateMutation={makeMutation()} toast={makeToast()} canEdit={true} />
     )
     expect(screen.getByText(/product type/i)).toBeDefined()
   })
@@ -132,7 +132,7 @@ describe('EscrowTab productType render (§7.0/2c)', () => {
     setProductTypeVisibility('hidden')
     const component = baseComponent({ productType: 'TYPE_A' })
     renderWithProviders(
-      <EscrowTab component={component} updateMutation={makeMutation()} toast={makeToast()} />
+      <EscrowTab component={component} updateMutation={makeMutation()} toast={makeToast()} canEdit={true} />
     )
     expect(screen.queryByText(/product type/i)).toBeNull()
   })
@@ -141,7 +141,7 @@ describe('EscrowTab productType render (§7.0/2c)', () => {
     setProductTypeVisibility('readonly')
     const component = baseComponent({ productType: 'TYPE_A' })
     renderWithProviders(
-      <EscrowTab component={component} updateMutation={makeMutation()} toast={makeToast()} />
+      <EscrowTab component={component} updateMutation={makeMutation()} toast={makeToast()} canEdit={true} />
     )
     // Label is visible; disabled state is on the underlying Radix Select trigger
     expect(screen.getByText(/product type/i)).toBeDefined()
@@ -156,7 +156,7 @@ describe('EscrowTab save handler', () => {
     const mutateAsync = vi.fn().mockResolvedValue({})
     const component = baseComponent({ productType: 'TYPE_B', version: 5 })
     renderWithProviders(
-      <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} />
+      <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} canEdit={true} />
     )
 
     const saveBtn = screen.getByRole('button', { name: /save escrow/i })
@@ -178,7 +178,7 @@ describe('EscrowTab save handler', () => {
     const mutateAsync = vi.fn().mockResolvedValue({})
     const component = baseComponent({ productType: 'TYPE_A', version: 2 })
     renderWithProviders(
-      <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} />
+      <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} canEdit={true} />
     )
 
     fireEvent.click(screen.getByRole('button', { name: /save escrow/i }))
@@ -197,7 +197,7 @@ describe('EscrowTab save handler', () => {
     const mutateAsync = vi.fn().mockResolvedValue({})
     const component = baseComponent({ productType: 'TYPE_A' })
     renderWithProviders(
-      <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} />
+      <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} canEdit={true} />
     )
 
     fireEvent.click(screen.getByRole('button', { name: /save escrow/i }))
@@ -214,7 +214,7 @@ describe('EscrowTab new fields render', () => {
   it('renders Additional Sources input', () => {
     const component = baseComponent()
     renderWithProviders(
-      <EscrowTab component={component} updateMutation={makeMutation()} toast={makeToast()} />
+      <EscrowTab component={component} updateMutation={makeMutation()} toast={makeToast()} canEdit={true} />
     )
     expect(screen.getByText(/additional sources/i)).toBeDefined()
   })
@@ -222,7 +222,7 @@ describe('EscrowTab new fields render', () => {
   it('renders Gradle Include Configurations input', () => {
     const component = baseComponent()
     renderWithProviders(
-      <EscrowTab component={component} updateMutation={makeMutation()} toast={makeToast()} />
+      <EscrowTab component={component} updateMutation={makeMutation()} toast={makeToast()} canEdit={true} />
     )
     expect(screen.getByText(/gradle include configurations/i)).toBeDefined()
   })
@@ -230,7 +230,7 @@ describe('EscrowTab new fields render', () => {
   it('renders Gradle Exclude Configurations input', () => {
     const component = baseComponent()
     renderWithProviders(
-      <EscrowTab component={component} updateMutation={makeMutation()} toast={makeToast()} />
+      <EscrowTab component={component} updateMutation={makeMutation()} toast={makeToast()} canEdit={true} />
     )
     expect(screen.getByText(/gradle exclude configurations/i)).toBeDefined()
   })
@@ -238,7 +238,7 @@ describe('EscrowTab new fields render', () => {
   it('renders Gradle Include Test Configurations switch', () => {
     const component = baseComponent()
     renderWithProviders(
-      <EscrowTab component={component} updateMutation={makeMutation()} toast={makeToast()} />
+      <EscrowTab component={component} updateMutation={makeMutation()} toast={makeToast()} canEdit={true} />
     )
     expect(screen.getByText(/gradle include test configurations/i)).toBeDefined()
     expect(screen.getByRole('switch', { name: /gradle include test configurations/i })).toBeDefined()
@@ -249,7 +249,7 @@ describe('EscrowTab new fields render', () => {
     // Override escrow fixture to provide a value
     component.configurations![0]!.escrow!.additionalSources = 'src/extra'
     renderWithProviders(
-      <EscrowTab component={component} updateMutation={makeMutation()} toast={makeToast()} />
+      <EscrowTab component={component} updateMutation={makeMutation()} toast={makeToast()} canEdit={true} />
     )
     const input = screen.getByPlaceholderText(/additional source paths/i) as HTMLInputElement
     expect(input.value).toBe('src/extra')
@@ -259,7 +259,7 @@ describe('EscrowTab new fields render', () => {
     const component = baseComponent()
     component.configurations![0]!.escrow!.gradleIncludeTestConfigurations = true
     renderWithProviders(
-      <EscrowTab component={component} updateMutation={makeMutation()} toast={makeToast()} />
+      <EscrowTab component={component} updateMutation={makeMutation()} toast={makeToast()} canEdit={true} />
     )
     const sw = screen.getByRole('switch', { name: /gradle include test configurations/i }) as HTMLButtonElement
     expect(sw.getAttribute('data-state')).toBe('checked')
@@ -273,7 +273,7 @@ describe('EscrowTab new fields save', () => {
     const component = baseComponent()
     component.configurations![0]!.escrow!.additionalSources = 'src/vendor'
     renderWithProviders(
-      <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} />
+      <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} canEdit={true} />
     )
 
     fireEvent.click(screen.getByRole('button', { name: /save escrow/i }))
@@ -289,7 +289,7 @@ describe('EscrowTab new fields save', () => {
     const mutateAsync = vi.fn().mockResolvedValue({})
     const component = baseComponent()
     renderWithProviders(
-      <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} />
+      <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} canEdit={true} />
     )
 
     fireEvent.click(screen.getByRole('button', { name: /save escrow/i }))
@@ -306,7 +306,7 @@ describe('EscrowTab new fields save', () => {
     const component = baseComponent()
     component.configurations![0]!.escrow!.gradleIncludeConfigurations = 'compile,runtimeClasspath'
     renderWithProviders(
-      <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} />
+      <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} canEdit={true} />
     )
 
     fireEvent.click(screen.getByRole('button', { name: /save escrow/i }))
@@ -322,7 +322,7 @@ describe('EscrowTab new fields save', () => {
     const mutateAsync = vi.fn().mockResolvedValue({})
     const component = baseComponent()
     renderWithProviders(
-      <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} />
+      <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} canEdit={true} />
     )
 
     fireEvent.click(screen.getByRole('button', { name: /save escrow/i }))
@@ -338,7 +338,7 @@ describe('EscrowTab new fields save', () => {
     const mutateAsync = vi.fn().mockResolvedValue({})
     const component = baseComponent()
     renderWithProviders(
-      <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} />
+      <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} canEdit={true} />
     )
 
     // Default is false (null in fixture → false); toggle to true
@@ -369,7 +369,7 @@ describe('EscrowTab — inline override coverage', () => {
 
   it.each(overridablePaths)('renders FieldOverrideInline under %s', (path) => {
     renderWithProviders(
-      <EscrowTab component={baseComponent()} updateMutation={makeMutation()} toast={makeToast()} />
+      <EscrowTab component={baseComponent()} updateMutation={makeMutation()} toast={makeToast()} canEdit={true} />
     )
     expect(screen.getByTestId(`field-override-inline-${path}`)).toBeInTheDocument()
   })

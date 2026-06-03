@@ -24,6 +24,7 @@ import { VcsTab } from '../components/editor/VcsTab'
 import { DistributionTab } from '../components/editor/DistributionTab'
 import { JiraTab } from '../components/editor/JiraTab'
 import { EscrowTab } from '../components/editor/EscrowTab'
+import { CANNOT_EDIT_TITLE } from '../components/editor/editPermission'
 import { FieldOverrides } from '../components/editor/FieldOverrides'
 import { ConfigurationsTab } from '../components/editor/ConfigurationsTab'
 import { AsCodeTab } from '../components/editor/AsCodeTab'
@@ -60,6 +61,12 @@ export function ComponentDetailPage() {
 
   const canArchive = hasPermission(user, PERMISSIONS.DELETE_COMPONENTS)
   const canUnarchive = hasPermission(user, PERMISSIONS.ARCHIVE_COMPONENTS)
+
+  // Per-component edit gate. CRS returns `canEdit` on the detail response (true for
+  // the component's owner/RM/SC or an admin); fall back to the global EDIT_COMPONENTS
+  // permission when an older backend omits the flag. Drives the Save buttons and the
+  // inline field-override controls so non-owners don't act and then hit a 403.
+  const canEdit = component?.canEdit ?? hasPermission(user, PERMISSIONS.EDIT_COMPONENTS)
 
   // Field-config visibility — used to filter hidden fields from the save payload.
   // Portal-side enforcement is required because CRS server-side does NOT filter
@@ -217,11 +224,12 @@ export function ComponentDetailPage() {
 
   async function handleSave() {
     if (!component) return
-    // Defence-in-depth for the Save dirty-gate: the button is already disabled
-    // when there's nothing to save, but bail here too so any non-click trigger
-    // can't fire a no-op PATCH (and a misleading "saved" toast). The system-
-    // required-clear case keeps hasUnsavedChanges true, so its inline error
+    // Defence-in-depth (both gates): the Save button is disabled when the user
+    // can't edit OR there's nothing to save; bail here too so any non-click trigger
+    // can't bypass either gate. The backend 403s a forbidden edit regardless; the
+    // system-required-clear case keeps hasUnsavedChanges true so its inline error
     // still surfaces below.
+    if (!canEdit) return
     if (!hasUnsavedChanges) return
     // Server-side errors set on a previous failed submit don't auto-clear
     // when the user fixes the input or when the next save succeeds (RHF
@@ -486,21 +494,29 @@ export function ComponentDetailPage() {
                 Unarchive
               </Button>
             )}
-            <Button
-              size="sm"
-              onClick={handleSave}
-              disabled={updateMutation.isPending || fieldConfigLoading || !hasUnsavedChanges}
+            {/* title lives on the wrapping span, not the Button: a disabled Button has
+                `pointer-events-none`, so a title on it would never show on hover. */}
+            <span
+              className="inline-flex"
               title={
-                fieldConfigLoading
-                  ? 'Loading field configuration…'
-                  : !hasUnsavedChanges
-                    ? 'No changes to save'
-                    : undefined
+                !canEdit
+                  ? CANNOT_EDIT_TITLE
+                  : fieldConfigLoading
+                    ? 'Loading field configuration…'
+                    : !hasUnsavedChanges
+                      ? 'No changes to save'
+                      : undefined
               }
             >
-              <Save className="h-4 w-4" />
-              {updateMutation.isPending ? 'Saving…' : 'Save'}
-            </Button>
+              <Button
+                size="sm"
+                onClick={handleSave}
+                disabled={updateMutation.isPending || fieldConfigLoading || !canEdit || !hasUnsavedChanges}
+              >
+                <Save className="h-4 w-4" />
+                {updateMutation.isPending ? 'Saving…' : 'Save'}
+              </Button>
+            </span>
           </div>
         </div>
 
@@ -566,23 +582,23 @@ export function ComponentDetailPage() {
             </TabsContent>
 
             <TabsContent value="build">
-              <BuildTab component={component} updateMutation={updateMutation} toast={toast} />
+              <BuildTab component={component} updateMutation={updateMutation} toast={toast} canEdit={canEdit} />
             </TabsContent>
 
             <TabsContent value="vcs">
-              <VcsTab component={component} updateMutation={updateMutation} toast={toast} />
+              <VcsTab component={component} updateMutation={updateMutation} toast={toast} canEdit={canEdit} />
             </TabsContent>
 
             <TabsContent value="distribution">
-              <DistributionTab component={component} updateMutation={updateMutation} toast={toast} />
+              <DistributionTab component={component} updateMutation={updateMutation} toast={toast} canEdit={canEdit} />
             </TabsContent>
 
             <TabsContent value="jira">
-              <JiraTab component={component} updateMutation={updateMutation} toast={toast} />
+              <JiraTab component={component} updateMutation={updateMutation} toast={toast} canEdit={canEdit} />
             </TabsContent>
 
             <TabsContent value="escrow">
-              <EscrowTab component={component} updateMutation={updateMutation} toast={toast} />
+              <EscrowTab component={component} updateMutation={updateMutation} toast={toast} canEdit={canEdit} />
             </TabsContent>
 
             <TabsContent value="configurations">

@@ -10,11 +10,13 @@ import type { ComponentUpdateRequest } from '../../hooks/useComponent'
 import type { UseMutationResult } from '@tanstack/react-query'
 import { useOptimisticConflict } from '../../hooks/useOptimisticConflict'
 import { selectBaseRow } from '../../lib/api/baseRow'
+import { CANNOT_EDIT_TITLE } from './editPermission'
 
 interface DistributionTabProps {
   component: ComponentDetail
   updateMutation: UseMutationResult<ComponentDetail, Error, ComponentUpdateRequest>
   toast: (opts: { title: string; description?: string; variant?: 'default' | 'destructive' }) => void
+  canEdit: boolean
 }
 
 // Local edit state mirrors the server shapes minus id/sortOrder
@@ -48,7 +50,7 @@ function sortBy<T extends { sortOrder: number }>(arr: T[]): T[] {
   return [...arr].sort((a, b) => a.sortOrder - b.sortOrder)
 }
 
-export function DistributionTab({ component, updateMutation, toast }: DistributionTabProps) {
+export function DistributionTab({ component, updateMutation, toast, canEdit }: DistributionTabProps) {
   const handleConflict = useOptimisticConflict(component.id)
   const [explicit, setExplicit] = useState(component.distributionExplicit ?? false)
   const [external, setExternal] = useState(component.distributionExternal ?? false)
@@ -109,6 +111,7 @@ export function DistributionTab({ component, updateMutation, toast }: Distributi
   function removeSecurityGroup(i: number) { setSecurityGroups((p) => p.filter((_, idx) => idx !== i)) }
 
   async function handleSave() {
+    if (!canEdit) return // Save is disabled when !canEdit; guard the handler too (backend also 403s).
     // Drop rows whose required fields are still blank — the wire shape's
     // required strings would otherwise hit the server as empty values
     // and 400. Save is a button click (not a form submit), so HTML
@@ -212,7 +215,7 @@ export function DistributionTab({ component, updateMutation, toast }: Distributi
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold">Maven Artifacts</h3>
-          <Button variant="ghost" size="sm" onClick={addMaven}>
+          <Button variant="ghost" size="sm" onClick={addMaven} disabled={!canEdit}>
             <Plus className="h-4 w-4" />
             Add
           </Button>
@@ -222,7 +225,7 @@ export function DistributionTab({ component, updateMutation, toast }: Distributi
           <div key={i} className="rounded-md border p-3 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-muted-foreground">Artifact {i + 1}</span>
-              <Button variant="ghost" size="sm" onClick={() => removeMaven(i)} className="h-7 text-destructive hover:text-destructive">
+              <Button variant="ghost" size="sm" onClick={() => removeMaven(i)} disabled={!canEdit} className="h-7 text-destructive hover:text-destructive">
                 <Trash2 className="h-3 w-3" />
               </Button>
             </div>
@@ -258,7 +261,7 @@ export function DistributionTab({ component, updateMutation, toast }: Distributi
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold">File URL Artifacts</h3>
-          <Button variant="ghost" size="sm" onClick={addFileUrl}>
+          <Button variant="ghost" size="sm" onClick={addFileUrl} disabled={!canEdit}>
             <Plus className="h-4 w-4" />
             Add
           </Button>
@@ -268,7 +271,7 @@ export function DistributionTab({ component, updateMutation, toast }: Distributi
           <div key={i} className="rounded-md border p-3 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-muted-foreground">Artifact {i + 1}</span>
-              <Button variant="ghost" size="sm" onClick={() => removeFileUrl(i)} className="h-7 text-destructive hover:text-destructive">
+              <Button variant="ghost" size="sm" onClick={() => removeFileUrl(i)} disabled={!canEdit} className="h-7 text-destructive hover:text-destructive">
                 <Trash2 className="h-3 w-3" />
               </Button>
             </div>
@@ -300,7 +303,7 @@ export function DistributionTab({ component, updateMutation, toast }: Distributi
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold">Docker Images</h3>
-          <Button variant="ghost" size="sm" onClick={addDocker}>
+          <Button variant="ghost" size="sm" onClick={addDocker} disabled={!canEdit}>
             <Plus className="h-4 w-4" />
             Add
           </Button>
@@ -310,7 +313,7 @@ export function DistributionTab({ component, updateMutation, toast }: Distributi
           <div key={i} className="rounded-md border p-3 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-muted-foreground">Image {i + 1}</span>
-              <Button variant="ghost" size="sm" onClick={() => removeDocker(i)} className="h-7 text-destructive hover:text-destructive">
+              <Button variant="ghost" size="sm" onClick={() => removeDocker(i)} disabled={!canEdit} className="h-7 text-destructive hover:text-destructive">
                 <Trash2 className="h-3 w-3" />
               </Button>
             </div>
@@ -338,7 +341,7 @@ export function DistributionTab({ component, updateMutation, toast }: Distributi
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold">Packages</h3>
-          <Button variant="ghost" size="sm" onClick={addPackage}>
+          <Button variant="ghost" size="sm" onClick={addPackage} disabled={!canEdit}>
             <Plus className="h-4 w-4" />
             Add
           </Button>
@@ -348,7 +351,7 @@ export function DistributionTab({ component, updateMutation, toast }: Distributi
           <div key={i} className="rounded-md border p-3 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-muted-foreground">Package {i + 1}</span>
-              <Button variant="ghost" size="sm" onClick={() => removePackage(i)} className="h-7 text-destructive hover:text-destructive">
+              <Button variant="ghost" size="sm" onClick={() => removePackage(i)} disabled={!canEdit} className="h-7 text-destructive hover:text-destructive">
                 <Trash2 className="h-3 w-3" />
               </Button>
             </div>
@@ -376,7 +379,7 @@ export function DistributionTab({ component, updateMutation, toast }: Distributi
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold">Security Groups</h3>
-          <Button variant="ghost" size="sm" onClick={addSecurityGroup}>
+          <Button variant="ghost" size="sm" onClick={addSecurityGroup} disabled={!canEdit}>
             <Plus className="h-4 w-4" />
             Add
           </Button>
@@ -386,7 +389,7 @@ export function DistributionTab({ component, updateMutation, toast }: Distributi
           <div key={i} className="rounded-md border p-3 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-muted-foreground">Group {i + 1}</span>
-              <Button variant="ghost" size="sm" onClick={() => removeSecurityGroup(i)} className="h-7 text-destructive hover:text-destructive">
+              <Button variant="ghost" size="sm" onClick={() => removeSecurityGroup(i)} disabled={!canEdit} className="h-7 text-destructive hover:text-destructive">
                 <Trash2 className="h-3 w-3" />
               </Button>
             </div>
@@ -409,10 +412,14 @@ export function DistributionTab({ component, updateMutation, toast }: Distributi
       </div>
 
       <div className="flex justify-end">
-        <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending}>
-          <Save className="h-4 w-4" />
-          {updateMutation.isPending ? 'Saving...' : 'Save Distribution'}
-        </Button>
+        {/* title on the wrapping span: a disabled Button has pointer-events-none, so a
+            title on it would never show on hover. */}
+        <span className="inline-flex" title={!canEdit ? CANNOT_EDIT_TITLE : undefined}>
+          <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending || !canEdit}>
+            <Save className="h-4 w-4" />
+            {updateMutation.isPending ? 'Saving...' : 'Save Distribution'}
+          </Button>
+        </span>
       </div>
     </div>
   )

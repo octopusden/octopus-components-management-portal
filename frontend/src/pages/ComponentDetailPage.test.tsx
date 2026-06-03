@@ -79,6 +79,7 @@ import { useComponent, useUpdateComponent, useDeleteComponent } from '../hooks/u
 import { usePortalLinks } from '../hooks/useInfo'
 import { useFieldConfigEntry } from '../hooks/useFieldConfig'
 import { GeneralTab } from '../components/editor/GeneralTab'
+import { CANNOT_EDIT_TITLE } from '../components/editor/editPermission'
 
 const mockedUsePortalLinks = vi.mocked(usePortalLinks)
 const mockedUseFieldConfigEntry = vi.mocked(useFieldConfigEntry)
@@ -240,6 +241,63 @@ beforeEach(() => {
       form.setValue('system', component.system ?? '')
     }, [component, form])
     return React.createElement('div', { 'data-testid': 'general-tab' })
+  })
+})
+
+describe('ComponentDetailPage — Save gating on canEdit', () => {
+  // The header Save button is the only "Save" (tab-specific saves like "Save Build"
+  // live in inactive, unmounted tabs); match its exact accessible name.
+  const SAVE = { name: 'Save' } as const
+
+  // Render with a GeneralTab stub exposing an edit button; clicking it makes a real
+  // (dirty) change so the merged Save dirty-gate is satisfied, isolating the canEdit
+  // gate from "nothing to save".
+  function renderDirty(component: ComponentDetail, user: User) {
+    vi.mocked(GeneralTab).mockImplementation(({ component: c, form }) => {
+      useEffect(() => {
+        form.setValue('system', c.system ?? '')
+      }, [c, form])
+      return React.createElement(
+        'button',
+        {
+          'data-testid': 'edit-display-name',
+          onClick: () => form.setValue('displayName', 'Edited Name', { shouldDirty: true }),
+        },
+        'edit',
+      )
+    })
+    renderPage(component, user)
+    fireEvent.click(screen.getByTestId('edit-display-name'))
+  }
+
+  it('Save enables when component.canEdit is true (after a real edit)', async () => {
+    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    renderDirty({ ...baseComponent, canEdit: true }, user)
+    await waitFor(() => expect(screen.getByRole('button', SAVE)).not.toBeDisabled())
+  })
+
+  it('Save stays disabled when canEdit is false even after an edit (and with EDIT_COMPONENTS)', async () => {
+    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    renderDirty({ ...baseComponent, canEdit: false }, user)
+    // The edit applied (sibling control reacted), yet Save is gated by canEdit — and
+    // the wrapper tooltip names that reason, not "no changes".
+    const save = screen.getByRole('button', SAVE)
+    expect(save).toBeDisabled()
+    expect(save.parentElement).toHaveAttribute('title', CANNOT_EDIT_TITLE)
+  })
+
+  it('absent canEdit falls back to EDIT_COMPONENTS — enables after an edit', async () => {
+    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    renderDirty(baseComponent, user) // baseComponent has no canEdit
+    await waitFor(() => expect(screen.getByRole('button', SAVE)).not.toBeDisabled())
+  })
+
+  it('absent canEdit falls back to EDIT_COMPONENTS — disabled without the permission', () => {
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    renderDirty(baseComponent, user)
+    const save = screen.getByRole('button', SAVE)
+    expect(save).toBeDisabled()
+    expect(save.parentElement).toHaveAttribute('title', CANNOT_EDIT_TITLE)
   })
 })
 
