@@ -211,6 +211,12 @@ export function ComponentDetailPage() {
 
   async function handleSave() {
     if (!component) return
+    // Defence-in-depth for the Save dirty-gate: the button is already disabled
+    // when there's nothing to save, but bail here too so any non-click trigger
+    // can't fire a no-op PATCH (and a misleading "saved" toast). The system-
+    // required-clear case keeps hasUnsavedChanges true, so its inline error
+    // still surfaces below.
+    if (!hasUnsavedChanges) return
     // Server-side errors set on a previous failed submit don't auto-clear
     // when the user fixes the input or when the next save succeeds (RHF
     // only clears errors on its own validation passes). Wipe them at the
