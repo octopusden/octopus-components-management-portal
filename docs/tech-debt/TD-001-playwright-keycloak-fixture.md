@@ -22,7 +22,7 @@ Today the fixture is `frontend/e2e/auth.setup.ts`. It scripts the OIDC authoriza
 
 ## Acceptance criteria
 
-1. A helper API — call site shape `loginAs({ roles: ['IMPORT_DATA', 'EDIT_COMPONENTS'] })` — that returns a Playwright `BrowserContext` with a valid session and the requested role mapping, creating the realm user on demand.
+1. A helper API — call site shape `loginAs({ roles: ['IMPORT_DATA', 'CREATE_COMPONENTS'] })` — that returns a Playwright `BrowserContext` with a valid session and the requested role mapping, creating the realm user on demand.
 2. A token-expiry helper — `expireAccessToken(context)` — that fast-forwards the BFF session's token so the next XHR exercises the `ApiClientAuthorizationFailureFilter` path.
 3. Decoupling from `frontend/e2e/auth.setup.ts`'s single-pass decode: the helper drives the OIDC dance through HTTP, not by parsing the login HTML.
 4. Existing specs (`admin-migration.spec.ts`, `smoke-admin.spec.ts`, `regression-components-list.spec.ts`) migrate to the helper without behaviour changes.

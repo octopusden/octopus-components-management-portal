@@ -89,7 +89,7 @@ This is the lighter path Plan §7.1.6 explicitly allowed. The full ConflictResol
 | Action | UX gate | Server gate |
 |---|---|---|
 | Read everything | none (public per CRS Phase 1 backward compat) | `permitAll` filter chain on GET |
-| Plain edit | none (any authenticated user with `EDIT_COMPONENTS`) | `canEditComponent(#id.toString())` |
+| Plain edit | Save and inline override controls follow the detail response `canEdit` flag | `canEditComponent(#id.toString())` |
 | Archive / unarchive | none (Switch is always interactive) | `canArchiveComponent(...)` (ROLE_ADMIN today) |
 | Rename | `disabled` input with hint when missing `RENAME_COMPONENTS` | `canRenameComponent(...)` (ROLE_ADMIN today) |
 | Delete | `RequirePermission` around the page (the route is gated up-front)<sup>†</sup> | `canDeleteComponent(...)` |

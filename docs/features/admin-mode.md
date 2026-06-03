@@ -68,7 +68,7 @@ Use Admin mode for actions that are:
 - **Hard to reverse** without restoring from backup.
 - **Likely to fire by accident** in a long-lived tab.
 
-Do **not** gate everyday CRUD on it (editing one component's escrow config is gated by `EDIT_COMPONENTS` on the server and visible to the user as part of the form workflow — that's enough).
+Do **not** gate everyday CRUD on it (editing one component's escrow config is gated by `canEditComponent` on the server and visible to the user as part of the form workflow — that's enough).
 
 Today the only thing behind Admin mode is "Run migration" in [`docs/features/admin-migration.md`](admin-migration.md). When new candidates appear, document them here.
 

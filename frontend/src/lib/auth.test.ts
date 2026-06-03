@@ -95,7 +95,7 @@ describe('restoreContinuePath', () => {
 describe('fetchCurrentUser', () => {
   const validUser: User = {
     username: 'alice',
-    roles: [{ name: 'admin', permissions: ['EDIT_COMPONENTS'] }],
+    roles: [{ name: 'admin', permissions: ['CREATE_COMPONENTS'] }],
     groups: ['devs'],
   }
 
@@ -139,16 +139,16 @@ describe('fetchCurrentUser', () => {
 describe('hasPermission', () => {
   const user: User = {
     username: 'alice',
-    roles: [{ name: 'editor', permissions: ['EDIT_COMPONENTS', 'ACCESS_COMPONENTS'] }],
+    roles: [{ name: 'editor', permissions: ['CREATE_COMPONENTS', 'ACCESS_COMPONENTS'] }],
     groups: [],
   }
 
   it('returns false for null user', () => {
-    expect(hasPermission(null, 'EDIT_COMPONENTS')).toBe(false)
+    expect(hasPermission(null, 'CREATE_COMPONENTS')).toBe(false)
   })
 
   it('returns false for undefined user', () => {
-    expect(hasPermission(undefined, 'EDIT_COMPONENTS')).toBe(false)
+    expect(hasPermission(undefined, 'CREATE_COMPONENTS')).toBe(false)
   })
 
   it('returns false when permission is not in any role', () => {
@@ -156,7 +156,7 @@ describe('hasPermission', () => {
   })
 
   it('returns true when permission is present in a role', () => {
-    expect(hasPermission(user, 'EDIT_COMPONENTS')).toBe(true)
+    expect(hasPermission(user, 'CREATE_COMPONENTS')).toBe(true)
   })
 })
 

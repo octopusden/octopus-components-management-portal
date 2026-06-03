@@ -39,8 +39,8 @@ vi.mock('../../hooks/useCurrentUser', () => ({
 function makeUser(permissions: string[]): User {
   return { username: 'u', roles: [{ name: 'r', permissions }], groups: [] }
 }
-const ADMIN_USER = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS', 'EDIT_METADATA'])
-const EDITOR_USER = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+const ADMIN_USER = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS', 'EDIT_METADATA'])
+const EDITOR_USER = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
 
 // Stub OverrideRowEditor so FieldOverrides tests focus on the table/buttons,
 // not on the editor internals. The stub renders a sentinel element when open

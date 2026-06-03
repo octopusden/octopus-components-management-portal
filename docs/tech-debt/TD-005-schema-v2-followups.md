@@ -39,7 +39,7 @@ For each tab the schema-v2 migration touched, add one Playwright scenario that:
 4. Clicks the tab-local Save (or the central Save for GeneralTab).
 5. Re-reads the component via `page.request.get('/rest/api/4/components/{id}')` and asserts the change round-tripped.
 
-Six new specs total, one per tab. Layout matches the existing `regression-components-list.spec.ts`. Run under `chromium-admin` because `ROLE_ADMIN` carries `EDIT_COMPONENTS`.
+Six new specs total, one per tab. Layout matches the existing `regression-components-list.spec.ts`. Run under `chromium-admin` because `ROLE_ADMIN` carries `CREATE_COMPONENTS`.
 
 Acceptance: every save path of the schema-v2 contract has an active e2e gate. A future CRS field rename (say `vcsPath → vcsCanonicalPath`) trips the matching spec immediately.
 
@@ -61,7 +61,7 @@ a) **Scalar override flow** — open a component, click Add Override, select a s
 
 b) **Marker override flow** — same but with `vcs.settings`, add two vcsEntries with different paths, save. Assert the new row appears with `rowType=MARKER` and the marker child collection rendered (via the Configurations tab summary).
 
-Both run under `chromium-admin` (`EDIT_COMPONENTS`).
+Both run under `chromium-admin` (`CREATE_COMPONENTS`).
 
 Acceptance: the override editor's two arms of the tagged-union are exercised end-to-end against real `/field-overrides` endpoints.
 

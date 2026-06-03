@@ -271,13 +271,13 @@ describe('ComponentDetailPage — Save gating on canEdit', () => {
   }
 
   it('Save enables when component.canEdit is true (after a real edit)', async () => {
-    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
     renderDirty({ ...baseComponent, canEdit: true }, user)
     await waitFor(() => expect(screen.getByRole('button', SAVE)).not.toBeDisabled())
   })
 
-  it('Save stays disabled when canEdit is false even after an edit (and with EDIT_COMPONENTS)', async () => {
-    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+  it('Save stays disabled when canEdit is false even after an edit (and with CREATE_COMPONENTS)', async () => {
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
     renderDirty({ ...baseComponent, canEdit: false }, user)
     // The edit applied (sibling control reacted), yet Save is gated by canEdit — and
     // the wrapper tooltip names that reason, not "no changes".
@@ -286,13 +286,13 @@ describe('ComponentDetailPage — Save gating on canEdit', () => {
     expect(save.parentElement).toHaveAttribute('title', CANNOT_EDIT_TITLE)
   })
 
-  it('absent canEdit falls back to EDIT_COMPONENTS — enables after an edit', async () => {
-    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+  it('absent canEdit falls back to CREATE_COMPONENTS — enables after an edit', async () => {
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
     renderDirty(baseComponent, user) // baseComponent has no canEdit
     await waitFor(() => expect(screen.getByRole('button', SAVE)).not.toBeDisabled())
   })
 
-  it('absent canEdit falls back to EDIT_COMPONENTS — disabled without the permission', () => {
+  it('absent canEdit falls back to CREATE_COMPONENTS — disabled without the permission', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderDirty(baseComponent, user)
     const save = screen.getByRole('button', SAVE)
@@ -567,7 +567,7 @@ describe('ComponentDetailPage — solution flag dirty-gate', () => {
     // null) cannot happen at all. The omit semantics themselves remain unit-
     // tested in buildUpdateRequest.test.ts.
     const updateMutateAsync = vi.fn(() => Promise.resolve())
-    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
     const seeded: ComponentDetail = { ...baseComponent, solution: null }
     renderPage(seeded, user, { updateMutation: { mutateAsync: updateMutateAsync } })
 
@@ -600,7 +600,7 @@ describe('ComponentDetailPage — Save dirty-gate', () => {
       )
     })
     const updateMutateAsync = vi.fn(() => Promise.resolve())
-    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
     renderPage(baseComponent, user, { updateMutation: { mutateAsync: updateMutateAsync } })
 
     // Pristine (system hydrated, nothing else changed) → Save disabled.
@@ -629,7 +629,7 @@ describe('ComponentDetailPage — Save dirty-gate', () => {
     // gate must still render. (A previous version computed the gate by calling
     // buildUpdateRequest at render, which dereferenced component.docs.length
     // and blanked the entire /components/{id} page — caught by the E2E suite.)
-    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
     const seeded = {
       ...baseComponent,
       docs: undefined,
@@ -654,7 +654,7 @@ describe('ComponentDetailPage — system clear-blocks-save guard (task #14 singl
       React.createElement('div', { 'data-testid': 'general-tab-systems-cleared' }),
     )
     const updateMutateAsync = vi.fn(() => Promise.resolve())
-    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
     renderPage(baseComponent, user, { updateMutation: { mutateAsync: updateMutateAsync } })
 
     await waitFor(() => {
@@ -697,7 +697,7 @@ describe('ComponentDetailPage — system clear-blocks-save guard (task #14 singl
       ),
     )
     const updateMutateAsync = vi.fn(() => Promise.resolve())
-    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
     renderPage(baseComponent, user, { updateMutation: { mutateAsync: updateMutateAsync } })
 
     // Make the edit, then wait for Save to enable before clicking it.
@@ -742,7 +742,7 @@ describe('ComponentDetailPage — labels clear-all sends [] (PR #44 follow-up: c
       return React.createElement('div', { 'data-testid': 'general-tab-labels-cleared' })
     })
     const updateMutateAsync = vi.fn(() => Promise.resolve())
-    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
     const seeded: ComponentDetail = { ...baseComponent, labels: ['backend', 'internal'] }
     renderPage(seeded, user, { updateMutation: { mutateAsync: updateMutateAsync } })
 
@@ -764,7 +764,7 @@ describe('ComponentDetailPage — labels clear-all sends [] (PR #44 follow-up: c
     // form is pristine and Save stays disabled. (The "labels:[] would be a
     // no-op write" omit is unit-tested in buildUpdateRequest.test.ts.)
     const updateMutateAsync = vi.fn(() => Promise.resolve())
-    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
     const seeded: ComponentDetail = { ...baseComponent, labels: [] }
     renderPage(seeded, user, { updateMutation: { mutateAsync: updateMutateAsync } })
 
@@ -787,7 +787,7 @@ describe('ComponentDetailPage — labels clear-all sends [] (PR #44 follow-up: c
     // The default GeneralTab stub hydrates only `system`; labels stays at the
     // form default [], modelling the untouched / pre-hydration window.
     const updateMutateAsync = vi.fn(() => Promise.resolve())
-    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
     const seeded: ComponentDetail = { ...baseComponent, labels: ['backend', 'internal'] }
     renderPage(seeded, user, { updateMutation: { mutateAsync: updateMutateAsync } })
 
@@ -813,7 +813,7 @@ describe('ComponentDetailPage — labels clear-all sends [] (PR #44 follow-up: c
       isError: false,
     }))
     const updateMutateAsync = vi.fn(() => Promise.resolve())
-    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
     const seeded: ComponentDetail = { ...baseComponent, labels: ['backend'] }
     renderPage(seeded, user, { updateMutation: { mutateAsync: updateMutateAsync } })
 

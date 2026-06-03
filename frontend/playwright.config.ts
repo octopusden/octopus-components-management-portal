@@ -78,7 +78,7 @@ export default defineConfig({
       // e2e/visual/_compare-vs-prototype.spec.ts`.
       //
       // `editor-*` specs are route-mocked editor-flow journeys that need
-      // EDIT_COMPONENTS (admin) — same project shape as the visual specs
+      // CREATE_COMPONENTS (admin) — same project shape as the visual specs
       // (route-mocked + admin storageState), so they piggyback here.
       testMatch: /(smoke-admin|admin-migration|editor-[^/]+|visual\/(?!_)[^/]+)\.spec\.ts$/,
     },
