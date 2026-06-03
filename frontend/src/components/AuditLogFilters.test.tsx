@@ -64,12 +64,12 @@ describe('AuditLogFilters (B7.1.3)', () => {
     expect(onChange).toHaveBeenCalledWith({ source: 'git-history' })
   })
 
-  it('exposes an action dropdown with CRUD/RENAME/ARCHIVE plus All', async () => {
+  it('exposes an action dropdown with CRUD/RENAME/MIGRATED plus All', async () => {
     render(<AuditLogFilters filter={{}} onChange={onChange} />)
 
     await userEvent.click(screen.getByRole('combobox', { name: /action/i }))
 
-    for (const action of ['CREATE', 'UPDATE', 'DELETE', 'RENAME', 'ARCHIVE']) {
+    for (const action of ['CREATE', 'UPDATE', 'DELETE', 'RENAME', 'MIGRATED']) {
       expect(screen.getByRole('option', { name: action })).toBeDefined()
     }
     expect(screen.getByRole('option', { name: /all actions/i })).toBeDefined()
@@ -193,5 +193,25 @@ describe('AuditLogFilters (B7.1.3)', () => {
     render(<AuditLogFilters filter={{ entityType: 'Component' }} onChange={onChange} />)
     await userEvent.click(screen.getByRole('button', { name: /clear filters/i }))
     expect(onChange).toHaveBeenCalledWith({})
+  })
+
+  it('exposes a "Show migration" toggle that is off by default', () => {
+    render(<AuditLogFilters filter={{}} onChange={onChange} />)
+    const toggle = screen.getByRole('switch', { name: /show migration/i })
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+  })
+
+  it('turns includeMigrated on when the toggle is switched', async () => {
+    render(<AuditLogFilters filter={{}} onChange={onChange} />)
+    await userEvent.click(screen.getByRole('switch', { name: /show migration/i }))
+    expect(onChange).toHaveBeenCalledWith({ includeMigrated: true })
+  })
+
+  it('turns includeMigrated off (omitted) when the toggle is switched back', async () => {
+    render(<AuditLogFilters filter={{ includeMigrated: true }} onChange={onChange} />)
+    const toggle = screen.getByRole('switch', { name: /show migration/i })
+    expect(toggle.getAttribute('aria-checked')).toBe('true')
+    await userEvent.click(toggle)
+    expect(onChange).toHaveBeenCalledWith({ includeMigrated: undefined })
   })
 })

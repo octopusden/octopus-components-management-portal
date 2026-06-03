@@ -222,15 +222,14 @@ export function JiraTab({ component, updateMutation, toast, canEdit }: JiraTabPr
       </div>
 
       <div className="flex justify-end">
-        <Button
-          size="sm"
-          onClick={handleSave}
-          disabled={updateMutation.isPending || !canEdit}
-          title={!canEdit ? CANNOT_EDIT_TITLE : undefined}
-        >
-          <Save className="h-4 w-4" />
-          {updateMutation.isPending ? 'Saving...' : 'Save Jira'}
-        </Button>
+        {/* title on the wrapping span: a disabled Button has pointer-events-none, so a
+            title on it would never show on hover. */}
+        <span className="inline-flex" title={!canEdit ? CANNOT_EDIT_TITLE : undefined}>
+          <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending || !canEdit}>
+            <Save className="h-4 w-4" />
+            {updateMutation.isPending ? 'Saving...' : 'Save Jira'}
+          </Button>
+        </span>
       </div>
     </div>
   )

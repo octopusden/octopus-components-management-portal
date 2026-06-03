@@ -181,15 +181,14 @@ export function VcsTab({ component, updateMutation, toast, canEdit }: VcsTabProp
       </div>
 
       <div className="flex justify-end">
-        <Button
-          size="sm"
-          onClick={handleSave}
-          disabled={updateMutation.isPending || !canEdit}
-          title={!canEdit ? CANNOT_EDIT_TITLE : undefined}
-        >
-          <Save className="h-4 w-4" />
-          {updateMutation.isPending ? 'Saving...' : 'Save VCS'}
-        </Button>
+        {/* title on the wrapping span: a disabled Button has pointer-events-none, so a
+            title on it would never show on hover. */}
+        <span className="inline-flex" title={!canEdit ? CANNOT_EDIT_TITLE : undefined}>
+          <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending || !canEdit}>
+            <Save className="h-4 w-4" />
+            {updateMutation.isPending ? 'Saving...' : 'Save VCS'}
+          </Button>
+        </span>
       </div>
     </div>
   )

@@ -412,15 +412,14 @@ export function DistributionTab({ component, updateMutation, toast, canEdit }: D
       </div>
 
       <div className="flex justify-end">
-        <Button
-          size="sm"
-          onClick={handleSave}
-          disabled={updateMutation.isPending || !canEdit}
-          title={!canEdit ? CANNOT_EDIT_TITLE : undefined}
-        >
-          <Save className="h-4 w-4" />
-          {updateMutation.isPending ? 'Saving...' : 'Save Distribution'}
-        </Button>
+        {/* title on the wrapping span: a disabled Button has pointer-events-none, so a
+            title on it would never show on hover. */}
+        <span className="inline-flex" title={!canEdit ? CANNOT_EDIT_TITLE : undefined}>
+          <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending || !canEdit}>
+            <Save className="h-4 w-4" />
+            {updateMutation.isPending ? 'Saving...' : 'Save Distribution'}
+          </Button>
+        </span>
       </div>
     </div>
   )

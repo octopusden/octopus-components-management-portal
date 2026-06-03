@@ -145,13 +145,92 @@ export function ComponentDetailPage() {
   // about the otherwise-unused expressions.
   void form.formState.dirtyFields
   void form.formState.touchedFields
+  // Subscribe to form VALUES too (not just dirty/touched flags) so the Save
+  // dirty-gate below recomputes as the user edits and after GeneralTab's
+  // useEffect hydrates the form from the server — `setValue` during hydration
+  // doesn't flip a dirty flag, so without a value subscription the gate would
+  // stay stuck on the pre-hydration snapshot.
+  void form.watch()
+
+  // Assemble the General-tab PATCH from current form + server snapshot + FC
+  // visibility. Shared by handleSave (the actual write) and the render-time
+  // dirty gate below so the two never disagree about what counts as a change.
+  function buildPatchRequest(): ComponentUpdateRequest | null {
+    if (!component) return null
+    return buildUpdateRequest({
+      component,
+      values: form.getValues(),
+      visibilities: {
+        displayName: displayNameFc.visibility ?? 'editable',
+        componentOwner: componentOwnerFc.visibility ?? 'editable',
+        system: systemFc.visibility ?? 'editable',
+        clientCode: clientCodeFc.visibility ?? 'editable',
+        releaseManager: releaseManagerFc.visibility ?? 'editable',
+        securityChampion: securityChampionFc.visibility ?? 'editable',
+        copyright: copyrightFc.visibility ?? 'editable',
+        canBeParent: canBeParentFc.visibility ?? 'editable',
+        labels: labelsFc.visibility ?? 'editable',
+      },
+      dirtyFields: {
+        solution: form.formState.dirtyFields.solution === true,
+        system: form.formState.dirtyFields.system === true,
+        labels:
+          (form.formState.dirtyFields.labels as unknown) === true ||
+          (labelsFc.visibility !== 'hidden' &&
+            (form.formState.touchedFields.labels as unknown) === true &&
+            (component.labels?.length ?? 0) > 0 &&
+            (form.getValues('labels')?.length ?? 0) === 0),
+        releaseManager:
+          (form.formState.dirtyFields.releaseManager as unknown) === true ||
+          (releaseManagerFc.visibility !== 'hidden' &&
+            (form.formState.touchedFields.releaseManager as unknown) === true &&
+            (component.releaseManager?.length ?? 0) > 0 &&
+            (form.getValues('releaseManager')?.length ?? 0) === 0),
+        securityChampion:
+          (form.formState.dirtyFields.securityChampion as unknown) === true ||
+          (securityChampionFc.visibility !== 'hidden' &&
+            (form.formState.touchedFields.securityChampion as unknown) === true &&
+            (component.securityChampion?.length ?? 0) > 0 &&
+            (form.getValues('securityChampion')?.length ?? 0) === 0),
+        docs: !!form.formState.dirtyFields.docs,
+        artifactIds: !!form.formState.dirtyFields.artifactIds,
+      },
+    })
+  }
+
+  // Save-button dirty gate (Portal companion to SYS-048). The header Save
+  // governs ONLY the General tab — the other tabs own their own save — so
+  // hasUnsavedChanges mirrors exactly what handleSave would PATCH, via the
+  // shared buildPatchRequest(). Computing it here at render is deliberate: it
+  // also subscribes RHF's lazy formState proxy to the nested dirtyFields /
+  // touchedFields that handleSave reads (labels / releaseManager /
+  // securityChampion / …) — a top-level `void form.formState.dirtyFields` alone
+  // does not reliably populate those array subfields, so without this the save
+  // would omit a just-edited people list. buildUpdateRequest is null-safe for
+  // absent collections (docs/artifactIds), so this render-time call cannot crash
+  // the page even when the API omits them. The system-required-clear case keeps
+  // Save enabled so the inline "System is required" error still surfaces.
+  const pendingPatch = buildPatchRequest()
+  const systemClearNeedsAttention =
+    systemFc.visibility !== 'hidden' &&
+    (component?.system ?? '') !== '' &&
+    ((form.getValues('system') as string | undefined) ?? '') === ''
+  const hasUnsavedChanges =
+    systemClearNeedsAttention ||
+    (!!pendingPatch &&
+      Object.entries(pendingPatch).some(
+        ([key, value]) => key !== 'version' && key !== 'clearGroup' && value !== undefined,
+      ))
 
   async function handleSave() {
     if (!component) return
-    // Defense-in-depth: the Save button is disabled when !canEdit, but guard the
-    // handler too so a programmatic invocation can't bypass the gate (the backend
-    // would 403 regardless).
+    // Defence-in-depth (both gates): the Save button is disabled when the user
+    // can't edit OR there's nothing to save; bail here too so any non-click trigger
+    // can't bypass either gate. The backend 403s a forbidden edit regardless; the
+    // system-required-clear case keeps hasUnsavedChanges true so its inline error
+    // still surfaces below.
     if (!canEdit) return
+    if (!hasUnsavedChanges) return
     // Server-side errors set on a previous failed submit don't auto-clear
     // when the user fixes the input or when the next save succeeds (RHF
     // only clears errors on its own validation passes). Wipe them at the
@@ -194,77 +273,8 @@ export function ComponentDetailPage() {
     // guard. canBeParent invariants are enforced server-side; their 400s map
     // inline via GENERAL_TAB_FIELDS below.
 
-    const request = buildUpdateRequest({
-      component,
-      values: form.getValues(),
-      // Each FieldConfigEntry.visibility is optional in the type but the
-      // hook falls back to 'editable' when the config row is missing, so
-      // mirror the same default here for the (rare) case where data is
-      // shaped without the visibility key set.
-      visibilities: {
-        displayName: displayNameFc.visibility ?? 'editable',
-        componentOwner: componentOwnerFc.visibility ?? 'editable',
-        system: systemFc.visibility ?? 'editable',
-        clientCode: clientCodeFc.visibility ?? 'editable',
-        releaseManager: releaseManagerFc.visibility ?? 'editable',
-        securityChampion: securityChampionFc.visibility ?? 'editable',
-        copyright: copyrightFc.visibility ?? 'editable',
-        canBeParent: canBeParentFc.visibility ?? 'editable',
-        labels: labelsFc.visibility ?? 'editable',
-      },
-      dirtyFields: {
-        solution: form.formState.dirtyFields.solution === true,
-        // system: scalar string (task #14 single-select). RHF dirty
-        // tracking for primitive strings is straightforward — `=== true`
-        // ignores the undefined/unset state.
-        system: form.formState.dirtyFields.system === true,
-        // labels: close the RHF clear-all blind-spot (PR #44 follow-up).
-        // RHF treats `setValue('labels', [])` as not-dirty when the form
-        // default is also `[]` — so a user who unchecks every label gets
-        // dirty=false even with shouldDirty:true. The chip UI uses
-        // shouldTouch:true to flip `touchedFields.labels`, which gives us
-        // a reliable "user interacted" signal independent of RHF's
-        // value-equality dirty check.
-        //
-        // Synth-dirty fires when ALL of these hold:
-        //   - field is not FC-hidden (admins who hid it can't fix the form),
-        //   - user has touched the field (touchedFields.labels === true) —
-        //     guards against the pre-hydration race where form is the []
-        //     default and component.labels is non-empty,
-        //   - server had labels (component.labels.length > 0),
-        //   - form has no labels now (form.getValues('labels').length === 0).
-        // The touched guard makes "fails closed" symmetric with the systems
-        // race: if the user hasn't touched labels, no synth → no PATCH wipe.
-        labels:
-          (form.formState.dirtyFields.labels as unknown) === true ||
-          (labelsFc.visibility !== 'hidden' &&
-            (form.formState.touchedFields.labels as unknown) === true &&
-            (component.labels?.length ?? 0) > 0 &&
-            (form.getValues('labels')?.length ?? 0) === 0),
-        // releaseManager / securityChampion: multi-value arrays whose form
-        // default is []. Same RHF clear-all blind-spot as labels — a user who
-        // removes every person gets dirty=false because the new value []
-        // equals the form default []. PeopleListInput sets shouldTouch:true on
-        // every change, so the synth-dirty fires when ALL of: not FC-hidden,
-        // touched, server had values, form now empty. (Add/reorder already set
-        // RHF dirty via the non-empty value, so the `=== true` branch covers
-        // those.)
-        releaseManager:
-          (form.formState.dirtyFields.releaseManager as unknown) === true ||
-          (releaseManagerFc.visibility !== 'hidden' &&
-            (form.formState.touchedFields.releaseManager as unknown) === true &&
-            (component.releaseManager?.length ?? 0) > 0 &&
-            (form.getValues('releaseManager')?.length ?? 0) === 0),
-        securityChampion:
-          (form.formState.dirtyFields.securityChampion as unknown) === true ||
-          (securityChampionFc.visibility !== 'hidden' &&
-            (form.formState.touchedFields.securityChampion as unknown) === true &&
-            (component.securityChampion?.length ?? 0) > 0 &&
-            (form.getValues('securityChampion')?.length ?? 0) === 0),
-        docs: !!form.formState.dirtyFields.docs,
-        artifactIds: !!form.formState.dirtyFields.artifactIds,
-      },
-    })
+    const request = buildPatchRequest()
+    if (!request) return
 
     try {
       await updateMutation.mutateAsync(request)
@@ -484,21 +494,29 @@ export function ComponentDetailPage() {
                 Unarchive
               </Button>
             )}
-            <Button
-              size="sm"
-              onClick={handleSave}
-              disabled={updateMutation.isPending || fieldConfigLoading || !canEdit}
+            {/* title lives on the wrapping span, not the Button: a disabled Button has
+                `pointer-events-none`, so a title on it would never show on hover. */}
+            <span
+              className="inline-flex"
               title={
                 !canEdit
                   ? CANNOT_EDIT_TITLE
                   : fieldConfigLoading
                     ? 'Loading field configuration…'
-                    : undefined
+                    : !hasUnsavedChanges
+                      ? 'No changes to save'
+                      : undefined
               }
             >
-              <Save className="h-4 w-4" />
-              {updateMutation.isPending ? 'Saving…' : 'Save'}
-            </Button>
+              <Button
+                size="sm"
+                onClick={handleSave}
+                disabled={updateMutation.isPending || fieldConfigLoading || !canEdit || !hasUnsavedChanges}
+              >
+                <Save className="h-4 w-4" />
+                {updateMutation.isPending ? 'Saving…' : 'Save'}
+              </Button>
+            </span>
           </div>
         </div>
 

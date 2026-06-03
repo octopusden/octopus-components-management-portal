@@ -3,4 +3,4 @@
 // admin). Mirrors the backend `canEditComponent` gate, surfaced to the SPA via
 // `ComponentDetail.canEdit`.
 export const CANNOT_EDIT_TITLE =
-  'Only the component owner, a release manager, or a security champion can edit this component'
+  'Only the component owner, a release manager, a security champion, or an administrator can edit this component'
