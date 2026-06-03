@@ -563,6 +563,23 @@ describe('ComponentDetailPage — Save dirty-gate', () => {
     const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
     expect(payload['displayName']).toBe('New Name')
   })
+
+  it('renders (Save button present) even when the API omits docs/artifactIds', () => {
+    // Regression: the dirty-gate must never crash the whole page. Older CRS
+    // images omit docs/artifactIds from ComponentDetailResponse; the TS type
+    // says they're always arrays, but if the runtime payload disagrees the
+    // gate must still render. (A previous version computed the gate by calling
+    // buildUpdateRequest at render, which dereferenced component.docs.length
+    // and blanked the entire /components/{id} page — caught by the E2E suite.)
+    const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
+    const seeded = {
+      ...baseComponent,
+      docs: undefined,
+      artifactIds: undefined,
+    } as unknown as ComponentDetail
+    renderPage(seeded, user)
+    expect(screen.getByRole('button', { name: /^save$/i })).toBeDefined()
+  })
 })
 
 describe('ComponentDetailPage — system clear-blocks-save guard (task #14 single-select)', () => {
@@ -607,20 +624,29 @@ describe('ComponentDetailPage — system clear-blocks-save guard (task #14 singl
       isLoading: false,
       isError: false,
     }))
-    vi.mocked(GeneralTab).mockImplementation(({ form }) => {
-      useEffect(() => {
-        // A real, visible change so the dirty-gate enables Save; system left at
-        // the '' default to model the hidden-and-empty case.
-        form.setValue('displayName', 'Edited While System Hidden', { shouldDirty: true })
-      }, [form])
-      return React.createElement('div', { 'data-testid': 'general-tab-systems-hidden' })
-    })
+    // Stub exposes a button that makes a real visible edit (displayName) on
+    // click — a user-driven setValue reliably flips RHF's isDirty (mirrors how
+    // the real GeneralTab's registered inputs behave). System is left at the ''
+    // default to model the hidden-and-empty case.
+    vi.mocked(GeneralTab).mockImplementation(({ form }) =>
+      React.createElement(
+        'button',
+        {
+          'data-testid': 'edit-display-name',
+          onClick: () => form.setValue('displayName', 'Edited While System Hidden', { shouldDirty: true }),
+        },
+        'edit',
+      ),
+    )
     const updateMutateAsync = vi.fn(() => Promise.resolve())
     const user = makeUser(['ACCESS_COMPONENTS', 'EDIT_COMPONENTS'])
     renderPage(baseComponent, user, { updateMutation: { mutateAsync: updateMutateAsync } })
 
+    // Make the edit, then wait for Save to enable before clicking it.
+    fireEvent.click(screen.getByTestId('edit-display-name'))
     await waitFor(() => {
-      expect(screen.getByTestId('general-tab-systems-hidden')).toBeDefined()
+      const btn = screen.getByRole('button', { name: /^save$/i }) as HTMLButtonElement
+      expect(btn.disabled).toBe(false)
     })
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
 

@@ -207,7 +207,9 @@ function buildDocsPatch(
       docComponentKey: d.docComponentKey,
       majorVersion: d.majorVersion === '' ? null : d.majorVersion,
     }))
-  const hadPrior = component.docs.length > 0
+  // `?? []` is defensive: the type says docs is always an array, but older CRS
+  // images omit it from ComponentDetailResponse — guard so a save never crashes.
+  const hadPrior = (component.docs ?? []).length > 0
   const dirty = !!dirtyFields.docs
   if (cleaned.length > 0) return { docs: cleaned }
   if (dirty && hadPrior) return { docs: [] }
@@ -225,7 +227,8 @@ function buildArtifactIdsPatch(
       artifactPattern: (a.artifactPattern ?? '').trim(),
     }))
     .filter((a) => a.groupPattern !== '' && a.artifactPattern !== '')
-  const hadPrior = component.artifactIds.length > 0
+  // `?? []` is defensive — see buildDocsPatch (older CRS omits artifactIds).
+  const hadPrior = (component.artifactIds ?? []).length > 0
   const dirty = !!dirtyFields.artifactIds
   if (cleaned.length > 0) return { artifactIds: cleaned }
   if (dirty && hadPrior) return { artifactIds: [] }
