@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from './ui/select'
 import { Button } from './ui/button'
+import { Switch } from './ui/switch'
 import { FilterBar } from './ui/filter-bar'
 
 /**
@@ -27,6 +28,11 @@ export interface AuditFilter {
   action?: string
   from?: string
   to?: string
+  /**
+   * Surface git-history baseline rows (`action = MIGRATED`), hidden by CRS by
+   * default (SYS-049). Backs the "Show migration" toggle. Omitted unless on.
+   */
+  includeMigrated?: boolean
 }
 
 interface AuditLogFiltersProps {
@@ -38,7 +44,7 @@ const ALL_VALUE = '__all__'
 
 const ENTITY_TYPE_OPTIONS = ['Component'] as const
 const SOURCE_OPTIONS = ['api', 'git-history'] as const
-const ACTION_OPTIONS = ['CREATE', 'UPDATE', 'DELETE', 'RENAME', 'ARCHIVE'] as const
+const ACTION_OPTIONS = ['CREATE', 'UPDATE', 'DELETE', 'RENAME', 'MIGRATED'] as const
 
 /**
  * Convert a browser `datetime-local` string ("YYYY-MM-DDTHH:mm") into a
@@ -106,13 +112,23 @@ export function AuditLogFilters({ filter, onChange }: AuditLogFiltersProps) {
     onChange({ ...filter, to: localToInstant(value) })
   }
 
+  const handleIncludeMigrated = (checked: boolean) => {
+    onChange({ ...filter, includeMigrated: checked || undefined })
+  }
+
   const handleClear = () => {
     setChangedByLocal('')
     onChange({})
   }
 
   const hasActiveFilters =
-    !!filter.entityType || !!filter.changedBy || !!filter.source || !!filter.action || !!filter.from || !!filter.to
+    !!filter.entityType ||
+    !!filter.changedBy ||
+    !!filter.source ||
+    !!filter.action ||
+    !!filter.from ||
+    !!filter.to ||
+    !!filter.includeMigrated
 
   return (
     <FilterBar withLabels>
@@ -198,6 +214,18 @@ export function AuditLogFilters({ filter, onChange }: AuditLogFiltersProps) {
           onChange={(e) => handleTo(e.target.value)}
           className="w-[200px]"
         />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="audit-filter-include-migrated">Show migration</Label>
+        <div className="flex h-9 items-center">
+          <Switch
+            id="audit-filter-include-migrated"
+            aria-label="Show migration"
+            checked={!!filter.includeMigrated}
+            onCheckedChange={handleIncludeMigrated}
+          />
+        </div>
       </div>
 
       {hasActiveFilters && (

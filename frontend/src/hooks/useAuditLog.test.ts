@@ -76,6 +76,28 @@ describe('useEntityAuditLog', () => {
     expect(result.current.isFetching).toBe(false)
     expect(mockApi.get).not.toHaveBeenCalled()
   })
+
+  it('sends includeMigrated=true only when requested', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result } = renderHook(
+      () => useEntityAuditLog('Component', 'abc-123', { includeMigrated: true }),
+      { wrapper: makeWrapper() },
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const url = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    expect(url).toContain('includeMigrated=true')
+  })
+
+  it('omits includeMigrated by default', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result } = renderHook(
+      () => useEntityAuditLog('Component', 'abc-123'),
+      { wrapper: makeWrapper() },
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const url = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    expect(url).not.toContain('includeMigrated')
+  })
 })
 
 describe('useRecentAuditLog — filter params', () => {
@@ -105,5 +127,21 @@ describe('useRecentAuditLog — filter params', () => {
     expect(url).toContain('action=UPDATE')
     expect(url).toContain('from=')
     expect(url).toContain('to=')
+  })
+
+  it('omits includeMigrated by default and sends it only when true', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result, rerender } = renderHook(
+      ({ inc }: { inc: boolean }) => useRecentAuditLog({ filter: { includeMigrated: inc } }),
+      { wrapper: makeWrapper(), initialProps: { inc: false } },
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const defaultUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    expect(defaultUrl).not.toContain('includeMigrated')
+
+    rerender({ inc: true })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const lastUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls.at(-1)![0] as string
+    expect(lastUrl).toContain('includeMigrated=true')
   })
 })

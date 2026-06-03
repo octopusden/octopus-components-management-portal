@@ -1,5 +1,8 @@
+import { useState } from 'react'
 import { AuditLogTable } from '../AuditLogTable'
 import { useEntityAuditLog } from '../../hooks/useAuditLog'
+import { Switch } from '../ui/switch'
+import { Label } from '../ui/label'
 
 interface ComponentHistoryTabProps {
   componentId: string
@@ -17,9 +20,33 @@ interface ComponentHistoryTabProps {
  * this page (they're constant `Component` + the page's id) but trimming
  * them now would fork the table for a cosmetic win — that's a 7.2 polish
  * if we ever pick it up.
+ *
+ * The "Show migration" toggle surfaces the git-history baseline row
+ * (`action = MIGRATED`), which CRS hides by default — one migration row per
+ * component is noise on the day-to-day history view (SYS-049).
  */
 export function ComponentHistoryTab({ componentId }: ComponentHistoryTabProps) {
-  const { data, isLoading } = useEntityAuditLog('Component', componentId, { page: 0, size: 50 })
+  const [includeMigrated, setIncludeMigrated] = useState(false)
+  const { data, isLoading } = useEntityAuditLog('Component', componentId, {
+    page: 0,
+    size: 50,
+    includeMigrated,
+  })
   const entries = data?.content ?? []
-  return <AuditLogTable data={entries} isLoading={isLoading} />
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-end gap-2">
+        <Label htmlFor="history-show-migration" className="text-sm font-normal text-muted-foreground">
+          Show migration
+        </Label>
+        <Switch
+          id="history-show-migration"
+          aria-label="Show migration"
+          checked={includeMigrated}
+          onCheckedChange={setIncludeMigrated}
+        />
+      </div>
+      <AuditLogTable data={entries} isLoading={isLoading} />
+    </div>
+  )
 }
