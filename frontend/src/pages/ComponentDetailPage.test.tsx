@@ -521,7 +521,7 @@ describe('ComponentDetailPage — solution flag dirty-gate', () => {
     })
 
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
-    await new Promise((r) => setTimeout(r, 50))
+    // Disabled Save fires no handler, so no need to await: assert directly.
     expect(updateMutateAsync).not.toHaveBeenCalled()
   })
 })
@@ -605,7 +605,7 @@ describe('ComponentDetailPage — system clear-blocks-save guard (task #14 singl
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
 
     // Give React-Query a tick to settle if the mutation were to fire.
-    await new Promise((r) => setTimeout(r, 50))
+    // Disabled Save fires no handler, so no need to await: assert directly.
     expect(updateMutateAsync).not.toHaveBeenCalled()
   })
 
@@ -715,7 +715,7 @@ describe('ComponentDetailPage — labels clear-all sends [] (PR #44 follow-up: c
       expect(btn.disabled).toBe(true)
     })
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
-    await new Promise((r) => setTimeout(r, 50))
+    // Disabled Save fires no handler, so no need to await: assert directly.
     expect(updateMutateAsync).not.toHaveBeenCalled()
   })
 
@@ -738,7 +738,7 @@ describe('ComponentDetailPage — labels clear-all sends [] (PR #44 follow-up: c
       expect(btn.disabled).toBe(true)
     })
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
-    await new Promise((r) => setTimeout(r, 50))
+    // Disabled Save fires no handler, so no need to await: assert directly.
     expect(updateMutateAsync).not.toHaveBeenCalled()
   })
 
@@ -764,7 +764,7 @@ describe('ComponentDetailPage — labels clear-all sends [] (PR #44 follow-up: c
       expect(btn.disabled).toBe(true)
     })
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
-    await new Promise((r) => setTimeout(r, 50))
+    // Disabled Save fires no handler, so no need to await: assert directly.
     expect(updateMutateAsync).not.toHaveBeenCalled()
   })
 })

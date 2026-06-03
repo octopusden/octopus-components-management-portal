@@ -122,7 +122,13 @@ export function AuditLogFilters({ filter, onChange }: AuditLogFiltersProps) {
   }
 
   const hasActiveFilters =
-    !!filter.entityType || !!filter.changedBy || !!filter.source || !!filter.action || !!filter.from || !!filter.to
+    !!filter.entityType ||
+    !!filter.changedBy ||
+    !!filter.source ||
+    !!filter.action ||
+    !!filter.from ||
+    !!filter.to ||
+    !!filter.includeMigrated
 
   return (
     <FilterBar withLabels>
