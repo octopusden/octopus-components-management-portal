@@ -191,35 +191,28 @@ export function ComponentDetailPage() {
   }
 
   // Save-button dirty gate (Portal companion to SYS-048). The header Save
-  // governs ONLY the General tab — the other tabs own their own save — so the
-  // gate reflects whether the General form carries a real change. It is built
-  // purely from RHF's own dirty/touched signals and MUST NOT dereference
-  // `component` (e.g. via buildUpdateRequest): doing so at render once crashed
-  // the whole /components/{id} page when the API omitted an optional collection.
-  // RHF leaves dirty=false when an array field is cleared back to its empty
-  // default, so a real clear-all of a server-populated list is detected via
-  // touched + server-had + now-empty (mirrors buildUpdateRequest's synth). The
-  // system-required-clear case keeps Save enabled so the inline "System is
-  // required" error still surfaces on click.
-  const arrayClearedToEmpty = (
-    field: 'labels' | 'releaseManager' | 'securityChampion',
-    hidden: boolean,
-    serverLen: number,
-  ): boolean =>
-    !hidden &&
-    (form.formState.touchedFields[field] as unknown) === true &&
-    serverLen > 0 &&
-    (form.getValues(field)?.length ?? 0) === 0
+  // governs ONLY the General tab — the other tabs own their own save — so
+  // hasUnsavedChanges mirrors exactly what handleSave would PATCH, via the
+  // shared buildPatchRequest(). Computing it here at render is deliberate: it
+  // also subscribes RHF's lazy formState proxy to the nested dirtyFields /
+  // touchedFields that handleSave reads (labels / releaseManager /
+  // securityChampion / …) — a top-level `void form.formState.dirtyFields` alone
+  // does not reliably populate those array subfields, so without this the save
+  // would omit a just-edited people list. buildUpdateRequest is null-safe for
+  // absent collections (docs/artifactIds), so this render-time call cannot crash
+  // the page even when the API omits them. The system-required-clear case keeps
+  // Save enabled so the inline "System is required" error still surfaces.
+  const pendingPatch = buildPatchRequest()
   const systemClearNeedsAttention =
     systemFc.visibility !== 'hidden' &&
     (component?.system ?? '') !== '' &&
     ((form.getValues('system') as string | undefined) ?? '') === ''
   const hasUnsavedChanges =
-    form.formState.isDirty ||
     systemClearNeedsAttention ||
-    arrayClearedToEmpty('labels', labelsFc.visibility === 'hidden', component?.labels?.length ?? 0) ||
-    arrayClearedToEmpty('releaseManager', releaseManagerFc.visibility === 'hidden', component?.releaseManager?.length ?? 0) ||
-    arrayClearedToEmpty('securityChampion', securityChampionFc.visibility === 'hidden', component?.securityChampion?.length ?? 0)
+    (!!pendingPatch &&
+      Object.entries(pendingPatch).some(
+        ([key, value]) => key !== 'version' && key !== 'clearGroup' && value !== undefined,
+      ))
 
   async function handleSave() {
     if (!component) return
