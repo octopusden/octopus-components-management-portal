@@ -97,6 +97,12 @@ export function PeopleInput({
             setOpen(true)
           }}
           onFocus={() => setOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              onChange(inputValue)
+              setOpen(false)
+            }
+          }}
           onBlur={() => {
             onChange(inputValue)
           }}

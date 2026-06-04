@@ -447,6 +447,38 @@ open class E2ETestcontainersDriver {
         }
     }
 
+    private fun directGrantAccessToken(username: String, password: String): String {
+        val keycloakHost = keycloak.host
+        val keycloakPort = keycloak.getMappedPort(KEYCLOAK_INTERNAL_PORT)
+        val tokenUrl = URI(
+            "http://$keycloakHost:$keycloakPort/realms/$KEYCLOAK_REALM/protocol/openid-connect/token"
+        ).toURL()
+        val form = listOf(
+            "grant_type" to "password",
+            "client_id" to KEYCLOAK_DIRECT_GRANT_CLIENT,
+            "client_secret" to keycloakDirectGrantSecret,
+            "username" to username,
+            "password" to password,
+            "scope" to "openid profile email",
+        ).joinToString("&") { (key, value) ->
+            URLEncoder.encode(key, StandardCharsets.UTF_8) + "=" +
+                    URLEncoder.encode(value, StandardCharsets.UTF_8)
+        }
+        val conn = tokenUrl.openConnection() as HttpURLConnection
+        return try {
+            conn.requestMethod = "POST"
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+            conn.outputStream.use { it.write(form.toByteArray(StandardCharsets.UTF_8)) }
+            assertEquals(200, conn.responseCode, "Direct-grant token endpoint should return 200")
+            val body = conn.inputStream.bufferedReader().use { it.readText() }
+            Regex("\"access_token\"\\s*:\\s*\"([^\"]+)\"").find(body)?.groupValues?.get(1)
+                ?: error("No access_token in token response: ${body.take(200)}")
+        } finally {
+            conn.disconnect()
+        }
+    }
+
     @Test
     fun `CRS serves at least one component`() {
         val host = crs.host
@@ -593,6 +625,49 @@ open class E2ETestcontainersDriver {
     }
 
     @Test
+    fun `CRS employee endpoints are available and fail open when directory is disabled`() {
+        val host = crs.host
+        val port = crs.getMappedPort(CRS_INTERNAL_PORT)
+        val accessToken = directGrantAccessToken(E2E_VIEWER_USERNAME, e2eViewerPassword)
+
+        val searchUrl = URI(
+            "http://$host:$port/rest/api/4/components/meta/employees?search=$E2E_VIEWER_USERNAME",
+        ).toURL()
+        val searchConn = searchUrl.openConnection() as HttpURLConnection
+        try {
+            searchConn.requestMethod = "GET"
+            searchConn.setRequestProperty("Authorization", "Bearer $accessToken")
+            assertEquals(200, searchConn.responseCode, "Employee search endpoint should return 200")
+            val body = searchConn.inputStream.bufferedReader().use { it.readText() }
+            assertEquals("[]", body, "Disabled employee directory should fail open with no matches")
+        } finally {
+            searchConn.disconnect()
+        }
+
+        val statusUrl = URI(
+            "http://$host:$port/rest/api/4/components/meta/employees/status",
+        ).toURL()
+        val statusConn = statusUrl.openConnection() as HttpURLConnection
+        try {
+            statusConn.requestMethod = "POST"
+            statusConn.doOutput = true
+            statusConn.setRequestProperty("Authorization", "Bearer $accessToken")
+            statusConn.setRequestProperty("Content-Type", "application/json")
+            statusConn.outputStream.use {
+                it.write("""["$E2E_VIEWER_USERNAME"]""".toByteArray(StandardCharsets.UTF_8))
+            }
+            assertEquals(200, statusConn.responseCode, "Employee status endpoint should return 200")
+            val body = statusConn.inputStream.bufferedReader().use { it.readText() }
+            assertTrue(
+                body.contains("\"$E2E_VIEWER_USERNAME\":null"),
+                "Disabled employee directory should return unknown status. Body: $body",
+            )
+        } finally {
+            statusConn.disconnect()
+        }
+    }
+
+    @Test
     fun `OIDC userinfo emits bare role names`() {
         // Sanity check that the realm fixture's protocol mappers and bare
         // role names reach the userinfo endpoint as designed. Uses the
@@ -600,32 +675,7 @@ open class E2ETestcontainersDriver {
         // "http://keycloak:8080" because that's what KC_HOSTNAME pins.
         val keycloakHost = keycloak.host
         val keycloakPort = keycloak.getMappedPort(KEYCLOAK_INTERNAL_PORT)
-        val tokenUrl = URI(
-            "http://$keycloakHost:$keycloakPort/realms/$KEYCLOAK_REALM/protocol/openid-connect/token"
-        ).toURL()
-        val form = listOf(
-            "grant_type" to "password",
-            "client_id" to KEYCLOAK_DIRECT_GRANT_CLIENT,
-            "client_secret" to keycloakDirectGrantSecret,
-            "username" to E2E_ADMIN_USERNAME,
-            "password" to e2eAdminPassword,
-            "scope" to "openid profile email",
-        ).joinToString("&") { (k, v) ->
-            URLEncoder.encode(k, StandardCharsets.UTF_8) + "=" + URLEncoder.encode(v, StandardCharsets.UTF_8)
-        }
-        val tokenConn = tokenUrl.openConnection() as HttpURLConnection
-        val accessToken: String = try {
-            tokenConn.requestMethod = "POST"
-            tokenConn.doOutput = true
-            tokenConn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
-            tokenConn.outputStream.use { it.write(form.toByteArray(StandardCharsets.UTF_8)) }
-            assertEquals(200, tokenConn.responseCode, "Direct-grant token endpoint should return 200")
-            val body = tokenConn.inputStream.bufferedReader().use { it.readText() }
-            Regex("\"access_token\"\\s*:\\s*\"([^\"]+)\"").find(body)?.groupValues?.get(1)
-                ?: error("No access_token in token response: ${body.take(200)}")
-        } finally {
-            tokenConn.disconnect()
-        }
+        val accessToken = directGrantAccessToken(E2E_ADMIN_USERNAME, e2eAdminPassword)
 
         val userinfoUrl = URI(
             "http://$keycloakHost:$keycloakPort/realms/$KEYCLOAK_REALM/protocol/openid-connect/userinfo"

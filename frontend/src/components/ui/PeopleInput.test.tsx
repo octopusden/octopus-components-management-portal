@@ -49,6 +49,16 @@ describe('PeopleInput', () => {
     expect(onChange).toHaveBeenCalledWith('carol@example.com')
   })
 
+  it('commits the current value and closes suggestions on Enter', async () => {
+    render(<PeopleInput value="" onChange={onChange} />)
+    const input = screen.getByRole('textbox')
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: 'carol@example.com' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onChange).toHaveBeenCalledWith('carol@example.com')
+    expect(screen.queryByText('alice@example.com')).toBeNull()
+  })
+
   it('does not call lookupFn when input is less than 2 characters', () => {
     vi.useFakeTimers()
     const lookupFn = vi.fn().mockResolvedValue([])
