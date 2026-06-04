@@ -120,6 +120,18 @@ describe('PeopleInput', () => {
     vi.useRealTimers()
   })
 
+  it('treats an empty lookup response as no external results', async () => {
+    vi.useFakeTimers()
+    const lookupMock = vi.fn(async () => undefined)
+    const lookupFn = lookupMock as unknown as (query: string) => Promise<[]>
+    render(<PeopleInput value="" onChange={onChange} lookupFn={lookupFn} />)
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'al' } })
+    await act(async () => { vi.advanceTimersByTime(300) })
+    expect(lookupMock).toHaveBeenCalledWith('al')
+    expect(screen.getByText('alice@example.com')).toBeDefined()
+    vi.useRealTimers()
+  })
+
   it('hides dropdown on outside click', async () => {
     render(
       <div>

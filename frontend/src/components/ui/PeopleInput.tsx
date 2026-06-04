@@ -66,7 +66,7 @@ export function PeopleInput({
     const timer = setTimeout(async () => {
       try {
         const results = await lookupFn(inputValue)
-        if (!cancelled) setExternalResults(results)
+        if (!cancelled) setExternalResults(results ?? [])
       } catch {
         if (!cancelled) setExternalResults([])
       }
