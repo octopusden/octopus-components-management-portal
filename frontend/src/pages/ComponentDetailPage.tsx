@@ -1,8 +1,8 @@
 import { useParams, useNavigate, Link } from 'react-router'
 import { useForm } from 'react-hook-form'
-import { ArrowLeft, Save, Trash2, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, Save, Trash2, AlertTriangle, LockKeyhole } from 'lucide-react'
 import { JiraIcon, BitbucketIcon, TeamCityIcon } from '../components/ui/icons/brand-icons'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Layout } from '../components/Layout'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
@@ -46,6 +46,26 @@ import { usePortalLinks } from '../hooks/useInfo'
 import { safeHttpUrl } from '../lib/utils'
 
 export type UpdateMutation = UseMutationResult<ComponentDetail, Error, ComponentUpdateRequest>
+
+function EditSurface({
+  canEdit,
+  label,
+  children,
+}: {
+  canEdit: boolean
+  label: string
+  children: ReactNode
+}) {
+  return (
+    <fieldset
+      aria-label={`${label} fields`}
+      className="m-0 min-w-0 border-0 p-0"
+      disabled={!canEdit}
+    >
+      {children}
+    </fieldset>
+  )
+}
 
 export function ComponentDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -393,6 +413,12 @@ export function ComponentDetailPage() {
               <Badge variant={component.archived ? 'destructive' : 'secondary'}>
                 {component.archived ? 'Archived' : 'Active'}
               </Badge>
+              {!canEdit && (
+                <Badge variant="warning" title={CANNOT_EDIT_TITLE}>
+                  <LockKeyhole className="mr-1 h-3 w-3" />
+                  View only
+                </Badge>
+              )}
               {component.solution && (
                 <Badge variant="outline">Solution</Badge>
               )}
@@ -578,27 +604,39 @@ export function ComponentDetailPage() {
                   internal state of ComponentSelect / PeopleInput would carry
                   the previous component's typed-but-unblurred input over to
                   the next component's form. */}
-              <GeneralTab key={component.id} component={component} form={form} />
+              <EditSurface canEdit={canEdit} label="General">
+                <GeneralTab key={component.id} component={component} form={form} />
+              </EditSurface>
             </TabsContent>
 
             <TabsContent value="build">
-              <BuildTab component={component} updateMutation={updateMutation} toast={toast} canEdit={canEdit} />
+              <EditSurface canEdit={canEdit} label="Build">
+                <BuildTab component={component} updateMutation={updateMutation} toast={toast} canEdit={canEdit} />
+              </EditSurface>
             </TabsContent>
 
             <TabsContent value="vcs">
-              <VcsTab component={component} updateMutation={updateMutation} toast={toast} canEdit={canEdit} />
+              <EditSurface canEdit={canEdit} label="VCS">
+                <VcsTab component={component} updateMutation={updateMutation} toast={toast} canEdit={canEdit} />
+              </EditSurface>
             </TabsContent>
 
             <TabsContent value="distribution">
-              <DistributionTab component={component} updateMutation={updateMutation} toast={toast} canEdit={canEdit} />
+              <EditSurface canEdit={canEdit} label="Distribution">
+                <DistributionTab component={component} updateMutation={updateMutation} toast={toast} canEdit={canEdit} />
+              </EditSurface>
             </TabsContent>
 
             <TabsContent value="jira">
-              <JiraTab component={component} updateMutation={updateMutation} toast={toast} canEdit={canEdit} />
+              <EditSurface canEdit={canEdit} label="Jira">
+                <JiraTab component={component} updateMutation={updateMutation} toast={toast} canEdit={canEdit} />
+              </EditSurface>
             </TabsContent>
 
             <TabsContent value="escrow">
-              <EscrowTab component={component} updateMutation={updateMutation} toast={toast} canEdit={canEdit} />
+              <EditSurface canEdit={canEdit} label="Escrow">
+                <EscrowTab component={component} updateMutation={updateMutation} toast={toast} canEdit={canEdit} />
+              </EditSurface>
             </TabsContent>
 
             <TabsContent value="configurations">
@@ -610,7 +648,9 @@ export function ComponentDetailPage() {
             </TabsContent>
 
             <TabsContent value="overrides">
-              <FieldOverrides componentId={component.id} />
+              <EditSurface canEdit={canEdit} label="Overrides">
+                <FieldOverrides componentId={component.id} />
+              </EditSurface>
             </TabsContent>
 
             <TabsContent value="history">

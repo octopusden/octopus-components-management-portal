@@ -49,6 +49,7 @@ function makeDetail(overrides: Partial<MutableDetail> = {}): MutableDetail {
     clientCode: null,
     archived: false,
     solution: false,
+    canEdit: true,
     parentComponentName: null,
     version: 1,
     createdAt: '2026-01-01T00:00:00Z',
