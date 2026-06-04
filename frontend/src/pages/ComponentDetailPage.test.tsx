@@ -301,6 +301,45 @@ describe('ComponentDetailPage — Save gating on canEdit', () => {
   })
 })
 
+describe('ComponentDetailPage — view-only mode', () => {
+  function renderWithGeneralControls(component: ComponentDetail) {
+    vi.mocked(GeneralTab).mockImplementation(() =>
+      React.createElement(
+        'div',
+        null,
+        React.createElement('input', { 'aria-label': 'Editable field' }),
+        React.createElement('button', null, 'Edit action'),
+      ),
+    )
+    renderPage(component, makeUser(['ACCESS_COMPONENTS']))
+  }
+
+  it('shows View only and disables fields and actions when canEdit is false', () => {
+    renderWithGeneralControls({ ...baseComponent, canEdit: false })
+
+    expect(screen.getByText('View only')).toHaveAttribute('title', CANNOT_EDIT_TITLE)
+    expect(screen.getByRole('group', { name: 'General fields' })).toBeDisabled()
+    expect(screen.getByRole('textbox', { name: 'Editable field' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Edit action' })).toBeDisabled()
+  })
+
+  it('keeps tab navigation available while each edit surface remains disabled', () => {
+    renderWithGeneralControls({ ...baseComponent, canEdit: false })
+
+    expect(screen.getByRole('tab', { name: /Build/ })).not.toBeDisabled()
+    expect(screen.getByRole('group', { name: 'General fields' })).toBeDisabled()
+  })
+
+  it('hides View only and keeps fields enabled when canEdit is true', () => {
+    renderWithGeneralControls({ ...baseComponent, canEdit: true })
+
+    expect(screen.queryByText('View only')).toBeNull()
+    expect(screen.getByRole('group', { name: 'General fields' })).not.toBeDisabled()
+    expect(screen.getByRole('textbox', { name: 'Editable field' })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Edit action' })).not.toBeDisabled()
+  })
+})
+
 describe('ComponentDetailPage — Archive / Unarchive buttons', () => {
   it('(a) Archive button renders for user with DELETE_COMPONENTS, archived=false', () => {
     const user = makeUser(['ACCESS_COMPONENTS', 'DELETE_COMPONENTS'])
@@ -841,4 +880,3 @@ describe('ComponentDetailPage — confirmation dialog text', () => {
     })
   })
 })
-
