@@ -32,6 +32,16 @@ describe('parseServerFieldErrors — IllegalArgumentException format', () => {
     expect(result.get('name')).toBe('must not be blank')
   })
 
+  it.each(['componentOwner', 'releaseManager', 'securityChampion', 'clientCode', 'copyright'])(
+    'maps field-prefixed validation for %s',
+    (field) => {
+      const result = parseServerFieldErrors(
+        JSON.stringify({ errorMessage: `${field} is invalid` }),
+      )
+      expect(result.get(field)).toBe('is invalid')
+    },
+  )
+
   it('plain-message heuristic captures the first word as candidate field (filtered by caller via GENERAL_TAB_FIELDS)', () => {
     const body = JSON.stringify({ errorMessage: 'Something went wrong internally' })
     const result = parseServerFieldErrors(body)

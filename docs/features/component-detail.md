@@ -70,6 +70,9 @@ Each editor is a `useFieldArray` row list with inline add and per-row delete. Th
 - **JSON field names stay singular** (`releaseManager`, `securityChampion`); only the type changed `string` → `string[]` in the v4 contract. Legacy v1/v2/v3 keep the comma-joined `String`.
 - **UI labels are plural** ("Release Managers" / "Security Champions"); the form field keys remain singular.
 - **Dedupe**: a username already present cannot be added again (keep-first), mirroring the server-side canonicalization (trim → drop-blank → keep-first dedupe).
+- **Employee status**: after two typed characters, each people picker asks CRS for an exact username match via `GET /rest/api/4/components/meta/employees?search=...`; matching suggestions are marked Active or Inactive before selection. Saved owner / release-manager / security-champion values are checked together via `POST /rest/api/4/components/meta/employees/status`, and inactive values get an inline badge.
+- **Fail-open UI**: when employee-service integration is disabled or unavailable, CRS returns no match / `null` status. The Portal then renders no status badge and still lets CRS enforce the configured write-time policy.
+- **Create dialog**: Component Owner is required and uses the same exact-match picker. A field-prefixed CRS `400` is rendered inline instead of as a generic toast.
 - **Save semantics mirror `labels`**: the `PeopleListInput.onChange` sets `{ shouldDirty: true, shouldTouch: true }`, and `ComponentDetailPage` synthesises a dirty flag for the clear-all case (touched + server-had-values + form-now-empty). `buildUpdateRequest` then dirty-gates a REPLACE: omit when not dirty (pre-hydration guard), emit the ordered canonicalized array when dirty (with `[]` = explicit clear).
 - The readonly field-config branch renders the joined list (comma-separated, disabled).
 

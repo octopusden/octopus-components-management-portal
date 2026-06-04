@@ -72,14 +72,31 @@ describe('PeopleInput', () => {
 
   it('shows external lookup results alongside filtered owners', async () => {
     vi.useFakeTimers()
-    const externalResult = { id: '99', displayName: 'Carol Smith', email: 'carol@example.com' }
+    const externalResult = { username: 'carol@example.com', active: true }
     const lookupFn = vi.fn().mockResolvedValue([externalResult])
     render(<PeopleInput value="" onChange={onChange} lookupFn={lookupFn} />)
     fireEvent.focus(screen.getByRole('textbox'))
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'ca' } })
     await act(async () => { vi.advanceTimersByTime(300) })
-    expect(screen.getByText('Carol Smith (carol@example.com)')).toBeDefined()
+    expect(screen.getByText('carol@example.com')).toBeDefined()
+    expect(screen.getByText('Active')).toBeDefined()
     vi.useRealTimers()
+  })
+
+  it('annotates an exact inactive lookup result', async () => {
+    vi.useFakeTimers()
+    const lookupFn = vi.fn().mockResolvedValue([{ username: 'carol', active: false }])
+    render(<PeopleInput value="" onChange={onChange} lookupFn={lookupFn} />)
+    fireEvent.focus(screen.getByRole('textbox'))
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'carol' } })
+    await act(async () => { vi.advanceTimersByTime(300) })
+    expect(screen.getByText('Inactive')).toBeDefined()
+    vi.useRealTimers()
+  })
+
+  it('renders an inactive badge for the current value', () => {
+    render(<PeopleInput value="alice" onChange={onChange} status={false} />)
+    expect(screen.getByText('Inactive')).toBeDefined()
   })
 
   it('clears external results and does not throw when lookupFn rejects', async () => {

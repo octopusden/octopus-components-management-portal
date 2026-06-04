@@ -34,6 +34,12 @@ vi.mock('../hooks/useFieldOptions', () => ({
     isLoading: false,
   })),
 }))
+vi.mock('../hooks/useOwners', () => ({
+  useOwners: vi.fn(() => ({ data: ['alice', 'inactive-user'] })),
+}))
+vi.mock('../hooks/useEmployees', () => ({
+  lookupEmployee: vi.fn(),
+}))
 
 function renderWithProviders(ui: React.ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -46,6 +52,10 @@ function renderWithProviders(ui: React.ReactElement) {
 
 async function openDialog() {
   await userEvent.click(screen.getByRole('button', { name: /new component/i }))
+}
+
+async function fillComponentOwner(owner = 'alice') {
+  await userEvent.type(screen.getByPlaceholderText('owner@example.com'), owner)
 }
 
 beforeEach(() => {
@@ -91,7 +101,7 @@ describe('CreateComponentDialog — validation', () => {
     expect(mockMutateAsync).not.toHaveBeenCalled()
   })
 
-  it('shows a required error for buildSystem (the only hard requirement) when submitted empty', async () => {
+  it('shows a required error for buildSystem when submitted empty', async () => {
     renderWithProviders(<CreateComponentButton />)
     await openDialog()
     // Valid name so Zod doesn't short-circuit on `name`; buildSystem left empty.
@@ -103,6 +113,41 @@ describe('CreateComponentDialog — validation', () => {
     // R1: there is no Group ID requirement anymore.
     expect(screen.queryByText(/group id is required/i)).toBeNull()
     expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('shows a required error for component owner', async () => {
+    renderWithProviders(<CreateComponentButton />)
+    await openDialog()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget-svc')
+    await userEvent.click(screen.getByRole('combobox'))
+    await userEvent.click(screen.getByRole('option', { name: 'MAVEN' }))
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => {
+      expect(screen.getByText(/component owner is required/i)).toBeDefined()
+    })
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('maps a CRS componentOwner 400 inline', async () => {
+    mockMutateAsync.mockRejectedValue(
+      new ApiError(
+        400,
+        'componentOwner is not an active employee',
+        JSON.stringify({ errorMessage: 'componentOwner is not an active employee' }),
+      ),
+    )
+    renderWithProviders(<CreateComponentButton />)
+    await openDialog()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget-svc')
+    await userEvent.click(screen.getByRole('combobox'))
+    await userEvent.click(screen.getByRole('option', { name: 'MAVEN' }))
+    await userEvent.type(screen.getByPlaceholderText('owner@example.com'), 'inactive-user')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('is not an active employee')).toBeDefined()
+    })
+    expect(mockToast).not.toHaveBeenCalled()
   })
 })
 
@@ -116,6 +161,7 @@ describe('CreateComponentDialog — submit payload', () => {
     // Pick a buildSystem via the EnumSelect combobox.
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(screen.getByRole('option', { name: 'MAVEN' }))
+    await fillComponentOwner()
 
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
@@ -149,6 +195,7 @@ describe('CreateComponentDialog — submit payload', () => {
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'svc')
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(screen.getByRole('option', { name: 'GRADLE' }))
+    await fillComponentOwner()
 
     // Flip both defaults: explicit on, external off.
     await userEvent.click(screen.getByLabelText(/explicit/i))
@@ -172,6 +219,7 @@ describe('CreateComponentDialog — submit payload', () => {
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'my-lib')
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(screen.getByRole('option', { name: 'MAVEN' }))
+    await fillComponentOwner()
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/components/comp-42'))
   })
@@ -183,6 +231,7 @@ describe('CreateComponentDialog — submit payload', () => {
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'duplicate-lib')
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(screen.getByRole('option', { name: 'MAVEN' }))
+    await fillComponentOwner()
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() =>
       expect(mockToast).toHaveBeenCalledWith(
@@ -198,6 +247,7 @@ describe('CreateComponentDialog — submit payload', () => {
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'some-lib')
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(screen.getByRole('option', { name: 'MAVEN' }))
+    await fillComponentOwner()
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() =>
       expect(mockToast).toHaveBeenCalledWith(

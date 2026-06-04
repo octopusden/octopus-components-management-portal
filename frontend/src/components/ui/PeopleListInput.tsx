@@ -20,7 +20,8 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { Button } from './button'
-import { PeopleInput } from './PeopleInput'
+import { EmployeeStatusBadge, PeopleInput } from './PeopleInput'
+import type { EmployeeMatch, EmployeeStatuses } from '../../hooks/useEmployees'
 
 /**
  * Ordered, reorderable multi-people editor. Renders the current people as a
@@ -54,13 +55,16 @@ export interface PeopleListInputProps {
   /** Placeholder copy for the add-row autocomplete. */
   placeholder?: string
   /** External lookup forwarded to the embedded {@link PeopleInput}. */
-  lookupFn?: (query: string) => Promise<{ id: string; displayName: string; email: string }[]>
+  lookupFn?: (query: string) => Promise<EmployeeMatch[]>
+  /** Batch active status for stored rows; null/absent renders no badge. */
+  statuses?: EmployeeStatuses
 }
 
 interface SortablePersonRowProps {
   person: string
   idx: number
   disabled?: boolean
+  status?: boolean | null
   onRemove: (idx: number) => void
 }
 
@@ -71,7 +75,7 @@ interface SortablePersonRowProps {
  * activator (`setActivatorNodeRef` + dnd-kit listeners) so a click on the
  * remove button never starts a drag.
  */
-function SortablePersonRow({ person, idx, disabled, onRemove }: SortablePersonRowProps) {
+function SortablePersonRow({ person, idx, disabled, status, onRemove }: SortablePersonRowProps) {
   const {
     attributes,
     listeners,
@@ -110,6 +114,7 @@ function SortablePersonRow({ person, idx, disabled, onRemove }: SortablePersonRo
       <span className="flex-1 truncate rounded-md border border-input bg-muted/40 px-3 py-1.5 text-sm">
         {person}
       </span>
+      <EmployeeStatusBadge status={status} />
       <Button
         type="button"
         variant="ghost"
@@ -131,6 +136,7 @@ export function PeopleListInput({
   disabled,
   placeholder = 'Add person',
   lookupFn,
+  statuses = {},
 }: PeopleListInputProps) {
   // Remount key for the add-row PeopleInput. PeopleInput owns its internal
   // inputValue state and only re-syncs from the `value` prop when that prop
@@ -219,6 +225,7 @@ export function PeopleListInput({
                   person={person}
                   idx={idx}
                   disabled={disabled}
+                  status={statuses[person]}
                   onRemove={handleRemove}
                 />
               ))}

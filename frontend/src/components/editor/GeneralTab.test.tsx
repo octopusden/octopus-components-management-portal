@@ -13,6 +13,10 @@ import type { ComponentDetail } from '../../lib/types'
 vi.mock('../../hooks/useOwners', () => ({
   useOwners: () => ({ data: [] }),
 }))
+vi.mock('../../hooks/useEmployees', () => ({
+  lookupEmployee: vi.fn(),
+  useEmployeeStatuses: () => ({ data: { alice: false, 'rm-inactive': false, 'sc-active': true } }),
+}))
 vi.mock('../../hooks/useComponents', () => ({
   useComponents: vi.fn(() => ({ data: { content: [], totalElements: 0 } })),
 }))
@@ -369,6 +373,17 @@ describe('GeneralTab system field hidden → form value contract (CRS #301)', ()
 })
 
 describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
+  it('annotates inactive people across owner and ordered lists', () => {
+    const component = baseComponent({
+      componentOwner: 'alice',
+      releaseManager: ['rm-inactive'],
+      securityChampion: ['sc-active'],
+    })
+    renderWithProviders(<Harness component={component} />)
+
+    expect(screen.getAllByText('Inactive')).toHaveLength(2)
+  })
+
   it('group key renders READ-ONLY with the derived group value (items 1/2)', () => {
     setAllEditable()
     const component = baseComponent({ group: { groupKey: 'org.example.alpha', isFake: false, role: 'MEMBER' } })

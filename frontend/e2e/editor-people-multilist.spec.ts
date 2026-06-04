@@ -30,6 +30,8 @@ import {
 const COMPONENT_ID = '11111111-1111-1111-1111-111111111111'
 const DETAIL_RE = /\/rest\/api\/4\/components\/[^/?]+(?:\?.*)?$/
 const FIELD_OVERRIDES = '**/rest/api/4/components/*/field-overrides'
+const EMPLOYEE_SEARCH = '**/rest/api/4/components/meta/employees?*'
+const EMPLOYEE_STATUS = '**/rest/api/4/components/meta/employees/status'
 
 interface MutableDetail {
   [key: string]: unknown
@@ -97,7 +99,11 @@ function summaryFor(detail: MutableDetail) {
  * Registers the stateful component routes. Returns a handle exposing the
  * captured PATCH bodies and the current server-side detail (post-PATCH).
  */
-async function setupRoutes(page: Page, initial: MutableDetail) {
+async function setupRoutes(
+  page: Page,
+  initial: MutableDetail,
+  options: { patchValidationError?: string } = {},
+) {
   const state: { detail: MutableDetail; patches: Array<Record<string, unknown>> } = {
     detail: JSON.parse(JSON.stringify(initial)) as MutableDetail,
     patches: [],
@@ -107,8 +113,38 @@ async function setupRoutes(page: Page, initial: MutableDetail) {
   // {} field-config → every useFieldConfigEntry falls back to 'editable', so
   // RM / SC / componentOwner all render editable and visible.
   await mockFieldConfig(page, {})
-  await mockOwners(page, ['rm-alice', 'rm-bob', 'rm-carol', 'sc-carol', 'sc-dave', 'owner-oscar'])
+  await mockOwners(page, [
+    'rm-alice',
+    'rm-bob',
+    'rm-carol',
+    'sc-carol',
+    'sc-dave',
+    'owner-oscar',
+    'inactive-ivy',
+  ])
   await mockLabels(page, [])
+  await page.route(EMPLOYEE_SEARCH, (route) => {
+    const username = new URL(route.request().url()).searchParams.get('search')?.trim() ?? ''
+    const matches = username
+      ? [{ username, active: !username.startsWith('inactive-') }]
+      : []
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(matches),
+    })
+  })
+  await page.route(EMPLOYEE_STATUS, (route) => {
+    const usernames = (route.request().postDataJSON() ?? []) as string[]
+    const statuses = Object.fromEntries(
+      usernames.map((username) => [username, !username.startsWith('inactive-')]),
+    )
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(statuses),
+    })
+  })
   // FieldOverrides fires on mount (enabled: !!componentId) regardless of the
   // active tab — stub it so the spec stays self-contained.
   await page.route(FIELD_OVERRIDES, (route) =>
@@ -128,6 +164,13 @@ async function setupRoutes(page: Page, initial: MutableDetail) {
     if (method === 'PATCH') {
       const body = (req.postDataJSON() ?? {}) as Record<string, unknown>
       state.patches.push(body)
+      if (options.patchValidationError) {
+        return route.fulfill({
+          status: 400,
+          contentType: 'application/json',
+          body: JSON.stringify({ errorMessage: options.patchValidationError }),
+        })
+      }
       const next: MutableDetail = { ...state.detail, version: state.detail.version + 1 }
       // PATCH = REPLACE the whole ordered list when the field is present.
       if (Array.isArray(body.releaseManager)) next.releaseManager = body.releaseManager as string[]
@@ -189,6 +232,58 @@ test.describe('Editor — multi-value Release Managers / Security Champions (SYS
     // RM/SC hydrate as ordered rows from the arrays.
     await expect(rowNames(page, 'Release Managers')).toHaveText(['rm-alice'])
     await expect(rowNames(page, 'Security Champions')).toHaveText(['sc-carol'])
+  })
+
+  test('exact employee lookup annotates active and inactive suggestions', async ({ page }) => {
+    await setupRoutes(page, makeDetail())
+    await page.goto(`/components/${COMPONENT_ID}`)
+
+    const ownerInput = peopleField(page, 'Component Owner').getByRole('textbox')
+    await ownerInput.fill('inactive-ivy')
+    const inactiveSuggestion = peopleField(page, 'Component Owner')
+      .getByRole('button')
+      .filter({ hasText: 'inactive-ivy' })
+    await expect(inactiveSuggestion).toContainText('Inactive')
+
+    await ownerInput.fill('active-amy')
+    const activeSuggestion = peopleField(page, 'Component Owner')
+      .getByRole('button')
+      .filter({ hasText: 'active-amy' })
+    await expect(activeSuggestion).toContainText('Active')
+  })
+
+  test('saved inactive owner and list rows are marked inactive', async ({ page }) => {
+    await setupRoutes(
+      page,
+      makeDetail({
+        componentOwner: 'inactive-owner',
+        releaseManager: ['inactive-rm'],
+      }),
+    )
+    await page.goto(`/components/${COMPONENT_ID}`)
+
+    await expect(peopleField(page, 'Component Owner').getByText('Inactive')).toBeVisible()
+    await expect(
+      peopleField(page, 'Release Managers')
+        .getByTestId('person-row-0')
+        .getByText('Inactive', { exact: true }),
+    ).toBeVisible()
+  })
+
+  test('field-prefixed CRS 400 is rendered inline under component owner', async ({ page }) => {
+    await setupRoutes(page, makeDetail(), {
+      patchValidationError: 'componentOwner is not an active employee',
+    })
+    await page.goto(`/components/${COMPONENT_ID}`)
+
+    const ownerInput = peopleField(page, 'Component Owner').getByRole('textbox')
+    await ownerInput.fill('inactive-owner')
+    await ownerInput.blur()
+    await page.getByRole('button', { name: /^save$/i }).click()
+
+    await expect(
+      peopleField(page, 'Component Owner').getByText('is not an active employee'),
+    ).toBeVisible()
   })
 
   test('add → reorder → remove → save sends the reordered array; reload persists the order', async ({
