@@ -12,7 +12,7 @@ import { ApiError } from '@/lib/api'
 //
 // ComponentListPage delegates to several heavy sub-components (filters, table,
 // pagination) that pull their own queries. The page-level contract under test
-// is narrow: (1) New Component button visibility gated on EDIT_COMPONENTS, and
+// is narrow: (1) New Component button visibility gated on CREATE_COMPONENTS, and
 // (2) friendlier 403 message instead of raw "Failed to load: Access Denied".
 // We stub the sub-components so the mounted DOM only contains what we assert
 // against — keeps the test focused on the page-level guards.
@@ -58,7 +58,7 @@ const editorUser: User = {
   roles: [
     {
       name: 'ROLE_COMPONENTS_REGISTRY_EDITOR',
-      permissions: ['ACCESS_COMPONENTS', 'EDIT_COMPONENTS', 'ACCESS_AUDIT'],
+      permissions: ['ACCESS_COMPONENTS', 'CREATE_COMPONENTS', 'ACCESS_AUDIT'],
     },
   ],
   groups: [],
@@ -71,7 +71,7 @@ const adminUser: User = {
       name: 'ROLE_ADMIN',
       permissions: [
         'ACCESS_COMPONENTS',
-        'EDIT_COMPONENTS',
+        'CREATE_COMPONENTS',
         'ARCHIVE_COMPONENTS',
         'RENAME_COMPONENTS',
         'DELETE_COMPONENTS',
@@ -147,19 +147,19 @@ afterEach(() => {
 })
 
 describe('ComponentListPage — New Component button gating', () => {
-  it('hides "New Component" for a viewer-only user (no EDIT_COMPONENTS)', () => {
+  it('hides "New Component" for a viewer-only user (no CREATE_COMPONENTS)', () => {
     mockUser(viewerUser)
     mockComponentsOk()
 
     renderPage()
 
     // Page itself rendered (Components heading present) but the write-action
-    // button is suppressed because hasPermission(user, EDIT_COMPONENTS) is false.
+    // button is suppressed because hasPermission(user, CREATE_COMPONENTS) is false.
     expect(screen.getByRole('heading', { name: /components/i })).toBeDefined()
     expect(screen.queryByRole('button', { name: /new component/i })).toBeNull()
   })
 
-  it('shows "New Component" for an editor user with EDIT_COMPONENTS', () => {
+  it('shows "New Component" for an editor user with CREATE_COMPONENTS', () => {
     mockUser(editorUser)
     mockComponentsOk()
 

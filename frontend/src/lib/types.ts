@@ -86,7 +86,7 @@ export interface ComponentDetail {
   // Per-user affordance from CRS: true when the CURRENT user may edit this
   // component (is its componentOwner / releaseManager / securityChampion, or an
   // admin). Optional — absent against an older backend, in which case the UI
-  // falls back to the global EDIT_COMPONENTS permission check.
+  // falls back to the global CREATE_COMPONENTS permission check.
   canEdit?: boolean
 }
 

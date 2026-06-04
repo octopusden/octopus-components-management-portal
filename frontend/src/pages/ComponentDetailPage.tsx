@@ -63,10 +63,10 @@ export function ComponentDetailPage() {
   const canUnarchive = hasPermission(user, PERMISSIONS.ARCHIVE_COMPONENTS)
 
   // Per-component edit gate. CRS returns `canEdit` on the detail response (true for
-  // the component's owner/RM/SC or an admin); fall back to the global EDIT_COMPONENTS
+  // the component's owner/RM/SC or an admin); fall back to the global CREATE_COMPONENTS
   // permission when an older backend omits the flag. Drives the Save buttons and the
   // inline field-override controls so non-owners don't act and then hit a 403.
-  const canEdit = component?.canEdit ?? hasPermission(user, PERMISSIONS.EDIT_COMPONENTS)
+  const canEdit = component?.canEdit ?? hasPermission(user, PERMISSIONS.CREATE_COMPONENTS)
 
   // Field-config visibility — used to filter hidden fields from the save payload.
   // Portal-side enforcement is required because CRS server-side does NOT filter

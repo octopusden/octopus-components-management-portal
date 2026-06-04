@@ -138,7 +138,7 @@ const ADMIN_USER = {
       name: 'ROLE_ADMIN',
       permissions: [
         'ACCESS_COMPONENTS',
-        'EDIT_COMPONENTS',
+        'CREATE_COMPONENTS',
         'ARCHIVE_COMPONENTS',
         'RENAME_COMPONENTS',
         'DELETE_COMPONENTS',
@@ -154,7 +154,7 @@ const EDITOR_USER = {
   roles: [
     {
       name: 'ROLE_COMPONENTS_REGISTRY_EDITOR',
-      permissions: ['ACCESS_COMPONENTS', 'EDIT_COMPONENTS', 'ACCESS_AUDIT'],
+      permissions: ['ACCESS_COMPONENTS', 'CREATE_COMPONENTS', 'ACCESS_AUDIT'],
     },
   ],
   groups: [],

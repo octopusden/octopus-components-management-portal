@@ -41,7 +41,7 @@ export function ComponentListPage() {
               </span>
             )}
           </div>
-          {hasPermission(user, PERMISSIONS.EDIT_COMPONENTS) && <CreateComponentButton />}
+          {hasPermission(user, PERMISSIONS.CREATE_COMPONENTS) && <CreateComponentButton />}
         </div>
 
         <ComponentFilters filter={filter} onFilterChange={handleFilterChange} />

@@ -221,7 +221,7 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
           {/* Name — editable only with RENAME_COMPONENTS (B7.1.4). On the create
               surface (isNew) the field is unconditionally editable because the
               server enforces RENAME_COMPONENTS only on PATCH; POST permits
-              anything the EDIT_COMPONENTS holder can name. */}
+              anything the CREATE_COMPONENTS holder can name. */}
           <div className="space-y-1.5">
             <Label htmlFor="name">Component Key</Label>
             <Input
