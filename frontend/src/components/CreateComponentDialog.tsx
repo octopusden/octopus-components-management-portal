@@ -7,6 +7,7 @@ import { Plus } from 'lucide-react'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
+import { PeopleInput } from './ui/PeopleInput'
 import {
   Dialog,
   DialogContent,
@@ -20,6 +21,8 @@ import { EnumSelect } from './ui/EnumSelect'
 import { useCreateComponent } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
 import { ApiError } from '../lib/api'
+import { parseServerFieldErrors } from '../lib/serverErrors'
+import { lookupEmployee } from '../hooks/useEmployees'
 
 // R1 (aggregator/parentComponent decouple): a component's `group` is migration-owned
 // aggregator membership (a DSL `components { }` owner + its sub-components) and is NOT
@@ -34,7 +37,7 @@ const createSchema = z.object({
     .regex(/^[a-zA-Z0-9_\-./]+$/, 'Component Key can only contain letters, digits, _, -, ., /'),
   displayName: z.string().optional(),
   buildSystem: z.string().min(1, 'Build System is required'),
-  componentOwner: z.string().optional(),
+  componentOwner: z.string().trim().min(1, 'Component Owner is required'),
   distributionExplicit: z.boolean(),
   distributionExternal: z.boolean(),
 })
@@ -57,6 +60,7 @@ export function CreateComponentDialog({ open, onOpenChange }: CreateComponentDia
     reset,
     watch,
     setValue,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<CreateFormValues>({
     resolver: zodResolver(createSchema),
@@ -71,6 +75,7 @@ export function CreateComponentDialog({ open, onOpenChange }: CreateComponentDia
   })
 
   const buildSystemValue = watch('buildSystem')
+  const componentOwnerValue = watch('componentOwner')
 
   function handleOpenChange(open: boolean) {
     if (!open) {
@@ -86,7 +91,7 @@ export function CreateComponentDialog({ open, onOpenChange }: CreateComponentDia
       const component = await createMutation.mutateAsync({
         name: values.name,
         displayName: values.displayName || undefined,
-        componentOwner: values.componentOwner || undefined,
+        componentOwner: values.componentOwner,
         // No `group`: it is migration-owned and ignored by the API on create.
         baseConfiguration: { build: { buildSystem: values.buildSystem } },
         // CRS PR #301: System is scalar `string | null`. The Create dialog
@@ -110,6 +115,13 @@ export function CreateComponentDialog({ open, onOpenChange }: CreateComponentDia
       let message = err instanceof Error ? err.message : String(err)
       if (err instanceof ApiError && err.status === 409) {
         message = 'A component with this name already exists.'
+      }
+      if (err instanceof ApiError && err.status === 400) {
+        const componentOwnerError = parseServerFieldErrors(err.rawBody).get('componentOwner')
+        if (componentOwnerError) {
+          setError('componentOwner', { type: 'server', message: componentOwnerError })
+          return
+        }
       }
       toast({
         title: 'Failed to create component',
@@ -179,12 +191,21 @@ export function CreateComponentDialog({ open, onOpenChange }: CreateComponentDia
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="create-componentOwner">Component Owner</Label>
-            <Input
+            <Label htmlFor="create-componentOwner">
+              Component Owner <span className="text-destructive">*</span>
+            </Label>
+            <PeopleInput
               id="create-componentOwner"
+              value={componentOwnerValue}
+              onChange={(value) =>
+                setValue('componentOwner', value, { shouldValidate: true, shouldDirty: true })
+              }
               placeholder="owner@example.com"
-              {...register('componentOwner')}
+              lookupFn={lookupEmployee}
             />
+            {errors.componentOwner && (
+              <p className="text-xs text-destructive">{errors.componentOwner.message}</p>
+            )}
           </div>
 
           <div className="flex items-center gap-2">

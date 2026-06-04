@@ -49,6 +49,16 @@ describe('PeopleInput', () => {
     expect(onChange).toHaveBeenCalledWith('carol@example.com')
   })
 
+  it('commits the current value and closes suggestions on Enter', async () => {
+    render(<PeopleInput value="" onChange={onChange} />)
+    const input = screen.getByRole('textbox')
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: 'carol@example.com' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onChange).toHaveBeenCalledWith('carol@example.com')
+    expect(screen.queryByText('alice@example.com')).toBeNull()
+  })
+
   it('does not call lookupFn when input is less than 2 characters', () => {
     vi.useFakeTimers()
     const lookupFn = vi.fn().mockResolvedValue([])
@@ -72,14 +82,31 @@ describe('PeopleInput', () => {
 
   it('shows external lookup results alongside filtered owners', async () => {
     vi.useFakeTimers()
-    const externalResult = { id: '99', displayName: 'Carol Smith', email: 'carol@example.com' }
+    const externalResult = { username: 'carol@example.com', active: true }
     const lookupFn = vi.fn().mockResolvedValue([externalResult])
     render(<PeopleInput value="" onChange={onChange} lookupFn={lookupFn} />)
     fireEvent.focus(screen.getByRole('textbox'))
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'ca' } })
     await act(async () => { vi.advanceTimersByTime(300) })
-    expect(screen.getByText('Carol Smith (carol@example.com)')).toBeDefined()
+    expect(screen.getByText('carol@example.com')).toBeDefined()
+    expect(screen.getByText('Active')).toBeDefined()
     vi.useRealTimers()
+  })
+
+  it('annotates an exact inactive lookup result', async () => {
+    vi.useFakeTimers()
+    const lookupFn = vi.fn().mockResolvedValue([{ username: 'carol', active: false }])
+    render(<PeopleInput value="" onChange={onChange} lookupFn={lookupFn} />)
+    fireEvent.focus(screen.getByRole('textbox'))
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'carol' } })
+    await act(async () => { vi.advanceTimersByTime(300) })
+    expect(screen.getByText('Inactive')).toBeDefined()
+    vi.useRealTimers()
+  })
+
+  it('renders an inactive badge for the current value', () => {
+    render(<PeopleInput value="alice" onChange={onChange} status={false} />)
+    expect(screen.getByText('Inactive')).toBeDefined()
   })
 
   it('clears external results and does not throw when lookupFn rejects', async () => {
@@ -90,6 +117,18 @@ describe('PeopleInput', () => {
     await act(async () => { vi.advanceTimersByTime(300) })
     // No error thrown, dropdown shows no external results
     expect(screen.queryByText('Carol Smith')).toBeNull()
+    vi.useRealTimers()
+  })
+
+  it('treats an empty lookup response as no external results', async () => {
+    vi.useFakeTimers()
+    const lookupMock = vi.fn(async () => undefined)
+    const lookupFn = lookupMock as unknown as (query: string) => Promise<[]>
+    render(<PeopleInput value="" onChange={onChange} lookupFn={lookupFn} />)
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'al' } })
+    await act(async () => { vi.advanceTimersByTime(300) })
+    expect(lookupMock).toHaveBeenCalledWith('al')
+    expect(screen.getByText('alice@example.com')).toBeDefined()
     vi.useRealTimers()
   })
 

@@ -121,6 +121,17 @@ describe('PeopleListInput', () => {
     expect(screen.queryByRole('button', { name: /move .* down/i })).toBeNull()
   })
 
+  it('renders an inactive badge on a stored person row', () => {
+    render(
+      <PeopleListInput
+        value={['alice@example.com', 'bob@example.com']}
+        onChange={vi.fn()}
+        statuses={{ 'alice@example.com': true, 'bob@example.com': false }}
+      />,
+    )
+    expect(screen.getByText('Inactive')).toBeDefined()
+  })
+
   it('adds a picked person to the END of the ordered list', async () => {
     render(<Harness initial={['alice@example.com']} />)
     await addViaSuggestion('bob@example.com')

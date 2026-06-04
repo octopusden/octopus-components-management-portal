@@ -6,7 +6,7 @@ import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Input } from '../ui/input'
 import { Switch } from '../ui/switch'
-import { PeopleInput } from '../ui/PeopleInput'
+import { EmployeeStatusBadge, PeopleInput } from '../ui/PeopleInput'
 import { PeopleListInput } from '../ui/PeopleListInput'
 import { ComponentSelect } from '../ui/ComponentSelect'
 import { ChipsInput } from '../ui/ChipsInput'
@@ -23,6 +23,7 @@ import { useFieldConfigEntry } from '../../hooks/useFieldConfig'
 // (filter UX wants to offer values that exist).
 import { useSystemsDictionary } from '../../hooks/useSystemsDictionary'
 import { useLabelsDictionary } from '../../hooks/useLabelsDictionary'
+import { lookupEmployee, useEmployeeStatuses } from '../../hooks/useEmployees'
 
 /**
  * Canonical list of field names owned by GeneralTab — used by
@@ -131,6 +132,11 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
   // 404/501 → [] (handled by the hooks).
   const labelsDict = useLabelsDictionary()
   const systemsDict = useSystemsDictionary()
+  const { data: employeeStatuses = {} } = useEmployeeStatuses([
+    component.componentOwner ?? '',
+    ...(component.releaseManager ?? []),
+    ...(component.securityChampion ?? []),
+  ])
 
   // schema-v2 list editors. useFieldArray provides stable `id` keys so row
   // re-renders don't blow away focus on text inputs.
@@ -396,17 +402,23 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
               <div className="space-y-1.5">
                 <Label htmlFor="componentOwner">Component Owner</Label>
                 {componentOwnerEntry.visibility === 'readonly' ? (
-                  <Input
-                    id="componentOwner"
-                    value={componentOwner}
-                    disabled
-                    className="bg-muted"
-                    readOnly
-                  />
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="componentOwner"
+                      value={componentOwner}
+                      disabled
+                      className="bg-muted"
+                      readOnly
+                    />
+                    <EmployeeStatusBadge status={employeeStatuses[componentOwner]} />
+                  </div>
                 ) : (
                   <PeopleInput
+                    id="componentOwner"
                     value={componentOwner}
                     onChange={(val) => setValue('componentOwner', val)}
+                    lookupFn={lookupEmployee}
+                    status={employeeStatuses[componentOwner]}
                   />
                 )}
                 {errors.componentOwner && (
@@ -422,13 +434,18 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
               <div className="space-y-1.5">
                 <Label htmlFor="releaseManager">Release Managers</Label>
                 {releaseManagerEntry.visibility === 'readonly' ? (
-                  <Input
-                    id="releaseManager"
-                    value={(releaseManager ?? []).join(', ')}
-                    disabled
-                    className="bg-muted"
-                    readOnly
-                  />
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="releaseManager"
+                      value={(releaseManager ?? []).join(', ')}
+                      disabled
+                      className="bg-muted"
+                      readOnly
+                    />
+                    {(releaseManager ?? []).some((username) => employeeStatuses[username] === false) && (
+                      <EmployeeStatusBadge status={false} />
+                    )}
+                  </div>
                 ) : (
                   <PeopleListInput
                     value={releaseManager ?? []}
@@ -439,6 +456,8 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                     onChange={(val) =>
                       setValue('releaseManager', val, { shouldDirty: true, shouldTouch: true })
                     }
+                    lookupFn={lookupEmployee}
+                    statuses={employeeStatuses}
                   />
                 )}
                 {errors.releaseManager && (
@@ -454,19 +473,26 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
               <div className="space-y-1.5">
                 <Label htmlFor="securityChampion">Security Champions</Label>
                 {securityChampionEntry.visibility === 'readonly' ? (
-                  <Input
-                    id="securityChampion"
-                    value={(securityChampion ?? []).join(', ')}
-                    disabled
-                    className="bg-muted"
-                    readOnly
-                  />
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="securityChampion"
+                      value={(securityChampion ?? []).join(', ')}
+                      disabled
+                      className="bg-muted"
+                      readOnly
+                    />
+                    {(securityChampion ?? []).some((username) => employeeStatuses[username] === false) && (
+                      <EmployeeStatusBadge status={false} />
+                    )}
+                  </div>
                 ) : (
                   <PeopleListInput
                     value={securityChampion ?? []}
                     onChange={(val) =>
                       setValue('securityChampion', val, { shouldDirty: true, shouldTouch: true })
                     }
+                    lookupFn={lookupEmployee}
+                    statuses={employeeStatuses}
                   />
                 )}
                 {errors.securityChampion && (
