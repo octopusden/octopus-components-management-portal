@@ -56,7 +56,7 @@ export interface PeopleListInputProps {
   placeholder?: string
   /** External lookup forwarded to the embedded {@link PeopleInput}. */
   lookupFn?: (query: string) => Promise<EmployeeMatch[]>
-  /** Batch active status for stored rows; null/absent renders no badge. */
+  /** Batch active status for stored rows; null renders a not-verified badge. */
   statuses?: EmployeeStatuses
 }
 
@@ -114,7 +114,7 @@ function SortablePersonRow({ person, idx, disabled, status, onRemove }: Sortable
       <span className="flex-1 truncate rounded-md border border-input bg-muted/40 px-3 py-1.5 text-sm">
         {person}
       </span>
-      <EmployeeStatusBadge status={status} />
+      <EmployeeStatusBadge status={status} showUnknown />
       <Button
         type="button"
         variant="ghost"

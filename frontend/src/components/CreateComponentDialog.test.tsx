@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -25,6 +25,8 @@ vi.mock('../hooks/use-toast', () => ({
   useToast: () => ({ toast: mockToast }),
 }))
 
+const mockLookupEmployee = vi.hoisted(() => vi.fn())
+
 // EnumSelect transitively pulls in useFieldOptions; stub it so the
 // dialog's Build System select renders deterministically without hitting
 // any /meta/* endpoint.
@@ -38,7 +40,7 @@ vi.mock('../hooks/useOwners', () => ({
   useOwners: vi.fn(() => ({ data: ['alice', 'inactive-user'] })),
 }))
 vi.mock('../hooks/useEmployees', () => ({
-  lookupEmployee: vi.fn(),
+  lookupEmployee: mockLookupEmployee,
 }))
 
 function renderWithProviders(ui: React.ReactElement) {
@@ -55,13 +57,21 @@ async function openDialog() {
 }
 
 async function fillComponentOwner(owner = 'alice') {
-  await userEvent.type(screen.getByPlaceholderText('owner@example.com'), owner)
+  const input = screen.getByPlaceholderText('owner@example.com')
+  await userEvent.type(input, owner)
+  fireEvent.blur(input)
+  await waitFor(() => expect(mockLookupEmployee).toHaveBeenCalledWith(owner))
+  await waitFor(() => expect(screen.queryByText('Validating person...')).toBeNull())
 }
 
 beforeEach(() => {
   mockMutateAsync.mockReset()
   mockNavigate.mockReset()
   mockToast.mockReset()
+  mockLookupEmployee.mockReset()
+  mockLookupEmployee.mockImplementation(async (query: string) => [
+    { username: query.trim(), active: true },
+  ])
 })
 
 describe('CreateComponentButton', () => {
@@ -141,13 +151,54 @@ describe('CreateComponentDialog — validation', () => {
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget-svc')
     await userEvent.click(screen.getByRole('combobox'))
     await userEvent.click(screen.getByRole('option', { name: 'MAVEN' }))
-    await userEvent.type(screen.getByPlaceholderText('owner@example.com'), 'inactive-user')
+    await fillComponentOwner('inactive-user')
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
     await waitFor(() => {
       expect(screen.getByText('is not an active employee')).toBeDefined()
     })
     expect(mockToast).not.toHaveBeenCalled()
+  })
+
+  it('blocks submit when component owner is not found in employee lookup', async () => {
+    mockLookupEmployee.mockResolvedValue([])
+    renderWithProviders(<CreateComponentButton />)
+    await openDialog()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget-svc')
+    await userEvent.click(screen.getByRole('combobox'))
+    await userEvent.click(screen.getByRole('option', { name: 'MAVEN' }))
+    const input = screen.getByPlaceholderText('owner@example.com')
+    await userEvent.type(input, 'asdfd')
+    fireEvent.blur(input)
+
+    await screen.findByText('Select an active person from the directory')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('does not submit a stale active owner when the textbox is edited before revalidation', async () => {
+    mockLookupEmployee.mockImplementation((query: string) => {
+      if (query.trim() === 'alice') {
+        return Promise.resolve([{ username: 'alice', active: true }])
+      }
+      return new Promise(() => undefined)
+    })
+    renderWithProviders(<CreateComponentButton />)
+    await openDialog()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget-svc')
+    await userEvent.click(screen.getByRole('combobox'))
+    await userEvent.click(screen.getByRole('option', { name: 'MAVEN' }))
+    await fillComponentOwner('alice')
+
+    const input = screen.getByPlaceholderText('owner@example.com')
+    await userEvent.clear(input)
+    await userEvent.type(input, 'asdfd')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/component owner is required/i)).toBeDefined()
+    })
+    expect(mockMutateAsync).not.toHaveBeenCalled()
   })
 })
 

@@ -15,11 +15,17 @@ vi.mock('../../hooks/useOwners', () => ({
 // Stateful harness — PeopleListInput is controlled (parent owns the array).
 // A dump element exposes the current value so tests assert the exact ordered
 // string[] the component emits.
-function Harness({ initial = [] as string[] }) {
+function Harness({
+  initial = [] as string[],
+  lookupFn,
+}: {
+  initial?: string[]
+  lookupFn?: Parameters<typeof PeopleListInput>[0]['lookupFn']
+}) {
   const [value, setValue] = useState<string[]>(initial)
   return (
     <>
-      <PeopleListInput value={value} onChange={setValue} />
+      <PeopleListInput value={value} onChange={setValue} lookupFn={lookupFn} />
       <div data-testid="dump">{JSON.stringify(value)}</div>
     </>
   )
@@ -132,6 +138,17 @@ describe('PeopleListInput', () => {
     expect(screen.getByText('Inactive')).toBeDefined()
   })
 
+  it('renders a not-verified badge on a stored person row with unknown status', () => {
+    render(
+      <PeopleListInput
+        value={['asdfd']}
+        onChange={vi.fn()}
+        statuses={{ asdfd: null }}
+      />,
+    )
+    expect(screen.getByText('Not verified')).toBeDefined()
+  })
+
   it('adds a picked person to the END of the ordered list', async () => {
     render(<Harness initial={['alice@example.com']} />)
     await addViaSuggestion('bob@example.com')
@@ -238,5 +255,17 @@ describe('PeopleListInput', () => {
     await userEvent.type(input2, 'alice')
     fireEvent.blur(input2)
     await waitFor(() => expect(dump()).toBe(JSON.stringify(['alice'])))
+  })
+
+  it('does not add a free-typed person that employee lookup cannot validate', async () => {
+    const lookupFn = vi.fn().mockResolvedValue([])
+    render(<Harness initial={[]} lookupFn={lookupFn} />)
+    const input = screen.getByRole('textbox')
+    await userEvent.type(input, 'asdfd')
+    fireEvent.blur(input)
+    await screen.findByRole('alert')
+    expect(dump()).toBe('[]')
+    expect(screen.getByText('Select an active person from the directory')).toBeDefined()
+    expect((input as HTMLInputElement).value).toBe('asdfd')
   })
 })
