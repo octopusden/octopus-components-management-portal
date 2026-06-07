@@ -174,5 +174,5 @@ export const fieldDescriptions: Record<string, string> = {
   'escrow.gradleIncludeTestConfigurations':
     'Includes Gradle test configurations (the test classpath dependencies) in the escrow package. Off by default.',
   'escrow.buildTask':
-    'Custom build task the escrow generation runs instead of the default build lifecycle. Supports dynamic variables; set it for components that need a non-standard escrow build sequence.',
+    'Custom build task the escrow generation runs instead of the default build lifecycle. Supports dynamic variables; set it for components that need a non-standard escrow build sequence. Configurable as a per-version override.',
 }
