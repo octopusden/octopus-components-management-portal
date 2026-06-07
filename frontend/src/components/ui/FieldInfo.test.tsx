@@ -12,8 +12,10 @@ vi.mock('../../lib/fieldDescriptions', () => ({
 }))
 
 function renderFieldInfo(path: string, label: string) {
+  // delayDuration={0}: hover-intent delay is timer-gated in Radix; zero it so
+  // the hover test is deterministic in jsdom (focus opens with no delay anyway).
   return render(
-    <TooltipProvider>
+    <TooltipProvider delayDuration={0}>
       <FieldInfo path={path} label={label} />
     </TooltipProvider>,
   )
@@ -41,6 +43,16 @@ describe('FieldInfo', () => {
     renderFieldInfo('component.name', 'Component Key')
 
     await user.tab()
+
+    const tooltip = await screen.findByRole('tooltip')
+    expect(tooltip).toHaveTextContent('Unique technical key of the component.')
+  })
+
+  it('shows the description in a tooltip on mouse hover', async () => {
+    const user = userEvent.setup()
+    renderFieldInfo('component.name', 'Component Key')
+
+    await user.hover(screen.getByRole('button', { name: 'Description for Component Key' }))
 
     const tooltip = await screen.findByRole('tooltip')
     expect(tooltip).toHaveTextContent('Unique technical key of the component.')

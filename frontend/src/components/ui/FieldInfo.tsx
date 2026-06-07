@@ -18,7 +18,7 @@ interface FieldInfoProps {
  */
 export function FieldInfo({ path, label }: FieldInfoProps) {
   const description = fieldDescriptions[path]
-  if (!description) return null
+  if (!description?.trim()) return null
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -26,7 +26,7 @@ export function FieldInfo({ path, label }: FieldInfoProps) {
           type="button"
           aria-label={`Description for ${label}`}
           data-field-path={path}
-          className="inline-flex shrink-0 rounded-sm text-muted-foreground hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex shrink-0 cursor-help rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&_svg]:pointer-events-none"
         >
           <Info className="h-3.5 w-3.5" aria-hidden="true" />
         </button>
