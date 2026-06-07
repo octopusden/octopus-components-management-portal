@@ -242,6 +242,6 @@ describe('DistributionTab field descriptions (FieldInfo)', () => {
     ) as HTMLElement
     act(() => trigger.focus())
     const tooltip = await screen.findByRole('tooltip')
-    expect(tooltip).toHaveTextContent(fieldDescriptions['component.distributionExplicit'])
+    expect(tooltip).toHaveTextContent(fieldDescriptions['component.distributionExplicit']!)
   })
 })

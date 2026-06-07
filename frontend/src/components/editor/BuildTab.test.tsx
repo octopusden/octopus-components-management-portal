@@ -663,6 +663,6 @@ describe('BuildTab field descriptions (FieldInfo)', () => {
     const trigger = document.querySelector('[data-field-path="build.buildSystem"]') as HTMLElement
     act(() => trigger.focus())
     const tooltip = await screen.findByRole('tooltip')
-    expect(tooltip).toHaveTextContent(fieldDescriptions['build.buildSystem'])
+    expect(tooltip).toHaveTextContent(fieldDescriptions['build.buildSystem']!)
   })
 })

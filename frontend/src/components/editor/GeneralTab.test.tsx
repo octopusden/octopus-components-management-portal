@@ -846,6 +846,6 @@ describe('GeneralTab field descriptions (FieldInfo)', () => {
     const trigger = document.querySelector('[data-field-path="component.name"]') as HTMLElement
     act(() => trigger.focus())
     const tooltip = await screen.findByRole('tooltip')
-    expect(tooltip).toHaveTextContent(fieldDescriptions['component.name'])
+    expect(tooltip).toHaveTextContent(fieldDescriptions['component.name']!)
   })
 })

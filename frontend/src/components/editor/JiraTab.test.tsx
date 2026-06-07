@@ -163,6 +163,6 @@ describe('JiraTab field descriptions (FieldInfo)', () => {
     const trigger = document.querySelector('[data-field-path="jira.projectKey"]') as HTMLElement
     act(() => trigger.focus())
     const tooltip = await screen.findByRole('tooltip')
-    expect(tooltip).toHaveTextContent(fieldDescriptions['jira.projectKey'])
+    expect(tooltip).toHaveTextContent(fieldDescriptions['jira.projectKey']!)
   })
 })

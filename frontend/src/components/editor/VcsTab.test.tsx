@@ -23,6 +23,7 @@ function makeBaseRow(overrides: Partial<ComponentConfiguration> = {}): Component
     vcsEntries: [
       {
         id: 'vcs-1',
+        sortOrder: 0,
         name: 'main',
         vcsPath: 'ssh://git@example.com/repo.git',
         repositoryType: 'GIT',
@@ -124,8 +125,8 @@ describe('VcsTab field descriptions (FieldInfo)', () => {
       configurations: [
         makeBaseRow({
           vcsEntries: [
-            { id: 'vcs-1', name: 'a', vcsPath: 'ssh://one', repositoryType: 'GIT', tag: null, branch: null, hotfixBranch: null },
-            { id: 'vcs-2', name: 'b', vcsPath: 'ssh://two', repositoryType: 'GIT', tag: null, branch: null, hotfixBranch: null },
+            { id: 'vcs-1', sortOrder: 0, name: 'a', vcsPath: 'ssh://one', repositoryType: 'GIT', tag: null, branch: null, hotfixBranch: null },
+            { id: 'vcs-2', sortOrder: 1, name: 'b', vcsPath: 'ssh://two', repositoryType: 'GIT', tag: null, branch: null, hotfixBranch: null },
           ],
         }),
       ],
@@ -141,6 +142,6 @@ describe('VcsTab field descriptions (FieldInfo)', () => {
     const trigger = document.querySelector('[data-field-path="vcs.vcsPath"]') as HTMLElement
     act(() => trigger.focus())
     const tooltip = await screen.findByRole('tooltip')
-    expect(tooltip).toHaveTextContent(fieldDescriptions['vcs.vcsPath'])
+    expect(tooltip).toHaveTextContent(fieldDescriptions['vcs.vcsPath']!)
   })
 })

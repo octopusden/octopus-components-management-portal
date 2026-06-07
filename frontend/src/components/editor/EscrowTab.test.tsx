@@ -419,6 +419,6 @@ describe('EscrowTab field descriptions (FieldInfo)', () => {
     const trigger = document.querySelector('[data-field-path="escrow.generation"]') as HTMLElement
     act(() => trigger.focus())
     const tooltip = await screen.findByRole('tooltip')
-    expect(tooltip).toHaveTextContent(fieldDescriptions['escrow.generation'])
+    expect(tooltip).toHaveTextContent(fieldDescriptions['escrow.generation']!)
   })
 })
