@@ -35,7 +35,6 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
   // localError is the surface for the handleSave guard — covers the case
   // where the user clicks Save without ever interacting with the field.
   const [localError, setLocalError] = useState<string | null>(null)
-  const [buildSystemVersion, setBuildSystemVersion] = useState(build?.buildSystemVersion ?? '')
   const [buildFilePath, setBuildFilePath] = useState(build?.buildFilePath ?? '')
   const [javaVersion, setJavaVersion] = useState(build?.javaVersion ?? '')
   const [mavenVersion, setMavenVersion] = useState(build?.mavenVersion ?? '')
@@ -51,7 +50,6 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
     const br = selectBaseRow(component)
     const b = br?.build
     setBuildSystem(b?.buildSystem ?? '')
-    setBuildSystemVersion(b?.buildSystemVersion ?? '')
     setBuildFilePath(b?.buildFilePath ?? '')
     setJavaVersion(b?.javaVersion ?? '')
     setMavenVersion(b?.mavenVersion ?? '')
@@ -92,7 +90,6 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
         baseConfiguration: {
           build: {
             buildSystem: buildSystem || null,
-            buildSystemVersion: buildSystemVersion || null,
             buildFilePath: buildFilePath || null,
             javaVersion: javaVersion || null,
             mavenVersion: mavenVersion || null,
@@ -154,19 +151,6 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
             </p>
           )}
           <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.buildSystem" />
-        </div>
-
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-1">
-            <Label>Build System Version</Label>
-            <FieldInfo path="build.buildSystemVersion" label="Build System Version" />
-          </div>
-          <Input
-            value={buildSystemVersion}
-            onChange={(e) => setBuildSystemVersion(e.target.value)}
-            placeholder="e.g. 3.9.6"
-          />
-          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.buildSystemVersion" />
         </div>
 
         <div className="space-y-1.5">

@@ -30,7 +30,6 @@ const EXPECTED_KEYS = [
   'component.artifactIds',
   // BuildTab
   'build.buildSystem',
-  'build.buildSystemVersion',
   'build.buildFilePath',
   'build.javaVersion',
   'build.mavenVersion',

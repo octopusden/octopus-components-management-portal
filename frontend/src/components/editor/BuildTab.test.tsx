@@ -231,44 +231,6 @@ describe('BuildTab — save path', () => {
     expect(callArg.baseConfiguration?.build?.mavenVersion).toBeNull()
   })
 
-  it('sends buildSystemVersion in build payload', async () => {
-    const mutateFn = vi.fn().mockResolvedValue({})
-    const component = makeComponent({
-      configurations: [
-        makeBaseRow({
-          build: { buildSystem: 'MAVEN', buildSystemVersion: '3.8.0' },
-        }),
-      ],
-    })
-
-    const { getByPlaceholderText, getByText } = renderTab(component, mutateFn)
-
-    const input = getByPlaceholderText('e.g. 3.9.6')
-    await userEvent.clear(input)
-    await userEvent.type(input, '3.9.0')
-
-    await userEvent.click(getByText('Save Build'))
-
-    const callArg = mutateFn.mock.calls[0]![0] as ComponentUpdateRequest
-    expect(callArg.baseConfiguration?.build?.buildSystemVersion).toBe('3.9.0')
-  })
-
-  it('sends null for buildSystemVersion when cleared', async () => {
-    const mutateFn = vi.fn().mockResolvedValue({})
-    const component = makeComponent({
-      configurations: [
-        makeBaseRow({ build: { buildSystem: 'MAVEN', buildSystemVersion: '3.8.0' } }),
-      ],
-    })
-
-    const { getByPlaceholderText, getByText } = renderTab(component, mutateFn)
-    await userEvent.clear(getByPlaceholderText('e.g. 3.9.6'))
-    await userEvent.click(getByText('Save Build'))
-
-    const callArg = mutateFn.mock.calls[0]![0] as ComponentUpdateRequest
-    expect(callArg.baseConfiguration?.build?.buildSystemVersion).toBeNull()
-  })
-
   it('sends projectVersion in build payload', async () => {
     const mutateFn = vi.fn().mockResolvedValue({})
     const component = makeComponent({
@@ -492,7 +454,6 @@ describe('BuildTab — existing structure preserved', () => {
   it('renders new Wave B controls', () => {
     renderTab(makeComponent())
 
-    expect(screen.getByText('Build System Version')).toBeDefined()
     expect(screen.getByText('Maven Version')).toBeDefined()
     expect(screen.getByText('Project Version')).toBeDefined()
     expect(screen.getByText('Build Tasks')).toBeDefined()
@@ -528,7 +489,6 @@ describe('BuildTab — existing structure preserved', () => {
     expect((screen.getByPlaceholderText('8.6') as HTMLInputElement).value).toBe('')
     expect((screen.getByPlaceholderText('1.8 / 11 / 17 / 21') as HTMLInputElement).value).toBe('')
     expect((screen.getByPlaceholderText('3.9.6') as HTMLInputElement).value).toBe('')
-    expect((screen.getByPlaceholderText('e.g. 3.9.6') as HTMLInputElement).value).toBe('')
   })
 })
 
@@ -613,7 +573,6 @@ describe('BuildTab — buildSystem required (ui-swift-sloth §5)', () => {
 describe('BuildTab — inline override coverage', () => {
   const overridablePaths = [
     'build.buildSystem',
-    'build.buildSystemVersion',
     'build.buildFilePath',
     'build.javaVersion',
     'build.mavenVersion',
@@ -635,7 +594,6 @@ describe('BuildTab field descriptions (FieldInfo)', () => {
   // Exact set of registry paths this tab must expose an info icon for.
   const EXPECTED_PATHS = [
     'build.buildSystem',
-    'build.buildSystemVersion',
     'build.buildFilePath',
     'build.javaVersion',
     'build.mavenVersion',

@@ -119,7 +119,6 @@ export interface ComponentConfiguration {
 
 export interface BuildAspect {
   buildSystem?: string | null
-  buildSystemVersion?: string | null
   javaVersion?: string | null
   mavenVersion?: string | null
   gradleVersion?: string | null
