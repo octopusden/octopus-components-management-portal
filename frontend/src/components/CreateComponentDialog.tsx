@@ -281,20 +281,30 @@ function CreateComponentForm({ source, isCopy, onClose }: CreateComponentFormPro
       }
       if (err instanceof ApiError && err.status === 400) {
         const fieldErrors = parseServerFieldErrors(err.rawBody)
-        // Route recognized field errors inline; "distribution" maps to the
-        // coordinate block. If anything was routed, skip the toast.
+        // Route recognized field errors inline; if anything was routed to a
+        // VISIBLE field, skip the toast. componentOwner is always shown; RM /
+        // SC / copyright / coordinate live in the explicit+external block, so
+        // only route them inline when that block is rendered — otherwise the
+        // message would land on a hidden field and silently vanish, so we let
+        // it fall through to the toast instead.
         let routed = false
-        for (const field of ['componentOwner', 'copyright', 'releaseManager', 'securityChampion'] as const) {
-          const msg = fieldErrors.get(field)
-          if (msg) {
-            setError(field, { type: 'server', message: msg })
+        if (fieldErrors.get('componentOwner')) {
+          setError('componentOwner', { type: 'server', message: fieldErrors.get('componentOwner')! })
+          routed = true
+        }
+        if (gated) {
+          for (const field of ['copyright', 'releaseManager', 'securityChampion'] as const) {
+            const msg = fieldErrors.get(field)
+            if (msg) {
+              setError(field, { type: 'server', message: msg })
+              routed = true
+            }
+          }
+          const distributionMsg = fieldErrors.get('distribution')
+          if (distributionMsg) {
+            setError('coordinate', { type: 'server', message: distributionMsg })
             routed = true
           }
-        }
-        const distributionMsg = fieldErrors.get('distribution')
-        if (distributionMsg) {
-          setError('coordinate', { type: 'server', message: distributionMsg })
-          routed = true
         }
         if (routed) return
       }
