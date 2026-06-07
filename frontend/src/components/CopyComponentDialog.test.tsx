@@ -139,10 +139,10 @@ describe('CopyComponentDialog — form prefill & hint', () => {
     expect((screen.getByLabelText(/component key/i) as HTMLInputElement).value).toBe('')
   })
 
-  it('renders the static copied / not-copied hint', () => {
+  it('renders the static included / excluded hint', () => {
     loaded()
     renderDialog()
-    expect(screen.getByText(/not copied/i)).toBeDefined()
+    expect(screen.getByText(/excluded/i)).toBeDefined()
     expect(screen.getByText(/overrides/i)).toBeDefined()
     expect(screen.getByText(/vcs entries/i)).toBeDefined()
   })

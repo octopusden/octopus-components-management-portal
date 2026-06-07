@@ -158,11 +158,12 @@ export function CopyComponentDialog({ sourceId, open, onOpenChange }: CopyCompon
 
           <div className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground space-y-1">
             <p>
-              <span className="font-medium text-foreground">Copied:</span> general details, people,
-              labels, docs, security groups, and the base build / escrow / Jira configuration.
+              <span className="font-medium text-foreground">Included:</span> general details,
+              people, labels, docs, security groups, and the base build / escrow / Jira
+              configuration.
             </p>
             <p>
-              <span className="font-medium text-foreground">Not copied:</span> VCS entries,
+              <span className="font-medium text-foreground">Excluded:</span> VCS entries,
               artifacts (Maven, Docker, files, packages), TeamCity projects, configuration
               overrides, and the Jira project key — set these on the new component afterwards.
             </p>
