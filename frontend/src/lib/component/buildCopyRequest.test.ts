@@ -187,7 +187,13 @@ describe('buildCopyRequest — baseConfiguration', () => {
   })
 
   it('omits jira entirely when the source aspect only has projectKey', () => {
-    const req = buildCopyRequest(sourceWithBase({ jira: { projectKey: 'ALPHA' } }), INPUT)
+    // build present so baseConfiguration itself exists — the assertion
+    // targets the jira key specifically; whole-object omission has its
+    // own test below.
+    const req = buildCopyRequest(
+      sourceWithBase({ build: FULL_BUILD, jira: { projectKey: 'ALPHA' } }),
+      INPUT,
+    )
     expect(req.baseConfiguration && 'jira' in req.baseConfiguration).toBe(false)
   })
 
@@ -234,6 +240,22 @@ describe('buildCopyRequest — baseConfiguration', () => {
 
   it('omits baseConfiguration entirely when the source has no BASE row', () => {
     const req = buildCopyRequest(makeComponent({ configurations: [] }), INPUT)
+    expect('baseConfiguration' in req).toBe(false)
+  })
+
+  it('omits baseConfiguration when the BASE row has nothing to copy (no aspects, no tools)', () => {
+    // e.g. a synthetic/minimal BASE row whose only content is excluded
+    // collections — copying must not send `baseConfiguration: {}`.
+    const req = buildCopyRequest(
+      sourceWithBase({
+        build: null,
+        escrow: null,
+        jira: { projectKey: 'ALPHA' },
+        requiredTools: [],
+        vcsEntries: [{ id: 'v-1', vcsPath: 'proj/repo', sortOrder: 0 }],
+      }),
+      INPUT,
+    )
     expect('baseConfiguration' in req).toBe(false)
   })
 

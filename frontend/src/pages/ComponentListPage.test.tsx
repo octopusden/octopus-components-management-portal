@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
@@ -237,8 +238,7 @@ describe('ComponentListPage — per-row Copy gating + dialog wiring', () => {
     mockComponentsOk()
     renderPage()
 
-    const trigger = screen.getByTestId('table-copy-trigger')
-    trigger.click()
+    await userEvent.click(screen.getByTestId('table-copy-trigger'))
     expect(await screen.findByTestId('copy-dialog')).toBeDefined()
     expect(screen.getByTestId('copy-dialog').textContent).toBe('comp-x')
   })

@@ -71,11 +71,17 @@ export function buildCopyRequest(source: ComponentDetail, input: CopyInput): Com
     // Shallow-clone the aspects/lists so the request never shares references
     // with the TanStack-cached source detail — a future mutation of the
     // request must not corrupt the cache entry.
-    req.baseConfiguration = {
+    const baseConfiguration = {
       ...(baseRow.build ? { build: { ...baseRow.build } } : {}),
       ...(baseRow.escrow ? { escrow: { ...baseRow.escrow } } : {}),
       ...(jira ? { jira } : {}),
       ...(baseRow.requiredTools.length > 0 ? { requiredTools: [...baseRow.requiredTools] } : {}),
+    }
+    // A BASE row whose only content is excluded collections (e.g. a
+    // synthetic/minimal base) yields nothing to copy — omit the key rather
+    // than sending `baseConfiguration: {}`.
+    if (Object.keys(baseConfiguration).length > 0) {
+      req.baseConfiguration = baseConfiguration
     }
   }
 
