@@ -108,6 +108,12 @@ describe('fieldDescriptions registry', () => {
     }
   })
 
+  it('declares every registry key in EXPECTED_KEYS (no undocumented entries)', () => {
+    // Inverse of the per-key check: a key added to the registry without being
+    // declared here would otherwise slip through silently.
+    expect(Object.keys(fieldDescriptions).sort()).toEqual([...EXPECTED_KEYS].sort())
+  })
+
   it('has no registry keys outside the known section prefixes', () => {
     const allowedPrefix = /^(component|build|jira|vcs|distribution|escrow)\./
     for (const key of Object.keys(fieldDescriptions)) {
