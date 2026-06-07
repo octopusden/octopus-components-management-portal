@@ -190,9 +190,19 @@ async function setupRoutes(
   return state
 }
 
-/** Field wrapper div for a labelled people editor (label's parent). */
+/**
+ * Field wrapper div for a labelled people editor. Since the per-field
+ * description tooltips (#81) the label sits inside a `flex` row next to its
+ * FieldInfo trigger, so the field container is the label's GRANDparent:
+ *   <div class="space-y-1.5">        ← returned here
+ *     <div class="flex ...">
+ *       <Label>…</Label> <FieldInfo/>
+ *     </div>
+ *     <PeopleInput/> | <PeopleListInput/>
+ *   </div>
+ */
 function peopleField(page: Page, label: string) {
-  return page.getByText(label, { exact: true }).locator('..')
+  return page.getByText(label, { exact: true }).locator('../..')
 }
 
 /** Ordered person-name spans rendered inside a PeopleListInput field. */
