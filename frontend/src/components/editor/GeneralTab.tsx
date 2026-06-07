@@ -11,6 +11,7 @@ import { PeopleListInput } from '../ui/PeopleListInput'
 import { ComponentSelect } from '../ui/ComponentSelect'
 import { ChipsInput } from '../ui/ChipsInput'
 import { EnumSelect } from '../ui/EnumSelect'
+import { FieldInfo } from '../ui/FieldInfo'
 import type { ComponentDetail } from '../../lib/types'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../../lib/auth'
@@ -229,7 +230,10 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
               server enforces RENAME_COMPONENTS only on PATCH; POST permits
               anything the CREATE_COMPONENTS holder can name. */}
           <div className="space-y-1.5">
-            <Label htmlFor="name">Component Key</Label>
+            <div className="flex items-center gap-1">
+              <Label htmlFor="name">Component Key</Label>
+              <FieldInfo path="component.name" label="Component Key" />
+            </div>
             <Input
               id="name"
               placeholder="my-component"
@@ -257,7 +261,10 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
           {/* Display Name — visibility-gated */}
           {displayNameEntry.visibility !== 'hidden' && (
             <div className="space-y-1.5">
-              <Label htmlFor="displayName">Display Name</Label>
+              <div className="flex items-center gap-1">
+                <Label htmlFor="displayName">Display Name</Label>
+                <FieldInfo path="component.displayName" label="Display Name" />
+              </div>
               <Input
                 id="displayName"
                 placeholder="Human-readable name"
@@ -277,7 +284,10 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
               when canBeParent && a (grandfathered) parent exists, only clearing is
               offered for remediation. */}
           <div className="space-y-1.5 sm:col-span-2 sm:max-w-md">
-            <Label htmlFor="parentComponentName">Parent Component</Label>
+            <div className="flex items-center gap-1">
+              <Label htmlFor="parentComponentName">Parent Component</Label>
+              <FieldInfo path="component.parentComponentName" label="Parent Component" />
+            </div>
             {canBeParent && (parentComponentName ?? '') !== '' ? (
               <div className="flex items-center gap-2">
                 <Input
@@ -335,6 +345,7 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                 }
               />
               <Label htmlFor="canBeParent" className="cursor-pointer">Can be a parent</Label>
+              <FieldInfo path="component.canBeParent" label="Can be a parent" />
               <span className="text-xs text-muted-foreground">
                 May be selected as another component&apos;s parent (not an aggregator).
               </span>
@@ -350,7 +361,10 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
               migration/import path only, never via the API — not user-editable here. */}
           {groupIdEntry.visibility !== 'hidden' && (
             <div className="space-y-1.5">
-              <Label htmlFor="groupId">Group Key</Label>
+              <div className="flex items-center gap-1">
+                <Label htmlFor="groupId">Group Key</Label>
+                <FieldInfo path="component.groupId" label="Group Key" />
+              </div>
               <Input
                 id="groupId"
                 value={component.group?.groupKey ?? ''}
@@ -385,6 +399,7 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
               onCheckedChange={(checked) => setValue('solution', checked, { shouldDirty: true })}
             />
             <Label htmlFor="solution" className="cursor-pointer">Solution</Label>
+            <FieldInfo path="component.solution" label="Solution" />
           </div>
 
         </div>
@@ -400,7 +415,10 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
             {/* Component Owner */}
             {componentOwnerEntry.visibility !== 'hidden' && (
               <div className="space-y-1.5">
-                <Label htmlFor="componentOwner">Component Owner</Label>
+                <div className="flex items-center gap-1">
+                  <Label htmlFor="componentOwner">Component Owner</Label>
+                  <FieldInfo path="component.componentOwner" label="Component Owner" />
+                </div>
                 {componentOwnerEntry.visibility === 'readonly' ? (
                   <div className="flex items-center gap-2">
                     <Input
@@ -432,7 +450,10 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                 `releaseManager`. */}
             {releaseManagerEntry.visibility !== 'hidden' && (
               <div className="space-y-1.5">
-                <Label htmlFor="releaseManager">Release Managers</Label>
+                <div className="flex items-center gap-1">
+                  <Label htmlFor="releaseManager">Release Managers</Label>
+                  <FieldInfo path="component.releaseManager" label="Release Managers" />
+                </div>
                 {releaseManagerEntry.visibility === 'readonly' ? (
                   <div className="flex items-center gap-2">
                     <Input
@@ -471,7 +492,10 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                 `securityChampion`. */}
             {securityChampionEntry.visibility !== 'hidden' && (
               <div className="space-y-1.5">
-                <Label htmlFor="securityChampion">Security Champions</Label>
+                <div className="flex items-center gap-1">
+                  <Label htmlFor="securityChampion">Security Champions</Label>
+                  <FieldInfo path="component.securityChampion" label="Security Champions" />
+                </div>
                 {securityChampionEntry.visibility === 'readonly' ? (
                   <div className="flex items-center gap-2">
                     <Input
@@ -521,7 +545,10 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                 attached to yet. */}
             {systemEntry.visibility !== 'hidden' && (
               <div className="space-y-1.5">
-                <Label htmlFor="component-system">System</Label>
+                <div className="flex items-center gap-1">
+                  <Label htmlFor="component-system">System</Label>
+                  <FieldInfo path="component.system" label="System" />
+                </div>
                 <EnumSelect
                   id="component-system"
                   fieldPath="component.system"
@@ -547,7 +574,10 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
             {/* Client Code */}
             {clientCodeEntry.visibility !== 'hidden' && (
               <div className="space-y-1.5">
-                <Label htmlFor="clientCode">Client Code</Label>
+                <div className="flex items-center gap-1">
+                  <Label htmlFor="clientCode">Client Code</Label>
+                  <FieldInfo path="component.clientCode" label="Client Code" />
+                </div>
                 <Input
                   id="clientCode"
                   placeholder="CLIENT_CODE"
@@ -564,7 +594,10 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
             {/* Copyright — SYS-039 */}
             {copyrightEntry.visibility !== 'hidden' && (
               <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor="copyright">Copyright</Label>
+                <div className="flex items-center gap-1">
+                  <Label htmlFor="copyright">Copyright</Label>
+                  <FieldInfo path="component.copyright" label="Copyright" />
+                </div>
                 <Input
                   id="copyright"
                   placeholder="(c) 2026 Acme Inc."
@@ -587,7 +620,10 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                 explicit-clear, omits on pre-hydration. */}
             {labelsEntry.visibility !== 'hidden' && (
               <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor="component-labels">Labels</Label>
+                <div className="flex items-center gap-1">
+                  <Label htmlFor="component-labels">Labels</Label>
+                  <FieldInfo path="component.labels" label="Labels" />
+                </div>
                 <ChipsInput
                   id="component-labels"
                   value={labelsValue ?? []}
@@ -624,7 +660,10 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
           Both are per-component child lists introduced by schema-v2. No
           field-config gates today; full visibility for all editors. */}
       <section data-testid="section-references">
-        <h3 className="text-sm font-medium text-muted-foreground mb-3">Doc Links</h3>
+        <div className="flex items-center gap-1 mb-3">
+          <h3 className="text-sm font-medium text-muted-foreground">Doc Links</h3>
+          <FieldInfo path="component.docs" label="Doc Links" />
+        </div>
         <div className="space-y-2">
           {docsFieldArray.fields.length === 0 ? (
             <p className="text-xs text-muted-foreground">No documentation links configured.</p>
@@ -679,7 +718,10 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
       </section>
 
       <section data-testid="section-artifact-ids">
-        <h3 className="text-sm font-medium text-muted-foreground mb-3">Artifact IDs</h3>
+        <div className="flex items-center gap-1 mb-3">
+          <h3 className="text-sm font-medium text-muted-foreground">Artifact IDs</h3>
+          <FieldInfo path="component.artifactIds" label="Artifact IDs" />
+        </div>
         <div className="space-y-2">
           {artifactIdsFieldArray.fields.length === 0 ? (
             <p className="text-xs text-muted-foreground">No artifact IDs configured.</p>
