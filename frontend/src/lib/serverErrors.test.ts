@@ -72,6 +72,36 @@ describe('parseServerFieldErrors — IllegalArgumentException format', () => {
   })
 })
 
+describe('parseServerFieldErrors — colon-prefixed IllegalArgumentException format', () => {
+  // Some CRS rules emit "<field>: <message>" with a colon (no space before it),
+  // e.g. the distribution-coordinate rule. The plain space heuristic misses
+  // these because the identifier is followed by ':' not whitespace.
+  it('maps "distribution: an explicit+external component must define …"', () => {
+    const result = parseServerFieldErrors(
+      JSON.stringify({
+        errorMessage:
+          "distribution: an explicit+external component must define at least one distribution coordinate (maven GAV, docker image, or package) (component 'TS-Copy')",
+      }),
+    )
+    expect(result.get('distribution')).toContain('must define at least one distribution coordinate')
+  })
+
+  it('maps a colon-prefixed copyright message', () => {
+    const result = parseServerFieldErrors(
+      JSON.stringify({ errorMessage: "copyright: 'X' is not supported" }),
+    )
+    expect(result.get('copyright')).toBe("'X' is not supported")
+  })
+
+  it('does not mistake a "Validation failed:" envelope for a colon field', () => {
+    const result = parseServerFieldErrors(
+      JSON.stringify({ errorMessage: 'Validation failed: name: must not be blank' }),
+    )
+    expect(result.get('name')).toBe('must not be blank')
+    expect(result.has('Validation failed')).toBe(false)
+  })
+})
+
 describe('parseServerFieldErrors — non-GeneralTab fields parse but rely on caller filtering', () => {
   it('a field outside GeneralTab scope (e.g. buildSystem) is parsed but filtered by caller', () => {
     // parseServerFieldErrors itself parses any field — scope filtering happens in ComponentDetailPage.

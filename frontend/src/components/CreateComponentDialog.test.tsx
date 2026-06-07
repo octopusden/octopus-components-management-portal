@@ -3,15 +3,15 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { CreateComponentButton } from './CreateComponentDialog'
+import { CreateComponentButton, CreateComponentDialog } from './CreateComponentDialog'
 import { ApiError } from '../lib/api'
+import type { ComponentDetail } from '../lib/types'
 
 const mockMutateAsync = vi.fn()
+const mockUseComponent = vi.fn()
 vi.mock('../hooks/useComponent', () => ({
-  useCreateComponent: vi.fn(() => ({
-    mutateAsync: mockMutateAsync,
-    isPending: false,
-  })),
+  useComponent: (id: string) => mockUseComponent(id),
+  useCreateComponent: vi.fn(() => ({ mutateAsync: mockMutateAsync, isPending: false })),
 }))
 
 const mockNavigate = vi.fn()
@@ -21,24 +21,17 @@ vi.mock('react-router', async (importOriginal) => {
 })
 
 const mockToast = vi.fn()
-vi.mock('../hooks/use-toast', () => ({
-  useToast: () => ({ toast: mockToast }),
-}))
+vi.mock('../hooks/use-toast', () => ({ useToast: () => ({ toast: mockToast }) }))
 
-// EnumSelect transitively pulls in useFieldOptions; stub it so the
-// dialog's Build System select renders deterministically without hitting
-// any /meta/* endpoint.
 vi.mock('../hooks/useFieldOptions', () => ({
-  useFieldOptions: vi.fn(() => ({
-    options: ['MAVEN', 'GRADLE'],
-    isLoading: false,
-  })),
+  useFieldOptions: vi.fn(() => ({ options: ['MAVEN', 'GRADLE'], isLoading: false })),
 }))
 vi.mock('../hooks/useOwners', () => ({
   useOwners: vi.fn(() => ({ data: ['alice', 'inactive-user'] })),
 }))
 vi.mock('../hooks/useEmployees', () => ({
   lookupEmployee: vi.fn(),
+  useEmployeeStatuses: vi.fn(() => ({ data: {} })),
 }))
 
 function renderWithProviders(ui: React.ReactElement) {
@@ -50,188 +43,285 @@ function renderWithProviders(ui: React.ReactElement) {
   )
 }
 
-async function openDialog() {
-  await userEvent.click(screen.getByRole('button', { name: /new component/i }))
+function makeSource(overrides: Partial<ComponentDetail> = {}): ComponentDetail {
+  return {
+    id: 'c-1',
+    name: 'svc-alpha',
+    displayName: 'Service Alpha',
+    componentOwner: 'alice',
+    productType: null,
+    system: 'SYS1',
+    clientCode: null,
+    archived: false,
+    solution: null,
+    parentComponentName: null,
+    version: 1,
+    createdAt: null,
+    updatedAt: null,
+    labels: ['backend'],
+    docs: [],
+    artifactIds: [],
+    securityGroups: [],
+    teamcityProjects: [],
+    releaseManager: [],
+    securityChampion: [],
+    distributionExplicit: false,
+    distributionExternal: true,
+    configurations: [
+      {
+        id: 'cfg-base',
+        versionRange: '(,0),[0,)',
+        rowType: 'BASE',
+        overriddenAttribute: null,
+        isSyntheticBase: false,
+        build: { buildSystem: 'GRADLE' },
+        escrow: null,
+        jira: null,
+        vcsEntries: [],
+        mavenArtifacts: [],
+        fileUrlArtifacts: [],
+        dockerImages: [],
+        packages: [],
+        requiredTools: [],
+      },
+    ],
+    ...overrides,
+  }
 }
 
-async function fillComponentOwner(owner = 'alice') {
-  await userEvent.type(screen.getByPlaceholderText('owner@example.com'), owner)
+function scratchDisabled() {
+  mockUseComponent.mockReturnValue({ data: undefined, isLoading: false, error: null })
 }
 
 beforeEach(() => {
   mockMutateAsync.mockReset()
   mockNavigate.mockReset()
   mockToast.mockReset()
+  mockUseComponent.mockReset()
+  scratchDisabled()
 })
 
-describe('CreateComponentButton', () => {
-  it('opens the dialog without crashing when New Component is clicked', async () => {
+async function openScratch() {
+  await userEvent.click(screen.getByRole('button', { name: /new component/i }))
+}
+
+async function fillBaseFields(owner = 'alice') {
+  await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+  await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
+  await userEvent.type(screen.getByPlaceholderText('owner@example.com'), owner)
+}
+
+describe('CreateComponentDialog — scratch mode base', () => {
+  it('opens and renders base fields without the gated block', async () => {
     renderWithProviders(<CreateComponentButton />)
-    await openDialog()
-    expect(screen.getByRole('dialog')).toBeDefined()
+    await openScratch()
     expect(screen.getByText('Create Component')).toBeDefined()
-  })
-
-  it('renders the expected fields and drops the legacy Group ID + Product Type', async () => {
-    renderWithProviders(<CreateComponentButton />)
-    await openDialog()
     expect(screen.getByPlaceholderText('my-component')).toBeDefined()
-    expect(screen.getByPlaceholderText('My Component')).toBeDefined()
-    expect(screen.getByPlaceholderText('owner@example.com')).toBeDefined()
     expect(screen.getByLabelText(/build system/i)).toBeDefined()
-    expect(screen.getByLabelText(/explicit/i)).toBeDefined()
-    expect(screen.getByLabelText(/external/i)).toBeDefined()
-    // R1 (aggregator/parentComponent decouple): Group ID is gone — a group is
-    // migration-owned aggregator membership, never assigned via the create API.
-    expect(screen.queryByLabelText(/group id/i)).toBeNull()
-    // Product Type must be gone (legacy).
-    expect(screen.queryByLabelText(/product type/i)).toBeNull()
+    // Gated block hidden by default (external on, explicit off).
+    expect(screen.queryByText(/required for explicit \+ external/i)).toBeNull()
   })
-})
 
-describe('CreateComponentDialog — validation', () => {
-  it('shows a validation error for an invalid component key', async () => {
+  it('validates the component key regex', async () => {
     renderWithProviders(<CreateComponentButton />)
-    await openDialog()
+    await openScratch()
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'bad name!')
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
-    await waitFor(() =>
-      expect(screen.getByText(/component key can only contain/i)).toBeDefined(),
-    )
+    await waitFor(() => expect(screen.getByText(/component key can only contain/i)).toBeDefined())
     expect(mockMutateAsync).not.toHaveBeenCalled()
   })
 
-  it('shows a required error for buildSystem when submitted empty', async () => {
-    renderWithProviders(<CreateComponentButton />)
-    await openDialog()
-    // Valid name so Zod doesn't short-circuit on `name`; buildSystem left empty.
-    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget-svc')
-    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
-    await waitFor(() => {
-      expect(screen.getByText(/build system is required/i)).toBeDefined()
-    })
-    // R1: there is no Group ID requirement anymore.
-    expect(screen.queryByText(/group id is required/i)).toBeNull()
-    expect(mockMutateAsync).not.toHaveBeenCalled()
-  })
-
-  it('shows a required error for component owner', async () => {
-    renderWithProviders(<CreateComponentButton />)
-    await openDialog()
-    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget-svc')
-    await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(screen.getByRole('option', { name: 'MAVEN' }))
-    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
-    await waitFor(() => {
-      expect(screen.getByText(/component owner is required/i)).toBeDefined()
-    })
-    expect(mockMutateAsync).not.toHaveBeenCalled()
-  })
-
-  it('maps a CRS componentOwner 400 inline', async () => {
-    mockMutateAsync.mockRejectedValue(
-      new ApiError(
-        400,
-        'componentOwner is not an active employee',
-        JSON.stringify({ errorMessage: 'componentOwner is not an active employee' }),
-      ),
-    )
-    renderWithProviders(<CreateComponentButton />)
-    await openDialog()
-    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget-svc')
-    await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(screen.getByRole('option', { name: 'MAVEN' }))
-    await userEvent.type(screen.getByPlaceholderText('owner@example.com'), 'inactive-user')
-    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
-
-    await waitFor(() => {
-      expect(screen.getByText('is not an active employee')).toBeDefined()
-    })
-    expect(mockToast).not.toHaveBeenCalled()
-  })
-})
-
-describe('CreateComponentDialog — submit payload', () => {
-  it('builds the payload with nested baseConfiguration.build.buildSystem and NO group (migration-owned)', async () => {
+  it('submits a from-scratch payload and navigates', async () => {
     mockMutateAsync.mockResolvedValue({ id: 'comp-1', name: 'widget' })
     renderWithProviders(<CreateComponentButton />)
-    await openDialog()
-    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
-
-    // Pick a buildSystem via the EnumSelect combobox.
-    await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(screen.getByRole('option', { name: 'MAVEN' }))
-    await fillComponentOwner()
-
+    await openScratch()
+    await fillBaseFields()
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
-
     await waitFor(() => expect(mockMutateAsync).toHaveBeenCalled())
     const arg = mockMutateAsync.mock.calls[0]![0]
     expect(arg).toMatchObject({
       name: 'widget',
       baseConfiguration: { build: { buildSystem: 'MAVEN' } },
-      // CRS PR #301: scalar `system` field. The Create dialog doesn't
-      // expose it yet (deferred per the original plan); sends null.
-      system: null,
-      labels: [],
-      docs: [],
-      artifactIds: [],
-      securityGroups: [],
-      teamcityProjects: [],
       archived: false,
       distributionExplicit: false,
       distributionExternal: true,
     })
-    // R1: no `group` is sent — group is migration-owned and ignored by the API.
-    expect('group' in arg).toBe(false)
-    // No stale fields from the previous schema.
-    expect('productType' in arg).toBe(false)
+    expect(mockNavigate).toHaveBeenCalledWith('/components/comp-1')
+  })
+})
+
+describe('CreateComponentDialog — explicit+external gated block', () => {
+  async function makeGated() {
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await fillBaseFields()
+    // external already on; toggle explicit on → gated.
+    await userEvent.click(screen.getByLabelText(/explicit/i))
+    await waitFor(() => expect(screen.getByText(/required for explicit \+ external/i)).toBeDefined())
+  }
+
+  it('shows the gated block when both explicit and external are checked', async () => {
+    await makeGated()
+    expect(screen.getByText(/release managers/i)).toBeDefined()
+    expect(screen.getByText(/security champions/i)).toBeDefined()
+    expect(screen.getByLabelText(/^distribution coordinate/i)).toBeDefined()
   })
 
-  it('sends the user-toggled checkbox values in the payload', async () => {
-    mockMutateAsync.mockResolvedValue({ id: 'c', name: 'c' })
-    renderWithProviders(<CreateComponentButton />)
-    await openDialog()
-    await userEvent.type(screen.getByPlaceholderText('my-component'), 'svc')
-    await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(screen.getByRole('option', { name: 'GRADLE' }))
-    await fillComponentOwner()
-
-    // Flip both defaults: explicit on, external off.
-    await userEvent.click(screen.getByLabelText(/explicit/i))
-    await userEvent.click(screen.getByLabelText(/external/i))
-
+  it('blocks submit on empty RM / SC / coordinate but NOT on empty copyright', async () => {
+    await makeGated()
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(screen.getByText(/at least one release manager/i)).toBeDefined())
+    expect(screen.getByText(/at least one security champion/i)).toBeDefined()
+    expect(screen.getByText(/group id is required/i)).toBeDefined()
+    // copyright has no client-side required error
+    expect(screen.queryByText(/copyright is required/i)).toBeNull()
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('switching coordinate type from maven to docker drops the stale maven fields from the payload', async () => {
+    mockMutateAsync.mockResolvedValue({ id: 'comp-2', name: 'widget' })
+    await makeGated()
+    // Fill maven first
+    await userEvent.type(screen.getByLabelText('Group ID'), 'org.acme')
+    await userEvent.type(screen.getByLabelText('Artifact ID'), 'svc')
+    // Switch to docker
+    await userEvent.selectOptions(screen.getByLabelText(/^distribution coordinate/i), 'docker')
+    await userEvent.type(screen.getByLabelText('Image name'), 'acme/svc')
+    // Fill people so validation passes
+    await userEvent.type(
+      screen.getAllByPlaceholderText('Add person')[0]!,
+      'rm-bob',
+    )
+    await userEvent.type(screen.getAllByPlaceholderText('Add person')[1]!, 'sc-bob')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalled())
+    const base = mockMutateAsync.mock.calls[0]![0].baseConfiguration
+    expect(base.dockerImages).toEqual([{ imageName: 'acme/svc', flavor: null }])
+    expect('mavenArtifacts' in base).toBe(false)
+  })
+
+  it('packageType offers only DEB and RPM', async () => {
+    await makeGated()
+    await userEvent.selectOptions(screen.getByLabelText(/^distribution coordinate/i), 'package')
+    const typeSelect = screen.getByLabelText('Package type') as HTMLSelectElement
+    const values = Array.from(typeSelect.options).map((o) => o.value)
+    expect(values).toEqual(['DEB', 'RPM'])
+  })
+})
+
+describe('CreateComponentDialog — copy mode (sourceId)', () => {
+  function loaded(source = makeSource()) {
+    mockUseComponent.mockReturnValue({ data: source, isLoading: false, error: null })
+  }
+
+  function renderCopy(onOpenChange = vi.fn()) {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <CreateComponentDialog sourceId="c-1" open onOpenChange={onOpenChange} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    return { onOpenChange, view }
+  }
+
+  it('shows the Create Similar title and Included/Excluded hint', () => {
+    loaded()
+    renderCopy()
+    expect(screen.getByText('Create Similar Component')).toBeDefined()
+    expect(screen.getByText(/excluded/i)).toBeDefined()
+  })
+
+  it('prefills displayName / buildSystem / owner from the source; key stays empty', async () => {
+    loaded()
+    renderCopy()
     await waitFor(() =>
-      expect(mockMutateAsync).toHaveBeenCalledWith(
-        expect.objectContaining({
-          distributionExplicit: true,
-          distributionExternal: false,
+      expect((screen.getByLabelText(/display name/i) as HTMLInputElement).value).toBe('Service Alpha'),
+    )
+    expect((screen.getByLabelText(/component key/i) as HTMLInputElement).value).toBe('')
+    expect((screen.getByLabelText(/build system/i) as HTMLSelectElement).value).toBe('GRADLE')
+    expect((screen.getByPlaceholderText('owner@example.com') as HTMLInputElement).value).toBe('alice')
+  })
+
+  it('source loading disables Create; source error shows InlineError', () => {
+    mockUseComponent.mockReturnValue({ data: undefined, isLoading: true, error: null })
+    const { view } = renderCopy()
+    expect((screen.getByRole('button', { name: /^create$/i }) as HTMLButtonElement).disabled).toBe(true)
+    mockUseComponent.mockReturnValue({ data: undefined, isLoading: false, error: new Error('boom') })
+    view.rerender(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter>
+          <CreateComponentDialog sourceId="c-1" open onOpenChange={vi.fn()} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    expect(screen.getByText(/failed to load/i)).toBeDefined()
+  })
+
+  it('keeps typed key + edited display name across a background source refetch', async () => {
+    loaded()
+    const { onOpenChange, view } = renderCopy()
+    await userEvent.type(screen.getByLabelText(/component key/i), 'svc-beta')
+    const dn = screen.getByLabelText(/display name/i)
+    await userEvent.clear(dn)
+    await userEvent.type(dn, 'Edited Name')
+    // fresh source object identity (refetch)
+    loaded(makeSource())
+    view.rerender(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter>
+          <CreateComponentDialog sourceId="c-1" open onOpenChange={onOpenChange} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    expect((screen.getByLabelText(/component key/i) as HTMLInputElement).value).toBe('svc-beta')
+    expect((screen.getByLabelText(/display name/i) as HTMLInputElement).value).toBe('Edited Name')
+  })
+
+  it('explicit+external source with empty RM/SC blocks submit (the original 400 case)', async () => {
+    loaded(makeSource({ distributionExplicit: true, distributionExternal: true, releaseManager: [], securityChampion: [] }))
+    renderCopy()
+    await waitFor(() => expect(screen.getByText(/required for explicit \+ external/i)).toBeDefined())
+    await userEvent.type(screen.getByLabelText(/component key/i), 'svc-clone')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(screen.getByText(/at least one release manager/i)).toBeDefined())
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('maps a server 400 distribution error inline at the coordinate block', async () => {
+    mockMutateAsync.mockRejectedValue(
+      new ApiError(
+        400,
+        'distribution: ...',
+        JSON.stringify({
+          errorMessage:
+            "distribution: an explicit+external component must define at least one distribution coordinate (component 'X')",
         }),
       ),
     )
-  })
-
-  it('navigates to the new component after successful creation', async () => {
-    mockMutateAsync.mockResolvedValue({ id: 'comp-42', name: 'my-lib' })
-    renderWithProviders(<CreateComponentButton />)
-    await openDialog()
-    await userEvent.type(screen.getByPlaceholderText('my-component'), 'my-lib')
-    await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(screen.getByRole('option', { name: 'MAVEN' }))
-    await fillComponentOwner()
+    loaded(
+      makeSource({
+        distributionExplicit: true,
+        distributionExternal: true,
+        releaseManager: ['rm-a'],
+        securityChampion: ['sc-a'],
+      }),
+    )
+    renderCopy()
+    await userEvent.type(screen.getByLabelText(/component key/i), 'svc-clone')
+    await userEvent.type(screen.getByLabelText('Group ID'), 'org.acme')
+    await userEvent.type(screen.getByLabelText('Artifact ID'), 'svc')
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
-    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/components/comp-42'))
+    await waitFor(() => expect(screen.getByText(/must define at least one distribution coordinate/i)).toBeDefined())
+    expect(mockToast).not.toHaveBeenCalled()
   })
 
-  it('shows a 409 conflict toast with a descriptive message', async () => {
-    mockMutateAsync.mockRejectedValue(new ApiError(409, 'component exists'))
-    renderWithProviders(<CreateComponentButton />)
-    await openDialog()
-    await userEvent.type(screen.getByPlaceholderText('my-component'), 'duplicate-lib')
-    await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(screen.getByRole('option', { name: 'MAVEN' }))
-    await fillComponentOwner()
+  it('409 shows the duplicate-name toast', async () => {
+    mockMutateAsync.mockRejectedValue(new ApiError(409, 'conflict'))
+    loaded()
+    renderCopy()
+    await userEvent.type(screen.getByLabelText(/component key/i), 'svc-alpha')
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() =>
       expect(mockToast).toHaveBeenCalledWith(
@@ -240,27 +330,15 @@ describe('CreateComponentDialog — submit payload', () => {
     )
   })
 
-  it('shows a generic error toast for non-409 failures', async () => {
-    mockMutateAsync.mockRejectedValue(new Error('network failure'))
-    renderWithProviders(<CreateComponentButton />)
-    await openDialog()
-    await userEvent.type(screen.getByPlaceholderText('my-component'), 'some-lib')
-    await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(screen.getByRole('option', { name: 'MAVEN' }))
-    await fillComponentOwner()
+  it('submits buildCreateRequest output and navigates on success', async () => {
+    mockMutateAsync.mockResolvedValue({ id: 'comp-9', name: 'svc-clone' })
+    loaded()
+    const { onOpenChange } = renderCopy()
+    await userEvent.type(screen.getByLabelText(/component key/i), 'svc-clone')
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
-    await waitFor(() =>
-      expect(mockToast).toHaveBeenCalledWith(
-        expect.objectContaining({ description: 'network failure' }),
-      ),
-    )
-  })
-
-  it('resets the form and closes when Cancel is clicked', async () => {
-    renderWithProviders(<CreateComponentButton />)
-    await openDialog()
-    await userEvent.type(screen.getByPlaceholderText('my-component'), 'temp-name')
-    await userEvent.click(screen.getByRole('button', { name: /cancel/i }))
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/components/comp-9'))
+    const arg = mockMutateAsync.mock.calls[0]![0]
+    expect(arg).toMatchObject({ name: 'svc-clone', labels: ['backend'], baseConfiguration: { build: { buildSystem: 'GRADLE' } } })
+    expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 })

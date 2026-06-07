@@ -4,7 +4,7 @@ import { ComponentFilters } from '../components/ComponentFilters'
 import { ComponentTable } from '../components/ComponentTable'
 import { Pagination } from '../components/Pagination'
 import { CreateComponentButton } from '../components/CreateComponentDialog'
-import { CopyComponentDialog } from '../components/CopyComponentDialog'
+import { CreateComponentDialog } from '../components/CreateComponentDialog'
 import { InlineError } from '../components/ui/inline-error'
 import { useComponents } from '../hooks/useComponents'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
@@ -72,9 +72,9 @@ export function ComponentListPage() {
         />
 
         {/* One dialog per page (not per row); keyed by source id so each
-            Copy click gets a fresh fetch + Display Name prefill. */}
+            Create-similar click gets a fresh fetch + prefill. */}
         {copySourceId && (
-          <CopyComponentDialog
+          <CreateComponentDialog
             key={copySourceId}
             sourceId={copySourceId}
             open

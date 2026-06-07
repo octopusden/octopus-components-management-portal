@@ -29,7 +29,7 @@ import { FieldOverrides } from '../components/editor/FieldOverrides'
 import { ConfigurationsTab } from '../components/editor/ConfigurationsTab'
 import { AsCodeTab } from '../components/editor/AsCodeTab'
 import { ComponentHistoryTab } from '../components/editor/ComponentHistoryTab'
-import { CopyComponentDialog } from '../components/CopyComponentDialog'
+import { CreateComponentDialog } from '../components/CreateComponentDialog'
 import { useComponent, useUpdateComponent, useDeleteComponent, type ComponentUpdateRequest } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
 import { ApiError } from '../lib/api'
@@ -675,8 +675,8 @@ export function ComponentDetailPage() {
         </Tabs>
       </div>
 
-      {/* Copy-as-new-component dialog */}
-      <CopyComponentDialog
+      {/* Create-similar dialog (sourceId → pre-filled from this component) */}
+      <CreateComponentDialog
         sourceId={component.id}
         open={copyDialogOpen}
         onOpenChange={setCopyDialogOpen}

@@ -73,10 +73,10 @@ vi.mock('../components/editor/FieldOverrides', () => ({
 vi.mock('../components/editor/ComponentHistoryTab', () => ({
   ComponentHistoryTab: () => React.createElement('div', { 'data-testid': 'history-tab' }),
 }))
-// CopyComponentDialog pulls useCreateComponent from the (mocked) useComponent
+// CreateComponentDialog (copy mode) pulls hooks from the (mocked) useComponent
 // module; stub it so the page test only asserts the open/sourceId wiring.
-vi.mock('../components/CopyComponentDialog', () => ({
-  CopyComponentDialog: ({ sourceId, open }: { sourceId: string; open: boolean }) =>
+vi.mock('../components/CreateComponentDialog', () => ({
+  CreateComponentDialog: ({ sourceId, open }: { sourceId?: string; open: boolean }) =>
     open ? React.createElement('div', { 'data-testid': 'copy-dialog' }, sourceId) : null,
 }))
 

@@ -47,10 +47,17 @@ vi.mock('../components/ComponentTable', () => ({
 vi.mock('../components/Pagination', () => ({
   Pagination: () => React.createElement('div', { 'data-testid': 'pagination' }),
 }))
-vi.mock('../components/CopyComponentDialog', () => ({
-  CopyComponentDialog: ({ sourceId, open }: { sourceId: string; open: boolean }) =>
-    open ? React.createElement('div', { 'data-testid': 'copy-dialog' }, sourceId) : null,
-}))
+// CreateComponentDialog and CreateComponentButton live in the same module;
+// keep the real button (the "New Component" gate is under test) and stub only
+// the dialog to a sourceId probe.
+vi.mock('../components/CreateComponentDialog', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../components/CreateComponentDialog')>()
+  return {
+    ...actual,
+    CreateComponentDialog: ({ sourceId, open }: { sourceId?: string; open: boolean }) =>
+      open ? React.createElement('div', { 'data-testid': 'copy-dialog' }, sourceId) : null,
+  }
+})
 
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { useComponents } from '../hooks/useComponents'
