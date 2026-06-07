@@ -5,6 +5,8 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { GeneralTab, type GeneralFormValues } from './GeneralTab'
+import { TooltipProvider } from '../ui/tooltip'
+import { fieldDescriptions } from '../../lib/fieldDescriptions'
 import type { ComponentDetail } from '../../lib/types'
 
 // Stub the live data sources behind the embedded ui pickers so this file stays
@@ -129,7 +131,13 @@ beforeEach(() => {
 
 function renderWithProviders(ui: React.ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
+  // TooltipProvider mirrors the app-root provider (App.tsx) required by the
+  // FieldInfo description tooltips rendered next to the field labels.
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>{ui}</TooltipProvider>
+    </QueryClientProvider>,
+  )
 }
 
 // User shape mirrors /auth/me — `roles` is an array of {name, permissions}.
@@ -169,7 +177,7 @@ describe('GeneralTab parentComponentName (B7.1.5)', () => {
     const component = baseComponent({ parentComponentName: 'platform-core' })
     renderWithProviders(<Harness component={component} />)
 
-    const input = screen.getByLabelText(/parent component/i) as HTMLInputElement
+    const input = screen.getByLabelText(/^parent component$/i) as HTMLInputElement
     expect(input).toBeDefined()
     expect(input.tagName.toLowerCase()).toBe('input')
     expect(input.value).toBe('platform-core')
@@ -179,7 +187,7 @@ describe('GeneralTab parentComponentName (B7.1.5)', () => {
     const component = baseComponent({ parentComponentName: null })
     renderWithProviders(<Harness component={component} />)
 
-    const input = screen.getByLabelText(/parent component/i) as HTMLInputElement
+    const input = screen.getByLabelText(/^parent component$/i) as HTMLInputElement
     expect(input).toBeDefined()
     expect(input.value).toBe('')
   })
@@ -188,7 +196,7 @@ describe('GeneralTab parentComponentName (B7.1.5)', () => {
     const component = baseComponent({ parentComponentName: 'old-parent' })
     renderWithProviders(<Harness component={component} />)
 
-    const input = screen.getByLabelText(/parent component/i) as HTMLInputElement
+    const input = screen.getByLabelText(/^parent component$/i) as HTMLInputElement
     await userEvent.clear(input)
     await userEvent.type(input, 'new-parent')
 
@@ -263,7 +271,7 @@ describe('GeneralTab visibility-gating', () => {
     const component = baseComponent({ clientCode: 'ACME' })
     renderWithProviders(<Harness component={component} />)
 
-    expect(screen.queryByLabelText(/client code/i)).toBeNull()
+    expect(screen.queryByLabelText(/^client code$/i)).toBeNull()
   })
 
   it('clientCode readonly → input rendered disabled', () => {
@@ -274,7 +282,7 @@ describe('GeneralTab visibility-gating', () => {
     const component = baseComponent({ clientCode: 'ACME' })
     renderWithProviders(<Harness component={component} />)
 
-    const input = screen.getByLabelText(/client code/i) as HTMLInputElement
+    const input = screen.getByLabelText(/^client code$/i) as HTMLInputElement
     expect(input.disabled).toBe(true)
   })
 
@@ -283,7 +291,7 @@ describe('GeneralTab visibility-gating', () => {
     const component = baseComponent({ clientCode: 'ACME' })
     renderWithProviders(<Harness component={component} />)
 
-    const input = screen.getByLabelText(/client code/i) as HTMLInputElement
+    const input = screen.getByLabelText(/^client code$/i) as HTMLInputElement
     expect(input.disabled).toBe(false)
   })
 
@@ -324,7 +332,7 @@ describe('GeneralTab visibility-gating', () => {
     const component = baseComponent({ componentOwner: 'alice' })
     renderWithProviders(<Harness component={component} />)
 
-    expect(screen.queryByLabelText(/component owner/i)).toBeNull()
+    expect(screen.queryByLabelText(/^component owner$/i)).toBeNull()
   })
 
   it('displayName hidden → Display Name input NOT rendered', () => {
@@ -335,7 +343,7 @@ describe('GeneralTab visibility-gating', () => {
     const component = baseComponent({ displayName: 'Test' })
     renderWithProviders(<Harness component={component} />)
 
-    expect(screen.queryByLabelText(/display name/i)).toBeNull()
+    expect(screen.queryByLabelText(/^display name$/i)).toBeNull()
   })
 
   it('productType EnumSelect is NOT rendered in GeneralTab (migrated to EscrowTab)', () => {
@@ -389,7 +397,7 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
     const component = baseComponent({ group: { groupKey: 'org.example.alpha', isFake: false, role: 'MEMBER' } })
     renderWithProviders(<Harness component={component} />)
 
-    const input = screen.getByLabelText(/group key/i) as HTMLInputElement
+    const input = screen.getByLabelText(/^group key$/i) as HTMLInputElement
     expect(input).toBeDefined()
     expect(input.value).toBe('org.example.alpha')
     // Group is now server-derived → the field is read-only (no longer editable).
@@ -404,7 +412,7 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
     const component = baseComponent({ group: { groupKey: 'org.example.alpha', isFake: false, role: 'MEMBER' } })
     renderWithProviders(<Harness component={component} />)
 
-    expect(screen.queryByLabelText(/group key/i)).toBeNull()
+    expect(screen.queryByLabelText(/^group key$/i)).toBeNull()
   })
 
   it('releaseManager editable → PeopleListInput hydrates ordered rows from the array', () => {
@@ -436,7 +444,7 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
     const component = baseComponent({ releaseManager: ['rm-a', 'rm-b'] })
     renderWithProviders(<Harness component={component} />)
 
-    const input = screen.getByLabelText(/release managers/i) as HTMLInputElement
+    const input = screen.getByLabelText(/^release managers$/i) as HTMLInputElement
     expect(input.disabled).toBe(true)
     expect(input.value).toBe('rm-a, rm-b')
   })
@@ -449,7 +457,7 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
     const component = baseComponent({ securityChampion: ['sc-user'] })
     renderWithProviders(<Harness component={component} />)
 
-    expect(screen.queryByLabelText(/security champion/i)).toBeNull()
+    expect(screen.queryByLabelText(/^security champions?$/i)).toBeNull()
   })
 
   it('reordering a release manager updates the ordered form value (keyboard drag down)', async () => {
@@ -510,7 +518,7 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
     const component = baseComponent({ copyright: '(c) 2026 Acme Inc.' })
     renderWithProviders(<Harness component={component} />)
 
-    const input = screen.getByLabelText(/copyright/i) as HTMLInputElement
+    const input = screen.getByLabelText(/^copyright$/i) as HTMLInputElement
     expect(input.value).toBe('(c) 2026 Acme Inc.')
   })
 
@@ -567,10 +575,10 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
     })
     renderWithProviders(<Harness component={component} />)
 
-    expect(screen.queryByLabelText(/group key/i)).toBeNull()
-    expect(screen.queryByLabelText(/release manager/i)).toBeNull()
-    expect(screen.queryByLabelText(/security champion/i)).toBeNull()
-    expect(screen.queryByLabelText(/copyright/i)).toBeNull()
+    expect(screen.queryByLabelText(/^group key$/i)).toBeNull()
+    expect(screen.queryByLabelText(/^release managers?$/i)).toBeNull()
+    expect(screen.queryByLabelText(/^security champions?$/i)).toBeNull()
+    expect(screen.queryByLabelText(/^copyright$/i)).toBeNull()
     // labels — hidden hides both the <Label> and the multi-select.
     expect(screen.queryByText(/^labels$/i)).toBeNull()
   })
@@ -754,7 +762,7 @@ describe('GeneralTab — group key + canBeParent (items 1/2 + 4)', () => {
     )
     const label = screen.getByText(/group key/i)
     expect(label.textContent).not.toContain('*')
-    const input = screen.getByLabelText(/group key/i) as HTMLInputElement
+    const input = screen.getByLabelText(/^group key$/i) as HTMLInputElement
     expect(input.disabled).toBe(true)
     expect(input.value).toBe('org.example.alpha')
   })
@@ -763,7 +771,7 @@ describe('GeneralTab — group key + canBeParent (items 1/2 + 4)', () => {
     setAllEditable()
     const component = baseComponent({ canBeParent: true })
     renderWithProviders(<Harness component={component} />)
-    const sw = screen.getByLabelText(/can be a parent/i) as HTMLButtonElement
+    const sw = screen.getByLabelText(/^can be a parent$/i) as HTMLButtonElement
     expect(sw).toBeDefined()
     // Radix Switch exposes checked state via aria-checked / data-state.
     expect(sw.getAttribute('aria-checked')).toBe('true')
@@ -796,5 +804,48 @@ describe('GeneralTab — group key + canBeParent (items 1/2 + 4)', () => {
     // Only remediation offered: a Clear button that empties the parent.
     await userEvent.click(screen.getByRole('button', { name: /^clear$/i }))
     expect(formRef.current!.getValues('parentComponentName')).toBe('')
+  })
+})
+
+describe('GeneralTab field descriptions (FieldInfo)', () => {
+  // Exact set of registry paths this tab must expose an info icon for.
+  // data-field-path (not the accessible name) is the wiring contract — it
+  // catches a duplicated or misassigned path, not just a missing icon.
+  const EXPECTED_PATHS = [
+    'component.name',
+    'component.displayName',
+    'component.parentComponentName',
+    'component.canBeParent',
+    'component.groupId',
+    'component.solution',
+    'component.componentOwner',
+    'component.releaseManager',
+    'component.securityChampion',
+    'component.system',
+    'component.clientCode',
+    'component.copyright',
+    'component.labels',
+    'component.docs',
+    'component.artifactIds',
+  ]
+
+  it('renders exactly one info icon per described field', () => {
+    setAllEditable()
+    renderWithProviders(<Harness component={baseComponent()} />)
+    for (const path of EXPECTED_PATHS) {
+      expect(
+        document.querySelectorAll(`[data-field-path="${path}"]`),
+        `info icon for ${path}`,
+      ).toHaveLength(1)
+    }
+  })
+
+  it('opens the registry description for Component Key on focus', async () => {
+    setAllEditable()
+    renderWithProviders(<Harness component={baseComponent()} />)
+    const trigger = document.querySelector('[data-field-path="component.name"]') as HTMLElement
+    act(() => trigger.focus())
+    const tooltip = await screen.findByRole('tooltip')
+    expect(tooltip).toHaveTextContent(fieldDescriptions['component.name']!)
   })
 })

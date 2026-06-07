@@ -6,6 +6,7 @@ import { Switch } from '../ui/switch'
 import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
 import { EnumSelect } from '../ui/EnumSelect'
+import { FieldInfo } from '../ui/FieldInfo'
 import { FieldOverrideInline } from './FieldOverrideInline'
 import { CANNOT_EDIT_TITLE } from './editPermission'
 import { selectBaseRow } from '../../lib/api/baseRow'
@@ -125,9 +126,12 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label htmlFor="build-buildSystem">
-            Build System <span className="text-destructive">*</span>
-          </Label>
+          <div className="flex items-center gap-1">
+            <Label htmlFor="build-buildSystem">
+              Build System <span className="text-destructive">*</span>
+            </Label>
+            <FieldInfo path="build.buildSystem" label="Build System" />
+          </div>
           <EnumSelect
             fieldPath="buildSystem"
             value={buildSystem}
@@ -153,7 +157,10 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
         </div>
 
         <div className="space-y-1.5">
-          <Label>Build System Version</Label>
+          <div className="flex items-center gap-1">
+            <Label>Build System Version</Label>
+            <FieldInfo path="build.buildSystemVersion" label="Build System Version" />
+          </div>
           <Input
             value={buildSystemVersion}
             onChange={(e) => setBuildSystemVersion(e.target.value)}
@@ -163,7 +170,10 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
         </div>
 
         <div className="space-y-1.5">
-          <Label>Build File Path</Label>
+          <div className="flex items-center gap-1">
+            <Label>Build File Path</Label>
+            <FieldInfo path="build.buildFilePath" label="Build File Path" />
+          </div>
           <Input
             value={buildFilePath}
             onChange={(e) => setBuildFilePath(e.target.value)}
@@ -173,7 +183,10 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
         </div>
 
         <div className="space-y-1.5">
-          <Label>Java Version</Label>
+          <div className="flex items-center gap-1">
+            <Label>Java Version</Label>
+            <FieldInfo path="build.javaVersion" label="Java Version" />
+          </div>
           <Input
             value={javaVersion}
             onChange={(e) => setJavaVersion(e.target.value)}
@@ -183,7 +196,10 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
         </div>
 
         <div className="space-y-1.5">
-          <Label>Maven Version</Label>
+          <div className="flex items-center gap-1">
+            <Label>Maven Version</Label>
+            <FieldInfo path="build.mavenVersion" label="Maven Version" />
+          </div>
           <Input
             value={mavenVersion}
             onChange={(e) => setMavenVersion(e.target.value)}
@@ -193,7 +209,10 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
         </div>
 
         <div className="space-y-1.5">
-          <Label>Gradle Version</Label>
+          <div className="flex items-center gap-1">
+            <Label>Gradle Version</Label>
+            <FieldInfo path="build.gradleVersion" label="Gradle Version" />
+          </div>
           <Input
             value={gradleVersion}
             onChange={(e) => setGradleVersion(e.target.value)}
@@ -203,7 +222,10 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
         </div>
 
         <div className="space-y-1.5">
-          <Label>Project Version</Label>
+          <div className="flex items-center gap-1">
+            <Label>Project Version</Label>
+            <FieldInfo path="build.projectVersion" label="Project Version" />
+          </div>
           <Input
             value={projectVersion}
             onChange={(e) => setProjectVersion(e.target.value)}
@@ -214,7 +236,10 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
       </div>
 
       <div className="space-y-1.5">
-        <Label>Build Tasks</Label>
+        <div className="flex items-center gap-1">
+          <Label>Build Tasks</Label>
+          <FieldInfo path="build.buildTasks" label="Build Tasks" />
+        </div>
         <Input
           value={buildTasks}
           onChange={(e) => setBuildTasks(e.target.value)}
@@ -224,7 +249,10 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
       </div>
 
       <div className="space-y-1.5">
-        <Label>System Properties</Label>
+        <div className="flex items-center gap-1">
+          <Label>System Properties</Label>
+          <FieldInfo path="build.systemProperties" label="System Properties" />
+        </div>
         <textarea
           className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-y min-h-[80px]"
           value={systemProperties}
@@ -243,6 +271,7 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
             onCheckedChange={setDeprecated}
           />
           <Label htmlFor="build-deprecated" className="cursor-pointer">Deprecated</Label>
+          <FieldInfo path="build.deprecated" label="Deprecated" />
         </div>
         <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.deprecated" />
       </div>
@@ -255,12 +284,16 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
             onCheckedChange={setRequiredProject}
           />
           <Label htmlFor="build-required-project" className="cursor-pointer">Required Project</Label>
+          <FieldInfo path="build.requiredProject" label="Required Project" />
         </div>
         <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.requiredProject" />
       </div>
 
       <div className="space-y-1.5">
-        <Label>Required Tools</Label>
+        <div className="flex items-center gap-1">
+          <Label>Required Tools</Label>
+          <FieldInfo path="build.requiredTools" label="Required Tools" />
+        </div>
         <Input
           value={requiredToolsInput}
           onChange={(e) => setRequiredToolsInput(e.target.value)}

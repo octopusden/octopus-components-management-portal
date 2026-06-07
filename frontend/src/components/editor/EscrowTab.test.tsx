@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import React from 'react'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { EscrowTab } from './EscrowTab'
+import { TooltipProvider } from '../ui/tooltip'
+import { fieldDescriptions } from '../../lib/fieldDescriptions'
 import type { ComponentDetail } from '../../lib/types'
 
 // Visible stub: each FieldOverrideInline renders a div tagged with the
@@ -85,7 +87,13 @@ function baseComponent(overrides: Partial<ComponentDetail> = {}): ComponentDetai
 
 function renderWithProviders(ui: React.ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
+  // TooltipProvider mirrors the app-root provider (App.tsx) required by the
+  // FieldInfo description tooltips rendered next to the field labels.
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>{ui}</TooltipProvider>
+    </QueryClientProvider>,
+  )
 }
 
 function makeToast() {
@@ -372,5 +380,45 @@ describe('EscrowTab — inline override coverage', () => {
       <EscrowTab component={baseComponent()} updateMutation={makeMutation()} toast={makeToast()} canEdit={true} />
     )
     expect(screen.getByTestId(`field-override-inline-${path}`)).toBeInTheDocument()
+  })
+})
+
+describe('EscrowTab field descriptions (FieldInfo)', () => {
+  // Exact set of registry paths this tab must expose an info icon for.
+  // productType keeps its component.* field-config path even though it
+  // renders on the Escrow tab (§7.0/2c migration).
+  const EXPECTED_PATHS = [
+    'component.productType',
+    'escrow.generation',
+    'escrow.diskSpace',
+    'escrow.reusable',
+    'escrow.providedDependencies',
+    'escrow.additionalSources',
+    'escrow.gradleIncludeConfigurations',
+    'escrow.gradleExcludeConfigurations',
+    'escrow.gradleIncludeTestConfigurations',
+    'escrow.buildTask',
+  ]
+
+  it('renders exactly one info icon per described field', () => {
+    renderWithProviders(
+      <EscrowTab component={baseComponent()} updateMutation={makeMutation()} toast={makeToast()} canEdit={true} />
+    )
+    for (const path of EXPECTED_PATHS) {
+      expect(
+        document.querySelectorAll(`[data-field-path="${path}"]`),
+        `info icon for ${path}`,
+      ).toHaveLength(1)
+    }
+  })
+
+  it('opens the registry description for Generation on focus', async () => {
+    renderWithProviders(
+      <EscrowTab component={baseComponent()} updateMutation={makeMutation()} toast={makeToast()} canEdit={true} />
+    )
+    const trigger = document.querySelector('[data-field-path="escrow.generation"]') as HTMLElement
+    act(() => trigger.focus())
+    const tooltip = await screen.findByRole('tooltip')
+    expect(tooltip).toHaveTextContent(fieldDescriptions['escrow.generation']!)
   })
 })

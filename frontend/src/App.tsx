@@ -7,6 +7,7 @@ import { AdminSettingsPage } from './pages/AdminSettingsPage'
 import { RequirePermission } from './components/RequirePermission'
 import { PERMISSIONS, restoreContinuePath } from './lib/auth'
 import { Toaster } from './components/ui/toaster'
+import { TooltipProvider } from './components/ui/tooltip'
 
 // If the user was deep-linked into a protected route, hit a 401, and was bounced
 // through the OIDC flow, the post-login redirect lands them at "/". Replace history
@@ -28,30 +29,32 @@ const queryClient = new QueryClient({
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '') || '/'}>
-        <Routes>
-          <Route path="/" element={<Navigate to="/components" replace />} />
-          <Route path="/components" element={<ComponentListPage />} />
-          <Route path="/components/:id" element={<ComponentDetailPage />} />
-          <Route
-            path="/audit"
-            element={
-              <RequirePermission permission={PERMISSIONS.ACCESS_AUDIT}>
-                <AuditLogPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/admin"
-            element={
-              <RequirePermission permission={PERMISSIONS.IMPORT_DATA}>
-                <AdminSettingsPage />
-              </RequirePermission>
-            }
-          />
-        </Routes>
-        <Toaster />
-      </BrowserRouter>
+      <TooltipProvider delayDuration={200}>
+        <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '') || '/'}>
+          <Routes>
+            <Route path="/" element={<Navigate to="/components" replace />} />
+            <Route path="/components" element={<ComponentListPage />} />
+            <Route path="/components/:id" element={<ComponentDetailPage />} />
+            <Route
+              path="/audit"
+              element={
+                <RequirePermission permission={PERMISSIONS.ACCESS_AUDIT}>
+                  <AuditLogPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                <RequirePermission permission={PERMISSIONS.IMPORT_DATA}>
+                  <AdminSettingsPage />
+                </RequirePermission>
+              }
+            />
+          </Routes>
+          <Toaster />
+        </BrowserRouter>
+      </TooltipProvider>
     </QueryClientProvider>
   )
 }

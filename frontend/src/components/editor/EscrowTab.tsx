@@ -5,6 +5,7 @@ import { Input } from '../ui/input'
 import { Switch } from '../ui/switch'
 import { Button } from '../ui/button'
 import { EnumSelect } from '../ui/EnumSelect'
+import { FieldInfo } from '../ui/FieldInfo'
 import { FieldOverrideInline } from './FieldOverrideInline'
 import { CANNOT_EDIT_TITLE } from './editPermission'
 import type { ComponentDetail } from '../../lib/types'
@@ -96,7 +97,10 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
         {/* Product Type — migrated from GeneralTab (§7.0/2c); visibility-gated */}
         {productTypeEntry.visibility !== 'hidden' && (
           <div className="space-y-1.5">
-            <Label>Product Type</Label>
+            <div className="flex items-center gap-1">
+              <Label>Product Type</Label>
+              <FieldInfo path="component.productType" label="Product Type" />
+            </div>
             <EnumSelect
               fieldPath="component.productType"
               value={productType}
@@ -108,7 +112,10 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
         )}
 
         <div className="space-y-1.5">
-          <Label>Generation</Label>
+          <div className="flex items-center gap-1">
+            <Label>Generation</Label>
+            <FieldInfo path="escrow.generation" label="Generation" />
+          </div>
           <EnumSelect
             fieldPath="generation"
             value={generation}
@@ -119,7 +126,10 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
         </div>
 
         <div className="space-y-1.5">
-          <Label>Disk Space</Label>
+          <div className="flex items-center gap-1">
+            <Label>Disk Space</Label>
+            <FieldInfo path="escrow.diskSpace" label="Disk Space" />
+          </div>
           <Input
             value={diskSpace}
             onChange={(e) => setDiskSpace(e.target.value)}
@@ -137,12 +147,16 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
             onCheckedChange={setReusable}
           />
           <Label htmlFor="escrow-reusable" className="cursor-pointer">Reusable</Label>
+          <FieldInfo path="escrow.reusable" label="Reusable" />
         </div>
         <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="escrow.reusable" />
       </div>
 
       <div className="space-y-1.5">
-        <Label>Provided Dependencies</Label>
+        <div className="flex items-center gap-1">
+          <Label>Provided Dependencies</Label>
+          <FieldInfo path="escrow.providedDependencies" label="Provided Dependencies" />
+        </div>
         <textarea
           className="w-full h-24 rounded-md border bg-background px-3 py-2 text-xs font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-y"
           value={providedDependencies}
@@ -154,7 +168,10 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
       </div>
 
       <div className="space-y-1.5">
-        <Label>Additional Sources</Label>
+        <div className="flex items-center gap-1">
+          <Label>Additional Sources</Label>
+          <FieldInfo path="escrow.additionalSources" label="Additional Sources" />
+        </div>
         <Input
           value={additionalSources}
           onChange={(e) => setAdditionalSources(e.target.value)}
@@ -165,7 +182,10 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label>Gradle Include Configurations</Label>
+          <div className="flex items-center gap-1">
+            <Label>Gradle Include Configurations</Label>
+            <FieldInfo path="escrow.gradleIncludeConfigurations" label="Gradle Include Configurations" />
+          </div>
           <Input
             value={gradleIncludeConfigurations}
             onChange={(e) => setGradleIncludeConfigurations(e.target.value)}
@@ -175,7 +195,10 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
         </div>
 
         <div className="space-y-1.5">
-          <Label>Gradle Exclude Configurations</Label>
+          <div className="flex items-center gap-1">
+            <Label>Gradle Exclude Configurations</Label>
+            <FieldInfo path="escrow.gradleExcludeConfigurations" label="Gradle Exclude Configurations" />
+          </div>
           <Input
             value={gradleExcludeConfigurations}
             onChange={(e) => setGradleExcludeConfigurations(e.target.value)}
@@ -193,6 +216,7 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
             onCheckedChange={setGradleIncludeTestConfigurations}
           />
           <Label htmlFor="escrow-gradle-include-test" className="cursor-pointer">Gradle Include Test Configurations</Label>
+          <FieldInfo path="escrow.gradleIncludeTestConfigurations" label="Gradle Include Test Configurations" />
         </div>
         <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="escrow.gradleIncludeTestConfigurations" />
       </div>
@@ -202,7 +226,10 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
           expose it — no BASE input here until the CRS contract is widened.
           Inline override remains available as the entry point. */}
       <div className="space-y-1.5">
-        <Label>Build Task</Label>
+        <div className="flex items-center gap-1">
+          <Label>Build Task</Label>
+          <FieldInfo path="escrow.buildTask" label="Build Task" />
+        </div>
         <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="escrow.buildTask" />
       </div>
 

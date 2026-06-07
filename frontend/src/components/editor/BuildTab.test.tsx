@@ -3,6 +3,8 @@ import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BuildTab } from './BuildTab'
+import { TooltipProvider } from '../ui/tooltip'
+import { fieldDescriptions } from '../../lib/fieldDescriptions'
 import type { ComponentDetail, ComponentConfiguration } from '../../lib/types'
 import type { UseMutationResult } from '@tanstack/react-query'
 import type { ComponentUpdateRequest } from '../../hooks/useComponent'
@@ -113,7 +115,10 @@ function renderTab(component: ComponentDetail, mutateAsync = vi.fn(), canEdit = 
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const utils = render(
     <QueryClientProvider client={queryClient}>
-      <BuildTab component={component} updateMutation={mutation} toast={toast} canEdit={canEdit} />
+      {/* TooltipProvider mirrors the app-root provider required by FieldInfo. */}
+      <TooltipProvider>
+        <BuildTab component={component} updateMutation={mutation} toast={toast} canEdit={canEdit} />
+      </TooltipProvider>
     </QueryClientProvider>
   )
   return { toast, mutateAsync, ...utils }
@@ -623,5 +628,41 @@ describe('BuildTab — inline override coverage', () => {
   it.each(overridablePaths)('renders FieldOverrideInline under %s', (path) => {
     renderTab(makeComponent())
     expect(screen.getByTestId(`field-override-inline-${path}`)).toBeInTheDocument()
+  })
+})
+
+describe('BuildTab field descriptions (FieldInfo)', () => {
+  // Exact set of registry paths this tab must expose an info icon for.
+  const EXPECTED_PATHS = [
+    'build.buildSystem',
+    'build.buildSystemVersion',
+    'build.buildFilePath',
+    'build.javaVersion',
+    'build.mavenVersion',
+    'build.gradleVersion',
+    'build.projectVersion',
+    'build.buildTasks',
+    'build.systemProperties',
+    'build.deprecated',
+    'build.requiredProject',
+    'build.requiredTools',
+  ]
+
+  it('renders exactly one info icon per described field', () => {
+    renderTab(makeComponent())
+    for (const path of EXPECTED_PATHS) {
+      expect(
+        document.querySelectorAll(`[data-field-path="${path}"]`),
+        `info icon for ${path}`,
+      ).toHaveLength(1)
+    }
+  })
+
+  it('opens the registry description for Build System on focus', async () => {
+    renderTab(makeComponent())
+    const trigger = document.querySelector('[data-field-path="build.buildSystem"]') as HTMLElement
+    act(() => trigger.focus())
+    const tooltip = await screen.findByRole('tooltip')
+    expect(tooltip).toHaveTextContent(fieldDescriptions['build.buildSystem']!)
   })
 })

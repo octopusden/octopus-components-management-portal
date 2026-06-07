@@ -4,6 +4,7 @@ import { Label } from '../ui/label'
 import { Input } from '../ui/input'
 import { Switch } from '../ui/switch'
 import { Button } from '../ui/button'
+import { FieldInfo } from '../ui/FieldInfo'
 import { FieldOverrideInline } from './FieldOverrideInline'
 import { CANNOT_EDIT_TITLE } from './editPermission'
 import type { ComponentDetail } from '../../lib/types'
@@ -104,7 +105,10 @@ export function JiraTab({ component, updateMutation, toast, canEdit }: JiraTabPr
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label>Project Key</Label>
+          <div className="flex items-center gap-1">
+            <Label>Project Key</Label>
+            <FieldInfo path="jira.projectKey" label="Project Key" />
+          </div>
           <Input
             value={projectKey}
             onChange={(e) => setProjectKey(e.target.value)}
@@ -114,7 +118,10 @@ export function JiraTab({ component, updateMutation, toast, canEdit }: JiraTabPr
         </div>
 
         <div className="space-y-1.5">
-          <Label>Display Name</Label>
+          <div className="flex items-center gap-1">
+            <Label>Display Name</Label>
+            <FieldInfo path="jira.displayName" label="Display Name" />
+          </div>
           <Input
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
@@ -131,6 +138,7 @@ export function JiraTab({ component, updateMutation, toast, canEdit }: JiraTabPr
             onCheckedChange={setTechnical}
           />
           <Label htmlFor="jira-technical" className="cursor-pointer">Technical</Label>
+          <FieldInfo path="jira.technical" label="Technical" />
         </div>
         <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="jira.technical" />
       </div>
@@ -146,12 +154,16 @@ export function JiraTab({ component, updateMutation, toast, canEdit }: JiraTabPr
           <Label htmlFor="releasesInDefaultBranch" className="cursor-pointer">
             Releases in default branch
           </Label>
+          <FieldInfo path="component.releasesInDefaultBranch" label="Releases in default branch" />
         </div>
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label>Hotfix Version Format</Label>
+          <div className="flex items-center gap-1">
+            <Label>Hotfix Version Format</Label>
+            <FieldInfo path="jira.hotfixVersionFormat" label="Hotfix Version Format" />
+          </div>
           <Input
             value={hotfixVersionFormat}
             onChange={(e) => setHotfixVersionFormat(e.target.value)}
@@ -161,7 +173,10 @@ export function JiraTab({ component, updateMutation, toast, canEdit }: JiraTabPr
         </div>
 
         <div className="space-y-1.5">
-          <Label>Version Prefix</Label>
+          <div className="flex items-center gap-1">
+            <Label>Version Prefix</Label>
+            <FieldInfo path="jira.versionPrefix" label="Version Prefix" />
+          </div>
           <Input
             value={versionPrefix}
             onChange={(e) => setVersionPrefix(e.target.value)}
@@ -171,7 +186,10 @@ export function JiraTab({ component, updateMutation, toast, canEdit }: JiraTabPr
         </div>
 
         <div className="space-y-1.5">
-          <Label>Major Version Format</Label>
+          <div className="flex items-center gap-1">
+            <Label>Major Version Format</Label>
+            <FieldInfo path="jira.majorVersionFormat" label="Major Version Format" />
+          </div>
           <Input
             value={majorVersionFormat}
             onChange={(e) => setMajorVersionFormat(e.target.value)}
@@ -181,7 +199,10 @@ export function JiraTab({ component, updateMutation, toast, canEdit }: JiraTabPr
         </div>
 
         <div className="space-y-1.5">
-          <Label>Release Version Format</Label>
+          <div className="flex items-center gap-1">
+            <Label>Release Version Format</Label>
+            <FieldInfo path="jira.releaseVersionFormat" label="Release Version Format" />
+          </div>
           <Input
             value={releaseVersionFormat}
             onChange={(e) => setReleaseVersionFormat(e.target.value)}
@@ -191,7 +212,10 @@ export function JiraTab({ component, updateMutation, toast, canEdit }: JiraTabPr
         </div>
 
         <div className="space-y-1.5">
-          <Label>Build Version Format</Label>
+          <div className="flex items-center gap-1">
+            <Label>Build Version Format</Label>
+            <FieldInfo path="jira.buildVersionFormat" label="Build Version Format" />
+          </div>
           <Input
             value={buildVersionFormat}
             onChange={(e) => setBuildVersionFormat(e.target.value)}
@@ -201,7 +225,10 @@ export function JiraTab({ component, updateMutation, toast, canEdit }: JiraTabPr
         </div>
 
         <div className="space-y-1.5">
-          <Label>Line Version Format</Label>
+          <div className="flex items-center gap-1">
+            <Label>Line Version Format</Label>
+            <FieldInfo path="jira.lineVersionFormat" label="Line Version Format" />
+          </div>
           <Input
             value={lineVersionFormat}
             onChange={(e) => setLineVersionFormat(e.target.value)}
@@ -211,7 +238,10 @@ export function JiraTab({ component, updateMutation, toast, canEdit }: JiraTabPr
         </div>
 
         <div className="space-y-1.5 sm:col-span-2">
-          <Label>Version Format</Label>
+          <div className="flex items-center gap-1">
+            <Label>Version Format</Label>
+            <FieldInfo path="jira.versionFormat" label="Version Format" />
+          </div>
           <Input
             value={versionFormat}
             onChange={(e) => setVersionFormat(e.target.value)}

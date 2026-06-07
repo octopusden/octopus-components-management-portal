@@ -1,40 +1,12 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { JiraTab } from './JiraTab'
+import { VcsTab } from './VcsTab'
 import { TooltipProvider } from '../ui/tooltip'
 import { fieldDescriptions } from '../../lib/fieldDescriptions'
 import type { ComponentDetail, ComponentConfiguration } from '../../lib/types'
 import type { UseMutationResult } from '@tanstack/react-query'
 import type { ComponentUpdateRequest } from '../../hooks/useComponent'
-
-// Visible stub: each FieldOverrideInline renders a div tagged with the
-// overriddenAttribute so tests can assert per-field inline coverage.
-vi.mock('./FieldOverrideInline', () => ({
-  FieldOverrideInline: ({ overriddenAttribute }: { overriddenAttribute: string }) => (
-    <div data-testid={`field-override-inline-${overriddenAttribute}`} />
-  ),
-}))
-
-vi.mock('../../hooks/useFieldConfig', () => ({
-  useFieldConfigEntry: () => ({
-    entry: {
-      visibility: 'visible',
-      label: null,
-      options: null,
-      searchable: null,
-      required: null,
-      defaultValue: null,
-      description: null,
-      overridable: null,
-      locked: null,
-    },
-  }),
-}))
-
-vi.mock('../../hooks/useOptimisticConflict', () => ({
-  useOptimisticConflict: () => () => null,
-}))
 
 function makeBaseRow(overrides: Partial<ComponentConfiguration> = {}): ComponentConfiguration {
   return {
@@ -46,7 +18,20 @@ function makeBaseRow(overrides: Partial<ComponentConfiguration> = {}): Component
     build: null,
     escrow: null,
     jira: null,
-    vcsEntries: [],
+    // Per-row labels only render when at least one entry exists — the
+    // FieldInfo completeness assertion below depends on this fixture row.
+    vcsEntries: [
+      {
+        id: 'vcs-1',
+        sortOrder: 0,
+        name: 'main',
+        vcsPath: 'ssh://git@example.com/repo.git',
+        repositoryType: 'GIT',
+        tag: 'v$version',
+        branch: 'master',
+        hotfixBranch: null,
+      },
+    ],
     mavenArtifacts: [],
     fileUrlArtifacts: [],
     dockerImages: [],
@@ -76,9 +61,9 @@ function makeComponent(overrides: Partial<ComponentDetail> = {}): ComponentDetai
   } as ComponentDetail
 }
 
-function makeMutation(mutateFn = vi.fn()) {
+function makeMutation() {
   return {
-    mutateAsync: mutateFn,
+    mutateAsync: vi.fn(),
     isPending: false,
     isError: false,
     isSuccess: false,
@@ -105,50 +90,27 @@ function renderTab(component: ComponentDetail, canEdit = true) {
     <QueryClientProvider client={queryClient}>
       {/* TooltipProvider mirrors the app-root provider required by FieldInfo. */}
       <TooltipProvider>
-        <JiraTab component={component} updateMutation={mutation} toast={toast} canEdit={canEdit} />
+        <VcsTab component={component} updateMutation={mutation} toast={toast} canEdit={canEdit} />
       </TooltipProvider>
     </QueryClientProvider>,
   )
 }
 
-describe('JiraTab — inline override coverage', () => {
-  const overridablePaths = [
-    'jira.projectKey',
-    'jira.technical',
-    'jira.majorVersionFormat',
-    'jira.releaseVersionFormat',
-    'jira.buildVersionFormat',
-    'jira.lineVersionFormat',
-    'jira.versionPrefix',
-    'jira.versionFormat',
-    'jira.hotfixVersionFormat',
-  ]
-
-  it.each(overridablePaths)('renders FieldOverrideInline under %s', (path) => {
-    renderTab(makeComponent())
-    expect(screen.getByTestId(`field-override-inline-${path}`)).toBeInTheDocument()
-  })
-})
-
-describe('JiraTab field descriptions (FieldInfo)', () => {
+describe('VcsTab field descriptions (FieldInfo)', () => {
   // Exact set of registry paths this tab must expose an info icon for.
-  // releasesInDefaultBranch keeps its component.* field-config path even
-  // though it renders on the Jira tab.
+  // Per-entry paths render once per entry row; the fixture has one row.
   const EXPECTED_PATHS = [
-    'jira.projectKey',
-    'jira.displayName',
-    'jira.technical',
-    'component.releasesInDefaultBranch',
-    'jira.hotfixVersionFormat',
-    'jira.versionPrefix',
-    'jira.majorVersionFormat',
-    'jira.releaseVersionFormat',
-    'jira.buildVersionFormat',
-    'jira.lineVersionFormat',
-    'jira.versionFormat',
+    'vcs.externalRegistry',
+    'vcs.entries',
+    'vcs.name',
+    'vcs.vcsPath',
+    'vcs.repositoryType',
+    'vcs.branch',
+    'vcs.tag',
+    'vcs.hotfixBranch',
   ]
 
-  it('renders exactly one info icon per described field', () => {
+  it('renders exactly one info icon per described field (one entry row)', () => {
     renderTab(makeComponent())
     for (const path of EXPECTED_PATHS) {
       expect(
@@ -158,11 +120,28 @@ describe('JiraTab field descriptions (FieldInfo)', () => {
     }
   })
 
-  it('opens the registry description for Project Key on focus', async () => {
+  it('repeats the per-entry icons for every entry row', () => {
+    const component = makeComponent({
+      configurations: [
+        makeBaseRow({
+          vcsEntries: [
+            { id: 'vcs-1', sortOrder: 0, name: 'a', vcsPath: 'ssh://one', repositoryType: 'GIT', tag: null, branch: null, hotfixBranch: null },
+            { id: 'vcs-2', sortOrder: 1, name: 'b', vcsPath: 'ssh://two', repositoryType: 'GIT', tag: null, branch: null, hotfixBranch: null },
+          ],
+        }),
+      ],
+    })
+    renderTab(component)
+    expect(document.querySelectorAll('[data-field-path="vcs.vcsPath"]')).toHaveLength(2)
+    // Section-level icons stay single regardless of row count.
+    expect(document.querySelectorAll('[data-field-path="vcs.entries"]')).toHaveLength(1)
+  })
+
+  it('opens the registry description for VCS Path on focus', async () => {
     renderTab(makeComponent())
-    const trigger = document.querySelector('[data-field-path="jira.projectKey"]') as HTMLElement
+    const trigger = document.querySelector('[data-field-path="vcs.vcsPath"]') as HTMLElement
     act(() => trigger.focus())
     const tooltip = await screen.findByRole('tooltip')
-    expect(tooltip).toHaveTextContent(fieldDescriptions['jira.projectKey']!)
+    expect(tooltip).toHaveTextContent(fieldDescriptions['vcs.vcsPath']!)
   })
 })
