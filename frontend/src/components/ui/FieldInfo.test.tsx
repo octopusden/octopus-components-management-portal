@@ -8,6 +8,7 @@ import { FieldInfo } from './FieldInfo'
 vi.mock('../../lib/fieldDescriptions', () => ({
   fieldDescriptions: {
     'component.name': 'Unique technical key of the component.',
+    'component.blank': '   ',
   },
 }))
 
@@ -34,6 +35,12 @@ describe('FieldInfo', () => {
 
   it('renders nothing when the path has no registry entry', () => {
     const { container } = renderFieldInfo('component.unknown', 'Unknown Field')
+
+    expect(container).toBeEmptyDOMElement()
+  })
+
+  it('renders nothing when the registry entry is whitespace-only', () => {
+    const { container } = renderFieldInfo('component.blank', 'Blank Field')
 
     expect(container).toBeEmptyDOMElement()
   })

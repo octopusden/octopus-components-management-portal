@@ -233,6 +233,20 @@ describe('DistributionTab field descriptions (FieldInfo)', () => {
     }
   })
 
+  it('repeats per-row icons for every artifact row while section icons stay single', () => {
+    const component = populatedComponent()
+    const base = component.configurations![0] as ComponentConfiguration
+    base.mavenArtifacts = [
+      { id: 'm-1', sortOrder: 0, groupPattern: 'com.example', artifactPattern: 'app-*', extension: null, classifier: null },
+      { id: 'm-2', sortOrder: 1, groupPattern: 'com.example.two', artifactPattern: 'lib-*', extension: null, classifier: null },
+    ]
+    renderWithProviders(
+      <DistributionTab component={component} updateMutation={makeMutation(vi.fn())} toast={vi.fn()} canEdit={true} />,
+    )
+    expect(document.querySelectorAll('[data-field-path="distribution.maven.groupPattern"]')).toHaveLength(2)
+    expect(document.querySelectorAll('[data-field-path="distribution.mavenArtifacts"]')).toHaveLength(1)
+  })
+
   it('opens the registry description for the Explicit toggle on focus', async () => {
     renderWithProviders(
       <DistributionTab component={baseComponent()} updateMutation={makeMutation(vi.fn())} toast={vi.fn()} canEdit={true} />,
