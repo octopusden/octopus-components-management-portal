@@ -892,7 +892,7 @@ describe('ComponentDetailPage — Copy button (CREATE_COMPONENTS gate)', () => {
     const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
     renderPage(baseComponent, user)
 
-    const copyBtn = screen.getByRole('button', { name: /^copy$/i })
+    const copyBtn = screen.getByRole('button', { name: /^create similar$/i })
     fireEvent.click(copyBtn)
 
     await waitFor(() => {
@@ -903,12 +903,12 @@ describe('ComponentDetailPage — Copy button (CREATE_COMPONENTS gate)', () => {
   it('hides Copy without CREATE_COMPONENTS', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(baseComponent, user)
-    expect(screen.queryByRole('button', { name: /^copy$/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^create similar$/i })).toBeNull()
   })
 
   it('Copy is available even when per-component canEdit is false (global create gate, not canEdit)', () => {
     const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
     renderPage({ ...baseComponent, canEdit: false }, user)
-    expect(screen.getByRole('button', { name: /^copy$/i })).toBeDefined()
+    expect(screen.getByRole('button', { name: /^create similar$/i })).toBeDefined()
   })
 })

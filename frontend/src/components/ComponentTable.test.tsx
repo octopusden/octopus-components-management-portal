@@ -422,14 +422,14 @@ describe('ComponentTable — per-row Copy action', () => {
       ],
       onCopy,
     )
-    const alphaCopy = screen.getByRole('button', { name: 'Copy alpha' })
-    expect(screen.getByRole('button', { name: 'Copy beta' })).toBeDefined()
+    const alphaCopy = screen.getByRole('button', { name: 'Create similar to alpha' })
+    expect(screen.getByRole('button', { name: 'Create similar to beta' })).toBeDefined()
     await userEvent.click(alphaCopy)
     expect(onCopy).toHaveBeenCalledWith('c1')
   })
 
   it('renders no Copy buttons or actions column when onCopy is omitted', () => {
     renderTable([makeComponent({ id: 'c1', name: 'alpha' })])
-    expect(screen.queryByRole('button', { name: /^copy /i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^create similar to /i })).toBeNull()
   })
 })

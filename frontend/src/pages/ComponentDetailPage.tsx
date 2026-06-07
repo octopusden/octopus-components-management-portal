@@ -503,12 +503,14 @@ export function ComponentDetailPage() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {/* Copy — creates a new component from this one; gated on the
-                global CREATE_COMPONENTS permission, not per-component canEdit. */}
+            {/* Create Similar — creates a NEW component pre-filled from this
+                one (not an exact copy: unique fields and overrides are not
+                carried over). Gated on the global CREATE_COMPONENTS
+                permission, not per-component canEdit. */}
             {canCreate && (
               <Button variant="outline" size="sm" onClick={() => setCopyDialogOpen(true)}>
                 <Copy className="h-4 w-4" />
-                Copy
+                Create Similar
               </Button>
             )}
             {/* Archive / Unarchive — permission-gated, not just disabled */}

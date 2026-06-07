@@ -304,8 +304,8 @@ const actionsColumn = columnHelper.display({
       <Button
         variant="ghost"
         size="sm"
-        title={`Copy ${row.original.name}`}
-        aria-label={`Copy ${row.original.name}`}
+        title={`Create similar to ${row.original.name}`}
+        aria-label={`Create similar to ${row.original.name}`}
         onClick={() => onCopy(row.original.id)}
       >
         <Copy className="h-4 w-4" />

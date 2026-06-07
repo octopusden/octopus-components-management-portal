@@ -114,7 +114,7 @@ export function CopyComponentDialog({ sourceId, open, onOpenChange }: CopyCompon
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Copy Component</DialogTitle>
+          <DialogTitle>Create Similar Component</DialogTitle>
           <DialogDescription>
             Create a new component pre-filled from{' '}
             {source ? <span className="font-medium">{source.name}</span> : 'the selected component'}.

@@ -84,13 +84,13 @@ test.describe('Copy component — viewer permission gate', () => {
     await setupRoutes(page)
     await page.goto('/components')
     await expect(page.getByRole('link', { name: 'svc-copy-source' })).toBeVisible()
-    await expect(page.getByRole('button', { name: /^copy /i })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /^create similar to /i })).toHaveCount(0)
   })
 
   test('detail header renders no Copy button without CREATE_COMPONENTS', async ({ page }) => {
     await setupRoutes(page)
     await page.goto(`/components/${SOURCE_ID}`)
     await expect(page.getByRole('heading', { name: 'svc-copy-source' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Copy', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Create Similar', exact: true })).toHaveCount(0)
   })
 })

@@ -191,9 +191,9 @@ test.describe('Copy component — admin smoke', () => {
     const state = await setupRoutes(page)
     await page.goto(`/components/${SOURCE_ID}`)
 
-    await page.getByRole('button', { name: 'Copy', exact: true }).click()
+    await page.getByRole('button', { name: 'Create Similar', exact: true }).click()
     const dialog = page.getByRole('dialog')
-    await expect(dialog.getByText('Copy Component')).toBeVisible()
+    await expect(dialog.getByText('Create Similar Component')).toBeVisible()
 
     // Display Name prefilled from the source; Component Key starts empty.
     await expect(dialog.getByLabel(/display name/i)).toHaveValue('Copy Source')
@@ -249,9 +249,9 @@ test.describe('Copy component — admin smoke', () => {
     await setupRoutes(page)
     await page.goto('/components')
 
-    await page.getByRole('button', { name: 'Copy svc-copy-source' }).click()
+    await page.getByRole('button', { name: 'Create similar to svc-copy-source' }).click()
     const dialog = page.getByRole('dialog')
-    await expect(dialog.getByText('Copy Component')).toBeVisible()
+    await expect(dialog.getByText('Create Similar Component')).toBeVisible()
     // Prefill proves the dialog loaded the FULL detail from a summary-only row.
     await expect(dialog.getByLabel(/display name/i)).toHaveValue('Copy Source')
 
