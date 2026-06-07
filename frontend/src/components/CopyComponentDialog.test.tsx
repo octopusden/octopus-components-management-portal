@@ -70,16 +70,20 @@ function makeSource(overrides: Partial<ComponentDetail> = {}): ComponentDetail {
   }
 }
 
+function dialogTree(onOpenChange: (open: boolean) => void) {
+  return (
+    <MemoryRouter>
+      <CopyComponentDialog sourceId="c-1" open onOpenChange={onOpenChange} />
+    </MemoryRouter>
+  )
+}
+
 function renderDialog(onOpenChange = vi.fn()) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(
-    <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
-        <CopyComponentDialog sourceId="c-1" open onOpenChange={onOpenChange} />
-      </MemoryRouter>
-    </QueryClientProvider>,
+  const view = render(
+    <QueryClientProvider client={queryClient}>{dialogTree(onOpenChange)}</QueryClientProvider>,
   )
-  return onOpenChange
+  return { onOpenChange, view }
 }
 
 function loaded(source = makeSource()) {
@@ -208,7 +212,7 @@ describe('CopyComponentDialog — submit', () => {
   it('navigates to the new component and closes on success', async () => {
     mockMutateAsync.mockResolvedValue({ id: 'comp-9', name: 'svc-beta' })
     loaded()
-    const onOpenChange = renderDialog()
+    const { onOpenChange } = renderDialog()
     await userEvent.type(screen.getByLabelText(/component key/i), 'svc-beta')
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/components/comp-9'))
@@ -247,8 +251,58 @@ describe('CopyComponentDialog — submit', () => {
 
   it('closes via Cancel', async () => {
     loaded()
-    const onOpenChange = renderDialog()
+    const { onOpenChange } = renderDialog()
     await userEvent.click(screen.getByRole('button', { name: /cancel/i }))
     expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+})
+
+describe('CopyComponentDialog — background refetch must not clobber user input', () => {
+  it('preserves typed Component Key and edited Display Name when a fresh source object arrives', async () => {
+    loaded()
+    const { onOpenChange, view } = renderDialog()
+
+    await userEvent.type(screen.getByLabelText(/component key/i), 'svc-beta')
+    const displayName = screen.getByLabelText(/display name/i)
+    await userEvent.clear(displayName)
+    await userEvent.type(displayName, 'Edited Name')
+
+    // Simulate a React Query background refetch: same data, NEW object identity.
+    loaded(makeSource())
+    view.rerender(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        {dialogTree(onOpenChange)}
+      </QueryClientProvider>,
+    )
+
+    expect((screen.getByLabelText(/component key/i) as HTMLInputElement).value).toBe('svc-beta')
+    expect((screen.getByLabelText(/display name/i) as HTMLInputElement).value).toBe('Edited Name')
+  })
+
+  it('still updates an untouched Display Name from the refreshed source', async () => {
+    loaded()
+    const { onOpenChange, view } = renderDialog()
+    await waitFor(() =>
+      expect((screen.getByLabelText(/display name/i) as HTMLInputElement).value).toBe(
+        'Service Alpha',
+      ),
+    )
+
+    loaded(makeSource({ displayName: 'Renamed Upstream' }))
+    view.rerender(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        {dialogTree(onOpenChange)}
+      </QueryClientProvider>,
+    )
+
+    await waitFor(() =>
+      expect((screen.getByLabelText(/display name/i) as HTMLInputElement).value).toBe(
+        'Renamed Upstream',
+      ),
+    )
   })
 })

@@ -66,8 +66,14 @@ export function CopyComponentDialog({ sourceId, open, onOpenChange }: CopyCompon
 
   // Prefill Display Name once the source detail arrives. Component Key stays
   // empty — it must be a new unique value.
+  // `keepDirtyValues` guards against a React Query background refetch (stale
+  // cache / window focus) delivering a fresh `source` object mid-edit: the
+  // re-run reset must not clobber a typed Component Key or an edited Display
+  // Name, while an untouched Display Name still tracks the refreshed source.
   useEffect(() => {
-    if (source) reset({ name: '', displayName: source.displayName ?? '' })
+    if (source) {
+      reset({ name: '', displayName: source.displayName ?? '' }, { keepDirtyValues: true })
+    }
   }, [source, reset])
 
   function handleOpenChange(open: boolean) {
