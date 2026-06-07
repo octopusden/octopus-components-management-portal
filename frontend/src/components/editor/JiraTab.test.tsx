@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { JiraTab } from './JiraTab'
+import { TooltipProvider } from '../ui/tooltip'
+import { fieldDescriptions } from '../../lib/fieldDescriptions'
 import type { ComponentDetail, ComponentConfiguration } from '../../lib/types'
 import type { UseMutationResult } from '@tanstack/react-query'
 import type { ComponentUpdateRequest } from '../../hooks/useComponent'
@@ -101,7 +103,10 @@ function renderTab(component: ComponentDetail, canEdit = true) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
-      <JiraTab component={component} updateMutation={mutation} toast={toast} canEdit={canEdit} />
+      {/* TooltipProvider mirrors the app-root provider required by FieldInfo. */}
+      <TooltipProvider>
+        <JiraTab component={component} updateMutation={mutation} toast={toast} canEdit={canEdit} />
+      </TooltipProvider>
     </QueryClientProvider>,
   )
 }
@@ -122,5 +127,42 @@ describe('JiraTab — inline override coverage', () => {
   it.each(overridablePaths)('renders FieldOverrideInline under %s', (path) => {
     renderTab(makeComponent())
     expect(screen.getByTestId(`field-override-inline-${path}`)).toBeInTheDocument()
+  })
+})
+
+describe('JiraTab field descriptions (FieldInfo)', () => {
+  // Exact set of registry paths this tab must expose an info icon for.
+  // releasesInDefaultBranch keeps its component.* field-config path even
+  // though it renders on the Jira tab.
+  const EXPECTED_PATHS = [
+    'jira.projectKey',
+    'jira.displayName',
+    'jira.technical',
+    'component.releasesInDefaultBranch',
+    'jira.hotfixVersionFormat',
+    'jira.versionPrefix',
+    'jira.majorVersionFormat',
+    'jira.releaseVersionFormat',
+    'jira.buildVersionFormat',
+    'jira.lineVersionFormat',
+    'jira.versionFormat',
+  ]
+
+  it('renders exactly one info icon per described field', () => {
+    renderTab(makeComponent())
+    for (const path of EXPECTED_PATHS) {
+      expect(
+        document.querySelectorAll(`[data-field-path="${path}"]`),
+        `info icon for ${path}`,
+      ).toHaveLength(1)
+    }
+  })
+
+  it('opens the registry description for Project Key on focus', async () => {
+    renderTab(makeComponent())
+    const trigger = document.querySelector('[data-field-path="jira.projectKey"]') as HTMLElement
+    act(() => trigger.focus())
+    const tooltip = await screen.findByRole('tooltip')
+    expect(tooltip).toHaveTextContent(fieldDescriptions['jira.projectKey'])
   })
 })
