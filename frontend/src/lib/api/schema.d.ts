@@ -1042,7 +1042,6 @@ export interface components {
         };
         BuildAspectRequest: {
             buildSystem?: string;
-            buildSystemVersion?: string;
             javaVersion?: string;
             mavenVersion?: string;
             gradleVersion?: string;
@@ -1150,7 +1149,6 @@ export interface components {
         };
         BuildAspectResponse: {
             buildSystem?: string;
-            buildSystemVersion?: string;
             javaVersion?: string;
             mavenVersion?: string;
             gradleVersion?: string;

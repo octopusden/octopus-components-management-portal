@@ -71,8 +71,6 @@ export const fieldDescriptions: Record<string, string> = {
   // ── BuildTab — build.* ────────────────────────────────────────────────────
   'build.buildSystem':
     'The build tool that produces this component (e.g. Maven, Gradle, or “provided” for externally built ones). Required: escrow generation and release pipelines select the build wrapper and lifecycle from this value. Can be overridden per version range.',
-  'build.buildSystemVersion':
-    'Version of the selected build tool to use (e.g. 3.9.6). Automated rebuilds, including escrow generation, invoke exactly this tool version.',
   'build.buildFilePath':
     'Path to the build file (pom.xml, build.gradle, …) relative to the repository root. Supports dynamic variables such as $version. Build automation uses it to locate the entry point of the build.',
   'build.javaVersion':
