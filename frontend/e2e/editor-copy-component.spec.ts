@@ -128,6 +128,12 @@ async function setupRoutes(page: Page, sourceOverride: Record<string, unknown> =
   await mockFieldConfig(page, {})
   await mockOwners(page, ['owner-oscar'])
   await mockLabels(page, ['backend'])
+  // The unified dialog reads build systems via useFieldOptions('buildSystem');
+  // mock it so the scratch path can deterministically pick MAVEN without
+  // depending on the live CRS meta endpoint (keeps this spec fully route-mocked).
+  await page.route('**/rest/api/4/components/meta/build-systems', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(['MAVEN', 'GRADLE']) }),
+  )
   await page.route(EMPLOYEE_STATUS, (route) => {
     const usernames = (route.request().postDataJSON() ?? []) as string[]
     return route.fulfill({
