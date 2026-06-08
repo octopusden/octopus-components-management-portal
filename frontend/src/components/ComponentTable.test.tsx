@@ -58,14 +58,14 @@ function mockLinks(links: Partial<PortalLinks> | null = null) {
   } as unknown as ReturnType<typeof usePortalLinks>)
 }
 
-function renderTable(data: ComponentSummary[]) {
+function renderTable(data: ComponentSummary[], onCopy?: (id: string) => void) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     React.createElement(
       QueryClientProvider,
       { client },
       <MemoryRouter>
-        <ComponentTable data={data} isLoading={false} />
+        <ComponentTable data={data} isLoading={false} onCopy={onCopy} />
       </MemoryRouter>,
     ),
   )
@@ -405,5 +405,31 @@ describe('ComponentTable', () => {
       expect(rows[0]!.className).not.toContain('opacity-50')
       expect(rows[1]!.className).toContain('opacity-50')
     })
+  })
+})
+
+describe('ComponentTable — per-row Copy action', () => {
+  beforeEach(() => {
+    mockLinks(null)
+  })
+
+  it('renders a Copy button per row and reports the row id when onCopy is provided', async () => {
+    const onCopy = vi.fn()
+    renderTable(
+      [
+        makeComponent({ id: 'c1', name: 'alpha' }),
+        makeComponent({ id: 'c2', name: 'beta' }),
+      ],
+      onCopy,
+    )
+    const alphaCopy = screen.getByRole('button', { name: 'Create similar to alpha' })
+    expect(screen.getByRole('button', { name: 'Create similar to beta' })).toBeDefined()
+    await userEvent.click(alphaCopy)
+    expect(onCopy).toHaveBeenCalledWith('c1')
+  })
+
+  it('renders no Copy buttons or actions column when onCopy is omitted', () => {
+    renderTable([makeComponent({ id: 'c1', name: 'alpha' })])
+    expect(screen.queryByRole('button', { name: /^create similar to /i })).toBeNull()
   })
 })

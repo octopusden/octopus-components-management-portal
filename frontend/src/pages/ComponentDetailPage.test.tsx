@@ -73,6 +73,12 @@ vi.mock('../components/editor/FieldOverrides', () => ({
 vi.mock('../components/editor/ComponentHistoryTab', () => ({
   ComponentHistoryTab: () => React.createElement('div', { 'data-testid': 'history-tab' }),
 }))
+// CreateComponentDialog (copy mode) pulls hooks from the (mocked) useComponent
+// module; stub it so the page test only asserts the open/sourceId wiring.
+vi.mock('../components/CreateComponentDialog', () => ({
+  CreateComponentDialog: ({ sourceId, open }: { sourceId?: string; open: boolean }) =>
+    open ? React.createElement('div', { 'data-testid': 'copy-dialog' }, sourceId) : null,
+}))
 
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useComponent, useUpdateComponent, useDeleteComponent } from '../hooks/useComponent'
@@ -878,5 +884,31 @@ describe('ComponentDetailPage — confirmation dialog text', () => {
       expect(screen.getByText(/restore it later/i)).toBeDefined()
       expect(screen.queryByText(/cannot be undone/i)).toBeNull()
     })
+  })
+})
+
+describe('ComponentDetailPage — Copy button (CREATE_COMPONENTS gate)', () => {
+  it('renders Copy for a user with CREATE_COMPONENTS and opens the dialog with the component id', async () => {
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage(baseComponent, user)
+
+    const copyBtn = screen.getByRole('button', { name: /^create similar$/i })
+    fireEvent.click(copyBtn)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('copy-dialog').textContent).toBe('comp-1')
+    })
+  })
+
+  it('hides Copy without CREATE_COMPONENTS', () => {
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    renderPage(baseComponent, user)
+    expect(screen.queryByRole('button', { name: /^create similar$/i })).toBeNull()
+  })
+
+  it('Copy is available even when per-component canEdit is false (global create gate, not canEdit)', () => {
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage({ ...baseComponent, canEdit: false }, user)
+    expect(screen.getByRole('button', { name: /^create similar$/i })).toBeDefined()
   })
 })

@@ -73,7 +73,12 @@ export function EnumSelect({
   // `enabled` flag inside the hook (skipToken on the meta query) — caller
   // override short-circuits the field-config read too.
   const hookResult = useFieldOptions(fieldPath, { enabled: optionsOverride === undefined })
-  const options = optionsOverride ?? hookResult.options
+  // Dedupe: a vocabulary source (meta endpoint or admin field-config) may
+  // advertise the same value twice. Radix Select keys items by value, so a
+  // duplicate produces a React key collision and a selection that can fail to
+  // register — drop repeats, keeping first occurrence / order.
+  const rawOptions = optionsOverride ?? hookResult.options
+  const options = rawOptions.filter((opt, i) => rawOptions.indexOf(opt) === i)
   const isLoading = optionsOverride !== undefined ? Boolean(isLoadingOverride) : hookResult.isLoading
 
   // Bundled here so all three render branches forward the same a11y set without

@@ -7,9 +7,9 @@ import {
   createColumnHelper,
   type SortingState,
 } from '@tanstack/react-table'
-import { ArrowUpDown, ArrowUp, ArrowDown, Package } from 'lucide-react'
+import { ArrowUpDown, ArrowUp, ArrowDown, Copy, Package } from 'lucide-react'
 import { JiraIcon, BitbucketIcon, TeamCityIcon } from './ui/icons/brand-icons'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Table,
   TableBody,
@@ -19,6 +19,7 @@ import {
   TableRow,
 } from './ui/table'
 import { Badge, badgeVariants } from './ui/badge'
+import { Button } from './ui/button'
 import { EmptyState } from './ui/empty-state'
 import { SkeletonTable } from './ui/skeleton-table'
 import { cn, safeHttpUrl } from '../lib/utils'
@@ -29,12 +30,19 @@ declare module '@tanstack/react-table' {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface TableMeta<TData> {
     links?: PortalLinks | null
+    onCopy?: (id: string) => void
   }
 }
 
 interface ComponentTableProps {
   data: ComponentSummary[]
   isLoading: boolean
+  /**
+   * Per-row "copy component" action. The page passes the callback only when
+   * the user holds CREATE_COMPONENTS — when absent the actions column is not
+   * rendered at all, so permission gating stays at the page level.
+   */
+  onCopy?: (id: string) => void
 }
 
 const columnHelper = createColumnHelper<ComponentSummary>()
@@ -283,26 +291,55 @@ const columns = [
   }),
 ]
 
-export function ComponentTable({ data, isLoading }: ComponentTableProps) {
+// Per-row Copy action — appended to `columns` only when the page provides an
+// `onCopy` callback (CREATE_COMPONENTS holders), so viewers never see the
+// column. The handler travels via table meta like `links` does.
+const actionsColumn = columnHelper.display({
+  id: 'actions',
+  header: '',
+  cell: ({ row, table }) => {
+    const onCopy = table.options.meta?.onCopy
+    if (!onCopy) return null
+    return (
+      <Button
+        variant="ghost"
+        size="sm"
+        title={`Create similar to ${row.original.name}`}
+        aria-label={`Create similar to ${row.original.name}`}
+        onClick={() => onCopy(row.original.id)}
+      >
+        <Copy className="h-4 w-4" />
+      </Button>
+    )
+  },
+  enableSorting: false,
+})
+
+export function ComponentTable({ data, isLoading, onCopy }: ComponentTableProps) {
   const [sorting, setSorting] = useState<SortingState>([])
   const { data: portalLinks } = usePortalLinks()
 
+  const visibleColumns = useMemo(
+    () => (onCopy ? [...columns, actionsColumn] : columns),
+    [onCopy],
+  )
+
   const table = useReactTable({
     data,
-    columns,
+    columns: visibleColumns,
     state: { sorting },
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     manualSorting: false,
-    meta: { links: portalLinks },
+    meta: { links: portalLinks, onCopy },
   })
 
   if (isLoading) {
     return (
       <div className="rounded-md border">
         <Table>
-          <SkeletonTable rows={8} cols={columns.length} />
+          <SkeletonTable rows={8} cols={visibleColumns.length} />
         </Table>
       </div>
     )
@@ -327,7 +364,7 @@ export function ComponentTable({ data, isLoading }: ComponentTableProps) {
           </TableHeader>
           <TableBody>
             <TableRow>
-              <TableCell colSpan={columns.length} className="p-0">
+              <TableCell colSpan={visibleColumns.length} className="p-0">
                 <EmptyState message="No components found" />
               </TableCell>
             </TableRow>

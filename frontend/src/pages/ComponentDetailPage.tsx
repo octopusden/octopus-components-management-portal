@@ -1,6 +1,6 @@
 import { useParams, useNavigate, Link } from 'react-router'
 import { useForm } from 'react-hook-form'
-import { ArrowLeft, Save, Trash2, AlertTriangle, LockKeyhole } from 'lucide-react'
+import { ArrowLeft, Copy, Save, Trash2, AlertTriangle, LockKeyhole } from 'lucide-react'
 import { JiraIcon, BitbucketIcon, TeamCityIcon } from '../components/ui/icons/brand-icons'
 import { useState, type ReactNode } from 'react'
 import { Layout } from '../components/Layout'
@@ -29,6 +29,7 @@ import { FieldOverrides } from '../components/editor/FieldOverrides'
 import { ConfigurationsTab } from '../components/editor/ConfigurationsTab'
 import { AsCodeTab } from '../components/editor/AsCodeTab'
 import { ComponentHistoryTab } from '../components/editor/ComponentHistoryTab'
+import { CreateComponentDialog } from '../components/CreateComponentDialog'
 import { useComponent, useUpdateComponent, useDeleteComponent, type ComponentUpdateRequest } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
 import { ApiError } from '../lib/api'
@@ -73,6 +74,7 @@ export function ComponentDetailPage() {
   const { toast } = useToast()
   const handleConflict = useOptimisticConflict(id)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [copyDialogOpen, setCopyDialogOpen] = useState(false)
 
   const { data: component, isLoading, error } = useComponent(id ?? '')
   const updateMutation = useUpdateComponent(id ?? '')
@@ -81,6 +83,9 @@ export function ComponentDetailPage() {
 
   const canArchive = hasPermission(user, PERMISSIONS.DELETE_COMPONENTS)
   const canUnarchive = hasPermission(user, PERMISSIONS.ARCHIVE_COMPONENTS)
+  // Copy creates a NEW component, so it gates on the global CREATE_COMPONENTS
+  // permission — not on the per-component `canEdit` affordance below.
+  const canCreate = hasPermission(user, PERMISSIONS.CREATE_COMPONENTS)
 
   // Per-component edit gate. CRS returns `canEdit` on the detail response (true for
   // the component's owner/RM/SC or an admin); fall back to the global CREATE_COMPONENTS
@@ -498,6 +503,16 @@ export function ComponentDetailPage() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {/* Create Similar — creates a NEW component pre-filled from this
+                one (not an exact copy: unique fields and overrides are not
+                carried over). Gated on the global CREATE_COMPONENTS
+                permission, not per-component canEdit. */}
+            {canCreate && (
+              <Button variant="outline" size="sm" onClick={() => setCopyDialogOpen(true)}>
+                <Copy className="h-4 w-4" />
+                Create Similar
+              </Button>
+            )}
             {/* Archive / Unarchive — permission-gated, not just disabled */}
             {!component.archived && canArchive && (
               <Button
@@ -659,6 +674,13 @@ export function ComponentDetailPage() {
           </div>
         </Tabs>
       </div>
+
+      {/* Create-similar dialog (sourceId → pre-filled from this component) */}
+      <CreateComponentDialog
+        sourceId={component.id}
+        open={copyDialogOpen}
+        onOpenChange={setCopyDialogOpen}
+      />
 
       {/* Archive confirmation dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

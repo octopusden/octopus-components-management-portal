@@ -41,6 +41,18 @@ export function parseServerFieldErrors(apiErrorMessage: string): Map<string, str
     return result
   }
 
+  // Colon-prefixed single message — "<field>: <message>" with the colon
+  // directly after the identifier (no preceding space), e.g. the distribution-
+  // coordinate rule "distribution: an explicit+external component must …".
+  // The space heuristic below would miss these (identifier is followed by ':',
+  // not whitespace). Field names are camelCase identifiers; require a space
+  // after the colon so a bare "foo:" without a message doesn't match.
+  const colonMatch = /^([a-zA-Z][a-zA-Z0-9]*): (.+)$/.exec(errorMessage)
+  if (colonMatch) {
+    result.set(colonMatch[1]!, colonMatch[2]!.trim())
+    return result
+  }
+
   // Plain message — best-effort heuristic that takes the first identifier-
   // looking word as a candidate field. False-positive on messages like
   // "Something went wrong" is intentional: the caller filters by its own
