@@ -1,14 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
-import {
-  useComponentDefaults,
-  useUpdateComponentDefaults,
-  useMigrateDefaults,
-  useFieldConfig,
-} from '@/hooks/useAdminConfig'
-import { useAdminMode } from '@/lib/adminModeStore'
+import { useComponentDefaults } from '@/hooks/useAdminConfig'
 import { ComponentDefaultsForm } from './ComponentDefaultsForm'
 
 function renderWithQuery(ui: ReactElement) {
@@ -18,70 +12,17 @@ function renderWithQuery(ui: ReactElement) {
   )
 }
 
-// Regression for PR #8 P2: the new Admin-mode toggle in AppFooter is the
-// portal's "without weapons" mode for destructive admin actions. The Run
-// migration button on /admin → Migration tab respects it; the existing
-// "Import from Git" button on /admin → Component Defaults tab did not.
-//
-// "Import from Git" calls useMigrateDefaults().mutate() which POSTs
-// /admin/migrate-defaults — the same migration-style operation that
-// rewrites component defaults from DSL on disk. Leaving it armed when
-// Admin mode is OFF contradicts the gate's invariant.
-//
-// "Save" stays unconditional. Editing a value and clicking Save is the
-// regular write path of this editor; gating the entire form on Admin
-// mode would make it useless without the toggle and changes scope
-// beyond what the reviewer asked for.
-
+// Component defaults are now code-as-config (managed in service-config). This
+// view is READ-ONLY: no Save / Import-from-Git / Reset controls; values render
+// disabled. Reload lives on the Admin Settings page, not here.
 vi.mock('@/hooks/useAdminConfig', () => ({
-  // EnumSelect inside the form pulls field-config options through
-  // useFieldConfigOptions → useFieldConfig. Mock it too so the form renders
-  // without reaching the network. Returning empty data is fine — the dropdown
-  // just shows no options, which is irrelevant to the Admin-mode gate tests.
-  useFieldConfig: vi.fn(),
-  useUpdateFieldConfig: vi.fn(),
   useComponentDefaults: vi.fn(),
-  useUpdateComponentDefaults: vi.fn(),
-  useMigrateDefaults: vi.fn(),
 }))
 
-const mockUseFieldConfig = vi.mocked(useFieldConfig)
 const mockUseComponentDefaults = vi.mocked(useComponentDefaults)
-const mockUseUpdateComponentDefaults = vi.mocked(useUpdateComponentDefaults)
-const mockUseMigrateDefaults = vi.mocked(useMigrateDefaults)
-
-function idleMutation<TArg = unknown>() {
-  return {
-    mutate: vi.fn() as (arg?: TArg) => void,
-    mutateAsync: vi.fn().mockResolvedValue(undefined),
-    reset: vi.fn(),
-    isPending: false,
-    isSuccess: false,
-    isError: false,
-    isIdle: true,
-    data: undefined,
-    error: null,
-    status: 'idle',
-    variables: undefined,
-    submittedAt: 0,
-    failureCount: 0,
-    failureReason: null,
-    isPaused: false,
-  }
-}
 
 beforeEach(() => {
-  localStorage.clear()
   vi.clearAllMocks()
-  useAdminMode.setState({ enabled: false })
-
-  mockUseFieldConfig.mockReturnValue({
-    data: { fields: {} },
-    isLoading: false,
-    isError: false,
-    error: null,
-    refetch: vi.fn(),
-  } as unknown as ReturnType<typeof useFieldConfig>)
   mockUseComponentDefaults.mockReturnValue({
     data: { buildSystem: 'GRADLE' },
     isLoading: false,
@@ -89,68 +30,40 @@ beforeEach(() => {
     error: null,
     refetch: vi.fn(),
   } as unknown as ReturnType<typeof useComponentDefaults>)
-  mockUseUpdateComponentDefaults.mockReturnValue(
-    idleMutation() as unknown as ReturnType<typeof useUpdateComponentDefaults>,
-  )
-  mockUseMigrateDefaults.mockReturnValue(
-    idleMutation() as unknown as ReturnType<typeof useMigrateDefaults>,
-  )
 })
 
 afterEach(() => {
   cleanup()
-  localStorage.clear()
-  useAdminMode.setState({ enabled: false })
 })
 
-describe('ComponentDefaultsForm — Import from Git Admin-mode gate', () => {
-  it('disables the Import from Git button when Admin mode is OFF and shows the helper text', () => {
+describe('ComponentDefaultsForm — read-only (code-as-config)', () => {
+  it('renders no write controls (Save / Import from Git / Reset)', () => {
     renderWithQuery(<ComponentDefaultsForm />)
-    const importBtn = screen.getByRole('button', { name: /import from git/i })
-    expect(importBtn).toBeDisabled()
-    expect(screen.getByText(/Enable Admin mode in the footer/i)).toBeDefined()
+    expect(screen.queryByRole('button', { name: /^save$/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /import from git/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^reset$/i })).toBeNull()
   })
 
-  it('enables Import from Git once Admin mode flips ON', () => {
+  it('renders the loaded default value read-only', () => {
     renderWithQuery(<ComponentDefaultsForm />)
-    expect(screen.getByRole('button', { name: /import from git/i })).toBeDisabled()
-
-    act(() => {
-      useAdminMode.setState({ enabled: true })
-    })
-
-    expect(screen.getByRole('button', { name: /import from git/i })).not.toBeDisabled()
+    const buildSystem = screen.getByDisplayValue('GRADLE') as HTMLInputElement
+    expect(buildSystem.readOnly).toBe(true)
   })
 
-  it('clicking Import from Git triggers useMigrateDefaults().mutate when Admin mode is ON', () => {
-    const migrateMutation = idleMutation()
-    mockUseMigrateDefaults.mockReturnValue(
-      migrateMutation as unknown as ReturnType<typeof useMigrateDefaults>,
-    )
-    useAdminMode.setState({ enabled: true })
-
+  it('Raw JSON view is read-only', () => {
     renderWithQuery(<ComponentDefaultsForm />)
-    fireEvent.click(screen.getByRole('button', { name: /import from git/i }))
-
-    expect(migrateMutation.mutate).toHaveBeenCalledOnce()
-  })
-
-  it('Save button stays available regardless of Admin mode (regular edit path is not destructive)', () => {
-    renderWithQuery(<ComponentDefaultsForm />)
-    // Admin mode is OFF here; the Save button must NOT be disabled by it.
-    // It can still be disabled by mutation pending state, but we mocked
-    // updateMutation as idle, so the only signal here is the gate.
-    expect(screen.getByRole('button', { name: /^save$/i })).not.toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: /raw json/i }))
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
+    expect(textarea.readOnly).toBe(true)
+    expect(textarea.value).toContain('GRADLE')
   })
 })
 
 // SYS-039 §6: people fields (componentOwner / releaseManager / securityChampion)
-// are removed from the global component-defaults surface entirely, AND any
-// stale stored keys are actively stripped on load and before every save (form
-// view + raw JSON) so they don't get re-persisted.
-describe('ComponentDefaultsForm — people fields removed + sanitized (SYS-039)', () => {
+// are not part of the global component-defaults surface and are stripped on load
+// so a stale stored blob never renders them.
+describe('ComponentDefaultsForm — people fields stripped on load (SYS-039)', () => {
   beforeEach(() => {
-    // Stored blob still carries the legacy people keys (pre-migration data).
     mockUseComponentDefaults.mockReturnValue({
       data: {
         buildSystem: 'GRADLE',
@@ -165,68 +78,20 @@ describe('ComponentDefaultsForm — people fields removed + sanitized (SYS-039)'
     } as unknown as ReturnType<typeof useComponentDefaults>)
   })
 
-  it('does not render Component Owner / Release Manager / Security Champion inputs', () => {
+  it('does not render Component Owner / Release Manager / Security Champion', () => {
     renderWithQuery(<ComponentDefaultsForm />)
     expect(screen.queryByText('Component Owner')).toBeNull()
     expect(screen.queryByText('Release Manager')).toBeNull()
     expect(screen.queryByText('Security Champion')).toBeNull()
   })
 
-  it('strips the 3 people keys from the payload on Save (form view) but keeps the rest', () => {
-    const mutate = vi.fn()
-    mockUseUpdateComponentDefaults.mockReturnValue(
-      { ...idleMutation(), mutate } as unknown as ReturnType<typeof useUpdateComponentDefaults>,
-    )
-
-    renderWithQuery(<ComponentDefaultsForm />)
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
-
-    expect(mutate).toHaveBeenCalledOnce()
-    const payload = mutate.mock.calls[0]![0] as Record<string, unknown>
-    expect(payload).not.toHaveProperty('componentOwner')
-    expect(payload).not.toHaveProperty('releaseManager')
-    expect(payload).not.toHaveProperty('securityChampion')
-    expect(payload).toHaveProperty('buildSystem', 'GRADLE')
-  })
-
-  it('strips the 3 people keys even when saving via the Raw JSON path', async () => {
-    const mutate = vi.fn()
-    mockUseUpdateComponentDefaults.mockReturnValue(
-      { ...idleMutation(), mutate } as unknown as ReturnType<typeof useUpdateComponentDefaults>,
-    )
-
-    renderWithQuery(<ComponentDefaultsForm />)
-    // Flip to Raw JSON and inject a blob that re-adds the people keys.
-    fireEvent.click(screen.getByRole('button', { name: /raw json/i }))
-    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
-    fireEvent.change(textarea, {
-      target: { value: JSON.stringify({ buildSystem: 'MAVEN', componentOwner: 'x', releaseManager: 'y', securityChampion: 'z' }) },
-    })
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
-
-    expect(mutate).toHaveBeenCalledOnce()
-    const payload = mutate.mock.calls[0]![0] as Record<string, unknown>
-    expect(payload).not.toHaveProperty('componentOwner')
-    expect(payload).not.toHaveProperty('releaseManager')
-    expect(payload).not.toHaveProperty('securityChampion')
-    expect(payload).toHaveProperty('buildSystem', 'MAVEN')
-  })
-
-  it('rejects a non-object Raw JSON payload (e.g. null) with a form error instead of crashing', () => {
-    const mutate = vi.fn()
-    mockUseUpdateComponentDefaults.mockReturnValue(
-      { ...idleMutation(), mutate } as unknown as ReturnType<typeof useUpdateComponentDefaults>,
-    )
-
+  it('strips the people keys from the Raw JSON view', () => {
     renderWithQuery(<ComponentDefaultsForm />)
     fireEvent.click(screen.getByRole('button', { name: /raw json/i }))
     const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
-    // Valid JSON, but `null` — would crash sanitizeDefaults' object-spread.
-    fireEvent.change(textarea, { target: { value: 'null' } })
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
-
-    // No crash, no save; a form-level parse error is surfaced instead.
-    expect(mutate).not.toHaveBeenCalled()
-    expect(screen.getByText(/must be a JSON object/i)).toBeDefined()
+    expect(textarea.value).not.toContain('componentOwner')
+    expect(textarea.value).not.toContain('releaseManager')
+    expect(textarea.value).not.toContain('securityChampion')
+    expect(textarea.value).toContain('GRADLE')
   })
 })

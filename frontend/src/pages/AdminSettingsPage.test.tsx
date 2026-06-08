@@ -80,10 +80,8 @@ const idleMutation = {
 }
 vi.mock('@/hooks/useAdminConfig', () => ({
   useFieldConfig: vi.fn(),
-  useUpdateFieldConfig: vi.fn(() => idleMutation),
   useComponentDefaults: vi.fn(),
-  useUpdateComponentDefaults: vi.fn(() => idleMutation),
-  useMigrateDefaults: vi.fn(() => idleMutation),
+  useReloadConfig: vi.fn(() => idleMutation),
 }))
 // FieldConfigEditor (the default tab) now reads enum option vocabularies for its
 // Default Value dropdowns (R3). Stub them loaded-and-empty so the page renders

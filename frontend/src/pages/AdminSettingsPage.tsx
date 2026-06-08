@@ -1,10 +1,47 @@
+import { RefreshCw } from 'lucide-react'
 import { Layout } from '../components/Layout'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
+import { Button } from '../components/ui/button'
+import { StatusBanner } from '../components/ui/status-banner'
 import { FieldConfigEditor } from '../components/admin/FieldConfigEditor'
 import { ComponentDefaultsForm } from '../components/admin/ComponentDefaultsForm'
 import { MigrationHistoryPanel } from '../components/admin/MigrationHistoryPanel'
 import { MigrationPanel } from '../components/admin/MigrationPanel'
 import { TeamCityResyncPanel } from '../components/admin/TeamCityResyncPanel'
+import { useReloadConfig } from '../hooks/useAdminConfig'
+import { useAdminMode } from '../lib/adminModeStore'
+
+function ConfigReloadBar() {
+  const adminMode = useAdminMode((s) => s.enabled)
+  const reload = useReloadConfig()
+  return (
+    <StatusBanner variant="info" className="flex items-center justify-between gap-4">
+      <span className="text-sm">
+        Field configuration and component defaults are <strong>managed as code</strong> in
+        service-config and shown read-only here. Edit them in service-config, then reload to
+        apply without a redeploy.
+      </span>
+      <div className="flex items-center gap-2 shrink-0">
+        {reload.isSuccess && <span className="text-xs text-muted-foreground">Reloaded</span>}
+        {reload.error && (
+          <span className="text-xs text-destructive">
+            {reload.error instanceof Error ? reload.error.message : String(reload.error)}
+          </span>
+        )}
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => reload.mutate()}
+          disabled={!adminMode || reload.isPending}
+          title={adminMode ? 'Reload config from service-config' : 'Enable Admin mode in the footer to reload'}
+        >
+          <RefreshCw className="h-4 w-4" />
+          {reload.isPending ? 'Reloading…' : 'Reload'}
+        </Button>
+      </div>
+    </StatusBanner>
+  )
+}
 
 export function AdminSettingsPage() {
   return (
@@ -13,6 +50,8 @@ export function AdminSettingsPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold tracking-tight">Admin Settings</h1>
         </div>
+
+        <ConfigReloadBar />
 
         <Tabs defaultValue="field-config" variant="underline">
           <TabsList>

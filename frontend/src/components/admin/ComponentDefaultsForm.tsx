@@ -1,30 +1,28 @@
-import { useState, useEffect, useCallback } from 'react'
-import { Save, RotateCcw, Download, Code } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Code } from 'lucide-react'
 import { Label } from '../ui/label'
 import { Input } from '../ui/input'
 import { Switch } from '../ui/switch'
 import { Button } from '../ui/button'
 import { Separator } from '../ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs'
-import { EnumSelect } from '../ui/EnumSelect'
 import { InlineError } from '../ui/inline-error'
 import { SkeletonBlock } from '../ui/skeleton-block'
-import { StatusBanner } from '../ui/status-banner'
-import { useComponentDefaults, useUpdateComponentDefaults, useMigrateDefaults } from '../../hooks/useAdminConfig'
-import { useAdminMode } from '../../lib/adminModeStore'
+import { useComponentDefaults } from '../../hooks/useAdminConfig'
+
+// Component defaults are code-as-config (managed in service-config), so this
+// view is READ-ONLY. The legacy Save / Import-from-Git / Reset controls were
+// removed; changes are made in service-config and applied via the "Reload"
+// button on the Admin Settings page (POST /admin/reload-config).
 
 interface DefaultsData {
-  // General
   buildSystem?: string
   buildFilePath?: string
   artifactIdPattern?: string
   groupIdPattern?: string
   componentDisplayName?: string
-  // componentOwner / releaseManager / securityChampion are intentionally NOT
-  // part of the global component-defaults surface — the real Defaults.groovy
-  // never sets them. They are stripped on load and before save by
-  // sanitizeDefaults() (see below).
-  // CRS PR #301 renamed the default key to singular alongside the DTO collapse.
+  // componentOwner / releaseManager / securityChampion are intentionally NOT part
+  // of the global component-defaults surface — stripped on load by sanitizeDefaults().
   system?: string
   clientCode?: string
   parentComponent?: string
@@ -35,7 +33,6 @@ interface DefaultsData {
   copyright?: string
   octopusVersion?: string
   labels?: string[]
-  // Nested
   build?: Record<string, unknown>
   jira?: Record<string, unknown>
   distribution?: Record<string, unknown>
@@ -53,10 +50,8 @@ function getBool(obj: Record<string, unknown> | undefined, key: string): boolean
   return (obj?.[key] as boolean) ?? false
 }
 
-// People fields don't belong in the GLOBAL component-defaults blob — the real
-// Defaults.groovy never sets them. Strip them on load AND before every save
-// (form-view and raw-JSON) so any stale stored keys are actively removed the
-// next time defaults are persisted. Raw JSON is not an escape hatch.
+// People fields don't belong in the global component-defaults blob; strip them
+// on load so they never render even if a stale stored blob still carries them.
 const PEOPLE_DEFAULT_KEYS = ['componentOwner', 'releaseManager', 'securityChampion'] as const
 
 function sanitizeDefaults<T extends Record<string, unknown>>(obj: T): T {
@@ -69,86 +64,15 @@ function sanitizeDefaults<T extends Record<string, unknown>>(obj: T): T {
 
 export function ComponentDefaultsForm() {
   const { data, isLoading, error } = useComponentDefaults()
-  const updateMutation = useUpdateComponentDefaults()
-  const migrateMutation = useMigrateDefaults()
-  // Same UX gate as MigrationPanel: "Import from Git" rewrites every default
-  // from the on-disk DSL — same destructive class as a full migration. When
-  // Admin mode is OFF the button stays disabled with a helper pointing at
-  // the footer toggle. The Save button is the regular write path of this
-  // editor and is intentionally NOT gated.
-  const adminMode = useAdminMode((s) => s.enabled)
 
   const [defaults, setDefaults] = useState<DefaultsData>({})
   const [showRawJson, setShowRawJson] = useState(false)
-  const [jsonText, setJsonText] = useState('')
-  const [parseError, setParseError] = useState<string | null>(null)
-  const [savedFeedback, setSavedFeedback] = useState(false)
 
   useEffect(() => {
     if (data) {
-      // Strip stale people keys on load so they never re-render (form or raw
-      // JSON) and never get re-persisted on the next save.
-      const sanitized = sanitizeDefaults(data as DefaultsData)
-      setDefaults(sanitized)
-      setJsonText(JSON.stringify(sanitized, null, 2))
+      setDefaults(sanitizeDefaults(data as DefaultsData))
     }
   }, [data])
-
-  const setField = useCallback((key: string, value: unknown) => {
-    setDefaults((prev) => ({ ...prev, [key]: value }))
-  }, [])
-
-  const setNested = useCallback((section: string, key: string, value: unknown) => {
-    setDefaults((prev) => ({
-      ...prev,
-      [section]: { ...(prev[section] as Record<string, unknown> ?? {}), [key]: value },
-    }))
-  }, [])
-
-  const handleReset = () => {
-    if (data) {
-      const sanitized = sanitizeDefaults(data as DefaultsData)
-      setDefaults(sanitized)
-      setJsonText(JSON.stringify(sanitized, null, 2))
-      setParseError(null)
-    }
-  }
-
-  const handleSave = () => {
-    let toSave: Record<string, unknown>
-
-    if (showRawJson) {
-      let parsed: unknown
-      try {
-        parsed = JSON.parse(jsonText)
-      } catch (e) {
-        setParseError(e instanceof Error ? e.message : 'Invalid JSON')
-        return
-      }
-      // Valid JSON that isn't a plain object (null, array, primitive) would
-      // crash sanitizeDefaults' object-spread below — reject it as a form error.
-      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        setParseError('Defaults must be a JSON object')
-        return
-      }
-      toSave = parsed as Record<string, unknown>
-      setParseError(null)
-    } else {
-      toSave = defaults as Record<string, unknown>
-    }
-
-    // Belt-and-braces: strip the people keys before persisting on BOTH the
-    // form-view and raw-JSON paths, so a stored blob that still carries them
-    // (or a raw-JSON edit that re-adds them) is cleaned on the next save.
-    toSave = sanitizeDefaults(toSave)
-
-    updateMutation.mutate(toSave, {
-      onSuccess: () => {
-        setSavedFeedback(true)
-        setTimeout(() => setSavedFeedback(false), 2000)
-      },
-    })
-  }
 
   if (isLoading) {
     return <SkeletonBlock height="h-64" width="w-full" />
@@ -174,63 +98,18 @@ export function ComponentDefaultsForm() {
 
   return (
     <div className="space-y-4">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => { setShowRawJson(!showRawJson); if (!showRawJson) setJsonText(JSON.stringify(defaults, null, 2)) }}>
-            <Code className="h-4 w-4" />
-            {showRawJson ? 'Form View' : 'Raw JSON'}
-          </Button>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => migrateMutation.mutate()}
-            disabled={!adminMode || migrateMutation.isPending || updateMutation.isPending}
-            title={
-              adminMode
-                ? 'Import defaults from Git DSL'
-                : 'Enable Admin mode in the footer to import from Git'
-            }
-          >
-            <Download className="h-4 w-4" />
-            {migrateMutation.isPending ? 'Importing...' : 'Import from Git'}
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleReset} disabled={updateMutation.isPending}>
-            <RotateCcw className="h-4 w-4" />
-            Reset
-          </Button>
-          <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending}>
-            <Save className="h-4 w-4" />
-            {updateMutation.isPending ? 'Saving...' : savedFeedback ? 'Saved!' : 'Save'}
-          </Button>
-        </div>
+      <div className="flex items-center justify-end">
+        <Button variant="outline" size="sm" onClick={() => setShowRawJson(!showRawJson)}>
+          <Code className="h-4 w-4" />
+          {showRawJson ? 'Form View' : 'Raw JSON'}
+        </Button>
       </div>
-
-      {!adminMode && (
-        <p className="text-xs text-muted-foreground">
-          Enable Admin mode in the footer to use Import from Git. (Saving regular edits is unaffected.)
-        </p>
-      )}
-
-      {parseError && (
-        <StatusBanner variant="destructive" className="text-xs font-mono">
-          JSON error: {parseError}
-        </StatusBanner>
-      )}
-
-      {updateMutation.error && (
-        <StatusBanner variant="destructive">
-          Save failed: {updateMutation.error instanceof Error ? updateMutation.error.message : String(updateMutation.error)}
-        </StatusBanner>
-      )}
 
       {showRawJson ? (
         <textarea
-          className="w-full h-96 rounded-md border bg-background px-3 py-2 text-xs font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-y"
-          value={jsonText}
-          onChange={(e) => { setJsonText(e.target.value); setParseError(null) }}
+          className="w-full h-96 rounded-md border bg-muted/40 px-3 py-2 text-xs font-mono text-foreground focus:outline-none resize-y"
+          value={JSON.stringify(defaults, null, 2)}
+          readOnly
           spellCheck={false}
         />
       ) : (
@@ -247,143 +126,81 @@ export function ComponentDefaultsForm() {
           {/* General */}
           <TabsContent value="general" className="mt-4 space-y-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <FieldInput label="Build System (default)">
-                <EnumSelect fieldPath="buildSystem" value={defaults.buildSystem ?? ''} onValueChange={(v) => setField('buildSystem', v || undefined)} placeholder="Select build system" />
-              </FieldInput>
-              <FieldInput label="Build File Path">
-                <Input value={defaults.buildFilePath ?? ''} onChange={(e) => setField('buildFilePath', e.target.value || undefined)} />
-              </FieldInput>
-              <FieldInput label="Artifact ID Pattern">
-                <Input value={defaults.artifactIdPattern ?? ''} onChange={(e) => setField('artifactIdPattern', e.target.value || undefined)} className="font-mono text-xs" />
-              </FieldInput>
-              <FieldInput label="Group ID Pattern">
-                <Input value={defaults.groupIdPattern ?? ''} onChange={(e) => setField('groupIdPattern', e.target.value || undefined)} className="font-mono text-xs" />
-              </FieldInput>
-              <FieldInput label="Display Name">
-                <Input value={defaults.componentDisplayName ?? ''} onChange={(e) => setField('componentDisplayName', e.target.value || undefined)} />
-              </FieldInput>
-              {/* componentOwner / releaseManager / securityChampion removed:
-                  people fields are not part of the global component-defaults
-                  surface (the real Defaults.groovy never sets them, and they
-                  are now per-component multi-value editor fields). */}
-              <FieldInput label="System">
-                <Input value={defaults.system ?? ''} onChange={(e) => setField('system', e.target.value || undefined)} />
-              </FieldInput>
-              <FieldInput label="Client Code">
-                <Input value={defaults.clientCode ?? ''} onChange={(e) => setField('clientCode', e.target.value || undefined)} />
-              </FieldInput>
-              <FieldInput label="Copyright">
-                <Input value={defaults.copyright ?? ''} onChange={(e) => setField('copyright', e.target.value || undefined)} />
-              </FieldInput>
-              <FieldInput label="Octopus Version">
-                <Input value={defaults.octopusVersion ?? ''} onChange={(e) => setField('octopusVersion', e.target.value || undefined)} />
-              </FieldInput>
+              <ReadField label="Build System (default)" value={defaults.buildSystem} />
+              <ReadField label="Build File Path" value={defaults.buildFilePath} />
+              <ReadField label="Artifact ID Pattern" value={defaults.artifactIdPattern} mono />
+              <ReadField label="Group ID Pattern" value={defaults.groupIdPattern} mono />
+              <ReadField label="Display Name" value={defaults.componentDisplayName} />
+              <ReadField label="System" value={defaults.system} />
+              <ReadField label="Client Code" value={defaults.clientCode} />
+              <ReadField label="Copyright" value={defaults.copyright} />
+              <ReadField label="Octopus Version" value={defaults.octopusVersion} />
             </div>
             <Separator />
             <div className="flex flex-wrap gap-6">
-              <SwitchField label="Solution" checked={defaults.solution ?? false} onChange={(v) => setField('solution', v)} />
-              <SwitchField label="Archived" checked={defaults.archived ?? false} onChange={(v) => setField('archived', v)} />
-              <SwitchField label="Deprecated" checked={defaults.deprecated ?? false} onChange={(v) => setField('deprecated', v)} />
-              <SwitchField label="Releases in Default Branch" checked={defaults.releasesInDefaultBranch ?? false} onChange={(v) => setField('releasesInDefaultBranch', v)} />
+              <SwitchField label="Solution" checked={defaults.solution ?? false} />
+              <SwitchField label="Archived" checked={defaults.archived ?? false} />
+              <SwitchField label="Deprecated" checked={defaults.deprecated ?? false} />
+              <SwitchField label="Releases in Default Branch" checked={defaults.releasesInDefaultBranch ?? false} />
             </div>
           </TabsContent>
 
           {/* Build */}
           <TabsContent value="build" className="mt-4 space-y-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <FieldInput label="Java Version">
-                <Input value={getStr(build, 'javaVersion')} onChange={(e) => setNested('build', 'javaVersion', e.target.value || undefined)} />
-              </FieldInput>
-              <FieldInput label="Maven Version">
-                <Input value={getStr(build, 'mavenVersion')} onChange={(e) => setNested('build', 'mavenVersion', e.target.value || undefined)} />
-              </FieldInput>
-              <FieldInput label="Gradle Version">
-                <Input value={getStr(build, 'gradleVersion')} onChange={(e) => setNested('build', 'gradleVersion', e.target.value || undefined)} />
-              </FieldInput>
-              <FieldInput label="Project Version">
-                <Input value={getStr(build, 'projectVersion')} onChange={(e) => setNested('build', 'projectVersion', e.target.value || undefined)} />
-              </FieldInput>
-              <FieldInput label="System Properties">
-                <Input value={getStr(build, 'systemProperties')} onChange={(e) => setNested('build', 'systemProperties', e.target.value || undefined)} />
-              </FieldInput>
-              <FieldInput label="Build Tasks">
-                <Input value={getStr(build, 'buildTasks')} onChange={(e) => setNested('build', 'buildTasks', e.target.value || undefined)} />
-              </FieldInput>
+              <ReadField label="Java Version" value={getStr(build, 'javaVersion')} />
+              <ReadField label="Maven Version" value={getStr(build, 'mavenVersion')} />
+              <ReadField label="Gradle Version" value={getStr(build, 'gradleVersion')} />
+              <ReadField label="Project Version" value={getStr(build, 'projectVersion')} />
+              <ReadField label="System Properties" value={getStr(build, 'systemProperties')} />
+              <ReadField label="Build Tasks" value={getStr(build, 'buildTasks')} />
             </div>
-            <SwitchField label="Required Project" checked={getBool(build, 'requiredProject')} onChange={(v) => setNested('build', 'requiredProject', v)} />
+            <SwitchField label="Required Project" checked={getBool(build, 'requiredProject')} />
           </TabsContent>
 
           {/* Jira */}
           <TabsContent value="jira" className="mt-4 space-y-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FieldInput label="Project Key">
-                <Input value={getStr(jira, 'projectKey')} onChange={(e) => setNested('jira', 'projectKey', e.target.value || undefined)} />
-              </FieldInput>
-              <FieldInput label="Display Name">
-                <Input value={getStr(jira, 'displayName')} onChange={(e) => setNested('jira', 'displayName', e.target.value || undefined)} />
-              </FieldInput>
+              <ReadField label="Project Key" value={getStr(jira, 'projectKey')} />
+              <ReadField label="Display Name" value={getStr(jira, 'displayName')} />
             </div>
-            <SwitchField label="Technical" checked={getBool(jira, 'technical')} onChange={(v) => setNested('jira', 'technical', v)} />
+            <SwitchField label="Technical" checked={getBool(jira, 'technical')} />
           </TabsContent>
 
           {/* Distribution */}
           <TabsContent value="distribution" className="mt-4 space-y-4">
             <div className="flex flex-wrap gap-6">
-              <SwitchField label="Explicit" checked={getBool(distribution, 'explicit')} onChange={(v) => setNested('distribution', 'explicit', v)} />
-              <SwitchField label="External" checked={getBool(distribution, 'external')} onChange={(v) => setNested('distribution', 'external', v)} />
+              <SwitchField label="Explicit" checked={getBool(distribution, 'explicit')} />
+              <SwitchField label="External" checked={getBool(distribution, 'external')} />
             </div>
             <Separator />
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FieldInput label="GAV">
-                <Input value={getStr(distribution, 'GAV')} onChange={(e) => setNested('distribution', 'GAV', e.target.value || undefined)} className="font-mono text-xs" />
-              </FieldInput>
-              <FieldInput label="DEB">
-                <Input value={getStr(distribution, 'DEB')} onChange={(e) => setNested('distribution', 'DEB', e.target.value || undefined)} className="font-mono text-xs" />
-              </FieldInput>
-              <FieldInput label="RPM">
-                <Input value={getStr(distribution, 'RPM')} onChange={(e) => setNested('distribution', 'RPM', e.target.value || undefined)} className="font-mono text-xs" />
-              </FieldInput>
-              <FieldInput label="Docker">
-                <Input value={getStr(distribution, 'docker')} onChange={(e) => setNested('distribution', 'docker', e.target.value || undefined)} className="font-mono text-xs" />
-              </FieldInput>
+              <ReadField label="GAV" value={getStr(distribution, 'GAV')} mono />
+              <ReadField label="DEB" value={getStr(distribution, 'DEB')} mono />
+              <ReadField label="RPM" value={getStr(distribution, 'RPM')} mono />
+              <ReadField label="Docker" value={getStr(distribution, 'docker')} mono />
             </div>
           </TabsContent>
 
           {/* VCS */}
           <TabsContent value="vcs" className="mt-4 space-y-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FieldInput label="External Registry">
-                <Input value={getStr(vcs, 'externalRegistry')} onChange={(e) => setNested('vcs', 'externalRegistry', e.target.value || undefined)} />
-              </FieldInput>
-              <FieldInput label="VCS Path">
-                <Input value={getStr(vcs, 'vcsPath')} onChange={(e) => setNested('vcs', 'vcsPath', e.target.value || undefined)} className="font-mono text-xs" />
-              </FieldInput>
-              <FieldInput label="Repository Type">
-                <EnumSelect fieldPath="repositoryType" value={getStr(vcs, 'repositoryType')} onValueChange={(v) => setNested('vcs', 'repositoryType', v || undefined)} placeholder="GIT" />
-              </FieldInput>
-              <FieldInput label="Tag">
-                <Input value={getStr(vcs, 'tag')} onChange={(e) => setNested('vcs', 'tag', e.target.value || undefined)} className="font-mono text-xs" />
-              </FieldInput>
-              <FieldInput label="Branch">
-                <Input value={getStr(vcs, 'branch')} onChange={(e) => setNested('vcs', 'branch', e.target.value || undefined)} className="font-mono text-xs" />
-              </FieldInput>
+              <ReadField label="External Registry" value={getStr(vcs, 'externalRegistry')} />
+              <ReadField label="VCS Path" value={getStr(vcs, 'vcsPath')} mono />
+              <ReadField label="Repository Type" value={getStr(vcs, 'repositoryType')} />
+              <ReadField label="Tag" value={getStr(vcs, 'tag')} mono />
+              <ReadField label="Branch" value={getStr(vcs, 'branch')} mono />
             </div>
           </TabsContent>
 
           {/* Escrow */}
           <TabsContent value="escrow" className="mt-4 space-y-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FieldInput label="Build Task">
-                <Input value={getStr(escrow, 'buildTask')} onChange={(e) => setNested('escrow', 'buildTask', e.target.value || undefined)} />
-              </FieldInput>
-              <FieldInput label="Generation">
-                <EnumSelect fieldPath="generation" value={getStr(escrow, 'generation')} onValueChange={(v) => setNested('escrow', 'generation', v || undefined)} placeholder="Select generation" />
-              </FieldInput>
-              <FieldInput label="Disk Space">
-                <Input value={getStr(escrow, 'diskSpace')} onChange={(e) => setNested('escrow', 'diskSpace', e.target.value || undefined)} />
-              </FieldInput>
+              <ReadField label="Build Task" value={getStr(escrow, 'buildTask')} />
+              <ReadField label="Generation" value={getStr(escrow, 'generation')} />
+              <ReadField label="Disk Space" value={getStr(escrow, 'diskSpace')} />
             </div>
-            <SwitchField label="Reusable" checked={getBool(escrow, 'reusable')} onChange={(v) => setNested('escrow', 'reusable', v)} />
+            <SwitchField label="Reusable" checked={getBool(escrow, 'reusable')} />
           </TabsContent>
         </Tabs>
       )}
@@ -391,21 +208,21 @@ export function ComponentDefaultsForm() {
   )
 }
 
-function FieldInput({ label, children }: { label: string; children: React.ReactNode }) {
+function ReadField({ label, value, mono }: { label: string; value?: string; mono?: boolean }) {
   return (
     <div className="space-y-1.5">
       <Label className="text-sm">{label}</Label>
-      {children}
+      <Input value={value ?? ''} readOnly tabIndex={-1} className={mono ? 'font-mono text-xs' : undefined} />
     </div>
   )
 }
 
-function SwitchField({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+function SwitchField({ label, checked }: { label: string; checked: boolean }) {
   const id = `default-${label.replace(/\s+/g, '-').toLowerCase()}`
   return (
     <div className="flex items-center gap-3">
-      <Switch id={id} checked={checked} onCheckedChange={onChange} />
-      <Label htmlFor={id} className="cursor-pointer">{label}</Label>
+      <Switch id={id} checked={checked} disabled />
+      <Label htmlFor={id}>{label}</Label>
     </div>
   )
 }
