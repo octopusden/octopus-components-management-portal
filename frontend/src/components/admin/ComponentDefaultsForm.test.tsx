@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
 import { useComponentDefaults } from '@/hooks/useAdminConfig'
@@ -48,6 +49,26 @@ describe('ComponentDefaultsForm — read-only (code-as-config)', () => {
     renderWithQuery(<ComponentDefaultsForm />)
     const buildSystem = screen.getByDisplayValue('GRADLE') as HTMLInputElement
     expect(buildSystem.readOnly).toBe(true)
+  })
+
+  it('renders structured values safely (lists joined, maps as JSON — no [object Object])', async () => {
+    mockUseComponentDefaults.mockReturnValue({
+      data: {
+        buildSystem: 'GRADLE',
+        labels: ['core', 'lib'],
+        build: { systemProperties: { foo: 'bar' } },
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useComponentDefaults>)
+    renderWithQuery(<ComponentDefaultsForm />)
+    // General tab (active): a list default renders comma-joined.
+    expect(screen.getByDisplayValue('core, lib')).toBeDefined()
+    // Build tab: a map default renders as JSON, never "[object Object]".
+    await userEvent.setup().click(screen.getByRole('tab', { name: /build/i }))
+    expect(screen.getByDisplayValue('{"foo":"bar"}')).toBeDefined()
   })
 
   it('Raw JSON view is read-only', () => {

@@ -50,6 +50,15 @@ function getBool(obj: Record<string, unknown> | undefined, key: string): boolean
   return (obj?.[key] as boolean) ?? false
 }
 
+// Render any stored default value safely: scalars as-is, arrays comma-joined,
+// objects (e.g. build.systemProperties) as compact JSON — never "[object Object]".
+function displayValue(v: unknown): string {
+  if (v == null) return ''
+  if (Array.isArray(v)) return v.map((x) => (typeof x === 'object' ? JSON.stringify(x) : String(x))).join(', ')
+  if (typeof v === 'object') return JSON.stringify(v)
+  return String(v)
+}
+
 // People fields don't belong in the global component-defaults blob; strip them
 // on load so they never render even if a stale stored blob still carries them.
 const PEOPLE_DEFAULT_KEYS = ['componentOwner', 'releaseManager', 'securityChampion'] as const
@@ -92,9 +101,12 @@ export function ComponentDefaultsForm() {
 
   const build = (defaults.build ?? {}) as Record<string, unknown>
   const jira = (defaults.jira ?? {}) as Record<string, unknown>
+  const jiraCvf = (jira.componentVersionFormat ?? {}) as Record<string, unknown>
   const distribution = (defaults.distribution ?? {}) as Record<string, unknown>
+  const distSecurity = (distribution.securityGroups ?? {}) as Record<string, unknown>
   const vcs = (defaults.vcs ?? {}) as Record<string, unknown>
   const escrow = (defaults.escrow ?? {}) as Record<string, unknown>
+  const doc = (defaults.doc ?? {}) as Record<string, unknown>
 
   return (
     <div className="space-y-4">
@@ -122,6 +134,7 @@ export function ComponentDefaultsForm() {
             <TabsTrigger value="distribution">Distribution</TabsTrigger>
             <TabsTrigger value="vcs">VCS</TabsTrigger>
             <TabsTrigger value="escrow">Escrow</TabsTrigger>
+            <TabsTrigger value="doc">Doc</TabsTrigger>
           </TabsList>
 
           {/* General */}
@@ -134,8 +147,10 @@ export function ComponentDefaultsForm() {
               <ReadField label="Display Name" value={defaults.componentDisplayName} />
               <ReadField label="System" value={defaults.system} />
               <ReadField label="Client Code" value={defaults.clientCode} />
+              <ReadField label="Parent Component" value={defaults.parentComponent} />
               <ReadField label="Copyright" value={defaults.copyright} />
               <ReadField label="Octopus Version" value={defaults.octopusVersion} />
+              <ReadField label="Labels" value={defaults.labels} />
             </div>
             <Separator />
             <div className="flex flex-wrap gap-6">
@@ -153,7 +168,7 @@ export function ComponentDefaultsForm() {
               <ReadField label="Maven Version" value={getStr(build, 'mavenVersion')} />
               <ReadField label="Gradle Version" value={getStr(build, 'gradleVersion')} />
               <ReadField label="Project Version" value={getStr(build, 'projectVersion')} />
-              <ReadField label="System Properties" value={getStr(build, 'systemProperties')} />
+              <ReadField label="System Properties" value={build.systemProperties} mono />
               <ReadField label="Build Tasks" value={getStr(build, 'buildTasks')} />
             </div>
             <SwitchField label="Required Project" checked={getBool(build, 'requiredProject')} />
@@ -166,6 +181,14 @@ export function ComponentDefaultsForm() {
               <ReadField label="Display Name" value={getStr(jira, 'displayName')} />
             </div>
             <SwitchField label="Technical" checked={getBool(jira, 'technical')} />
+            <Separator />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <ReadField label="Major Version Format" value={jiraCvf.majorVersionFormat} mono />
+              <ReadField label="Release Version Format" value={jiraCvf.releaseVersionFormat} mono />
+              <ReadField label="Build Version Format" value={jiraCvf.buildVersionFormat} mono />
+              <ReadField label="Line Version Format" value={jiraCvf.lineVersionFormat} mono />
+              <ReadField label="Hotfix Version Format" value={jiraCvf.hotfixVersionFormat} mono />
+            </div>
           </TabsContent>
 
           {/* Distribution */}
@@ -180,6 +203,7 @@ export function ComponentDefaultsForm() {
               <ReadField label="DEB" value={getStr(distribution, 'DEB')} mono />
               <ReadField label="RPM" value={getStr(distribution, 'RPM')} mono />
               <ReadField label="Docker" value={getStr(distribution, 'docker')} mono />
+              <ReadField label="Security Groups (Read)" value={distSecurity.read} />
             </div>
           </TabsContent>
 
@@ -200,8 +224,18 @@ export function ComponentDefaultsForm() {
               <ReadField label="Build Task" value={getStr(escrow, 'buildTask')} />
               <ReadField label="Generation" value={getStr(escrow, 'generation')} />
               <ReadField label="Disk Space" value={getStr(escrow, 'diskSpace')} />
+              <ReadField label="Provided Dependencies" value={escrow.providedDependencies} />
+              <ReadField label="Additional Sources" value={escrow.additionalSources} />
             </div>
             <SwitchField label="Reusable" checked={getBool(escrow, 'reusable')} />
+          </TabsContent>
+
+          {/* Doc */}
+          <TabsContent value="doc" className="mt-4 space-y-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <ReadField label="Component" value={doc.component} />
+              <ReadField label="Major Version" value={doc.majorVersion} />
+            </div>
           </TabsContent>
         </Tabs>
       )}
@@ -209,11 +243,11 @@ export function ComponentDefaultsForm() {
   )
 }
 
-function ReadField({ label, value, mono }: { label: string; value?: string; mono?: boolean }) {
+function ReadField({ label, value, mono }: { label: string; value?: unknown; mono?: boolean }) {
   return (
     <div className="space-y-1.5">
       <Label className="text-sm">{label}</Label>
-      <Input value={value ?? ''} readOnly className={mono ? 'font-mono text-xs' : undefined} />
+      <Input value={displayValue(value)} readOnly className={mono ? 'font-mono text-xs' : undefined} />
     </div>
   )
 }
