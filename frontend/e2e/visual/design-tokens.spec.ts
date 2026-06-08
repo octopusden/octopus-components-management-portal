@@ -39,7 +39,7 @@ test.describe('design tokens — Audit log action badges', () => {
 })
 
 test.describe('design tokens — FieldConfig visibility cells', () => {
-  test('each visibility Select trigger carries field-specific aria-label + data-visibility', async ({
+  test('each visibility cell carries the field-specific data-visibility token (read-only)', async ({
     page,
   }) => {
     await mockFieldConfig(page, fieldConfigFixture)
@@ -50,14 +50,13 @@ test.describe('design tokens — FieldConfig visibility cells', () => {
       // Tab may already be active or routing may auto-select it.
     })
 
-    // Fixture defines: displayName=editable, clientCode=readonly, solution=hidden.
-    const displayName = page.getByRole('combobox', { name: /displayName visibility/ })
-    const clientCode = page.getByRole('combobox', { name: /clientCode visibility/ })
-    const solution = page.getByRole('combobox', { name: /solution visibility/ })
-
-    await expect(displayName).toHaveAttribute('data-visibility', 'editable')
-    await expect(clientCode).toHaveAttribute('data-visibility', 'readonly')
-    await expect(solution).toHaveAttribute('data-visibility', 'hidden')
+    // FieldConfig is now read-only (code-as-config): visibility renders as a
+    // token-coloured <span data-visibility=…> keyed by data-testid, not an
+    // editable Select. Fixture: displayName=editable, clientCode=readonly,
+    // solution=hidden.
+    await expect(page.getByTestId('component.displayName-visibility')).toHaveAttribute('data-visibility', 'editable')
+    await expect(page.getByTestId('component.clientCode-visibility')).toHaveAttribute('data-visibility', 'readonly')
+    await expect(page.getByTestId('component.solution-visibility')).toHaveAttribute('data-visibility', 'hidden')
   })
 })
 
