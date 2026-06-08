@@ -107,6 +107,7 @@ export function ComponentDefaultsForm() {
 
       {showRawJson ? (
         <textarea
+          aria-label="Component defaults JSON (read-only)"
           className="w-full h-96 rounded-md border bg-muted/40 px-3 py-2 text-xs font-mono text-foreground focus:outline-none resize-y"
           value={JSON.stringify(defaults, null, 2)}
           readOnly
@@ -212,7 +213,7 @@ function ReadField({ label, value, mono }: { label: string; value?: string; mono
   return (
     <div className="space-y-1.5">
       <Label className="text-sm">{label}</Label>
-      <Input value={value ?? ''} readOnly tabIndex={-1} className={mono ? 'font-mono text-xs' : undefined} />
+      <Input value={value ?? ''} readOnly className={mono ? 'font-mono text-xs' : undefined} />
     </div>
   )
 }

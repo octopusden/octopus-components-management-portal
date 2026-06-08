@@ -8,7 +8,8 @@ import { AdminSettingsPage } from './AdminSettingsPage'
 import type { User } from '@/lib/auth'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { useMigrationJob, useMigrationStatus, useRunMigration } from '@/hooks/useMigration'
-import { useFieldConfig, useComponentDefaults } from '@/hooks/useAdminConfig'
+import { useFieldConfig, useComponentDefaults, useReloadConfig } from '@/hooks/useAdminConfig'
+import { useAdminMode } from '@/lib/adminModeStore'
 
 // AdminSettingsPage is the only mount point for the Migration tab; the plan
 // is explicit that the migration UI lives next to field-config and component-
@@ -83,15 +84,6 @@ vi.mock('@/hooks/useAdminConfig', () => ({
   useComponentDefaults: vi.fn(),
   useReloadConfig: vi.fn(() => idleMutation),
 }))
-// FieldConfigEditor (the default tab) now reads enum option vocabularies for its
-// Default Value dropdowns (R3). Stub them loaded-and-empty so the page renders
-// without depending on the fetch stub's shape.
-vi.mock('@/hooks/useSystemsDictionary', () => ({
-  useSystemsDictionary: vi.fn(() => ({ data: [], isLoading: false, isError: false })),
-}))
-vi.mock('@/hooks/useFieldOptions', () => ({
-  useFieldOptions: vi.fn(() => ({ options: [], isLoading: false })),
-}))
 
 const mockUseCurrentUser = vi.mocked(useCurrentUser)
 const mockUseMigrationStatus = vi.mocked(useMigrationStatus)
@@ -99,6 +91,7 @@ const mockUseMigrationJob = vi.mocked(useMigrationJob)
 const mockUseRunMigration = vi.mocked(useRunMigration)
 const mockUseFieldConfig = vi.mocked(useFieldConfig)
 const mockUseComponentDefaults = vi.mocked(useComponentDefaults)
+const mockUseReloadConfig = vi.mocked(useReloadConfig)
 
 const adminUser: User = {
   username: 'alice',
@@ -127,6 +120,8 @@ function renderPage() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  useAdminMode.setState({ enabled: false })
+  mockUseReloadConfig.mockReturnValue(idleMutation as unknown as ReturnType<typeof useReloadConfig>)
   mockUseCurrentUser.mockReturnValue({
     data: adminUser,
     isLoading: false,
@@ -199,5 +194,34 @@ describe('AdminSettingsPage tabs', () => {
     // disabled in this test because adminMode defaults to false; we only
     // need to know that the panel rendered.
     expect(screen.getByRole('button', { name: /run migration/i })).toBeDefined()
+  })
+})
+
+describe('AdminSettingsPage — ConfigReloadBar', () => {
+  it('shows the managed-as-code banner with a Reload button disabled when Admin mode is OFF', () => {
+    renderPage()
+    expect(screen.getByText(/managed as code/i)).toBeDefined()
+    expect(screen.getByRole('button', { name: /^reload$/i })).toBeDisabled()
+  })
+
+  it('clicking Reload calls useReloadConfig().mutate when Admin mode is ON', async () => {
+    const mutate = vi.fn()
+    mockUseReloadConfig.mockReturnValue(
+      { ...idleMutation, mutate } as unknown as ReturnType<typeof useReloadConfig>,
+    )
+    useAdminMode.setState({ enabled: true })
+    renderPage()
+    const reloadBtn = screen.getByRole('button', { name: /^reload$/i })
+    expect(reloadBtn).not.toBeDisabled()
+    await userEvent.setup().click(reloadBtn)
+    expect(mutate).toHaveBeenCalledOnce()
+  })
+
+  it('surfaces a reload error message', () => {
+    mockUseReloadConfig.mockReturnValue(
+      { ...idleMutation, error: new Error('config-validation') } as unknown as ReturnType<typeof useReloadConfig>,
+    )
+    renderPage()
+    expect(screen.getByText(/config-validation/)).toBeDefined()
   })
 })

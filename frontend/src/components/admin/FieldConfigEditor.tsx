@@ -1,4 +1,3 @@
-import { useMemo } from 'react'
 import {
   Table,
   TableBody,
@@ -222,7 +221,9 @@ const VCS_ROWS       = CATALOG.filter((r) => r.section === 'vcs')
 export function FieldConfigEditor() {
   const { data, isLoading, error } = useFieldConfig()
 
-  const rawData = useMemo(() => (data ?? {}) as Record<string, unknown>, [data])
+  // No local state — the component only re-renders when `data` changes, so a
+  // plain cast is sufficient (no memo needed).
+  const rawData = (data ?? {}) as Record<string, unknown>
 
   if (isLoading) {
     return (

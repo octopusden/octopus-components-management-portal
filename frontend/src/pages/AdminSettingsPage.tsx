@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { Layout } from '../components/Layout'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
@@ -13,7 +14,16 @@ import { useAdminMode } from '../lib/adminModeStore'
 
 function ConfigReloadBar() {
   const adminMode = useAdminMode((s) => s.enabled)
-  const reload = useReloadConfig()
+  const { mutate, reset, isPending, isSuccess, error } = useReloadConfig()
+
+  // The success flag is sticky on a mutation result; auto-clear the "Reloaded"
+  // hint after a couple of seconds (mirrors the old editors' saved-feedback UX).
+  useEffect(() => {
+    if (!isSuccess) return
+    const t = setTimeout(() => reset(), 2000)
+    return () => clearTimeout(t)
+  }, [isSuccess, reset])
+
   return (
     <StatusBanner variant="info" className="flex items-center justify-between gap-4">
       <span className="text-sm">
@@ -22,21 +32,21 @@ function ConfigReloadBar() {
         apply without a redeploy.
       </span>
       <div className="flex items-center gap-2 shrink-0">
-        {reload.isSuccess && <span className="text-xs text-muted-foreground">Reloaded</span>}
-        {reload.error && (
+        {isSuccess && <span className="text-xs text-muted-foreground">Reloaded</span>}
+        {error && (
           <span className="text-xs text-destructive">
-            {reload.error instanceof Error ? reload.error.message : String(reload.error)}
+            {error instanceof Error ? error.message : String(error)}
           </span>
         )}
         <Button
           size="sm"
           variant="outline"
-          onClick={() => reload.mutate()}
-          disabled={!adminMode || reload.isPending}
+          onClick={() => mutate()}
+          disabled={!adminMode || isPending}
           title={adminMode ? 'Reload config from service-config' : 'Enable Admin mode in the footer to reload'}
         >
           <RefreshCw className="h-4 w-4" />
-          {reload.isPending ? 'Reloading…' : 'Reload'}
+          {isPending ? 'Reloading…' : 'Reload'}
         </Button>
       </div>
     </StatusBanner>
