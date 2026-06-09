@@ -203,7 +203,12 @@ export function ComponentDetailPage() {
       dirtyFields: {
         solution: form.formState.dirtyFields.solution === true,
         system: form.formState.dirtyFields.system === true,
-        displayName: form.formState.dirtyFields.displayName === true,
+        // "interacted" (dirty OR touched) — buildUpdateRequest value-compares against the
+        // persisted displayName, so a clear back to the form default '' (not RHF-dirty) is
+        // still caught, while pre-hydration (untouched) stays omitted (no clobber).
+        displayName:
+          form.formState.dirtyFields.displayName === true ||
+          form.formState.touchedFields.displayName === true,
         labels:
           (form.formState.dirtyFields.labels as unknown) === true ||
           (labelsFc.visibility !== 'hidden' &&
@@ -245,22 +250,13 @@ export function ComponentDetailPage() {
     systemFc.visibility !== 'hidden' &&
     (component?.system ?? '') !== '' &&
     ((form.getValues('system') as string | undefined) ?? '') === ''
-  // displayName is required (NOT NULL) and effectively non-clearable: clearing it currently
-  // PATCHes nothing (omit = "don't touch"), so without this the Save button would disable with
-  // no feedback. Mirror the system guard so Save stays enabled and the inline error surfaces.
-  // Gate on TOUCHED (not dirty): clearing displayName back to the form default '' is value-equal
-  // to the default, so RHF never flags it dirty (the same blind-spot `labels` handles via
-  // touchedFields). Touched also stays false through the pre-hydration window (no interaction yet),
-  // avoiding the spurious-enable that a plain value-compare would cause now that displayName is
-  // always non-empty server-side. So: user interacted + server had a value + form now empty.
-  const displayNameClearNeedsAttention =
-    displayNameFc.visibility !== 'hidden' &&
-    form.formState.touchedFields.displayName === true &&
-    (component?.displayName ?? '') !== '' &&
-    ((form.getValues('displayName') as string | undefined) ?? '').trim() === ''
+  // displayName is nullable server-side: clearing it sends "" (buildUpdateRequest), which the
+  // server clears to null — or rejects with 400 for an explicit+external component, routed
+  // inline by handleSave. So a meaningful clear ("Foo" → "") is RHF-dirty and flows through
+  // pendingPatch like any other edit; no dedicated clear-guard is needed (unlike `system`,
+  // whose wire has no clear path).
   const hasUnsavedChanges =
     systemClearNeedsAttention ||
-    displayNameClearNeedsAttention ||
     (!!pendingPatch &&
       Object.entries(pendingPatch).some(
         ([key, value]) => key !== 'version' && key !== 'clearGroup' && value !== undefined,
@@ -313,20 +309,9 @@ export function ComponentDetailPage() {
       }
     }
 
-    // displayName is required + non-clearable (same shape as the system guard above): a clear
-    // is a silent no-op server-side, so surface the constraint inline instead of letting the
-    // user believe the clear took. Skipped when field-config hides the field.
-    if (displayNameFc.visibility !== 'hidden' && form.formState.touchedFields.displayName === true) {
-      const displayNameValue = (form.getValues('displayName') as string | undefined)?.trim() ?? ''
-      const priorDisplayName = component.displayName ?? ''
-      if (priorDisplayName !== '' && displayNameValue === '') {
-        form.setError('displayName', {
-          type: 'required',
-          message: 'Display Name is required',
-        })
-        return
-      }
-    }
+    // displayName is nullable: clearing it is a valid edit (sent as "" → server stores null).
+    // The server still rejects a clear for an explicit+external component (400 keyed
+    // displayName), which is routed inline by the 400 handler below — no client guard needed.
 
     // Group Key is now server-derived + read-only (items 1/2) — no group save
     // guard. canBeParent invariants are enforced server-side; their 400s map
@@ -541,8 +526,8 @@ export function ComponentDetailPage() {
                   </a>
                 ))}
             </div>
-            {/* displayName is always populated (defaults to the key); show the subtitle only
-                when it differs from the name so it isn't a redundant echo. */}
+            {/* displayName is nullable (null when no componentDisplayName); show the subtitle
+                only when present AND differs from the name so it isn't a redundant echo. */}
             {component.displayName && component.displayName !== component.name && (
               <p className="text-sm text-muted-foreground">{component.displayName}</p>
             )}

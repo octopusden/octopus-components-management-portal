@@ -923,7 +923,7 @@ describe('ComponentDetailPage — Copy button (CREATE_COMPONENTS gate)', () => {
   })
 })
 
-describe('ComponentDetailPage — cross-tab 400 + displayName clear-guard', () => {
+describe('ComponentDetailPage — cross-tab 400 + displayName clear', () => {
   it('auto-switches to the Misc tab when a 400 maps to a Misc-owned field', async () => {
     // GeneralTab stub hydrates displayName + exposes a dirty edit so Save enables.
     vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
@@ -951,7 +951,7 @@ describe('ComponentDetailPage — cross-tab 400 + displayName clear-guard', () =
     await waitFor(() => expect(screen.getByTestId('misc-tab')).toBeDefined())
   })
 
-  it('blocks Save (no PATCH) when the user clears the required displayName', async () => {
+  it('clearing displayName PATCHes it as "" (nullable — server clears to null, or 400s for explicit+external)', async () => {
     vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
       useEffect(() => {
         form.setValue('system', component.system ?? '')
@@ -961,8 +961,6 @@ describe('ComponentDetailPage — cross-tab 400 + displayName clear-guard', () =
         'button',
         {
           'data-testid': 'clear-dn',
-          // shouldTouch mirrors the real input's blur — the clear-guard keys on touched
-          // (clear-to-default '' isn't value-dirty, RHF's known blind-spot).
           onClick: () => form.setValue('displayName', '', { shouldDirty: true, shouldTouch: true }),
         },
         'clear',
@@ -970,15 +968,19 @@ describe('ComponentDetailPage — cross-tab 400 + displayName clear-guard', () =
     })
     const mutateAsync = vi.fn(() => Promise.resolve())
     const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    // baseComponent has a displayName ('My Component') and is not explicit+external, so a clear
+    // is a valid edit: Save enables (dirty) and the PATCH carries displayName: "" (the server
+    // stores null; an explicit+external component would be rejected with a 400 routed inline).
     renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
 
     fireEvent.click(screen.getByTestId('clear-dn'))
     await waitFor(() => {
       const btn = screen.getByRole('button', { name: /^save$/i }) as HTMLButtonElement
-      expect(btn.disabled).toBe(false) // clear-guard keeps Save enabled to surface the error
+      expect(btn.disabled).toBe(false)
     })
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
-    // Guard returns before the mutation — nothing is sent.
-    await waitFor(() => expect(mutateAsync).not.toHaveBeenCalled())
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce())
+    const payload = (mutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
+    expect(payload['displayName']).toBe('')
   })
 })

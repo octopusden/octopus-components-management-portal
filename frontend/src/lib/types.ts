@@ -11,8 +11,9 @@
 export interface ComponentSummary {
   id: string
   name: string
-  // Required + unique server-side (NOT NULL UNIQUE); always present on read.
-  displayName: string
+  // Nullable + unique server-side. Stored verbatim from the DSL (no key backfill), so it is
+  // null when the component declares no componentDisplayName (preserves the legacy $.name wire).
+  displayName: string | null
   componentOwner: string | null
   // CRS PR #301 collapsed Component.systems Set<String> → Component.system
   // String?. Single-value per component in the domain; the list page renders
@@ -41,9 +42,10 @@ export interface ComponentSummary {
 export interface ComponentDetail {
   id: string
   name: string
-  // Required + unique server-side (NOT NULL UNIQUE); always present on read. The server
-  // defaults a blank value to the component key, so this is never null on a read response.
-  displayName: string
+  // Nullable + unique server-side. Stored verbatim from the DSL (no key backfill), so it is
+  // null when the component declares no componentDisplayName (preserves the legacy $.name wire).
+  // Required only for explicit+external components (server-enforced).
+  displayName: string | null
   componentOwner: string | null
   productType: string | null
   // CRS PR #301 collapsed Component.systems Set<String> → Component.system

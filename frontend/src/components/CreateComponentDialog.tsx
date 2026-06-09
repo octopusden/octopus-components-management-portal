@@ -51,11 +51,10 @@ function makeCreateSchema(editable: (field: string) => boolean) {
       .string()
       .min(1, 'Component Key is required')
       .regex(NAME_REGEX, 'Component Key can only contain letters, digits, _, -, ., /'),
-    // displayName is server-side required + unique. Require it here only when the field is
-    // editable (rendered); when hidden, CRS defaults a blank value to the component key.
-    displayName: editable('displayName')
-      ? z.string().trim().min(1, 'Display Name is required')
-      : z.string(),
+    // displayName is nullable server-side and required ONLY for explicit+external components
+    // (mirrors EscrowConfigValidator). The EE-gated requirement is enforced in superRefine
+    // below; otherwise it is optional (a blank value is stored as null, NOT the component key).
+    displayName: z.string(),
     buildSystem: z.string().min(1, 'Build System is required'),
     componentOwner: z.string().trim().min(1, 'Component Owner is required'),
     distributionExplicit: z.boolean(),
@@ -76,6 +75,13 @@ function makeCreateSchema(editable: (field: string) => boolean) {
   })
   .superRefine((v, ctx) => {
     if (!(v.distributionExplicit && v.distributionExternal)) return
+    if (editable('displayName') && !v.displayName.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['displayName'],
+        message: 'Display Name is required for an explicit + external component',
+      })
+    }
     if (editable('releaseManager') && v.releaseManager.length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -327,8 +333,8 @@ function CreateComponentForm({ source, isCopy, onClose }: CreateComponentFormPro
         // message would land on a hidden field and silently vanish, so we let
         // it fall through to the toast instead.
         let routed = false
-        // displayName uniqueness (and the key-collides-with-a-display-name case, keyed `name`)
-        // come back as field-prefixed 400s — route them onto the inputs the user controls.
+        // A duplicate component key comes back keyed `name`; a duplicate (non-null) display
+        // name comes back keyed `displayName` — route both onto the inputs the user controls.
         if (fieldErrors.get('name')) {
           setError('name', { type: 'server', message: fieldErrors.get('name')! })
           routed = true
@@ -374,7 +380,7 @@ function CreateComponentForm({ source, isCopy, onClose }: CreateComponentFormPro
       {editable('displayName') && (
         <div className="space-y-1.5">
           <Label htmlFor="create-displayName">
-            Display Name <span className="text-destructive">*</span>
+            Display Name{explicit && external && <span className="text-destructive"> *</span>}
           </Label>
           <Input id="create-displayName" placeholder="My Component" {...register('displayName')} />
           {errors.displayName && (
