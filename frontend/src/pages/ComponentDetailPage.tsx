@@ -606,7 +606,6 @@ export function ComponentDetailPage() {
         <Tabs value={activeTab} onValueChange={setActiveTab} variant="underline">
           <TabsList className="flex-wrap gap-1">
             <TabsTrigger value="general">General</TabsTrigger>
-            <TabsTrigger value="misc">Misc</TabsTrigger>
             {(() => {
               // schema-v2: counts derived from the BASE row. Build/Jira/Escrow are
               // 0-or-1 (presence of the aspect); VCS counts vcsEntries; Distribution
@@ -637,6 +636,7 @@ export function ComponentDetailPage() {
                 </>
               )
             })()}
+            <TabsTrigger value="misc">Misc</TabsTrigger>
             <TabsTrigger value="configurations">
               Configurations
               {(() => {
@@ -669,12 +669,6 @@ export function ComponentDetailPage() {
               </EditSurface>
             </TabsContent>
 
-            <TabsContent value="misc">
-              <EditSurface canEdit={canEdit} label="Misc">
-                <MiscTab key={component.id} component={component} form={form} />
-              </EditSurface>
-            </TabsContent>
-
             <TabsContent value="build">
               <EditSurface canEdit={canEdit} label="Build">
                 <BuildTab component={component} updateMutation={updateMutation} toast={toast} canEdit={canEdit} />
@@ -702,6 +696,12 @@ export function ComponentDetailPage() {
             <TabsContent value="escrow">
               <EditSurface canEdit={canEdit} label="Escrow">
                 <EscrowTab component={component} updateMutation={updateMutation} toast={toast} canEdit={canEdit} />
+              </EditSurface>
+            </TabsContent>
+
+            <TabsContent value="misc">
+              <EditSurface canEdit={canEdit} label="Misc">
+                <MiscTab key={component.id} component={component} form={form} />
               </EditSurface>
             </TabsContent>
 

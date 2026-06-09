@@ -2,14 +2,12 @@ import { useState, useEffect } from 'react'
 import { Save } from 'lucide-react'
 import { Label } from '../ui/label'
 import { Input } from '../ui/input'
-import { Switch } from '../ui/switch'
 import { Button } from '../ui/button'
-import { Badge } from '../ui/badge'
 import { EnumSelect } from '../ui/EnumSelect'
 import { FieldInfo } from '../ui/FieldInfo'
 import { FieldOverrideInline } from './FieldOverrideInline'
 import { CANNOT_EDIT_TITLE } from './editPermission'
-import { selectBaseRow } from '../../lib/api/baseRow'
+import { selectBaseRow, selectOverrideRows } from '../../lib/api/baseRow'
 import type { ComponentDetail } from '../../lib/types'
 import type { ComponentUpdateRequest } from '../../hooks/useComponent'
 import type { UseMutationResult } from '@tanstack/react-query'
@@ -39,28 +37,43 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
   const [javaVersion, setJavaVersion] = useState(build?.javaVersion ?? '')
   const [mavenVersion, setMavenVersion] = useState(build?.mavenVersion ?? '')
   const [gradleVersion, setGradleVersion] = useState(build?.gradleVersion ?? '')
-  const [deprecated, setDeprecated] = useState(build?.deprecated ?? false)
-  const [requiredProject, setRequiredProject] = useState(build?.requiredProject ?? false)
   const [projectVersion, setProjectVersion] = useState(build?.projectVersion ?? '')
-  const [systemProperties, setSystemProperties] = useState(build?.systemProperties ?? '')
-  const [buildTasks, setBuildTasks] = useState(build?.buildTasks ?? '')
-  const [requiredToolsInput, setRequiredToolsInput] = useState((baseRow?.requiredTools ?? []).join(', '))
+  // buildTasks / systemProperties / deprecated / requiredProject / requiredTools
+  // moved to the Escrow tab (escrow/automation knobs) — EscrowTab owns them now.
 
   useEffect(() => {
-    const br = selectBaseRow(component)
-    const b = br?.build
+    const b = selectBaseRow(component)?.build
     setBuildSystem(b?.buildSystem ?? '')
     setBuildFilePath(b?.buildFilePath ?? '')
     setJavaVersion(b?.javaVersion ?? '')
     setMavenVersion(b?.mavenVersion ?? '')
     setGradleVersion(b?.gradleVersion ?? '')
-    setDeprecated(b?.deprecated ?? false)
-    setRequiredProject(b?.requiredProject ?? false)
     setProjectVersion(b?.projectVersion ?? '')
-    setSystemProperties(b?.systemProperties ?? '')
-    setBuildTasks(b?.buildTasks ?? '')
-    setRequiredToolsInput((br?.requiredTools ?? []).join(', '))
   }, [component])
+
+  // Maven/Gradle Version visibility: the tool-version input renders only when
+  // SOME version range builds with that tool — the BASE Build System (the live,
+  // possibly unsaved selection) or any build.buildSystem override row. A range
+  // override on the version field itself also keeps it visible, otherwise its
+  // inline-override list would become unreachable. Hidden ≠ cleared: a hidden
+  // field is omitted from the PATCH payload and stays untouched server-side.
+  // Only SCALAR_OVERRIDE rows carry a per-range scalar value; a MARKER row's
+  // overriddenAttribute names a child collection and must not count here.
+  const scalarOverrideRows = selectOverrideRows(component).filter(
+    (r) => r.rowType === 'SCALAR_OVERRIDE',
+  )
+  const effectiveBuildSystems = new Set(
+    [
+      buildSystem,
+      ...scalarOverrideRows
+        .filter((r) => r.overriddenAttribute === 'build.buildSystem')
+        .map((r) => r.build?.buildSystem),
+    ].filter((s): s is string => Boolean(s)),
+  )
+  const hasOverrideOn = (attr: string) =>
+    scalarOverrideRows.some((r) => r.overriddenAttribute === attr)
+  const showMavenVersion = effectiveBuildSystems.has('MAVEN') || hasOverrideOn('build.mavenVersion')
+  const showGradleVersion = effectiveBuildSystems.has('GRADLE') || hasOverrideOn('build.gradleVersion')
 
   async function handleSave() {
     if (!canEdit) return // Save is disabled when !canEdit; guard the handler too (backend also 403s).
@@ -74,34 +87,24 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
     }
     setLocalError(null)
     try {
-      const requiredToolsArray = [...new Set(
-        requiredToolsInput.split(',').map((t) => t.trim()).filter(Boolean)
-      )]
-      // Guard against wiping server-side requiredTools when no BASE row was
-      // loaded yet. The form's requiredToolsInput would be '' (parsed to []),
-      // and BaseConfigurationRequest.requiredTools = [] is an explicit clear.
-      // Sending null = "don't touch" preserves whatever the server has.
-      const baseRowPresent = selectBaseRow(component) !== undefined
-      const requiredToolsPayload = baseRowPresent ? requiredToolsArray : null
-
       await updateMutation.mutateAsync({
         version: component.version,
         clearGroup: false,
         baseConfiguration: {
+          // Only the toolchain scalars this tab renders. The Escrow-tab-migrated
+          // fields (buildTasks / systemProperties / deprecated / requiredProject
+          // / requiredTools) are intentionally ABSENT: CRS PATCH applies
+          // per-field (?.let), so omitted keys stay untouched.
           build: {
             buildSystem: buildSystem || null,
             buildFilePath: buildFilePath || null,
             javaVersion: javaVersion || null,
-            mavenVersion: mavenVersion || null,
-            gradleVersion: gradleVersion || null,
-            deprecated,
-            requiredProject,
+            // Hidden tool versions are omitted (not nulled) — see the
+            // visibility note above the render block.
+            ...(showMavenVersion ? { mavenVersion: mavenVersion || null } : {}),
+            ...(showGradleVersion ? { gradleVersion: gradleVersion || null } : {}),
             projectVersion: projectVersion || null,
-            systemProperties: systemProperties || null,
-            buildTasks: buildTasks || null,
           },
-          // requiredTools lives at the BaseConfigurationRequest level, not inside build
-          requiredTools: requiredToolsPayload,
         },
       })
       toast({ title: 'Build configuration saved' })
@@ -114,10 +117,6 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
       toast({ title: 'Save failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' })
     }
   }
-
-  const parsedRequiredTools = [...new Set(
-    requiredToolsInput.split(',').map((t) => t.trim()).filter(Boolean)
-  )]
 
   return (
     <div className="space-y-6">
@@ -184,34 +183,38 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
           <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.javaVersion" />
         </div>
 
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-1">
-            <Label htmlFor="build-mavenVersion">Maven Version</Label>
-            <FieldInfo path="build.mavenVersion" label="Maven Version" />
+        {showMavenVersion && (
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1">
+              <Label htmlFor="build-mavenVersion">Maven Version</Label>
+              <FieldInfo path="build.mavenVersion" label="Maven Version" />
+            </div>
+            {/* Dropdown sourced from /meta/maven-versions (see Java Version note above). */}
+            <EnumSelect
+              id="build-mavenVersion"
+              fieldPath="build.mavenVersion"
+              value={mavenVersion}
+              onValueChange={setMavenVersion}
+              placeholder="Select Maven version"
+            />
+            <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.mavenVersion" />
           </div>
-          {/* Dropdown sourced from /meta/maven-versions (see Java Version note above). */}
-          <EnumSelect
-            id="build-mavenVersion"
-            fieldPath="build.mavenVersion"
-            value={mavenVersion}
-            onValueChange={setMavenVersion}
-            placeholder="Select Maven version"
-          />
-          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.mavenVersion" />
-        </div>
+        )}
 
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-1">
-            <Label>Gradle Version</Label>
-            <FieldInfo path="build.gradleVersion" label="Gradle Version" />
+        {showGradleVersion && (
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1">
+              <Label>Gradle Version</Label>
+              <FieldInfo path="build.gradleVersion" label="Gradle Version" />
+            </div>
+            <Input
+              value={gradleVersion}
+              onChange={(e) => setGradleVersion(e.target.value)}
+              placeholder="8.6"
+            />
+            <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.gradleVersion" />
           </div>
-          <Input
-            value={gradleVersion}
-            onChange={(e) => setGradleVersion(e.target.value)}
-            placeholder="8.6"
-          />
-          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.gradleVersion" />
-        </div>
+        )}
 
         <div className="space-y-1.5">
           <div className="flex items-center gap-1">
@@ -225,79 +228,6 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
           />
           <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.projectVersion" />
         </div>
-      </div>
-
-      <div className="space-y-1.5">
-        <div className="flex items-center gap-1">
-          <Label>Build Tasks</Label>
-          <FieldInfo path="build.buildTasks" label="Build Tasks" />
-        </div>
-        <Input
-          value={buildTasks}
-          onChange={(e) => setBuildTasks(e.target.value)}
-          placeholder="clean install / assemble"
-        />
-        <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.buildTasks" />
-      </div>
-
-      <div className="space-y-1.5">
-        <div className="flex items-center gap-1">
-          <Label>System Properties</Label>
-          <FieldInfo path="build.systemProperties" label="System Properties" />
-        </div>
-        <textarea
-          className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-y min-h-[80px]"
-          value={systemProperties}
-          onChange={(e) => setSystemProperties(e.target.value)}
-          placeholder="-Dproperty=value"
-          spellCheck={false}
-        />
-        <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.systemProperties" />
-      </div>
-
-      <div className="space-y-1.5">
-        <div className="flex items-center gap-3">
-          <Switch
-            id="build-deprecated"
-            checked={deprecated}
-            onCheckedChange={setDeprecated}
-          />
-          <Label htmlFor="build-deprecated" className="cursor-pointer">Deprecated</Label>
-          <FieldInfo path="build.deprecated" label="Deprecated" />
-        </div>
-        <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.deprecated" />
-      </div>
-
-      <div className="space-y-1.5">
-        <div className="flex items-center gap-3">
-          <Switch
-            id="build-required-project"
-            checked={requiredProject}
-            onCheckedChange={setRequiredProject}
-          />
-          <Label htmlFor="build-required-project" className="cursor-pointer">Required Project</Label>
-          <FieldInfo path="build.requiredProject" label="Required Project" />
-        </div>
-        <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.requiredProject" />
-      </div>
-
-      <div className="space-y-1.5">
-        <div className="flex items-center gap-1">
-          <Label>Required Tools</Label>
-          <FieldInfo path="build.requiredTools" label="Required Tools" />
-        </div>
-        <Input
-          value={requiredToolsInput}
-          onChange={(e) => setRequiredToolsInput(e.target.value)}
-          placeholder="tool-a, tool-b"
-        />
-        {parsedRequiredTools.length > 0 && (
-          <div className="flex flex-wrap gap-2 pt-1">
-            {parsedRequiredTools.map((tool) => (
-              <Badge key={tool} variant="outline">{tool}</Badge>
-            ))}
-          </div>
-        )}
       </div>
 
       <div className="flex justify-end">

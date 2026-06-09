@@ -4,6 +4,7 @@ import { Label } from '../ui/label'
 import { Input } from '../ui/input'
 import { Switch } from '../ui/switch'
 import { Button } from '../ui/button'
+import { Badge } from '../ui/badge'
 import { EnumSelect } from '../ui/EnumSelect'
 import { FieldInfo } from '../ui/FieldInfo'
 import { FieldOverrideInline } from './FieldOverrideInline'
@@ -43,8 +44,19 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
   const [gradleExcludeConfigurations, setGradleExcludeConfigurations] = useState(escrow?.gradleExcludeConfigurations ?? '')
   const [gradleIncludeTestConfigurations, setGradleIncludeTestConfigurations] = useState(escrow?.gradleIncludeTestConfigurations ?? false)
 
+  // Build-settings fields migrated from the Build tab (escrow/automation knobs:
+  // build tasks, system properties, deprecation, required project/tools). They
+  // keep their build.* / row-level payload paths — only the UI placement moved.
+  const build = baseRow?.build
+  const [buildTasks, setBuildTasks] = useState(build?.buildTasks ?? '')
+  const [systemProperties, setSystemProperties] = useState(build?.systemProperties ?? '')
+  const [deprecated, setDeprecated] = useState(build?.deprecated ?? false)
+  const [requiredProject, setRequiredProject] = useState(build?.requiredProject ?? false)
+  const [requiredToolsInput, setRequiredToolsInput] = useState((baseRow?.requiredTools ?? []).join(', '))
+
   useEffect(() => {
-    const e = selectBaseRow(component)?.escrow
+    const br = selectBaseRow(component)
+    const e = br?.escrow
     setProductType(component.productType ?? '')
     setGeneration(e?.generation ?? '')
     setDiskSpace(e?.diskSpace ?? '')
@@ -54,11 +66,27 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
     setGradleIncludeConfigurations(e?.gradleIncludeConfigurations ?? '')
     setGradleExcludeConfigurations(e?.gradleExcludeConfigurations ?? '')
     setGradleIncludeTestConfigurations(e?.gradleIncludeTestConfigurations ?? false)
+    const b = br?.build
+    setBuildTasks(b?.buildTasks ?? '')
+    setSystemProperties(b?.systemProperties ?? '')
+    setDeprecated(b?.deprecated ?? false)
+    setRequiredProject(b?.requiredProject ?? false)
+    setRequiredToolsInput((br?.requiredTools ?? []).join(', '))
   }, [component])
 
   async function handleSave() {
     if (!canEdit) return // Save is disabled when !canEdit; guard the handler too (backend also 403s).
     try {
+      const requiredToolsArray = [...new Set(
+        requiredToolsInput.split(',').map((t) => t.trim()).filter(Boolean)
+      )]
+      // Guard against wiping server-side requiredTools when no BASE row was
+      // loaded yet. The form's requiredToolsInput would be '' (parsed to []),
+      // and BaseConfigurationRequest.requiredTools = [] is an explicit clear.
+      // Sending null = "don't touch" preserves whatever the server has.
+      const baseRowPresent = selectBaseRow(component) !== undefined
+      const requiredToolsPayload = baseRowPresent ? requiredToolsArray : null
+
       await updateMutation.mutateAsync({
         version: component.version,
         clearGroup: false,
@@ -78,6 +106,24 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
             gradleExcludeConfigurations: gradleExcludeConfigurations || null,
             gradleIncludeTestConfigurations,
           },
+          // Migrated build settings. Only the fields THIS tab renders are sent —
+          // CRS PATCH applies per-field (?.let), so omitted scalars (buildSystem,
+          // versions, ...) stay untouched and the Build tab remains their only
+          // writer. Same no-BASE-row guard as requiredTools: with nothing loaded
+          // the booleans are bare defaults and would write zero-values into the
+          // row the server auto-creates.
+          ...(baseRowPresent
+            ? {
+                build: {
+                  buildTasks: buildTasks || null,
+                  systemProperties: systemProperties || null,
+                  deprecated,
+                  requiredProject,
+                },
+              }
+            : {}),
+          // requiredTools lives at the BaseConfigurationRequest level, not inside build
+          requiredTools: requiredToolsPayload,
         },
       })
       toast({ title: 'Escrow configuration saved' })
@@ -90,6 +136,10 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
       toast({ title: 'Save failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' })
     }
   }
+
+  const parsedRequiredTools = [...new Set(
+    requiredToolsInput.split(',').map((t) => t.trim()).filter(Boolean)
+  )]
 
   return (
     <div className="space-y-6">
@@ -219,6 +269,83 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
           <FieldInfo path="escrow.gradleIncludeTestConfigurations" label="Gradle Include Test Configurations" />
         </div>
         <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="escrow.gradleIncludeTestConfigurations" />
+      </div>
+
+      {/* ── Build settings migrated from the Build tab ──────────────────────
+          Escrow/automation knobs that live on the build aspect (build.* paths
+          unchanged): build tasks, system properties, deprecation, required
+          project/tools. */}
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-1">
+          <Label>Build Tasks</Label>
+          <FieldInfo path="build.buildTasks" label="Build Tasks" />
+        </div>
+        <Input
+          value={buildTasks}
+          onChange={(e) => setBuildTasks(e.target.value)}
+          placeholder="clean install / assemble"
+        />
+        <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.buildTasks" />
+      </div>
+
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-1">
+          <Label>System Properties</Label>
+          <FieldInfo path="build.systemProperties" label="System Properties" />
+        </div>
+        <textarea
+          className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-y min-h-[80px]"
+          value={systemProperties}
+          onChange={(e) => setSystemProperties(e.target.value)}
+          placeholder="-Dproperty=value"
+          spellCheck={false}
+        />
+        <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.systemProperties" />
+      </div>
+
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-3">
+          <Switch
+            id="build-deprecated"
+            checked={deprecated}
+            onCheckedChange={setDeprecated}
+          />
+          <Label htmlFor="build-deprecated" className="cursor-pointer">Deprecated</Label>
+          <FieldInfo path="build.deprecated" label="Deprecated" />
+        </div>
+        <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.deprecated" />
+      </div>
+
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-3">
+          <Switch
+            id="build-required-project"
+            checked={requiredProject}
+            onCheckedChange={setRequiredProject}
+          />
+          <Label htmlFor="build-required-project" className="cursor-pointer">Required Project</Label>
+          <FieldInfo path="build.requiredProject" label="Required Project" />
+        </div>
+        <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.requiredProject" />
+      </div>
+
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-1">
+          <Label>Required Tools</Label>
+          <FieldInfo path="build.requiredTools" label="Required Tools" />
+        </div>
+        <Input
+          value={requiredToolsInput}
+          onChange={(e) => setRequiredToolsInput(e.target.value)}
+          placeholder="tool-a, tool-b"
+        />
+        {parsedRequiredTools.length > 0 && (
+          <div className="flex flex-wrap gap-2 pt-1">
+            {parsedRequiredTools.map((tool) => (
+              <Badge key={tool} variant="outline">{tool}</Badge>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Build Task is registered in CRS SCALAR_ATTRIBUTE_PATHS and overridable
