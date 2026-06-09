@@ -12,7 +12,7 @@ The detail page at `/components/<UUID>` is the editor surface. It renders [`page
 
 | Tab | Source | Notes |
 |---|---|---|
-| **General** | `GeneralTab` | Identity + ownership: name, **Display Name (required + unique)**, owner, system, clientCode, archive flag, plus a read-only **"who can edit"** list (owner + release managers + security champions, from `GET /{id}/editors`; admins also edit). Detailed below. |
+| **General** | `GeneralTab` | Identity + ownership: name, **Display Name (nullable + unique; required for explicit+external)**, owner, system, clientCode, archive flag, plus a read-only **"who can edit"** list (owner + release managers + security champions, from `GET /{id}/editors`; admins also edit). Detailed below. |
 | **Misc** | `MiscTab` | Parent Component, Can-be-parent, and the read-only Group Key / synthetic-group display — moved off General. Shares the page form; the header Save covers it. `MISC_TAB_FIELDS` lets the 400 handler auto-switch here when a parent/canBeParent error returns. |
 | **Build / VCS / Distribution / Jira / Escrow** | `BuildTab` etc. | Per-tab Save buttons; each tab handles its own mutation slice via the page-level `updateMutation`. Build's **Java / Maven Version** are dropdowns sourced from `GET /meta/{java,maven}-versions` (CRS `application.yml`, per-install overridable). Jira's **Display Name** is shown only when it diverges from the component display name. Mostly out of scope for this doc. |
 | **Overrides** | `FieldOverrides` | Per-version field overrides. Out of scope. |
@@ -34,15 +34,19 @@ The UX gate is a hint, not a security boundary. Server-side `@PreAuthorize canRe
 
 The save handler in `ComponentDetailPage.handleSave` only sends `name` on a real change (`trimmedName !== '' && trimmedName !== component.name`). Defence in depth — even if the UI gate were bypassed, an unchanged form value never trips the server's gate.
 
-### Display Name (required + unique)
+### Display Name (nullable + unique; required for explicit+external)
 
-`displayName` is NOT NULL + UNIQUE server-side. On the General tab the field is required (when
-field-config-visible) and dirty-gated in `buildUpdateRequest` (only sent on a real edit). Clearing
-it is blocked by a page-level guard (mirroring the `system` guard) that keeps Save enabled and
-surfaces an inline "Display Name is required" error rather than silently no-op'ing. A server
-uniqueness 400 (keyed `displayName`, or `name` when the value defaulted to the key) maps inline. In
-the list/detail UI the display name is shown as a secondary line only when it differs from the
-component key (it defaults to the key server-side, so it's otherwise a redundant echo).
+`displayName` is **nullable** + UNIQUE server-side, stored verbatim from the DSL — it is NOT
+backfilled to the component key (so the legacy v1/v2/v3 `$.name` stays byte-compatible). It is
+**required only for explicit+external** components (`distribution.explicit && distribution.external`,
+mirroring the CRS DSL validator); otherwise optional. On the General tab the `*` marker / create-form
+requirement therefore appears only under that gate. `buildUpdateRequest` value-compares against the
+persisted value and gates on *interacted* (dirty OR touched), so **clearing** it sends `""` — the
+server stores `null` (or returns a 400 keyed `displayName` for an explicit+external component, routed
+inline). There is no client clear-guard: a clear is a valid edit and the server owns the EE rule. A
+uniqueness 400 (keyed `displayName`; a duplicate component **key** is keyed `name`) maps inline. In
+the list/detail UI the display name is shown as a secondary line only when present AND it differs
+from the name (otherwise a redundant echo or absent).
 
 ### Parent component (B7.1.5) — now on the Misc tab
 
