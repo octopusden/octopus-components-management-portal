@@ -311,10 +311,11 @@ describe('BuildTab — existing structure preserved', () => {
 
     expect(screen.getByText('Build System')).toBeDefined()
     expect(screen.getByText('Java Version')).toBeDefined()
-    expect(screen.getByText('Gradle Version')).toBeDefined()
     expect(screen.getByText('Maven Version')).toBeDefined()
     expect(screen.getByText('Project Version')).toBeDefined()
     expect(screen.getByText('Save Build')).toBeDefined()
+    // Gradle Version is hidden for a MAVEN-only component — see the
+    // visibility describe below.
   })
 
   it('does NOT render the fields migrated to the Escrow tab', () => {
@@ -351,9 +352,104 @@ describe('BuildTab — existing structure preserved', () => {
 
     renderTab(component)
 
-    expect((screen.getByPlaceholderText('8.6') as HTMLInputElement).value).toBe('')
     expect((screen.getByPlaceholderText('Select Java version') as HTMLInputElement).value).toBe('')
-    expect((screen.getByPlaceholderText('Select Maven version') as HTMLInputElement).value).toBe('')
+    expect((screen.getByPlaceholderText('pom.xml / build.gradle') as HTMLInputElement).value).toBe('')
+  })
+})
+
+// ─── 3b. Maven/Gradle Version conditional visibility ─────────────────────────
+// The tool-version input renders only when SOME version range builds with that
+// tool: the BASE Build System (tracking the live, possibly unsaved selection)
+// or any build.buildSystem override row. A range-override on the version field
+// itself also keeps it visible (the inline-override list must stay reachable).
+describe('BuildTab — Maven/Gradle Version visibility', () => {
+  function makeOverrideRow(overrides: Partial<ComponentConfiguration>): ComponentConfiguration {
+    return makeBaseRow({
+      id: 'cfg-ovr-1',
+      rowType: 'SCALAR_OVERRIDE',
+      versionRange: '[1.0,2.0)',
+      ...overrides,
+    })
+  }
+
+  it('hides Maven Version when no range has buildSystem MAVEN', () => {
+    const component = makeComponent({
+      configurations: [makeBaseRow({ build: { buildSystem: 'GRADLE', gradleVersion: '8.6' } })],
+    })
+    renderTab(component)
+    expect(screen.queryByText('Maven Version')).toBeNull()
+    expect(screen.getByText('Gradle Version')).toBeDefined()
+  })
+
+  it('hides Gradle Version when no range has buildSystem GRADLE', () => {
+    const component = makeComponent({
+      configurations: [makeBaseRow({ build: { buildSystem: 'MAVEN', mavenVersion: '3.9.5' } })],
+    })
+    renderTab(component)
+    expect(screen.queryByText('Gradle Version')).toBeNull()
+    expect(screen.getByText('Maven Version')).toBeDefined()
+  })
+
+  it('hides both tool versions when the build aspect is absent', () => {
+    const component = makeComponent({ configurations: [makeBaseRow({ build: null })] })
+    renderTab(component)
+    expect(screen.queryByText('Maven Version')).toBeNull()
+    expect(screen.queryByText('Gradle Version')).toBeNull()
+  })
+
+  it('shows Maven Version when an override row pins buildSystem=MAVEN for some range', () => {
+    const component = makeComponent({
+      configurations: [
+        makeBaseRow({ build: { buildSystem: 'GRADLE', gradleVersion: '8.6' } }),
+        makeOverrideRow({ overriddenAttribute: 'build.buildSystem', build: { buildSystem: 'MAVEN' } }),
+      ],
+    })
+    renderTab(component)
+    expect(screen.getByText('Maven Version')).toBeDefined()
+    expect(screen.getByText('Gradle Version')).toBeDefined()
+  })
+
+  it('keeps Gradle Version visible when build.gradleVersion itself is overridden in some range', () => {
+    const component = makeComponent({
+      configurations: [
+        makeBaseRow({ build: { buildSystem: 'MAVEN', mavenVersion: '3.9.5' } }),
+        makeOverrideRow({ overriddenAttribute: 'build.gradleVersion', build: { gradleVersion: '8.9' } }),
+      ],
+    })
+    renderTab(component)
+    expect(screen.getByText('Gradle Version')).toBeDefined()
+  })
+
+  it('reveals Maven Version live when Build System is switched to MAVEN', async () => {
+    const component = makeComponent({
+      configurations: [makeBaseRow({ build: { buildSystem: 'GRADLE' } })],
+    })
+    renderTab(component)
+    expect(screen.queryByText('Maven Version')).toBeNull()
+
+    const enumSelect = screen.getByTestId('enum-select-build-buildSystem') as HTMLInputElement
+    await userEvent.clear(enumSelect)
+    await userEvent.type(enumSelect, 'MAVEN')
+
+    expect(screen.getByText('Maven Version')).toBeDefined()
+    expect(screen.queryByText('Gradle Version')).toBeNull()
+  })
+
+  it('omits the hidden tool version from the PATCH payload', async () => {
+    const mutateFn = vi.fn().mockResolvedValue({})
+    const component = makeComponent({
+      configurations: [
+        makeBaseRow({ build: { buildSystem: 'GRADLE', gradleVersion: '8.6', mavenVersion: '3.9.5' } }),
+      ],
+    })
+    const { getByText } = renderTab(component, mutateFn)
+    await userEvent.click(getByText('Save Build'))
+
+    const callArg = mutateFn.mock.calls[0]![0] as ComponentUpdateRequest
+    const build = callArg.baseConfiguration?.build as Record<string, unknown>
+    // Hidden ≠ cleared: the stale mavenVersion stays untouched server-side.
+    expect('mavenVersion' in build).toBe(false)
+    expect(build['gradleVersion']).toBe('8.6')
   })
 })
 
@@ -435,6 +531,23 @@ describe('BuildTab — buildSystem required (ui-swift-sloth §5)', () => {
   })
 })
 
+// Dual-system fixture: BASE builds with MAVEN, one range overrides to GRADLE —
+// so both tool-version inputs (and their inline overrides / info icons) render.
+function makeDualSystemComponent() {
+  return makeComponent({
+    configurations: [
+      makeBaseRow({ build: { buildSystem: 'MAVEN', mavenVersion: '3.9.5' } }),
+      makeBaseRow({
+        id: 'cfg-ovr-1',
+        rowType: 'SCALAR_OVERRIDE',
+        versionRange: '[1.0,2.0)',
+        overriddenAttribute: 'build.buildSystem',
+        build: { buildSystem: 'GRADLE' },
+      }),
+    ],
+  })
+}
+
 describe('BuildTab — inline override coverage', () => {
   const overridablePaths = [
     'build.buildSystem',
@@ -448,7 +561,7 @@ describe('BuildTab — inline override coverage', () => {
   ]
 
   it.each(overridablePaths)('renders FieldOverrideInline under %s', (path) => {
-    renderTab(makeComponent())
+    renderTab(makeDualSystemComponent())
     expect(screen.getByTestId(`field-override-inline-${path}`)).toBeInTheDocument()
   })
 })
@@ -467,7 +580,7 @@ describe('BuildTab field descriptions (FieldInfo)', () => {
   ]
 
   it('renders exactly one info icon per described field', () => {
-    renderTab(makeComponent())
+    renderTab(makeDualSystemComponent())
     for (const path of EXPECTED_PATHS) {
       expect(
         document.querySelectorAll(`[data-field-path="${path}"]`),

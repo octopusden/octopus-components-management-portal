@@ -7,7 +7,7 @@ import { EnumSelect } from '../ui/EnumSelect'
 import { FieldInfo } from '../ui/FieldInfo'
 import { FieldOverrideInline } from './FieldOverrideInline'
 import { CANNOT_EDIT_TITLE } from './editPermission'
-import { selectBaseRow } from '../../lib/api/baseRow'
+import { selectBaseRow, selectOverrideRows } from '../../lib/api/baseRow'
 import type { ComponentDetail } from '../../lib/types'
 import type { ComponentUpdateRequest } from '../../hooks/useComponent'
 import type { UseMutationResult } from '@tanstack/react-query'
@@ -51,6 +51,25 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
     setProjectVersion(b?.projectVersion ?? '')
   }, [component])
 
+  // Maven/Gradle Version visibility: the tool-version input renders only when
+  // SOME version range builds with that tool — the BASE Build System (the live,
+  // possibly unsaved selection) or any build.buildSystem override row. A range
+  // override on the version field itself also keeps it visible, otherwise its
+  // inline-override list would become unreachable. Hidden ≠ cleared: a hidden
+  // field is omitted from the PATCH payload and stays untouched server-side.
+  const overrideRows = selectOverrideRows(component)
+  const effectiveBuildSystems = new Set(
+    [
+      buildSystem,
+      ...overrideRows
+        .filter((r) => r.overriddenAttribute === 'build.buildSystem')
+        .map((r) => r.build?.buildSystem),
+    ].filter((s): s is string => Boolean(s)),
+  )
+  const hasOverrideOn = (attr: string) => overrideRows.some((r) => r.overriddenAttribute === attr)
+  const showMavenVersion = effectiveBuildSystems.has('MAVEN') || hasOverrideOn('build.mavenVersion')
+  const showGradleVersion = effectiveBuildSystems.has('GRADLE') || hasOverrideOn('build.gradleVersion')
+
   async function handleSave() {
     if (!canEdit) return // Save is disabled when !canEdit; guard the handler too (backend also 403s).
     // ui-swift-sloth §5: hard guard — empty buildSystem would 400 once the
@@ -75,8 +94,10 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
             buildSystem: buildSystem || null,
             buildFilePath: buildFilePath || null,
             javaVersion: javaVersion || null,
-            mavenVersion: mavenVersion || null,
-            gradleVersion: gradleVersion || null,
+            // Hidden tool versions are omitted (not nulled) — see the
+            // visibility note above the render block.
+            ...(showMavenVersion ? { mavenVersion: mavenVersion || null } : {}),
+            ...(showGradleVersion ? { gradleVersion: gradleVersion || null } : {}),
             projectVersion: projectVersion || null,
           },
         },
@@ -157,34 +178,38 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
           <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.javaVersion" />
         </div>
 
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-1">
-            <Label htmlFor="build-mavenVersion">Maven Version</Label>
-            <FieldInfo path="build.mavenVersion" label="Maven Version" />
+        {showMavenVersion && (
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1">
+              <Label htmlFor="build-mavenVersion">Maven Version</Label>
+              <FieldInfo path="build.mavenVersion" label="Maven Version" />
+            </div>
+            {/* Dropdown sourced from /meta/maven-versions (see Java Version note above). */}
+            <EnumSelect
+              id="build-mavenVersion"
+              fieldPath="build.mavenVersion"
+              value={mavenVersion}
+              onValueChange={setMavenVersion}
+              placeholder="Select Maven version"
+            />
+            <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.mavenVersion" />
           </div>
-          {/* Dropdown sourced from /meta/maven-versions (see Java Version note above). */}
-          <EnumSelect
-            id="build-mavenVersion"
-            fieldPath="build.mavenVersion"
-            value={mavenVersion}
-            onValueChange={setMavenVersion}
-            placeholder="Select Maven version"
-          />
-          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.mavenVersion" />
-        </div>
+        )}
 
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-1">
-            <Label>Gradle Version</Label>
-            <FieldInfo path="build.gradleVersion" label="Gradle Version" />
+        {showGradleVersion && (
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1">
+              <Label>Gradle Version</Label>
+              <FieldInfo path="build.gradleVersion" label="Gradle Version" />
+            </div>
+            <Input
+              value={gradleVersion}
+              onChange={(e) => setGradleVersion(e.target.value)}
+              placeholder="8.6"
+            />
+            <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.gradleVersion" />
           </div>
-          <Input
-            value={gradleVersion}
-            onChange={(e) => setGradleVersion(e.target.value)}
-            placeholder="8.6"
-          />
-          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.gradleVersion" />
-        </div>
+        )}
 
         <div className="space-y-1.5">
           <div className="flex items-center gap-1">
