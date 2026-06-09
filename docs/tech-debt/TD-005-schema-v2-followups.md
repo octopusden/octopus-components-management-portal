@@ -89,7 +89,9 @@ CRS PR #193 added the column `component_configurations.escrow_build_task` and th
 
 ### 7. TD-003 (CRS-side) — publish `v4.json` artifact
 
-Mirror of CRS's own TD-003. Portal's Wave 0 vendored the spec by hand from a downloaded `v3-api-docs.json`. Once CRS publishes the spec (either as a committed `docs/api/v4.json` or as a CI artifact per build), the portal's `frontend/scripts/refresh-openapi.sh` (or equivalent) can refresh automatically. TD-002 here on the portal side stays partially open until that pipeline closes.
+Mirror of CRS's own TD-003. Portal's Wave 0 vendored the spec by hand from a downloaded `v3-api-docs.json`. **DONE** (issue #89 → PR #91): CRS publishes a committed, drift-gated `components-registry-service-server/src/main/resources/openapi/v4.json`, and the portal's `frontend/scripts/vendor-spec.sh` (`npm run vendor-spec`) refreshes from it at a pinned CRS ref; `npm run vendor-spec:check` gates drift in `merge-gate.yml`. See [TD-002](TD-002-openapi-types.md) part (a).
+
+**Follow-up (post-cutover):** the gate pins the `v3` branch, so a CRS push can red an unrelated Portal PR and the fix drags unrelated contract churn into it. Replace the per-PR gate with a **scheduled workflow that opens a dedicated re-vendor PR** on detected drift (see the TD-002 "Known tradeoff" note).
 
 ### 8. Confirm Flyway data migration for `registry_config` rows
 

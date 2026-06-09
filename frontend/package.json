@@ -14,7 +14,9 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "generate-types": "openapi-typescript src/lib/api/v4.json -o src/lib/api/schema.d.ts",
-    "generate-types:check": "openapi-typescript src/lib/api/v4.json -o /tmp/schema-check-$$.d.ts && diff -u src/lib/api/schema.d.ts /tmp/schema-check-$$.d.ts; rc=$?; rm -f /tmp/schema-check-$$.d.ts; exit $rc"
+    "generate-types:check": "openapi-typescript src/lib/api/v4.json -o /tmp/schema-check-$$.d.ts && diff -u src/lib/api/schema.d.ts /tmp/schema-check-$$.d.ts; rc=$?; rm -f /tmp/schema-check-$$.d.ts; exit $rc",
+    "vendor-spec": "bash scripts/vendor-spec.sh",
+    "vendor-spec:check": "bash scripts/vendor-spec.sh --check"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

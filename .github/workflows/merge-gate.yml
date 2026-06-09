@@ -55,6 +55,16 @@ jobs:
       # Without this the script existed only as a local command and
       # contributors could re-vendor v4.json without regenerating.
       - run: npm run generate-types:check
+      # Cross-repo staleness gate. `generate-types:check` only proves
+      # schema.d.ts matches the *vendored* v4.json — not that the vendored
+      # copy still matches CRS's published spec. This fetches CRS's spec at
+      # the pinned ref (see scripts/vendor-spec.sh) and fails if Portal's
+      # copy has fallen behind, so the contract can't silently drift between
+      # the two repos. `gh` is preinstalled on the runner; GH_TOKEN lets it
+      # read the public CRS repo without hitting the anonymous rate limit.
+      - run: npm run vendor-spec:check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: npm run test:coverage
 
   gate-merge:
