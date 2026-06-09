@@ -286,10 +286,18 @@ test.describe('Editor — multi-value Release Managers / Security Champions (SYS
     })
     await page.goto(`/components/${COMPONENT_ID}`)
 
+    // The username must pass the CLIENT-side lookup (active per the search
+    // mock — no inactive- prefix) so the typed value commits and the save
+    // reaches the server; the mocked PATCH then 400s, modelling directory
+    // drift between lookup-time and save-time. (An inactive- name would be
+    // blocked client-side by PR #79 and never produce the server 400.)
     const ownerInput = peopleField(page, 'Component Owner').getByRole('textbox')
-    await ownerInput.fill('inactive-owner')
+    await ownerInput.fill('fired-fred')
     await ownerInput.blur()
-    await page.getByRole('button', { name: /^save$/i }).click()
+    // Save arms once the async commit lands (dirty + validating released).
+    const saveButton = page.getByRole('button', { name: /^save$/i })
+    await expect(saveButton).toBeEnabled()
+    await saveButton.click()
 
     await expect(
       peopleField(page, 'Component Owner').getByText('is not an active employee'),
