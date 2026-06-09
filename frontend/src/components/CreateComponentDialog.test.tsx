@@ -112,7 +112,8 @@ async function openScratch() {
 
 async function fillBaseFields(owner = 'alice') {
   await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
-  // displayName is required when editable (the default) — fill it so submit isn't blocked.
+  // displayName is optional for a non-explicit+external component (required only under the EE
+  // gate); fill it here for completeness so the created payload carries a value.
   await userEvent.type(screen.getByLabelText(/display name/i), 'Widget')
   await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
   await userEvent.type(screen.getByPlaceholderText('AD userkey'), owner)
