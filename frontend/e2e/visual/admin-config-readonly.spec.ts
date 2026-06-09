@@ -49,7 +49,11 @@ test.describe('admin config-as-code — Reload + read-only forms', () => {
     await page.getByRole('tab', { name: /component defaults/i }).click()
 
     // The loaded default renders, read-only; the legacy write controls are gone.
-    await expect(page.getByDisplayValue('MAVEN')).toBeVisible()
+    // `getByDisplayValue` is a Testing-Library method, not a Playwright one — locate the
+    // read-only input as the sibling of its (non-htmlFor-associated) label and assert its value.
+    await expect(
+      page.getByText('Build System (default)', { exact: true }).locator('xpath=following-sibling::input'),
+    ).toHaveValue('MAVEN')
     await expect(page.getByRole('button', { name: /^save$/i })).toHaveCount(0)
     await expect(page.getByRole('button', { name: /import from git/i })).toHaveCount(0)
   })
