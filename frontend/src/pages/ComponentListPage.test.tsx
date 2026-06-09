@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
@@ -27,12 +28,36 @@ vi.mock('../components/Layout', () => ({
 vi.mock('../components/ComponentFilters', () => ({
   ComponentFilters: () => React.createElement('div', { 'data-testid': 'filters' }),
 }))
+// The table stub surfaces the page→table `onCopy` contract: when the page
+// passes the callback (CREATE_COMPONENTS holders only) the stub renders a
+// trigger that reports a fixed row id, mirroring a real per-row Copy click.
 vi.mock('../components/ComponentTable', () => ({
-  ComponentTable: () => React.createElement('div', { 'data-testid': 'table' }),
+  ComponentTable: ({ onCopy }: { onCopy?: (id: string) => void }) =>
+    React.createElement(
+      'div',
+      { 'data-testid': 'table' },
+      onCopy
+        ? React.createElement('button', {
+            'data-testid': 'table-copy-trigger',
+            onClick: () => onCopy('comp-x'),
+          })
+        : null,
+    ),
 }))
 vi.mock('../components/Pagination', () => ({
   Pagination: () => React.createElement('div', { 'data-testid': 'pagination' }),
 }))
+// CreateComponentDialog and CreateComponentButton live in the same module;
+// keep the real button (the "New Component" gate is under test) and stub only
+// the dialog to a sourceId probe.
+vi.mock('../components/CreateComponentDialog', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../components/CreateComponentDialog')>()
+  return {
+    ...actual,
+    CreateComponentDialog: ({ sourceId, open }: { sourceId?: string; open: boolean }) =>
+      open ? React.createElement('div', { 'data-testid': 'copy-dialog' }, sourceId) : null,
+  }
+})
 
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { useComponents } from '../hooks/useComponents'
@@ -211,5 +236,24 @@ describe('ComponentListPage — error message rendering', () => {
     expect(
       screen.queryByText(/You do not have permission to view components/i),
     ).toBeNull()
+  })
+})
+
+describe('ComponentListPage — per-row Copy gating + dialog wiring', () => {
+  it('passes onCopy to the table for a user with CREATE_COMPONENTS and opens the dialog with the row id', async () => {
+    mockUser(editorUser)
+    mockComponentsOk()
+    renderPage()
+
+    await userEvent.click(screen.getByTestId('table-copy-trigger'))
+    expect(await screen.findByTestId('copy-dialog')).toBeDefined()
+    expect(screen.getByTestId('copy-dialog').textContent).toBe('comp-x')
+  })
+
+  it('does not pass onCopy without CREATE_COMPONENTS — no copy trigger rendered', () => {
+    mockUser(viewerUser)
+    mockComponentsOk()
+    renderPage()
+    expect(screen.queryByTestId('table-copy-trigger')).toBeNull()
   })
 })

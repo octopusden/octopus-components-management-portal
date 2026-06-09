@@ -46,7 +46,6 @@ interface ScalarAttr {
 const SCALAR_ATTRS: ScalarAttr[] = [
   // Build
   { path: 'build.buildSystem', label: 'Build System', type: 'string' },
-  { path: 'build.buildSystemVersion', label: 'Build System Version', type: 'string' },
   { path: 'build.javaVersion', label: 'Java Version', type: 'string' },
   { path: 'build.mavenVersion', label: 'Maven Version', type: 'string' },
   { path: 'build.gradleVersion', label: 'Gradle Version', type: 'string' },

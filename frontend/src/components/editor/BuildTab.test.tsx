@@ -3,6 +3,8 @@ import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BuildTab } from './BuildTab'
+import { TooltipProvider } from '../ui/tooltip'
+import { fieldDescriptions } from '../../lib/fieldDescriptions'
 import type { ComponentDetail, ComponentConfiguration } from '../../lib/types'
 import type { UseMutationResult } from '@tanstack/react-query'
 import type { ComponentUpdateRequest } from '../../hooks/useComponent'
@@ -37,7 +39,7 @@ vi.mock('../ui/EnumSelect', () => ({
   }) => (
     <input
       id={id}
-      data-testid="enum-select"
+      data-testid={id ? `enum-select-${id}` : 'enum-select'}
       value={value}
       onChange={(e) => onValueChange(e.target.value)}
       onBlur={() => onBlur?.()}
@@ -113,7 +115,10 @@ function renderTab(component: ComponentDetail, mutateAsync = vi.fn(), canEdit = 
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const utils = render(
     <QueryClientProvider client={queryClient}>
-      <BuildTab component={component} updateMutation={mutation} toast={toast} canEdit={canEdit} />
+      {/* TooltipProvider mirrors the app-root provider required by FieldInfo. */}
+      <TooltipProvider>
+        <BuildTab component={component} updateMutation={mutation} toast={toast} canEdit={canEdit} />
+      </TooltipProvider>
     </QueryClientProvider>
   )
   return { toast, mutateAsync, ...utils }
@@ -197,7 +202,7 @@ describe('BuildTab — save path', () => {
 
     const { getByPlaceholderText, getByText } = renderTab(component, mutateFn)
 
-    const mavenInput = getByPlaceholderText('3.9.6')
+    const mavenInput = getByPlaceholderText('Select Maven version')
     await userEvent.clear(mavenInput)
     await userEvent.type(mavenInput, '3.9.8')
 
@@ -219,49 +224,11 @@ describe('BuildTab — save path', () => {
     })
 
     const { getByPlaceholderText, getByText } = renderTab(component, mutateFn)
-    await userEvent.clear(getByPlaceholderText('3.9.6'))
+    await userEvent.clear(getByPlaceholderText('Select Maven version'))
     await userEvent.click(getByText('Save Build'))
 
     const callArg = mutateFn.mock.calls[0]![0] as ComponentUpdateRequest
     expect(callArg.baseConfiguration?.build?.mavenVersion).toBeNull()
-  })
-
-  it('sends buildSystemVersion in build payload', async () => {
-    const mutateFn = vi.fn().mockResolvedValue({})
-    const component = makeComponent({
-      configurations: [
-        makeBaseRow({
-          build: { buildSystem: 'MAVEN', buildSystemVersion: '3.8.0' },
-        }),
-      ],
-    })
-
-    const { getByPlaceholderText, getByText } = renderTab(component, mutateFn)
-
-    const input = getByPlaceholderText('e.g. 3.9.6')
-    await userEvent.clear(input)
-    await userEvent.type(input, '3.9.0')
-
-    await userEvent.click(getByText('Save Build'))
-
-    const callArg = mutateFn.mock.calls[0]![0] as ComponentUpdateRequest
-    expect(callArg.baseConfiguration?.build?.buildSystemVersion).toBe('3.9.0')
-  })
-
-  it('sends null for buildSystemVersion when cleared', async () => {
-    const mutateFn = vi.fn().mockResolvedValue({})
-    const component = makeComponent({
-      configurations: [
-        makeBaseRow({ build: { buildSystem: 'MAVEN', buildSystemVersion: '3.8.0' } }),
-      ],
-    })
-
-    const { getByPlaceholderText, getByText } = renderTab(component, mutateFn)
-    await userEvent.clear(getByPlaceholderText('e.g. 3.9.6'))
-    await userEvent.click(getByText('Save Build'))
-
-    const callArg = mutateFn.mock.calls[0]![0] as ComponentUpdateRequest
-    expect(callArg.baseConfiguration?.build?.buildSystemVersion).toBeNull()
   })
 
   it('sends projectVersion in build payload', async () => {
@@ -487,7 +454,6 @@ describe('BuildTab — existing structure preserved', () => {
   it('renders new Wave B controls', () => {
     renderTab(makeComponent())
 
-    expect(screen.getByText('Build System Version')).toBeDefined()
     expect(screen.getByText('Maven Version')).toBeDefined()
     expect(screen.getByText('Project Version')).toBeDefined()
     expect(screen.getByText('Build Tasks')).toBeDefined()
@@ -507,9 +473,9 @@ describe('BuildTab — existing structure preserved', () => {
 
     renderTab(component)
 
-    expect((screen.getByTestId('enum-select') as HTMLInputElement).value).toBe('GRADLE')
+    expect((screen.getByTestId('enum-select-build-buildSystem') as HTMLInputElement).value).toBe('GRADLE')
     expect((screen.getByPlaceholderText('pom.xml / build.gradle') as HTMLInputElement).value).toBe('build.gradle')
-    expect((screen.getByPlaceholderText('1.8 / 11 / 17 / 21') as HTMLInputElement).value).toBe('21')
+    expect((screen.getByPlaceholderText('Select Java version') as HTMLInputElement).value).toBe('21')
     expect((screen.getByPlaceholderText('8.6') as HTMLInputElement).value).toBe('8.6')
   })
 
@@ -521,9 +487,8 @@ describe('BuildTab — existing structure preserved', () => {
     renderTab(component)
 
     expect((screen.getByPlaceholderText('8.6') as HTMLInputElement).value).toBe('')
-    expect((screen.getByPlaceholderText('1.8 / 11 / 17 / 21') as HTMLInputElement).value).toBe('')
-    expect((screen.getByPlaceholderText('3.9.6') as HTMLInputElement).value).toBe('')
-    expect((screen.getByPlaceholderText('e.g. 3.9.6') as HTMLInputElement).value).toBe('')
+    expect((screen.getByPlaceholderText('Select Java version') as HTMLInputElement).value).toBe('')
+    expect((screen.getByPlaceholderText('Select Maven version') as HTMLInputElement).value).toBe('')
   })
 })
 
@@ -542,7 +507,7 @@ describe('BuildTab — buildSystem required (ui-swift-sloth §5)', () => {
     })
     renderTab(component)
 
-    const enumSelect = screen.getByTestId('enum-select') as HTMLInputElement
+    const enumSelect = screen.getByTestId('enum-select-build-buildSystem') as HTMLInputElement
     await userEvent.clear(enumSelect)
     // Wrap the synchronous .blur() in act() so React flushes the setState
     // it triggers (setBuildSystemTouched) before the assertion runs and
@@ -585,7 +550,7 @@ describe('BuildTab — buildSystem required (ui-swift-sloth §5)', () => {
     expect(screen.getByText(/build system is required/i)).toBeDefined()
 
     // Now type a value; once selected the error disappears and Save runs.
-    const enumSelect = getByTestId('enum-select') as HTMLInputElement
+    const enumSelect = getByTestId('enum-select-build-buildSystem') as HTMLInputElement
     await userEvent.type(enumSelect, 'MAVEN')
     await userEvent.click(getByText('Save Build'))
 
@@ -608,7 +573,6 @@ describe('BuildTab — buildSystem required (ui-swift-sloth §5)', () => {
 describe('BuildTab — inline override coverage', () => {
   const overridablePaths = [
     'build.buildSystem',
-    'build.buildSystemVersion',
     'build.buildFilePath',
     'build.javaVersion',
     'build.mavenVersion',
@@ -623,5 +587,40 @@ describe('BuildTab — inline override coverage', () => {
   it.each(overridablePaths)('renders FieldOverrideInline under %s', (path) => {
     renderTab(makeComponent())
     expect(screen.getByTestId(`field-override-inline-${path}`)).toBeInTheDocument()
+  })
+})
+
+describe('BuildTab field descriptions (FieldInfo)', () => {
+  // Exact set of registry paths this tab must expose an info icon for.
+  const EXPECTED_PATHS = [
+    'build.buildSystem',
+    'build.buildFilePath',
+    'build.javaVersion',
+    'build.mavenVersion',
+    'build.gradleVersion',
+    'build.projectVersion',
+    'build.buildTasks',
+    'build.systemProperties',
+    'build.deprecated',
+    'build.requiredProject',
+    'build.requiredTools',
+  ]
+
+  it('renders exactly one info icon per described field', () => {
+    renderTab(makeComponent())
+    for (const path of EXPECTED_PATHS) {
+      expect(
+        document.querySelectorAll(`[data-field-path="${path}"]`),
+        `info icon for ${path}`,
+      ).toHaveLength(1)
+    }
+  })
+
+  it('opens the registry description for Build System on focus', async () => {
+    renderTab(makeComponent())
+    const trigger = document.querySelector('[data-field-path="build.buildSystem"]') as HTMLElement
+    act(() => trigger.focus())
+    const tooltip = await screen.findByRole('tooltip')
+    expect(tooltip).toHaveTextContent(fieldDescriptions['build.buildSystem']!)
   })
 })

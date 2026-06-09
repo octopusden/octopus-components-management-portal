@@ -52,6 +52,14 @@ vi.mock('../components/editor/GeneralTab', async () => {
     GeneralTab: vi.fn(() => React.createElement('div', { 'data-testid': 'general-tab' })),
   }
 })
+// Keep the real MISC_TAB_FIELDS export (the 400 handler imports it) but stub the component
+// so the Misc tab content renders without ComponentSelect's data dependencies.
+vi.mock('../components/editor/MiscTab', async () => {
+  const actual = await vi.importActual<typeof import('../components/editor/MiscTab')>(
+    '../components/editor/MiscTab',
+  )
+  return { ...actual, MiscTab: () => React.createElement('div', { 'data-testid': 'misc-tab' }) }
+})
 vi.mock('../components/editor/BuildTab', () => ({
   BuildTab: () => React.createElement('div', { 'data-testid': 'build-tab' }),
 }))
@@ -73,7 +81,14 @@ vi.mock('../components/editor/FieldOverrides', () => ({
 vi.mock('../components/editor/ComponentHistoryTab', () => ({
   ComponentHistoryTab: () => React.createElement('div', { 'data-testid': 'history-tab' }),
 }))
+// CreateComponentDialog (copy mode) pulls hooks from the (mocked) useComponent
+// module; stub it so the page test only asserts the open/sourceId wiring.
+vi.mock('../components/CreateComponentDialog', () => ({
+  CreateComponentDialog: ({ sourceId, open }: { sourceId?: string; open: boolean }) =>
+    open ? React.createElement('div', { 'data-testid': 'copy-dialog' }, sourceId) : null,
+}))
 
+import { ApiError } from '../lib/api'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useComponent, useUpdateComponent, useDeleteComponent } from '../hooks/useComponent'
 import { usePortalLinks } from '../hooks/useInfo'
@@ -229,16 +244,15 @@ beforeEach(() => {
     isLoading: false,
     isError: false,
   }))
-  // Default GeneralTab stub. Hydrates `system` from `component.system`
-  // so the page-level save guard (PR #44 P2 systems — "server had
-  // systems, form has none" blocks the save) doesn't false-positive on
-  // tests that never touch the systems field. Mirrors the real
-  // GeneralTab.useEffect mirror-server-into-form behavior.
-  // Individual tests can still override this implementation to test
-  // specific scenarios (e.g. the clear-all-systems guard).
+  // Default GeneralTab stub. Hydrates `system` AND `displayName` from the component
+  // so the page-level save guards ("server had a value, form has none" for system /
+  // displayName) don't false-positive on tests that never touch those fields. Mirrors
+  // the real GeneralTab.useEffect mirror-server-into-form behavior. Individual tests can
+  // still override this to exercise the clear-all guards.
   vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
     useEffect(() => {
       form.setValue('system', component.system ?? '')
+      form.setValue('displayName', component.displayName ?? '')
     }, [component, form])
     return React.createElement('div', { 'data-testid': 'general-tab' })
   })
@@ -628,6 +642,7 @@ describe('ComponentDetailPage — Save dirty-gate', () => {
     vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
       useEffect(() => {
         form.setValue('system', component.system ?? '')
+        form.setValue('displayName', component.displayName ?? '')
       }, [component, form])
       return React.createElement(
         'button',
@@ -777,6 +792,7 @@ describe('ComponentDetailPage — labels clear-all sends [] (PR #44 follow-up: c
         form.setValue('labels', [], { shouldDirty: true, shouldTouch: true })
         // Hydrate systems too so the unrelated systems guard doesn't trip.
         form.setValue('system', component.system ?? '')
+        form.setValue('displayName', component.displayName ?? '')
       }, [component, form])
       return React.createElement('div', { 'data-testid': 'general-tab-labels-cleared' })
     })
@@ -878,5 +894,93 @@ describe('ComponentDetailPage — confirmation dialog text', () => {
       expect(screen.getByText(/restore it later/i)).toBeDefined()
       expect(screen.queryByText(/cannot be undone/i)).toBeNull()
     })
+  })
+})
+
+describe('ComponentDetailPage — Copy button (CREATE_COMPONENTS gate)', () => {
+  it('renders Copy for a user with CREATE_COMPONENTS and opens the dialog with the component id', async () => {
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage(baseComponent, user)
+
+    const copyBtn = screen.getByRole('button', { name: /^create similar$/i })
+    fireEvent.click(copyBtn)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('copy-dialog').textContent).toBe('comp-1')
+    })
+  })
+
+  it('hides Copy without CREATE_COMPONENTS', () => {
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    renderPage(baseComponent, user)
+    expect(screen.queryByRole('button', { name: /^create similar$/i })).toBeNull()
+  })
+
+  it('Copy is available even when per-component canEdit is false (global create gate, not canEdit)', () => {
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage({ ...baseComponent, canEdit: false }, user)
+    expect(screen.getByRole('button', { name: /^create similar$/i })).toBeDefined()
+  })
+})
+
+describe('ComponentDetailPage — cross-tab 400 + displayName clear', () => {
+  it('auto-switches to the Misc tab when a 400 maps to a Misc-owned field', async () => {
+    // GeneralTab stub hydrates displayName + exposes a dirty edit so Save enables.
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('system', component.system ?? '')
+        form.setValue('displayName', component.displayName ?? '')
+      }, [component, form])
+      return React.createElement(
+        'button',
+        { 'data-testid': 'edit', onClick: () => form.setValue('displayName', 'X', { shouldDirty: true }) },
+        'edit',
+      )
+    })
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(
+        new ApiError(400, 'bad', JSON.stringify({ errorMessage: 'parentComponentName: invalid parent' })),
+      ),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit'))
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => expect(screen.getByTestId('misc-tab')).toBeDefined())
+  })
+
+  it('clearing displayName PATCHes it as "" (nullable — server clears to null, or 400s for explicit+external)', async () => {
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('system', component.system ?? '')
+        form.setValue('displayName', component.displayName ?? '')
+      }, [component, form])
+      return React.createElement(
+        'button',
+        {
+          'data-testid': 'clear-dn',
+          onClick: () => form.setValue('displayName', '', { shouldDirty: true, shouldTouch: true }),
+        },
+        'clear',
+      )
+    })
+    const mutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    // baseComponent has a displayName ('My Component') and is not explicit+external, so a clear
+    // is a valid edit: Save enables (dirty) and the PATCH carries displayName: "" (the server
+    // stores null; an explicit+external component would be rejected with a 400 routed inline).
+    renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('clear-dn'))
+    await waitFor(() => {
+      const btn = screen.getByRole('button', { name: /^save$/i }) as HTMLButtonElement
+      expect(btn.disabled).toBe(false)
+    })
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce())
+    const payload = (mutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
+    expect(payload['displayName']).toBe('')
   })
 })

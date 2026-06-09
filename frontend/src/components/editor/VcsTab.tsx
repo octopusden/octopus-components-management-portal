@@ -3,6 +3,7 @@ import { Save, Plus, Trash2 } from 'lucide-react'
 import { Label } from '../ui/label'
 import { Input } from '../ui/input'
 import { Button } from '../ui/button'
+import { FieldInfo } from '../ui/FieldInfo'
 import { Separator } from '../ui/separator'
 import type { ComponentDetail, VcsEntry } from '../../lib/types'
 import type { ComponentUpdateRequest } from '../../hooks/useComponent'
@@ -115,7 +116,10 @@ export function VcsTab({ component, updateMutation, toast, canEdit }: VcsTabProp
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label>External Registry</Label>
+          <div className="flex items-center gap-1">
+            <Label>External Registry</Label>
+            <FieldInfo path="vcs.externalRegistry" label="External Registry" />
+          </div>
           <Input
             value={externalRegistry}
             onChange={(e) => setExternalRegistry(e.target.value)}
@@ -128,7 +132,10 @@ export function VcsTab({ component, updateMutation, toast, canEdit }: VcsTabProp
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold">VCS Entries</h3>
+          <div className="flex items-center gap-1">
+            <h3 className="text-sm font-semibold">VCS Entries</h3>
+            <FieldInfo path="vcs.entries" label="VCS Entries" />
+          </div>
           <Button variant="outline" size="sm" onClick={addEntry} disabled={!canEdit}>
             <Plus className="h-4 w-4" />
             Add Entry
@@ -145,28 +152,46 @@ export function VcsTab({ component, updateMutation, toast, canEdit }: VcsTabProp
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <div className="space-y-1">
-                <Label className="text-xs">Name</Label>
+                <div className="flex items-center gap-1">
+                  <Label className="text-xs">Name</Label>
+                  <FieldInfo path="vcs.name" label="Name" />
+                </div>
                 <Input value={entry.name} onChange={(e) => updateEntry(index, 'name', e.target.value)} placeholder="Entry name" />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">VCS Path</Label>
+                <div className="flex items-center gap-1">
+                  <Label className="text-xs">VCS Path</Label>
+                  <FieldInfo path="vcs.vcsPath" label="VCS Path" />
+                </div>
                 <Input value={entry.vcsPath} onChange={(e) => updateEntry(index, 'vcsPath', e.target.value)} placeholder="ssh://git@..." className="font-mono text-xs" />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Repository Type</Label>
+                <div className="flex items-center gap-1">
+                  <Label className="text-xs">Repository Type</Label>
+                  <FieldInfo path="vcs.repositoryType" label="Repository Type" />
+                </div>
                 {/* Read-only: repository type is not user-editable (it follows the VCS host). */}
                 <Input value={entry.repositoryType} disabled readOnly className="bg-muted font-mono text-xs" placeholder="GIT" />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Production branch</Label>
+                <div className="flex items-center gap-1">
+                  <Label className="text-xs">Production branch</Label>
+                  <FieldInfo path="vcs.branch" label="Production branch" />
+                </div>
                 <Input value={entry.branch} onChange={(e) => updateEntry(index, 'branch', e.target.value)} placeholder="Branch pattern" className="font-mono text-xs" />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Tag</Label>
+                <div className="flex items-center gap-1">
+                  <Label className="text-xs">Tag</Label>
+                  <FieldInfo path="vcs.tag" label="Tag" />
+                </div>
                 <Input value={entry.tag} onChange={(e) => updateEntry(index, 'tag', e.target.value)} placeholder="Tag pattern" className="font-mono text-xs" />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Hotfix Branch</Label>
+                <div className="flex items-center gap-1">
+                  <Label className="text-xs">Hotfix Branch</Label>
+                  <FieldInfo path="vcs.hotfixBranch" label="Hotfix Branch" />
+                </div>
                 <Input value={entry.hotfixBranch} onChange={(e) => updateEntry(index, 'hotfixBranch', e.target.value)} placeholder="Hotfix branch pattern" className="font-mono text-xs" />
               </div>
             </div>

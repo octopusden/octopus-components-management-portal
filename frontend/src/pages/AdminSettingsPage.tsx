@@ -1,10 +1,57 @@
+import { useEffect } from 'react'
+import { RefreshCw } from 'lucide-react'
 import { Layout } from '../components/Layout'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
+import { Button } from '../components/ui/button'
+import { StatusBanner } from '../components/ui/status-banner'
 import { FieldConfigEditor } from '../components/admin/FieldConfigEditor'
 import { ComponentDefaultsForm } from '../components/admin/ComponentDefaultsForm'
 import { MigrationHistoryPanel } from '../components/admin/MigrationHistoryPanel'
 import { MigrationPanel } from '../components/admin/MigrationPanel'
 import { TeamCityResyncPanel } from '../components/admin/TeamCityResyncPanel'
+import { useReloadConfig } from '../hooks/useAdminConfig'
+import { useAdminMode } from '../lib/adminModeStore'
+
+function ConfigReloadBar() {
+  const adminMode = useAdminMode((s) => s.enabled)
+  const { mutate, reset, isPending, isSuccess, error } = useReloadConfig()
+
+  // The success flag is sticky on a mutation result; auto-clear the "Reloaded"
+  // hint after a couple of seconds (mirrors the old editors' saved-feedback UX).
+  useEffect(() => {
+    if (!isSuccess) return
+    const t = setTimeout(() => reset(), 2000)
+    return () => clearTimeout(t)
+  }, [isSuccess, reset])
+
+  return (
+    <StatusBanner variant="info" className="flex items-center justify-between gap-4">
+      <span className="text-sm">
+        Field configuration and component defaults are <strong>managed as code</strong> in
+        service-config and shown read-only here. Edit them in service-config, then reload to
+        apply without a redeploy.
+      </span>
+      <div className="flex items-center gap-2 shrink-0">
+        {isSuccess && <span className="text-xs text-muted-foreground">Reloaded</span>}
+        {error && (
+          <span className="text-xs text-destructive">
+            {error instanceof Error ? error.message : String(error)}
+          </span>
+        )}
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => mutate()}
+          disabled={!adminMode || isPending}
+          title={adminMode ? 'Reload config from service-config' : 'Enable Admin mode in the footer to reload'}
+        >
+          <RefreshCw className="h-4 w-4" />
+          {isPending ? 'Reloading…' : 'Reload'}
+        </Button>
+      </div>
+    </StatusBanner>
+  )
+}
 
 export function AdminSettingsPage() {
   return (
@@ -13,6 +60,8 @@ export function AdminSettingsPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold tracking-tight">Admin Settings</h1>
         </div>
+
+        <ConfigReloadBar />
 
         <Tabs defaultValue="field-config" variant="underline">
           <TabsList>

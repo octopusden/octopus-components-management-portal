@@ -1,6 +1,6 @@
 import { useParams, useNavigate, Link } from 'react-router'
 import { useForm } from 'react-hook-form'
-import { ArrowLeft, Save, Trash2, AlertTriangle, LockKeyhole } from 'lucide-react'
+import { ArrowLeft, Copy, Save, Trash2, AlertTriangle, LockKeyhole } from 'lucide-react'
 import { JiraIcon, BitbucketIcon, TeamCityIcon } from '../components/ui/icons/brand-icons'
 import { useState, type ReactNode } from 'react'
 import { Layout } from '../components/Layout'
@@ -18,6 +18,7 @@ import {
   DialogFooter,
 } from '../components/ui/dialog'
 import { GeneralTab, type GeneralFormValues, GENERAL_TAB_FIELDS } from '../components/editor/GeneralTab'
+import { MiscTab, MISC_TAB_FIELDS } from '../components/editor/MiscTab'
 import { buildUpdateRequest } from '../lib/component/buildUpdateRequest'
 import { BuildTab } from '../components/editor/BuildTab'
 import { VcsTab } from '../components/editor/VcsTab'
@@ -29,6 +30,7 @@ import { FieldOverrides } from '../components/editor/FieldOverrides'
 import { ConfigurationsTab } from '../components/editor/ConfigurationsTab'
 import { AsCodeTab } from '../components/editor/AsCodeTab'
 import { ComponentHistoryTab } from '../components/editor/ComponentHistoryTab'
+import { CreateComponentDialog } from '../components/CreateComponentDialog'
 import { useComponent, useUpdateComponent, useDeleteComponent, type ComponentUpdateRequest } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
 import { ApiError } from '../lib/api'
@@ -73,6 +75,10 @@ export function ComponentDetailPage() {
   const { toast } = useToast()
   const handleConflict = useOptimisticConflict(id)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [copyDialogOpen, setCopyDialogOpen] = useState(false)
+  // Controlled tab so a server 400 on a field that lives on a non-active tab can auto-switch
+  // to the owning tab (otherwise the inline error renders on a hidden tab).
+  const [activeTab, setActiveTab] = useState('general')
 
   const { data: component, isLoading, error } = useComponent(id ?? '')
   const updateMutation = useUpdateComponent(id ?? '')
@@ -81,6 +87,9 @@ export function ComponentDetailPage() {
 
   const canArchive = hasPermission(user, PERMISSIONS.DELETE_COMPONENTS)
   const canUnarchive = hasPermission(user, PERMISSIONS.ARCHIVE_COMPONENTS)
+  // Copy creates a NEW component, so it gates on the global CREATE_COMPONENTS
+  // permission — not on the per-component `canEdit` affordance below.
+  const canCreate = hasPermission(user, PERMISSIONS.CREATE_COMPONENTS)
 
   // Per-component edit gate. CRS returns `canEdit` on the detail response (true for
   // the component's owner/RM/SC or an admin); fall back to the global CREATE_COMPONENTS
@@ -194,6 +203,12 @@ export function ComponentDetailPage() {
       dirtyFields: {
         solution: form.formState.dirtyFields.solution === true,
         system: form.formState.dirtyFields.system === true,
+        // "interacted" (dirty OR touched) — buildUpdateRequest value-compares against the
+        // persisted displayName, so a clear back to the form default '' (not RHF-dirty) is
+        // still caught, while pre-hydration (untouched) stays omitted (no clobber).
+        displayName:
+          form.formState.dirtyFields.displayName === true ||
+          form.formState.touchedFields.displayName === true,
         labels:
           (form.formState.dirtyFields.labels as unknown) === true ||
           (labelsFc.visibility !== 'hidden' &&
@@ -235,6 +250,11 @@ export function ComponentDetailPage() {
     systemFc.visibility !== 'hidden' &&
     (component?.system ?? '') !== '' &&
     ((form.getValues('system') as string | undefined) ?? '') === ''
+  // displayName is nullable server-side: clearing it sends "" (buildUpdateRequest), which the
+  // server clears to null — or rejects with 400 for an explicit+external component, routed
+  // inline by handleSave. So a meaningful clear ("Foo" → "") is RHF-dirty and flows through
+  // pendingPatch like any other edit; no dedicated clear-guard is needed (unlike `system`,
+  // whose wire has no clear path).
   const hasUnsavedChanges =
     systemClearNeedsAttention ||
     (!!pendingPatch &&
@@ -289,6 +309,10 @@ export function ComponentDetailPage() {
       }
     }
 
+    // displayName is nullable: clearing it is a valid edit (sent as "" → server stores null).
+    // The server still rejects a clear for an explicit+external component (400 keyed
+    // displayName), which is routed inline by the 400 handler below — no client guard needed.
+
     // Group Key is now server-derived + read-only (items 1/2) — no group save
     // guard. canBeParent invariants are enforced server-side; their 400s map
     // inline via GENERAL_TAB_FIELDS below.
@@ -310,14 +334,24 @@ export function ComponentDetailPage() {
       }
       if (err instanceof ApiError && err.status === 400) {
         const fieldErrors = parseServerFieldErrors(err.rawBody)
+        // Only auto-switch to Misc when NO General-owned field also errored — General is the
+        // default tab, so a mixed 400 should leave the user there (where they can see both once
+        // they switch). Avoids hiding a General error behind the Misc switch.
+        const hasGeneralError = [...fieldErrors.keys()].some((f) =>
+          (GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(f),
+        )
         let anyFieldMapped = false
         for (const [field, message] of fieldErrors) {
-          // Only set errors for fields owned by GeneralTab; fields from other
-          // tabs (buildConfiguration, vcsSettings, …) arrive in the same 400
-          // but should not pollute GeneralTab's form state.
-          if ((GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(field)) {
+          // Set errors for fields owned by the General OR Misc tab (both share this RHF form);
+          // fields from other tabs (buildConfiguration, vcsSettings, …) arrive in the same 400
+          // but should not pollute this form's state. A Misc-owned field's input lives on the
+          // Misc tab, so switch to it — otherwise the inline error would render on a hidden tab.
+          const isGeneral = (GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(field)
+          const isMisc = (MISC_TAB_FIELDS as ReadonlyArray<string>).includes(field)
+          if (isGeneral || isMisc) {
             form.setError(field as keyof GeneralFormValues, { type: 'server', message })
             anyFieldMapped = true
+            if (isMisc && !hasGeneralError) setActiveTab('misc')
           }
         }
         // Known gap: mixed 400 with both GeneralTab and other-tab field
@@ -492,12 +526,24 @@ export function ComponentDetailPage() {
                   </a>
                 ))}
             </div>
-            {component.displayName && (
+            {/* displayName is nullable (null when no componentDisplayName); show the subtitle
+                only when present AND differs from the name so it isn't a redundant echo. */}
+            {component.displayName && component.displayName !== component.name && (
               <p className="text-sm text-muted-foreground">{component.displayName}</p>
             )}
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {/* Create Similar — creates a NEW component pre-filled from this
+                one (not an exact copy: unique fields and overrides are not
+                carried over). Gated on the global CREATE_COMPONENTS
+                permission, not per-component canEdit. */}
+            {canCreate && (
+              <Button variant="outline" size="sm" onClick={() => setCopyDialogOpen(true)}>
+                <Copy className="h-4 w-4" />
+                Create Similar
+              </Button>
+            )}
             {/* Archive / Unarchive — permission-gated, not just disabled */}
             {!component.archived && canArchive && (
               <Button
@@ -549,9 +595,10 @@ export function ComponentDetailPage() {
         <Separator />
 
         {/* Tabs */}
-        <Tabs defaultValue="general" variant="underline">
+        <Tabs value={activeTab} onValueChange={setActiveTab} variant="underline">
           <TabsList className="flex-wrap gap-1">
             <TabsTrigger value="general">General</TabsTrigger>
+            <TabsTrigger value="misc">Misc</TabsTrigger>
             {(() => {
               // schema-v2: counts derived from the BASE row. Build/Jira/Escrow are
               // 0-or-1 (presence of the aspect); VCS counts vcsEntries; Distribution
@@ -609,6 +656,12 @@ export function ComponentDetailPage() {
               </EditSurface>
             </TabsContent>
 
+            <TabsContent value="misc">
+              <EditSurface canEdit={canEdit} label="Misc">
+                <MiscTab key={component.id} component={component} form={form} />
+              </EditSurface>
+            </TabsContent>
+
             <TabsContent value="build">
               <EditSurface canEdit={canEdit} label="Build">
                 <BuildTab component={component} updateMutation={updateMutation} toast={toast} canEdit={canEdit} />
@@ -659,6 +712,13 @@ export function ComponentDetailPage() {
           </div>
         </Tabs>
       </div>
+
+      {/* Create-similar dialog (sourceId → pre-filled from this component) */}
+      <CreateComponentDialog
+        sourceId={component.id}
+        open={copyDialogOpen}
+        onOpenChange={setCopyDialogOpen}
+      />
 
       {/* Archive confirmation dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

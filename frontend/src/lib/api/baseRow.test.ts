@@ -22,7 +22,7 @@ function makeComponent(id: string, configurations: ComponentConfiguration[]): Co
   return {
     id,
     name: 'svc',
-    displayName: null,
+    displayName: 'svc',
     componentOwner: null,
     productType: null,
     system: null,

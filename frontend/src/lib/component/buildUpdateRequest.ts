@@ -32,6 +32,11 @@ export interface FieldVisibilities {
 export interface DirtyFlags {
   solution?: boolean
   system?: boolean
+  // displayName is nullable + unique server-side. The page passes this as "interacted"
+  // (dirty OR touched); buildUpdateRequest value-compares against the persisted value so a
+  // clear back to the form default '' is caught (RHF clear-to-default blind-spot) while a
+  // pristine/pre-hydration form omits it.
+  displayName?: boolean
   // ui-swift-sloth §4: labels is now a multi-select array, and like systems
   // it needs a dirty-gate to block the form-default `[]` from clobbering
   // server data pre-hydration.
@@ -131,8 +136,18 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
     // Required on the wire; group is now server-derived, never set/cleared here.
     clearGroup: false,
     name: renameField,
-    displayName:
-      visibilities.displayName === 'hidden' ? undefined : (values.displayName || undefined),
+    // displayName is nullable server-side. The page passes `dirtyFields.displayName` as
+    // "interacted" (dirty OR touched) so a clear back to the form default '' is still caught
+    // (RHF's known clear-to-default blind-spot, same as labels/system). We then value-compare
+    // against the persisted value: a real change is sent (a clear as "" — the server stores null,
+    // or 400s for an explicit+external component, routed inline), an unchanged value is omitted.
+    // Not "interacted" (e.g. pre-hydration) → omitted, so no form-default clobber.
+    displayName: ((): string | undefined => {
+      if (visibilities.displayName === 'hidden' || dirtyFields.displayName !== true) return undefined
+      const next = values.displayName.trim()
+      const prior = component.displayName ?? ''
+      return next === prior ? undefined : next
+    })(),
     componentOwner:
       visibilities.componentOwner === 'hidden' ? undefined : (values.componentOwner || undefined),
     // productType is owned by EscrowTab — never sent from the General save.

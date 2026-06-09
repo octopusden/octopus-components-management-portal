@@ -4,6 +4,7 @@ import { ComponentFilters } from '../components/ComponentFilters'
 import { ComponentTable } from '../components/ComponentTable'
 import { Pagination } from '../components/Pagination'
 import { CreateComponentButton } from '../components/CreateComponentDialog'
+import { CreateComponentDialog } from '../components/CreateComponentDialog'
 import { InlineError } from '../components/ui/inline-error'
 import { useComponents } from '../hooks/useComponents'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
@@ -15,9 +16,13 @@ export function ComponentListPage() {
   const [filter, setFilter] = useState<ComponentFilter>({ archived: false })
   const [page, setPage] = useState(0)
   const [size, setSize] = useState(20)
+  // Source component id for the per-row Copy action; non-null = dialog open.
+  const [copySourceId, setCopySourceId] = useState<string | null>(null)
 
   const { data: user } = useCurrentUser()
   const { data, isLoading, error } = useComponents({ filter, page, size })
+
+  const canCreate = hasPermission(user, PERMISSIONS.CREATE_COMPONENTS)
 
   const handleFilterChange = (newFilter: ComponentFilter) => {
     setFilter(newFilter)
@@ -41,7 +46,7 @@ export function ComponentListPage() {
               </span>
             )}
           </div>
-          {hasPermission(user, PERMISSIONS.CREATE_COMPONENTS) && <CreateComponentButton />}
+          {canCreate && <CreateComponentButton />}
         </div>
 
         <ComponentFilters filter={filter} onFilterChange={handleFilterChange} />
@@ -63,7 +68,21 @@ export function ComponentListPage() {
         <ComponentTable
           data={data?.content ?? []}
           isLoading={isLoading}
+          onCopy={canCreate ? setCopySourceId : undefined}
         />
+
+        {/* One dialog per page (not per row); keyed by source id so each
+            Create-similar click gets a fresh fetch + prefill. */}
+        {copySourceId && (
+          <CreateComponentDialog
+            key={copySourceId}
+            sourceId={copySourceId}
+            open
+            onOpenChange={(open) => {
+              if (!open) setCopySourceId(null)
+            }}
+          />
+        )}
 
         {data && data.totalElements > 0 && (
           <Pagination

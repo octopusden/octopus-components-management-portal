@@ -38,7 +38,7 @@ describe('useOptimisticConflict', () => {
     const { refetchSpy, wrapper } = makeHarness({
       id: 'c-1',
       name: 'svc',
-      displayName: null,
+      displayName: 'svc',
       componentOwner: null,
       productType: null,
       system: null,

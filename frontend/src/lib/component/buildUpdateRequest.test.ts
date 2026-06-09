@@ -118,6 +118,70 @@ describe('buildUpdateRequest — field-config hidden visibility', () => {
 
 })
 
+describe('buildUpdateRequest — displayName (nullable + value-compare)', () => {
+  // `dirtyFields.displayName` is passed by the page as "interacted" (dirty OR touched);
+  // buildUpdateRequest then value-compares against the persisted displayName.
+  it('clear (interacted, blank, server had a value) → emits "" (server clears to null)', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({ displayName: 'Service Alpha' }),
+      values: makeValues({ displayName: '' }),
+      visibilities: EDITABLE,
+      dirtyFields: { displayName: true },
+    })
+    expect(req.displayName).toBe('')
+  })
+
+  it('unchanged (interacted but equal to persisted) → omitted', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({ displayName: 'Service Alpha' }),
+      values: makeValues({ displayName: 'Service Alpha' }),
+      visibilities: EDITABLE,
+      dirtyFields: { displayName: true },
+    })
+    expect(req.displayName).toBeUndefined()
+  })
+
+  it('edit (interacted, new distinct value) → emits the trimmed value', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({ displayName: 'Service Alpha' }),
+      values: makeValues({ displayName: '  New Name  ' }),
+      visibilities: EDITABLE,
+      dirtyFields: { displayName: true },
+    })
+    expect(req.displayName).toBe('New Name')
+  })
+
+  it('set on a component whose displayName was null → emits the value', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({ displayName: null }),
+      values: makeValues({ displayName: 'First Name' }),
+      visibilities: EDITABLE,
+      dirtyFields: { displayName: true },
+    })
+    expect(req.displayName).toBe('First Name')
+  })
+
+  it('not interacted (dirty/touched false) → omitted regardless of value (pre-hydration safety)', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({ displayName: 'Service Alpha' }),
+      values: makeValues({ displayName: '' }),
+      visibilities: EDITABLE,
+      dirtyFields: {},
+    })
+    expect(req.displayName).toBeUndefined()
+  })
+
+  it('hidden field-config + interacted → omitted (hidden never written)', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({ displayName: 'Service Alpha' }),
+      values: makeValues({ displayName: 'Changed' }),
+      visibilities: { ...EDITABLE, displayName: 'hidden' },
+      dirtyFields: { displayName: true },
+    })
+    expect(req.displayName).toBeUndefined()
+  })
+})
+
 describe('buildUpdateRequest — dirtyFields gating (pre-hydration safety)', () => {
   it('solution form-default false on server-null component is omitted when not dirty', () => {
     const req = buildUpdateRequest({
