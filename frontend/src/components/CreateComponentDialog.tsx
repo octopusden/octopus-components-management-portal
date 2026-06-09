@@ -311,7 +311,13 @@ function CreateComponentForm({ source, isCopy, onClose }: CreateComponentFormPro
     clearErrors('coordinate')
   }
 
-  const submitDisabled = isSubmitting || createMutation.isPending
+  // Hold Create while the typed owner's async directory validation is in
+  // flight: the value only commits to the form after the lookup resolves, so
+  // a fast submit would read componentOwner='' and block on a misleading
+  // "required" error.
+  const [ownerValidating, setOwnerValidating] = useState(false)
+
+  const submitDisabled = isSubmitting || createMutation.isPending || ownerValidating
 
   async function onSubmit(values: CreateFormValues) {
     try {
@@ -433,6 +439,7 @@ function CreateComponentForm({ source, isCopy, onClose }: CreateComponentFormPro
           }
           placeholder="AD userkey"
           lookupFn={lookupEmployee}
+          onValidatingChange={setOwnerValidating}
         />
         {errors.componentOwner && (
           <p className="text-xs text-destructive">{errors.componentOwner.message}</p>

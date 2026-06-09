@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -23,6 +23,8 @@ vi.mock('react-router', async (importOriginal) => {
 const mockToast = vi.fn()
 vi.mock('../hooks/use-toast', () => ({ useToast: () => ({ toast: mockToast }) }))
 
+const mockLookupEmployee = vi.hoisted(() => vi.fn())
+
 vi.mock('../hooks/useFieldOptions', () => ({
   useFieldOptions: vi.fn(() => ({ options: ['MAVEN', 'GRADLE'], isLoading: false })),
 }))
@@ -30,7 +32,7 @@ vi.mock('../hooks/useOwners', () => ({
   useOwners: vi.fn(() => ({ data: ['alice', 'inactive-user'] })),
 }))
 vi.mock('../hooks/useEmployees', () => ({
-  lookupEmployee: vi.fn(),
+  lookupEmployee: mockLookupEmployee,
   useEmployeeStatuses: vi.fn(() => ({ data: {} })),
 }))
 // Field-config drives which fields the create form renders. Default: no data →
@@ -101,6 +103,12 @@ beforeEach(() => {
   mockMutateAsync.mockReset()
   mockNavigate.mockReset()
   mockToast.mockReset()
+  mockLookupEmployee.mockReset()
+  // Default: every queried person resolves as an exact active match, so tests
+  // not about validation behave as before PR #79's commit-after-validation.
+  mockLookupEmployee.mockImplementation(async (query: string) => [
+    { username: query.trim(), active: true },
+  ])
   mockUseComponent.mockReset()
   mockUseFieldConfig.mockReturnValue({ data: undefined, isLoading: false, isError: false })
   scratchDisabled()
@@ -110,13 +118,24 @@ async function openScratch() {
   await userEvent.click(screen.getByRole('button', { name: /new component/i }))
 }
 
+// PeopleInput commits a typed person only after the async directory lookup
+// resolves (blur/Enter → validate → onChange). Blur the input and wait the
+// validation out before submitting, otherwise the form still holds ''.
+async function commitComponentOwner(owner = 'alice') {
+  const input = screen.getByPlaceholderText('AD userkey')
+  await userEvent.type(input, owner)
+  fireEvent.blur(input)
+  await waitFor(() => expect(mockLookupEmployee).toHaveBeenCalledWith(owner))
+  await waitFor(() => expect(screen.queryByText('Validating person...')).toBeNull())
+}
+
 async function fillBaseFields(owner = 'alice') {
   await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
   // displayName is optional for a non-explicit+external component (required only under the EE
   // gate); fill it here for completeness so the created payload carries a value.
   await userEvent.type(screen.getByLabelText(/display name/i), 'Widget')
   await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
-  await userEvent.type(screen.getByPlaceholderText('AD userkey'), owner)
+  await commitComponentOwner(owner)
 }
 
 describe('CreateComponentDialog — scratch mode base', () => {
@@ -136,6 +155,93 @@ describe('CreateComponentDialog — scratch mode base', () => {
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'bad name!')
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() => expect(screen.getByText(/component key can only contain/i)).toBeDefined())
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('maps a CRS componentOwner 400 inline', async () => {
+    mockMutateAsync.mockRejectedValue(
+      new ApiError(
+        400,
+        'componentOwner is not an active employee',
+        JSON.stringify({ errorMessage: 'componentOwner is not an active employee' }),
+      ),
+    )
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    // Client-side lookup (mock) says active — the server is the one rejecting.
+    await fillBaseFields('inactive-user')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('is not an active employee')).toBeDefined()
+    })
+    expect(mockToast).not.toHaveBeenCalled()
+  })
+
+  it('disables Create while the typed owner is still being validated', async () => {
+    let resolveLookup!: (value: { username: string; active: boolean }[]) => void
+    mockLookupEmployee.mockImplementation(
+      () =>
+        new Promise<{ username: string; active: boolean }[]>((resolve) => {
+          resolveLookup = resolve
+        }),
+    )
+    mockMutateAsync.mockResolvedValue({ id: 'comp-1', name: 'widget' })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
+    const input = screen.getByPlaceholderText('AD userkey')
+    await userEvent.type(input, 'alice')
+    fireEvent.blur(input)
+
+    await screen.findByText('Validating person...')
+    expect((screen.getByRole('button', { name: /^create$/i }) as HTMLButtonElement).disabled).toBe(true)
+
+    await act(async () => {
+      resolveLookup([{ username: 'alice', active: true }])
+    })
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: /^create$/i }) as HTMLButtonElement).disabled).toBe(false),
+    )
+  })
+
+  it('blocks submit when component owner is not found in the directory', async () => {
+    mockLookupEmployee.mockResolvedValue([])
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
+    const input = screen.getByPlaceholderText('AD userkey')
+    await userEvent.type(input, 'asdfd')
+    fireEvent.blur(input)
+
+    await screen.findByText('Select an active person from the directory')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('does not submit a stale active owner when the textbox is edited before revalidation', async () => {
+    mockLookupEmployee.mockImplementation((query: string) => {
+      if (query.trim() === 'alice') {
+        return Promise.resolve([{ username: 'alice', active: true }])
+      }
+      return new Promise(() => undefined)
+    })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
+    await commitComponentOwner('alice')
+
+    const input = screen.getByPlaceholderText('AD userkey')
+    await userEvent.clear(input)
+    await userEvent.type(input, 'asdfd')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/component owner is required/i)).toBeDefined()
+    })
     expect(mockMutateAsync).not.toHaveBeenCalled()
   })
 

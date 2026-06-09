@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, act, fireEvent } from '@testing-library/react'
+import { render, screen, act, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { PeopleInput } from './PeopleInput'
+import { EmployeeStatusBadge, PeopleInput } from './PeopleInput'
 
 vi.mock('../../hooks/useOwners', () => ({
   useOwners: vi.fn(() => ({ data: ['alice@example.com', 'bob@example.com'] })),
@@ -59,6 +59,182 @@ describe('PeopleInput', () => {
     expect(screen.queryByText('alice@example.com')).toBeNull()
   })
 
+  it('commits a typed person only after exact active validation', async () => {
+    const lookupFn = vi.fn().mockResolvedValue([{ username: 'carol', active: true }])
+    render(<PeopleInput value="" onChange={onChange} lookupFn={lookupFn} />)
+    const input = screen.getByRole('textbox')
+    fireEvent.change(input, { target: { value: 'carol' } })
+    fireEvent.blur(input)
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith('carol'))
+    expect(lookupFn).toHaveBeenCalledWith('carol')
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('clears the committed parent value immediately when a validated value is edited', () => {
+    const lookupFn = vi.fn().mockResolvedValue([])
+    const { rerender } = render(
+      <PeopleInput value="alice" onChange={onChange} lookupFn={lookupFn} />,
+    )
+    const input = screen.getByRole('textbox')
+    fireEvent.change(input, { target: { value: 'asdfd' } })
+
+    expect(onChange).toHaveBeenCalledWith('')
+    expect((input as HTMLInputElement).value).toBe('asdfd')
+
+    rerender(<PeopleInput value="" onChange={onChange} lookupFn={lookupFn} />)
+    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('asdfd')
+  })
+
+  it('cancels a pending validation when the user edits again', async () => {
+    let resolveLookup!: (value: { username: string; active: boolean }[]) => void
+    const lookupFn = vi.fn(() =>
+      new Promise<{ username: string; active: boolean }[]>((resolve) => {
+        resolveLookup = resolve
+      }),
+    )
+    render(<PeopleInput value="" onChange={onChange} lookupFn={lookupFn} />)
+    const input = screen.getByRole('textbox')
+    fireEvent.change(input, { target: { value: 'carol' } })
+    fireEvent.blur(input)
+    await screen.findByText('Validating person...')
+
+    fireEvent.change(input, { target: { value: 'dave' } })
+    expect(screen.queryByText('Validating person...')).toBeNull()
+
+    await act(async () => {
+      resolveLookup([{ username: 'carol', active: true }])
+    })
+
+    expect(onChange).not.toHaveBeenCalledWith('carol')
+    expect((input as HTMLInputElement).value).toBe('dave')
+  })
+
+  it('does not re-validate on blur when the input equals the committed value', async () => {
+    const lookupFn = vi.fn().mockResolvedValue([{ username: 'alice', active: true }])
+    const onValidatingChange = vi.fn()
+    render(
+      <PeopleInput value="alice" onChange={onChange} lookupFn={lookupFn} onValidatingChange={onValidatingChange} />,
+    )
+    // Blur without edits — e.g. focus leaving the field because the user
+    // clicked Submit. Must be a no-op: no lookup, no validating flicker
+    // (which would disable the submit button mid-click).
+    fireEvent.blur(screen.getByRole('textbox'))
+    await act(async () => {})
+    expect(lookupFn).not.toHaveBeenCalled()
+    expect(onValidatingChange).not.toHaveBeenCalledWith(true)
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it('reuses a loaded suggestion match on commit instead of a second lookup', async () => {
+    vi.useFakeTimers()
+    const lookupFn = vi.fn().mockResolvedValue([{ username: 'Carol', active: true }])
+    render(<PeopleInput value="" onChange={onChange} lookupFn={lookupFn} />)
+    const input = screen.getByRole('textbox')
+    fireEvent.change(input, { target: { value: 'carol' } })
+    // Debounced suggestion search fires once...
+    await act(async () => {
+      vi.advanceTimersByTime(300)
+    })
+    expect(lookupFn).toHaveBeenCalledTimes(1)
+
+    // ...and the commit reuses its exact match: no second request, the
+    // canonical-case username from the directory is committed synchronously.
+    fireEvent.blur(input)
+    await act(async () => {})
+    expect(lookupFn).toHaveBeenCalledTimes(1)
+    expect(onChange).toHaveBeenCalledWith('Carol')
+    expect(screen.queryByText('Validating person...')).toBeNull()
+    vi.useRealTimers()
+  })
+
+  it('rejects an inactive loaded suggestion match on commit without a second lookup', async () => {
+    vi.useFakeTimers()
+    const lookupFn = vi.fn().mockResolvedValue([{ username: 'carol', active: false }])
+    render(<PeopleInput value="" onChange={onChange} lookupFn={lookupFn} />)
+    const input = screen.getByRole('textbox')
+    fireEvent.change(input, { target: { value: 'carol' } })
+    await act(async () => {
+      vi.advanceTimersByTime(300)
+    })
+    fireEvent.blur(input)
+    await act(async () => {})
+    expect(lookupFn).toHaveBeenCalledTimes(1)
+    expect(onChange).not.toHaveBeenCalled()
+    expect(screen.getByText('Person is inactive')).toBeDefined()
+    vi.useRealTimers()
+  })
+
+  it('reports in-flight validation through onValidatingChange', async () => {
+    let resolveLookup!: (value: { username: string; active: boolean }[]) => void
+    const lookupFn = vi.fn(() =>
+      new Promise<{ username: string; active: boolean }[]>((resolve) => {
+        resolveLookup = resolve
+      }),
+    )
+    const onValidatingChange = vi.fn()
+    render(
+      <PeopleInput value="" onChange={onChange} lookupFn={lookupFn} onValidatingChange={onValidatingChange} />,
+    )
+    const input = screen.getByRole('textbox')
+    fireEvent.change(input, { target: { value: 'carol' } })
+    fireEvent.blur(input)
+    await screen.findByText('Validating person...')
+    expect(onValidatingChange).toHaveBeenLastCalledWith(true)
+
+    await act(async () => {
+      resolveLookup([{ username: 'carol', active: true }])
+    })
+    expect(onValidatingChange).toHaveBeenLastCalledWith(false)
+  })
+
+  it('reports validation cancelled (false) when the user edits during a pending lookup', async () => {
+    const lookupFn = vi.fn(() => new Promise<{ username: string; active: boolean }[]>(() => undefined))
+    const onValidatingChange = vi.fn()
+    render(
+      <PeopleInput value="" onChange={onChange} lookupFn={lookupFn} onValidatingChange={onValidatingChange} />,
+    )
+    const input = screen.getByRole('textbox')
+    fireEvent.change(input, { target: { value: 'carol' } })
+    fireEvent.blur(input)
+    await screen.findByText('Validating person...')
+    expect(onValidatingChange).toHaveBeenLastCalledWith(true)
+
+    fireEvent.change(input, { target: { value: 'dave' } })
+    expect(onValidatingChange).toHaveBeenLastCalledWith(false)
+  })
+
+  it('does not commit a typed person that is missing from the directory', async () => {
+    const lookupFn = vi.fn().mockResolvedValue([])
+    render(<PeopleInput value="" onChange={onChange} lookupFn={lookupFn} />)
+    const input = screen.getByRole('textbox')
+    fireEvent.change(input, { target: { value: 'asdfd' } })
+    fireEvent.blur(input)
+    await screen.findByRole('alert')
+    expect(onChange).not.toHaveBeenCalled()
+    expect(screen.getByText('Select an active person from the directory')).toBeDefined()
+    expect((input as HTMLInputElement).value).toBe('asdfd')
+  })
+
+  it('does not commit an inactive typed person', async () => {
+    const lookupFn = vi.fn().mockResolvedValue([{ username: 'carol', active: false }])
+    render(<PeopleInput value="" onChange={onChange} lookupFn={lookupFn} />)
+    const input = screen.getByRole('textbox')
+    fireEvent.change(input, { target: { value: 'carol' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    await screen.findByRole('alert')
+    expect(onChange).not.toHaveBeenCalled()
+    expect(screen.getByText('Person is inactive')).toBeDefined()
+  })
+
+  it('validates an owner suggestion before committing when lookupFn is present', async () => {
+    const lookupFn = vi.fn().mockResolvedValue([{ username: 'alice@example.com', active: true }])
+    render(<PeopleInput value="" onChange={onChange} lookupFn={lookupFn} />)
+    await userEvent.click(screen.getByRole('textbox'))
+    fireEvent.mouseDown(screen.getByRole('button', { name: 'alice@example.com' }))
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith('alice@example.com'))
+    expect(lookupFn).toHaveBeenCalledWith('alice@example.com')
+  })
+
   it('does not call lookupFn when input is less than 2 characters', () => {
     vi.useFakeTimers()
     const lookupFn = vi.fn().mockResolvedValue([])
@@ -107,6 +283,11 @@ describe('PeopleInput', () => {
   it('renders an inactive badge for the current value', () => {
     render(<PeopleInput value="alice" onChange={onChange} status={false} />)
     expect(screen.getByText('Inactive')).toBeDefined()
+  })
+
+  it('renders a not-verified badge when unknown status is explicitly shown', () => {
+    render(<EmployeeStatusBadge status={null} showUnknown />)
+    expect(screen.getByText('Not verified')).toBeDefined()
   })
 
   it('clears external results and does not throw when lookupFn rejects', async () => {

@@ -637,6 +637,50 @@ describe('ComponentDetailPage — solution flag dirty-gate', () => {
   })
 })
 
+describe('ComponentDetailPage — Save gating on owner validation', () => {
+  it('disables Save while GeneralTab reports the owner lookup in flight', async () => {
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    vi.mocked(GeneralTab).mockImplementation(({ component: c, form, onOwnerValidatingChange }) => {
+      useEffect(() => {
+        form.setValue('system', c.system ?? '')
+        form.setValue('displayName', c.displayName ?? '')
+      }, [c, form])
+      return React.createElement(
+        'div',
+        null,
+        React.createElement(
+          'button',
+          { 'data-testid': 'edit', onClick: () => form.setValue('displayName', 'X', { shouldDirty: true }) },
+          'edit',
+        ),
+        React.createElement(
+          'button',
+          { 'data-testid': 'validating-on', onClick: () => onOwnerValidatingChange?.(true) },
+          'on',
+        ),
+        React.createElement(
+          'button',
+          { 'data-testid': 'validating-off', onClick: () => onOwnerValidatingChange?.(false) },
+          'off',
+        ),
+      )
+    })
+    renderPage({ ...baseComponent, canEdit: true }, user)
+
+    // Dirty edit so the dirty-gate passes and Save starts enabled.
+    fireEvent.click(screen.getByTestId('edit'))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled())
+
+    fireEvent.click(screen.getByTestId('validating-on'))
+    const save = screen.getByRole('button', { name: 'Save' })
+    expect(save).toBeDisabled()
+    expect(save.parentElement).toHaveAttribute('title', 'Validating component owner…')
+
+    fireEvent.click(screen.getByTestId('validating-off'))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled())
+  })
+})
+
 describe('ComponentDetailPage — Save dirty-gate', () => {
   it('Save is disabled on a pristine form, enables after a real edit, then PATCHes', async () => {
     vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {

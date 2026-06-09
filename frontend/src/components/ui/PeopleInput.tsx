@@ -11,20 +11,33 @@ interface PeopleInputProps {
   placeholder?: string
   lookupFn?: (query: string) => Promise<EmployeeMatch[]>
   status?: boolean | null
+  /**
+   * Reports the in-flight state of the async commit validation (true on
+   * lookup start, false on resolve/cancel/unmount). Parents use it to hold
+   * their submit action while a typed person has not committed yet —
+   * otherwise a fast submit reads the form before onChange fires and blocks
+   * on a misleading "required" error.
+   */
+  onValidatingChange?: (validating: boolean) => void
 }
 
 export function EmployeeStatusBadge({
   status,
   showActive = false,
+  showUnknown = false,
 }: {
   status?: boolean | null
   showActive?: boolean
+  showUnknown?: boolean
 }) {
   if (status === false) {
     return <Badge variant="destructive" className="shrink-0">Inactive</Badge>
   }
   if (showActive && status === true) {
     return <Badge variant="success" className="shrink-0">Active</Badge>
+  }
+  if (showUnknown && status === null) {
+    return <Badge variant="outline" className="shrink-0">Not verified</Badge>
   }
   return null
 }
@@ -36,16 +49,47 @@ export function PeopleInput({
   placeholder = 'AD userkey',
   lookupFn,
   status,
+  onValidatingChange,
 }: PeopleInputProps) {
   const { data: owners = [] } = useOwners()
   const [open, setOpen] = useState(false)
   const [inputValue, setInputValue] = useState(value)
   const [externalResults, setExternalResults] = useState<EmployeeMatch[]>([])
+  const [validationError, setValidationError] = useState<string | null>(null)
+  const [validating, setValidating] = useState(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const validationRunRef = useRef(0)
+  const skipNextEmptySyncRef = useRef(false)
+  // Latest-callback ref so effects keyed on [value] don't have to depend on a
+  // possibly-inline parent lambda.
+  const onValidatingChangeRef = useRef(onValidatingChange)
+  onValidatingChangeRef.current = onValidatingChange
+
+  const updateValidating = (next: boolean) => {
+    setValidating(next)
+    onValidatingChangeRef.current?.(next)
+  }
 
   useEffect(() => {
+    validationRunRef.current += 1
+    setValidating(false)
+    onValidatingChangeRef.current?.(false)
+    setValidationError(null)
+    if (skipNextEmptySyncRef.current && value === '') {
+      skipNextEmptySyncRef.current = false
+      return
+    }
     setInputValue(value)
   }, [value])
+
+  useEffect(() => {
+    return () => {
+      validationRunRef.current += 1
+      // The parent's "hold submit" flag must not stay stuck when the input
+      // unmounts mid-validation.
+      onValidatingChangeRef.current?.(false)
+    }
+  }, [])
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -78,6 +122,15 @@ export function PeopleInput({
     ? owners.filter((o) => o.toLowerCase().includes(inputValue.toLowerCase()))
     : owners
 
+  // Exact (case-insensitive) directory match already fetched by the debounced
+  // suggestion search. Commit reuses it — username/active are entity facts
+  // keyed by username, not by the query that surfaced them — saving a second
+  // lookup round-trip on blur/Enter and canonicalizing the typed case.
+  const exactExternalMatch = (raw: string) => {
+    const candidate = raw.trim().toLowerCase()
+    return externalResults.find((result) => result.username.toLowerCase() === candidate)
+  }
+
   const exactStatuses = new Map(externalResults.map((result) => [result.username, result.active]))
   const suggestions = [
     ...filtered.map((username) => ({ username, active: exactStatuses.get(username) })),
@@ -86,50 +139,133 @@ export function PeopleInput({
       .map((result) => ({ username: result.username, active: result.active })),
   ].slice(0, 10)
 
+  const commitCandidate = async (raw: string, knownActive?: boolean) => {
+    const candidate = raw.trim()
+    setInputValue(candidate)
+    setOpen(false)
+    setValidationError(null)
+
+    // Validated mode only: already the committed value (e.g. blur caused by
+    // clicking Submit right after a successful commit) — nothing to
+    // (re-)validate. Without this early-out the re-validation would flip the
+    // parent's validating flag and a submit click landing in that window
+    // would hit a disabled button. Without lookupFn blur keeps the legacy
+    // re-commit contract.
+    if (lookupFn && candidate && candidate === value.trim()) {
+      return
+    }
+
+    if (!candidate) {
+      onChange('')
+      return
+    }
+
+    if (!lookupFn) {
+      onChange(candidate)
+      return
+    }
+
+    if (knownActive === true) {
+      onChange(candidate)
+      return
+    }
+
+    if (knownActive === false) {
+      setValidationError('Person is inactive')
+      return
+    }
+
+    const runId = validationRunRef.current + 1
+    validationRunRef.current = runId
+    updateValidating(true)
+    try {
+      const results = (await lookupFn(candidate)) ?? []
+      if (validationRunRef.current !== runId) return
+      const exact = results.find(
+        (result) => result.username.toLowerCase() === candidate.toLowerCase(),
+      )
+      if (!exact) {
+        setValidationError('Select an active person from the directory')
+        return
+      }
+      if (!exact.active) {
+        setValidationError('Person is inactive')
+        return
+      }
+      setInputValue(exact.username)
+      onChange(exact.username)
+    } catch {
+      if (validationRunRef.current === runId) {
+        setValidationError('Could not validate person')
+      }
+    } finally {
+      if (validationRunRef.current === runId) {
+        updateValidating(false)
+      }
+    }
+  }
+
   return (
-    <div ref={wrapperRef} className="flex items-center gap-2">
-      <div className="relative min-w-0 flex-1">
-        <Input
-          id={id}
-          value={inputValue}
-          onChange={(e) => {
-            setInputValue(e.target.value)
-            setOpen(true)
-          }}
-          onFocus={() => setOpen(true)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              onChange(inputValue)
-              setOpen(false)
-            }
-          }}
-          onBlur={() => {
-            onChange(inputValue)
-          }}
-          placeholder={placeholder}
-        />
-        {open && suggestions.length > 0 && (
-          <div className="absolute z-50 mt-1 w-full max-h-48 overflow-auto rounded-md border bg-popover shadow-md">
-            {suggestions.map((suggestion) => (
-              <button
-                key={suggestion.username}
-                type="button"
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
-                onMouseDown={(e) => {
-                  e.preventDefault()
-                  setInputValue(suggestion.username)
-                  onChange(suggestion.username)
-                  setOpen(false)
-                }}
-              >
-                <span className="min-w-0 flex-1 truncate">{suggestion.username}</span>
-                <EmployeeStatusBadge status={suggestion.active} showActive />
-              </button>
-            ))}
-          </div>
-        )}
+    <div ref={wrapperRef} className="space-y-1">
+      <div className="flex items-center gap-2">
+        <div className="relative min-w-0 flex-1">
+          <Input
+            id={id}
+            value={inputValue}
+            onChange={(e) => {
+              const nextValue = e.target.value
+              validationRunRef.current += 1
+              updateValidating(false)
+              setInputValue(nextValue)
+              setValidationError(null)
+              setOpen(true)
+              if (lookupFn && value.trim() !== '') {
+                skipNextEmptySyncRef.current = true
+                onChange('')
+              }
+            }}
+            onFocus={() => setOpen(true)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                const match = exactExternalMatch(inputValue)
+                void commitCandidate(match?.username ?? inputValue, match?.active)
+              }
+            }}
+            onBlur={() => {
+              const match = exactExternalMatch(inputValue)
+              void commitCandidate(match?.username ?? inputValue, match?.active)
+            }}
+            placeholder={placeholder}
+            aria-invalid={Boolean(validationError)}
+          />
+          {open && suggestions.length > 0 && (
+            <div className="absolute z-50 mt-1 w-full max-h-48 overflow-auto rounded-md border bg-popover shadow-md">
+              {suggestions.map((suggestion) => (
+                <button
+                  key={suggestion.username}
+                  type="button"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    void commitCandidate(suggestion.username, suggestion.active)
+                  }}
+                >
+                  <span className="min-w-0 flex-1 truncate">{suggestion.username}</span>
+                  <EmployeeStatusBadge status={suggestion.active} showActive />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <EmployeeStatusBadge status={status} />
       </div>
-      <EmployeeStatusBadge status={status} />
+      {validating && (
+        <p className="text-xs text-muted-foreground">Validating person...</p>
+      )}
+      {validationError && (
+        <p role="alert" className="text-xs text-destructive">{validationError}</p>
+      )}
     </div>
   )
 }
