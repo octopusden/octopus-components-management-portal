@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -156,6 +156,54 @@ describe('CreateComponentDialog — scratch mode base', () => {
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() => expect(screen.getByText(/component key can only contain/i)).toBeDefined())
     expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('maps a CRS componentOwner 400 inline', async () => {
+    mockMutateAsync.mockRejectedValue(
+      new ApiError(
+        400,
+        'componentOwner is not an active employee',
+        JSON.stringify({ errorMessage: 'componentOwner is not an active employee' }),
+      ),
+    )
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    // Client-side lookup (mock) says active — the server is the one rejecting.
+    await fillBaseFields('inactive-user')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('is not an active employee')).toBeDefined()
+    })
+    expect(mockToast).not.toHaveBeenCalled()
+  })
+
+  it('disables Create while the typed owner is still being validated', async () => {
+    let resolveLookup!: (value: { username: string; active: boolean }[]) => void
+    mockLookupEmployee.mockImplementation(
+      () =>
+        new Promise<{ username: string; active: boolean }[]>((resolve) => {
+          resolveLookup = resolve
+        }),
+    )
+    mockMutateAsync.mockResolvedValue({ id: 'comp-1', name: 'widget' })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
+    const input = screen.getByPlaceholderText('AD userkey')
+    await userEvent.type(input, 'alice')
+    fireEvent.blur(input)
+
+    await screen.findByText('Validating person...')
+    expect((screen.getByRole('button', { name: /^create$/i }) as HTMLButtonElement).disabled).toBe(true)
+
+    await act(async () => {
+      resolveLookup([{ username: 'alice', active: true }])
+    })
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: /^create$/i }) as HTMLButtonElement).disabled).toBe(false),
+    )
   })
 
   it('blocks submit when component owner is not found in the directory', async () => {

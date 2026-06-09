@@ -11,6 +11,14 @@ interface PeopleInputProps {
   placeholder?: string
   lookupFn?: (query: string) => Promise<EmployeeMatch[]>
   status?: boolean | null
+  /**
+   * Reports the in-flight state of the async commit validation (true on
+   * lookup start, false on resolve/cancel/unmount). Parents use it to hold
+   * their submit action while a typed person has not committed yet —
+   * otherwise a fast submit reads the form before onChange fires and blocks
+   * on a misleading "required" error.
+   */
+  onValidatingChange?: (validating: boolean) => void
 }
 
 export function EmployeeStatusBadge({
@@ -41,6 +49,7 @@ export function PeopleInput({
   placeholder = 'AD userkey',
   lookupFn,
   status,
+  onValidatingChange,
 }: PeopleInputProps) {
   const { data: owners = [] } = useOwners()
   const [open, setOpen] = useState(false)
@@ -51,10 +60,20 @@ export function PeopleInput({
   const wrapperRef = useRef<HTMLDivElement>(null)
   const validationRunRef = useRef(0)
   const skipNextEmptySyncRef = useRef(false)
+  // Latest-callback ref so effects keyed on [value] don't have to depend on a
+  // possibly-inline parent lambda.
+  const onValidatingChangeRef = useRef(onValidatingChange)
+  onValidatingChangeRef.current = onValidatingChange
+
+  const updateValidating = (next: boolean) => {
+    setValidating(next)
+    onValidatingChangeRef.current?.(next)
+  }
 
   useEffect(() => {
     validationRunRef.current += 1
     setValidating(false)
+    onValidatingChangeRef.current?.(false)
     setValidationError(null)
     if (skipNextEmptySyncRef.current && value === '') {
       skipNextEmptySyncRef.current = false
@@ -66,6 +85,9 @@ export function PeopleInput({
   useEffect(() => {
     return () => {
       validationRunRef.current += 1
+      // The parent's "hold submit" flag must not stay stuck when the input
+      // unmounts mid-validation.
+      onValidatingChangeRef.current?.(false)
     }
   }, [])
 
@@ -114,6 +136,16 @@ export function PeopleInput({
     setOpen(false)
     setValidationError(null)
 
+    // Validated mode only: already the committed value (e.g. blur caused by
+    // clicking Submit right after a successful commit) — nothing to
+    // (re-)validate. Without this early-out the re-validation would flip the
+    // parent's validating flag and a submit click landing in that window
+    // would hit a disabled button. Without lookupFn blur keeps the legacy
+    // re-commit contract.
+    if (lookupFn && candidate && candidate === value.trim()) {
+      return
+    }
+
     if (!candidate) {
       onChange('')
       return
@@ -136,7 +168,7 @@ export function PeopleInput({
 
     const runId = validationRunRef.current + 1
     validationRunRef.current = runId
-    setValidating(true)
+    updateValidating(true)
     try {
       const results = (await lookupFn(candidate)) ?? []
       if (validationRunRef.current !== runId) return
@@ -159,7 +191,7 @@ export function PeopleInput({
       }
     } finally {
       if (validationRunRef.current === runId) {
-        setValidating(false)
+        updateValidating(false)
       }
     }
   }
@@ -174,7 +206,7 @@ export function PeopleInput({
             onChange={(e) => {
               const nextValue = e.target.value
               validationRunRef.current += 1
-              setValidating(false)
+              updateValidating(false)
               setInputValue(nextValue)
               setValidationError(null)
               setOpen(true)

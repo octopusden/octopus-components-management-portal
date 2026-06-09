@@ -109,6 +109,61 @@ describe('PeopleInput', () => {
     expect((input as HTMLInputElement).value).toBe('dave')
   })
 
+  it('does not re-validate on blur when the input equals the committed value', async () => {
+    const lookupFn = vi.fn().mockResolvedValue([{ username: 'alice', active: true }])
+    const onValidatingChange = vi.fn()
+    render(
+      <PeopleInput value="alice" onChange={onChange} lookupFn={lookupFn} onValidatingChange={onValidatingChange} />,
+    )
+    // Blur without edits — e.g. focus leaving the field because the user
+    // clicked Submit. Must be a no-op: no lookup, no validating flicker
+    // (which would disable the submit button mid-click).
+    fireEvent.blur(screen.getByRole('textbox'))
+    await act(async () => {})
+    expect(lookupFn).not.toHaveBeenCalled()
+    expect(onValidatingChange).not.toHaveBeenCalledWith(true)
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it('reports in-flight validation through onValidatingChange', async () => {
+    let resolveLookup!: (value: { username: string; active: boolean }[]) => void
+    const lookupFn = vi.fn(() =>
+      new Promise<{ username: string; active: boolean }[]>((resolve) => {
+        resolveLookup = resolve
+      }),
+    )
+    const onValidatingChange = vi.fn()
+    render(
+      <PeopleInput value="" onChange={onChange} lookupFn={lookupFn} onValidatingChange={onValidatingChange} />,
+    )
+    const input = screen.getByRole('textbox')
+    fireEvent.change(input, { target: { value: 'carol' } })
+    fireEvent.blur(input)
+    await screen.findByText('Validating person...')
+    expect(onValidatingChange).toHaveBeenLastCalledWith(true)
+
+    await act(async () => {
+      resolveLookup([{ username: 'carol', active: true }])
+    })
+    expect(onValidatingChange).toHaveBeenLastCalledWith(false)
+  })
+
+  it('reports validation cancelled (false) when the user edits during a pending lookup', async () => {
+    const lookupFn = vi.fn(() => new Promise<{ username: string; active: boolean }[]>(() => undefined))
+    const onValidatingChange = vi.fn()
+    render(
+      <PeopleInput value="" onChange={onChange} lookupFn={lookupFn} onValidatingChange={onValidatingChange} />,
+    )
+    const input = screen.getByRole('textbox')
+    fireEvent.change(input, { target: { value: 'carol' } })
+    fireEvent.blur(input)
+    await screen.findByText('Validating person...')
+    expect(onValidatingChange).toHaveBeenLastCalledWith(true)
+
+    fireEvent.change(input, { target: { value: 'dave' } })
+    expect(onValidatingChange).toHaveBeenLastCalledWith(false)
+  })
+
   it('does not commit a typed person that is missing from the directory', async () => {
     const lookupFn = vi.fn().mockResolvedValue([])
     render(<PeopleInput value="" onChange={onChange} lookupFn={lookupFn} />)
