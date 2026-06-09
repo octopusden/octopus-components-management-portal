@@ -49,6 +49,14 @@ const CATALOG: CatalogRow[] = [
   { section: 'component', fieldName: 'groupKey',            label: 'groupKey', locked: true },
   { section: 'component', fieldName: 'distributionExplicit', label: 'distributionExplicit' },
   { section: 'component', fieldName: 'distributionExternal', label: 'distributionExternal' },
+  { section: 'component', fieldName: 'releasesInDefaultBranch', label: 'releasesInDefaultBranch' },
+  // Remaining updateComponent-gated component fields (component.<field> paths).
+  { section: 'component', fieldName: 'copyright',              label: 'copyright'              },
+  { section: 'component', fieldName: 'releaseManager',         label: 'releaseManager'         },
+  { section: 'component', fieldName: 'securityChampion',       label: 'securityChampion'       },
+  { section: 'component', fieldName: 'jiraDisplayName',        label: 'jiraDisplayName'        },
+  { section: 'component', fieldName: 'jiraHotfixVersionFormat', label: 'jiraHotfixVersionFormat' },
+  { section: 'component', fieldName: 'vcsExternalRegistry',    label: 'vcsExternalRegistry'    },
   // Build Fields — Appendix B
   { section: 'build', fieldName: 'buildSystem',   label: 'buildSystem' },
   { section: 'build', fieldName: 'javaVersion',   label: 'javaVersion'   },

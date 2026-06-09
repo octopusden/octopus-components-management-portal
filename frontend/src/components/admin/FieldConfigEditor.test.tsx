@@ -83,7 +83,8 @@ describe('FieldConfigEditor — catalog rows', () => {
     renderEditor({})
     const fields = [
       'name', 'displayName', 'solution', 'componentOwner', 'system', 'productType',
-      'clientCode', 'groupId', 'distributionExplicit', 'distributionExternal',
+      'clientCode', 'groupId', 'distributionExplicit', 'distributionExternal', 'releasesInDefaultBranch',
+      'copyright', 'releaseManager', 'securityChampion', 'jiraDisplayName', 'jiraHotfixVersionFormat', 'vcsExternalRegistry',
       'buildSystem', 'javaVersion', 'gradleVersion',
       'parentComponentName', 'canBeParent', 'groupKey', 'projectKey', 'technical',
       'vcsPath', 'branch',
@@ -131,6 +132,12 @@ describe('FieldConfigEditor — effective values (read-only display)', () => {
       component: { displayName: { visibility: 'readonly', defaultValue: 'My Component' } },
     })
     expect(screen.getByTestId('component.displayName-default').textContent).toBe('My Component')
+  })
+
+  it('renders releasesInDefaultBranch as readonly + not searchable from config', () => {
+    renderEditor({ component: { releasesInDefaultBranch: { visibility: 'readonly', searchable: 'None' } } })
+    expect(screen.getByTestId('component.releasesInDefaultBranch-visibility').getAttribute('data-visibility')).toBe('readonly')
+    expect(screen.getByTestId('component.releasesInDefaultBranch-searchable').getAttribute('data-searchable')).toBe('None')
   })
 
   it('reads the flat shape (backward-compat)', () => {
