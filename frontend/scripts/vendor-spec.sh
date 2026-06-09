@@ -15,6 +15,10 @@
 #
 # The CRS ref is pinned below. Override per-invocation with CRS_SPEC_REF=<ref>.
 # Requires the GitHub CLI (`gh`) authenticated against github.com.
+#
+# Load-bearing precondition: CRS is a PUBLIC repo, so a Portal CI run reading
+# it with the default GITHUB_TOKEN works. If CRS ever goes private this fetch
+# 404s/403s in CI and a PAT / GitHub App token with cross-repo read is needed.
 
 set -euo pipefail
 
@@ -36,13 +40,28 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEST="${SCRIPT_DIR}/../src/lib/api/v4.json"
 
 # Fetch CRS's spec into a temp file. Never write the destination directly —
-# a failed fetch must not truncate the committed copy. `set -e` aborts on a
-# non-zero `gh` exit, so a fetch failure fails the gate (fail-closed) rather
-# than treating an empty/partial body as the contract.
+# a failed fetch must not truncate the committed copy. Retry a few times so a
+# transient network/API blip doesn't fail an unrelated Portal PR's gate; if
+# every attempt fails `set -e` aborts (fail-closed) rather than treating an
+# empty/partial body as the contract. Each attempt re-truncates $tmp.
 tmp="$(mktemp)"
 trap 'rm -f "$tmp"' EXIT
-gh api "repos/${CRS_REPO}/contents/${CRS_SPEC_PATH}?ref=${CRS_SPEC_REF}" \
-  -H "Accept: application/vnd.github.raw+json" > "$tmp"
+
+fetch_crs_spec() {
+  local attempt
+  for attempt in 1 2 3; do
+    if gh api "repos/${CRS_REPO}/contents/${CRS_SPEC_PATH}?ref=${CRS_SPEC_REF}" \
+         -H "Accept: application/vnd.github.raw+json" > "$tmp"; then
+      return 0
+    fi
+    echo "warn: failed to fetch CRS spec (attempt ${attempt}/3); retrying..." >&2
+    sleep $(( attempt * 2 ))
+  done
+  echo "ERROR: could not fetch CRS spec from ${CRS_REPO}@${CRS_SPEC_REF} after 3 attempts." >&2
+  return 1
+}
+
+fetch_crs_spec
 
 if [ "${1:-}" = "--check" ]; then
   # diff exits 0 (same), 1 (differ), or >=2 (error, e.g. DEST unreadable).

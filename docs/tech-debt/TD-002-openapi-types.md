@@ -8,6 +8,12 @@ Part (a) — **DONE** (issue #89): CRS publishes a drift-gated spec (CRS TD-003,
 
 What remains: (b) retiring `frontend/src/lib/types.ts` in favour of re-exports from `schema.d.ts` once the two intentional drifts noted in `e2e2199`'s commit message (`?: T | null` vs `?: T`, `value: unknown` vs `Record<string, never>`) are resolved upstream or accepted as a thin compatibility shim.
 
+### Known tradeoff in the part (a) gate (and a follow-up)
+
+`vendor-spec:check` pins to the CRS `v3` **branch**, which is required for the gate to detect anything — pinning to a SHA would make the check a tautology (the vendored bytes were `cp`'d from that SHA). The cost of a moving ref: a Portal PR with zero spec-related changes can flip **red** the moment CRS pushes to `v3`, and the remediation (`npm run vendor-spec` + commit) then pulls unrelated CRS contract changes into an unrelated feature PR — mixing concerns and landing schema churn that PR's reviewers didn't sign up for. The diff is also byte-exact, so a non-semantic CRS reserialization (key reorder, whitespace) trips the gate even when the contract is unchanged ("gate red" ≠ "contract changed"; the remediation message is honest about this).
+
+Acceptable for the single-consumer MVP. **Follow-up (post-cutover):** replace the per-PR gate with a **scheduled workflow that opens a dedicated `chore(openapi): re-vendor v4.json` PR** when drift is detected, so contract bumps are their own reviewable unit and never surprise-red in-flight PRs. Tracked alongside the CRS-spec-publication item in [TD-005](TD-005-schema-v2-followups.md).
+
 ## Context
 
 The CRS REST API (v4) is the contract between Portal frontend and CRS backend. Today, the TypeScript types that describe that contract live in [`frontend/src/lib/types.ts`](../../frontend/src/lib/types.ts) and are maintained **by hand**:
