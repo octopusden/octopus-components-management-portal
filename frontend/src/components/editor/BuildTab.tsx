@@ -57,16 +57,21 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
   // override on the version field itself also keeps it visible, otherwise its
   // inline-override list would become unreachable. Hidden ≠ cleared: a hidden
   // field is omitted from the PATCH payload and stays untouched server-side.
-  const overrideRows = selectOverrideRows(component)
+  // Only SCALAR_OVERRIDE rows carry a per-range scalar value; a MARKER row's
+  // overriddenAttribute names a child collection and must not count here.
+  const scalarOverrideRows = selectOverrideRows(component).filter(
+    (r) => r.rowType === 'SCALAR_OVERRIDE',
+  )
   const effectiveBuildSystems = new Set(
     [
       buildSystem,
-      ...overrideRows
+      ...scalarOverrideRows
         .filter((r) => r.overriddenAttribute === 'build.buildSystem')
         .map((r) => r.build?.buildSystem),
     ].filter((s): s is string => Boolean(s)),
   )
-  const hasOverrideOn = (attr: string) => overrideRows.some((r) => r.overriddenAttribute === attr)
+  const hasOverrideOn = (attr: string) =>
+    scalarOverrideRows.some((r) => r.overriddenAttribute === attr)
   const showMavenVersion = effectiveBuildSystems.has('MAVEN') || hasOverrideOn('build.mavenVersion')
   const showGradleVersion = effectiveBuildSystems.has('GRADLE') || hasOverrideOn('build.gradleVersion')
 

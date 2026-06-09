@@ -502,7 +502,7 @@ describe('EscrowTab — migrated build settings save', () => {
     expect((mutateAsync.mock.calls[0]![0] as any).baseConfiguration.requiredTools).toEqual([])
   })
 
-  it('sends requiredTools: null (don\'t touch) when no BASE row is loaded', async () => {
+  it('sends requiredTools: null and omits build entirely when no BASE row is loaded', async () => {
     setProductTypeVisibility('hidden')
     const mutateAsync = vi.fn().mockResolvedValue({})
     const component = baseComponent({ configurations: [] })
@@ -514,7 +514,12 @@ describe('EscrowTab — migrated build settings save', () => {
     await vi.waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce())
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect((mutateAsync.mock.calls[0]![0] as any).baseConfiguration.requiredTools).toBeNull()
+    const baseConfiguration = (mutateAsync.mock.calls[0]![0] as any).baseConfiguration
+    expect(baseConfiguration.requiredTools).toBeNull()
+    // Without a loaded BASE row the form state is all defaults — sending
+    // build {deprecated:false, requiredProject:false, ...} would write
+    // zero-values into the row the server auto-creates. Omit the aspect.
+    expect('build' in baseConfiguration).toBe(false)
   })
 })
 

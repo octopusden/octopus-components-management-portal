@@ -109,13 +109,19 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
           // Migrated build settings. Only the fields THIS tab renders are sent —
           // CRS PATCH applies per-field (?.let), so omitted scalars (buildSystem,
           // versions, ...) stay untouched and the Build tab remains their only
-          // writer.
-          build: {
-            buildTasks: buildTasks || null,
-            systemProperties: systemProperties || null,
-            deprecated,
-            requiredProject,
-          },
+          // writer. Same no-BASE-row guard as requiredTools: with nothing loaded
+          // the booleans are bare defaults and would write zero-values into the
+          // row the server auto-creates.
+          ...(baseRowPresent
+            ? {
+                build: {
+                  buildTasks: buildTasks || null,
+                  systemProperties: systemProperties || null,
+                  deprecated,
+                  requiredProject,
+                },
+              }
+            : {}),
           // requiredTools lives at the BaseConfigurationRequest level, not inside build
           requiredTools: requiredToolsPayload,
         },
