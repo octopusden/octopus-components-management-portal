@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -21,6 +21,8 @@ import {
   DialogClose,
 } from './ui/dialog'
 import { useFieldOptions } from '../hooks/useFieldOptions'
+import { useFieldConfig } from '../hooks/useAdminConfig'
+import { visibilityFor } from '../hooks/useFieldConfig'
 import { useComponent, useCreateComponent } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
 import { ApiError } from '../lib/api'
@@ -38,7 +40,12 @@ const NAME_REGEX = /^[a-zA-Z0-9_\-./]+$/
 // here: CRS only requires it when a copyright catalog is configured server-side,
 // which the Portal can't detect — a server 400 is mapped inline instead, so we
 // don't block valid creates in catalog-less environments.
-const createSchema = z
+// Schema is built per-render from field-config visibility: a field hidden/
+// readonly in field-config is removed from the create form, so its
+// requirement (e.g. RM/SC for explicit+external) must not fire. `editable`
+// returns true when `component.<field>` is editable.
+function makeCreateSchema(editable: (field: string) => boolean) {
+  return z
   .object({
     name: z
       .string()
@@ -63,14 +70,14 @@ const createSchema = z
   })
   .superRefine((v, ctx) => {
     if (!(v.distributionExplicit && v.distributionExternal)) return
-    if (v.releaseManager.length === 0) {
+    if (editable('releaseManager') && v.releaseManager.length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['releaseManager'],
         message: 'At least one Release Manager is required for an explicit + external component',
       })
     }
-    if (v.securityChampion.length === 0) {
+    if (editable('securityChampion') && v.securityChampion.length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['securityChampion'],
@@ -89,6 +96,7 @@ const createSchema = z
       if (!c.packageName.trim()) missing('packageName', 'Package name is required')
     }
   })
+}
 
 const EMPTY_COORDINATE: CreateFormValues['coordinate'] = {
   type: 'maven',
@@ -234,6 +242,16 @@ function CreateComponentForm({ source, isCopy, onClose }: CreateComponentFormPro
   const createMutation = useCreateComponent()
   const { toast } = useToast()
 
+  // Field-config visibility (code-as-config): a field that is hidden/readonly is
+  // removed from the create form and never sent. One read drives both the schema
+  // and the conditional renders below (generic — no per-field special-casing).
+  const { data: fieldConfigData } = useFieldConfig()
+  const editable = useCallback(
+    (field: string) => visibilityFor(fieldConfigData, `component.${field}`) === 'editable',
+    [fieldConfigData],
+  )
+  const schema = useMemo(() => makeCreateSchema(editable), [editable])
+
   const {
     register,
     handleSubmit,
@@ -244,7 +262,7 @@ function CreateComponentForm({ source, isCopy, onClose }: CreateComponentFormPro
     control,
     formState: { errors, isSubmitting },
   } = useForm<CreateFormValues>({
-    resolver: zodResolver(createSchema),
+    resolver: zodResolver(schema),
     defaultValues: initialValues(source),
   })
 
@@ -270,7 +288,7 @@ function CreateComponentForm({ source, isCopy, onClose }: CreateComponentFormPro
 
   async function onSubmit(values: CreateFormValues) {
     try {
-      const component = await createMutation.mutateAsync(buildCreateRequest(values, source ?? undefined))
+      const component = await createMutation.mutateAsync(buildCreateRequest(values, source ?? undefined, editable))
       toast({ title: 'Component created', description: `"${component.name}" was created.` })
       onClose()
       navigate(`/components/${component.id}`)
@@ -322,10 +340,12 @@ function CreateComponentForm({ source, isCopy, onClose }: CreateComponentFormPro
         {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
       </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="create-displayName">Display Name</Label>
-        <Input id="create-displayName" placeholder="My Component" {...register('displayName')} />
-      </div>
+      {editable('displayName') && (
+        <div className="space-y-1.5">
+          <Label htmlFor="create-displayName">Display Name</Label>
+          <Input id="create-displayName" placeholder="My Component" {...register('displayName')} />
+        </div>
+      )}
 
       <div className="space-y-1.5">
         <Label htmlFor="create-buildSystem">
@@ -377,25 +397,29 @@ function CreateComponentForm({ source, isCopy, onClose }: CreateComponentFormPro
         )}
       </div>
 
-      <div className="flex items-center gap-2">
-        <input
-          id="create-distributionExplicit"
-          type="checkbox"
-          className="h-4 w-4 rounded border-input accent-primary"
-          {...register('distributionExplicit')}
-        />
-        <Label htmlFor="create-distributionExplicit">Explicit</Label>
-      </div>
+      {editable('distributionExplicit') && (
+        <div className="flex items-center gap-2">
+          <input
+            id="create-distributionExplicit"
+            type="checkbox"
+            className="h-4 w-4 rounded border-input accent-primary"
+            {...register('distributionExplicit')}
+          />
+          <Label htmlFor="create-distributionExplicit">Explicit</Label>
+        </div>
+      )}
 
-      <div className="flex items-center gap-2">
-        <input
-          id="create-distributionExternal"
-          type="checkbox"
-          className="h-4 w-4 rounded border-input accent-primary"
-          {...register('distributionExternal')}
-        />
-        <Label htmlFor="create-distributionExternal">External</Label>
-      </div>
+      {editable('distributionExternal') && (
+        <div className="flex items-center gap-2">
+          <input
+            id="create-distributionExternal"
+            type="checkbox"
+            className="h-4 w-4 rounded border-input accent-primary"
+            {...register('distributionExternal')}
+          />
+          <Label htmlFor="create-distributionExternal">External</Label>
+        </div>
+      )}
 
       {/* Required-for-explicit+external block. CRS rejects an explicit+
           external component without release managers, security champions,
@@ -407,48 +431,54 @@ function CreateComponentForm({ source, isCopy, onClose }: CreateComponentFormPro
             Required for explicit + external
           </legend>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="create-releaseManager">
-              Release Managers <span className="text-destructive">*</span>
-            </Label>
-            <PeopleListInput
-              value={releaseManager}
-              onChange={(val) =>
-                setValue('releaseManager', val, { shouldValidate: true, shouldDirty: true })
-              }
-              lookupFn={lookupEmployee}
-              statuses={employeeStatuses}
-            />
-            {errors.releaseManager && (
-              <p className="text-xs text-destructive">{errors.releaseManager.message}</p>
-            )}
-          </div>
+          {editable('releaseManager') && (
+            <div className="space-y-1.5">
+              <Label htmlFor="create-releaseManager">
+                Release Managers <span className="text-destructive">*</span>
+              </Label>
+              <PeopleListInput
+                value={releaseManager}
+                onChange={(val) =>
+                  setValue('releaseManager', val, { shouldValidate: true, shouldDirty: true })
+                }
+                lookupFn={lookupEmployee}
+                statuses={employeeStatuses}
+              />
+              {errors.releaseManager && (
+                <p className="text-xs text-destructive">{errors.releaseManager.message}</p>
+              )}
+            </div>
+          )}
 
-          <div className="space-y-1.5">
-            <Label htmlFor="create-securityChampion">
-              Security Champions <span className="text-destructive">*</span>
-            </Label>
-            <PeopleListInput
-              value={securityChampion}
-              onChange={(val) =>
-                setValue('securityChampion', val, { shouldValidate: true, shouldDirty: true })
-              }
-              lookupFn={lookupEmployee}
-              statuses={employeeStatuses}
-            />
-            {errors.securityChampion && (
-              <p className="text-xs text-destructive">{errors.securityChampion.message}</p>
-            )}
-          </div>
+          {editable('securityChampion') && (
+            <div className="space-y-1.5">
+              <Label htmlFor="create-securityChampion">
+                Security Champions <span className="text-destructive">*</span>
+              </Label>
+              <PeopleListInput
+                value={securityChampion}
+                onChange={(val) =>
+                  setValue('securityChampion', val, { shouldValidate: true, shouldDirty: true })
+                }
+                lookupFn={lookupEmployee}
+                statuses={employeeStatuses}
+              />
+              {errors.securityChampion && (
+                <p className="text-xs text-destructive">{errors.securityChampion.message}</p>
+              )}
+            </div>
+          )}
 
-          <div className="space-y-1.5">
-            <Label htmlFor="create-copyright">Copyright</Label>
-            <Input id="create-copyright" placeholder="(c) 2026 Acme Inc." {...register('copyright')} />
-            <p className="text-xs text-muted-foreground">Required if a copyright catalog is configured.</p>
-            {errors.copyright && (
-              <p className="text-xs text-destructive">{errors.copyright.message}</p>
-            )}
-          </div>
+          {editable('copyright') && (
+            <div className="space-y-1.5">
+              <Label htmlFor="create-copyright">Copyright</Label>
+              <Input id="create-copyright" placeholder="(c) 2026 Acme Inc." {...register('copyright')} />
+              <p className="text-xs text-muted-foreground">Required if a copyright catalog is configured.</p>
+              {errors.copyright && (
+                <p className="text-xs text-destructive">{errors.copyright.message}</p>
+              )}
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label htmlFor="create-coordinate-type">
