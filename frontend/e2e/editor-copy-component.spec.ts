@@ -334,8 +334,11 @@ test.describe('Create component from scratch — admin smoke', () => {
     await ownerInput.fill('owner-oscar')
     // Click the suggestion to commit + close the popup. (Enter would submit the
     // whole form; blur commits but leaves the popup open over the checkbox.)
-    // The commit resolves through the (mocked) directory lookup — wait it out
-    // so the Create button isn't held by the validating guard later.
+    // A fast click lands before the 300ms suggestion debounce annotates the
+    // entry with `active`, so the commit may go through the (mocked) network
+    // validation — wait out the indicator so the Create button isn't held by
+    // the validating guard later. (Post-debounce clicks short-circuit and the
+    // indicator never shows; the wait then resolves immediately.)
     await dialog.getByRole('button', { name: /owner-oscar/i }).click()
     await expect(dialog.getByText('Validating person...')).toHaveCount(0)
 
@@ -344,14 +347,17 @@ test.describe('Create component from scratch — admin smoke', () => {
     await expect(dialog.getByText(/required for explicit \+ external/i)).toBeVisible()
 
     // RM / SC via the add-row autocomplete. A typed person lands as a list row
-    // only after the async lookup validates it — await each row before moving on.
+    // only after the async lookup validates it — await each COMMITTED row
+    // (scoped to the list container; bare getByText could match the still-open
+    // suggestion popup button) before moving on.
+    const listRows = dialog.getByTestId('people-list-rows')
     const peopleInputs = dialog.getByPlaceholder('Add person')
     await peopleInputs.nth(0).fill('rm-bob')
     await peopleInputs.nth(0).blur()
-    await expect(dialog.getByText('rm-bob', { exact: true })).toBeVisible()
+    await expect(listRows.getByText('rm-bob', { exact: true })).toBeVisible()
     await peopleInputs.nth(1).fill('sc-bob')
     await peopleInputs.nth(1).blur()
-    await expect(dialog.getByText('sc-bob', { exact: true })).toBeVisible()
+    await expect(listRows.getByText('sc-bob', { exact: true })).toBeVisible()
 
     // Docker coordinate.
     await dialog.getByLabel(/^distribution coordinate/i).selectOption('docker')
