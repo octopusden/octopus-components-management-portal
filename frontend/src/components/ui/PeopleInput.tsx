@@ -122,6 +122,15 @@ export function PeopleInput({
     ? owners.filter((o) => o.toLowerCase().includes(inputValue.toLowerCase()))
     : owners
 
+  // Exact (case-insensitive) directory match already fetched by the debounced
+  // suggestion search. Commit reuses it — username/active are entity facts
+  // keyed by username, not by the query that surfaced them — saving a second
+  // lookup round-trip on blur/Enter and canonicalizing the typed case.
+  const exactExternalMatch = (raw: string) => {
+    const candidate = raw.trim().toLowerCase()
+    return externalResults.find((result) => result.username.toLowerCase() === candidate)
+  }
+
   const exactStatuses = new Map(externalResults.map((result) => [result.username, result.active]))
   const suggestions = [
     ...filtered.map((username) => ({ username, active: exactStatuses.get(username) })),
@@ -219,11 +228,13 @@ export function PeopleInput({
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault()
-                void commitCandidate(inputValue)
+                const match = exactExternalMatch(inputValue)
+                void commitCandidate(match?.username ?? inputValue, match?.active)
               }
             }}
             onBlur={() => {
-              void commitCandidate(inputValue)
+              const match = exactExternalMatch(inputValue)
+              void commitCandidate(match?.username ?? inputValue, match?.active)
             }}
             placeholder={placeholder}
             aria-invalid={Boolean(validationError)}

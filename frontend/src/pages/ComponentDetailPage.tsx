@@ -79,6 +79,12 @@ export function ComponentDetailPage() {
   // Controlled tab so a server 400 on a field that lives on a non-active tab can auto-switch
   // to the owning tab (otherwise the inline error renders on a hidden tab).
   const [activeTab, setActiveTab] = useState('general')
+  // GeneralTab's owner PeopleInput commits a typed value only after its async
+  // directory lookup resolves. Hold Save while that is in flight — a save in
+  // the window would read componentOwner='' and silently omit the user's edit
+  // from the PATCH. PeopleInput releases the flag on resolve/cancel/unmount
+  // (tab switches unmount GeneralTab), so it cannot stick.
+  const [ownerValidating, setOwnerValidating] = useState(false)
 
   const { data: component, isLoading, error } = useComponent(id ?? '')
   const updateMutation = useUpdateComponent(id ?? '')
@@ -575,15 +581,17 @@ export function ComponentDetailPage() {
                   ? CANNOT_EDIT_TITLE
                   : fieldConfigLoading
                     ? 'Loading field configuration…'
-                    : !hasUnsavedChanges
-                      ? 'No changes to save'
-                      : undefined
+                    : ownerValidating
+                      ? 'Validating component owner…'
+                      : !hasUnsavedChanges
+                        ? 'No changes to save'
+                        : undefined
               }
             >
               <Button
                 size="sm"
                 onClick={handleSave}
-                disabled={updateMutation.isPending || fieldConfigLoading || !canEdit || !hasUnsavedChanges}
+                disabled={updateMutation.isPending || fieldConfigLoading || !canEdit || !hasUnsavedChanges || ownerValidating}
               >
                 <Save className="h-4 w-4" />
                 {updateMutation.isPending ? 'Saving…' : 'Save'}
@@ -652,7 +660,12 @@ export function ComponentDetailPage() {
                   the previous component's typed-but-unblurred input over to
                   the next component's form. */}
               <EditSurface canEdit={canEdit} label="General">
-                <GeneralTab key={component.id} component={component} form={form} />
+                <GeneralTab
+                  key={component.id}
+                  component={component}
+                  form={form}
+                  onOwnerValidatingChange={setOwnerValidating}
+                />
               </EditSurface>
             </TabsContent>
 

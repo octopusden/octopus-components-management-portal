@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form'
 import { GeneralTab, type GeneralFormValues } from './GeneralTab'
 import { TooltipProvider } from '../ui/tooltip'
 import { fieldDescriptions } from '../../lib/fieldDescriptions'
+import { lookupEmployee } from '../../hooks/useEmployees'
 import type { ComponentDetail } from '../../lib/types'
 
 // Stub the live data sources behind the embedded ui pickers so this file stays
@@ -98,7 +99,7 @@ function setAllEditable() {
   mockUseFieldConfigEntry.mockImplementation(() => makeEntry('editable'))
 }
 
-function Harness({ component, formRef }: { component: ComponentDetail; formRef?: React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null> }) {
+function Harness({ component, formRef, onOwnerValidatingChange }: { component: ComponentDetail; formRef?: React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>; onOwnerValidatingChange?: (validating: boolean) => void }) {
   const form = useForm<GeneralFormValues>({
     defaultValues: {
       name: component.name,
@@ -128,7 +129,7 @@ function Harness({ component, formRef }: { component: ComponentDetail; formRef?:
     },
   })
   if (formRef) formRef.current = form
-  return <GeneralTab component={component} form={form} />
+  return <GeneralTab component={component} form={form} onOwnerValidatingChange={onOwnerValidatingChange} />
 }
 
 beforeEach(() => {
@@ -773,5 +774,27 @@ describe('GeneralTab — responsible-people (who can edit) field', () => {
     const input = screen.getByLabelText(/owner, release managers, and security champions/i) as HTMLInputElement
     expect(input.value).toBe('')
     expect(input.placeholder).toBe('Loading…')
+  })
+})
+
+// ── Owner async-validation propagation (page Save guard) ─────────────────────
+// PeopleInput commits a typed owner only after the directory lookup resolves;
+// GeneralTab forwards the in-flight signal so ComponentDetailPage can hold the
+// global Save (otherwise the unsaved edit is silently dropped from the PATCH).
+describe('GeneralTab — owner validating propagation', () => {
+  it('reports the owner lookup in-flight state through onOwnerValidatingChange', async () => {
+    vi.mocked(lookupEmployee).mockResolvedValue([{ username: 'bob', active: true }])
+    const onOwnerValidatingChange = vi.fn()
+    const component = baseComponent({ componentOwner: 'alice' })
+    renderWithProviders(
+      <Harness component={component} onOwnerValidatingChange={onOwnerValidatingChange} />,
+    )
+
+    const input = screen.getByPlaceholderText('AD userkey')
+    fireEvent.change(input, { target: { value: 'bob' } })
+    fireEvent.blur(input)
+
+    await waitFor(() => expect(onOwnerValidatingChange).toHaveBeenCalledWith(true))
+    await waitFor(() => expect(onOwnerValidatingChange).toHaveBeenLastCalledWith(false))
   })
 })

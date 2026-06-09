@@ -125,6 +125,45 @@ describe('PeopleInput', () => {
     expect(onChange).not.toHaveBeenCalled()
   })
 
+  it('reuses a loaded suggestion match on commit instead of a second lookup', async () => {
+    vi.useFakeTimers()
+    const lookupFn = vi.fn().mockResolvedValue([{ username: 'Carol', active: true }])
+    render(<PeopleInput value="" onChange={onChange} lookupFn={lookupFn} />)
+    const input = screen.getByRole('textbox')
+    fireEvent.change(input, { target: { value: 'carol' } })
+    // Debounced suggestion search fires once...
+    await act(async () => {
+      vi.advanceTimersByTime(300)
+    })
+    expect(lookupFn).toHaveBeenCalledTimes(1)
+
+    // ...and the commit reuses its exact match: no second request, the
+    // canonical-case username from the directory is committed synchronously.
+    fireEvent.blur(input)
+    await act(async () => {})
+    expect(lookupFn).toHaveBeenCalledTimes(1)
+    expect(onChange).toHaveBeenCalledWith('Carol')
+    expect(screen.queryByText('Validating person...')).toBeNull()
+    vi.useRealTimers()
+  })
+
+  it('rejects an inactive loaded suggestion match on commit without a second lookup', async () => {
+    vi.useFakeTimers()
+    const lookupFn = vi.fn().mockResolvedValue([{ username: 'carol', active: false }])
+    render(<PeopleInput value="" onChange={onChange} lookupFn={lookupFn} />)
+    const input = screen.getByRole('textbox')
+    fireEvent.change(input, { target: { value: 'carol' } })
+    await act(async () => {
+      vi.advanceTimersByTime(300)
+    })
+    fireEvent.blur(input)
+    await act(async () => {})
+    expect(lookupFn).toHaveBeenCalledTimes(1)
+    expect(onChange).not.toHaveBeenCalled()
+    expect(screen.getByText('Person is inactive')).toBeDefined()
+    vi.useRealTimers()
+  })
+
   it('reports in-flight validation through onValidatingChange', async () => {
     let resolveLookup!: (value: { username: string; active: boolean }[]) => void
     const lookupFn = vi.fn(() =>

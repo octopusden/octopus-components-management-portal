@@ -101,9 +101,16 @@ interface GeneralTabProps {
   component: ComponentDetail
   form: UseFormReturn<GeneralFormValues>
   isNew?: boolean
+  /**
+   * In-flight signal of the owner PeopleInput's async directory validation.
+   * The typed owner only commits to the form after the lookup resolves, so
+   * ComponentDetailPage holds the global Save while this reports true —
+   * otherwise the PATCH would silently omit the user's still-uncommitted edit.
+   */
+  onOwnerValidatingChange?: (validating: boolean) => void
 }
 
-export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) {
+export function GeneralTab({ component, form, isNew = false, onOwnerValidatingChange }: GeneralTabProps) {
   const {
     control,
     register,
@@ -333,6 +340,7 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                     onChange={(val) => setValue('componentOwner', val)}
                     lookupFn={lookupEmployee}
                     status={employeeStatuses[componentOwner]}
+                    onValidatingChange={onOwnerValidatingChange}
                   />
                 )}
                 {errors.componentOwner && (
