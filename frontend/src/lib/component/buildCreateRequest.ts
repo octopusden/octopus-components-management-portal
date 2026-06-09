@@ -96,9 +96,25 @@ function coordinatePatch(
   }
 }
 
+// Component-level fields whose presence on create is governed by field-config
+// visibility. A hidden/readonly field must NOT be sent on create (matching the
+// read-only create form) — including values copied from the source in "Create
+// Similar" mode. Keys here are both the request keys and the `component.<field>`
+// field-config field names. Structural/required fields (name, componentOwner,
+// baseConfiguration, coordinate, archived, collections) are intentionally absent.
+const VISIBILITY_GATED_CREATE_FIELDS = [
+  'displayName', 'copyright', 'releaseManager', 'securityChampion',
+  'distributionExplicit', 'distributionExternal', 'system', 'clientCode',
+  'solution', 'productType', 'parentComponentName', 'releasesInDefaultBranch',
+  'jiraHotfixVersionFormat', 'vcsExternalRegistry',
+] as const
+
 export function buildCreateRequest(
   form: CreateFormValues,
   source?: ComponentDetail,
+  // Returns true if a `component.<field>` is editable (i.e. should be sent).
+  // Defaults to "everything editable" so existing call-sites/tests are unchanged.
+  isFieldEditable: (field: string) => boolean = () => true,
 ): ComponentCreateRequest {
   const gated = form.distributionExplicit && form.distributionExternal
   const baseRow = source ? selectBaseRow(source) : undefined
@@ -154,6 +170,13 @@ export function buildCreateRequest(
   if (gated) Object.assign(baseConfiguration, coordinatePatch(form.coordinate))
 
   req.baseConfiguration = baseConfiguration
+
+  // Strip field-config hidden/readonly component fields so a non-editable field
+  // is never sent on create — including a value copied from the source. The
+  // server then applies its own default, matching the read-only create form.
+  for (const field of VISIBILITY_GATED_CREATE_FIELDS) {
+    if (!isFieldEditable(field)) delete req[field as keyof ComponentCreateRequest]
+  }
 
   // Drop keys left undefined (scratch mode where the source is absent) so the
   // request omits them entirely — `'productType' in req` stays false and the

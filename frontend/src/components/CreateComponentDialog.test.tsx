@@ -33,6 +33,10 @@ vi.mock('../hooks/useEmployees', () => ({
   lookupEmployee: vi.fn(),
   useEmployeeStatuses: vi.fn(() => ({ data: {} })),
 }))
+// Field-config drives which fields the create form renders. Default: no data →
+// every field editable (preserves the pre-gating test expectations).
+const mockUseFieldConfig = vi.fn(() => ({ data: undefined as unknown, isLoading: false, isError: false }))
+vi.mock('../hooks/useAdminConfig', () => ({ useFieldConfig: () => mockUseFieldConfig() }))
 
 function renderWithProviders(ui: React.ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -98,6 +102,7 @@ beforeEach(() => {
   mockNavigate.mockReset()
   mockToast.mockReset()
   mockUseComponent.mockReset()
+  mockUseFieldConfig.mockReturnValue({ data: undefined, isLoading: false, isError: false })
   scratchDisabled()
 })
 
@@ -147,6 +152,38 @@ describe('CreateComponentDialog — scratch mode base', () => {
       distributionExternal: true,
     })
     expect(mockNavigate).toHaveBeenCalledWith('/components/comp-1')
+  })
+})
+
+describe('CreateComponentDialog — field-config visibility gating', () => {
+  it('removes a hidden field (displayName) from the create form', async () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: { component: { displayName: { visibility: 'hidden' } } },
+      isLoading: false,
+      isError: false,
+    })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    // Required fields stay; the hidden field is gone.
+    expect(screen.getByPlaceholderText('my-component')).toBeDefined()
+    expect(screen.queryByLabelText(/display name/i)).toBeNull()
+  })
+
+  it('removes copyright from the gated block when field-config hides it', async () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: { component: { copyright: { visibility: 'hidden' } } },
+      isLoading: false,
+      isError: false,
+    })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await fillBaseFields()
+    await userEvent.click(screen.getByLabelText(/explicit/i)) // → explicit+external gated block
+    await waitFor(() => expect(screen.getByText(/required for explicit \+ external/i)).toBeDefined())
+    // Copyright gone; the other gated fields remain.
+    expect(screen.queryByLabelText(/copyright/i)).toBeNull()
+    expect(screen.getByText(/release managers/i)).toBeDefined()
+    expect(screen.getByText(/security champions/i)).toBeDefined()
   })
 })
 

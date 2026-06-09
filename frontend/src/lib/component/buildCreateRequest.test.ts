@@ -292,4 +292,25 @@ describe('buildCreateRequest — copy mode (with source)', () => {
       expect(key in req, `${key} must be absent`).toBe(false)
     }
   })
+
+  // Field-config visibility gating: a hidden/readonly component field must never
+  // be sent on create — not from the form, and not copied from the source.
+  it('strips a field-config hidden field (copyright) from the request, including the copied source value', () => {
+    const req = buildCreateRequest(
+      makeForm({ copyright: 'FORM-CR' }),
+      makeSource({ copyright: 'SOURCE-CR' }),
+      (field) => field !== 'copyright',
+    )
+    expect('copyright' in req).toBe(false)
+  })
+
+  it('strips a hidden source-only field (system) from the request', () => {
+    const req = buildCreateRequest(makeForm(), makeSource({ system: 'SYS1' }), (field) => field !== 'system')
+    expect('system' in req).toBe(false)
+  })
+
+  it('keeps fields the visibility predicate marks editable', () => {
+    const req = buildCreateRequest(makeForm({ copyright: 'KEEP' }), makeSource(), () => true)
+    expect(req.copyright).toBe('KEEP')
+  })
 })

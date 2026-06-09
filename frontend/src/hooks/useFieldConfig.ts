@@ -56,6 +56,47 @@ const SECTION_ORDER = ['component', 'build', 'jira', 'escrow', 'vcs'] as const
  *
  * Graceful fallbacks: visibility → 'editable', required → false, defaultValue → undefined
  */
+/**
+ * Pure resolver (no hook) shared by `useFieldConfigEntry` and non-hook callers
+ * (e.g. the create dialog builds its schema/visibility from a single
+ * `useFieldConfig()` read rather than one hook per field). Supports both flat
+ * and sectioned shapes and section-prefixed / bare paths. Falls back to
+ * `{ visibility: 'editable', required: false }` when data is absent or the
+ * field is unconfigured.
+ */
+export function resolveFieldEntry(data: unknown, fieldPath: string): FieldConfigEntry {
+  const base: FieldConfigEntry = { visibility: 'editable', required: false }
+  if (!data) return base
+
+  const config = data as FieldConfigData
+  const dotIndex = fieldPath.indexOf('.')
+  const isSectionPrefixed = dotIndex !== -1
+
+  let found: FieldConfigEntry | undefined
+
+  if (isSectionPrefixed) {
+    const section = fieldPath.slice(0, dotIndex) as keyof FieldConfigDataSectioned
+    const fieldName = fieldPath.slice(dotIndex + 1)
+    found = config[section]?.[fieldName]
+    if (!found) found = config.fields?.[fieldPath]
+  } else {
+    found = config.fields?.[fieldPath]
+    if (!found) {
+      for (const section of SECTION_ORDER) {
+        found = config[section]?.[fieldPath]
+        if (found) break
+      }
+    }
+  }
+
+  return { ...base, ...found }
+}
+
+/** Visibility for a field path, defaulting to 'editable'. Pure (no hook). */
+export function visibilityFor(data: unknown, fieldPath: string): FieldVisibility {
+  return resolveFieldEntry(data, fieldPath).visibility ?? 'editable'
+}
+
 export function useFieldConfigEntry(fieldPath: string): {
   entry: FieldConfigEntry
   isLoading: boolean
@@ -71,44 +112,7 @@ export function useFieldConfigEntry(fieldPath: string): {
     }
   }
 
-  const config = data as FieldConfigData
-
-  const dotIndex = fieldPath.indexOf('.')
-  const isSectionPrefixed = dotIndex !== -1
-
-  let found: FieldConfigEntry | undefined
-
-  if (isSectionPrefixed) {
-    const section = fieldPath.slice(0, dotIndex) as keyof FieldConfigDataSectioned
-    const fieldName = fieldPath.slice(dotIndex + 1)
-
-    // Try sectioned shape first
-    found = config[section]?.[fieldName]
-
-    // Fallback: flat shape with full dotted path as key
-    if (!found) {
-      found = config.fields?.[fieldPath]
-    }
-  } else {
-    // Bare path — try flat shape first
-    found = config.fields?.[fieldPath]
-
-    // Then try each section in order
-    if (!found) {
-      for (const section of SECTION_ORDER) {
-        found = config[section]?.[fieldPath]
-        if (found) break
-      }
-    }
-  }
-
-  const entry: FieldConfigEntry = {
-    visibility: 'editable',
-    required: false,
-    ...found,
-  }
-
-  return { entry, isLoading: false, isError: isError ?? false }
+  return { entry: resolveFieldEntry(data, fieldPath), isLoading: false, isError: isError ?? false }
 }
 
 /**
