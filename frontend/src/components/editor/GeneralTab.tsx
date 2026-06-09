@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import { UseFormReturn, useFieldArray } from 'react-hook-form'
 import { Plus, Trash2 } from 'lucide-react'
-import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Input } from '../ui/input'
@@ -25,6 +24,7 @@ import { useFieldConfigEntry } from '../../hooks/useFieldConfig'
 import { useSystemsDictionary } from '../../hooks/useSystemsDictionary'
 import { useLabelsDictionary } from '../../hooks/useLabelsDictionary'
 import { lookupEmployee, useEmployeeStatuses } from '../../hooks/useEmployees'
+import { useComponentEditors } from '../../hooks/useComponentEditors'
 
 /**
  * Canonical list of field names owned by GeneralTab — used by
@@ -46,8 +46,7 @@ export const GENERAL_TAB_FIELDS = [
   'componentOwner',
   'system',
   'clientCode',
-  'parentComponentName',
-  'canBeParent',
+  // parentComponentName / canBeParent moved to the Misc tab (see MISC_TAB_FIELDS in MiscTab).
   'releaseManager',
   'securityChampion',
   'copyright',
@@ -115,12 +114,11 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
 
   const solution = watch('solution')
   const componentOwner = watch('componentOwner')
-  const parentComponentName = watch('parentComponentName')
+  // parentComponentName / canBeParent moved to the Misc tab (MiscTab.tsx).
   // SYS-039 watchers — PeopleListInput (multi-value) / Switch are controlled,
   // not register'd. releaseManager / securityChampion are ordered string[].
   const releaseManager = watch('releaseManager')
   const securityChampion = watch('securityChampion')
-  const canBeParent = watch('canBeParent')
   // Task #14: `system` is a scalar string (single-select EnumSelect).
   // `labels` stays an array (chips UX). Both watched so the controlled
   // primitives receive the current value.
@@ -138,6 +136,9 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
     ...(component.releaseManager ?? []),
     ...(component.securityChampion ?? []),
   ])
+
+  // Read-only "who can edit" projection (owner + RMs + SCs). Informational; admins also edit.
+  const { data: editors, isLoading: editorsLoading } = useComponentEditors(component.id)
 
   // schema-v2 list editors. useFieldArray provides stable `id` keys so row
   // re-renders don't blow away focus on text inputs.
@@ -163,12 +164,10 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
   const { entry: componentOwnerEntry } = useFieldConfigEntry('component.componentOwner')
   const { entry: systemEntry } = useFieldConfigEntry('component.system')
   const { entry: clientCodeEntry } = useFieldConfigEntry('component.clientCode')
-  // SYS-039 fields
-  const { entry: groupIdEntry } = useFieldConfigEntry('component.groupId')
+  // SYS-039 fields. (component.groupId / component.canBeParent FC entries moved to MiscTab.)
   const { entry: releaseManagerEntry } = useFieldConfigEntry('component.releaseManager')
   const { entry: securityChampionEntry } = useFieldConfigEntry('component.securityChampion')
   const { entry: copyrightEntry } = useFieldConfigEntry('component.copyright')
-  const { entry: canBeParentEntry } = useFieldConfigEntry('component.canBeParent')
   const { entry: labelsEntry } = useFieldConfigEntry('component.labels')
 
   useEffect(() => {
@@ -187,6 +186,9 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
     setValue('clientCode', component.clientCode ?? '')
     setValue('solution', component.solution ?? false)
     setValue('archived', component.archived)
+    // parentComponentName / canBeParent render on the Misc tab but are hydrated HERE: General
+    // is the default tab (always mounted on load), whereas Radix unmounts the inactive Misc
+    // tab, so hydrating in MiscTab would leave these unset until the user opens Misc.
     setValue('parentComponentName', component.parentComponentName ?? '')
     setValue('canBeParent', component.canBeParent ?? false)
     // Multi-value lists. Like `labels`, hydration MUST NOT set shouldTouch —
@@ -278,114 +280,8 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
             </div>
           )}
 
-          {/* Parent Component — strict single-select limited to canBeParent
-              components. A can-be-parent component may not itself have a parent
-              (single-level): the picker is disabled when canBeParent && no parent;
-              when canBeParent && a (grandfathered) parent exists, only clearing is
-              offered for remediation. */}
-          <div className="space-y-1.5 sm:col-span-2 sm:max-w-md">
-            <div className="flex items-center gap-1">
-              <Label htmlFor="parentComponentName">Parent Component</Label>
-              <FieldInfo path="component.parentComponentName" label="Parent Component" />
-            </div>
-            {canBeParent && (parentComponentName ?? '') !== '' ? (
-              <div className="flex items-center gap-2">
-                <Input
-                  id="parentComponentName"
-                  value={parentComponentName ?? ''}
-                  disabled
-                  readOnly
-                  className="bg-muted"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setValue('parentComponentName', '', { shouldDirty: true })}
-                >
-                  Clear
-                </Button>
-              </div>
-            ) : (
-              <ComponentSelect
-                id="parentComponentName"
-                value={parentComponentName ?? ''}
-                excludeName={component.name}
-                onChange={(val) => setValue('parentComponentName', val, { shouldDirty: true })}
-                placeholder={
-                  canBeParent
-                    ? 'A can-be-parent component cannot have a parent'
-                    : 'No parent (top-level component)'
-                }
-                filter={{ canBeParent: true }}
-                strict
-                disabled={canBeParent}
-              />
-            )}
-            {errors.parentComponentName ? (
-              <p className="text-xs text-destructive">{errors.parentComponentName.message}</p>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                {canBeParent
-                  ? 'This component can be a parent, so it cannot itself have a parent.'
-                  : 'Pick a component marked “can be parent”. Leave blank for a top-level component.'}
-              </p>
-            )}
-          </div>
-
-          {/* CAN_BE_PARENT — whether this component may be referenced as a parent. */}
-          {canBeParentEntry.visibility !== 'hidden' && (
-            <div className="sm:col-span-2 flex items-center gap-3">
-              <Switch
-                id="canBeParent"
-                checked={canBeParent}
-                disabled={canBeParentEntry.visibility === 'readonly'}
-                onCheckedChange={(checked) =>
-                  setValue('canBeParent', checked, { shouldDirty: true, shouldTouch: true })
-                }
-              />
-              <Label htmlFor="canBeParent" className="cursor-pointer">Can be a parent</Label>
-              <FieldInfo path="component.canBeParent" label="Can be a parent" />
-              <span className="text-xs text-muted-foreground">
-                May be selected as another component&apos;s parent (not an aggregator).
-              </span>
-              {errors.canBeParent && (
-                <p className="text-xs text-destructive">{errors.canBeParent.message}</p>
-              )}
-            </div>
-          )}
-
-          {/* Group Key + Synthetic group — READ-ONLY. The group is the DSL aggregator
-              this component belongs to (an aggregator owns a `components { }` block):
-              filled for aggregator members, empty for standalone components. Set by the
-              migration/import path only, never via the API — not user-editable here. */}
-          {groupIdEntry.visibility !== 'hidden' && (
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-1">
-                <Label htmlFor="groupId">Group Key</Label>
-                <FieldInfo path="component.groupId" label="Group Key" />
-              </div>
-              <Input
-                id="groupId"
-                value={component.group?.groupKey ?? ''}
-                disabled
-                readOnly
-                className="bg-muted"
-                placeholder="(none — standalone component)"
-              />
-              <div className="flex items-center gap-3 pt-1">
-                {component.group?.isFake && (
-                  <Badge variant="outline" className="text-xs">Synthetic group (isFake)</Badge>
-                )}
-                {component.group?.role && (
-                  <Badge variant="outline" className="text-xs">{component.group.role}</Badge>
-                )}
-                <span className="text-xs text-muted-foreground">
-                  Aggregator membership (read-only; set by migration).
-                </span>
-              </div>
-            </div>
-          )}
+          {/* Parent Component, Can-be-parent, and Group Key / Synthetic-group moved to the
+              Misc tab (MiscTab.tsx) to keep General focused on identity/ownership/metadata. */}
 
           {/* Solution toggle */}
           <div className="sm:col-span-2 flex items-center gap-3">
@@ -524,6 +420,33 @@ export function GeneralTab({ component, form, isNew = false }: GeneralTabProps) 
                 )}
               </div>
             )}
+
+            {/* Who can edit — read-only informational list (owner + RMs + SCs), from the
+                /editors endpoint. The live per-component edit gate also admits administrators. */}
+            <div className="space-y-1.5 sm:col-span-2" data-testid="can-edit-people">
+              <Label htmlFor="canEditPeople">Owner, release managers, and security champions</Label>
+              {(() => {
+                const people = [
+                  editors?.componentOwner ?? undefined,
+                  ...(editors?.releaseManagers ?? []),
+                  ...(editors?.securityChampions ?? []),
+                ].filter((p): p is string => !!p)
+                const unique = [...new Set(people)]
+                return (
+                  <Input
+                    id="canEditPeople"
+                    value={editorsLoading ? '' : unique.join(', ')}
+                    disabled
+                    readOnly
+                    className="bg-muted"
+                    placeholder={editorsLoading ? 'Loading…' : '(no people assigned)'}
+                  />
+                )
+              })()}
+              <p className="text-xs text-muted-foreground">
+                These people can edit this component. Administrators may also have edit access.
+              </p>
+            </div>
           </div>
         </section>
       )}

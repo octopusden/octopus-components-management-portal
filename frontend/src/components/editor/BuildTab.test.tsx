@@ -39,7 +39,7 @@ vi.mock('../ui/EnumSelect', () => ({
   }) => (
     <input
       id={id}
-      data-testid="enum-select"
+      data-testid={id ? `enum-select-${id}` : 'enum-select'}
       value={value}
       onChange={(e) => onValueChange(e.target.value)}
       onBlur={() => onBlur?.()}
@@ -202,7 +202,7 @@ describe('BuildTab — save path', () => {
 
     const { getByPlaceholderText, getByText } = renderTab(component, mutateFn)
 
-    const mavenInput = getByPlaceholderText('3.9.6')
+    const mavenInput = getByPlaceholderText('Select Maven version')
     await userEvent.clear(mavenInput)
     await userEvent.type(mavenInput, '3.9.8')
 
@@ -224,7 +224,7 @@ describe('BuildTab — save path', () => {
     })
 
     const { getByPlaceholderText, getByText } = renderTab(component, mutateFn)
-    await userEvent.clear(getByPlaceholderText('3.9.6'))
+    await userEvent.clear(getByPlaceholderText('Select Maven version'))
     await userEvent.click(getByText('Save Build'))
 
     const callArg = mutateFn.mock.calls[0]![0] as ComponentUpdateRequest
@@ -473,9 +473,9 @@ describe('BuildTab — existing structure preserved', () => {
 
     renderTab(component)
 
-    expect((screen.getByTestId('enum-select') as HTMLInputElement).value).toBe('GRADLE')
+    expect((screen.getByTestId('enum-select-build-buildSystem') as HTMLInputElement).value).toBe('GRADLE')
     expect((screen.getByPlaceholderText('pom.xml / build.gradle') as HTMLInputElement).value).toBe('build.gradle')
-    expect((screen.getByPlaceholderText('1.8 / 11 / 17 / 21') as HTMLInputElement).value).toBe('21')
+    expect((screen.getByPlaceholderText('Select Java version') as HTMLInputElement).value).toBe('21')
     expect((screen.getByPlaceholderText('8.6') as HTMLInputElement).value).toBe('8.6')
   })
 
@@ -487,8 +487,8 @@ describe('BuildTab — existing structure preserved', () => {
     renderTab(component)
 
     expect((screen.getByPlaceholderText('8.6') as HTMLInputElement).value).toBe('')
-    expect((screen.getByPlaceholderText('1.8 / 11 / 17 / 21') as HTMLInputElement).value).toBe('')
-    expect((screen.getByPlaceholderText('3.9.6') as HTMLInputElement).value).toBe('')
+    expect((screen.getByPlaceholderText('Select Java version') as HTMLInputElement).value).toBe('')
+    expect((screen.getByPlaceholderText('Select Maven version') as HTMLInputElement).value).toBe('')
   })
 })
 
@@ -507,7 +507,7 @@ describe('BuildTab — buildSystem required (ui-swift-sloth §5)', () => {
     })
     renderTab(component)
 
-    const enumSelect = screen.getByTestId('enum-select') as HTMLInputElement
+    const enumSelect = screen.getByTestId('enum-select-build-buildSystem') as HTMLInputElement
     await userEvent.clear(enumSelect)
     // Wrap the synchronous .blur() in act() so React flushes the setState
     // it triggers (setBuildSystemTouched) before the assertion runs and
@@ -550,7 +550,7 @@ describe('BuildTab — buildSystem required (ui-swift-sloth §5)', () => {
     expect(screen.getByText(/build system is required/i)).toBeDefined()
 
     // Now type a value; once selected the error disappears and Save runs.
-    const enumSelect = getByTestId('enum-select') as HTMLInputElement
+    const enumSelect = getByTestId('enum-select-build-buildSystem') as HTMLInputElement
     await userEvent.type(enumSelect, 'MAVEN')
     await userEvent.click(getByText('Save Build'))
 

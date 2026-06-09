@@ -35,7 +35,9 @@ function makeComponent(overrides: Partial<ComponentSummary> = {}): ComponentSumm
   return {
     id: 'comp-1',
     name: 'my-component',
-    displayName: null,
+    // Equal to the name → no secondary line (displayName is nullable; when present it shows
+    // only when distinct from the name).
+    displayName: 'my-component',
     componentOwner: null,
     system: null,
     productType: null,
@@ -101,8 +103,8 @@ describe('ComponentTable', () => {
       expect(screen.getByText('Alpha Display')).toBeDefined()
     })
 
-    it('renders only the name link when displayName is null', () => {
-      const { container } = renderTable([makeComponent({ name: 'beta', displayName: null })])
+    it('renders only the name link when displayName equals the name', () => {
+      const { container } = renderTable([makeComponent({ name: 'beta', displayName: 'beta' })])
       expect(screen.getByRole('link', { name: 'beta' })).toBeDefined()
       // The name cell should contain only the link, no secondary display-name span
       const nameCell = container.querySelector('tbody tr td:first-child')
@@ -112,6 +114,13 @@ describe('ComponentTable', () => {
     it('renders only the name link when displayName is empty string', () => {
       renderTable([makeComponent({ name: 'gamma', displayName: '' })])
       expect(screen.getByRole('link', { name: 'gamma' })).toBeDefined()
+    })
+
+    it('renders only the name link when displayName is null (nullable contract)', () => {
+      const { container } = renderTable([makeComponent({ name: 'delta', displayName: null })])
+      expect(screen.getByRole('link', { name: 'delta' })).toBeDefined()
+      const nameCell = container.querySelector('tbody tr td:first-child')
+      expect(nameCell?.querySelectorAll('span').length).toBe(0)
     })
   })
 

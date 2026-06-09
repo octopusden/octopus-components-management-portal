@@ -33,7 +33,7 @@ export function PeopleInput({
   value,
   onChange,
   id,
-  placeholder = 'owner@example.com',
+  placeholder = 'AD userkey',
   lookupFn,
   status,
 }: PeopleInputProps) {

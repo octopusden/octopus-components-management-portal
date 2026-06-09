@@ -36,6 +36,16 @@ vi.mock('../../hooks/useLabelsDictionary', () => ({
   useLabelsDictionary: () => mockUseLabelsDictionary(),
 }))
 
+// useComponentEditors mock — the read-only "who can edit" projection. Default editable test
+// data; the field renders a comma-joined owner + RMs + SCs list.
+const mockUseComponentEditors = vi.fn(() => ({
+  data: { componentOwner: 'alice', releaseManagers: ['rm-1'], securityChampions: ['sc-1'] },
+  isLoading: false,
+}))
+vi.mock('../../hooks/useComponentEditors', () => ({
+  useComponentEditors: () => mockUseComponentEditors(),
+}))
+
 // useFieldConfigEntry mock — controls visibility-gating per test.
 // Default: all fields 'editable'. Tests can override per field via mockReturnValue.
 const mockUseFieldConfigEntry = vi.fn()
@@ -172,37 +182,8 @@ const EDITOR_USER = {
   groups: [],
 }
 
-describe('GeneralTab parentComponentName (B7.1.5)', () => {
-  it('renders parentComponentName as a labelled editable input pre-filled with current value', () => {
-    const component = baseComponent({ parentComponentName: 'platform-core' })
-    renderWithProviders(<Harness component={component} />)
-
-    const input = screen.getByLabelText(/^parent component$/i) as HTMLInputElement
-    expect(input).toBeDefined()
-    expect(input.tagName.toLowerCase()).toBe('input')
-    expect(input.value).toBe('platform-core')
-  })
-
-  it('renders parentComponentName as an empty input when the component has no parent', () => {
-    const component = baseComponent({ parentComponentName: null })
-    renderWithProviders(<Harness component={component} />)
-
-    const input = screen.getByLabelText(/^parent component$/i) as HTMLInputElement
-    expect(input).toBeDefined()
-    expect(input.value).toBe('')
-  })
-
-  it('lets the user type a new value and surfaces it via the form', async () => {
-    const component = baseComponent({ parentComponentName: 'old-parent' })
-    renderWithProviders(<Harness component={component} />)
-
-    const input = screen.getByLabelText(/^parent component$/i) as HTMLInputElement
-    await userEvent.clear(input)
-    await userEvent.type(input, 'new-parent')
-
-    await waitFor(() => expect(input.value).toBe('new-parent'))
-  })
-})
+// parentComponentName / canBeParent / group-key tests moved to MiscTab.test.tsx (those
+// fields now render on the Misc tab).
 
 describe('GeneralTab rename (B7.1.4)', () => {
   it('admin with RENAME_COMPONENTS sees an editable Name input pre-filled with the current name', () => {
@@ -392,28 +373,7 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
     expect(screen.getAllByText('Inactive')).toHaveLength(2)
   })
 
-  it('group key renders READ-ONLY with the derived group value (items 1/2)', () => {
-    setAllEditable()
-    const component = baseComponent({ group: { groupKey: 'org.example.alpha', isFake: false, role: 'MEMBER' } })
-    renderWithProviders(<Harness component={component} />)
-
-    const input = screen.getByLabelText(/^group key$/i) as HTMLInputElement
-    expect(input).toBeDefined()
-    expect(input.value).toBe('org.example.alpha')
-    // Group is now server-derived → the field is read-only (no longer editable).
-    expect(input.disabled).toBe(true)
-  })
-
-  it('groupId hidden → input NOT rendered', () => {
-    mockUseFieldConfigEntry.mockImplementation((path: string) => {
-      if (path === 'component.groupId') return makeEntry('hidden')
-      return makeEntry('editable')
-    })
-    const component = baseComponent({ group: { groupKey: 'org.example.alpha', isFake: false, role: 'MEMBER' } })
-    renderWithProviders(<Harness component={component} />)
-
-    expect(screen.queryByLabelText(/^group key$/i)).toBeNull()
-  })
+  // group-key read-only + groupId-hidden tests moved to MiscTab.test.tsx.
 
   it('releaseManager editable → PeopleListInput hydrates ordered rows from the array', () => {
     setAllEditable()
@@ -556,7 +516,6 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
   it('all SYS-039 entries hidden → none of the SYS-039 controls render', () => {
     mockUseFieldConfigEntry.mockImplementation((path: string) => {
       if (
-        path === 'component.groupId' ||
         path === 'component.releaseManager' ||
         path === 'component.securityChampion' ||
         path === 'component.copyright' ||
@@ -567,7 +526,6 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
       return makeEntry('editable')
     })
     const component = baseComponent({
-      group: { groupKey: 'org.example', isFake: false, role: 'MEMBER' },
       releaseManager: ['rm'],
       securityChampion: ['sc'],
       copyright: '(c)',
@@ -575,7 +533,6 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
     })
     renderWithProviders(<Harness component={component} />)
 
-    expect(screen.queryByLabelText(/^group key$/i)).toBeNull()
     expect(screen.queryByLabelText(/^release managers?$/i)).toBeNull()
     expect(screen.queryByLabelText(/^security champions?$/i)).toBeNull()
     expect(screen.queryByLabelText(/^copyright$/i)).toBeNull()
@@ -754,58 +711,7 @@ describe('GeneralTab — system single-select + labels chips (task #14)', () => 
 // ui-swift-sloth §3.5: Group Key required + disallowed-prefix.
 // ---------------------------------------------------------------------------
 
-describe('GeneralTab — group key + canBeParent (items 1/2 + 4)', () => {
-  it('group key is read-only (no required `*` marker, no editable input)', () => {
-    setAllEditable()
-    renderWithProviders(
-      <Harness component={baseComponent({ group: { groupKey: 'org.example.alpha', isFake: false, role: 'MEMBER' } })} />,
-    )
-    const label = screen.getByText(/group key/i)
-    expect(label.textContent).not.toContain('*')
-    const input = screen.getByLabelText(/^group key$/i) as HTMLInputElement
-    expect(input.disabled).toBe(true)
-    expect(input.value).toBe('org.example.alpha')
-  })
-
-  it('canBeParent switch reflects the component flag and is editable', () => {
-    setAllEditable()
-    const component = baseComponent({ canBeParent: true })
-    renderWithProviders(<Harness component={component} />)
-    const sw = screen.getByLabelText(/^can be a parent$/i) as HTMLButtonElement
-    expect(sw).toBeDefined()
-    // Radix Switch exposes checked state via aria-checked / data-state.
-    expect(sw.getAttribute('aria-checked')).toBe('true')
-    // R1: the label drops the misleading "(aggregator)" suffix, and the field is
-    // explicitly disambiguated from an aggregator (a `components { }` owner).
-    expect(screen.getByText('Can be a parent')).toBeDefined()
-    expect(screen.queryByText(/can be a parent \(aggregator\)/i)).toBeNull()
-    expect(screen.getByText(/not an aggregator/i)).toBeDefined()
-  })
-
-  it('a canBeParent component with no parent: the parent picker is disabled', () => {
-    setAllEditable()
-    const component = baseComponent({ canBeParent: true, parentComponentName: null })
-    renderWithProviders(<Harness component={component} />)
-    // A can-be-parent component may not gain a parent → the strict picker renders disabled.
-    const parentInput = screen.getByLabelText(/^parent component$/i) as HTMLInputElement
-    expect(parentInput.disabled).toBe(true)
-  })
-
-  it('a grandfathered canBeParent component WITH a parent: read-only value + Clear button', async () => {
-    setAllEditable()
-    const formRef = React.createRef<
-      ReturnType<typeof useForm<GeneralFormValues>> | null
-    >() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
-    const component = baseComponent({ canBeParent: true, parentComponentName: 'legacy-parent' })
-    renderWithProviders(<Harness component={component} formRef={formRef} />)
-    const parentInput = screen.getByLabelText(/^parent component$/i) as HTMLInputElement
-    expect(parentInput.value).toBe('legacy-parent')
-    expect(parentInput.disabled).toBe(true)
-    // Only remediation offered: a Clear button that empties the parent.
-    await userEvent.click(screen.getByRole('button', { name: /^clear$/i }))
-    expect(formRef.current!.getValues('parentComponentName')).toBe('')
-  })
-})
+// group-key + canBeParent + parent-picker tests moved to MiscTab.test.tsx.
 
 describe('GeneralTab field descriptions (FieldInfo)', () => {
   // Exact set of registry paths this tab must expose an info icon for.
@@ -814,9 +720,7 @@ describe('GeneralTab field descriptions (FieldInfo)', () => {
   const EXPECTED_PATHS = [
     'component.name',
     'component.displayName',
-    'component.parentComponentName',
-    'component.canBeParent',
-    'component.groupId',
+    // parentComponentName / canBeParent / groupId moved to the Misc tab (see MiscTab.test).
     'component.solution',
     'component.componentOwner',
     'component.releaseManager',
@@ -847,5 +751,27 @@ describe('GeneralTab field descriptions (FieldInfo)', () => {
     act(() => trigger.focus())
     const tooltip = await screen.findByRole('tooltip')
     expect(tooltip).toHaveTextContent(fieldDescriptions['component.name']!)
+  })
+})
+
+describe('GeneralTab — responsible-people (who can edit) field', () => {
+  it('renders the read-only owner + RMs + SCs list from useComponentEditors', () => {
+    setAllEditable()
+    renderWithProviders(<Harness component={baseComponent()} />)
+    const input = screen.getByLabelText(/owner, release managers, and security champions/i) as HTMLInputElement
+    expect(input.value).toBe('alice, rm-1, sc-1')
+    expect(input.disabled).toBe(true)
+    expect(screen.getByText(/administrators may also have edit access/i)).toBeDefined()
+  })
+
+  it('shows a Loading… placeholder while the editors projection is in flight', () => {
+    setAllEditable()
+    // mockReturnValue (not Once): GeneralTab re-renders via form.watch, so a one-shot would be
+    // consumed before the assertion. This is the last test in the file, so leftover state is moot.
+    mockUseComponentEditors.mockReturnValue({ data: undefined as never, isLoading: true })
+    renderWithProviders(<Harness component={baseComponent()} />)
+    const input = screen.getByLabelText(/owner, release managers, and security champions/i) as HTMLInputElement
+    expect(input.value).toBe('')
+    expect(input.placeholder).toBe('Loading…')
   })
 })

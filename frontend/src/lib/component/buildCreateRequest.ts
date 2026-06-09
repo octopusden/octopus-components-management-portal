@@ -27,6 +27,10 @@ export interface CreateFormValues {
   releaseManager: string[]
   securityChampion: string[]
   copyright: string
+  // BASE jira aspect fields settable at create. jiraProjectKey is unique per component (never
+  // copied); versionPrefix defaults to the component key in scratch mode (mirrored in the form).
+  jiraProjectKey: string
+  versionPrefix: string
   // Exactly one distribution coordinate (more are added later in the
   // Distribution tab). Only emitted when explicit+external.
   coordinate: {
@@ -50,11 +54,12 @@ export interface CreateFormValues {
 //   - copied from source: productType, system, clientCode, solution,
 //     parentComponentName, labels, docs, securityGroups, releasesInDefaultBranch,
 //     jiraHotfixVersionFormat, vcsExternalRegistry, and from the BASE row the
-//     escrow aspect, jira aspect (without projectKey), requiredTools, and the
-//     build aspect (merged with the form's buildSystem);
+//     escrow aspect, jira aspect (source projectKey stripped — the form supplies jiraProjectKey
+//     and versionPrefix, which win), requiredTools, and the build aspect (merged with the form's
+//     buildSystem);
 //   - required-but-not-copied collections: artifactIds: [], teamcityProjects: [];
 //   - never sent: id/version/timestamps/group/canEdit, override rows, vcsEntries,
-//     source distribution artifacts, jira.projectKey, jiraDisplayName.
+//     source distribution artifacts, source jira.projectKey, jiraDisplayName.
 //
 // Scratch mode (no source): source-derived fields fall to their defaults
 // (system: null, empty collections, archived: false).
@@ -160,8 +165,12 @@ export function buildCreateRequest(
     build: { ...(baseRow?.build ?? {}), buildSystem: form.buildSystem },
   }
   if (baseRow?.escrow) baseConfiguration.escrow = { ...baseRow.escrow }
-  const jira = copyJiraAspect(baseRow?.jira)
-  if (jira) baseConfiguration.jira = jira
+  // Jira aspect: start from the source's copied aspect (projectKey stripped), then overlay the
+  // form's jiraProjectKey + versionPrefix (form wins). Only attach when something is present.
+  const jira: JiraAspect = { ...(copyJiraAspect(baseRow?.jira) ?? {}) }
+  if (form.jiraProjectKey.trim()) jira.projectKey = form.jiraProjectKey.trim()
+  if (form.versionPrefix.trim()) jira.versionPrefix = form.versionPrefix.trim()
+  if (Object.values(jira).some((v) => v != null)) baseConfiguration.jira = jira
   if (baseRow && baseRow.requiredTools.length > 0) {
     baseConfiguration.requiredTools = [...baseRow.requiredTools]
   }

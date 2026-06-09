@@ -11,6 +11,8 @@
 export interface ComponentSummary {
   id: string
   name: string
+  // Nullable + unique server-side. Stored verbatim from the DSL (no key backfill), so it is
+  // null when the component declares no componentDisplayName (preserves the legacy $.name wire).
   displayName: string | null
   componentOwner: string | null
   // CRS PR #301 collapsed Component.systems Set<String> → Component.system
@@ -40,6 +42,9 @@ export interface ComponentSummary {
 export interface ComponentDetail {
   id: string
   name: string
+  // Nullable + unique server-side. Stored verbatim from the DSL (no key backfill), so it is
+  // null when the component declares no componentDisplayName (preserves the legacy $.name wire).
+  // Required only for explicit+external components (server-enforced).
   displayName: string | null
   componentOwner: string | null
   productType: string | null
@@ -88,6 +93,17 @@ export interface ComponentDetail {
   // admin). Optional — absent against an older backend, in which case the UI
   // falls back to the global CREATE_COMPONENTS permission check.
   canEdit?: boolean
+}
+
+/**
+ * The people who may edit a component, from `GET /components/{id}/editors`. Read-only
+ * informational projection (owner + ordered release managers + security champions);
+ * administrators may also edit but are not enumerated here.
+ */
+export interface ComponentEditors {
+  componentOwner: string | null
+  releaseManagers: string[]
+  securityChampions: string[]
 }
 
 // ---------------------------------------------------------------------------

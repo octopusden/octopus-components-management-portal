@@ -13,6 +13,8 @@ function makeForm(overrides: Partial<CreateFormValues> = {}): CreateFormValues {
     releaseManager: [],
     securityChampion: [],
     copyright: '',
+    jiraProjectKey: '',
+    versionPrefix: '',
     coordinate: {
       type: 'maven',
       groupPattern: '',
@@ -170,6 +172,16 @@ describe('buildCreateRequest — gated (explicit+external) coordinate', () => {
     expect(req.releaseManager).toEqual(['rm-a'])
     expect(req.securityChampion).toEqual(['sc-a'])
     expect(req.copyright).toBe('ACME')
+  })
+
+  it('emits form jiraProjectKey + versionPrefix onto baseConfiguration.jira', () => {
+    const req = buildCreateRequest(makeForm({ jiraProjectKey: 'PROJ', versionPrefix: 'svc-new' }))
+    expect(req.baseConfiguration?.jira).toMatchObject({ projectKey: 'PROJ', versionPrefix: 'svc-new' })
+  })
+
+  it('omits jira aspect entirely when no jira fields are set (scratch)', () => {
+    const req = buildCreateRequest(makeForm({ jiraProjectKey: '', versionPrefix: '' }))
+    expect('jira' in (req.baseConfiguration ?? {})).toBe(false)
   })
 })
 

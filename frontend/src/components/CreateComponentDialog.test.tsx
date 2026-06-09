@@ -112,8 +112,11 @@ async function openScratch() {
 
 async function fillBaseFields(owner = 'alice') {
   await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+  // displayName is optional for a non-explicit+external component (required only under the EE
+  // gate); fill it here for completeness so the created payload carries a value.
+  await userEvent.type(screen.getByLabelText(/display name/i), 'Widget')
   await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
-  await userEvent.type(screen.getByPlaceholderText('owner@example.com'), owner)
+  await userEvent.type(screen.getByPlaceholderText('AD userkey'), owner)
 }
 
 describe('CreateComponentDialog — scratch mode base', () => {
@@ -270,15 +273,16 @@ describe('CreateComponentDialog — copy mode (sourceId)', () => {
     expect(screen.getByText(/excluded/i)).toBeDefined()
   })
 
-  it('prefills displayName / buildSystem / owner from the source; key stays empty', async () => {
+  it('does NOT prefill displayName from the source (unique); prefills buildSystem / owner; key stays empty', async () => {
     loaded()
     renderCopy()
+    // displayName is UNIQUE, so copy mode must NOT prefill it — the user supplies a fresh one.
     await waitFor(() =>
-      expect((screen.getByLabelText(/display name/i) as HTMLInputElement).value).toBe('Service Alpha'),
+      expect((screen.getByLabelText(/display name/i) as HTMLInputElement).value).toBe(''),
     )
     expect((screen.getByLabelText(/component key/i) as HTMLInputElement).value).toBe('')
     expect((screen.getByLabelText(/build system/i) as HTMLSelectElement).value).toBe('GRADLE')
-    expect((screen.getByPlaceholderText('owner@example.com') as HTMLInputElement).value).toBe('alice')
+    expect((screen.getByPlaceholderText('AD userkey') as HTMLInputElement).value).toBe('alice')
   })
 
   it('source loading disables Create; source error shows InlineError', () => {
@@ -347,6 +351,7 @@ describe('CreateComponentDialog — copy mode (sourceId)', () => {
     )
     renderCopy()
     await userEvent.type(screen.getByLabelText(/component key/i), 'svc-clone')
+    await userEvent.type(screen.getByLabelText(/display name/i), 'Svc Clone')
     await userEvent.type(screen.getByLabelText('Group ID'), 'org.acme')
     await userEvent.type(screen.getByLabelText('Artifact ID'), 'svc')
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
@@ -359,6 +364,7 @@ describe('CreateComponentDialog — copy mode (sourceId)', () => {
     loaded()
     renderCopy()
     await userEvent.type(screen.getByLabelText(/component key/i), 'svc-alpha')
+    await userEvent.type(screen.getByLabelText(/display name/i), 'Svc Alpha')
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() =>
       expect(mockToast).toHaveBeenCalledWith(
@@ -372,6 +378,7 @@ describe('CreateComponentDialog — copy mode (sourceId)', () => {
     loaded()
     const { onOpenChange } = renderCopy()
     await userEvent.type(screen.getByLabelText(/component key/i), 'svc-clone')
+    await userEvent.type(screen.getByLabelText(/display name/i), 'Svc Clone')
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/components/comp-9'))
     const arg = mockMutateAsync.mock.calls[0]![0]

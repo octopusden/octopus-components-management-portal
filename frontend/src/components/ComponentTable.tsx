@@ -157,7 +157,9 @@ const columns = [
         >
           {row.original.name}
         </Link>
-        {row.original.displayName && (
+        {/* displayName is nullable (null when no componentDisplayName); show the secondary
+            line only when present AND distinct from the name (not a redundant echo). */}
+        {row.original.displayName && row.original.displayName !== row.original.name && (
           <span className="text-xs text-muted-foreground">{row.original.displayName}</span>
         )}
       </div>
