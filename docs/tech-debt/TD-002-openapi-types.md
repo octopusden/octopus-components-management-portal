@@ -2,7 +2,11 @@
 
 ## Status
 
-Partial. Wave 0 of the schema-v2 migration (PR #38, commits `e2e2199` + `2070c9e`) wired the portal-side half: `openapi-typescript` against a vendored `frontend/src/lib/api/v4.json` produces `frontend/src/lib/api/schema.d.ts`; `npm run generate-types:check` is the drift gate. What remains: (a) CRS-side automatic spec publication so the vendored copy refreshes without a manual `cp ~/Downloads/v3-api-docs.json` (tracked as CRS's own TD-003 and as item #7 in [TD-005](TD-005-schema-v2-followups.md)); (b) retiring `frontend/src/lib/types.ts` in favour of re-exports from `schema.d.ts` once the two intentional drifts noted in `e2e2199`'s commit message (`?: T | null` vs `?: T`, `value: unknown` vs `Record<string, never>`) are resolved upstream or accepted as a thin compatibility shim.
+Partial. Wave 0 of the schema-v2 migration (PR #38, commits `e2e2199` + `2070c9e`) wired the portal-side half: `openapi-typescript` against a vendored `frontend/src/lib/api/v4.json` produces `frontend/src/lib/api/schema.d.ts`; `npm run generate-types:check` is the drift gate.
+
+Part (a) — **DONE** (issue #89): CRS publishes a drift-gated spec (CRS TD-003, PRs #350/#351) and Portal now has a cross-repo staleness gate. `npm run vendor-spec` (`frontend/scripts/vendor-spec.sh`) fetches CRS's spec at a pinned ref (`v3` pre-cutover) → writes `v4.json` → regenerates types in one step; `npm run vendor-spec:check` runs in `merge-gate.yml` and fails the PR when the vendored copy falls behind CRS. The manual `cp ~/Downloads/v3-api-docs.json` flow is retired. See the "OpenAPI v4 types" section of the [README](../../README.md) for the pinned-ref + refresh details.
+
+What remains: (b) retiring `frontend/src/lib/types.ts` in favour of re-exports from `schema.d.ts` once the two intentional drifts noted in `e2e2199`'s commit message (`?: T | null` vs `?: T`, `value: unknown` vs `Record<string, never>`) are resolved upstream or accepted as a thin compatibility shim.
 
 ## Context
 
