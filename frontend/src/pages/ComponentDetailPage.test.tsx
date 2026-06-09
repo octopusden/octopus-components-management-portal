@@ -464,6 +464,28 @@ describe('ComponentDetailPage — breadcrumb badges', () => {
   })
 })
 
+describe('ComponentDetailPage — tab order', () => {
+  it('renders Misc right after Escrow (aspect tabs first, Misc before the meta tabs)', () => {
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    renderPage(baseComponent, user)
+    const tabs = within(screen.getByRole('tablist')).getAllByRole('tab')
+    // Strip count badges ("Build1" → "Build") so the assertion only pins order.
+    expect(tabs.map((t) => (t.textContent ?? '').replace(/\d+$/, ''))).toEqual([
+      'General',
+      'Build',
+      'VCS',
+      'Distribution',
+      'Jira',
+      'Escrow',
+      'Misc',
+      'Configurations',
+      'As Code',
+      'Overrides',
+      'History',
+    ])
+  })
+})
+
 describe('ComponentDetailPage — Jira/Git quick-links', () => {
   it('(f) Jira link renders when jiraBaseUrl is set and projectKey exists', () => {
     mockedUsePortalLinks.mockReturnValue({
