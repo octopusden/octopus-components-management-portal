@@ -267,177 +267,42 @@ describe('BuildTab — save path', () => {
     expect(callArg.baseConfiguration?.build?.projectVersion).toBeNull()
   })
 
-  it('sends buildTasks in build payload', async () => {
+  it('omits the Escrow-tab-migrated fields from the PATCH payload entirely', async () => {
+    // Build Tasks / System Properties / Deprecated / Required Project /
+    // Required Tools render and save on the Escrow tab now. CRS PATCH is
+    // per-field (?.let): keys ABSENT here = untouched, so a Build save can
+    // never clobber what the Escrow tab owns.
     const mutateFn = vi.fn().mockResolvedValue({})
-    const component = makeComponent({
-      configurations: [
-        makeBaseRow({ build: { buildSystem: 'MAVEN', buildTasks: 'clean install' } }),
-      ],
-    })
-
-    const { getByPlaceholderText, getByText } = renderTab(component, mutateFn)
-
-    const input = getByPlaceholderText('clean install / assemble')
-    await userEvent.clear(input)
-    await userEvent.type(input, 'assemble')
-
-    await userEvent.click(getByText('Save Build'))
-
-    const callArg = mutateFn.mock.calls[0]![0] as ComponentUpdateRequest
-    expect(callArg.baseConfiguration?.build?.buildTasks).toBe('assemble')
-  })
-
-  it('sends null for buildTasks when cleared', async () => {
-    const mutateFn = vi.fn().mockResolvedValue({})
-    const component = makeComponent({
-      configurations: [
-        makeBaseRow({ build: { buildSystem: 'MAVEN', buildTasks: 'clean install' } }),
-      ],
-    })
-
-    const { getByPlaceholderText, getByText } = renderTab(component, mutateFn)
-    await userEvent.clear(getByPlaceholderText('clean install / assemble'))
-    await userEvent.click(getByText('Save Build'))
-
-    const callArg = mutateFn.mock.calls[0]![0] as ComponentUpdateRequest
-    expect(callArg.baseConfiguration?.build?.buildTasks).toBeNull()
-  })
-
-  it('sends systemProperties in build payload', async () => {
-    const mutateFn = vi.fn().mockResolvedValue({})
-    const component = makeComponent({
-      configurations: [
-        makeBaseRow({ build: { buildSystem: 'MAVEN', systemProperties: '-Dfoo=bar' } }),
-      ],
-    })
-
-    const { getByPlaceholderText, getByText } = renderTab(component, mutateFn)
-
-    const textarea = getByPlaceholderText('-Dproperty=value')
-    await userEvent.clear(textarea)
-    await userEvent.type(textarea, '-Dbaz=qux')
-
-    await userEvent.click(getByText('Save Build'))
-
-    const callArg = mutateFn.mock.calls[0]![0] as ComponentUpdateRequest
-    expect(callArg.baseConfiguration?.build?.systemProperties).toBe('-Dbaz=qux')
-  })
-
-  it('sends null for systemProperties when cleared', async () => {
-    const mutateFn = vi.fn().mockResolvedValue({})
-    const component = makeComponent({
-      configurations: [
-        makeBaseRow({ build: { buildSystem: 'MAVEN', systemProperties: '-Dfoo=bar' } }),
-      ],
-    })
-
-    const { getByPlaceholderText, getByText } = renderTab(component, mutateFn)
-    await userEvent.clear(getByPlaceholderText('-Dproperty=value'))
-    await userEvent.click(getByText('Save Build'))
-
-    const callArg = mutateFn.mock.calls[0]![0] as ComponentUpdateRequest
-    expect(callArg.baseConfiguration?.build?.systemProperties).toBeNull()
-  })
-
-  it('sends requiredProject boolean in build payload', async () => {
-    const mutateFn = vi.fn().mockResolvedValue({})
-    const component = makeComponent({
-      configurations: [
-        makeBaseRow({ build: { buildSystem: 'MAVEN', requiredProject: false } }),
-      ],
-    })
-
-    const { getByLabelText, getByText } = renderTab(component, mutateFn)
-    await userEvent.click(getByLabelText('Required Project'))
-    await userEvent.click(getByText('Save Build'))
-
-    const callArg = mutateFn.mock.calls[0]![0] as ComponentUpdateRequest
-    expect(callArg.baseConfiguration?.build?.requiredProject).toBe(true)
-  })
-})
-
-// ─── 2. Required Tools editable section ──────────────────────────────────────
-describe('BuildTab — Required Tools editable section', () => {
-  it('renders tool name badges when requiredTools is non-empty', () => {
     const component = makeComponent({
       configurations: [
         makeBaseRow({
-          requiredTools: ['my-tool', 'another-tool'],
+          build: { buildSystem: 'MAVEN', buildTasks: 'clean install', systemProperties: '-Dfoo=bar', deprecated: true, requiredProject: true },
+          requiredTools: ['tool-x'],
         }),
       ],
     })
 
-    renderTab(component)
-
-    expect(screen.getByText('my-tool')).toBeDefined()
-    expect(screen.getByText('another-tool')).toBeDefined()
-  })
-
-  it('renders Required Tools input field always', () => {
-    const component = makeComponent({
-      configurations: [makeBaseRow({ requiredTools: [] })],
-    })
-
-    renderTab(component)
-
-    expect(screen.getByText('Required Tools')).toBeDefined()
-    expect(screen.getByPlaceholderText('tool-a, tool-b')).toBeDefined()
-  })
-
-  it('saves requiredTools as array at BASE row level, not inside build', async () => {
-    const mutateFn = vi.fn().mockResolvedValue({})
-    const component = makeComponent({
-      configurations: [makeBaseRow({ build: { buildSystem: 'MAVEN' }, requiredTools: [] })],
-    })
-
-    const { getByPlaceholderText, getByText } = renderTab(component, mutateFn)
-
-    const input = getByPlaceholderText('tool-a, tool-b')
-    await userEvent.type(input, 'tool-a, tool-b, tool-a')
-
+    const { getByText } = renderTab(component, mutateFn)
     await userEvent.click(getByText('Save Build'))
 
     expect(mutateFn).toHaveBeenCalledOnce()
     const callArg = mutateFn.mock.calls[0]![0] as ComponentUpdateRequest
-    // deduplicated array at baseConfiguration level
-    expect(callArg.baseConfiguration?.requiredTools).toEqual(['tool-a', 'tool-b'])
-    // not inside build
-    expect((callArg.baseConfiguration?.build as Record<string, unknown> | undefined | null)?.['requiredTools']).toBeUndefined()
-  })
-
-  it('saves empty array when requiredTools input is blank', async () => {
-    const mutateFn = vi.fn().mockResolvedValue({})
-    const component = makeComponent({
-      configurations: [makeBaseRow({ build: { buildSystem: 'MAVEN' }, requiredTools: ['tool-x'] })],
-    })
-
-    const { getByPlaceholderText, getByText } = renderTab(component, mutateFn)
-    await userEvent.clear(getByPlaceholderText('tool-a, tool-b'))
-    await userEvent.click(getByText('Save Build'))
-
-    const callArg = mutateFn.mock.calls[0]![0] as ComponentUpdateRequest
-    expect(callArg.baseConfiguration?.requiredTools).toEqual([])
-  })
-
-  it('populates input from existing requiredTools', () => {
-    const component = makeComponent({
-      configurations: [makeBaseRow({ requiredTools: ['tool-x', 'tool-y'] })],
-    })
-
-    renderTab(component)
-
-    const input = screen.getByPlaceholderText('tool-a, tool-b') as HTMLInputElement
-    expect(input.value).toBe('tool-x, tool-y')
+    const build = callArg.baseConfiguration?.build as Record<string, unknown>
+    expect('buildTasks' in build).toBe(false)
+    expect('systemProperties' in build).toBe(false)
+    expect('deprecated' in build).toBe(false)
+    expect('requiredProject' in build).toBe(false)
+    expect('requiredTools' in (callArg.baseConfiguration as Record<string, unknown>)).toBe(false)
   })
 })
 
 // ─── 3. Existing structure preserved ─────────────────────────────────────────
 describe('BuildTab — existing structure preserved', () => {
-  it('renders Build System, Java Version, Deprecated controls', () => {
+  it('renders the build-toolchain controls', () => {
     const component = makeComponent({
       configurations: [
         makeBaseRow({
-          build: { buildSystem: 'MAVEN', buildFilePath: 'pom.xml', javaVersion: '17', deprecated: false },
+          build: { buildSystem: 'MAVEN', buildFilePath: 'pom.xml', javaVersion: '17' },
         }),
       ],
     })
@@ -446,20 +311,20 @@ describe('BuildTab — existing structure preserved', () => {
 
     expect(screen.getByText('Build System')).toBeDefined()
     expect(screen.getByText('Java Version')).toBeDefined()
-    expect(screen.getByText('Deprecated')).toBeDefined()
     expect(screen.getByText('Gradle Version')).toBeDefined()
+    expect(screen.getByText('Maven Version')).toBeDefined()
+    expect(screen.getByText('Project Version')).toBeDefined()
     expect(screen.getByText('Save Build')).toBeDefined()
   })
 
-  it('renders new Wave B controls', () => {
+  it('does NOT render the fields migrated to the Escrow tab', () => {
     renderTab(makeComponent())
 
-    expect(screen.getByText('Maven Version')).toBeDefined()
-    expect(screen.getByText('Project Version')).toBeDefined()
-    expect(screen.getByText('Build Tasks')).toBeDefined()
-    expect(screen.getByText('System Properties')).toBeDefined()
-    expect(screen.getByText('Required Project')).toBeDefined()
-    expect(screen.getByText('Required Tools')).toBeDefined()
+    expect(screen.queryByText('Build Tasks')).toBeNull()
+    expect(screen.queryByText('System Properties')).toBeNull()
+    expect(screen.queryByText('Deprecated')).toBeNull()
+    expect(screen.queryByText('Required Project')).toBeNull()
+    expect(screen.queryByText('Required Tools')).toBeNull()
   })
 
   it('populates fields from BASE row build aspect', () => {
@@ -578,10 +443,8 @@ describe('BuildTab — inline override coverage', () => {
     'build.mavenVersion',
     'build.gradleVersion',
     'build.projectVersion',
-    'build.systemProperties',
-    'build.buildTasks',
-    'build.deprecated',
-    'build.requiredProject',
+    // buildTasks / systemProperties / deprecated / requiredProject inline
+    // overrides moved to the Escrow tab with their fields.
   ]
 
   it.each(overridablePaths)('renders FieldOverrideInline under %s', (path) => {
@@ -592,6 +455,8 @@ describe('BuildTab — inline override coverage', () => {
 
 describe('BuildTab field descriptions (FieldInfo)', () => {
   // Exact set of registry paths this tab must expose an info icon for.
+  // (buildTasks / systemProperties / deprecated / requiredProject /
+  // requiredTools moved to the Escrow tab.)
   const EXPECTED_PATHS = [
     'build.buildSystem',
     'build.buildFilePath',
@@ -599,11 +464,6 @@ describe('BuildTab field descriptions (FieldInfo)', () => {
     'build.mavenVersion',
     'build.gradleVersion',
     'build.projectVersion',
-    'build.buildTasks',
-    'build.systemProperties',
-    'build.deprecated',
-    'build.requiredProject',
-    'build.requiredTools',
   ]
 
   it('renders exactly one info icon per described field', () => {

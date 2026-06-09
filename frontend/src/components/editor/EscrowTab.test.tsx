@@ -362,6 +362,162 @@ describe('EscrowTab new fields save', () => {
   })
 })
 
+// ── Build-settings fields migrated from the Build tab ────────────────────────
+// Build Tasks / System Properties / Deprecated / Required Project / Required
+// Tools render (and save) here now; they stay `build.*` / row-level in the
+// PATCH payload — only the UI placement moved.
+
+describe('EscrowTab — migrated build settings render', () => {
+  it('renders Build Tasks, System Properties, Deprecated, Required Project and Required Tools', () => {
+    renderWithProviders(
+      <EscrowTab component={baseComponent()} updateMutation={makeMutation()} toast={makeToast()} canEdit={true} />
+    )
+    expect(screen.getByText('Build Tasks')).toBeDefined()
+    expect(screen.getByText('System Properties')).toBeDefined()
+    expect(screen.getByText('Deprecated')).toBeDefined()
+    expect(screen.getByText('Required Project')).toBeDefined()
+    expect(screen.getByText('Required Tools')).toBeDefined()
+  })
+
+  it('initialises the migrated fields from the BASE row build aspect and requiredTools', () => {
+    const component = baseComponent()
+    component.configurations![0]!.build = {
+      buildSystem: 'MAVEN',
+      buildTasks: 'clean install',
+      systemProperties: '-Dfoo=bar',
+      deprecated: true,
+      requiredProject: true,
+    }
+    component.configurations![0]!.requiredTools = ['tool-x', 'tool-y']
+    renderWithProviders(
+      <EscrowTab component={component} updateMutation={makeMutation()} toast={makeToast()} canEdit={true} />
+    )
+    expect((screen.getByPlaceholderText('clean install / assemble') as HTMLInputElement).value).toBe('clean install')
+    expect((screen.getByPlaceholderText('-Dproperty=value') as HTMLTextAreaElement).value).toBe('-Dfoo=bar')
+    expect(screen.getByRole('switch', { name: 'Deprecated' }).getAttribute('data-state')).toBe('checked')
+    expect(screen.getByRole('switch', { name: 'Required Project' }).getAttribute('data-state')).toBe('checked')
+    expect((screen.getByPlaceholderText('tool-a, tool-b') as HTMLInputElement).value).toBe('tool-x, tool-y')
+  })
+})
+
+describe('EscrowTab — migrated build settings save', () => {
+  it('sends the migrated scalars inside baseConfiguration.build and omits Build-tab-owned ones', async () => {
+    setProductTypeVisibility('hidden')
+    const mutateAsync = vi.fn().mockResolvedValue({})
+    const component = baseComponent()
+    component.configurations![0]!.build = {
+      buildSystem: 'MAVEN',
+      buildTasks: 'clean install',
+      systemProperties: '-Dfoo=bar',
+      deprecated: false,
+      requiredProject: false,
+    }
+    renderWithProviders(
+      <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} canEdit={true} />
+    )
+
+    const tasksInput = screen.getByPlaceholderText('clean install / assemble')
+    fireEvent.change(tasksInput, { target: { value: 'assemble' } })
+    fireEvent.click(screen.getByRole('switch', { name: 'Deprecated' }))
+
+    fireEvent.click(screen.getByRole('button', { name: /save escrow/i }))
+    await vi.waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce())
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const payload = mutateAsync.mock.calls[0]![0] as any
+    expect(payload.baseConfiguration.escrow).toBeDefined()
+    const build = payload.baseConfiguration.build
+    expect(build.buildTasks).toBe('assemble')
+    expect(build.systemProperties).toBe('-Dfoo=bar')
+    expect(build.deprecated).toBe(true)
+    expect(build.requiredProject).toBe(false)
+    // Build-tab-owned scalars must be ABSENT (CRS PATCH = per-field ?.let,
+    // absent = don't touch) so an Escrow save can never clobber them.
+    expect('buildSystem' in build).toBe(false)
+    expect('buildFilePath' in build).toBe(false)
+    expect('javaVersion' in build).toBe(false)
+    expect('mavenVersion' in build).toBe(false)
+    expect('gradleVersion' in build).toBe(false)
+    expect('projectVersion' in build).toBe(false)
+  })
+
+  it('sends null for cleared Build Tasks / System Properties', async () => {
+    setProductTypeVisibility('hidden')
+    const mutateAsync = vi.fn().mockResolvedValue({})
+    const component = baseComponent()
+    component.configurations![0]!.build = {
+      buildSystem: 'MAVEN',
+      buildTasks: 'clean install',
+      systemProperties: '-Dfoo=bar',
+    }
+    renderWithProviders(
+      <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} canEdit={true} />
+    )
+
+    fireEvent.change(screen.getByPlaceholderText('clean install / assemble'), { target: { value: '' } })
+    fireEvent.change(screen.getByPlaceholderText('-Dproperty=value'), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: /save escrow/i }))
+    await vi.waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce())
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const build = (mutateAsync.mock.calls[0]![0] as any).baseConfiguration.build
+    expect(build.buildTasks).toBeNull()
+    expect(build.systemProperties).toBeNull()
+  })
+
+  it('saves requiredTools deduped at BASE-row level, not inside build', async () => {
+    setProductTypeVisibility('hidden')
+    const mutateAsync = vi.fn().mockResolvedValue({})
+    const component = baseComponent()
+    renderWithProviders(
+      <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} canEdit={true} />
+    )
+
+    fireEvent.change(screen.getByPlaceholderText('tool-a, tool-b'), {
+      target: { value: 'tool-a, tool-b, tool-a' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /save escrow/i }))
+    await vi.waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce())
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const payload = mutateAsync.mock.calls[0]![0] as any
+    expect(payload.baseConfiguration.requiredTools).toEqual(['tool-a', 'tool-b'])
+    expect('requiredTools' in payload.baseConfiguration.build).toBe(false)
+  })
+
+  it('saves empty requiredTools array when input is cleared (explicit clear)', async () => {
+    setProductTypeVisibility('hidden')
+    const mutateAsync = vi.fn().mockResolvedValue({})
+    const component = baseComponent()
+    component.configurations![0]!.requiredTools = ['tool-x']
+    renderWithProviders(
+      <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} canEdit={true} />
+    )
+
+    fireEvent.change(screen.getByPlaceholderText('tool-a, tool-b'), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: /save escrow/i }))
+    await vi.waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce())
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((mutateAsync.mock.calls[0]![0] as any).baseConfiguration.requiredTools).toEqual([])
+  })
+
+  it('sends requiredTools: null (don\'t touch) when no BASE row is loaded', async () => {
+    setProductTypeVisibility('hidden')
+    const mutateAsync = vi.fn().mockResolvedValue({})
+    const component = baseComponent({ configurations: [] })
+    renderWithProviders(
+      <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} canEdit={true} />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /save escrow/i }))
+    await vi.waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce())
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((mutateAsync.mock.calls[0]![0] as any).baseConfiguration.requiredTools).toBeNull()
+  })
+})
+
 describe('EscrowTab — inline override coverage', () => {
   const overridablePaths = [
     'escrow.providedDependencies',
@@ -373,6 +529,11 @@ describe('EscrowTab — inline override coverage', () => {
     'escrow.gradleExcludeConfigurations',
     'escrow.gradleIncludeTestConfigurations',
     'escrow.buildTask',
+    // migrated from the Build tab — attribute paths stay build.*
+    'build.buildTasks',
+    'build.systemProperties',
+    'build.deprecated',
+    'build.requiredProject',
   ]
 
   it.each(overridablePaths)('renders FieldOverrideInline under %s', (path) => {
@@ -398,6 +559,12 @@ describe('EscrowTab field descriptions (FieldInfo)', () => {
     'escrow.gradleExcludeConfigurations',
     'escrow.gradleIncludeTestConfigurations',
     'escrow.buildTask',
+    // migrated from the Build tab — registry description paths stay build.*
+    'build.buildTasks',
+    'build.systemProperties',
+    'build.deprecated',
+    'build.requiredProject',
+    'build.requiredTools',
   ]
 
   it('renders exactly one info icon per described field', () => {
