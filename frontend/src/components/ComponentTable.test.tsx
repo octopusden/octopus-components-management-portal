@@ -35,7 +35,8 @@ function makeComponent(overrides: Partial<ComponentSummary> = {}): ComponentSumm
   return {
     id: 'comp-1',
     name: 'my-component',
-    displayName: null,
+    // Defaults to the name (server defaults a blank displayName to the key) → no secondary line.
+    displayName: 'my-component',
     componentOwner: null,
     system: null,
     productType: null,
@@ -101,8 +102,8 @@ describe('ComponentTable', () => {
       expect(screen.getByText('Alpha Display')).toBeDefined()
     })
 
-    it('renders only the name link when displayName is null', () => {
-      const { container } = renderTable([makeComponent({ name: 'beta', displayName: null })])
+    it('renders only the name link when displayName equals the name', () => {
+      const { container } = renderTable([makeComponent({ name: 'beta', displayName: 'beta' })])
       expect(screen.getByRole('link', { name: 'beta' })).toBeDefined()
       // The name cell should contain only the link, no secondary display-name span
       const nameCell = container.querySelector('tbody tr td:first-child')

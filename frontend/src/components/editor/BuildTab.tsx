@@ -168,26 +168,34 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
 
         <div className="space-y-1.5">
           <div className="flex items-center gap-1">
-            <Label>Java Version</Label>
+            <Label htmlFor="build-javaVersion">Java Version</Label>
             <FieldInfo path="build.javaVersion" label="Java Version" />
           </div>
-          <Input
+          {/* Dropdown sourced from /meta/java-versions (configured in CRS application.yml,
+              per-install overridable). An existing off-list value is preserved as a selectable
+              item by EnumSelect; new entries are limited to the configured list. */}
+          <EnumSelect
+            id="build-javaVersion"
+            fieldPath="build.javaVersion"
             value={javaVersion}
-            onChange={(e) => setJavaVersion(e.target.value)}
-            placeholder="1.8 / 11 / 17 / 21"
+            onValueChange={setJavaVersion}
+            placeholder="Select Java version"
           />
           <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.javaVersion" />
         </div>
 
         <div className="space-y-1.5">
           <div className="flex items-center gap-1">
-            <Label>Maven Version</Label>
+            <Label htmlFor="build-mavenVersion">Maven Version</Label>
             <FieldInfo path="build.mavenVersion" label="Maven Version" />
           </div>
-          <Input
+          {/* Dropdown sourced from /meta/maven-versions (see Java Version note above). */}
+          <EnumSelect
+            id="build-mavenVersion"
+            fieldPath="build.mavenVersion"
             value={mavenVersion}
-            onChange={(e) => setMavenVersion(e.target.value)}
-            placeholder="3.9.6"
+            onValueChange={setMavenVersion}
+            placeholder="Select Maven version"
           />
           <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.mavenVersion" />
         </div>

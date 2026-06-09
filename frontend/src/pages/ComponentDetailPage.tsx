@@ -18,6 +18,7 @@ import {
   DialogFooter,
 } from '../components/ui/dialog'
 import { GeneralTab, type GeneralFormValues, GENERAL_TAB_FIELDS } from '../components/editor/GeneralTab'
+import { MiscTab, MISC_TAB_FIELDS } from '../components/editor/MiscTab'
 import { buildUpdateRequest } from '../lib/component/buildUpdateRequest'
 import { BuildTab } from '../components/editor/BuildTab'
 import { VcsTab } from '../components/editor/VcsTab'
@@ -75,6 +76,9 @@ export function ComponentDetailPage() {
   const handleConflict = useOptimisticConflict(id)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [copyDialogOpen, setCopyDialogOpen] = useState(false)
+  // Controlled tab so a server 400 on a field that lives on a non-active tab can auto-switch
+  // to the owning tab (otherwise the inline error renders on a hidden tab).
+  const [activeTab, setActiveTab] = useState('general')
 
   const { data: component, isLoading, error } = useComponent(id ?? '')
   const updateMutation = useUpdateComponent(id ?? '')
@@ -199,6 +203,7 @@ export function ComponentDetailPage() {
       dirtyFields: {
         solution: form.formState.dirtyFields.solution === true,
         system: form.formState.dirtyFields.system === true,
+        displayName: form.formState.dirtyFields.displayName === true,
         labels:
           (form.formState.dirtyFields.labels as unknown) === true ||
           (labelsFc.visibility !== 'hidden' &&
@@ -240,8 +245,21 @@ export function ComponentDetailPage() {
     systemFc.visibility !== 'hidden' &&
     (component?.system ?? '') !== '' &&
     ((form.getValues('system') as string | undefined) ?? '') === ''
+  // displayName is required (NOT NULL) and effectively non-clearable: clearing it currently
+  // PATCHes nothing (omit = "don't touch"), so without this the Save button would disable with
+  // no feedback. Mirror the system guard so Save stays enabled and the inline error surfaces.
+  // Gate on dirty: unlike `system` (which can be null and so dodges its guard pre-hydration),
+  // displayName is always non-empty server-side, so without the dirty check this would fire in the
+  // brief window between component load and GeneralTab hydrating the form — briefly enabling Save
+  // and risking a spurious inline error. Only a real user clear (dirty + empty) needs attention.
+  const displayNameClearNeedsAttention =
+    displayNameFc.visibility !== 'hidden' &&
+    form.formState.dirtyFields.displayName === true &&
+    (component?.displayName ?? '') !== '' &&
+    ((form.getValues('displayName') as string | undefined) ?? '').trim() === ''
   const hasUnsavedChanges =
     systemClearNeedsAttention ||
+    displayNameClearNeedsAttention ||
     (!!pendingPatch &&
       Object.entries(pendingPatch).some(
         ([key, value]) => key !== 'version' && key !== 'clearGroup' && value !== undefined,
@@ -294,6 +312,21 @@ export function ComponentDetailPage() {
       }
     }
 
+    // displayName is required + non-clearable (same shape as the system guard above): a clear
+    // is a silent no-op server-side, so surface the constraint inline instead of letting the
+    // user believe the clear took. Skipped when field-config hides the field.
+    if (displayNameFc.visibility !== 'hidden' && form.formState.dirtyFields.displayName === true) {
+      const displayNameValue = (form.getValues('displayName') as string | undefined)?.trim() ?? ''
+      const priorDisplayName = component.displayName ?? ''
+      if (priorDisplayName !== '' && displayNameValue === '') {
+        form.setError('displayName', {
+          type: 'required',
+          message: 'Display Name is required',
+        })
+        return
+      }
+    }
+
     // Group Key is now server-derived + read-only (items 1/2) — no group save
     // guard. canBeParent invariants are enforced server-side; their 400s map
     // inline via GENERAL_TAB_FIELDS below.
@@ -315,14 +348,24 @@ export function ComponentDetailPage() {
       }
       if (err instanceof ApiError && err.status === 400) {
         const fieldErrors = parseServerFieldErrors(err.rawBody)
+        // Only auto-switch to Misc when NO General-owned field also errored — General is the
+        // default tab, so a mixed 400 should leave the user there (where they can see both once
+        // they switch). Avoids hiding a General error behind the Misc switch.
+        const hasGeneralError = [...fieldErrors.keys()].some((f) =>
+          (GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(f),
+        )
         let anyFieldMapped = false
         for (const [field, message] of fieldErrors) {
-          // Only set errors for fields owned by GeneralTab; fields from other
-          // tabs (buildConfiguration, vcsSettings, …) arrive in the same 400
-          // but should not pollute GeneralTab's form state.
-          if ((GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(field)) {
+          // Set errors for fields owned by the General OR Misc tab (both share this RHF form);
+          // fields from other tabs (buildConfiguration, vcsSettings, …) arrive in the same 400
+          // but should not pollute this form's state. A Misc-owned field's input lives on the
+          // Misc tab, so switch to it — otherwise the inline error would render on a hidden tab.
+          const isGeneral = (GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(field)
+          const isMisc = (MISC_TAB_FIELDS as ReadonlyArray<string>).includes(field)
+          if (isGeneral || isMisc) {
             form.setError(field as keyof GeneralFormValues, { type: 'server', message })
             anyFieldMapped = true
+            if (isMisc && !hasGeneralError) setActiveTab('misc')
           }
         }
         // Known gap: mixed 400 with both GeneralTab and other-tab field
@@ -497,7 +540,9 @@ export function ComponentDetailPage() {
                   </a>
                 ))}
             </div>
-            {component.displayName && (
+            {/* displayName is always populated (defaults to the key); show the subtitle only
+                when it differs from the name so it isn't a redundant echo. */}
+            {component.displayName && component.displayName !== component.name && (
               <p className="text-sm text-muted-foreground">{component.displayName}</p>
             )}
           </div>
@@ -564,9 +609,10 @@ export function ComponentDetailPage() {
         <Separator />
 
         {/* Tabs */}
-        <Tabs defaultValue="general" variant="underline">
+        <Tabs value={activeTab} onValueChange={setActiveTab} variant="underline">
           <TabsList className="flex-wrap gap-1">
             <TabsTrigger value="general">General</TabsTrigger>
+            <TabsTrigger value="misc">Misc</TabsTrigger>
             {(() => {
               // schema-v2: counts derived from the BASE row. Build/Jira/Escrow are
               // 0-or-1 (presence of the aspect); VCS counts vcsEntries; Distribution
@@ -621,6 +667,12 @@ export function ComponentDetailPage() {
                   the next component's form. */}
               <EditSurface canEdit={canEdit} label="General">
                 <GeneralTab key={component.id} component={component} form={form} />
+              </EditSurface>
+            </TabsContent>
+
+            <TabsContent value="misc">
+              <EditSurface canEdit={canEdit} label="Misc">
+                <MiscTab key={component.id} component={component} form={form} />
               </EditSurface>
             </TabsContent>
 

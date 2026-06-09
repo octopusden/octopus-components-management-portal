@@ -32,6 +32,10 @@ export interface FieldVisibilities {
 export interface DirtyFlags {
   solution?: boolean
   system?: boolean
+  // displayName is required + unique server-side; dirty-gate it (like system) so a pristine
+  // hydrated form doesn't re-send it on every General save, and the page's clear-guard owns
+  // the empty case. Only a real user edit emits it.
+  displayName?: boolean
   // ui-swift-sloth §4: labels is now a multi-select array, and like systems
   // it needs a dirty-gate to block the form-default `[]` from clobbering
   // server data pre-hydration.
@@ -131,8 +135,13 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
     // Required on the wire; group is now server-derived, never set/cleared here.
     clearGroup: false,
     name: renameField,
+    // Dirty-gated like `system`: only sent on a real edit. A pristine hydrated form omits it
+    // (server keeps the value); a clear (dirty + empty) is omitted here and surfaced inline by
+    // the page-level displayName clear-guard rather than silently sent.
     displayName:
-      visibilities.displayName === 'hidden' ? undefined : (values.displayName || undefined),
+      visibilities.displayName === 'hidden' || dirtyFields.displayName !== true
+        ? undefined
+        : (values.displayName.trim() || undefined),
     componentOwner:
       visibilities.componentOwner === 'hidden' ? undefined : (values.componentOwner || undefined),
     // productType is owned by EscrowTab — never sent from the General save.

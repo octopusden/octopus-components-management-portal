@@ -195,11 +195,12 @@ test.describe('Copy component — admin smoke', () => {
     const dialog = page.getByRole('dialog')
     await expect(dialog.getByText('Create Similar Component')).toBeVisible()
 
-    // Display Name prefilled from the source; Component Key starts empty.
-    await expect(dialog.getByLabel(/display name/i)).toHaveValue('Copy Source')
+    // Display Name is NOT prefilled from the source (it is unique); Component Key starts empty.
+    await expect(dialog.getByLabel(/display name/i)).toHaveValue('')
     await expect(dialog.getByLabel(/component key/i)).toHaveValue('')
 
     await dialog.getByLabel(/component key/i).fill('svc-copy-clone')
+    await dialog.getByLabel(/display name/i).fill('Copy Clone Name')
     await dialog.getByRole('button', { name: 'Create' }).click()
 
     // Navigates to the created component.
@@ -211,7 +212,7 @@ test.describe('Copy component — admin smoke', () => {
     const body = state.creates[0]!
     expect(body).toMatchObject({
       name: 'svc-copy-clone',
-      displayName: 'Copy Source',
+      displayName: 'Copy Clone Name',
       componentOwner: 'owner-oscar',
       system: 'SYS1',
       solution: false,
@@ -252,8 +253,10 @@ test.describe('Copy component — admin smoke', () => {
     await page.getByRole('button', { name: 'Create similar to svc-copy-source' }).click()
     const dialog = page.getByRole('dialog')
     await expect(dialog.getByText('Create Similar Component')).toBeVisible()
-    // Prefill proves the dialog loaded the FULL detail from a summary-only row.
-    await expect(dialog.getByLabel(/display name/i)).toHaveValue('Copy Source')
+    // Owner prefill proves the dialog loaded the FULL detail from a summary-only row.
+    // (displayName is intentionally NOT prefilled — it is unique.)
+    await expect(dialog.getByLabel(/display name/i)).toHaveValue('')
+    await expect(dialog.getByPlaceholder('AD userkey')).toHaveValue('owner-oscar')
 
     await dialog.getByRole('button', { name: 'Cancel' }).click()
     await expect(page.getByRole('dialog')).toBeHidden()
@@ -278,6 +281,7 @@ test.describe('Copy component — admin smoke', () => {
     await expect(dialog.getByText('sc-carol')).toBeVisible()
 
     await dialog.getByLabel(/component key/i).fill('svc-copy-clone')
+    await dialog.getByLabel(/display name/i).fill('Copy Clone Name')
     // Fill a maven coordinate (default type).
     await dialog.getByLabel('Group ID').fill('org.acme')
     await dialog.getByLabel('Artifact ID').fill('svc')
@@ -310,10 +314,11 @@ test.describe('Create component from scratch — admin smoke', () => {
     await expect(dialog.getByText('Create Component')).toBeVisible()
 
     await dialog.getByLabel(/component key/i).fill('scratch-svc')
+    await dialog.getByLabel(/display name/i).fill('Scratch Svc')
     // Build System is a native <select> — selectOption is unambiguous and
     // closes cleanly (no portal overlay to block later clicks).
     await dialog.getByLabel(/build system/i).selectOption('MAVEN')
-    const ownerInput = dialog.getByPlaceholder('owner@example.com')
+    const ownerInput = dialog.getByPlaceholder('AD userkey')
     await ownerInput.fill('owner-oscar')
     // Click the suggestion to commit + close the popup. (Enter would submit the
     // whole form; blur commits but leaves the popup open over the checkbox.)

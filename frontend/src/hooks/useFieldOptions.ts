@@ -12,6 +12,11 @@ const META_ENDPOINTS: Record<string, string> = {
   'component.system': '/components/meta/systems',
   repositoryType: '/components/meta/repository-types',
   generation: '/components/meta/escrow-generations',
+  // Allowed Java / Maven build-tool versions (numeric-sorted server-side). Keys are the
+  // section-prefixed field-config paths the BuildTab EnumSelect passes, so an admin
+  // field-config `options[]` for these fields takes precedence over the meta endpoint.
+  'build.javaVersion': '/components/meta/java-versions',
+  'build.mavenVersion': '/components/meta/maven-versions',
 }
 
 interface UseFieldOptionsOptions {

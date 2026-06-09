@@ -34,7 +34,7 @@ export default tseslint.config(
         'warn',
         {
           allowConstantExport: true,
-          allowExportNames: ['GENERAL_TAB_FIELDS'],
+          allowExportNames: ['GENERAL_TAB_FIELDS', 'MISC_TAB_FIELDS'],
         },
       ],
     },

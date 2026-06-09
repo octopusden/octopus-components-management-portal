@@ -235,16 +235,15 @@ beforeEach(() => {
     isLoading: false,
     isError: false,
   }))
-  // Default GeneralTab stub. Hydrates `system` from `component.system`
-  // so the page-level save guard (PR #44 P2 systems — "server had
-  // systems, form has none" blocks the save) doesn't false-positive on
-  // tests that never touch the systems field. Mirrors the real
-  // GeneralTab.useEffect mirror-server-into-form behavior.
-  // Individual tests can still override this implementation to test
-  // specific scenarios (e.g. the clear-all-systems guard).
+  // Default GeneralTab stub. Hydrates `system` AND `displayName` from the component
+  // so the page-level save guards ("server had a value, form has none" for system /
+  // displayName) don't false-positive on tests that never touch those fields. Mirrors
+  // the real GeneralTab.useEffect mirror-server-into-form behavior. Individual tests can
+  // still override this to exercise the clear-all guards.
   vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
     useEffect(() => {
       form.setValue('system', component.system ?? '')
+      form.setValue('displayName', component.displayName ?? '')
     }, [component, form])
     return React.createElement('div', { 'data-testid': 'general-tab' })
   })
@@ -634,6 +633,7 @@ describe('ComponentDetailPage — Save dirty-gate', () => {
     vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
       useEffect(() => {
         form.setValue('system', component.system ?? '')
+        form.setValue('displayName', component.displayName ?? '')
       }, [component, form])
       return React.createElement(
         'button',
@@ -783,6 +783,7 @@ describe('ComponentDetailPage — labels clear-all sends [] (PR #44 follow-up: c
         form.setValue('labels', [], { shouldDirty: true, shouldTouch: true })
         // Hydrate systems too so the unrelated systems guard doesn't trip.
         form.setValue('system', component.system ?? '')
+        form.setValue('displayName', component.displayName ?? '')
       }, [component, form])
       return React.createElement('div', { 'data-testid': 'general-tab-labels-cleared' })
     })

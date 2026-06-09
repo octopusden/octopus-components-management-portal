@@ -30,6 +30,15 @@ export function JiraTab({ component, updateMutation, toast, canEdit }: JiraTabPr
   const { entry: releasesInDefaultBranchEntry } = useFieldConfigEntry(
     'component.releasesInDefaultBranch',
   )
+  const { entry: jiraDisplayNameEntry } = useFieldConfigEntry('jira.displayName')
+  // The Jira display name is a redundant echo of the component display name unless it diverges.
+  // Show the field ONLY when it is set AND differs from component.displayName (and not FC-hidden).
+  // Base the decision on the loaded component values so it doesn't vanish mid-edit. A divergent
+  // value is created via import/DSL or Field-Overrides, not from this (hidden-by-default) field.
+  const showJiraDisplayName =
+    jiraDisplayNameEntry.visibility !== 'hidden' &&
+    (component.jiraDisplayName ?? '') !== '' &&
+    component.jiraDisplayName !== component.displayName
 
   const [projectKey, setProjectKey] = useState(jira?.projectKey ?? '')
   const [displayName, setDisplayName] = useState(component.jiraDisplayName ?? '')
@@ -75,7 +84,12 @@ export function JiraTab({ component, updateMutation, toast, canEdit }: JiraTabPr
         releasesInDefaultBranch !== (component.releasesInDefaultBranch ?? false)
           ? { releasesInDefaultBranch }
           : {}),
-        jiraDisplayName: displayName || null,
+        // Dirty-gate: only send jiraDisplayName when it actually changed from the server value.
+        // Emitting it unconditionally would clear/rewrite it on every unrelated Jira save (and,
+        // with the divergence rule, wipe a hidden equal value).
+        ...((displayName || null) !== (component.jiraDisplayName ?? null)
+          ? { jiraDisplayName: displayName || null }
+          : {}),
         jiraHotfixVersionFormat: hotfixVersionFormat || null,
         baseConfiguration: {
           jira: {
@@ -117,17 +131,24 @@ export function JiraTab({ component, updateMutation, toast, canEdit }: JiraTabPr
           <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="jira.projectKey" />
         </div>
 
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-1">
-            <Label>Display Name</Label>
-            <FieldInfo path="jira.displayName" label="Display Name" />
+        {showJiraDisplayName && (
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1">
+              <Label>Display Name</Label>
+              <FieldInfo path="jira.displayName" label="Display Name" />
+            </div>
+            <Input
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              disabled={jiraDisplayNameEntry.visibility === 'readonly'}
+              className={jiraDisplayNameEntry.visibility === 'readonly' ? 'bg-muted' : undefined}
+              placeholder="Component display name in Jira"
+            />
+            <p className="text-xs text-muted-foreground">
+              Shown because it differs from the component display name.
+            </p>
           </div>
-          <Input
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="Component display name in Jira"
-          />
-        </div>
+        )}
       </div>
 
       <div className="space-y-1.5">

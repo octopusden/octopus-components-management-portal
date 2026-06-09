@@ -157,7 +157,9 @@ const columns = [
         >
           {row.original.name}
         </Link>
-        {row.original.displayName && (
+        {/* displayName is now always populated (defaults to the component key server-side),
+            so only show the secondary line when it carries a distinct, non-key value. */}
+        {row.original.displayName && row.original.displayName !== row.original.name && (
           <span className="text-xs text-muted-foreground">{row.original.displayName}</span>
         )}
       </div>

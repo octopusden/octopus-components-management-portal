@@ -13,6 +13,8 @@ function makeForm(overrides: Partial<CreateFormValues> = {}): CreateFormValues {
     releaseManager: [],
     securityChampion: [],
     copyright: '',
+    jiraProjectKey: '',
+    versionPrefix: '',
     coordinate: {
       type: 'maven',
       groupPattern: '',

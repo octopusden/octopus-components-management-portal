@@ -11,7 +11,8 @@
 export interface ComponentSummary {
   id: string
   name: string
-  displayName: string | null
+  // Required + unique server-side (NOT NULL UNIQUE); always present on read.
+  displayName: string
   componentOwner: string | null
   // CRS PR #301 collapsed Component.systems Set<String> → Component.system
   // String?. Single-value per component in the domain; the list page renders
@@ -40,7 +41,9 @@ export interface ComponentSummary {
 export interface ComponentDetail {
   id: string
   name: string
-  displayName: string | null
+  // Required + unique server-side (NOT NULL UNIQUE); always present on read. The server
+  // defaults a blank value to the component key, so this is never null on a read response.
+  displayName: string
   componentOwner: string | null
   productType: string | null
   // CRS PR #301 collapsed Component.systems Set<String> → Component.system
@@ -88,6 +91,17 @@ export interface ComponentDetail {
   // admin). Optional — absent against an older backend, in which case the UI
   // falls back to the global CREATE_COMPONENTS permission check.
   canEdit?: boolean
+}
+
+/**
+ * The people who may edit a component, from `GET /components/{id}/editors`. Read-only
+ * informational projection (owner + ordered release managers + security champions);
+ * administrators may also edit but are not enumerated here.
+ */
+export interface ComponentEditors {
+  componentOwner: string | null
+  releaseManagers: string[]
+  securityChampions: string[]
 }
 
 // ---------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -51,7 +51,11 @@ function makeCreateSchema(editable: (field: string) => boolean) {
       .string()
       .min(1, 'Component Key is required')
       .regex(NAME_REGEX, 'Component Key can only contain letters, digits, _, -, ., /'),
-    displayName: z.string(),
+    // displayName is server-side required + unique. Require it here only when the field is
+    // editable (rendered); when hidden, CRS defaults a blank value to the component key.
+    displayName: editable('displayName')
+      ? z.string().trim().min(1, 'Display Name is required')
+      : z.string(),
     buildSystem: z.string().min(1, 'Build System is required'),
     componentOwner: z.string().trim().min(1, 'Component Owner is required'),
     distributionExplicit: z.boolean(),
@@ -59,6 +63,8 @@ function makeCreateSchema(editable: (field: string) => boolean) {
     releaseManager: z.array(z.string()),
     securityChampion: z.array(z.string()),
     copyright: z.string(),
+    jiraProjectKey: z.string(),
+    versionPrefix: z.string(),
     coordinate: z.object({
       type: z.enum(['maven', 'docker', 'package']),
       groupPattern: z.string(),
@@ -117,6 +123,8 @@ const SCRATCH_DEFAULTS: CreateFormValues = {
   releaseManager: [],
   securityChampion: [],
   copyright: '',
+  jiraProjectKey: '',
+  versionPrefix: '',
   coordinate: EMPTY_COORDINATE,
 }
 
@@ -130,7 +138,8 @@ function initialValues(source: ComponentDetail | null): CreateFormValues {
   if (!source) return SCRATCH_DEFAULTS
   return {
     ...SCRATCH_DEFAULTS,
-    displayName: source.displayName ?? '',
+    // displayName is NOT prefilled from the source: it is unique, so copying it would always
+    // collide. The user supplies a fresh one (or, when the field is hidden, CRS defaults to key).
     buildSystem: selectBaseRow(source)?.build?.buildSystem ?? '',
     componentOwner: source.componentOwner ?? '',
     distributionExplicit: source.distributionExplicit ?? false,
@@ -138,6 +147,9 @@ function initialValues(source: ComponentDetail | null): CreateFormValues {
     releaseManager: [...(source.releaseManager ?? [])],
     securityChampion: [...(source.securityChampion ?? [])],
     copyright: source.copyright ?? '',
+    // jiraProjectKey is unique per component → never copied (left blank). versionPrefix is a
+    // reusable format, so it IS prefilled from the source's BASE jira config.
+    versionPrefix: selectBaseRow(source)?.jira?.versionPrefix ?? '',
   }
 }
 
@@ -274,6 +286,15 @@ function CreateComponentForm({ source, isCopy, onClose }: CreateComponentFormPro
   const releaseManager = watch('releaseManager')
   const securityChampion = watch('securityChampion')
   const coordinateType = watch('coordinate.type')
+  const nameValue = watch('name')
+
+  // versionPrefix derived-default: in scratch mode mirror the component key until the user
+  // edits the field. Copy mode prefills from the source (initialValues), so skip mirroring there.
+  const [versionPrefixEdited, setVersionPrefixEdited] = useState(false)
+  useEffect(() => {
+    if (isCopy || versionPrefixEdited) return
+    setValue('versionPrefix', nameValue, { shouldValidate: false })
+  }, [nameValue, isCopy, versionPrefixEdited, setValue])
 
   const { data: employeeStatuses } = useEmployeeStatuses([...releaseManager, ...securityChampion])
 
@@ -306,6 +327,16 @@ function CreateComponentForm({ source, isCopy, onClose }: CreateComponentFormPro
         // message would land on a hidden field and silently vanish, so we let
         // it fall through to the toast instead.
         let routed = false
+        // displayName uniqueness (and the key-collides-with-a-display-name case, keyed `name`)
+        // come back as field-prefixed 400s — route them onto the inputs the user controls.
+        if (fieldErrors.get('name')) {
+          setError('name', { type: 'server', message: fieldErrors.get('name')! })
+          routed = true
+        }
+        if (editable('displayName') && fieldErrors.get('displayName')) {
+          setError('displayName', { type: 'server', message: fieldErrors.get('displayName')! })
+          routed = true
+        }
         if (fieldErrors.get('componentOwner')) {
           setError('componentOwner', { type: 'server', message: fieldErrors.get('componentOwner')! })
           routed = true
@@ -342,8 +373,13 @@ function CreateComponentForm({ source, isCopy, onClose }: CreateComponentFormPro
 
       {editable('displayName') && (
         <div className="space-y-1.5">
-          <Label htmlFor="create-displayName">Display Name</Label>
+          <Label htmlFor="create-displayName">
+            Display Name <span className="text-destructive">*</span>
+          </Label>
           <Input id="create-displayName" placeholder="My Component" {...register('displayName')} />
+          {errors.displayName && (
+            <p className="text-xs text-destructive">{errors.displayName.message}</p>
+          )}
         </div>
       )}
 
@@ -389,12 +425,27 @@ function CreateComponentForm({ source, isCopy, onClose }: CreateComponentFormPro
           onChange={(value) =>
             setValue('componentOwner', value, { shouldValidate: true, shouldDirty: true })
           }
-          placeholder="owner@example.com"
+          placeholder="AD userkey"
           lookupFn={lookupEmployee}
         />
         {errors.componentOwner && (
           <p className="text-xs text-destructive">{errors.componentOwner.message}</p>
         )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label htmlFor="create-jiraProjectKey">Jira Project Key</Label>
+          <Input id="create-jiraProjectKey" placeholder="JIRA project key" {...register('jiraProjectKey')} />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="create-versionPrefix">Version Prefix</Label>
+          <Input
+            id="create-versionPrefix"
+            placeholder="e.g. the component key"
+            {...register('versionPrefix', { onChange: () => setVersionPrefixEdited(true) })}
+          />
+        </div>
       </div>
 
       {editable('distributionExplicit') && (

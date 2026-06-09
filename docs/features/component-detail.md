@@ -2,7 +2,7 @@
 
 > Target users: `ACCESS_COMPONENTS` for read; per-tab gates for writes (see "Auth gating" below).
 
-The detail page at `/components/<UUID>` is the editor surface. It renders [`pages/ComponentDetailPage.tsx`](../../frontend/src/pages/ComponentDetailPage.tsx) and decomposes into eight tabs (General, Build, VCS, Distribution, Jira, Escrow, Overrides, History). The page-level form lives once and tabs share its state via `react-hook-form`.
+The detail page at `/components/<UUID>` is the editor surface. It renders [`pages/ComponentDetailPage.tsx`](../../frontend/src/pages/ComponentDetailPage.tsx) and decomposes into tabs (General, **Misc**, Build, VCS, Distribution, Jira, Escrow, Configurations, As Code, Overrides, History). The page-level form lives once and the General + Misc tabs share its state via `react-hook-form`. The `Tabs` are controlled so a server 400 on a field that lives on a non-active tab auto-switches to the owning tab.
 
 ## URL stability
 
@@ -12,8 +12,9 @@ The detail page at `/components/<UUID>` is the editor surface. It renders [`page
 
 | Tab | Source | Notes |
 |---|---|---|
-| **General** | `GeneralTab` | Identity + ownership: name, displayName, owner, productType, system, clientCode, parent component, archive flag. Detailed below. |
-| **Build / VCS / Distribution / Jira / Escrow** | `BuildTab` etc. | Per-tab Save buttons; each tab handles its own mutation slice via the page-level `updateMutation`. Out of scope for this doc. |
+| **General** | `GeneralTab` | Identity + ownership: name, **Display Name (required + unique)**, owner, system, clientCode, archive flag, plus a read-only **"who can edit"** list (owner + release managers + security champions, from `GET /{id}/editors`; admins also edit). Detailed below. |
+| **Misc** | `MiscTab` | Parent Component, Can-be-parent, and the read-only Group Key / synthetic-group display — moved off General. Shares the page form; the header Save covers it. `MISC_TAB_FIELDS` lets the 400 handler auto-switch here when a parent/canBeParent error returns. |
+| **Build / VCS / Distribution / Jira / Escrow** | `BuildTab` etc. | Per-tab Save buttons; each tab handles its own mutation slice via the page-level `updateMutation`. Build's **Java / Maven Version** are dropdowns sourced from `GET /meta/{java,maven}-versions` (CRS `application.yml`, per-install overridable). Jira's **Display Name** is shown only when it diverges from the component display name. Mostly out of scope for this doc. |
 | **Overrides** | `FieldOverrides` | Per-version field overrides. Out of scope. |
 | **History** | `ComponentHistoryTab` (B7.1.2) | New in P1; detailed below. |
 
@@ -33,9 +34,20 @@ The UX gate is a hint, not a security boundary. Server-side `@PreAuthorize canRe
 
 The save handler in `ComponentDetailPage.handleSave` only sends `name` on a real change (`trimmedName !== '' && trimmedName !== component.name`). Defence in depth — even if the UI gate were bypassed, an unchanged form value never trips the server's gate.
 
-### Parent component (B7.1.5)
+### Display Name (required + unique)
 
-`<ComponentSelect>` autocomplete (`frontend/src/components/ui/ComponentSelect.tsx`) drives the parent picker:
+`displayName` is NOT NULL + UNIQUE server-side. On the General tab the field is required (when
+field-config-visible) and dirty-gated in `buildUpdateRequest` (only sent on a real edit). Clearing
+it is blocked by a page-level guard (mirroring the `system` guard) that keeps Save enabled and
+surfaces an inline "Display Name is required" error rather than silently no-op'ing. A server
+uniqueness 400 (keyed `displayName`, or `name` when the value defaulted to the key) maps inline. In
+the list/detail UI the display name is shown as a secondary line only when it differs from the
+component key (it defaults to the key server-side, so it's otherwise a redundant echo).
+
+### Parent component (B7.1.5) — now on the Misc tab
+
+The parent picker (and Can-be-parent / Group Key) moved to `MiscTab.tsx`. `<ComponentSelect>`
+autocomplete (`frontend/src/components/ui/ComponentSelect.tsx`) drives the parent picker:
 - Suggestions come from `GET /rest/api/4/components?search=<query>` via [`useComponents`](../../frontend/src/hooks/useComponents.ts). Two-character minimum on the input keeps the request volume sane.
 - The current component is filtered out of the suggestion list (`excludeName`) — a component cannot be its own parent.
 - Submits the canonical `name`, never `displayName`. The backend stores `parentComponentName` as a name reference, not a UUID.
