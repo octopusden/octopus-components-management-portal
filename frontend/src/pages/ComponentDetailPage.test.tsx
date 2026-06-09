@@ -52,6 +52,14 @@ vi.mock('../components/editor/GeneralTab', async () => {
     GeneralTab: vi.fn(() => React.createElement('div', { 'data-testid': 'general-tab' })),
   }
 })
+// Keep the real MISC_TAB_FIELDS export (the 400 handler imports it) but stub the component
+// so the Misc tab content renders without ComponentSelect's data dependencies.
+vi.mock('../components/editor/MiscTab', async () => {
+  const actual = await vi.importActual<typeof import('../components/editor/MiscTab')>(
+    '../components/editor/MiscTab',
+  )
+  return { ...actual, MiscTab: () => React.createElement('div', { 'data-testid': 'misc-tab' }) }
+})
 vi.mock('../components/editor/BuildTab', () => ({
   BuildTab: () => React.createElement('div', { 'data-testid': 'build-tab' }),
 }))
@@ -80,6 +88,7 @@ vi.mock('../components/CreateComponentDialog', () => ({
     open ? React.createElement('div', { 'data-testid': 'copy-dialog' }, sourceId) : null,
 }))
 
+import { ApiError } from '../lib/api'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useComponent, useUpdateComponent, useDeleteComponent } from '../hooks/useComponent'
 import { usePortalLinks } from '../hooks/useInfo'
@@ -911,5 +920,65 @@ describe('ComponentDetailPage — Copy button (CREATE_COMPONENTS gate)', () => {
     const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
     renderPage({ ...baseComponent, canEdit: false }, user)
     expect(screen.getByRole('button', { name: /^create similar$/i })).toBeDefined()
+  })
+})
+
+describe('ComponentDetailPage — cross-tab 400 + displayName clear-guard', () => {
+  it('auto-switches to the Misc tab when a 400 maps to a Misc-owned field', async () => {
+    // GeneralTab stub hydrates displayName + exposes a dirty edit so Save enables.
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('system', component.system ?? '')
+        form.setValue('displayName', component.displayName ?? '')
+      }, [component, form])
+      return React.createElement(
+        'button',
+        { 'data-testid': 'edit', onClick: () => form.setValue('displayName', 'X', { shouldDirty: true }) },
+        'edit',
+      )
+    })
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(
+        new ApiError(400, 'bad', JSON.stringify({ errorMessage: 'parentComponentName: invalid parent' })),
+      ),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit'))
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => expect(screen.getByTestId('misc-tab')).toBeDefined())
+  })
+
+  it('blocks Save (no PATCH) when the user clears the required displayName', async () => {
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('system', component.system ?? '')
+        form.setValue('displayName', component.displayName ?? '')
+      }, [component, form])
+      return React.createElement(
+        'button',
+        {
+          'data-testid': 'clear-dn',
+          // shouldTouch mirrors the real input's blur — the clear-guard keys on touched
+          // (clear-to-default '' isn't value-dirty, RHF's known blind-spot).
+          onClick: () => form.setValue('displayName', '', { shouldDirty: true, shouldTouch: true }),
+        },
+        'clear',
+      )
+    })
+    const mutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('clear-dn'))
+    await waitFor(() => {
+      const btn = screen.getByRole('button', { name: /^save$/i }) as HTMLButtonElement
+      expect(btn.disabled).toBe(false) // clear-guard keeps Save enabled to surface the error
+    })
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+    // Guard returns before the mutation — nothing is sent.
+    await waitFor(() => expect(mutateAsync).not.toHaveBeenCalled())
   })
 })

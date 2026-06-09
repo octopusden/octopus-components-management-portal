@@ -36,6 +36,16 @@ vi.mock('../../hooks/useLabelsDictionary', () => ({
   useLabelsDictionary: () => mockUseLabelsDictionary(),
 }))
 
+// useComponentEditors mock — the read-only "who can edit" projection. Default editable test
+// data; the field renders a comma-joined owner + RMs + SCs list.
+const mockUseComponentEditors = vi.fn(() => ({
+  data: { componentOwner: 'alice', releaseManagers: ['rm-1'], securityChampions: ['sc-1'] },
+  isLoading: false,
+}))
+vi.mock('../../hooks/useComponentEditors', () => ({
+  useComponentEditors: () => mockUseComponentEditors(),
+}))
+
 // useFieldConfigEntry mock — controls visibility-gating per test.
 // Default: all fields 'editable'. Tests can override per field via mockReturnValue.
 const mockUseFieldConfigEntry = vi.fn()
@@ -741,5 +751,27 @@ describe('GeneralTab field descriptions (FieldInfo)', () => {
     act(() => trigger.focus())
     const tooltip = await screen.findByRole('tooltip')
     expect(tooltip).toHaveTextContent(fieldDescriptions['component.name']!)
+  })
+})
+
+describe('GeneralTab — responsible-people (who can edit) field', () => {
+  it('renders the read-only owner + RMs + SCs list from useComponentEditors', () => {
+    setAllEditable()
+    renderWithProviders(<Harness component={baseComponent()} />)
+    const input = screen.getByLabelText(/owner, release managers, and security champions/i) as HTMLInputElement
+    expect(input.value).toBe('alice, rm-1, sc-1')
+    expect(input.disabled).toBe(true)
+    expect(screen.getByText(/administrators may also have edit access/i)).toBeDefined()
+  })
+
+  it('shows a Loading… placeholder while the editors projection is in flight', () => {
+    setAllEditable()
+    // mockReturnValue (not Once): GeneralTab re-renders via form.watch, so a one-shot would be
+    // consumed before the assertion. This is the last test in the file, so leftover state is moot.
+    mockUseComponentEditors.mockReturnValue({ data: undefined as never, isLoading: true })
+    renderWithProviders(<Harness component={baseComponent()} />)
+    const input = screen.getByLabelText(/owner, release managers, and security champions/i) as HTMLInputElement
+    expect(input.value).toBe('')
+    expect(input.placeholder).toBe('Loading…')
   })
 })

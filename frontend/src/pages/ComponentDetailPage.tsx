@@ -248,13 +248,14 @@ export function ComponentDetailPage() {
   // displayName is required (NOT NULL) and effectively non-clearable: clearing it currently
   // PATCHes nothing (omit = "don't touch"), so without this the Save button would disable with
   // no feedback. Mirror the system guard so Save stays enabled and the inline error surfaces.
-  // Gate on dirty: unlike `system` (which can be null and so dodges its guard pre-hydration),
-  // displayName is always non-empty server-side, so without the dirty check this would fire in the
-  // brief window between component load and GeneralTab hydrating the form — briefly enabling Save
-  // and risking a spurious inline error. Only a real user clear (dirty + empty) needs attention.
+  // Gate on TOUCHED (not dirty): clearing displayName back to the form default '' is value-equal
+  // to the default, so RHF never flags it dirty (the same blind-spot `labels` handles via
+  // touchedFields). Touched also stays false through the pre-hydration window (no interaction yet),
+  // avoiding the spurious-enable that a plain value-compare would cause now that displayName is
+  // always non-empty server-side. So: user interacted + server had a value + form now empty.
   const displayNameClearNeedsAttention =
     displayNameFc.visibility !== 'hidden' &&
-    form.formState.dirtyFields.displayName === true &&
+    form.formState.touchedFields.displayName === true &&
     (component?.displayName ?? '') !== '' &&
     ((form.getValues('displayName') as string | undefined) ?? '').trim() === ''
   const hasUnsavedChanges =
@@ -315,7 +316,7 @@ export function ComponentDetailPage() {
     // displayName is required + non-clearable (same shape as the system guard above): a clear
     // is a silent no-op server-side, so surface the constraint inline instead of letting the
     // user believe the clear took. Skipped when field-config hides the field.
-    if (displayNameFc.visibility !== 'hidden' && form.formState.dirtyFields.displayName === true) {
+    if (displayNameFc.visibility !== 'hidden' && form.formState.touchedFields.displayName === true) {
       const displayNameValue = (form.getValues('displayName') as string | undefined)?.trim() ?? ''
       const priorDisplayName = component.displayName ?? ''
       if (priorDisplayName !== '' && displayNameValue === '') {
