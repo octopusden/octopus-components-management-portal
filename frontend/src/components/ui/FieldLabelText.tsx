@@ -14,5 +14,6 @@ interface FieldLabelTextProps {
  * required-asterisk siblings, …) without changing the markup around it.
  */
 export function FieldLabelText({ path, fallback }: FieldLabelTextProps) {
-  return <>{useFieldLabel(path, fallback)}</>
+  const label = useFieldLabel(path, fallback)
+  return <>{label}</>
 }

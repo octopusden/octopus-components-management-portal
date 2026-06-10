@@ -101,6 +101,13 @@ describe('labelFor', () => {
     const data = { build: { projectVersion: { label: '   ' } } }
     expect(labelFor(data, 'build.projectVersion', 'Project Version')).toBe('Project Version')
   })
+
+  it('resolves labels for distribution-section paths', () => {
+    // Distribution paths nest deeper than one dot; the resolver splits on the
+    // FIRST dot, so the remainder is the field key within the section.
+    const data = { distribution: { 'maven.groupPattern': { label: 'Example Label' } } }
+    expect(labelFor(data, 'distribution.maven.groupPattern', 'Group Pattern')).toBe('Example Label')
+  })
 })
 
 describe('useFieldLabel', () => {

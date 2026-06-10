@@ -37,6 +37,12 @@ interface FieldConfigDataSectioned {
   jira?: Record<string, FieldConfigEntry>
   escrow?: Record<string, FieldConfigEntry>
   vcs?: Record<string, FieldConfigEntry>
+  /**
+   * Distribution paths nest deeper than one dot (distribution.maven.groupPattern);
+   * the resolver splits on the FIRST dot, so the field key within this section
+   * keeps the remainder ("maven.groupPattern").
+   */
+  distribution?: Record<string, FieldConfigEntry>
 }
 
 /** Legacy flat shape */
@@ -46,7 +52,7 @@ interface FieldConfigDataFlat {
 
 type FieldConfigData = FieldConfigDataSectioned & FieldConfigDataFlat
 
-const SECTION_ORDER = ['component', 'build', 'jira', 'escrow', 'vcs'] as const
+const SECTION_ORDER = ['component', 'build', 'jira', 'escrow', 'vcs', 'distribution'] as const
 
 /**
  * Resolves a field config entry supporting both flat and sectioned shapes
