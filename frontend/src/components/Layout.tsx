@@ -4,6 +4,7 @@ import { cn, initials } from '../lib/utils'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { hasPermission, logout, PERMISSIONS } from '@/lib/auth'
 import { AppFooter } from './AppFooter'
+import { EmployeeIntegrationAlert } from './EmployeeIntegrationAlert'
 import { Badge } from './ui/badge'
 import { useAdminMode } from '@/lib/adminModeStore'
 
@@ -102,6 +103,7 @@ export function Layout({ children }: LayoutProps) {
           </div>
         </div>
       </header>
+      <EmployeeIntegrationAlert />
       <main className="flex-1 max-w-screen-xl w-full mx-auto px-6 py-6">{children}</main>
       <AppFooter />
     </div>
