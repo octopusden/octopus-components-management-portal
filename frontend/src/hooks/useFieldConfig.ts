@@ -97,6 +97,16 @@ export function visibilityFor(data: unknown, fieldPath: string): FieldVisibility
   return resolveFieldEntry(data, fieldPath).visibility ?? 'editable'
 }
 
+/**
+ * Display label for a field path: the field-config `label` override when set
+ * (trimmed), else the hardcoded fallback. Pure (no hook) so catalogue-style
+ * consumers (OverrideRowEditor, editor tabs) can resolve many labels from a
+ * single `useFieldConfig()` read.
+ */
+export function labelFor(data: unknown, fieldPath: string, fallback: string): string {
+  return resolveFieldEntry(data, fieldPath).label?.trim() || fallback
+}
+
 export function useFieldConfigEntry(fieldPath: string): {
   entry: FieldConfigEntry
   isLoading: boolean
@@ -113,6 +123,12 @@ export function useFieldConfigEntry(fieldPath: string): {
   }
 
   return { entry: resolveFieldEntry(data, fieldPath), isLoading: false, isError: isError ?? false }
+}
+
+/** Convenience hook for a single field's display label (see labelFor). */
+export function useFieldLabel(fieldPath: string, fallback: string): string {
+  const { data } = useFieldConfig()
+  return labelFor(data, fieldPath, fallback)
 }
 
 /**

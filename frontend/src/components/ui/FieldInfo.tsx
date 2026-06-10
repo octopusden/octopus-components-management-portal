@@ -1,6 +1,7 @@
 import { Info } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from './tooltip'
 import { fieldDescriptions } from '../../lib/fieldDescriptions'
+import { useFieldConfigEntry } from '../../hooks/useFieldConfig'
 
 interface FieldInfoProps {
   /** Section-prefixed field path, e.g. "component.displayName" (useFieldConfig convention). */
@@ -12,12 +13,15 @@ interface FieldInfoProps {
 /**
  * Small info icon placed next to a field label (as a sibling, never inside
  * the <label> — nested interactive content). Hover/focus shows the field's
- * description from the fieldDescriptions registry. Renders nothing when the
- * path has no entry, so missing descriptions are visible by absence and never
- * produce an empty tooltip. Relies on the <TooltipProvider> mounted in App.
+ * description: the field-config `description` override when the deployment
+ * provides one, else the hardcoded fieldDescriptions registry. Renders nothing
+ * when neither has an entry, so missing descriptions are visible by absence
+ * and never produce an empty tooltip. Relies on the <TooltipProvider> mounted
+ * in App.
  */
 export function FieldInfo({ path, label }: FieldInfoProps) {
-  const description = fieldDescriptions[path]
+  const { entry } = useFieldConfigEntry(path)
+  const description = entry.description?.trim() || fieldDescriptions[path]
   if (!description?.trim()) return null
   return (
     <Tooltip>
