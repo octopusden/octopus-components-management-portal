@@ -26,6 +26,7 @@ import { DistributionTab } from '../components/editor/DistributionTab'
 import { JiraTab } from '../components/editor/JiraTab'
 import { EscrowTab } from '../components/editor/EscrowTab'
 import { CANNOT_EDIT_TITLE } from '../components/editor/editPermission'
+import { WhoCanEditPanel } from '../components/editor/WhoCanEditPanel'
 import { FieldOverrides } from '../components/editor/FieldOverrides'
 import { ConfigurationsTab } from '../components/editor/ConfigurationsTab'
 import { AsCodeTab } from '../components/editor/AsCodeTab'
@@ -600,6 +601,12 @@ export function ComponentDetailPage() {
           </div>
         </div>
 
+        {/* Read-only viewers can't see the owner/RM/SC fields on the (disabled)
+            General form at a glance, so surface "who can edit" prominently right
+            under the component name. Editors get the same panel at the foot of the
+            General tab instead. */}
+        {!canEdit && <WhoCanEditPanel componentId={component.id} />}
+
         <Separator />
 
         {/* Tabs */}
@@ -664,6 +671,7 @@ export function ComponentDetailPage() {
                   key={component.id}
                   component={component}
                   form={form}
+                  canEdit={canEdit}
                   onOwnerValidatingChange={setOwnerValidating}
                 />
               </EditSurface>

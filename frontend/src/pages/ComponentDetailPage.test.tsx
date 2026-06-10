@@ -81,6 +81,11 @@ vi.mock('../components/editor/FieldOverrides', () => ({
 vi.mock('../components/editor/ComponentHistoryTab', () => ({
   ComponentHistoryTab: () => React.createElement('div', { 'data-testid': 'history-tab' }),
 }))
+// WhoCanEditPanel fetches the /editors projection via react-query; stub it so the
+// page test only asserts whether the read-only "who can edit" banner is mounted.
+vi.mock('../components/editor/WhoCanEditPanel', () => ({
+  WhoCanEditPanel: () => React.createElement('div', { 'data-testid': 'who-can-edit' }),
+}))
 // CreateComponentDialog (copy mode) pulls hooks from the (mocked) useComponent
 // module; stub it so the page test only asserts the open/sourceId wiring.
 vi.mock('../components/CreateComponentDialog', () => ({
@@ -335,6 +340,14 @@ describe('ComponentDetailPage — view-only mode', () => {
     expect(screen.getByRole('group', { name: 'General fields' })).toBeDisabled()
     expect(screen.getByRole('textbox', { name: 'Editable field' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Edit action' })).toBeDisabled()
+    // Read-only viewers get the "who can edit" banner under the name / above the tabs.
+    expect(screen.getByTestId('who-can-edit')).toBeDefined()
+    // The footer panel's mutual-exclusivity depends on canEdit reaching GeneralTab —
+    // assert the prop pass-through (GeneralTab is mocked, so this is the only coverage).
+    // Inspect the props arg directly to stay agnostic of React's call arity.
+    expect(vi.mocked(GeneralTab).mock.calls.at(0)?.[0]).toEqual(
+      expect.objectContaining({ canEdit: false }),
+    )
   })
 
   it('keeps tab navigation available while each edit surface remains disabled', () => {
@@ -351,6 +364,9 @@ describe('ComponentDetailPage — view-only mode', () => {
     expect(screen.getByRole('group', { name: 'General fields' })).not.toBeDisabled()
     expect(screen.getByRole('textbox', { name: 'Editable field' })).not.toBeDisabled()
     expect(screen.getByRole('button', { name: 'Edit action' })).not.toBeDisabled()
+    // Editors don't get the header banner — they see the same panel at the foot of
+    // the General tab instead (rendered inside the real GeneralTab, mocked out here).
+    expect(screen.queryByTestId('who-can-edit')).toBeNull()
   })
 })
 

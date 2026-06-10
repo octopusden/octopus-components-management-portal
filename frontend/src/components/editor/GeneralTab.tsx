@@ -25,7 +25,7 @@ import { useFieldConfigEntry } from '../../hooks/useFieldConfig'
 import { useSystemsDictionary } from '../../hooks/useSystemsDictionary'
 import { useLabelsDictionary } from '../../hooks/useLabelsDictionary'
 import { lookupEmployee, useEmployeeStatuses } from '../../hooks/useEmployees'
-import { useComponentEditors } from '../../hooks/useComponentEditors'
+import { WhoCanEditPanel } from './WhoCanEditPanel'
 
 /**
  * Canonical list of field names owned by GeneralTab — used by
@@ -103,6 +103,12 @@ interface GeneralTabProps {
   form: UseFormReturn<GeneralFormValues>
   isNew?: boolean
   /**
+   * Per-component edit gate (from ComponentDetailPage). Drives the "who can edit"
+   * footer: editors see it here, while read-only viewers get the same panel as a
+   * header banner instead (so it never renders twice or duplicates its testid).
+   */
+  canEdit?: boolean
+  /**
    * In-flight signal of the owner PeopleInput's async directory validation.
    * The typed owner only commits to the form after the lookup resolves, so
    * ComponentDetailPage holds the global Save while this reports true —
@@ -111,7 +117,7 @@ interface GeneralTabProps {
   onOwnerValidatingChange?: (validating: boolean) => void
 }
 
-export function GeneralTab({ component, form, isNew = false, onOwnerValidatingChange }: GeneralTabProps) {
+export function GeneralTab({ component, form, isNew = false, canEdit = true, onOwnerValidatingChange }: GeneralTabProps) {
   const {
     control,
     register,
@@ -144,9 +150,6 @@ export function GeneralTab({ component, form, isNew = false, onOwnerValidatingCh
     ...(component.releaseManager ?? []),
     ...(component.securityChampion ?? []),
   ])
-
-  // Read-only "who can edit" projection (owner + RMs + SCs). Informational; admins also edit.
-  const { data: editors, isLoading: editorsLoading } = useComponentEditors(component.id)
 
   // schema-v2 list editors. useFieldArray provides stable `id` keys so row
   // re-renders don't blow away focus on text inputs.
@@ -429,33 +432,6 @@ export function GeneralTab({ component, form, isNew = false, onOwnerValidatingCh
                 )}
               </div>
             )}
-
-            {/* Who can edit — read-only informational list (owner + RMs + SCs), from the
-                /editors endpoint. The live per-component edit gate also admits administrators. */}
-            <div className="space-y-1.5 sm:col-span-2" data-testid="can-edit-people">
-              <Label htmlFor="canEditPeople">Owner, release managers, and security champions</Label>
-              {(() => {
-                const people = [
-                  editors?.componentOwner ?? undefined,
-                  ...(editors?.releaseManagers ?? []),
-                  ...(editors?.securityChampions ?? []),
-                ].filter((p): p is string => !!p)
-                const unique = [...new Set(people)]
-                return (
-                  <Input
-                    id="canEditPeople"
-                    value={editorsLoading ? '' : unique.join(', ')}
-                    disabled
-                    readOnly
-                    className="bg-muted"
-                    placeholder={editorsLoading ? 'Loading…' : '(no people assigned)'}
-                  />
-                )
-              })()}
-              <p className="text-xs text-muted-foreground">
-                These people can edit this component. Administrators may also have edit access.
-              </p>
-            </div>
           </div>
         </section>
       )}
@@ -694,6 +670,13 @@ export function GeneralTab({ component, form, isNew = false, onOwnerValidatingCh
           </Button>
         </div>
       </section>
+
+      {/* Who can edit — highlighted read-only footer (owner + RMs + SCs from the
+          /editors endpoint; admins also edit). Placed at the bottom of the form
+          rather than mid-section so it reads as a summary, not an editable field.
+          Editors only: read-only viewers see the same panel as a header banner
+          (ComponentDetailPage), so rendering it here too would duplicate it. */}
+      {canEdit && <WhoCanEditPanel componentId={component.id} />}
 
       {component.createdAt && (
         <div className="flex gap-6 text-xs text-muted-foreground">

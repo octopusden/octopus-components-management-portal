@@ -39,10 +39,11 @@ vi.mock('../../hooks/useLabelsDictionary', () => ({
 
 // useComponentEditors mock — the read-only "who can edit" projection. Default editable test
 // data; the field renders a comma-joined owner + RMs + SCs list.
-const mockUseComponentEditors = vi.fn(() => ({
+const DEFAULT_EDITORS = {
   data: { componentOwner: 'alice', releaseManagers: ['rm-1'], securityChampions: ['sc-1'] },
   isLoading: false,
-}))
+}
+const mockUseComponentEditors = vi.fn(() => DEFAULT_EDITORS)
 vi.mock('../../hooks/useComponentEditors', () => ({
   useComponentEditors: () => mockUseComponentEditors(),
 }))
@@ -102,7 +103,7 @@ function setAllEditable() {
   mockUseFieldConfigEntry.mockImplementation(() => makeEntry('editable'))
 }
 
-function Harness({ component, formRef, onOwnerValidatingChange }: { component: ComponentDetail; formRef?: React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>; onOwnerValidatingChange?: (validating: boolean) => void }) {
+function Harness({ component, formRef, onOwnerValidatingChange, canEdit }: { component: ComponentDetail; formRef?: React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>; onOwnerValidatingChange?: (validating: boolean) => void; canEdit?: boolean }) {
   const form = useForm<GeneralFormValues>({
     defaultValues: {
       name: component.name,
@@ -132,7 +133,7 @@ function Harness({ component, formRef, onOwnerValidatingChange }: { component: C
     },
   })
   if (formRef) formRef.current = form
-  return <GeneralTab component={component} form={form} onOwnerValidatingChange={onOwnerValidatingChange} />
+  return <GeneralTab component={component} form={form} canEdit={canEdit} onOwnerValidatingChange={onOwnerValidatingChange} />
 }
 
 beforeEach(() => {
@@ -141,6 +142,9 @@ beforeEach(() => {
   mockUseCurrentUser.mockReturnValue({ data: ADMIN_USER, isLoading: false, isError: false })
   // Default: all fields editable
   setAllEditable()
+  // Reset the "who can edit" projection to the populated default — the loading
+  // test below installs a sticky mockReturnValue that would otherwise leak forward.
+  mockUseComponentEditors.mockReturnValue(DEFAULT_EDITORS)
 })
 
 function renderWithProviders(ui: React.ReactElement) {
@@ -758,25 +762,29 @@ describe('GeneralTab field descriptions (FieldInfo)', () => {
   })
 })
 
-describe('GeneralTab — responsible-people (who can edit) field', () => {
-  it('renders the read-only owner + RMs + SCs list from useComponentEditors', () => {
+describe('GeneralTab — responsible-people (who can edit) panel', () => {
+  it('renders the highlighted read-only owner + RMs + SCs list from useComponentEditors', () => {
     setAllEditable()
     renderWithProviders(<Harness component={baseComponent()} />)
-    const input = screen.getByLabelText(/owner, release managers, and security champions/i) as HTMLInputElement
-    expect(input.value).toBe('alice, rm-1, sc-1')
-    expect(input.disabled).toBe(true)
-    expect(screen.getByText(/administrators may also have edit access/i)).toBeDefined()
+    const panel = screen.getByTestId('who-can-edit')
+    expect(panel.textContent).toContain('Who can edit this component')
+    expect(panel.textContent).toContain('alice, rm-1, sc-1')
+  })
+
+  it('hides the footer panel for read-only viewers (they get the header banner instead)', () => {
+    setAllEditable()
+    renderWithProviders(<Harness component={baseComponent()} canEdit={false} />)
+    expect(screen.queryByTestId('who-can-edit')).toBeNull()
   })
 
   it('shows a Loading… placeholder while the editors projection is in flight', () => {
     setAllEditable()
     // mockReturnValue (not Once): GeneralTab re-renders via form.watch, so a one-shot would be
-    // consumed before the assertion. This is the last test in the file, so leftover state is moot.
+    // consumed before the assertion. beforeEach resets this back to DEFAULT_EDITORS, so the
+    // sticky loading state does not leak into later tests.
     mockUseComponentEditors.mockReturnValue({ data: undefined as never, isLoading: true })
     renderWithProviders(<Harness component={baseComponent()} />)
-    const input = screen.getByLabelText(/owner, release managers, and security champions/i) as HTMLInputElement
-    expect(input.value).toBe('')
-    expect(input.placeholder).toBe('Loading…')
+    expect(screen.getByTestId('who-can-edit').textContent).toContain('Loading…')
   })
 })
 
