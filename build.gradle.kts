@@ -351,3 +351,15 @@ docker {
         images.set(setOf("${"octopusGithubDockerRegistry".getExt()}/octopusden/${project.name}:${project.version}"))
     }
 }
+
+// The bmuschko springBootApplication convention has no `user` knob, so the
+// generated Dockerfile runs the app as root. Appending RUN+USER here is safe:
+// the runtime user is the last USER instruction in the file regardless of its
+// position relative to ENTRYPOINT, and the app only needs read access to /app.
+tasks.named<com.bmuschko.gradle.docker.tasks.image.Dockerfile>("dockerCreateDockerfile") {
+    // Numeric USER (not the name) so Kubernetes runAsNonRoot admission can
+    // verify the image user — kubelet rejects pods whose image declares a
+    // non-numeric user when that check is enabled.
+    runCommand("useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin portal")
+    user("10001")
+}

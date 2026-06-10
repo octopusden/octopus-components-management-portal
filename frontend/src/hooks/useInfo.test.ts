@@ -218,6 +218,33 @@ describe('usePortalLinks', () => {
     expect(assignSpy).not.toHaveBeenCalled()
   })
 
+  // /portal/links values are server env config, not user input — but they end
+  // up templated into <a href> across the app (ComponentTable, detail page).
+  // Sanitizing here, at the single point where the payload enters the SPA,
+  // means no consumer can accidentally render a javascript:/data: href even if
+  // the backend (or a proxy in front of it) is compromised. teamcityProjectUrl
+  // gets the same treatment per-component via safeHttpUrl in ComponentTable.
+  it('nulls out non-http(s) base URLs so consumers never render javascript:/data: hrefs', async () => {
+    const fixture = {
+      jiraBaseUrl: 'javascript:alert(1)//',
+      gitBaseUrl: 'data:text/html,x',
+      tcBaseUrl: 'https://tc.example.com',
+      dmsBaseUrl: 'vbscript:msgbox(1)',
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(JSON.stringify(fixture), { status: 200 })),
+    )
+
+    const { result } = renderHook(() => usePortalLinks(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(result.current.data?.jiraBaseUrl).toBeNull()
+    expect(result.current.data?.gitBaseUrl).toBeNull()
+    expect(result.current.data?.dmsBaseUrl).toBeNull()
+    expect(result.current.data?.tcBaseUrl).toBe('https://tc.example.com')
+  })
+
   // Contract guard against backend/frontend shape drift.
   // The fixtures in src/test-fixtures/portal-links*.contract.json are also read
   // by PortalLinksControllerContractTest on the Kotlin side to verify Spring's

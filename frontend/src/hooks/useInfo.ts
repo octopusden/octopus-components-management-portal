@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import type { CrsInfo, PortalInfo, PortalLinks } from '../lib/types'
+import { safeHttpUrl } from '../lib/utils'
 
 // /portal/info and /rest/api/4/info are anonymous build-info endpoints used by
 // the footer. They MUST go through plain `fetch` rather than the shared
@@ -49,10 +50,27 @@ export function usePortalInfo() {
   })
 }
 
+// The four base URLs are templated into <a href> by every consumer
+// (ComponentTable icon links, detail-page quick-links). Allowlisting http(s)
+// here — the single point where the payload enters the SPA — guarantees a
+// javascript:/data: value can never reach an href even if the backend or a
+// proxy in front of it is compromised. Absence semantics are preserved:
+// undefined (key omitted by Jackson) stays undefined, null stays null,
+// non-http(s) becomes null.
+function sanitizeLinks(raw: PortalLinks): PortalLinks {
+  const clean = (url: string | null | undefined) => (url == null ? url : safeHttpUrl(url))
+  return {
+    jiraBaseUrl: clean(raw.jiraBaseUrl),
+    gitBaseUrl: clean(raw.gitBaseUrl),
+    tcBaseUrl: clean(raw.tcBaseUrl),
+    dmsBaseUrl: clean(raw.dmsBaseUrl),
+  }
+}
+
 export function usePortalLinks() {
   return useQuery<PortalLinks>({
     queryKey: ['links', 'portal'],
-    queryFn: () => fetchInfo<PortalLinks>(`${import.meta.env.BASE_URL}portal/links`),
+    queryFn: async () => sanitizeLinks(await fetchInfo<PortalLinks>(`${import.meta.env.BASE_URL}portal/links`)),
     ...QUERY_OPTIONS,
   })
 }
