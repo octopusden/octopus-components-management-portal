@@ -28,6 +28,8 @@ import {
   useFieldOverrides,
 } from '../../hooks/useComponent'
 import { useToast } from '../../hooks/use-toast'
+import { useFieldConfig } from '../../hooks/useAdminConfig'
+import { labelFor } from '../../hooks/useFieldConfig'
 import { isValidVersionRange, isClosedVersionRange, classifyRangeConflict } from '../../lib/versionRange'
 import type { FieldOverride, MarkerChildrenPayload, VcsEntryRequest, MavenArtifactRequest, FileUrlArtifactRequest, DockerImageRequest, PackageRequest } from '../../lib/types'
 
@@ -133,6 +135,11 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
   const updateMutation = useUpdateFieldOverride(componentId)
   const { data: allOverrides = [] } = useFieldOverrides(componentId)
   const { toast } = useToast()
+
+  // Single field-config read resolves display labels for the whole attribute
+  // catalogue (config label override, else the hardcoded catalogue label).
+  const { data: fieldConfigData } = useFieldConfig()
+  const attrLabel = (a: { path: string; label: string }) => labelFor(fieldConfigData, a.path, a.label)
 
   // Determine initial type and attribute from existing override in edit mode
   const initialType: 'scalar' | 'marker' = (() => {
@@ -607,19 +614,19 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
                   <SelectGroup>
                     <SelectLabel>Build</SelectLabel>
                     {SCALAR_ATTRS.filter((a) => a.path.startsWith('build.')).map((a) => (
-                      <SelectItem key={a.path} value={a.path}>{a.label}</SelectItem>
+                      <SelectItem key={a.path} value={a.path}>{attrLabel(a)}</SelectItem>
                     ))}
                   </SelectGroup>
                   <SelectGroup>
                     <SelectLabel>Escrow</SelectLabel>
                     {SCALAR_ATTRS.filter((a) => a.path.startsWith('escrow.')).map((a) => (
-                      <SelectItem key={a.path} value={a.path}>{a.label}</SelectItem>
+                      <SelectItem key={a.path} value={a.path}>{attrLabel(a)}</SelectItem>
                     ))}
                   </SelectGroup>
                   <SelectGroup>
                     <SelectLabel>Jira</SelectLabel>
                     {SCALAR_ATTRS.filter((a) => a.path.startsWith('jira.')).map((a) => (
-                      <SelectItem key={a.path} value={a.path}>{a.label}</SelectItem>
+                      <SelectItem key={a.path} value={a.path}>{attrLabel(a)}</SelectItem>
                     ))}
                   </SelectGroup>
                 </SelectContent>
@@ -631,7 +638,7 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
                 </SelectTrigger>
                 <SelectContent>
                   {MARKER_ATTRS.map((a) => (
-                    <SelectItem key={a.path} value={a.path}>{a.label}</SelectItem>
+                    <SelectItem key={a.path} value={a.path}>{attrLabel(a)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -687,7 +694,7 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
                   id="scalar-string"
                   value={scalarStringValue}
                   onChange={(e) => setScalarStringValue(e.target.value)}
-                  placeholder={`Value for ${selectedScalarAttr?.label ?? attribute}`}
+                  placeholder={`Value for ${selectedScalarAttr ? attrLabel(selectedScalarAttr) : attribute}`}
                 />
               )}
             </div>
@@ -695,7 +702,7 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
 
           {overrideType === 'marker' && attribute && selectedMarkerAttr && (
             <div className="space-y-3">
-              <Label>{selectedMarkerAttr.label} — entries</Label>
+              <Label>{attrLabel(selectedMarkerAttr)} — entries</Label>
 
               {/* VCS Settings */}
               {selectedMarkerAttr.childKey === 'vcsEntries' && (

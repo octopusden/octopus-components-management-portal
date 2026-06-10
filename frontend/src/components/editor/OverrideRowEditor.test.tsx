@@ -85,6 +85,17 @@ vi.mock('../ui/select', async () => {
   return { Select, SelectItem, SelectGroup, SelectLabel, SelectTrigger, SelectContent, SelectValue }
 })
 
+// Field-config data source consumed by labelFor (attribute label overrides) —
+// controllable per test, no network.
+const mockUseAdminFieldConfig = vi.fn()
+vi.mock('../../hooks/useAdminConfig', () => ({
+  useFieldConfig: () => mockUseAdminFieldConfig(),
+}))
+
+beforeEach(() => {
+  mockUseAdminFieldConfig.mockReturnValue({ data: undefined, isLoading: false, isError: false })
+})
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -199,6 +210,24 @@ describe('OverrideRowEditor — create mode', () => {
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
     await userEvent.selectOptions(select, 'build.javaVersion')
     expect(screen.getByPlaceholderText('Value for Java Version')).toBeDefined()
+  })
+
+  it('shows the field-config label override in the attribute catalogue and value placeholder', async () => {
+    mockUseAdminFieldConfig.mockReturnValue({
+      data: { build: { projectVersion: { label: 'Example Label' } } },
+      isLoading: false,
+      isError: false,
+    })
+    renderEditor()
+    const select = screen.getByTestId('attr-select') as HTMLSelectElement
+    const optionFor = Array.from(select.options).find((o) => o.value === 'build.projectVersion')!
+    expect(optionFor.textContent).toBe('Example Label')
+    // Attributes without an override keep their hardcoded labels
+    const javaOption = Array.from(select.options).find((o) => o.value === 'build.javaVersion')!
+    expect(javaOption.textContent).toBe('Java Version')
+
+    await userEvent.selectOptions(select, 'build.projectVersion')
+    expect(screen.getByPlaceholderText('Value for Example Label')).toBeDefined()
   })
 
   it('selecting a boolean attribute renders a Switch, not a string Input', async () => {
