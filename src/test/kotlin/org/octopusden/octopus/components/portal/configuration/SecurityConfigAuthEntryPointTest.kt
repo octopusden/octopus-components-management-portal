@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.portal.configuration
 
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Nested
@@ -89,6 +90,31 @@ class SecurityConfigAuthEntryPointTest {
                 .exchange()
                 .expectStatus().isOk
                 .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+        }
+    }
+
+    @Nested
+    inner class OidcLoginFailureRecovery {
+        @Test
+        fun `failed oidc callback redirects to root, not the unhandled login error page`() {
+            // After a portal redeploy the in-memory session — and the OAuth2
+            // authorization request saved in it — is gone, so the Keycloak callback
+            // fails with authorization_request_not_found. Spring's default failure
+            // handler would 302 to /login?error, but nothing serves /login (no
+            // controller, and SpaFallbackFilter deliberately excludes it) — the user
+            // lands on a Whitelabel 404. Redirecting to "/" instead restarts a clean
+            // OIDC flow: entry point -> Keycloak SSO -> back in, no dead end.
+            webTestClient.get()
+                .uri("/login/oauth2/code/${SecurityConfig.OIDC_REGISTRATION_ID}?code=stale&state=stale")
+                .exchange()
+                .expectStatus().isFound
+                .expectHeader().value("Location") { location ->
+                    assertEquals(
+                        "/",
+                        location,
+                        "OIDC failure must self-heal via \"/\" (got $location)",
+                    )
+                }
         }
     }
 
