@@ -675,8 +675,10 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
           /editors endpoint; admins also edit). Placed at the bottom of the form
           rather than mid-section so it reads as a summary, not an editable field.
           Editors only: read-only viewers see the same panel as a header banner
-          (ComponentDetailPage), so rendering it here too would duplicate it. */}
-      {canEdit && <WhoCanEditPanel componentId={component.id} />}
+          (ComponentDetailPage), so rendering it here too would duplicate it.
+          Skip on the create surface (isNew): there's no persisted component yet,
+          so /editors would just report "(no people assigned)". */}
+      {canEdit && !isNew && <WhoCanEditPanel componentId={component.id} />}
 
       {component.createdAt && (
         <div className="flex gap-6 text-xs text-muted-foreground">

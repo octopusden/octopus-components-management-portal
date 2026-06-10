@@ -23,7 +23,7 @@ interface WhoCanEditPanelProps {
  * dual mount across a session does not double-fetch.
  */
 export function WhoCanEditPanel({ componentId }: WhoCanEditPanelProps) {
-  const { data: editors, isLoading } = useComponentEditors(componentId)
+  const { data: editors, isLoading, isError } = useComponentEditors(componentId)
 
   const people = [
     editors?.componentOwner,
@@ -32,14 +32,30 @@ export function WhoCanEditPanel({ componentId }: WhoCanEditPanelProps) {
   ].filter((p): p is string => !!p)
   const unique = [...new Set(people)]
 
+  // Distinguish a failed /editors fetch from a genuinely empty list: this panel
+  // is the read-only viewer's primary "who do I ask" cue, so a misleading
+  // "(no people assigned)" on error is worse than an honest error message.
+  const peopleLine = isLoading
+    ? 'Loading…'
+    : isError
+      ? "Couldn't load the editor list — refresh to try again."
+      : unique.length > 0
+        ? unique.join(', ')
+        : '(no people assigned)'
+  const muted = isLoading || isError || unique.length === 0
+
   return (
     <div
       data-testid="who-can-edit"
+      role="region"
+      aria-labelledby="who-can-edit-heading"
       className="rounded-lg border border-primary/30 bg-primary/5 p-4"
     >
       <div className="flex items-center gap-1.5">
         <Users className="h-4 w-4 text-primary" aria-hidden="true" />
-        <span className="text-sm font-medium">Who can edit this component</span>
+        <span id="who-can-edit-heading" className="text-sm font-medium">
+          Who can edit this component
+        </span>
         <Tooltip>
           <TooltipTrigger asChild>
             <button
@@ -55,13 +71,12 @@ export function WhoCanEditPanel({ componentId }: WhoCanEditPanelProps) {
           </TooltipContent>
         </Tooltip>
       </div>
-      <p className="mt-1.5 text-sm text-foreground">
-        {isLoading
-          ? 'Loading…'
-          : unique.length > 0
-            ? unique.join(', ')
-            : '(no people assigned)'}
+      <p className={`mt-1.5 text-sm ${muted ? 'text-muted-foreground' : 'text-foreground'}`}>
+        {peopleLine}
       </p>
+      {/* Admins can always edit — kept as always-visible text (not tooltip-only)
+          so it survives on touch devices where the hover tooltip won't open. */}
+      <p className="mt-1 text-xs text-muted-foreground">Administrators can also edit any component.</p>
     </div>
   )
 }
