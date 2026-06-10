@@ -6,6 +6,7 @@ import { Input } from '../ui/input'
 import { Switch } from '../ui/switch'
 import { ComponentSelect } from '../ui/ComponentSelect'
 import { FieldInfo } from '../ui/FieldInfo'
+import { FieldLabelText } from '../ui/FieldLabelText'
 import type { ComponentDetail } from '../../lib/types'
 import { useFieldConfigEntry } from '../../hooks/useFieldConfig'
 import type { GeneralFormValues } from './GeneralTab'
@@ -59,7 +60,7 @@ export function MiscTab({ component, form }: MiscTabProps) {
               offered for remediation. */}
           <div className="space-y-1.5 sm:col-span-2 sm:max-w-md">
             <div className="flex items-center gap-1">
-              <Label htmlFor="parentComponentName">Parent Component</Label>
+              <Label htmlFor="parentComponentName"><FieldLabelText path="component.parentComponentName" fallback="Parent Component" /></Label>
               <FieldInfo path="component.parentComponentName" label="Parent Component" />
             </div>
             {canBeParent && (parentComponentName ?? '') !== '' ? (
@@ -118,7 +119,7 @@ export function MiscTab({ component, form }: MiscTabProps) {
                   setValue('canBeParent', checked, { shouldDirty: true, shouldTouch: true })
                 }
               />
-              <Label htmlFor="canBeParent" className="cursor-pointer">Can be a parent</Label>
+              <Label htmlFor="canBeParent" className="cursor-pointer"><FieldLabelText path="component.canBeParent" fallback="Can be a parent" /></Label>
               <FieldInfo path="component.canBeParent" label="Can be a parent" />
               <span className="text-xs text-muted-foreground">
                 May be selected as another component&apos;s parent (not an aggregator).
@@ -136,7 +137,7 @@ export function MiscTab({ component, form }: MiscTabProps) {
           {groupIdEntry.visibility !== 'hidden' && (
             <div className="space-y-1.5">
               <div className="flex items-center gap-1">
-                <Label htmlFor="groupId">Group Key</Label>
+                <Label htmlFor="groupId"><FieldLabelText path="component.groupId" fallback="Group Key" /></Label>
                 <FieldInfo path="component.groupId" label="Group Key" />
               </div>
               <Input

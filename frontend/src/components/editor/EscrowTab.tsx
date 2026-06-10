@@ -7,6 +7,7 @@ import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
 import { EnumSelect } from '../ui/EnumSelect'
 import { FieldInfo } from '../ui/FieldInfo'
+import { FieldLabelText } from '../ui/FieldLabelText'
 import { FieldOverrideInline } from './FieldOverrideInline'
 import { CANNOT_EDIT_TITLE } from './editPermission'
 import type { ComponentDetail } from '../../lib/types'
@@ -45,13 +46,15 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
   const [gradleIncludeTestConfigurations, setGradleIncludeTestConfigurations] = useState(escrow?.gradleIncludeTestConfigurations ?? false)
 
   // Build-settings fields migrated from the Build tab (escrow/automation knobs:
-  // build tasks, system properties, deprecation, required project/tools). They
-  // keep their build.* / row-level payload paths — only the UI placement moved.
+  // build tasks, system properties, deprecation, required project/tools, project
+  // version). They keep their build.* / row-level payload paths — only the UI
+  // placement moved.
   const build = baseRow?.build
   const [buildTasks, setBuildTasks] = useState(build?.buildTasks ?? '')
   const [systemProperties, setSystemProperties] = useState(build?.systemProperties ?? '')
   const [deprecated, setDeprecated] = useState(build?.deprecated ?? false)
   const [requiredProject, setRequiredProject] = useState(build?.requiredProject ?? false)
+  const [projectVersion, setProjectVersion] = useState(build?.projectVersion ?? '')
   const [requiredToolsInput, setRequiredToolsInput] = useState((baseRow?.requiredTools ?? []).join(', '))
 
   useEffect(() => {
@@ -71,6 +74,7 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
     setSystemProperties(b?.systemProperties ?? '')
     setDeprecated(b?.deprecated ?? false)
     setRequiredProject(b?.requiredProject ?? false)
+    setProjectVersion(b?.projectVersion ?? '')
     setRequiredToolsInput((br?.requiredTools ?? []).join(', '))
   }, [component])
 
@@ -119,6 +123,7 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
                   systemProperties: systemProperties || null,
                   deprecated,
                   requiredProject,
+                  projectVersion: projectVersion || null,
                 },
               }
             : {}),
@@ -148,7 +153,7 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
         {productTypeEntry.visibility !== 'hidden' && (
           <div className="space-y-1.5">
             <div className="flex items-center gap-1">
-              <Label>Product Type</Label>
+              <Label><FieldLabelText path="component.productType" fallback="Product Type" /></Label>
               <FieldInfo path="component.productType" label="Product Type" />
             </div>
             <EnumSelect
@@ -163,7 +168,7 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
 
         <div className="space-y-1.5">
           <div className="flex items-center gap-1">
-            <Label>Generation</Label>
+            <Label><FieldLabelText path="escrow.generation" fallback="Generation" /></Label>
             <FieldInfo path="escrow.generation" label="Generation" />
           </div>
           <EnumSelect
@@ -177,7 +182,7 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
 
         <div className="space-y-1.5">
           <div className="flex items-center gap-1">
-            <Label>Disk Space</Label>
+            <Label><FieldLabelText path="escrow.diskSpace" fallback="Disk Space" /></Label>
             <FieldInfo path="escrow.diskSpace" label="Disk Space" />
           </div>
           <Input
@@ -196,7 +201,7 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
             checked={reusable}
             onCheckedChange={setReusable}
           />
-          <Label htmlFor="escrow-reusable" className="cursor-pointer">Reusable</Label>
+          <Label htmlFor="escrow-reusable" className="cursor-pointer"><FieldLabelText path="escrow.reusable" fallback="Reusable" /></Label>
           <FieldInfo path="escrow.reusable" label="Reusable" />
         </div>
         <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="escrow.reusable" />
@@ -204,7 +209,7 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
 
       <div className="space-y-1.5">
         <div className="flex items-center gap-1">
-          <Label>Provided Dependencies</Label>
+          <Label><FieldLabelText path="escrow.providedDependencies" fallback="Provided Dependencies" /></Label>
           <FieldInfo path="escrow.providedDependencies" label="Provided Dependencies" />
         </div>
         <textarea
@@ -219,7 +224,7 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
 
       <div className="space-y-1.5">
         <div className="flex items-center gap-1">
-          <Label>Additional Sources</Label>
+          <Label><FieldLabelText path="escrow.additionalSources" fallback="Additional Sources" /></Label>
           <FieldInfo path="escrow.additionalSources" label="Additional Sources" />
         </div>
         <Input
@@ -233,7 +238,7 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <div className="flex items-center gap-1">
-            <Label>Gradle Include Configurations</Label>
+            <Label><FieldLabelText path="escrow.gradleIncludeConfigurations" fallback="Gradle Include Configurations" /></Label>
             <FieldInfo path="escrow.gradleIncludeConfigurations" label="Gradle Include Configurations" />
           </div>
           <Input
@@ -246,7 +251,7 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
 
         <div className="space-y-1.5">
           <div className="flex items-center gap-1">
-            <Label>Gradle Exclude Configurations</Label>
+            <Label><FieldLabelText path="escrow.gradleExcludeConfigurations" fallback="Gradle Exclude Configurations" /></Label>
             <FieldInfo path="escrow.gradleExcludeConfigurations" label="Gradle Exclude Configurations" />
           </div>
           <Input
@@ -265,7 +270,7 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
             checked={gradleIncludeTestConfigurations}
             onCheckedChange={setGradleIncludeTestConfigurations}
           />
-          <Label htmlFor="escrow-gradle-include-test" className="cursor-pointer">Gradle Include Test Configurations</Label>
+          <Label htmlFor="escrow-gradle-include-test" className="cursor-pointer"><FieldLabelText path="escrow.gradleIncludeTestConfigurations" fallback="Gradle Include Test Configurations" /></Label>
           <FieldInfo path="escrow.gradleIncludeTestConfigurations" label="Gradle Include Test Configurations" />
         </div>
         <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="escrow.gradleIncludeTestConfigurations" />
@@ -273,11 +278,11 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
 
       {/* ── Build settings migrated from the Build tab ──────────────────────
           Escrow/automation knobs that live on the build aspect (build.* paths
-          unchanged): build tasks, system properties, deprecation, required
-          project/tools. */}
+          unchanged): build tasks, system properties, project version,
+          deprecation, required project/tools. */}
       <div className="space-y-1.5">
         <div className="flex items-center gap-1">
-          <Label>Build Tasks</Label>
+          <Label><FieldLabelText path="build.buildTasks" fallback="Build Tasks" /></Label>
           <FieldInfo path="build.buildTasks" label="Build Tasks" />
         </div>
         <Input
@@ -290,7 +295,7 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
 
       <div className="space-y-1.5">
         <div className="flex items-center gap-1">
-          <Label>System Properties</Label>
+          <Label><FieldLabelText path="build.systemProperties" fallback="System Properties" /></Label>
           <FieldInfo path="build.systemProperties" label="System Properties" />
         </div>
         <textarea
@@ -304,13 +309,26 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
       </div>
 
       <div className="space-y-1.5">
+        <div className="flex items-center gap-1">
+          <Label><FieldLabelText path="build.projectVersion" fallback="Project Version" /></Label>
+          <FieldInfo path="build.projectVersion" label="Project Version" />
+        </div>
+        <Input
+          value={projectVersion}
+          onChange={(e) => setProjectVersion(e.target.value)}
+          placeholder="1.0.0"
+        />
+        <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.projectVersion" />
+      </div>
+
+      <div className="space-y-1.5">
         <div className="flex items-center gap-3">
           <Switch
             id="build-deprecated"
             checked={deprecated}
             onCheckedChange={setDeprecated}
           />
-          <Label htmlFor="build-deprecated" className="cursor-pointer">Deprecated</Label>
+          <Label htmlFor="build-deprecated" className="cursor-pointer"><FieldLabelText path="build.deprecated" fallback="Deprecated" /></Label>
           <FieldInfo path="build.deprecated" label="Deprecated" />
         </div>
         <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.deprecated" />
@@ -323,7 +341,7 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
             checked={requiredProject}
             onCheckedChange={setRequiredProject}
           />
-          <Label htmlFor="build-required-project" className="cursor-pointer">Required Project</Label>
+          <Label htmlFor="build-required-project" className="cursor-pointer"><FieldLabelText path="build.requiredProject" fallback="Required Project" /></Label>
           <FieldInfo path="build.requiredProject" label="Required Project" />
         </div>
         <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.requiredProject" />
@@ -331,7 +349,7 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
 
       <div className="space-y-1.5">
         <div className="flex items-center gap-1">
-          <Label>Required Tools</Label>
+          <Label><FieldLabelText path="build.requiredTools" fallback="Required Tools" /></Label>
           <FieldInfo path="build.requiredTools" label="Required Tools" />
         </div>
         <Input
@@ -354,7 +372,7 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
           Inline override remains available as the entry point. */}
       <div className="space-y-1.5">
         <div className="flex items-center gap-1">
-          <Label>Build Task</Label>
+          <Label><FieldLabelText path="escrow.buildTask" fallback="Build Task" /></Label>
           <FieldInfo path="escrow.buildTask" label="Build Task" />
         </div>
         <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="escrow.buildTask" />

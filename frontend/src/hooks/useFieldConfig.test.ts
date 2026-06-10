@@ -5,6 +5,8 @@ import React from 'react'
 import {
   useFieldConfigOptions,
   useFieldConfigEntry,
+  useFieldLabel,
+  labelFor,
   searchabilityFor,
   DEFAULT_SEARCHABILITY,
 } from './useFieldConfig'
@@ -72,6 +74,59 @@ describe('useFieldConfigOptions', () => {
       { wrapper: makeWrapper() },
     )
     expect(result.current).toEqual({ options: [], isLoading: false })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// labelFor / useFieldLabel — config-driven display-label overrides
+// ---------------------------------------------------------------------------
+
+describe('labelFor', () => {
+  it('returns the config label when set', () => {
+    const data = { build: { projectVersion: { label: 'Example Label' } } }
+    expect(labelFor(data, 'build.projectVersion', 'Project Version')).toBe('Example Label')
+  })
+
+  it('trims the config label', () => {
+    const data = { build: { projectVersion: { label: '  Example Label  ' } } }
+    expect(labelFor(data, 'build.projectVersion', 'Project Version')).toBe('Example Label')
+  })
+
+  it('falls back when the field has no config entry', () => {
+    expect(labelFor({ build: {} }, 'build.projectVersion', 'Project Version')).toBe('Project Version')
+    expect(labelFor(undefined, 'build.projectVersion', 'Project Version')).toBe('Project Version')
+  })
+
+  it('falls back when the config label is blank', () => {
+    const data = { build: { projectVersion: { label: '   ' } } }
+    expect(labelFor(data, 'build.projectVersion', 'Project Version')).toBe('Project Version')
+  })
+
+  it('resolves labels for distribution-section paths', () => {
+    // Distribution paths nest deeper than one dot; the resolver splits on the
+    // FIRST dot, so the remainder is the field key within the section.
+    const data = { distribution: { 'maven.groupPattern': { label: 'Example Label' } } }
+    expect(labelFor(data, 'distribution.maven.groupPattern', 'Group Pattern')).toBe('Example Label')
+  })
+})
+
+describe('useFieldLabel', () => {
+  it('returns the config label when present and the fallback otherwise', () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: { build: { projectVersion: { label: 'Example Label' } } },
+      isLoading: false,
+    } as unknown as ReturnType<typeof useFieldConfig>)
+    const { result } = renderHook(
+      () => useFieldLabel('build.projectVersion', 'Project Version'),
+      { wrapper: makeWrapper() },
+    )
+    expect(result.current).toBe('Example Label')
+
+    const { result: fallback } = renderHook(
+      () => useFieldLabel('build.javaVersion', 'Java Version'),
+      { wrapper: makeWrapper() },
+    )
+    expect(fallback.current).toBe('Java Version')
   })
 })
 

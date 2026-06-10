@@ -28,7 +28,8 @@ const EXPECTED_KEYS = [
   'component.labels',
   'component.docs',
   'component.artifactIds',
-  // BuildTab
+  // build aspect (toolchain scalars on BuildTab; buildTasks / systemProperties /
+  // deprecated / requiredProject / requiredTools / projectVersion render on EscrowTab)
   'build.buildSystem',
   'build.buildFilePath',
   'build.javaVersion',

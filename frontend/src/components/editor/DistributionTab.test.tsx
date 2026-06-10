@@ -14,6 +14,9 @@ vi.mock('./FieldOverrideInline', () => ({
 vi.mock('../../hooks/useFieldConfig', () => ({
   useFieldConfigOptions: () => ({ options: [], isLoading: false }),
   useFieldConfigEntry: () => ({ entry: { visibility: 'editable', required: false }, isLoading: false, isError: false }),
+  // FieldLabelText dependency — label overrides are exercised by the
+  // Escrow/Build/Vcs tab tests; here the fallback text is enough.
+  useFieldLabel: (_path: string, fallback: string) => fallback,
 }))
 
 function baseComponent(overrides: Partial<ComponentDetail> = {}): ComponentDetail {
