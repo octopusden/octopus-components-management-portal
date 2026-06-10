@@ -368,7 +368,7 @@ describe('EscrowTab new fields save', () => {
 // PATCH payload — only the UI placement moved.
 
 describe('EscrowTab — migrated build settings render', () => {
-  it('renders Build Tasks, System Properties, Deprecated, Required Project and Required Tools', () => {
+  it('renders Build Tasks, System Properties, Deprecated, Required Project, Required Tools and Project Version', () => {
     renderWithProviders(
       <EscrowTab component={baseComponent()} updateMutation={makeMutation()} toast={makeToast()} canEdit={true} />
     )
@@ -377,6 +377,7 @@ describe('EscrowTab — migrated build settings render', () => {
     expect(screen.getByText('Deprecated')).toBeDefined()
     expect(screen.getByText('Required Project')).toBeDefined()
     expect(screen.getByText('Required Tools')).toBeDefined()
+    expect(screen.getByText('Project Version')).toBeDefined()
   })
 
   it('initialises the migrated fields from the BASE row build aspect and requiredTools', () => {
@@ -387,6 +388,7 @@ describe('EscrowTab — migrated build settings render', () => {
       systemProperties: '-Dfoo=bar',
       deprecated: true,
       requiredProject: true,
+      projectVersion: '2.5.0',
     }
     component.configurations![0]!.requiredTools = ['tool-x', 'tool-y']
     renderWithProviders(
@@ -394,6 +396,7 @@ describe('EscrowTab — migrated build settings render', () => {
     )
     expect((screen.getByPlaceholderText('clean install / assemble') as HTMLInputElement).value).toBe('clean install')
     expect((screen.getByPlaceholderText('-Dproperty=value') as HTMLTextAreaElement).value).toBe('-Dfoo=bar')
+    expect((screen.getByPlaceholderText('1.0.0') as HTMLInputElement).value).toBe('2.5.0')
     expect(screen.getByRole('switch', { name: 'Deprecated' }).getAttribute('data-state')).toBe('checked')
     expect(screen.getByRole('switch', { name: 'Required Project' }).getAttribute('data-state')).toBe('checked')
     expect((screen.getByPlaceholderText('tool-a, tool-b') as HTMLInputElement).value).toBe('tool-x, tool-y')
@@ -418,6 +421,7 @@ describe('EscrowTab — migrated build settings save', () => {
 
     const tasksInput = screen.getByPlaceholderText('clean install / assemble')
     fireEvent.change(tasksInput, { target: { value: 'assemble' } })
+    fireEvent.change(screen.getByPlaceholderText('1.0.0'), { target: { value: '3.0.0' } })
     fireEvent.click(screen.getByRole('switch', { name: 'Deprecated' }))
 
     fireEvent.click(screen.getByRole('button', { name: /save escrow/i }))
@@ -431,6 +435,7 @@ describe('EscrowTab — migrated build settings save', () => {
     expect(build.systemProperties).toBe('-Dfoo=bar')
     expect(build.deprecated).toBe(true)
     expect(build.requiredProject).toBe(false)
+    expect(build.projectVersion).toBe('3.0.0')
     // Build-tab-owned scalars must be ABSENT (CRS PATCH = per-field ?.let,
     // absent = don't touch) so an Escrow save can never clobber them.
     expect('buildSystem' in build).toBe(false)
@@ -438,10 +443,9 @@ describe('EscrowTab — migrated build settings save', () => {
     expect('javaVersion' in build).toBe(false)
     expect('mavenVersion' in build).toBe(false)
     expect('gradleVersion' in build).toBe(false)
-    expect('projectVersion' in build).toBe(false)
   })
 
-  it('sends null for cleared Build Tasks / System Properties', async () => {
+  it('sends null for cleared Build Tasks / System Properties / Project Version', async () => {
     setProductTypeVisibility('hidden')
     const mutateAsync = vi.fn().mockResolvedValue({})
     const component = baseComponent()
@@ -449,6 +453,7 @@ describe('EscrowTab — migrated build settings save', () => {
       buildSystem: 'MAVEN',
       buildTasks: 'clean install',
       systemProperties: '-Dfoo=bar',
+      projectVersion: '2.5.0',
     }
     renderWithProviders(
       <EscrowTab component={component} updateMutation={makeMutation(mutateAsync)} toast={makeToast()} canEdit={true} />
@@ -456,6 +461,7 @@ describe('EscrowTab — migrated build settings save', () => {
 
     fireEvent.change(screen.getByPlaceholderText('clean install / assemble'), { target: { value: '' } })
     fireEvent.change(screen.getByPlaceholderText('-Dproperty=value'), { target: { value: '' } })
+    fireEvent.change(screen.getByPlaceholderText('1.0.0'), { target: { value: '' } })
     fireEvent.click(screen.getByRole('button', { name: /save escrow/i }))
     await vi.waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce())
 
@@ -463,6 +469,7 @@ describe('EscrowTab — migrated build settings save', () => {
     const build = (mutateAsync.mock.calls[0]![0] as any).baseConfiguration.build
     expect(build.buildTasks).toBeNull()
     expect(build.systemProperties).toBeNull()
+    expect(build.projectVersion).toBeNull()
   })
 
   it('saves requiredTools deduped at BASE-row level, not inside build', async () => {
@@ -539,6 +546,7 @@ describe('EscrowTab — inline override coverage', () => {
     'build.systemProperties',
     'build.deprecated',
     'build.requiredProject',
+    'build.projectVersion',
   ]
 
   it.each(overridablePaths)('renders FieldOverrideInline under %s', (path) => {
@@ -570,6 +578,7 @@ describe('EscrowTab field descriptions (FieldInfo)', () => {
     'build.deprecated',
     'build.requiredProject',
     'build.requiredTools',
+    'build.projectVersion',
   ]
 
   it('renders exactly one info icon per described field', () => {

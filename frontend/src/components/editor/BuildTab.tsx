@@ -37,9 +37,9 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
   const [javaVersion, setJavaVersion] = useState(build?.javaVersion ?? '')
   const [mavenVersion, setMavenVersion] = useState(build?.mavenVersion ?? '')
   const [gradleVersion, setGradleVersion] = useState(build?.gradleVersion ?? '')
-  const [projectVersion, setProjectVersion] = useState(build?.projectVersion ?? '')
   // buildTasks / systemProperties / deprecated / requiredProject / requiredTools
-  // moved to the Escrow tab (escrow/automation knobs) — EscrowTab owns them now.
+  // / projectVersion moved to the Escrow tab (escrow/automation knobs) —
+  // EscrowTab owns them now.
 
   useEffect(() => {
     const b = selectBaseRow(component)?.build
@@ -48,7 +48,6 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
     setJavaVersion(b?.javaVersion ?? '')
     setMavenVersion(b?.mavenVersion ?? '')
     setGradleVersion(b?.gradleVersion ?? '')
-    setProjectVersion(b?.projectVersion ?? '')
   }, [component])
 
   // Maven/Gradle Version visibility: the tool-version input renders only when
@@ -93,8 +92,8 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
         baseConfiguration: {
           // Only the toolchain scalars this tab renders. The Escrow-tab-migrated
           // fields (buildTasks / systemProperties / deprecated / requiredProject
-          // / requiredTools) are intentionally ABSENT: CRS PATCH applies
-          // per-field (?.let), so omitted keys stay untouched.
+          // / requiredTools / projectVersion) are intentionally ABSENT: CRS PATCH
+          // applies per-field (?.let), so omitted keys stay untouched.
           build: {
             buildSystem: buildSystem || null,
             buildFilePath: buildFilePath || null,
@@ -103,7 +102,6 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
             // visibility note above the render block.
             ...(showMavenVersion ? { mavenVersion: mavenVersion || null } : {}),
             ...(showGradleVersion ? { gradleVersion: gradleVersion || null } : {}),
-            projectVersion: projectVersion || null,
           },
         },
       })
@@ -215,19 +213,6 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
             <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.gradleVersion" />
           </div>
         )}
-
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-1">
-            <Label>Project Version</Label>
-            <FieldInfo path="build.projectVersion" label="Project Version" />
-          </div>
-          <Input
-            value={projectVersion}
-            onChange={(e) => setProjectVersion(e.target.value)}
-            placeholder="1.0.0"
-          />
-          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.projectVersion" />
-        </div>
       </div>
 
       <div className="flex justify-end">

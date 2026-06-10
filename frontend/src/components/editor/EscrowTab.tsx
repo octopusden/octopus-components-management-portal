@@ -45,13 +45,15 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
   const [gradleIncludeTestConfigurations, setGradleIncludeTestConfigurations] = useState(escrow?.gradleIncludeTestConfigurations ?? false)
 
   // Build-settings fields migrated from the Build tab (escrow/automation knobs:
-  // build tasks, system properties, deprecation, required project/tools). They
-  // keep their build.* / row-level payload paths — only the UI placement moved.
+  // build tasks, system properties, deprecation, required project/tools, project
+  // version). They keep their build.* / row-level payload paths — only the UI
+  // placement moved.
   const build = baseRow?.build
   const [buildTasks, setBuildTasks] = useState(build?.buildTasks ?? '')
   const [systemProperties, setSystemProperties] = useState(build?.systemProperties ?? '')
   const [deprecated, setDeprecated] = useState(build?.deprecated ?? false)
   const [requiredProject, setRequiredProject] = useState(build?.requiredProject ?? false)
+  const [projectVersion, setProjectVersion] = useState(build?.projectVersion ?? '')
   const [requiredToolsInput, setRequiredToolsInput] = useState((baseRow?.requiredTools ?? []).join(', '))
 
   useEffect(() => {
@@ -71,6 +73,7 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
     setSystemProperties(b?.systemProperties ?? '')
     setDeprecated(b?.deprecated ?? false)
     setRequiredProject(b?.requiredProject ?? false)
+    setProjectVersion(b?.projectVersion ?? '')
     setRequiredToolsInput((br?.requiredTools ?? []).join(', '))
   }, [component])
 
@@ -119,6 +122,7 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
                   systemProperties: systemProperties || null,
                   deprecated,
                   requiredProject,
+                  projectVersion: projectVersion || null,
                 },
               }
             : {}),
@@ -273,8 +277,8 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
 
       {/* ── Build settings migrated from the Build tab ──────────────────────
           Escrow/automation knobs that live on the build aspect (build.* paths
-          unchanged): build tasks, system properties, deprecation, required
-          project/tools. */}
+          unchanged): build tasks, system properties, project version,
+          deprecation, required project/tools. */}
       <div className="space-y-1.5">
         <div className="flex items-center gap-1">
           <Label>Build Tasks</Label>
@@ -301,6 +305,19 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
           spellCheck={false}
         />
         <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.systemProperties" />
+      </div>
+
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-1">
+          <Label>Project Version</Label>
+          <FieldInfo path="build.projectVersion" label="Project Version" />
+        </div>
+        <Input
+          value={projectVersion}
+          onChange={(e) => setProjectVersion(e.target.value)}
+          placeholder="1.0.0"
+        />
+        <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.projectVersion" />
       </div>
 
       <div className="space-y-1.5">

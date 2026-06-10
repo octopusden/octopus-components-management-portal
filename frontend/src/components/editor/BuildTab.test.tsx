@@ -231,52 +231,16 @@ describe('BuildTab — save path', () => {
     expect(callArg.baseConfiguration?.build?.mavenVersion).toBeNull()
   })
 
-  it('sends projectVersion in build payload', async () => {
-    const mutateFn = vi.fn().mockResolvedValue({})
-    const component = makeComponent({
-      configurations: [
-        makeBaseRow({ build: { buildSystem: 'MAVEN', projectVersion: '1.2.3' } }),
-      ],
-    })
-
-    const { getByPlaceholderText, getByText } = renderTab(component, mutateFn)
-
-    const input = getByPlaceholderText('1.0.0')
-    await userEvent.clear(input)
-    await userEvent.type(input, '2.0.0')
-
-    await userEvent.click(getByText('Save Build'))
-
-    const callArg = mutateFn.mock.calls[0]![0] as ComponentUpdateRequest
-    expect(callArg.baseConfiguration?.build?.projectVersion).toBe('2.0.0')
-  })
-
-  it('sends null for projectVersion when cleared', async () => {
-    const mutateFn = vi.fn().mockResolvedValue({})
-    const component = makeComponent({
-      configurations: [
-        makeBaseRow({ build: { buildSystem: 'MAVEN', projectVersion: '1.0.0' } }),
-      ],
-    })
-
-    const { getByPlaceholderText, getByText } = renderTab(component, mutateFn)
-    await userEvent.clear(getByPlaceholderText('1.0.0'))
-    await userEvent.click(getByText('Save Build'))
-
-    const callArg = mutateFn.mock.calls[0]![0] as ComponentUpdateRequest
-    expect(callArg.baseConfiguration?.build?.projectVersion).toBeNull()
-  })
-
   it('omits the Escrow-tab-migrated fields from the PATCH payload entirely', async () => {
     // Build Tasks / System Properties / Deprecated / Required Project /
-    // Required Tools render and save on the Escrow tab now. CRS PATCH is
-    // per-field (?.let): keys ABSENT here = untouched, so a Build save can
-    // never clobber what the Escrow tab owns.
+    // Required Tools / Project Version render and save on the Escrow tab now.
+    // CRS PATCH is per-field (?.let): keys ABSENT here = untouched, so a
+    // Build save can never clobber what the Escrow tab owns.
     const mutateFn = vi.fn().mockResolvedValue({})
     const component = makeComponent({
       configurations: [
         makeBaseRow({
-          build: { buildSystem: 'MAVEN', buildTasks: 'clean install', systemProperties: '-Dfoo=bar', deprecated: true, requiredProject: true },
+          build: { buildSystem: 'MAVEN', buildTasks: 'clean install', systemProperties: '-Dfoo=bar', deprecated: true, requiredProject: true, projectVersion: '1.2.3' },
           requiredTools: ['tool-x'],
         }),
       ],
@@ -292,6 +256,7 @@ describe('BuildTab — save path', () => {
     expect('systemProperties' in build).toBe(false)
     expect('deprecated' in build).toBe(false)
     expect('requiredProject' in build).toBe(false)
+    expect('projectVersion' in build).toBe(false)
     expect('requiredTools' in (callArg.baseConfiguration as Record<string, unknown>)).toBe(false)
   })
 })
@@ -312,7 +277,6 @@ describe('BuildTab — existing structure preserved', () => {
     expect(screen.getByText('Build System')).toBeDefined()
     expect(screen.getByText('Java Version')).toBeDefined()
     expect(screen.getByText('Maven Version')).toBeDefined()
-    expect(screen.getByText('Project Version')).toBeDefined()
     expect(screen.getByText('Save Build')).toBeDefined()
     // Gradle Version is hidden for a MAVEN-only component — see the
     // visibility describe below.
@@ -326,6 +290,7 @@ describe('BuildTab — existing structure preserved', () => {
     expect(screen.queryByText('Deprecated')).toBeNull()
     expect(screen.queryByText('Required Project')).toBeNull()
     expect(screen.queryByText('Required Tools')).toBeNull()
+    expect(screen.queryByText('Project Version')).toBeNull()
   })
 
   it('populates fields from BASE row build aspect', () => {
@@ -555,9 +520,8 @@ describe('BuildTab — inline override coverage', () => {
     'build.javaVersion',
     'build.mavenVersion',
     'build.gradleVersion',
-    'build.projectVersion',
-    // buildTasks / systemProperties / deprecated / requiredProject inline
-    // overrides moved to the Escrow tab with their fields.
+    // buildTasks / systemProperties / deprecated / requiredProject /
+    // projectVersion inline overrides moved to the Escrow tab with their fields.
   ]
 
   it.each(overridablePaths)('renders FieldOverrideInline under %s', (path) => {
@@ -569,14 +533,13 @@ describe('BuildTab — inline override coverage', () => {
 describe('BuildTab field descriptions (FieldInfo)', () => {
   // Exact set of registry paths this tab must expose an info icon for.
   // (buildTasks / systemProperties / deprecated / requiredProject /
-  // requiredTools moved to the Escrow tab.)
+  // requiredTools / projectVersion moved to the Escrow tab.)
   const EXPECTED_PATHS = [
     'build.buildSystem',
     'build.buildFilePath',
     'build.javaVersion',
     'build.mavenVersion',
     'build.gradleVersion',
-    'build.projectVersion',
   ]
 
   it('renders exactly one info icon per described field', () => {
