@@ -32,5 +32,9 @@ export function useEmployeeIntegrationHealth(enabled: boolean) {
     queryFn: () => api.get<EmployeeIntegrationHealth>('/components/meta/employees/health'),
     enabled,
     refetchInterval: EMPLOYEE_INTEGRATION_POLL_INTERVAL_MS,
+    // Retrying a failed poll is pointless (the next tick is 60s away) and
+    // would quadruple the wasted traffic against a registry that does not
+    // expose the endpoint yet (pre-release 404s).
+    retry: false,
   })
 }
