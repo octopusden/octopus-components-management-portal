@@ -31,6 +31,9 @@ vi.mock('../../hooks/useFieldConfig', () => ({
       locked: null,
     },
   }),
+  // FieldLabelText dependency — label overrides are exercised by the
+  // Escrow/Build/Vcs tab tests; here the fallback text is enough.
+  useFieldLabel: (_path: string, fallback: string) => fallback,
 }))
 
 vi.mock('../../hooks/useOptimisticConflict', () => ({

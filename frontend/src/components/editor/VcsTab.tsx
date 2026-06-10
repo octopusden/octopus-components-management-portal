@@ -4,6 +4,7 @@ import { Label } from '../ui/label'
 import { Input } from '../ui/input'
 import { Button } from '../ui/button'
 import { FieldInfo } from '../ui/FieldInfo'
+import { FieldLabelText } from '../ui/FieldLabelText'
 import { Separator } from '../ui/separator'
 import type { ComponentDetail, VcsEntry } from '../../lib/types'
 import type { ComponentUpdateRequest } from '../../hooks/useComponent'
@@ -117,7 +118,7 @@ export function VcsTab({ component, updateMutation, toast, canEdit }: VcsTabProp
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <div className="flex items-center gap-1">
-            <Label>External Registry</Label>
+            <Label><FieldLabelText path="vcs.externalRegistry" fallback="External Registry" /></Label>
             <FieldInfo path="vcs.externalRegistry" label="External Registry" />
           </div>
           <Input
@@ -133,7 +134,7 @@ export function VcsTab({ component, updateMutation, toast, canEdit }: VcsTabProp
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1">
-            <h3 className="text-sm font-semibold">VCS Entries</h3>
+            <h3 className="text-sm font-semibold"><FieldLabelText path="vcs.entries" fallback="VCS Entries" /></h3>
             <FieldInfo path="vcs.entries" label="VCS Entries" />
           </div>
           <Button variant="outline" size="sm" onClick={addEntry} disabled={!canEdit}>
@@ -153,21 +154,21 @@ export function VcsTab({ component, updateMutation, toast, canEdit }: VcsTabProp
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <div className="space-y-1">
                 <div className="flex items-center gap-1">
-                  <Label className="text-xs">Name</Label>
+                  <Label className="text-xs"><FieldLabelText path="vcs.name" fallback="Name" /></Label>
                   <FieldInfo path="vcs.name" label="Name" />
                 </div>
                 <Input value={entry.name} onChange={(e) => updateEntry(index, 'name', e.target.value)} placeholder="Entry name" />
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-1">
-                  <Label className="text-xs">VCS Path</Label>
+                  <Label className="text-xs"><FieldLabelText path="vcs.vcsPath" fallback="VCS Path" /></Label>
                   <FieldInfo path="vcs.vcsPath" label="VCS Path" />
                 </div>
                 <Input value={entry.vcsPath} onChange={(e) => updateEntry(index, 'vcsPath', e.target.value)} placeholder="ssh://git@..." className="font-mono text-xs" />
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-1">
-                  <Label className="text-xs">Repository Type</Label>
+                  <Label className="text-xs"><FieldLabelText path="vcs.repositoryType" fallback="Repository Type" /></Label>
                   <FieldInfo path="vcs.repositoryType" label="Repository Type" />
                 </div>
                 {/* Read-only: repository type is not user-editable (it follows the VCS host). */}
@@ -175,21 +176,21 @@ export function VcsTab({ component, updateMutation, toast, canEdit }: VcsTabProp
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-1">
-                  <Label className="text-xs">Production branch</Label>
+                  <Label className="text-xs"><FieldLabelText path="vcs.branch" fallback="Production branch" /></Label>
                   <FieldInfo path="vcs.branch" label="Production branch" />
                 </div>
                 <Input value={entry.branch} onChange={(e) => updateEntry(index, 'branch', e.target.value)} placeholder="Branch pattern" className="font-mono text-xs" />
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-1">
-                  <Label className="text-xs">Tag</Label>
+                  <Label className="text-xs"><FieldLabelText path="vcs.tag" fallback="Tag" /></Label>
                   <FieldInfo path="vcs.tag" label="Tag" />
                 </div>
                 <Input value={entry.tag} onChange={(e) => updateEntry(index, 'tag', e.target.value)} placeholder="Tag pattern" className="font-mono text-xs" />
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-1">
-                  <Label className="text-xs">Hotfix Branch</Label>
+                  <Label className="text-xs"><FieldLabelText path="vcs.hotfixBranch" fallback="Hotfix Branch" /></Label>
                   <FieldInfo path="vcs.hotfixBranch" label="Hotfix Branch" />
                 </div>
                 <Input value={entry.hotfixBranch} onChange={(e) => updateEntry(index, 'hotfixBranch', e.target.value)} placeholder="Hotfix branch pattern" className="font-mono text-xs" />

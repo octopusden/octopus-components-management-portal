@@ -11,6 +11,7 @@ import { ComponentSelect } from '../ui/ComponentSelect'
 import { ChipsInput } from '../ui/ChipsInput'
 import { EnumSelect } from '../ui/EnumSelect'
 import { FieldInfo } from '../ui/FieldInfo'
+import { FieldLabelText } from '../ui/FieldLabelText'
 import type { ComponentDetail } from '../../lib/types'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../../lib/auth'
@@ -240,7 +241,7 @@ export function GeneralTab({ component, form, isNew = false, onOwnerValidatingCh
               anything the CREATE_COMPONENTS holder can name. */}
           <div className="space-y-1.5">
             <div className="flex items-center gap-1">
-              <Label htmlFor="name">Component Key</Label>
+              <Label htmlFor="name"><FieldLabelText path="component.name" fallback="Component Key" /></Label>
               <FieldInfo path="component.name" label="Component Key" />
             </div>
             <Input
@@ -271,7 +272,7 @@ export function GeneralTab({ component, form, isNew = false, onOwnerValidatingCh
           {displayNameEntry.visibility !== 'hidden' && (
             <div className="space-y-1.5">
               <div className="flex items-center gap-1">
-                <Label htmlFor="displayName">Display Name</Label>
+                <Label htmlFor="displayName"><FieldLabelText path="component.displayName" fallback="Display Name" /></Label>
                 <FieldInfo path="component.displayName" label="Display Name" />
               </div>
               <Input
@@ -301,7 +302,7 @@ export function GeneralTab({ component, form, isNew = false, onOwnerValidatingCh
               // save handler omits the field every time.
               onCheckedChange={(checked) => setValue('solution', checked, { shouldDirty: true })}
             />
-            <Label htmlFor="solution" className="cursor-pointer">Solution</Label>
+            <Label htmlFor="solution" className="cursor-pointer"><FieldLabelText path="component.solution" fallback="Solution" /></Label>
             <FieldInfo path="component.solution" label="Solution" />
           </div>
 
@@ -319,7 +320,7 @@ export function GeneralTab({ component, form, isNew = false, onOwnerValidatingCh
             {componentOwnerEntry.visibility !== 'hidden' && (
               <div className="space-y-1.5">
                 <div className="flex items-center gap-1">
-                  <Label htmlFor="componentOwner">Component Owner</Label>
+                  <Label htmlFor="componentOwner"><FieldLabelText path="component.componentOwner" fallback="Component Owner" /></Label>
                   <FieldInfo path="component.componentOwner" label="Component Owner" />
                 </div>
                 {componentOwnerEntry.visibility === 'readonly' ? (
@@ -355,7 +356,7 @@ export function GeneralTab({ component, form, isNew = false, onOwnerValidatingCh
             {releaseManagerEntry.visibility !== 'hidden' && (
               <div className="space-y-1.5">
                 <div className="flex items-center gap-1">
-                  <Label htmlFor="releaseManager">Release Managers</Label>
+                  <Label htmlFor="releaseManager"><FieldLabelText path="component.releaseManager" fallback="Release Managers" /></Label>
                   <FieldInfo path="component.releaseManager" label="Release Managers" />
                 </div>
                 {releaseManagerEntry.visibility === 'readonly' ? (
@@ -397,7 +398,7 @@ export function GeneralTab({ component, form, isNew = false, onOwnerValidatingCh
             {securityChampionEntry.visibility !== 'hidden' && (
               <div className="space-y-1.5">
                 <div className="flex items-center gap-1">
-                  <Label htmlFor="securityChampion">Security Champions</Label>
+                  <Label htmlFor="securityChampion"><FieldLabelText path="component.securityChampion" fallback="Security Champions" /></Label>
                   <FieldInfo path="component.securityChampion" label="Security Champions" />
                 </div>
                 {securityChampionEntry.visibility === 'readonly' ? (
@@ -477,7 +478,7 @@ export function GeneralTab({ component, form, isNew = false, onOwnerValidatingCh
             {systemEntry.visibility !== 'hidden' && (
               <div className="space-y-1.5">
                 <div className="flex items-center gap-1">
-                  <Label htmlFor="component-system">System</Label>
+                  <Label htmlFor="component-system"><FieldLabelText path="component.system" fallback="System" /></Label>
                   <FieldInfo path="component.system" label="System" />
                 </div>
                 <EnumSelect
@@ -506,7 +507,7 @@ export function GeneralTab({ component, form, isNew = false, onOwnerValidatingCh
             {clientCodeEntry.visibility !== 'hidden' && (
               <div className="space-y-1.5">
                 <div className="flex items-center gap-1">
-                  <Label htmlFor="clientCode">Client Code</Label>
+                  <Label htmlFor="clientCode"><FieldLabelText path="component.clientCode" fallback="Client Code" /></Label>
                   <FieldInfo path="component.clientCode" label="Client Code" />
                 </div>
                 <Input
@@ -526,7 +527,7 @@ export function GeneralTab({ component, form, isNew = false, onOwnerValidatingCh
             {copyrightEntry.visibility !== 'hidden' && (
               <div className="space-y-1.5 sm:col-span-2">
                 <div className="flex items-center gap-1">
-                  <Label htmlFor="copyright">Copyright</Label>
+                  <Label htmlFor="copyright"><FieldLabelText path="component.copyright" fallback="Copyright" /></Label>
                   <FieldInfo path="component.copyright" label="Copyright" />
                 </div>
                 <Input
@@ -552,7 +553,7 @@ export function GeneralTab({ component, form, isNew = false, onOwnerValidatingCh
             {labelsEntry.visibility !== 'hidden' && (
               <div className="space-y-1.5 sm:col-span-2">
                 <div className="flex items-center gap-1">
-                  <Label htmlFor="component-labels">Labels</Label>
+                  <Label htmlFor="component-labels"><FieldLabelText path="component.labels" fallback="Labels" /></Label>
                   <FieldInfo path="component.labels" label="Labels" />
                 </div>
                 <ChipsInput
@@ -592,7 +593,7 @@ export function GeneralTab({ component, form, isNew = false, onOwnerValidatingCh
           field-config gates today; full visibility for all editors. */}
       <section data-testid="section-references">
         <div className="flex items-center gap-1 mb-3">
-          <h3 className="text-sm font-medium text-muted-foreground">Doc Links</h3>
+          <h3 className="text-sm font-medium text-muted-foreground"><FieldLabelText path="component.docs" fallback="Doc Links" /></h3>
           <FieldInfo path="component.docs" label="Doc Links" />
         </div>
         <div className="space-y-2">
@@ -650,7 +651,7 @@ export function GeneralTab({ component, form, isNew = false, onOwnerValidatingCh
 
       <section data-testid="section-artifact-ids">
         <div className="flex items-center gap-1 mb-3">
-          <h3 className="text-sm font-medium text-muted-foreground">Artifact IDs</h3>
+          <h3 className="text-sm font-medium text-muted-foreground"><FieldLabelText path="component.artifactIds" fallback="Artifact IDs" /></h3>
           <FieldInfo path="component.artifactIds" label="Artifact IDs" />
         </div>
         <div className="space-y-2">

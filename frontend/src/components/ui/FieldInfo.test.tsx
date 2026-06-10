@@ -124,4 +124,13 @@ describe('FieldInfo — field-config description overrides', () => {
     const tooltip = await screen.findByRole('tooltip')
     expect(tooltip).toHaveTextContent('Unique technical key of the component.')
   })
+
+  it('uses the config label override in the accessible name', () => {
+    setFieldConfig({ component: { name: { label: 'Example Label' } } })
+    renderFieldInfo('component.name', 'Component Key')
+
+    expect(
+      screen.getByRole('button', { name: 'Description for Example Label' }),
+    ).toBeInTheDocument()
+  })
 })

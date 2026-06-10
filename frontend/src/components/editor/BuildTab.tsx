@@ -5,6 +5,7 @@ import { Input } from '../ui/input'
 import { Button } from '../ui/button'
 import { EnumSelect } from '../ui/EnumSelect'
 import { FieldInfo } from '../ui/FieldInfo'
+import { FieldLabelText } from '../ui/FieldLabelText'
 import { FieldOverrideInline } from './FieldOverrideInline'
 import { CANNOT_EDIT_TITLE } from './editPermission'
 import { selectBaseRow, selectOverrideRows } from '../../lib/api/baseRow'
@@ -122,7 +123,8 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
         <div className="space-y-1.5">
           <div className="flex items-center gap-1">
             <Label htmlFor="build-buildSystem">
-              Build System <span className="text-destructive">*</span>
+              <FieldLabelText path="build.buildSystem" fallback="Build System" />{' '}
+              <span className="text-destructive">*</span>
             </Label>
             <FieldInfo path="build.buildSystem" label="Build System" />
           </div>
@@ -152,7 +154,7 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
 
         <div className="space-y-1.5">
           <div className="flex items-center gap-1">
-            <Label>Build File Path</Label>
+            <Label><FieldLabelText path="build.buildFilePath" fallback="Build File Path" /></Label>
             <FieldInfo path="build.buildFilePath" label="Build File Path" />
           </div>
           <Input
@@ -165,7 +167,7 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
 
         <div className="space-y-1.5">
           <div className="flex items-center gap-1">
-            <Label htmlFor="build-javaVersion">Java Version</Label>
+            <Label htmlFor="build-javaVersion"><FieldLabelText path="build.javaVersion" fallback="Java Version" /></Label>
             <FieldInfo path="build.javaVersion" label="Java Version" />
           </div>
           {/* Dropdown sourced from /meta/java-versions (configured in CRS application.yml,
@@ -184,7 +186,7 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
         {showMavenVersion && (
           <div className="space-y-1.5">
             <div className="flex items-center gap-1">
-              <Label htmlFor="build-mavenVersion">Maven Version</Label>
+              <Label htmlFor="build-mavenVersion"><FieldLabelText path="build.mavenVersion" fallback="Maven Version" /></Label>
               <FieldInfo path="build.mavenVersion" label="Maven Version" />
             </div>
             {/* Dropdown sourced from /meta/maven-versions (see Java Version note above). */}
@@ -202,7 +204,7 @@ export function BuildTab({ component, updateMutation, toast, canEdit }: BuildTab
         {showGradleVersion && (
           <div className="space-y-1.5">
             <div className="flex items-center gap-1">
-              <Label>Gradle Version</Label>
+              <Label><FieldLabelText path="build.gradleVersion" fallback="Gradle Version" /></Label>
               <FieldInfo path="build.gradleVersion" label="Gradle Version" />
             </div>
             <Input

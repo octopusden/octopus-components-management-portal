@@ -19,6 +19,9 @@ const mockUseFieldConfigEntry = vi.fn()
 vi.mock('../../hooks/useFieldConfig', () => ({
   useFieldConfigOptions: () => ({ options: [], isLoading: false }),
   useFieldConfigEntry: (fieldPath: string) => mockUseFieldConfigEntry(fieldPath),
+  // FieldLabelText dependency — label overrides are exercised by the
+  // Escrow/Build/Vcs tab tests; here the fallback text is enough.
+  useFieldLabel: (_path: string, fallback: string) => fallback,
 }))
 
 function baseComponent(overrides: Partial<ComponentDetail> = {}): ComponentDetail {

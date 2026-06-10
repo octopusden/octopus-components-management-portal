@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -47,6 +47,17 @@ vi.mock('../ui/EnumSelect', () => ({
     />
   ),
 }))
+
+// Field-config data source consumed by useFieldLabel / useFieldConfigEntry
+// (label and description overrides) — controllable per test, no network.
+const mockUseAdminFieldConfig = vi.fn()
+vi.mock('../../hooks/useAdminConfig', () => ({
+  useFieldConfig: () => mockUseAdminFieldConfig(),
+}))
+
+beforeEach(() => {
+  mockUseAdminFieldConfig.mockReturnValue({ data: undefined, isLoading: false, isError: false })
+})
 
 function makeBaseRow(overrides: Partial<ComponentConfiguration> = {}): ComponentConfiguration {
   return {
@@ -512,6 +523,33 @@ function makeDualSystemComponent() {
     ],
   })
 }
+
+describe('BuildTab — field-config label overrides', () => {
+  it('renders the config label override instead of the hardcoded label', () => {
+    mockUseAdminFieldConfig.mockReturnValue({
+      data: { build: { javaVersion: { label: 'Example Label' } } },
+      isLoading: false,
+      isError: false,
+    })
+    renderTab(makeComponent())
+
+    expect(screen.getByText('Example Label')).toBeDefined()
+    expect(screen.queryByText('Java Version')).toBeNull()
+  })
+
+  it('keeps the required asterisk when Build System is renamed via config', () => {
+    mockUseAdminFieldConfig.mockReturnValue({
+      data: { build: { buildSystem: { label: 'Example Build Tool' } } },
+      isLoading: false,
+      isError: false,
+    })
+    renderTab(makeComponent())
+
+    const label = screen.getByText('Example Build Tool').closest('label')!
+    expect(label.textContent).toContain('*')
+    expect(screen.queryByText('Build System')).toBeNull()
+  })
+})
 
 describe('BuildTab — inline override coverage', () => {
   const overridablePaths = [

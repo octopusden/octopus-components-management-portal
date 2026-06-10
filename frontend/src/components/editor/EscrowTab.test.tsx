@@ -17,12 +17,28 @@ vi.mock('./FieldOverrideInline', () => ({
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
-// Control productType visibility per test
+// Control productType visibility per test. importActual keeps the pure
+// resolvers (labelFor/resolveFieldEntry) and useFieldLabel real so the
+// FieldLabelText label overrides exercise the genuine resolution logic.
 const mockUseFieldConfigEntry = vi.fn()
-vi.mock('../../hooks/useFieldConfig', () => ({
-  useFieldConfigOptions: () => ({ options: [], isLoading: false }),
-  useFieldConfigEntry: (fieldPath: string) => mockUseFieldConfigEntry(fieldPath),
+vi.mock('../../hooks/useFieldConfig', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../hooks/useFieldConfig')>()
+  return {
+    ...actual,
+    useFieldConfigOptions: () => ({ options: [], isLoading: false }),
+    useFieldConfigEntry: (fieldPath: string) => mockUseFieldConfigEntry(fieldPath),
+  }
+})
+
+// Field-config data source consumed by useFieldLabel (label overrides).
+const mockUseAdminFieldConfig = vi.fn()
+vi.mock('../../hooks/useAdminConfig', () => ({
+  useFieldConfig: () => mockUseAdminFieldConfig(),
 }))
+
+function setFieldConfigData(data: unknown) {
+  mockUseAdminFieldConfig.mockReturnValue({ data, isLoading: false, isError: false })
+}
 
 function makeEntry(visibility: 'editable' | 'readonly' | 'hidden' = 'editable') {
   return { entry: { visibility, required: false }, isLoading: false, isError: false }
@@ -122,6 +138,7 @@ function makeMutation(mutateAsyncFn = vi.fn().mockResolvedValue({})) {
 
 beforeEach(() => {
   setProductTypeVisibility('editable')
+  setFieldConfigData(undefined)
 })
 
 // ── ProductType render tests ──────────────────────────────────────────────────
@@ -554,6 +571,26 @@ describe('EscrowTab — inline override coverage', () => {
       <EscrowTab component={baseComponent()} updateMutation={makeMutation()} toast={makeToast()} canEdit={true} />
     )
     expect(screen.getByTestId(`field-override-inline-${path}`)).toBeInTheDocument()
+  })
+})
+
+describe('EscrowTab — field-config label overrides', () => {
+  it('renders the config label override instead of the hardcoded label', () => {
+    setFieldConfigData({ build: { projectVersion: { label: 'Example Label' } } })
+    renderWithProviders(
+      <EscrowTab component={baseComponent()} updateMutation={makeMutation()} toast={makeToast()} canEdit={true} />
+    )
+
+    expect(screen.getByText('Example Label')).toBeInTheDocument()
+    expect(screen.queryByText('Project Version')).toBeNull()
+  })
+
+  it('falls back to hardcoded labels without config overrides', () => {
+    renderWithProviders(
+      <EscrowTab component={baseComponent()} updateMutation={makeMutation()} toast={makeToast()} canEdit={true} />
+    )
+
+    expect(screen.getByText('Project Version')).toBeInTheDocument()
   })
 })
 
