@@ -77,9 +77,11 @@ export default defineConfig({
       // them manually via a direct path: `npx playwright test
       // e2e/visual/_compare-vs-prototype.spec.ts`.
       //
-      // `editor-*` specs are route-mocked editor-flow journeys that need
-      // CREATE_COMPONENTS (admin) — same project shape as the visual specs
-      // (route-mocked + admin storageState), so they piggyback here.
+      // `editor-*` specs are editor-flow journeys that need
+      // CREATE_COMPONENTS (admin) — most are route-mocked (same project
+      // shape as the visual specs), but real-CRS journeys that self-skip
+      // when the backend lacks the feature also live here (each spec's
+      // header says which kind it is, e.g. editor-build-history).
       testMatch: /(smoke-admin|admin-migration|editor-[^/]+|visual\/(?!_)[^/]+)\.spec\.ts$/,
     },
   ],
