@@ -53,6 +53,10 @@ auth-server:
 # with different external tool URLs. Unset vars produce empty strings, which
 # the controller collapses to null in the JSON response.
 portal:
+  # Base URL of the components-registry instance this portal proxies. The same
+  # env var feeds the gateway routes above; the health indicator reuses it to
+  # mirror the registry's anonymous `employeeService` health component.
+  registry-health-base-url: ${COMPONENTS_REGISTRY_SERVICE_URL:http://localhost:4567}
   links:
     jira-base-url: ${PORTAL_LINKS_JIRA_BASE_URL:}
     git-base-url: ${PORTAL_LINKS_GIT_BASE_URL:}
