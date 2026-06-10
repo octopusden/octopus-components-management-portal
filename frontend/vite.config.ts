@@ -93,6 +93,11 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    // No sourcemaps in the production bundle: dist/assets is served permitAll
+    // by the Spring gateway (SecurityConfig), so a .js.map there would hand the
+    // full frontend source to unauthenticated callers. 'hidden' would not help —
+    // the map file still lands in dist/assets under a guessable name. Dev
+    // builds are unaffected (esbuild serves sources directly).
+    sourcemap: false,
   },
 })

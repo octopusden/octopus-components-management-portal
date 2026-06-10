@@ -351,3 +351,12 @@ docker {
         images.set(setOf("${"octopusGithubDockerRegistry".getExt()}/octopusden/${project.name}:${project.version}"))
     }
 }
+
+// The bmuschko springBootApplication convention has no `user` knob, so the
+// generated Dockerfile runs the app as root. Appending RUN+USER here is safe:
+// the runtime user is the last USER instruction in the file regardless of its
+// position relative to ENTRYPOINT, and the app only needs read access to /app.
+tasks.named<com.bmuschko.gradle.docker.tasks.image.Dockerfile>("dockerCreateDockerfile") {
+    runCommand("useradd --system --no-create-home --shell /usr/sbin/nologin portal")
+    user("portal")
+}
