@@ -6,10 +6,13 @@ import { test, expect } from '@playwright/test'
 // previously produced identical audit snapshots, were dropped by the SYS-048
 // no-op guard, and History stayed empty while the value persisted.
 //
-// Self-skip ladder (same convention as component-as-code.spec.ts): the spec
-// creates its own component via the v4 API, then probes the section-field
+// Feature gate (same spirit as component-as-code.spec.ts, but narrower): the
+// spec creates its own component via the v4 API, then probes the section-field
 // audit behaviour API-side first — against a CRS image that predates SYS-053
-// the probe finds no UPDATE row and the spec skips instead of failing.
+// the probe finds no UPDATE row and the spec skips instead of failing. Plain
+// HTTP failures of create/PATCH/audit are NOT skip conditions: those endpoints
+// exist on every CRS image the portal targets (the SPA itself uses them), so
+// a non-2xx there means a real stand problem (auth/CSRF/outage) and must fail.
 test.describe('Components Management Portal – Build tab edit lands in History (admin)', () => {
   // The BFF double-submits CSRF (CookieServerCsrfTokenRepository.withHttpOnlyFalse):
   // state-changing /rest calls must echo the XSRF-TOKEN cookie in X-XSRF-TOKEN,
@@ -30,7 +33,8 @@ test.describe('Components Management Portal – Build tab edit lands in History 
   let cleanup: { id: string; headers: Record<string, string> } | undefined
   test.afterEach(async ({ page }) => {
     if (!cleanup) return
-    await page.request.delete(`/rest/api/4/components/${cleanup.id}`, { headers: cleanup.headers })
+    const del = await page.request.delete(`/rest/api/4/components/${cleanup.id}`, { headers: cleanup.headers })
+    expect(del.ok(), `cleanup delete failed (HTTP ${del.status()}) for ${cleanup.id}`).toBeTruthy()
     cleanup = undefined
   })
 
@@ -50,7 +54,7 @@ test.describe('Components Management Portal – Build tab edit lands in History 
         baseConfiguration: { build: { buildSystem: 'MAVEN' } },
       },
     })
-    test.skip(!create.ok(), `cannot create component via v4 API (HTTP ${create.status()})`)
+    expect(create.ok(), `cannot create component via v4 API (HTTP ${create.status()})`).toBeTruthy()
     const created = await create.json()
     const id = created.id as string
     cleanup = { id, headers }
@@ -61,9 +65,9 @@ test.describe('Components Management Portal – Build tab edit lands in History 
       headers,
       data: { version: created.version, baseConfiguration: { build: { mavenVersion: '3.8' } } },
     })
-    test.skip(!probe.ok(), `component PATCH failed (HTTP ${probe.status()})`)
+    expect(probe.ok(), `component PATCH failed (HTTP ${probe.status()})`).toBeTruthy()
     const audit = await api.get(`/rest/api/4/audit/Component/${id}?page=0&size=50`)
-    test.skip(!audit.ok(), `audit endpoint not available (HTTP ${audit.status()})`)
+    expect(audit.ok(), `audit endpoint not available (HTTP ${audit.status()})`).toBeTruthy()
     const probeRows = ((await audit.json()).content ?? []) as Array<{ action: string }>
     test.skip(
       !probeRows.some((r) => r.action === 'UPDATE'),
