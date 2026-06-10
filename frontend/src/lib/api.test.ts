@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach, afterAll } from 'vitest'
-import { api, apiAbsolute, ApiError } from './api'
+import { api, apiAbsolute, ApiError, resetOidcRedirectGuardForTests } from './api'
 import { CONTINUE_PATH_STORAGE_KEY, OIDC_AUTHORIZE_PATH } from './auth'
 
 // jsdom's default window.location.assign cannot be re-spied across tests, so swap the
@@ -21,6 +21,7 @@ beforeEach(() => {
     value: { ...fakeLocation, pathname: '/components', search: '' },
   })
   sessionStorage.clear()
+  resetOidcRedirectGuardForTests()
 })
 
 afterEach(() => {
@@ -224,6 +225,28 @@ describe('api — 401 handling', () => {
 
     expect(err).toBeInstanceOf(ApiError)
     expect(err.status).toBe(401)
+    expect(assignSpy).toHaveBeenCalledOnce()
+    expect(assignSpy).toHaveBeenCalledWith(OIDC_AUTHORIZE_PATH)
+  })
+
+  it('redirects only once when several concurrent requests get 401 (post-redeploy race)', async () => {
+    // After a portal redeploy the in-memory BFF session is gone and every in-flight
+    // API call 401s at once. Each navigation to /oauth2/authorization/keycloak mints
+    // a fresh OAuth2 `state` and overwrites the previous one in the (new) server
+    // session, so concurrent redirects race the state Keycloak echoes back and the
+    // callback dies with authorization_request_not_found -> /login?error. Only the
+    // first 401 may navigate; the rest must just throw.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(() => Promise.resolve(new Response('nope', { status: 401 }))),
+    )
+
+    await Promise.all([
+      api.get('/components').catch(() => {}),
+      api.get('/components/foo').catch(() => {}),
+      apiAbsolute.get('/rest/api/2/common/supported-groups').catch(() => {}),
+    ])
+
     expect(assignSpy).toHaveBeenCalledOnce()
     expect(assignSpy).toHaveBeenCalledWith(OIDC_AUTHORIZE_PATH)
   })

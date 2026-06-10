@@ -32,6 +32,27 @@ export class ApiError extends Error {
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'TRACE'])
 
 /**
+ * One-shot latch: once any 401 has triggered the OIDC bounce, later 401s from
+ * concurrent in-flight requests must NOT navigate again. Every extra navigation
+ * to /oauth2/authorization/keycloak mints a fresh OAuth2 `state` and overwrites
+ * the one stored in the server-side session, so the `state` Keycloak echoes back
+ * may no longer match and the callback fails. The latch never needs unwinding in
+ * the browser — location.assign unloads the document. (If navigation is somehow
+ * cancelled, e.g. by a beforeunload handler, later 401s throw without re-bouncing
+ * until the user reloads — acceptable for that edge.)
+ */
+let oidcRedirectStarted = false
+
+/**
+ * Test-only: clears the one-shot OIDC redirect latch between test cases.
+ * Note: only resets THIS module instance — after vi.resetModules() a dynamically
+ * re-imported copy of api.ts has its own (fresh) latch this helper cannot reach.
+ */
+export function resetOidcRedirectGuardForTests(): void {
+  oidcRedirectStarted = false
+}
+
+/**
  * True when the current document URL is part of the OIDC redirect dance and we
  * should NOT bounce again on a 401 (would loop). We match exact paths plus a
  * trailing-slash prefix so unrelated SPA routes like /login-help, /logout-confirm
@@ -88,7 +109,8 @@ async function fetchAtUrl<T>(
     // custom query params we might attach here, so a query-param scheme would
     // not survive the round-trip).
     const pathname = window.location.pathname
-    if (!isInsideOidcFlow(pathname)) {
+    if (!oidcRedirectStarted && !isInsideOidcFlow(pathname)) {
+      oidcRedirectStarted = true
       rememberContinuePath(pathname + window.location.search)
       window.location.assign(OIDC_AUTHORIZE_PATH)
     }

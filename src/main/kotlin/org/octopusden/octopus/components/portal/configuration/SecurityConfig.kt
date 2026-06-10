@@ -13,6 +13,7 @@ import org.springframework.security.web.server.DelegatingServerAuthenticationEnt
 import org.springframework.security.web.server.SecurityWebFilterChain
 import org.springframework.security.web.server.ServerAuthenticationEntryPoint
 import org.springframework.security.web.server.authentication.RedirectServerAuthenticationEntryPoint
+import org.springframework.security.web.server.authentication.RedirectServerAuthenticationFailureHandler
 import org.springframework.security.web.server.authentication.logout.ServerLogoutSuccessHandler
 import org.springframework.security.web.server.csrf.CookieServerCsrfTokenRepository
 import org.springframework.security.web.server.csrf.CsrfToken
@@ -102,7 +103,22 @@ open class SecurityConfig(
                     ).permitAll()
                     .anyExchange().authenticated()
             }
-            .oauth2Login(Customizer.withDefaults())
+            .oauth2Login { login ->
+                // Self-healing on a broken OIDC callback. The default failure handler
+                // redirects to /login?error, which nothing serves (no controller, and
+                // SpaFallbackFilter deliberately excludes /login) — the user dead-ends
+                // on a Whitelabel 404. The common trigger is a portal redeploy: the
+                // in-memory session holding the saved authorization request is wiped,
+                // so the callback fails with authorization_request_not_found. A
+                // redirect to "/" instead restarts a clean flow: entry point ->
+                // Keycloak (SSO, no password prompt) -> logged back in.
+                //
+                // Known trade-off: if the callback fails PERMANENTLY (e.g. redirect_uri
+                // or realm misconfig) this loops / -> Keycloak -> / instead of parking
+                // on an error page. Acceptable for now — that class of failure is a
+                // deploy-config bug, loud in server logs either way.
+                login.authenticationFailureHandler(RedirectServerAuthenticationFailureHandler("/"))
+            }
             // Override the entry point AFTER oauth2Login registers its default so the
             // delegating one wins: it keeps browser OIDC redirect for navigations but
             // returns JSON 401 for API callers.
