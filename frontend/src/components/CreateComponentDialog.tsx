@@ -185,7 +185,10 @@ interface VcsDefaults {
 }
 
 function blankToUndefined(s: string | null | undefined): string | undefined {
-  return s?.trim() ? s : undefined
+  // typeof guard: component-defaults is an untyped Record cast to VcsDefaults —
+  // a malformed scalar (e.g. numeric vcs.tag) must degrade to the fallback, not
+  // throw inside the useForm defaultValues computation.
+  return typeof s === 'string' && s.trim() ? s.trim() : undefined
 }
 
 // Initial form values, computed synchronously from the source (copy mode) or
