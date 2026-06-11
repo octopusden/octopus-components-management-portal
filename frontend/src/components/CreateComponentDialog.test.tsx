@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { CreateComponentButton, CreateComponentDialog } from './CreateComponentDialog'
+import { TooltipProvider } from './ui/tooltip'
 import { ApiError } from '../lib/api'
 import type { ComponentDetail } from '../lib/types'
 
@@ -26,7 +27,9 @@ vi.mock('../hooks/use-toast', () => ({ useToast: () => ({ toast: mockToast }) })
 const mockLookupEmployee = vi.hoisted(() => vi.fn())
 
 vi.mock('../hooks/useFieldOptions', () => ({
-  useFieldOptions: vi.fn(() => ({ options: ['MAVEN', 'GRADLE'], isLoading: false })),
+  // BS2_0 is served by the meta endpoint but deprecated — the create form must
+  // filter it out of the dropdown. PROVIDED exercises the VCS-exempt branch.
+  useFieldOptions: vi.fn(() => ({ options: ['MAVEN', 'GRADLE', 'BS2_0', 'PROVIDED'], isLoading: false })),
 }))
 vi.mock('../hooks/useOwners', () => ({
   useOwners: vi.fn(() => ({ data: ['alice', 'inactive-user'] })),
@@ -38,13 +41,28 @@ vi.mock('../hooks/useEmployees', () => ({
 // Field-config drives which fields the create form renders. Default: no data →
 // every field editable (preserves the pre-gating test expectations).
 const mockUseFieldConfig = vi.fn(() => ({ data: undefined as unknown, isLoading: false, isError: false }))
-vi.mock('../hooks/useAdminConfig', () => ({ useFieldConfig: () => mockUseFieldConfig() }))
+// component-defaults feeds the VCS tag/branch prefill. The full query-result
+// shape matters: the dialog's ready-gate waits for isSuccess || isError.
+const COMPONENT_DEFAULTS_OK = {
+  data: { vcs: { tag: '$module-$version' } } as unknown,
+  isSuccess: true,
+  isError: false,
+  isLoading: false,
+}
+const mockUseComponentDefaults = vi.fn(() => COMPONENT_DEFAULTS_OK)
+vi.mock('../hooks/useAdminConfig', () => ({
+  useFieldConfig: () => mockUseFieldConfig(),
+  useComponentDefaults: () => mockUseComponentDefaults(),
+}))
 
 function renderWithProviders(ui: React.ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>{ui}</MemoryRouter>
+      {/* TooltipProvider mirrors the app-root provider required by FieldInfo. */}
+      <TooltipProvider>
+        <MemoryRouter>{ui}</MemoryRouter>
+      </TooltipProvider>
     </QueryClientProvider>,
   )
 }
@@ -111,6 +129,7 @@ beforeEach(() => {
   ])
   mockUseComponent.mockReset()
   mockUseFieldConfig.mockReturnValue({ data: undefined, isLoading: false, isError: false })
+  mockUseComponentDefaults.mockReturnValue(COMPONENT_DEFAULTS_OK)
   scratchDisabled()
 })
 
@@ -135,6 +154,10 @@ async function fillBaseFields(owner = 'alice') {
   // gate); fill it here for completeness so the created payload carries a value.
   await userEvent.type(screen.getByLabelText(/display name/i), 'Widget')
   await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
+  // MAVEN requires VCS → the block is visible; Jira Project Key is required.
+  // ^-anchored queries avoid matching FieldInfo's "Description for …" buttons.
+  await userEvent.type(screen.getByLabelText(/^vcs url/i), 'ssh://git@host/proj/repo.git')
+  await userEvent.type(screen.getByLabelText(/jira project key/i), 'WIDG')
   await commitComponentOwner(owner)
 }
 
@@ -255,12 +278,115 @@ describe('CreateComponentDialog — scratch mode base', () => {
     const arg = mockMutateAsync.mock.calls[0]![0]
     expect(arg).toMatchObject({
       name: 'widget',
-      baseConfiguration: { build: { buildSystem: 'MAVEN' } },
+      baseConfiguration: {
+        build: { buildSystem: 'MAVEN' },
+        jira: { projectKey: 'WIDG' },
+        vcsEntries: [
+          { vcsPath: 'ssh://git@host/proj/repo.git', tag: '$module-$version', branch: 'master' },
+        ],
+      },
       archived: false,
       distributionExplicit: false,
       distributionExternal: true,
     })
     expect(mockNavigate).toHaveBeenCalledWith('/components/comp-1')
+  })
+})
+
+describe('CreateComponentDialog — VCS block (legacy build-system rule)', () => {
+  async function open() {
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+  }
+
+  it('hides the VCS block until a build system is selected', async () => {
+    await open()
+    expect(screen.queryByLabelText(/^vcs url/i)).toBeNull()
+  })
+
+  it('shows the VCS block for MAVEN with tag prefilled from component-defaults and branch fallback "master"', async () => {
+    await open()
+    await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
+    expect((screen.getByLabelText(/^vcs url/i) as HTMLInputElement).value).toBe('')
+    expect((screen.getByLabelText(/^tag/i) as HTMLInputElement).value).toBe('$module-$version')
+    // component-defaults carries no vcs.branch → portal fallback.
+    expect((screen.getByLabelText(/^production branch/i) as HTMLInputElement).value).toBe('master')
+  })
+
+  it('hides the VCS block for the exempt build system PROVIDED', async () => {
+    await open()
+    await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'PROVIDED')
+    expect(screen.queryByLabelText(/^vcs url/i)).toBeNull()
+  })
+
+  it('does not offer deprecated BS2_0 in the build-system dropdown', async () => {
+    await open()
+    const select = screen.getByLabelText(/build system/i) as HTMLSelectElement
+    const values = Array.from(select.options).map((o) => o.value)
+    expect(values).not.toContain('BS2_0')
+    expect(values).toContain('MAVEN')
+  })
+
+  it('blocks submit with an inline error when VCS URL is empty for a VCS-requiring build system', async () => {
+    await open()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
+    await userEvent.type(screen.getByLabelText(/jira project key/i), 'WIDG')
+    await commitComponentOwner()
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(screen.getByText(/vcs url is required/i)).toBeDefined())
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('rejects a non-ssh URL with a format error', async () => {
+    await open()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
+    await userEvent.type(screen.getByLabelText(/^vcs url/i), 'https://host/proj/repo.git')
+    await userEvent.type(screen.getByLabelText(/jira project key/i), 'WIDG')
+    await commitComponentOwner()
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(screen.getByText(/must be an ssh:\/\/ url/i)).toBeDefined())
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('blocks submit when a prefilled tag/branch is cleared', async () => {
+    await open()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
+    await userEvent.type(screen.getByLabelText(/^vcs url/i), 'ssh://git@host/proj/repo.git')
+    await userEvent.clear(screen.getByLabelText(/^tag/i))
+    await userEvent.clear(screen.getByLabelText(/^production branch/i))
+    await userEvent.type(screen.getByLabelText(/jira project key/i), 'WIDG')
+    await commitComponentOwner()
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(screen.getByText(/tag is required/i)).toBeDefined())
+    await waitFor(() => expect(screen.getByText(/production branch is required/i)).toBeDefined())
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('blocks submit with an inline error when Jira Project Key is empty', async () => {
+    await open()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
+    await userEvent.type(screen.getByLabelText(/^vcs url/i), 'ssh://git@host/proj/repo.git')
+    await commitComponentOwner()
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(screen.getByText(/jira project key is required/i)).toBeDefined())
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('still mounts the form when the component-defaults fetch fails (fallbacks: tag empty, branch master)', async () => {
+    mockUseComponentDefaults.mockReturnValue({
+      data: undefined as unknown,
+      isSuccess: false,
+      isError: true,
+      isLoading: false,
+    })
+    await open()
+    await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
+    expect((screen.getByLabelText(/^tag/i) as HTMLInputElement).value).toBe('')
+    expect((screen.getByLabelText(/^production branch/i) as HTMLInputElement).value).toBe('master')
   })
 })
 
@@ -360,13 +486,22 @@ describe('CreateComponentDialog — copy mode (sourceId)', () => {
     mockUseComponent.mockReturnValue({ data: source, isLoading: false, error: null })
   }
 
+  // The default copy source builds with GRADLE (VCS-requiring) and the Jira key
+  // is never copied, so every submitting test must supply both.
+  async function fillCopyRequired() {
+    await userEvent.type(screen.getByLabelText(/^vcs url/i), 'ssh://git@host/clone/repo.git')
+    await userEvent.type(screen.getByLabelText(/jira project key/i), 'CLONE')
+  }
+
   function renderCopy(onOpenChange = vi.fn()) {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const view = render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <CreateComponentDialog sourceId="c-1" open onOpenChange={onOpenChange} />
-        </MemoryRouter>
+        <TooltipProvider>
+          <MemoryRouter>
+            <CreateComponentDialog sourceId="c-1" open onOpenChange={onOpenChange} />
+          </MemoryRouter>
+        </TooltipProvider>
       </QueryClientProvider>,
     )
     return { onOpenChange, view }
@@ -398,9 +533,11 @@ describe('CreateComponentDialog — copy mode (sourceId)', () => {
     mockUseComponent.mockReturnValue({ data: undefined, isLoading: false, error: new Error('boom') })
     view.rerender(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <MemoryRouter>
-          <CreateComponentDialog sourceId="c-1" open onOpenChange={vi.fn()} />
-        </MemoryRouter>
+        <TooltipProvider>
+          <MemoryRouter>
+            <CreateComponentDialog sourceId="c-1" open onOpenChange={vi.fn()} />
+          </MemoryRouter>
+        </TooltipProvider>
       </QueryClientProvider>,
     )
     expect(screen.getByText(/failed to load/i)).toBeDefined()
@@ -417,9 +554,11 @@ describe('CreateComponentDialog — copy mode (sourceId)', () => {
     loaded(makeSource())
     view.rerender(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <MemoryRouter>
-          <CreateComponentDialog sourceId="c-1" open onOpenChange={onOpenChange} />
-        </MemoryRouter>
+        <TooltipProvider>
+          <MemoryRouter>
+            <CreateComponentDialog sourceId="c-1" open onOpenChange={onOpenChange} />
+          </MemoryRouter>
+        </TooltipProvider>
       </QueryClientProvider>,
     )
     expect((screen.getByLabelText(/component key/i) as HTMLInputElement).value).toBe('svc-beta')
@@ -460,6 +599,7 @@ describe('CreateComponentDialog — copy mode (sourceId)', () => {
     await userEvent.type(screen.getByLabelText(/display name/i), 'Svc Clone')
     await userEvent.type(screen.getByLabelText('Group ID'), 'org.acme')
     await userEvent.type(screen.getByLabelText('Artifact ID'), 'svc')
+    await fillCopyRequired()
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() => expect(screen.getByText(/must define at least one distribution coordinate/i)).toBeDefined())
     expect(mockToast).not.toHaveBeenCalled()
@@ -471,6 +611,7 @@ describe('CreateComponentDialog — copy mode (sourceId)', () => {
     renderCopy()
     await userEvent.type(screen.getByLabelText(/component key/i), 'svc-alpha')
     await userEvent.type(screen.getByLabelText(/display name/i), 'Svc Alpha')
+    await fillCopyRequired()
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() =>
       expect(mockToast).toHaveBeenCalledWith(
@@ -485,10 +626,91 @@ describe('CreateComponentDialog — copy mode (sourceId)', () => {
     const { onOpenChange } = renderCopy()
     await userEvent.type(screen.getByLabelText(/component key/i), 'svc-clone')
     await userEvent.type(screen.getByLabelText(/display name/i), 'Svc Clone')
+    await fillCopyRequired()
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/components/comp-9'))
     const arg = mockMutateAsync.mock.calls[0]![0]
-    expect(arg).toMatchObject({ name: 'svc-clone', labels: ['backend'], baseConfiguration: { build: { buildSystem: 'GRADLE' } } })
+    expect(arg).toMatchObject({
+      name: 'svc-clone',
+      labels: ['backend'],
+      baseConfiguration: {
+        build: { buildSystem: 'GRADLE' },
+        vcsEntries: [{ vcsPath: 'ssh://git@host/clone/repo.git' }],
+      },
+    })
     expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+
+  it('prefills tag/branch from the source BASE VCS entry; vcsUrl stays empty', async () => {
+    loaded(
+      makeSource({
+        configurations: [
+          {
+            ...makeSource().configurations[0]!,
+            vcsEntries: [
+              {
+                id: 'v-1',
+                name: null,
+                vcsPath: 'ssh://git@host/src/alpha.git',
+                branch: 'main',
+                tag: 'alpha-$version',
+                hotfixBranch: null,
+                repositoryType: 'GIT',
+                sortOrder: 0,
+              },
+            ],
+          },
+        ],
+      }),
+    )
+    renderCopy()
+    await waitFor(() =>
+      expect((screen.getByLabelText(/^tag/i) as HTMLInputElement).value).toBe('alpha-$version'),
+    )
+    expect((screen.getByLabelText(/^production branch/i) as HTMLInputElement).value).toBe('main')
+    expect((screen.getByLabelText(/^vcs url/i) as HTMLInputElement).value).toBe('')
+  })
+
+  it('falls back to defaults when the source VCS entry has blank tag/branch', async () => {
+    loaded(
+      makeSource({
+        configurations: [
+          {
+            ...makeSource().configurations[0]!,
+            vcsEntries: [
+              {
+                id: 'v-1',
+                name: null,
+                vcsPath: 'ssh://git@host/src/alpha.git',
+                branch: '',
+                tag: '',
+                hotfixBranch: null,
+                repositoryType: 'GIT',
+                sortOrder: 0,
+              },
+            ],
+          },
+        ],
+      }),
+    )
+    renderCopy()
+    await waitFor(() =>
+      expect((screen.getByLabelText(/^tag/i) as HTMLInputElement).value).toBe('$module-$version'),
+    )
+    expect((screen.getByLabelText(/^production branch/i) as HTMLInputElement).value).toBe('master')
+  })
+
+  it('does not seed deprecated BS2_0 from the source — build system starts empty', async () => {
+    loaded(
+      makeSource({
+        configurations: [
+          { ...makeSource().configurations[0]!, build: { buildSystem: 'BS2_0' } },
+        ],
+      }),
+    )
+    renderCopy()
+    await waitFor(() =>
+      expect((screen.getByLabelText(/build system/i) as HTMLSelectElement).value).toBe(''),
+    )
   })
 })

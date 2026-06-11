@@ -13,10 +13,18 @@ export function useFieldConfig() {
   })
 }
 
-export function useComponentDefaults() {
+export function useComponentDefaults(options: { enabled?: boolean; retry?: boolean | number } = {}) {
+  const { enabled = true, retry } = options
   return useQuery({
     queryKey: ['config', 'component-defaults'],
     queryFn: () => api.get<Record<string, unknown>>('/config/component-defaults'),
+    enabled,
+    // Defaults change only via service-config reload; callers that gate UI on
+    // this query (create dialog) shouldn't refetch on every open.
+    staleTime: 5 * 60 * 1000,
+    // `retry: false` lets a gating caller fall back immediately instead of
+    // waiting out the QueryClient's global retry.
+    ...(retry !== undefined ? { retry } : {}),
   })
 }
 

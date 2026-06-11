@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import {
   mockComponentList,
+  mockComponentDefaults,
   mockFieldConfig,
   mockOwners,
   mockLabels,
@@ -127,6 +128,9 @@ async function setupRoutes(page: Page, sourceOverride: Record<string, unknown> =
 
   await mockComponentList(page, summaryPage())
   await mockFieldConfig(page, {})
+  // The create dialog gates its form mount on component-defaults and prefills
+  // the VCS tag from it.
+  await mockComponentDefaults(page)
   await mockOwners(page, ['owner-oscar'])
   await mockLabels(page, ['backend'])
   // The unified dialog reads build systems via useFieldOptions('buildSystem');
@@ -211,8 +215,18 @@ test.describe('Copy component — admin smoke', () => {
     await expect(dialog.getByLabel(/display name/i)).toHaveValue('')
     await expect(dialog.getByLabel(/component key/i)).toHaveValue('')
 
+    // GRADLE requires VCS → the block is visible. Tag/branch are reusable
+    // format patterns: branch prefills from the source BASE VCS entry ('main'),
+    // tag (absent on the source entry) from component-defaults. The URL is
+    // unique and starts empty. (^-anchored labels skip the FieldInfo buttons.)
+    await expect(dialog.getByLabel(/^vcs url/i)).toHaveValue('')
+    await expect(dialog.getByLabel(/^tag/i)).toHaveValue('$module-$version')
+    await expect(dialog.getByLabel(/^production branch/i)).toHaveValue('main')
+
     await dialog.getByLabel(/component key/i).fill('svc-copy-clone')
     await dialog.getByLabel(/display name/i).fill('Copy Clone Name')
+    await dialog.getByLabel(/^vcs url/i).fill('ssh://git@host/proj/clone-repo.git')
+    await dialog.getByLabel(/jira project key/i).fill('CLONE')
     await dialog.getByRole('button', { name: 'Create' }).click()
 
     // Navigates to the created component.
@@ -244,16 +258,21 @@ test.describe('Copy component — admin smoke', () => {
       teamcityProjects: [],
       baseConfiguration: {
         build: { buildSystem: 'GRADLE', gradleVersion: '8.5' },
-        // jira.projectKey stripped; version formats kept.
-        jira: { majorVersionFormat: '%d.%d' },
+        // source jira.projectKey stripped; the form's key wins. Version formats kept.
+        jira: { majorVersionFormat: '%d.%d', projectKey: 'CLONE' },
         requiredTools: ['tool-a'],
+        // The VCS entry is form-driven: URL typed fresh, branch from the
+        // source entry, tag from component-defaults. The source vcsPath
+        // ('proj/src-repo') must never leak into the payload.
+        vcsEntries: [
+          { vcsPath: 'ssh://git@host/proj/clone-repo.git', tag: '$module-$version', branch: 'main' },
+        ],
       },
     })
     const baseConfiguration = body.baseConfiguration as Record<string, unknown>
-    for (const key of ['vcsEntries', 'mavenArtifacts', 'versionRange']) {
+    for (const key of ['mavenArtifacts', 'versionRange']) {
       expect(key in baseConfiguration, `${key} must not be copied`).toBe(false)
     }
-    expect((baseConfiguration.jira as Record<string, unknown>).projectKey).toBeUndefined()
     expect('jiraDisplayName' in body, 'jiraDisplayName must not be copied').toBe(false)
     expect('group' in body, 'group is migration-owned').toBe(false)
   })
@@ -294,6 +313,8 @@ test.describe('Copy component — admin smoke', () => {
 
     await dialog.getByLabel(/component key/i).fill('svc-copy-clone')
     await dialog.getByLabel(/display name/i).fill('Copy Clone Name')
+    await dialog.getByLabel(/^vcs url/i).fill('ssh://git@host/proj/clone-repo.git')
+    await dialog.getByLabel(/jira project key/i).fill('CLONE')
     // Fill a maven coordinate (default type).
     await dialog.getByLabel('Group ID').fill('org.acme')
     await dialog.getByLabel('Artifact ID').fill('svc')
@@ -330,6 +351,12 @@ test.describe('Create component from scratch — admin smoke', () => {
     // Build System is a native <select> — selectOption is unambiguous and
     // closes cleanly (no portal overlay to block later clicks).
     await dialog.getByLabel(/build system/i).selectOption('MAVEN')
+    // MAVEN requires VCS → block appears, tag prefilled from component-defaults
+    // and branch from the portal fallback; only the URL needs typing.
+    await expect(dialog.getByLabel(/^tag/i)).toHaveValue('$module-$version')
+    await expect(dialog.getByLabel(/^production branch/i)).toHaveValue('master')
+    await dialog.getByLabel(/^vcs url/i).fill('ssh://git@host/proj/scratch-repo.git')
+    await dialog.getByLabel(/jira project key/i).fill('SCR')
     const ownerInput = dialog.getByPlaceholder('AD userkey')
     await ownerInput.fill('owner-oscar')
     // Click the suggestion to commit + close the popup. (Enter would submit the
@@ -377,6 +404,10 @@ test.describe('Create component from scratch — admin smoke', () => {
       baseConfiguration: {
         build: { buildSystem: 'MAVEN' },
         dockerImages: [{ imageName: 'acme/scratch' }],
+        jira: { projectKey: 'SCR' },
+        vcsEntries: [
+          { vcsPath: 'ssh://git@host/proj/scratch-repo.git', tag: '$module-$version', branch: 'master' },
+        ],
       },
     })
   })
