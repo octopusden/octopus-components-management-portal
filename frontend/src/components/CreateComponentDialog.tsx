@@ -374,6 +374,7 @@ function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateCom
   const securityChampion = watch('securityChampion')
   const coordinateType = watch('coordinate.type')
   const nameValue = watch('name')
+  const showVcs = vcsBlockApplies(watch('buildSystem'))
 
   // versionPrefix derived-default: in scratch mode mirror the component key until the user
   // edits the field. Copy mode prefills from the source (initialValues), so skip mirroring there.
@@ -512,7 +513,7 @@ function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateCom
           build system outside the exempt set, so surface it at create time
           instead of bouncing on the editor afterwards. Tag/branch arrive
           prefilled (component-defaults / source), only the URL is typed. */}
-      {vcsBlockApplies(watch('buildSystem')) && (
+      {showVcs && (
         <fieldset className="space-y-4 rounded-md border border-border p-3">
           <legend className="px-1 text-xs font-medium text-muted-foreground">VCS settings</legend>
 
@@ -784,14 +785,14 @@ function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateCom
         <div className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground space-y-1">
           <p>
             <span className="font-medium text-foreground">Included:</span> general details, people,
-            labels, docs, security groups, the base build / escrow / Jira configuration, and the
-            VCS tag / production branch formats (prefilled above).
+            labels, docs, security groups, the base build / escrow / Jira configuration
+            {showVcs && ', and the VCS tag / production branch formats (prefilled above)'}.
           </p>
           <p>
             <span className="font-medium text-foreground">Excluded:</span> other artifacts,
             TeamCity projects, and configuration overrides — set these on the new component
-            afterwards. The VCS URL and Jira project key are unique per component: enter new
-            values above.
+            afterwards. The {showVcs && 'VCS URL and '}Jira project key{' '}
+            {showVcs ? 'are' : 'is'} unique per component: enter new values above.
           </p>
         </div>
       )}

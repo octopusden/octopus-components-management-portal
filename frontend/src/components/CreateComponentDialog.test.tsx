@@ -361,7 +361,7 @@ describe('CreateComponentDialog — VCS block (legacy build-system rule)', () =>
     await commitComponentOwner()
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() => expect(screen.getByText(/tag is required/i)).toBeDefined())
-    expect(screen.getByText(/production branch is required/i)).toBeDefined()
+    await waitFor(() => expect(screen.getByText(/production branch is required/i)).toBeDefined())
     expect(mockMutateAsync).not.toHaveBeenCalled()
   })
 
