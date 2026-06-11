@@ -17,6 +17,7 @@ const COMPONENTS_OWNERS = '**/rest/api/4/components/meta/owners'
 const COMPONENTS_LABELS = '**/rest/api/4/components/meta/labels'
 const AUDIT_RECENT = '**/rest/api/4/audit/recent?**'
 const FIELD_CONFIG = '**/rest/api/4/config/field-config'
+const COMPONENT_DEFAULTS = '**/rest/api/4/config/component-defaults'
 
 function jsonRoute(route: Route, status: number, body: unknown) {
   void route.fulfill({
@@ -66,6 +67,19 @@ export async function mockLabels(page: Page, fixture: string[] = []) {
 /** Mock GET /config/field-config with a sectioned-shape fixture. */
 export async function mockFieldConfig(page: Page, fixture: unknown) {
   await page.route(FIELD_CONFIG, (route) => jsonRoute(route, 200, fixture))
+}
+
+/**
+ * Mock GET /config/component-defaults — the create dialog gates its form mount
+ * on this query and prefills the VCS tag/branch from `vcs`. The default
+ * fixture mirrors the CRS application.yml shipping default (tag only; branch
+ * has no config default and falls back to 'master' in the portal).
+ */
+export async function mockComponentDefaults(
+  page: Page,
+  fixture: unknown = { vcs: { tag: '$module-$version' } },
+) {
+  await page.route(COMPONENT_DEFAULTS, (route) => jsonRoute(route, 200, fixture))
 }
 
 /** Mock GET /components (list) with a 500 to drive InlineError state. */
