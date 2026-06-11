@@ -2,9 +2,17 @@
 
 ## Status
 
-Open. **Deadline:** 2026-05-07 (current cert expires).
+**Done.** Both prod (`ocpm`) and QA (`ocpd`) are served via an OKD `Ingress` referencing the shared wildcard TLS Secret; the cert auto-rotates with the Secret, no per-renewal redeploy.
 
-This work was previously tracked as a sub-bullet under step 8 of [`docs/onboarding/components-management-portal.md`](../onboarding/components-management-portal.md). It is broken out into its own tech-debt entry because (a) it is a one-off operational deliverable rather than an onboarding step, and (b) the deadline makes it worth tracking explicitly.
+This work was previously tracked as a sub-bullet under step 8 of [`docs/onboarding/components-management-portal.md`](../onboarding/components-management-portal.md). It was broken out into its own tech-debt entry because (a) it is a one-off operational deliverable rather than an onboarding step, and (b) the deadline made it worth tracking explicitly.
+
+## Resolution
+
+- The wildcard TLS Secret already existed and was current on `ocpm` — no platform-team provisioning was needed (Work item 1 was a no-op).
+- Applied an OKD `Ingress` (host = prod portal domain, `secretName` = shared wildcard) mirroring the QA Ingress, confirmed the synthesized Route was admitted and serving the wildcard cert, then deleted the old inline-TLS `Route`.
+- Prod HTTPS now serves the shared wildcard cert and auto-rotates. Note: the prod inline cert had actually **expired** before the cutover (the portal was down on TLS), so this turned out to be a recovery, not just preventive.
+- **Residual:** the Ingress was applied imperatively (`oc apply`), not committed as a manifest (the QA Ingress is likewise not in-repo). If we want declarative TLS, add the Ingress manifests under `infra/okd/` and/or have the Helm chart render an Ingress instead of an inline-TLS Route. Tracked loosely; not blocking.
+- The reusable lesson (use Ingress + `secretName`, never inline cert/key into a Route) now lives in the `service-deployment` okd-onboard skill (Step 8) and `keycloak-authentication.md`.
 
 ## Context
 
