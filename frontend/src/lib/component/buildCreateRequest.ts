@@ -13,6 +13,34 @@ export type PackageType = 'DEB' | 'RPM'
 
 export type CoordinateType = 'maven' | 'docker' | 'package'
 
+// Deprecated build systems are not offered for NEW components (the editor of
+// existing components is unaffected).
+export const DEPRECATED_BUILD_SYSTEMS: ReadonlySet<string> = new Set(['BS2_0'])
+
+// Legacy EscrowConfigValidator rule: VCS roots are mandatory for every build
+// system except these. BS2_0 is listed defensively — it is deprecated and
+// filtered out of the create dropdown (legacy demanded a FAKE vcs root for it,
+// which the portal never sends).
+export const VCS_HIDDEN_BUILD_SYSTEMS: ReadonlySet<string> = new Set([
+  'BS2_0',
+  'PROVIDED',
+  'ESCROW_PROVIDED_MANUALLY',
+  'ESCROW_NOT_SUPPORTED',
+  'WHISKEY',
+])
+
+// An unknown/future build system requires VCS — the legacy "everything else"
+// default.
+export function vcsBlockApplies(buildSystem: string): boolean {
+  return buildSystem !== '' && !VCS_HIDDEN_BUILD_SYSTEMS.has(buildSystem)
+}
+
+// component-defaults has no vcs.branch yet (only vcs.tag); until service-config
+// grows one, the production-branch prefill falls back here.
+export const FALLBACK_VCS_BRANCH = 'master'
+
+export const SSH_VCS_URL_REGEX = /^ssh:\/\/(?:[^@/\s]+@)?[^/\s:]+(?::\d+)?\/\S+$/
+
 // The unified create-form value shape, consumed by both CreateComponentDialog
 // modes (scratch / "Create Similar") and mapped to ComponentCreateRequest here.
 export interface CreateFormValues {
@@ -31,6 +59,13 @@ export interface CreateFormValues {
   // copied); versionPrefix defaults to the component key in scratch mode (mirrored in the form).
   jiraProjectKey: string
   versionPrefix: string
+  // VCS entry fields, only emitted when vcsBlockApplies(buildSystem). vcsUrl is
+  // unique per component (never copied); tag/branch are reusable format
+  // patterns prefilled from component-defaults (or the source BASE row in copy
+  // mode).
+  vcsUrl: string
+  vcsTag: string
+  vcsBranch: string
   // Exactly one distribution coordinate (more are added later in the
   // Distribution tab). Only emitted when explicit+external.
   coordinate: {
@@ -177,6 +212,17 @@ export function buildCreateRequest(
   // The form's distribution coordinate is only meaningful (and only required)
   // when explicit+external; otherwise no coordinate lists are sent.
   if (gated) Object.assign(baseConfiguration, coordinatePatch(form.coordinate))
+  // VCS entry comes from the FORM ONLY (never the source — the repository is
+  // unique per component) and only for VCS-requiring build systems.
+  if (vcsBlockApplies(form.buildSystem)) {
+    baseConfiguration.vcsEntries = [
+      {
+        vcsPath: form.vcsUrl.trim(),
+        tag: form.vcsTag.trim() || undefined,
+        branch: form.vcsBranch.trim() || undefined,
+      },
+    ]
+  }
 
   req.baseConfiguration = baseConfiguration
 

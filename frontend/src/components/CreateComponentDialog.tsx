@@ -21,7 +21,7 @@ import {
   DialogClose,
 } from './ui/dialog'
 import { useFieldOptions } from '../hooks/useFieldOptions'
-import { useFieldConfig } from '../hooks/useAdminConfig'
+import { useFieldConfig, useComponentDefaults } from '../hooks/useAdminConfig'
 import { visibilityFor } from '../hooks/useFieldConfig'
 import { useComponent, useCreateComponent } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
@@ -29,7 +29,16 @@ import { ApiError } from '../lib/api'
 import { parseServerFieldErrors } from '../lib/serverErrors'
 import { lookupEmployee, useEmployeeStatuses } from '../hooks/useEmployees'
 import { selectBaseRow } from '../lib/api/baseRow'
-import { buildCreateRequest, type CreateFormValues } from '../lib/component/buildCreateRequest'
+import {
+  buildCreateRequest,
+  vcsBlockApplies,
+  DEPRECATED_BUILD_SYSTEMS,
+  FALLBACK_VCS_BRANCH,
+  SSH_VCS_URL_REGEX,
+  type CreateFormValues,
+} from '../lib/component/buildCreateRequest'
+import { FieldLabelText } from './ui/FieldLabelText'
+import { FieldInfo } from './ui/FieldInfo'
 import type { ComponentDetail } from '../lib/types'
 
 const NAME_REGEX = /^[a-zA-Z0-9_\-./]+$/
@@ -62,8 +71,11 @@ function makeCreateSchema(editable: (field: string) => boolean) {
     releaseManager: z.array(z.string()),
     securityChampion: z.array(z.string()),
     copyright: z.string(),
-    jiraProjectKey: z.string(),
+    jiraProjectKey: z.string().trim().min(1, 'Jira Project Key is required'),
     versionPrefix: z.string(),
+    vcsUrl: z.string(),
+    vcsTag: z.string(),
+    vcsBranch: z.string(),
     coordinate: z.object({
       type: z.enum(['maven', 'docker', 'package']),
       groupPattern: z.string(),
@@ -74,6 +86,34 @@ function makeCreateSchema(editable: (field: string) => boolean) {
     }),
   })
   .superRefine((v, ctx) => {
+    // Legacy EscrowConfigValidator rule, lost in the DSL→portal migration: a
+    // VCS root is mandatory for every build system outside the exempt set.
+    if (vcsBlockApplies(v.buildSystem)) {
+      const url = v.vcsUrl.trim()
+      if (!url) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['vcsUrl'],
+          message: 'VCS URL is required for this build system',
+        })
+      } else if (!SSH_VCS_URL_REGEX.test(url)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['vcsUrl'],
+          message: 'VCS URL must be an ssh:// URL, e.g. ssh://git@host/path/repo.git',
+        })
+      }
+      if (!v.vcsTag.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['vcsTag'], message: 'Tag is required' })
+      }
+      if (!v.vcsBranch.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['vcsBranch'],
+          message: 'Production branch is required',
+        })
+      }
+    }
     if (!(v.distributionExplicit && v.distributionExternal)) return
     if (editable('displayName') && !v.displayName.trim()) {
       ctx.addIssue({
@@ -131,7 +171,21 @@ const SCRATCH_DEFAULTS: CreateFormValues = {
   copyright: '',
   jiraProjectKey: '',
   versionPrefix: '',
+  vcsUrl: '',
+  vcsTag: '',
+  vcsBranch: '',
   coordinate: EMPTY_COORDINATE,
+}
+
+// vcs.tag / vcs.branch read from GET /config/component-defaults (absent fields
+// stay undefined — e.g. vcs.branch has no config default yet).
+interface VcsDefaults {
+  tag?: string
+  branch?: string
+}
+
+function blankToUndefined(s: string | null | undefined): string | undefined {
+  return s?.trim() ? s : undefined
 }
 
 // Initial form values, computed synchronously from the source (copy mode) or
@@ -140,13 +194,27 @@ const SCRATCH_DEFAULTS: CreateFormValues = {
 // reset/`values` after the source arrives — keeps the buildSystem EnumSelect in
 // step with the form from its first render and sidesteps a browser-only race
 // where a post-load reset left the field empty.
-function initialValues(source: ComponentDetail | null): CreateFormValues {
-  if (!source) return SCRATCH_DEFAULTS
+function initialValues(source: ComponentDetail | null, vcsDefaults: VcsDefaults): CreateFormValues {
+  // Tag/branch are reusable format patterns (like versionPrefix): copy mode
+  // prefers the source's BASE VCS entry, then component-defaults, then the
+  // hardcoded branch fallback. vcsUrl is unique per component — never seeded.
+  // Seeded unconditionally even when the initial build system is VCS-exempt:
+  // visibility is purely a render/validation gate, so a later build-system
+  // switch finds the prefill already in place.
+  const baseVcs = source ? selectBaseRow(source)?.vcsEntries?.[0] : undefined
+  const vcsTag = blankToUndefined(baseVcs?.tag) ?? blankToUndefined(vcsDefaults.tag) ?? ''
+  const vcsBranch =
+    blankToUndefined(baseVcs?.branch) ?? blankToUndefined(vcsDefaults.branch) ?? FALLBACK_VCS_BRANCH
+  if (!source) return { ...SCRATCH_DEFAULTS, vcsTag, vcsBranch }
+  // Deprecated build systems are filtered out of the dropdown, so seeding one
+  // would desync the native <select> (no matching option) from the form value —
+  // leave it empty and let the user pick a current system.
+  const sourceBuildSystem = selectBaseRow(source)?.build?.buildSystem ?? ''
   return {
     ...SCRATCH_DEFAULTS,
     // displayName is NOT prefilled from the source: it is unique, so copying it would always
     // collide. The user supplies a fresh one (or, when the field is hidden, CRS defaults to key).
-    buildSystem: selectBaseRow(source)?.build?.buildSystem ?? '',
+    buildSystem: DEPRECATED_BUILD_SYSTEMS.has(sourceBuildSystem) ? '' : sourceBuildSystem,
     componentOwner: source.componentOwner ?? '',
     distributionExplicit: source.distributionExplicit ?? false,
     distributionExternal: source.distributionExternal ?? false,
@@ -156,6 +224,8 @@ function initialValues(source: ComponentDetail | null): CreateFormValues {
     // jiraProjectKey is unique per component → never copied (left blank). versionPrefix is a
     // reusable format, so it IS prefilled from the source's BASE jira config.
     versionPrefix: selectBaseRow(source)?.jira?.versionPrefix ?? '',
+    vcsTag,
+    vcsBranch,
   }
 }
 
@@ -177,7 +247,12 @@ export function CreateComponentDialog({ open, onOpenChange, sourceId }: CreateCo
   // useComponent('') is disabled, so scratch mode and the closed dialog issue
   // no request.
   const { data: source, error } = useComponent(open && sourceId ? sourceId : '')
-  const ready = !isCopy || (!!source && !error)
+  // component-defaults feeds the VCS tag/branch prefill. retry:false so an
+  // outage falls straight to the fallbacks (isError still mounts the form)
+  // instead of holding the skeleton through the QueryClient's global retry.
+  const defaults = useComponentDefaults({ enabled: open, retry: false })
+  const vcsDefaults = ((defaults.data as { vcs?: VcsDefaults } | undefined)?.vcs ?? {}) as VcsDefaults
+  const ready = (!isCopy || (!!source && !error)) && (defaults.isSuccess || defaults.isError)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -217,8 +292,10 @@ export function CreateComponentDialog({ open, onOpenChange, sourceId }: CreateCo
             </DialogFooter>
           </>
         ) : !ready ? (
-          // Copy mode, source still loading: skeleton + disabled Create so the
-          // form mounts only once its initial values are known.
+          // Source (copy mode) or component-defaults still loading: skeleton +
+          // disabled Create so the form mounts only once its initial values
+          // are known. Scratch mode pays this only on the first open per
+          // staleTime window.
           <div className="space-y-4">
             <SkeletonBlock className="h-9 w-full" />
             <SkeletonBlock className="h-9 w-full" />
@@ -241,6 +318,7 @@ export function CreateComponentDialog({ open, onOpenChange, sourceId }: CreateCo
             key={source?.id ?? 'scratch'}
             source={source ?? null}
             isCopy={isCopy}
+            vcsDefaults={vcsDefaults}
             onClose={() => onOpenChange(false)}
           />
         )}
@@ -252,10 +330,11 @@ export function CreateComponentDialog({ open, onOpenChange, sourceId }: CreateCo
 interface CreateComponentFormProps {
   source: ComponentDetail | null
   isCopy: boolean
+  vcsDefaults: VcsDefaults
   onClose: () => void
 }
 
-function CreateComponentForm({ source, isCopy, onClose }: CreateComponentFormProps) {
+function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateComponentFormProps) {
   const navigate = useNavigate()
   const createMutation = useCreateComponent()
   const { toast } = useToast()
@@ -281,10 +360,12 @@ function CreateComponentForm({ source, isCopy, onClose }: CreateComponentFormPro
     formState: { errors, isSubmitting },
   } = useForm<CreateFormValues>({
     resolver: zodResolver(schema),
-    defaultValues: initialValues(source),
+    defaultValues: initialValues(source, vcsDefaults),
   })
 
   const { options: buildSystems } = useFieldOptions('buildSystem')
+  // Deprecated systems (BS2_0) are not offered for new components.
+  const offeredBuildSystems = buildSystems.filter((bs) => !DEPRECATED_BUILD_SYSTEMS.has(bs))
   const componentOwnerValue = watch('componentOwner')
   const explicit = watch('distributionExplicit')
   const external = watch('distributionExternal')
@@ -414,7 +495,7 @@ function CreateComponentForm({ source, isCopy, onClose }: CreateComponentFormPro
           {...register('buildSystem')}
         >
           <option value="">Select build system</option>
-          {buildSystems.map((bs) => (
+          {offeredBuildSystems.map((bs) => (
             <option key={bs} value={bs}>
               {bs}
             </option>
@@ -426,6 +507,87 @@ function CreateComponentForm({ source, isCopy, onClose }: CreateComponentFormPro
           </p>
         )}
       </div>
+
+      {/* Legacy EscrowConfigValidator rule: a VCS root is mandatory for every
+          build system outside the exempt set, so surface it at create time
+          instead of bouncing on the editor afterwards. Tag/branch arrive
+          prefilled (component-defaults / source), only the URL is typed. */}
+      {vcsBlockApplies(watch('buildSystem')) && (
+        <fieldset className="space-y-4 rounded-md border border-border p-3">
+          <legend className="px-1 text-xs font-medium text-muted-foreground">VCS settings</legend>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1">
+              <Label htmlFor="create-vcsUrl">
+                <FieldLabelText path="vcs.vcsPath" fallback="VCS URL" />{' '}
+                <span className="text-destructive">*</span>
+              </Label>
+              <FieldInfo path="vcs.vcsPath" label="VCS URL" />
+            </div>
+            <Input
+              id="create-vcsUrl"
+              className="font-mono text-xs"
+              placeholder="ssh://git@host/path/repo.git"
+              aria-required
+              aria-invalid={Boolean(errors.vcsUrl)}
+              aria-describedby={errors.vcsUrl ? 'create-vcsUrl-error' : undefined}
+              {...register('vcsUrl')}
+            />
+            {errors.vcsUrl && (
+              <p id="create-vcsUrl-error" className="text-xs text-destructive">
+                {errors.vcsUrl.message}
+              </p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1">
+                <Label htmlFor="create-vcsTag">
+                  <FieldLabelText path="vcs.tag" fallback="Tag" />{' '}
+                  <span className="text-destructive">*</span>
+                </Label>
+                <FieldInfo path="vcs.tag" label="Tag" />
+              </div>
+              <Input
+                id="create-vcsTag"
+                className="font-mono text-xs"
+                aria-required
+                aria-invalid={Boolean(errors.vcsTag)}
+                aria-describedby={errors.vcsTag ? 'create-vcsTag-error' : undefined}
+                {...register('vcsTag')}
+              />
+              {errors.vcsTag && (
+                <p id="create-vcsTag-error" className="text-xs text-destructive">
+                  {errors.vcsTag.message}
+                </p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1">
+                <Label htmlFor="create-vcsBranch">
+                  <FieldLabelText path="vcs.branch" fallback="Production branch" />{' '}
+                  <span className="text-destructive">*</span>
+                </Label>
+                <FieldInfo path="vcs.branch" label="Production branch" />
+              </div>
+              <Input
+                id="create-vcsBranch"
+                className="font-mono text-xs"
+                aria-required
+                aria-invalid={Boolean(errors.vcsBranch)}
+                aria-describedby={errors.vcsBranch ? 'create-vcsBranch-error' : undefined}
+                {...register('vcsBranch')}
+              />
+              {errors.vcsBranch && (
+                <p id="create-vcsBranch-error" className="text-xs text-destructive">
+                  {errors.vcsBranch.message}
+                </p>
+              )}
+            </div>
+          </div>
+        </fieldset>
+      )}
 
       <div className="space-y-1.5">
         <Label htmlFor="create-componentOwner">
@@ -448,8 +610,22 @@ function CreateComponentForm({ source, isCopy, onClose }: CreateComponentFormPro
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label htmlFor="create-jiraProjectKey">Jira Project Key</Label>
-          <Input id="create-jiraProjectKey" placeholder="JIRA project key" {...register('jiraProjectKey')} />
+          <Label htmlFor="create-jiraProjectKey">
+            Jira Project Key <span className="text-destructive">*</span>
+          </Label>
+          <Input
+            id="create-jiraProjectKey"
+            placeholder="JIRA project key"
+            aria-required
+            aria-invalid={Boolean(errors.jiraProjectKey)}
+            aria-describedby={errors.jiraProjectKey ? 'create-jiraProjectKey-error' : undefined}
+            {...register('jiraProjectKey')}
+          />
+          {errors.jiraProjectKey && (
+            <p id="create-jiraProjectKey-error" className="text-xs text-destructive">
+              {errors.jiraProjectKey.message}
+            </p>
+          )}
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="create-versionPrefix">Version Prefix</Label>
@@ -608,12 +784,14 @@ function CreateComponentForm({ source, isCopy, onClose }: CreateComponentFormPro
         <div className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground space-y-1">
           <p>
             <span className="font-medium text-foreground">Included:</span> general details, people,
-            labels, docs, security groups, and the base build / escrow / Jira configuration.
+            labels, docs, security groups, the base build / escrow / Jira configuration, and the
+            VCS tag / production branch formats (prefilled above).
           </p>
           <p>
-            <span className="font-medium text-foreground">Excluded:</span> VCS entries, other
-            artifacts, TeamCity projects, configuration overrides, and the Jira project key — set
-            these on the new component afterwards.
+            <span className="font-medium text-foreground">Excluded:</span> other artifacts,
+            TeamCity projects, and configuration overrides — set these on the new component
+            afterwards. The VCS URL and Jira project key are unique per component: enter new
+            values above.
           </p>
         </div>
       )}

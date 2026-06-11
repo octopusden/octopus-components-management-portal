@@ -15,6 +15,9 @@ function makeForm(overrides: Partial<CreateFormValues> = {}): CreateFormValues {
     copyright: '',
     jiraProjectKey: '',
     versionPrefix: '',
+    vcsUrl: 'ssh://git@host/proj/repo.git',
+    vcsTag: '$module-$version',
+    vcsBranch: 'master',
     coordinate: {
       type: 'maven',
       groupPattern: '',
@@ -182,6 +185,66 @@ describe('buildCreateRequest — gated (explicit+external) coordinate', () => {
   it('omits jira aspect entirely when no jira fields are set (scratch)', () => {
     const req = buildCreateRequest(makeForm({ jiraProjectKey: '', versionPrefix: '' }))
     expect('jira' in (req.baseConfiguration ?? {})).toBe(false)
+  })
+})
+
+describe('buildCreateRequest — VCS entry (legacy EscrowConfigValidator rule)', () => {
+  it.each(['MAVEN', 'GOLANG'])('emits one vcsEntries row for %s (VCS-requiring build system)', (buildSystem) => {
+    const req = buildCreateRequest(makeForm({ buildSystem }))
+    expect(req.baseConfiguration?.vcsEntries).toEqual([
+      { vcsPath: 'ssh://git@host/proj/repo.git', tag: '$module-$version', branch: 'master' },
+    ])
+  })
+
+  it.each(['BS2_0', 'PROVIDED', 'ESCROW_PROVIDED_MANUALLY', 'ESCROW_NOT_SUPPORTED', 'WHISKEY'])(
+    'sends NO vcsEntries for exempt build system %s even when the form carries values',
+    (buildSystem) => {
+      const req = buildCreateRequest(makeForm({ buildSystem }))
+      expect('vcsEntries' in (req.baseConfiguration ?? {})).toBe(false)
+    },
+  )
+
+  it('trims vcsPath and drops blank tag/branch instead of sending empty strings', () => {
+    const req = buildCreateRequest(
+      makeForm({ vcsUrl: '  ssh://git@host/proj/repo.git ', vcsTag: '  ', vcsBranch: '' }),
+    )
+    expect(req.baseConfiguration?.vcsEntries).toEqual([{ vcsPath: 'ssh://git@host/proj/repo.git' }])
+  })
+
+  it('copy mode: vcsEntries come from the FORM, never from the source BASE row', () => {
+    const src = makeSource({
+      configurations: [
+        makeBaseRow({
+          build: { buildSystem: 'GRADLE' },
+          vcsEntries: [
+            {
+              id: 'v-1',
+              name: null,
+              vcsPath: 'ssh://git@host/src/SHOULD-NOT-APPEAR.git',
+              branch: 'main',
+              tag: 'src-tag',
+              hotfixBranch: null,
+              repositoryType: 'GIT',
+              sortOrder: 0,
+            },
+          ],
+        }),
+      ],
+    })
+    const req = buildCreateRequest(makeForm({ buildSystem: 'GRADLE' }), src)
+    expect(req.baseConfiguration?.vcsEntries).toEqual([
+      { vcsPath: 'ssh://git@host/proj/repo.git', tag: '$module-$version', branch: 'master' },
+    ])
+  })
+
+  it('exposes the rule helpers: vcsBlockApplies + deprecated set', async () => {
+    const { vcsBlockApplies, DEPRECATED_BUILD_SYSTEMS, FALLBACK_VCS_BRANCH } = await import('./buildCreateRequest')
+    expect(vcsBlockApplies('')).toBe(false)
+    expect(vcsBlockApplies('MAVEN')).toBe(true)
+    expect(vcsBlockApplies('SOME_FUTURE_SYSTEM')).toBe(true) // legacy default: everything else requires VCS
+    expect(vcsBlockApplies('WHISKEY')).toBe(false)
+    expect(DEPRECATED_BUILD_SYSTEMS.has('BS2_0')).toBe(true)
+    expect(FALLBACK_VCS_BRANCH).toBe('master')
   })
 })
 
