@@ -57,9 +57,10 @@ portal:
   # env var feeds the gateway routes above; the health indicator reuses it to
   # mirror the registry's anonymous `employeeService` health component.
   registry-health-base-url: ${COMPONENTS_REGISTRY_SERVICE_URL:http://localhost:4567}
-  # Environment label shown as a header badge in the SPA (e.g. "TEST" on QA),
-  # so a test instance can't be mistaken for production. Unset/blank → the
-  # field is omitted from /portal/info and no badge is rendered (prod default).
+  # Environment label shown as a full-width warning banner in the SPA header
+  # (e.g. "TEST INSTANCE" on QA), so a test instance can't be mistaken for
+  # production. Unset/blank → the field is omitted from /portal/info and no
+  # banner is rendered (prod default).
   # Per environment, prefer setting `portal.environment-label` in service-config
   # (config-server property sources override this default); the env var is the
   # fallback for local/dev/docker runs. Startup-bound (@Value) — a service-config

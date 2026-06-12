@@ -32,9 +32,10 @@ interface InfoResponse {
 The portal side additionally returns an optional `environmentLabel?: string` —
 runtime config from `portal.environment-label` (set per environment in
 service-config; falls back to the `PORTAL_ENVIRONMENT_LABEL` env var for
-local/dev runs; e.g. `TEST` on QA), rendered as a warning badge in the `Layout`
-header so non-prod instances are visually distinct. The key is omitted when
-unset, so production keeps the exact `{name, version}` body.
+local/dev runs; e.g. `TEST INSTANCE` on QA), rendered as a full-width warning
+banner inside the sticky `Layout` header so non-prod instances are unmistakable
+on every page. The key is omitted when unset, so production keeps the exact
+`{name, version}` body.
 
 ## Why both ends are anonymous
 
