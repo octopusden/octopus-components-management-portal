@@ -538,6 +538,9 @@ export interface PortalLinks {
 export interface PortalInfo {
   name: string
   version: string
+  // Omitted by the backend (NON_NULL) when PORTAL_ENVIRONMENT_LABEL is unset —
+  // tolerate both absent key and null, like PortalLinks above.
+  environmentLabel?: string | null
 }
 
 export interface CrsInfo {

@@ -20,7 +20,7 @@ Persistent footer rendered on every page (`AppFooter`):
 | `GET` | `/portal/info` | Anonymous (`permitAll` on portal `SecurityConfig`). | Portal `PortalInfoController` (this app, served locally — not proxied). |
 | `GET` | `/rest/api/4/info` | Anonymous on **both** sides — Portal `permitAll` + CRS `permitAll`. | CRS `InfoControllerV4` (proxied via `/rest/**` Gateway route). Contract: CRS [SYS-033](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/requirements-common.md). |
 
-Both endpoints respond with the same shape:
+Both endpoints respond with the same base shape:
 
 ```ts
 interface InfoResponse {
@@ -28,6 +28,13 @@ interface InfoResponse {
   version: string  // build version from build-info.properties
 }
 ```
+
+The portal side additionally returns an optional `environmentLabel?: string` —
+runtime config from `portal.environment-label` (set per environment in
+service-config; falls back to the `PORTAL_ENVIRONMENT_LABEL` env var for
+local/dev runs; e.g. `TEST` on QA), rendered as a warning badge in the `Layout`
+header so non-prod instances are visually distinct. The key is omitted when
+unset, so production keeps the exact `{name, version}` body.
 
 ## Why both ends are anonymous
 
@@ -60,7 +67,7 @@ If you add a field to `InfoResponse` (e.g. git SHA, build timestamp), update bot
 1. CRS `InfoControllerV4.kt` (and the matching test for SYS-033).
 2. Portal `PortalInfoController.kt`.
 
-Then update `frontend/src/lib/types.ts` (`CrsInfo`, `PortalInfo`) and `AppFooter.tsx`. Without OpenAPI generation today (see [TD-002](../tech-debt/TD-002-openapi-types.md)), this drift is manual and easy to miss.
+Then update `frontend/src/lib/types.ts` (`CrsInfo`, `PortalInfo`) and the consumers — `AppFooter.tsx` and `Layout.tsx` (environment badge) both read `PortalInfo`. The `portal-info*.contract.json` fixtures in `frontend/src/test-fixtures/` are asserted on both sides (`PortalInfoControllerTest` / `useInfo.test.ts`), so extend them too. Without OpenAPI generation today (see [TD-002](../tech-debt/TD-002-openapi-types.md)), this drift is otherwise manual and easy to miss.
 
 ## Tests
 

@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router'
 import { Package, History, Settings, LogOut, AlertTriangle } from 'lucide-react'
 import { cn, initials } from '../lib/utils'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
+import { usePortalInfo } from '@/hooks/useInfo'
 import { hasPermission, logout, PERMISSIONS } from '@/lib/auth'
 import { AppFooter } from './AppFooter'
 import { EmployeeIntegrationAlert } from './EmployeeIntegrationAlert'
@@ -29,6 +30,14 @@ export function Layout({ children }: LayoutProps) {
   const location = useLocation()
   const { data: user, isError } = useCurrentUser()
   const adminMode = useAdminMode((s) => s.enabled)
+  // Environment badge (e.g. "TEST" on QA) so a non-prod instance is identifiable
+  // on every page. Comes from /portal/info (PORTAL_ENVIRONMENT_LABEL runtime
+  // config) — prod leaves the var unset, the backend omits the key, and nothing
+  // renders. The backend already collapses blank labels; trim() here is
+  // defence-in-depth so a whitespace-only value from a drifted backend can
+  // never render an empty badge pill ('' is falsy, so the && below skips it).
+  const { data: portalInfo } = usePortalInfo()
+  const environmentLabel = portalInfo?.environmentLabel?.trim()
 
   // When /auth/me fails with a non-401 backend error, isError is true and `user` is
   // undefined. Don't hide admin/audit in that case — the user may be a valid admin;
@@ -45,6 +54,7 @@ export function Layout({ children }: LayoutProps) {
           <span className="font-semibold text-foreground text-base tracking-tight mr-2">
             Components Registry
           </span>
+          {environmentLabel && <Badge variant="warning">{environmentLabel}</Badge>}
           <nav className="flex items-center gap-1">
             {visibleItems.map(({ href, label, icon: Icon }) => {
               const isActive = location.pathname === href || location.pathname.startsWith(href + '/')
