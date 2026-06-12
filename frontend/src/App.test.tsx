@@ -20,6 +20,20 @@ vi.mock('./hooks/useCurrentUser', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // Layout (environment badge) and AppFooter both query the anonymous info
+  // endpoints via plain fetch — answer those with "no data" ({} → no badge, no
+  // version label). Every OTHER fetch rejects, mirroring jsdom's no-network
+  // behavior this suite has always relied on: components like MultiSelectFilter
+  // expect array payloads and must take their isError fallback, not parse {}.
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: RequestInfo | URL) => {
+      const u = String(url)
+      return u.includes('portal/info') || u.includes('rest/api/4/info')
+        ? Promise.resolve(new Response('{}', { status: 200 }))
+        : Promise.reject(new Error(`App.test: unstubbed fetch ${u}`))
+    }),
+  )
 })
 
 describe('App routing', () => {

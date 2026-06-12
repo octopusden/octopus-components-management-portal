@@ -32,8 +32,10 @@ export function Layout({ children }: LayoutProps) {
   const adminMode = useAdminMode((s) => s.enabled)
   // Environment badge (e.g. "TEST" on QA) so a non-prod instance is identifiable
   // on every page. Comes from /portal/info (PORTAL_ENVIRONMENT_LABEL runtime
-  // config) — prod leaves the var unset and renders nothing. trim() guards
-  // against a whitespace-only label producing an empty badge pill.
+  // config) — prod leaves the var unset, the backend omits the key, and nothing
+  // renders. The backend already collapses blank labels; trim() here is
+  // defence-in-depth so a whitespace-only value from a drifted backend can
+  // never render an empty badge pill ('' is falsy, so the && below skips it).
   const { data: portalInfo } = usePortalInfo()
   const environmentLabel = portalInfo?.environmentLabel?.trim()
 

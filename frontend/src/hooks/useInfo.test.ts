@@ -5,6 +5,8 @@ import React from 'react'
 import { useCrsInfo, usePortalLinks, usePortalInfo } from './useInfo'
 import portalLinksContract from '../test-fixtures/portal-links.contract.json'
 import portalLinksEmptyContract from '../test-fixtures/portal-links.empty.contract.json'
+import portalInfoContract from '../test-fixtures/portal-info.contract.json'
+import portalInfoLabelledContract from '../test-fixtures/portal-info.labelled.contract.json'
 
 // useInfo deliberately does NOT use the shared api wrapper from src/lib/api.ts.
 // `api` redirects to /oauth2/authorization/<id> on 401, which is the right
@@ -173,6 +175,41 @@ describe('usePortalInfo', () => {
     await waitFor(() => expect(result.current.isError).toBe(true))
 
     expect(assignSpy).not.toHaveBeenCalled()
+  })
+
+  // Contract guard against backend/frontend shape drift — the same fixtures are
+  // asserted byte-for-byte against Spring's serialized InfoResponse by
+  // PortalInfoControllerTest / PortalInfoControllerEnvironmentLabelTest. A rename
+  // of environmentLabel on either side fails one of the two suites instead of
+  // silently dropping the header badge.
+  it('contract: labelled /portal/info populates environmentLabel', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(portalInfoLabelledContract), { status: 200 }),
+      ),
+    )
+
+    const { result } = renderHook(() => usePortalInfo(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(result.current.data?.environmentLabel).toBe(portalInfoLabelledContract.environmentLabel)
+  })
+
+  it('contract: prod-shape /portal/info leaves environmentLabel undefined', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(portalInfoContract), { status: 200 }),
+      ),
+    )
+
+    const { result } = renderHook(() => usePortalInfo(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(result.current.data?.name).toBe(portalInfoContract.name)
+    expect(result.current.data?.version).toBe(portalInfoContract.version)
+    expect(result.current.data?.environmentLabel).toBeUndefined()
   })
 })
 
