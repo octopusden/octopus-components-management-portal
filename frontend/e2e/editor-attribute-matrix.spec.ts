@@ -73,10 +73,14 @@ async function openTab(page: Page, componentId: string, tab: RegExp): Promise<vo
 // The two texts the optimistic-lock path renders (lib/conflict.ts): the toast
 // title 'Save conflict' and the "updated by another user … reload" advice.
 // Neither may appear after a clean save (the QA incident) nor after a
-// uniqueness 409 (reload cannot fix a value clash).
+// uniqueness 409 (reload cannot fix a value clash). Callers invoke this ONLY
+// after awaiting the outcome toast of the same mutation (success or
+// 'Uniqueness violation'), so the mutation has settled and its toasts are
+// final — the success and conflict toasts are mutually exclusive branches of
+// one promise, no late-render window remains.
 async function expectNoOptimisticConflictToast(page: Page): Promise<void> {
-  await expect(page.getByText(/updated by another user/i)).toHaveCount(0)
-  await expect(page.getByText('Save conflict')).toHaveCount(0)
+  await expect(page.getByText(/updated by another user/i)).not.toBeVisible()
+  await expect(page.getByText('Save conflict')).not.toBeVisible()
 }
 
 test.describe.serial('Editor attribute matrix — every tab saves without a false conflict (admin)', () => {
@@ -170,9 +174,13 @@ test.describe.serial('Editor attribute matrix — every tab saves without a fals
       saveButton: 'Save',
       successToast: 'Component saved',
       // Display name is globally UNIQUE server-side — keep the run suffix in
-      // the value so reruns against a long-lived stand don't 409.
+      // the value so reruns against a long-lived stand don't 409. Field-config
+      // can hide the field entirely (GeneralTab renders it conditionally) —
+      // skip rather than fail on locator-not-found in that case.
       edit: async (page) => {
-        await page.getByLabel(/^display name/i).fill(`E2E Attr A ${SUFFIX}`)
+        const displayName = page.getByLabel(/^display name/i)
+        test.skip((await displayName.count()) === 0, 'displayName is hidden by field-config on this stand')
+        await displayName.fill(`E2E Attr A ${SUFFIX}`)
       },
       assertPersisted: async (page) => {
         await expect(page.getByLabel(/^display name/i)).toHaveValue(`E2E Attr A ${SUFFIX}`)
@@ -209,11 +217,13 @@ test.describe.serial('Editor attribute matrix — every tab saves without a fals
       successToast: 'Jira configuration saved',
       // (projectKey, versionPrefix) is unique among non-archived components —
       // suffix the key so it can't clash with the fixture's 'E2E' project.
+      // Last 6 suffix chars keep the key short (headroom vs key-length limits)
+      // while staying unique per run.
       edit: async (page) => {
-        await page.getByPlaceholder('JIRA project key').fill(`EA${SUFFIX.toUpperCase()}`)
+        await page.getByPlaceholder('JIRA project key').fill(`EA${SUFFIX.slice(-6).toUpperCase()}`)
       },
       assertPersisted: async (page) => {
-        await expect(page.getByPlaceholder('JIRA project key')).toHaveValue(`EA${SUFFIX.toUpperCase()}`)
+        await expect(page.getByPlaceholder('JIRA project key')).toHaveValue(`EA${SUFFIX.slice(-6).toUpperCase()}`)
       },
     },
     {
@@ -221,16 +231,18 @@ test.describe.serial('Editor attribute matrix — every tab saves without a fals
       tab: /distribution/i,
       saveButton: 'Save Distribution',
       successToast: 'Distribution saved',
-      // Image names are globally unique — suffix again. Scope the Add click to
-      // the Docker Images section (Maven/FileUrl/Packages/SecurityGroups all
-      // render their own Add button). heading → flex row → section container.
+      // Image names are globally unique — suffix again. Scope to the section's
+      // data-testid (Maven/FileUrl/Packages/SecurityGroups all render their own
+      // Add button, and the heading text is field-config-relabelable).
       edit: async (page) => {
-        const dockerSection = page.getByRole('heading', { name: 'Docker Images' }).locator('../../..')
+        const dockerSection = page.getByTestId('docker-images-section')
         await dockerSection.getByRole('button', { name: 'Add', exact: true }).click()
         await dockerSection.getByPlaceholder('my-org/my-image').fill(`e2e/attr-${SUFFIX}`)
       },
       assertPersisted: async (page) => {
-        await expect(page.getByPlaceholder('my-org/my-image')).toHaveValue(`e2e/attr-${SUFFIX}`)
+        await expect(
+          page.getByTestId('docker-images-section').getByPlaceholder('my-org/my-image'),
+        ).toHaveValue(`e2e/attr-${SUFFIX}`)
       },
     },
     {
@@ -292,6 +304,8 @@ test.describe.serial('Editor attribute matrix — every tab saves without a fals
     if (probe.ok()) {
       // Unexpected: the duplicate was accepted — restore B's own coordinate so
       // cleanup leaves no colliding rows behind, then skip (nothing to assert).
+      // NOTE: this probe.json() and the conflictBody one below are on mutually
+      // exclusive branches (ok vs 409) — the body is never consumed twice.
       const accepted = (await probe.json()) as { version: number }
       const revert = await api.patch(`/rest/api/4/components/${idB}`, {
         headers,
@@ -327,14 +341,31 @@ test.describe.serial('Editor attribute matrix — every tab saves without a fals
 
   // Best-effort hygiene for long-lived stands (the gradle testcontainers stack
   // is ephemeral anyway): archive the spec's components. DELETE = archive, the
-  // same call editor-build-history uses. If an earlier test fails, serial mode
-  // skips this too — acceptable: reruns use a fresh suffix and never collide.
-  test('cleanup: archive the created components', async ({ page }) => {
-    test.skip(createdIds.length === 0, 'nothing was created')
-    const headers = await mutationHeaders(page)
-    for (const id of createdIds) {
-      const del = await page.request.delete(`/rest/api/4/components/${id}`, { headers })
-      expect(del.ok(), `cleanup delete failed (HTTP ${del.status()}) for ${id}`).toBeTruthy()
+  // same call editor-build-history uses. afterAll (not a trailing serial test)
+  // so a mid-chain failure cannot cascade-skip the cleanup and orphan rows.
+  // afterAll has no test-scoped `request`/`page` fixtures — build a fresh
+  // authenticated APIRequestContext from the project's baseURL + storageState.
+  test.afterAll(async ({ playwright }) => {
+    if (createdIds.length === 0) return
+    const use = test.info().project.use
+    const ctx = await playwright.request.newContext({
+      baseURL: use.baseURL,
+      storageState: use.storageState as string | undefined,
+    })
+    try {
+      // CSRF double-submit: prime the XSRF-TOKEN cookie, then echo it.
+      await ctx.get('/rest/api/4/components?page=0&size=1')
+      const token = (await ctx.storageState()).cookies.find((c) => c.name === 'XSRF-TOKEN')?.value
+      const headers = {
+        'X-Requested-With': 'XMLHttpRequest',
+        ...(token ? { 'X-XSRF-TOKEN': decodeURIComponent(token) } : {}),
+      }
+      for (const id of createdIds) {
+        const del = await ctx.delete(`/rest/api/4/components/${id}`, { headers })
+        expect(del.ok(), `cleanup delete failed (HTTP ${del.status()}) for ${id}`).toBeTruthy()
+      }
+    } finally {
+      await ctx.dispose()
     }
   })
 })

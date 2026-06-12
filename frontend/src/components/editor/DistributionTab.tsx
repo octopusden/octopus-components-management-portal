@@ -331,7 +331,10 @@ export function DistributionTab({ component, updateMutation, toast, canEdit }: D
       <Separator />
 
       {/* ── Docker Images ──────────────────────────────────────────────────── */}
-      <div className="space-y-3">
+      {/* data-testid: e2e anchor — the heading text comes from FieldLabelText
+          (field-config can relabel it) and several sibling sections render
+          identical 'Add' buttons, so structural/text selectors are brittle. */}
+      <div className="space-y-3" data-testid="docker-images-section">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1">
             <h3 className="text-sm font-semibold"><FieldLabelText path="distribution.dockerImages" fallback="Docker Images" /></h3>
