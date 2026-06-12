@@ -67,6 +67,20 @@ class PortalInfoControllerTest {
             .jsonPath("$.links").doesNotExist()
     }
 
+    @Test
+    fun `environmentLabel is omitted when PORTAL_ENVIRONMENT_LABEL is unset`() {
+        // application.yaml defaults portal.environment-label to "" when the env var
+        // is absent; the controller must collapse that to an omitted key so the prod
+        // /portal/info body stays exactly {name, version} and the SPA shows no badge.
+        webTestClient
+            .get()
+            .uri("/portal/info")
+            .exchange()
+            .expectStatus().isOk
+            .expectBody()
+            .jsonPath("$.environmentLabel").doesNotExist()
+    }
+
     @TestConfiguration
     open class TestBuildPropertiesConfig {
         // BuildProperties is a final class, but its public Properties-based
@@ -87,5 +101,34 @@ class PortalInfoControllerTest {
     companion object {
         private const val EXPECTED_NAME = "octopus-components-management-portal"
         private const val EXPECTED_VERSION = "1.2.3"
+    }
+}
+
+// Separate test class (= separate Spring context) because environment-label is a
+// startup-bound @Value: the labelled and unlabelled cases cannot share a context.
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = [
+        "management.server.port=0",
+        "portal.environment-label=TEST",
+    ],
+)
+@AutoConfigureWebTestClient
+@ActiveProfiles("test")
+@Import(TestSecurityConfig::class, PortalInfoControllerTest.TestBuildPropertiesConfig::class)
+class PortalInfoControllerEnvironmentLabelTest {
+    @Autowired
+    lateinit var webTestClient: WebTestClient
+
+    @Test
+    fun `environmentLabel is returned anonymously when portal environment-label is set`() {
+        webTestClient
+            .get()
+            .uri("/portal/info")
+            .exchange()
+            .expectStatus().isOk
+            .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+            .expectBody()
+            .jsonPath("$.environmentLabel").isEqualTo("TEST")
     }
 }

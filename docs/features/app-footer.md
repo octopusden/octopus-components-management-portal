@@ -20,7 +20,7 @@ Persistent footer rendered on every page (`AppFooter`):
 | `GET` | `/portal/info` | Anonymous (`permitAll` on portal `SecurityConfig`). | Portal `PortalInfoController` (this app, served locally — not proxied). |
 | `GET` | `/rest/api/4/info` | Anonymous on **both** sides — Portal `permitAll` + CRS `permitAll`. | CRS `InfoControllerV4` (proxied via `/rest/**` Gateway route). Contract: CRS [SYS-033](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/requirements-common.md). |
 
-Both endpoints respond with the same shape:
+Both endpoints respond with the same base shape:
 
 ```ts
 interface InfoResponse {
@@ -28,6 +28,12 @@ interface InfoResponse {
   version: string  // build version from build-info.properties
 }
 ```
+
+The portal side additionally returns an optional `environmentLabel?: string` —
+runtime config from the `PORTAL_ENVIRONMENT_LABEL` env var (e.g. `TEST` on QA),
+rendered as a warning badge in the `Layout` header so non-prod instances are
+visually distinct. The key is omitted (`@JsonInclude NON_NULL`) when the var is
+unset, so production keeps the exact `{name, version}` body.
 
 ## Why both ends are anonymous
 

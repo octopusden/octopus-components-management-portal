@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.portal.controller
 
 import com.fasterxml.jackson.annotation.JsonInclude
 import org.octopusden.octopus.components.portal.configuration.PortalLinksProperties
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.info.BuildProperties
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
@@ -12,6 +13,10 @@ import org.springframework.web.bind.annotation.RestController
 class PortalInfoController(
     private val buildProperties: BuildProperties,
     private val linksProperties: PortalLinksProperties,
+    // Binds from PORTAL_ENVIRONMENT_LABEL via application.yaml. A single scalar,
+    // so @Value instead of a dedicated @ConfigurationProperties class — same
+    // pattern as registry-health-base-url in EmployeeServiceIntegrationHealthIndicator.
+    @Value("\${portal.environment-label:}") private val environmentLabel: String,
 ) {
     @GetMapping("/info")
     fun info(): InfoResponse = InfoResponse(
@@ -21,6 +26,8 @@ class PortalInfoController(
         // fallback is defensive against missing build-info.properties in dev runs only.
         name = buildProperties.name.orEmpty(),
         version = buildProperties.version.orEmpty(),
+        // blank (env var unset) collapses to null → key omitted, SPA renders no badge
+        environmentLabel = environmentLabel.takeIf(String::isNotBlank),
     )
 
     @GetMapping("/links")
@@ -32,9 +39,13 @@ class PortalInfoController(
         dmsBaseUrl = linksProperties.dmsBaseUrl?.takeIf(String::isNotBlank),
     )
 
+    // NON_NULL so a prod portal (no PORTAL_ENVIRONMENT_LABEL) keeps the exact
+    // pre-existing `{name, version}` body; only labelled environments gain the key.
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     data class InfoResponse(
         val name: String,
         val version: String,
+        val environmentLabel: String?,
     )
 
     // Omit null fields so a portal with no PORTAL_LINKS_*_BASE_URL env vars
