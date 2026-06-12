@@ -1024,6 +1024,7 @@ export interface components {
             username: string;
         };
         ErrorResponse: {
+            errorCode?: string;
             errorMessage: string;
         };
         EscrowAspectRequest: {
