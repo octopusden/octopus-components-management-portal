@@ -20,6 +20,12 @@ the contract drift before it reaches an E2E build.
   `PORTAL_LINKS_*_BASE_URL` env vars are set: Jackson omits the null fields,
   so the body is `{}`. Frontend code must treat each field as `undefined`-
   capable (not just `string | null`).
+- `portal-info.contract.json` — `/portal/info` prod shape: `{name, version}`
+  only, no `environmentLabel` key (env var `PORTAL_ENVIRONMENT_LABEL` unset).
+- `portal-info.labelled.contract.json` — `/portal/info` with
+  `environmentLabel` present (non-prod instances; drives the header badge).
 
-Both files drive `PortalLinksControllerContractTest.kt` (backend) and the
+The `portal-links*` files drive `PortalLinksControllerContractTest.kt`, the
+`portal-info*` files drive `PortalInfoControllerTest.kt` /
+`PortalInfoControllerEnvironmentLabelTest` (backend) — all four also drive the
 `'contract:'`-prefixed cases in `useInfo.test.ts` (frontend).

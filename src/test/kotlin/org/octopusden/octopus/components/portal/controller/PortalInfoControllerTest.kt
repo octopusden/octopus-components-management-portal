@@ -90,6 +90,7 @@ class PortalInfoControllerTest {
                     .uri("/portal/info")
                     .exchange()
                     .expectStatus().isOk
+                    .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
                     .expectBody()
                     .returnResult()
                     .responseBodyContent!!,
