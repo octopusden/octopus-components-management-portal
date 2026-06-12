@@ -24,7 +24,7 @@ function renderLayout(portalInfo: Record<string, unknown> = {}) {
   // Without a QueryClient in the tree, those hooks throw — failing the
   // existing nav-visibility tests. Stub fetch as well so the footer's info
   // queries don't reach the network in jsdom. The /portal/info request gets
-  // `portalInfo` (environment-badge tests inject a payload); everything else `{}`.
+  // `portalInfo` (environment-banner tests inject a payload); everything else `{}`.
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.stubGlobal(
     'fetch',

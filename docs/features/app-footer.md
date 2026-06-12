@@ -68,7 +68,7 @@ If you add a field to `InfoResponse` (e.g. git SHA, build timestamp), update bot
 1. CRS `InfoControllerV4.kt` (and the matching test for SYS-033).
 2. Portal `PortalInfoController.kt`.
 
-Then update `frontend/src/lib/types.ts` (`CrsInfo`, `PortalInfo`) and the consumers — `AppFooter.tsx` and `Layout.tsx` (environment badge) both read `PortalInfo`. The `portal-info*.contract.json` fixtures in `frontend/src/test-fixtures/` are asserted on both sides (`PortalInfoControllerTest` / `useInfo.test.ts`), so extend them too. Without OpenAPI generation today (see [TD-002](../tech-debt/TD-002-openapi-types.md)), this drift is otherwise manual and easy to miss.
+Then update `frontend/src/lib/types.ts` (`CrsInfo`, `PortalInfo`) and the consumers — `AppFooter.tsx` and `Layout.tsx` (environment banner) both read `PortalInfo`. The `portal-info*.contract.json` fixtures in `frontend/src/test-fixtures/` are asserted on both sides (`PortalInfoControllerTest` / `useInfo.test.ts`), so extend them too. Without OpenAPI generation today (see [TD-002](../tech-debt/TD-002-openapi-types.md)), this drift is otherwise manual and easy to miss.
 
 ## Tests
 
