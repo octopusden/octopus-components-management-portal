@@ -1,0 +1,340 @@
+import { test, expect, type Page } from '@playwright/test'
+
+// ---------------------------------------------------------------------------
+// Editor attribute matrix — real-CRS journey (NOT route-mocked), chromium-admin
+// (picked up by the existing `editor-[^/]+` testMatch in playwright.config.ts).
+//
+// Closes the "real-CRS edit e2e covering all main attributes" backlog item:
+// every tab's primary save path must land WITHOUT a false optimistic-conflict
+// toast. Guards the conflict-classification fix (CRS #358 errorCode dispatch in
+// useOptimisticConflict): before it, ANY 409 — including a uniqueness clash —
+// was reported as "updated by another user … reload", which sent QA into a
+// futile reload loop on a plain single-user save (the QA incident reproduced
+// by the Build-tab Java Version test below).
+//
+// Matrix coverage — ONE robust field per tab, all six main-attribute tabs:
+//   General      → Display Name        (header Save, 'Component saved')
+//   Build        → Build File Path     ('Save Build', 'Build configuration saved')
+//   VCS          → External Registry   ('Save VCS', 'VCS settings saved')
+//   Jira         → Project Key         ('Save Jira', 'Jira configuration saved')
+//   Distribution → Docker image name   ('Save Distribution', 'Distribution saved')
+//   Escrow       → Disk Space          ('Save Escrow', 'Escrow configuration saved')
+// No tab is omitted. VCS is exercised via the per-component External Registry
+// scalar rather than a VCS entry row (an entry needs a plausible vcsPath and
+// drags in host/path semantics — the scalar exercises the same PATCH + version
+// plumbing without that brittleness). Same idea for Escrow (Disk Space).
+//
+// Negative case: component B flips its maven artifact extension to EXACTLY
+// duplicate component A's GAV → CRS 409 UNIQUENESS_VIOLATION → the toast must
+// be 'Uniqueness violation' with the SERVER's message, and must NOT be the
+// optimistic-lock "updated by another user" advice.
+//
+// Feature gates (same spirit as editor-build-history.spec.ts): only the
+// uniqueness-specific steps self-skip against an older CRS image — once if the
+// image's GAV identity ignores the extension (B's `g:a:apk` create collides
+// with A's `g:a:zip` and 409s), and once if its 409 body predates #358 (no
+// errorCode). Plain HTTP failures of create/GET/PATCH/delete are NOT skip
+// conditions: those endpoints exist on every CRS image the portal targets, so
+// a non-2xx there means a real stand problem (auth/CSRF/outage) and must fail.
+//
+// Serial on purpose (matches the suite's workers:1): later tests reuse the
+// components created in the setup test; a setup failure aborts the chain.
+// ---------------------------------------------------------------------------
+
+const SUFFIX = Date.now().toString(36)
+const COMPONENT_A = `e2e-attr-a-${SUFFIX}`
+const COMPONENT_B = `e2e-attr-b-${SUFFIX}`
+// Must start with one of the stand's supported group prefixes
+// (COMPONENTS_REGISTRY_SUPPORTEDGROUPIDS=org.octopusden.octopus,… in
+// E2ETestcontainersDriver) or the create 400s on groupId-prefix validation.
+const GAV_GROUP = 'org.octopusden.octopus.test'
+// Unique per run — the artifactPattern is compared as a regex/CSV pattern by
+// the CRS GAV-collision rule, so keep it metacharacter-free.
+const GAV_ARTIFACT = `e2e-gav-${SUFFIX}`
+
+// The BFF double-submits CSRF (CookieServerCsrfTokenRepository.withHttpOnlyFalse):
+// state-changing /rest calls must echo the XSRF-TOKEN cookie in X-XSRF-TOKEN,
+// exactly like the SPA's api client does. The cookie is set on the first
+// response (csrfCookieWebFilter), so issue one GET before reading it.
+async function mutationHeaders(page: Page): Promise<Record<string, string>> {
+  await page.request.get('/rest/api/4/components?page=0&size=1')
+  const token = (await page.context().cookies()).find((c) => c.name === 'XSRF-TOKEN')?.value
+  return {
+    'X-Requested-With': 'XMLHttpRequest',
+    ...(token ? { 'X-XSRF-TOKEN': decodeURIComponent(token) } : {}),
+  }
+}
+
+async function openTab(page: Page, componentId: string, tab: RegExp): Promise<void> {
+  await page.goto(`/components/${componentId}`, { waitUntil: 'networkidle' })
+  await page.getByRole('tab', { name: tab }).click()
+}
+
+// The two texts the optimistic-lock path renders (lib/conflict.ts): the toast
+// title 'Save conflict' and the "updated by another user … reload" advice.
+// Neither may appear after a clean save (the QA incident) nor after a
+// uniqueness 409 (reload cannot fix a value clash).
+async function expectNoOptimisticConflictToast(page: Page): Promise<void> {
+  await expect(page.getByText(/updated by another user/i)).toHaveCount(0)
+  await expect(page.getByText('Save conflict')).toHaveCount(0)
+}
+
+test.describe.serial('Editor attribute matrix — every tab saves without a false conflict (admin)', () => {
+  let idA: string | undefined
+  let idB: string | undefined
+  const createdIds: string[] = []
+
+  test('setup: create components A and B via the v4 API (shared GAV group:artifact, different extension)', async ({ page }) => {
+    const api = page.request
+    const headers = await mutationHeaders(page)
+
+    const createBody = (name: string, extension: string) => ({
+      name,
+      componentOwner: 'e2e-admin',
+      baseConfiguration: {
+        // MAVEN so the Build tab renders its full toolchain block.
+        build: { buildSystem: 'MAVEN' },
+        mavenArtifacts: [{ groupPattern: GAV_GROUP, artifactPattern: GAV_ARTIFACT, extension }],
+      },
+    })
+
+    const createA = await api.post('/rest/api/4/components', {
+      headers,
+      data: createBody(COMPONENT_A, 'zip'),
+    })
+    expect(createA.ok(), `cannot create ${COMPONENT_A} via v4 API (HTTP ${createA.status()})`).toBeTruthy()
+    idA = ((await createA.json()) as { id: string }).id
+    createdIds.push(idA)
+
+    const createB = await api.post('/rest/api/4/components', {
+      headers,
+      data: createBody(COMPONENT_B, 'apk'),
+    })
+    // Feature gate: GAV identity is the FULL coordinate (g:a:zip ≠ g:a:apk,
+    // MavenGavCollision). An older CRS image that collides on group:artifact
+    // alone rejects B here — skip the B-dependent tests instead of failing.
+    // (Component A is created, so the regression + matrix tests still run.)
+    test.skip(
+      createB.status() === 409,
+      'CRS GAV identity predates full-coordinate (extension) matching — skipping component B setup',
+    )
+    expect(createB.ok(), `cannot create ${COMPONENT_B} via v4 API (HTTP ${createB.status()})`).toBeTruthy()
+    idB = ((await createB.json()) as { id: string }).id
+    createdIds.push(idB)
+  })
+
+  test('regression (QA incident): Build tab Java Version save succeeds with no "updated by another user" toast', async ({ page }) => {
+    test.skip(!idA, 'setup did not create component A')
+    await openTab(page, idA!, /build/i)
+
+    // Java Version is an EnumSelect sourced from /meta/java-versions
+    // (configured in CRS application.yml). Pick the first real option — the
+    // component was created without a javaVersion, so anything but 'None' is
+    // a change. An empty list is a stand misconfiguration, not a skip.
+    const javaTrigger = page.locator('#build-javaVersion')
+    await expect(javaTrigger).toBeVisible()
+    await javaTrigger.click()
+    const optionTexts = await page.getByRole('option').allTextContents()
+    const target = optionTexts.find((t) => t !== 'None')
+    expect(target, 'CRS /meta/java-versions returned no selectable Java versions').toBeTruthy()
+    await page.getByRole('option', { name: target!, exact: true }).click()
+
+    await page.getByRole('button', { name: 'Save Build' }).click()
+    // .first(): the toast text renders twice (toast body + the toaster's
+    // aria-live status region) — strict mode would reject the bare locator.
+    await expect(page.getByText('Build configuration saved').first()).toBeVisible({ timeout: 10_000 })
+    // The incident: a single-user save was answered with the optimistic-lock
+    // "updated by another user, reload" toast. Assert it stays gone.
+    await expectNoOptimisticConflictToast(page)
+
+    // Persisted, not just toasted.
+    await page.reload({ waitUntil: 'networkidle' })
+    await page.getByRole('tab', { name: /build/i }).click()
+    await expect(page.locator('#build-javaVersion')).toContainText(target!)
+  })
+
+  // One main attribute per tab: edit → save → success toast (and no conflict
+  // toast) → reload → the value survived the round-trip. Locators lean on
+  // stable placeholders/ids from the tab components (BuildTab/VcsTab/…).
+  const matrix: Array<{
+    title: string
+    tab: RegExp
+    saveButton: string
+    successToast: string
+    edit: (page: Page) => Promise<void>
+    assertPersisted: (page: Page) => Promise<void>
+  }> = [
+    {
+      title: 'General — Display Name',
+      tab: /general/i,
+      saveButton: 'Save',
+      successToast: 'Component saved',
+      // Display name is globally UNIQUE server-side — keep the run suffix in
+      // the value so reruns against a long-lived stand don't 409.
+      edit: async (page) => {
+        await page.getByLabel(/^display name/i).fill(`E2E Attr A ${SUFFIX}`)
+      },
+      assertPersisted: async (page) => {
+        await expect(page.getByLabel(/^display name/i)).toHaveValue(`E2E Attr A ${SUFFIX}`)
+      },
+    },
+    {
+      title: 'Build — Build File Path',
+      tab: /build/i,
+      saveButton: 'Save Build',
+      successToast: 'Build configuration saved',
+      edit: async (page) => {
+        await page.getByPlaceholder('pom.xml / build.gradle').fill(`e2e/${SUFFIX}/pom.xml`)
+      },
+      assertPersisted: async (page) => {
+        await expect(page.getByPlaceholder('pom.xml / build.gradle')).toHaveValue(`e2e/${SUFFIX}/pom.xml`)
+      },
+    },
+    {
+      title: 'VCS — External Registry',
+      tab: /vcs/i,
+      saveButton: 'Save VCS',
+      successToast: 'VCS settings saved',
+      edit: async (page) => {
+        await page.getByPlaceholder('External registry URL').fill(`e2e-registry-${SUFFIX}`)
+      },
+      assertPersisted: async (page) => {
+        await expect(page.getByPlaceholder('External registry URL')).toHaveValue(`e2e-registry-${SUFFIX}`)
+      },
+    },
+    {
+      title: 'Jira — Project Key',
+      tab: /jira/i,
+      saveButton: 'Save Jira',
+      successToast: 'Jira configuration saved',
+      // (projectKey, versionPrefix) is unique among non-archived components —
+      // suffix the key so it can't clash with the fixture's 'E2E' project.
+      edit: async (page) => {
+        await page.getByPlaceholder('JIRA project key').fill(`EA${SUFFIX.toUpperCase()}`)
+      },
+      assertPersisted: async (page) => {
+        await expect(page.getByPlaceholder('JIRA project key')).toHaveValue(`EA${SUFFIX.toUpperCase()}`)
+      },
+    },
+    {
+      title: 'Distribution — Docker image',
+      tab: /distribution/i,
+      saveButton: 'Save Distribution',
+      successToast: 'Distribution saved',
+      // Image names are globally unique — suffix again. Scope the Add click to
+      // the Docker Images section (Maven/FileUrl/Packages/SecurityGroups all
+      // render their own Add button). heading → flex row → section container.
+      edit: async (page) => {
+        const dockerSection = page.getByRole('heading', { name: 'Docker Images' }).locator('../../..')
+        await dockerSection.getByRole('button', { name: 'Add', exact: true }).click()
+        await dockerSection.getByPlaceholder('my-org/my-image').fill(`e2e/attr-${SUFFIX}`)
+      },
+      assertPersisted: async (page) => {
+        await expect(page.getByPlaceholder('my-org/my-image')).toHaveValue(`e2e/attr-${SUFFIX}`)
+      },
+    },
+    {
+      title: 'Escrow — Disk Space',
+      tab: /escrow/i,
+      saveButton: 'Save Escrow',
+      successToast: 'Escrow configuration saved',
+      edit: async (page) => {
+        await page.getByPlaceholder('e.g. 10GB').fill('42GB')
+      },
+      assertPersisted: async (page) => {
+        await expect(page.getByPlaceholder('e.g. 10GB')).toHaveValue('42GB')
+      },
+    },
+  ]
+
+  for (const entry of matrix) {
+    test(`matrix: ${entry.title} saves and persists`, async ({ page }) => {
+      test.skip(!idA, 'setup did not create component A')
+      await openTab(page, idA!, entry.tab)
+
+      await entry.edit(page)
+      // /^save$/i for General matches ONLY the header Save (the per-tab
+      // buttons are 'Save Build' / 'Save VCS' / … — full-name regex match).
+      await page.getByRole('button', { name: new RegExp(`^${entry.saveButton}$`, 'i') }).click()
+      await expect(page.getByText(entry.successToast).first()).toBeVisible({ timeout: 10_000 })
+      await expectNoOptimisticConflictToast(page)
+
+      // Reload → fresh GET → the edit survived the server round-trip.
+      await page.reload({ waitUntil: 'networkidle' })
+      await page.getByRole('tab', { name: entry.tab }).click()
+      await entry.assertPersisted(page)
+    })
+  }
+
+  test('negative: duplicating component A\'s exact GAV shows "Uniqueness violation", not the reload advice', async ({ page }) => {
+    test.skip(!idA || !idB, 'setup did not create both components')
+    const api = page.request
+    const headers = await mutationHeaders(page)
+
+    // Feature gate, API-side first (mirrors editor-build-history's probe):
+    // PATCH B's artifact to A's exact coordinate. On a current CRS this 409s
+    // with errorCode UNIQUENESS_VIOLATION and changes nothing. A 409 without
+    // errorCode predates CRS #358 — there the portal's old-server fallback
+    // (reload-and-reapply) is CORRECT behaviour, so the UI assertion below
+    // would fail by design; skip instead.
+    const detailResp = await api.get(`/rest/api/4/components/${idB}`)
+    expect(detailResp.ok(), `cannot load ${COMPONENT_B} (HTTP ${detailResp.status()})`).toBeTruthy()
+    const detail = (await detailResp.json()) as { version: number }
+    const duplicateGav = {
+      baseConfiguration: {
+        mavenArtifacts: [{ groupPattern: GAV_GROUP, artifactPattern: GAV_ARTIFACT, extension: 'zip' }],
+      },
+    }
+    const probe = await api.patch(`/rest/api/4/components/${idB}`, {
+      headers,
+      data: { version: detail.version, ...duplicateGav },
+    })
+    if (probe.ok()) {
+      // Unexpected: the duplicate was accepted — restore B's own coordinate so
+      // cleanup leaves no colliding rows behind, then skip (nothing to assert).
+      const accepted = (await probe.json()) as { version: number }
+      const revert = await api.patch(`/rest/api/4/components/${idB}`, {
+        headers,
+        data: {
+          version: accepted.version,
+          baseConfiguration: {
+            mavenArtifacts: [{ groupPattern: GAV_GROUP, artifactPattern: GAV_ARTIFACT, extension: 'apk' }],
+          },
+        },
+      })
+      expect(revert.ok(), `revert after unexpected duplicate-GAV acceptance failed (HTTP ${revert.status()})`).toBeTruthy()
+    }
+    test.skip(probe.ok(), 'CRS accepted a duplicate distribution GAV — uniqueness rule not enforced on this image')
+    expect(probe.status(), `expected 409 for the duplicate GAV, got HTTP ${probe.status()}`).toBe(409)
+    const conflictBody = (await probe.json().catch(() => ({}))) as { errorCode?: string | null }
+    test.skip(!conflictBody.errorCode, 'CRS predates #358 (409 without errorCode) — skipping UI journey')
+    expect(conflictBody.errorCode).toBe('UNIQUENESS_VIOLATION')
+
+    // UI journey: flip B's extension 'apk' → 'zip' (= A's exact coordinate).
+    await openTab(page, idB!, /distribution/i)
+    const extensionInput = page.getByPlaceholder('jar')
+    await expect(extensionInput).toHaveValue('apk')
+    await extensionInput.fill('zip')
+    await page.getByRole('button', { name: 'Save Distribution' }).click()
+
+    // Title is the fixed 'Uniqueness violation'; the description is the
+    // SERVER's message verbatim ("uniqueness violation: distribution GAV …").
+    await expect(page.getByText('Uniqueness violation').first()).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText(/uniqueness violation: distribution GAV/i).first()).toBeVisible()
+    // …and crucially NOT the optimistic-lock reload advice (the QA incident).
+    await expectNoOptimisticConflictToast(page)
+  })
+
+  // Best-effort hygiene for long-lived stands (the gradle testcontainers stack
+  // is ephemeral anyway): archive the spec's components. DELETE = archive, the
+  // same call editor-build-history uses. If an earlier test fails, serial mode
+  // skips this too — acceptable: reruns use a fresh suffix and never collide.
+  test('cleanup: archive the created components', async ({ page }) => {
+    test.skip(createdIds.length === 0, 'nothing was created')
+    const headers = await mutationHeaders(page)
+    for (const id of createdIds) {
+      const del = await page.request.delete(`/rest/api/4/components/${id}`, { headers })
+      expect(del.ok(), `cleanup delete failed (HTTP ${del.status()}) for ${id}`).toBeTruthy()
+    }
+  })
+})
