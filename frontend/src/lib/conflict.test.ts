@@ -1,5 +1,28 @@
 import { describe, it, expect } from 'vitest'
-import { describeOptimisticConflict } from './conflict'
+import { classifyConflictBody, describeOptimisticConflict } from './conflict'
+
+describe('classifyConflictBody', () => {
+  it('extracts errorCode and errorMessage from the ErrorResponse envelope', () => {
+    expect(
+      classifyConflictBody('{"errorMessage":"uniqueness violation: …","errorCode":"UNIQUENESS_VIOLATION"}'),
+    ).toEqual({ errorCode: 'UNIQUENESS_VIOLATION', errorMessage: 'uniqueness violation: …' })
+  })
+
+  it('returns null errorCode for an older server without the field', () => {
+    expect(classifyConflictBody('{"errorMessage":"plain conflict"}')).toEqual({
+      errorCode: null,
+      errorMessage: 'plain conflict',
+    })
+  })
+
+  it('tolerates malformed / non-JSON bodies', () => {
+    expect(classifyConflictBody('<html>proxy error</html>')).toEqual({
+      errorCode: null,
+      errorMessage: null,
+    })
+    expect(classifyConflictBody('')).toEqual({ errorCode: null, errorMessage: null })
+  })
+})
 
 describe('describeOptimisticConflict (B7.1.6)', () => {
   it('returns a title and a description that names "updated by another user" when latest is unknown', () => {
