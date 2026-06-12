@@ -74,4 +74,77 @@ describe('useOptimisticConflict', () => {
     expect(out!.title).toBe('Save conflict')
     expect(out!.description).toContain('another user')
   })
+
+  // ── errorCode-aware dispatch (CRS #358 contract) ──────────────────────────
+  // A 409 is NOT always an optimistic-lock conflict: uniqueness validation
+  // (duplicate distribution GAV / jira pair / docker image / component name)
+  // also returns 409. Misreporting those as "updated by another user" sends
+  // the user into a futile reload loop — the QA incident this fixes.
+
+  it('UNIQUENESS_VIOLATION → "Uniqueness violation" toast with the SERVER message, no refetch', async () => {
+    const { refetchSpy, wrapper } = makeHarness()
+    const { result } = renderHook(() => useOptimisticConflict('c-1'), { wrapper })
+    const serverMsg =
+      "uniqueness violation: distribution GAV 'g:a:zip' of component 'a' duplicates component 'b' in intersecting version ranges '(,0),[0,)' ∩ '(,0),[0,)'"
+    const out = await result.current(
+      new ApiError(
+        409,
+        serverMsg,
+        JSON.stringify({ errorMessage: serverMsg, errorCode: 'UNIQUENESS_VIOLATION' }),
+      ),
+    )
+    expect(out).not.toBeNull()
+    expect(out!.title).toBe('Uniqueness violation')
+    expect(out!.description).toBe(serverMsg)
+    expect(out!.description).not.toMatch(/another user/i)
+    // Reload would not help — the conflict is in the submitted values, not staleness.
+    expect(refetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('OPTIMISTIC_LOCK → the reload-and-reapply flow (refetch + "Save conflict")', async () => {
+    const { refetchSpy, wrapper } = makeHarness()
+    const { result } = renderHook(() => useOptimisticConflict('c-1'), { wrapper })
+    const out = await result.current(
+      new ApiError(
+        409,
+        'Optimistic locking conflict: expected version 3 but found 5',
+        JSON.stringify({
+          errorMessage: 'Optimistic locking conflict: expected version 3 but found 5',
+          errorCode: 'OPTIMISTIC_LOCK',
+        }),
+      ),
+    )
+    await waitFor(() => expect(refetchSpy).toHaveBeenCalledOnce())
+    expect(out!.title).toBe('Save conflict')
+    expect(out!.description).toMatch(/another user/i)
+  })
+
+  it('other machine-coded 409 (e.g. DATA_INTEGRITY) → "Save failed" with the server message', async () => {
+    const { refetchSpy, wrapper } = makeHarness()
+    const { result } = renderHook(() => useOptimisticConflict('c-1'), { wrapper })
+    const out = await result.current(
+      new ApiError(
+        409,
+        'Data integrity violation: duplicate or invalid data',
+        JSON.stringify({
+          errorMessage: 'Data integrity violation: duplicate or invalid data',
+          errorCode: 'DATA_INTEGRITY',
+        }),
+      ),
+    )
+    expect(out).not.toBeNull()
+    expect(out!.title).toBe('Save failed')
+    expect(out!.description).toBe('Data integrity violation: duplicate or invalid data')
+    expect(refetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('409 with no errorCode (older server) keeps the legacy optimistic-lock flow', async () => {
+    const { refetchSpy, wrapper } = makeHarness()
+    const { result } = renderHook(() => useOptimisticConflict('c-1'), { wrapper })
+    const out = await result.current(
+      new ApiError(409, 'some conflict', JSON.stringify({ errorMessage: 'some conflict' })),
+    )
+    await waitFor(() => expect(refetchSpy).toHaveBeenCalledOnce())
+    expect(out!.title).toBe('Save conflict')
+  })
 })

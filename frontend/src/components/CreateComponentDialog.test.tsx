@@ -620,6 +620,27 @@ describe('CreateComponentDialog — copy mode (sourceId)', () => {
     )
   })
 
+  it('409 with a structured uniqueness body shows the SERVER message, not the name guess', async () => {
+    const serverMsg =
+      "uniqueness violation: docker image name 'registry/app' of component 'svc-alpha' is already used by component(s) other-svc — image names must be globally unique"
+    mockMutateAsync.mockRejectedValue(
+      new ApiError(
+        409,
+        serverMsg,
+        JSON.stringify({ errorMessage: serverMsg, errorCode: 'UNIQUENESS_VIOLATION' }),
+      ),
+    )
+    loaded()
+    renderCopy()
+    await userEvent.type(screen.getByLabelText(/component key/i), 'svc-alpha')
+    await userEvent.type(screen.getByLabelText(/display name/i), 'Svc Alpha')
+    await fillCopyRequired()
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() =>
+      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ description: serverMsg })),
+    )
+  })
+
   it('submits buildCreateRequest output and navigates on success', async () => {
     mockMutateAsync.mockResolvedValue({ id: 'comp-9', name: 'svc-clone' })
     loaded()

@@ -18,6 +18,36 @@
  * for the surrounding rename/parent tests, and `ComponentDetailPage` for the
  * call site.
  */
+/**
+ * Machine-readable view of a 409 body. CRS (since #358) sends
+ * `{ errorMessage, errorCode }` where errorCode distinguishes error classes
+ * sharing the 409 status: `OPTIMISTIC_LOCK` (stale `version` — reload and
+ * re-apply), `UNIQUENESS_VIOLATION` (the submitted value clashes with another
+ * component — reload will NOT help), `DATA_INTEGRITY` (DB constraint). Older
+ * servers omit the field; unknown values must be tolerated. Malformed/non-JSON
+ * bodies (proxy error pages) classify as all-null.
+ */
+export interface ConflictBody {
+  errorCode: string | null
+  errorMessage: string | null
+}
+
+export function classifyConflictBody(rawBody: string): ConflictBody {
+  try {
+    const parsed: unknown = JSON.parse(rawBody)
+    if (typeof parsed === 'object' && parsed !== null) {
+      const obj = parsed as Record<string, unknown>
+      return {
+        errorCode: typeof obj.errorCode === 'string' ? obj.errorCode : null,
+        errorMessage: typeof obj.errorMessage === 'string' ? obj.errorMessage : null,
+      }
+    }
+  } catch {
+    // not JSON — fall through
+  }
+  return { errorCode: null, errorMessage: null }
+}
+
 export function describeOptimisticConflict(
   latest: { updatedAt: string | null } | undefined,
 ): { title: string; description: string } {
