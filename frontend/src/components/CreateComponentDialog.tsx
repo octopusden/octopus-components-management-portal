@@ -26,6 +26,7 @@ import { visibilityFor } from '../hooks/useFieldConfig'
 import { useComponent, useCreateComponent } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
 import { ApiError } from '../lib/api'
+import { classifyConflictBody } from '../lib/conflict'
 import { parseServerFieldErrors } from '../lib/serverErrors'
 import { lookupEmployee, useEmployeeStatuses } from '../hooks/useEmployees'
 import { selectBaseRow } from '../lib/api/baseRow'
@@ -413,7 +414,13 @@ function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateCom
     } catch (err) {
       let message = err instanceof Error ? err.message : String(err)
       if (err instanceof ApiError && err.status === 409) {
-        message = 'A component with this name already exists.'
+        // A create 409 is a uniqueness violation, but not necessarily the NAME:
+        // cross-component checks (distribution GAV / jira projectKey+prefix /
+        // docker image) also 409. Surface the server's real message instead of
+        // guessing; fall back to the name wording for older servers whose body
+        // carries no message.
+        message = classifyConflictBody(err.rawBody).errorMessage
+          ?? 'A component with this name already exists.'
       }
       if (err instanceof ApiError && err.status === 400) {
         const fieldErrors = parseServerFieldErrors(err.rawBody)
