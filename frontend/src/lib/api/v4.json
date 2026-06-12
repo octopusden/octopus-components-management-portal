@@ -1004,9 +1004,6 @@
       },
       "ErrorResponse" : {
         "properties" : {
-          "errorCode" : {
-            "type" : "string"
-          },
           "errorMessage" : {
             "type" : "string"
           }
