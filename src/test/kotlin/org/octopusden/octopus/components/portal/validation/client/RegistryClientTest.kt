@@ -126,10 +126,12 @@ class RegistryClientTest {
                 client(stub, timeoutSeconds = 1).componentIds().block(Duration.ofSeconds(10))
             }
         // reactor wraps the TimeoutException; assert the cause chain mentions a timeout.
-        assertTrue(
+        val timedOut =
             generateSequence(ex as Throwable) { it.cause }
-                .any { it is java.util.concurrent.TimeoutException || it.message?.contains("timeout", ignoreCase = true) == true },
-            "expected a timeout, got: $ex",
-        )
+                .any {
+                    it is java.util.concurrent.TimeoutException ||
+                        it.message?.contains("timeout", ignoreCase = true) == true
+                }
+        assertTrue(timedOut, "expected a timeout, got: $ex")
     }
 }

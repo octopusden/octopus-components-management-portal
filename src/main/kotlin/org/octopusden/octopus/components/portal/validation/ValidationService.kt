@@ -48,9 +48,25 @@ class ValidationService(
     /** The current cached report. */
     fun currentReport(): ValidationReport = report
 
-    /** Live (cache-bypassing) per-component check, bounded by the live timeout budget. */
+    /**
+     * Live (cache-bypassing) per-component check, bounded by the live timeout budget.
+     * A timeout (or any error escaping perComponent) surfaces as checkFailed=true so
+     * the endpoint returns 200 + an honest failed-check body rather than a 500.
+     */
     fun validateLive(component: String): Mono<ComponentValidation> =
-        perComponent(component).timeout(Duration.ofSeconds(properties.liveTimeoutSeconds))
+        perComponent(component)
+            .timeout(Duration.ofSeconds(properties.liveTimeoutSeconds))
+            .onErrorResume { e ->
+                log.warn("Live validation check failed for component '{}': {}", component, e.toString())
+                Mono.just(
+                    ComponentValidation(
+                        component = component,
+                        problems = emptyList(),
+                        checkFailed = true,
+                        checkError = shortReason(e),
+                    ),
+                )
+            }
 
     /**
      * Full sweep: all CRS component ids → per-component validation, bounded by
@@ -108,7 +124,7 @@ class ValidationService(
     /** One-shot refresh at startup, off the boot thread so it never blocks readiness. */
     @EventListener(ApplicationReadyEvent::class)
     fun refreshOnStartup() {
-        Mono.fromRunnable<Void> { refresh() }
+        Mono.fromRunnable<Unit> { refresh() }
             .subscribeOn(Schedulers.boundedElastic())
             .subscribe()
     }
@@ -120,6 +136,7 @@ class ValidationService(
      * failure/timeout → retain previous `components`, set refreshError + bump
      * lastAttemptAt (stale-but-honest).
      */
+    @Suppress("TooGenericExceptionCaught")
     fun refresh() {
         if (!refreshing.compareAndSet(false, true)) {
             log.debug("Validation refresh already running, skipping this trigger")
@@ -134,6 +151,9 @@ class ValidationService(
                 retainStale("sweep produced no report")
             }
         } catch (e: Exception) {
+            // Broad catch is intentional: .block() can throw reactor's ReactiveException
+            // wrapper or an IllegalStateException on sweep-timeout — all must retain the
+            // previous report rather than crash the scheduler thread.
             log.warn("Validation sweep failed, retaining previous report: {}", e.toString())
             retainStale(shortReason(e))
         } finally {

@@ -10,6 +10,7 @@ import org.octopusden.octopus.components.portal.validation.ValidationService
 import org.octopusden.octopus.components.portal.validation.client.RegistryClient
 import org.octopusden.octopus.components.portal.validation.client.ReleaseManagementClient
 import org.octopusden.octopus.components.portal.validation.validators.UnregisteredReleasedVersionsValidator
+import org.springframework.beans.factory.DisposableBean
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.TestConfiguration
@@ -108,8 +109,14 @@ class ValidationControllerTest {
     }
 
     @TestConfiguration
-    open class StubValidationServiceConfig {
+    open class StubValidationServiceConfig : DisposableBean {
         private val servers = mutableListOf<HttpServer>()
+
+        /** Stop all stub servers when the context is torn down (mirrors @AfterEach in ValidationServiceTest). */
+        override fun destroy() {
+            servers.forEach { it.stop(0) }
+            servers.clear()
+        }
 
         private fun newServer(): HttpServer {
             val stub = HttpServer.create(InetSocketAddress(0), 0)

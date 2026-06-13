@@ -62,6 +62,7 @@ class ValidationServiceTest {
         crs: HttpServer,
         rm: HttpServer,
         timeoutSeconds: Long = 10,
+        liveTimeoutSeconds: Long = 30,
     ): ValidationService {
         val properties =
             ValidationProperties().apply {
@@ -69,7 +70,7 @@ class ValidationServiceTest {
                 releaseManagementBaseUrl = "http://localhost:${rm.address.port}"
                 requestTimeoutSeconds = timeoutSeconds
                 sweepTimeoutSeconds = 30
-                liveTimeoutSeconds = 30
+                this.liveTimeoutSeconds = liveTimeoutSeconds
                 concurrency = 4
             }
         val registry = RegistryClient(properties)
@@ -243,5 +244,29 @@ class ValidationServiceTest {
         assertFalse(cv.checkFailed)
         assertEquals(1, cv.problems.size)
         assertEquals(listOf("9.9.9"), cv.problems.single().details["versions"])
+    }
+
+    @Test
+    @DisplayName("validateLive timeout surfaces as checkFailed=true (NOT an error/500)")
+    fun `validateLive timeout yields checkFailed`() {
+        val crs = newServer()
+        crs.createContext("/rest/api/2/components") { exchange ->
+            respondJson(exchange, 200, """{"versions":{}}""")
+        }
+        val rm = newServer()
+        // RM stalls past the live-timeout budget; the per-call request timeout is left
+        // high (default 10s) so it's the OUTER live timeout that fires.
+        rm.createContext("/rest/api/1/builds/component") { exchange ->
+            Thread.sleep(3_000)
+            respondJson(exchange, 200, """[]""")
+        }
+
+        val svc = service(crs, rm, timeoutSeconds = 10, liveTimeoutSeconds = 1)
+        val cv = svc.validateLive("slow-comp").block(Duration.ofSeconds(10))!!
+
+        assertEquals("slow-comp", cv.component)
+        assertTrue(cv.checkFailed, "a live-check timeout must surface as checkFailed, not an error")
+        assertTrue(cv.problems.isEmpty())
+        assertNotNull(cv.checkError)
     }
 }

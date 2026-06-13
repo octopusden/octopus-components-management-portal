@@ -143,10 +143,12 @@ class ReleaseManagementClientTest {
             assertThrows(RuntimeException::class.java) {
                 client(stub, timeoutSeconds = 1).releasedVersions("c").block(Duration.ofSeconds(10))
             }
-        assertTrue(
+        val timedOut =
             generateSequence(ex as Throwable) { it.cause }
-                .any { it is java.util.concurrent.TimeoutException || it.message?.contains("timeout", ignoreCase = true) == true },
-            "expected a timeout, got: $ex",
-        )
+                .any {
+                    it is java.util.concurrent.TimeoutException ||
+                        it.message?.contains("timeout", ignoreCase = true) == true
+                }
+        assertTrue(timedOut, "expected a timeout, got: $ex")
     }
 }
