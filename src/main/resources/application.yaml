@@ -70,6 +70,19 @@ portal:
     git-base-url: ${PORTAL_LINKS_GIT_BASE_URL:}
     tc-base-url: ${PORTAL_LINKS_TC_BASE_URL:}
     dms-base-url: ${PORTAL_LINKS_DMS_BASE_URL:}
+  # Generic "Validation Problems" facility: a scheduled in-memory sweep that
+  # reconciles release-management's RELEASE builds against the components-registry
+  # resolver. registry-base-url reuses the same CRS env var as the gateway routes;
+  # release-management-base-url is new. All timeout budgets are env-tunable so
+  # QA/prod can adjust without a rebuild.
+  validation:
+    registry-base-url: ${COMPONENTS_REGISTRY_SERVICE_URL:http://localhost:4567}
+    release-management-base-url: ${RELEASE_MANAGEMENT_SERVICE_URL:http://localhost:4568}
+    refresh-interval-ms: ${PORTAL_VALIDATION_REFRESH_INTERVAL_MS:3600000}
+    concurrency: ${PORTAL_VALIDATION_CONCURRENCY:8}
+    request-timeout-seconds: ${PORTAL_VALIDATION_REQUEST_TIMEOUT_SECONDS:30}
+    sweep-timeout-seconds: ${PORTAL_VALIDATION_SWEEP_TIMEOUT_SECONDS:600}
+    live-timeout-seconds: ${PORTAL_VALIDATION_LIVE_TIMEOUT_SECONDS:60}
 
 management:
   endpoints:
