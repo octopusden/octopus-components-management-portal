@@ -549,6 +549,60 @@ export interface CrsInfo {
 }
 
 // ---------------------------------------------------------------------------
+// Validation Problems (Portal-side aggregator facility)
+// ---------------------------------------------------------------------------
+//
+// Hand-mirrored from the Portal backend `/portal/validation/**` wire contract
+// (PR #109). These endpoints are NOT part of the CRS v4 surface — they are
+// produced by Portal's ValidationController, so they are not covered by the
+// generated schema.d.ts drift gate. The facility is generic/extensible: a
+// component carries an open-ended list of `problems`, each tagged by `type`.
+// The first (and currently only) problem type is UNREGISTERED_RELEASED_VERSIONS.
+
+// Open string-union rather than a closed enum: the backend can add new problem
+// kinds before the SPA is updated. Code that switches on `type` must tolerate
+// an unknown value (render a generic problem rather than crash).
+export type ValidationProblemType = 'UNREGISTERED_RELEASED_VERSIONS' | (string & {})
+
+export type ValidationSeverity = 'ERROR' | 'WARNING'
+
+export interface ValidationProblem {
+  type: ValidationProblemType
+  severity: ValidationSeverity
+  // Short human-readable summary, e.g. "3 released version(s) not registered ...".
+  message: string
+  // Type-specific payload. For UNREGISTERED_RELEASED_VERSIONS the backend emits
+  // { versions: string[], missingCount: number, releasedCount: number }. Kept as
+  // an open record so new problem types don't force a type change here; callers
+  // read the keys they know about defensively.
+  details: Record<string, unknown>
+}
+
+export interface ComponentValidation {
+  // CRS component id / key (matches ComponentSummary.name on the list page).
+  component: string
+  problems: ValidationProblem[]
+  // A validator/client error — NOT a clean pass. The component was NOT confirmed
+  // clean; we failed to check it. `problemsOnly=true` keeps these rows.
+  checkFailed: boolean
+  // Short reason when checkFailed is true.
+  checkError: string | null
+}
+
+export interface ValidationReport {
+  // When the held `components` were produced (last successful sweep); null until
+  // the backend's first successful sweep completes.
+  generatedAt: string | null
+  // When the most recent refresh attempt ran (success or failure).
+  lastAttemptAt: string | null
+  // Non-null when the most recent attempt failed; the previous good `components`
+  // are retained (stale-but-honest). Surfaced in the UI so a stale/failed report
+  // is never silently rendered as "all clean".
+  refreshError: string | null
+  components: ComponentValidation[]
+}
+
+// ---------------------------------------------------------------------------
 // Migration / async-job envelopes (unchanged by schema-v2; MIG-039 deferred,
 // so POST /admin/migrate currently returns 501 Not Implemented — UI gates that)
 // ---------------------------------------------------------------------------
