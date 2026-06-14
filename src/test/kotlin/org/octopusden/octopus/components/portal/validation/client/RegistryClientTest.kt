@@ -37,13 +37,33 @@ class RegistryClientTest {
     private fun client(
         stub: HttpServer,
         timeoutSeconds: Long = 10,
+        maxResponseBytes: Int = ValidationProperties().maxResponseBytes,
     ): RegistryClient {
         val properties =
             ValidationProperties().apply {
                 registryBaseUrl = "http://localhost:${stub.address.port}"
                 requestTimeoutSeconds = timeoutSeconds
+                this.maxResponseBytes = maxResponseBytes
             }
         return RegistryClient(properties)
+    }
+
+    /**
+     * Builds a syntactically valid `/rest/api/3/components` JSON body with [count]
+     * elements, all using neutral `comp-N` ids, sized to exceed WebClient's default
+     * 256 KB in-memory codec limit. Every 5th element is marked `"archived":true`.
+     * Returns the body and the ordered list of NON-archived ids (what the sweep keeps).
+     */
+    private fun largeComponentsBody(count: Int): Pair<String, List<String>> {
+        val expectedIds = mutableListOf<String>()
+        val body =
+            (0 until count).joinToString(prefix = "[", postfix = "]", separator = ",") { i ->
+                val id = "comp-$i"
+                val archived = i % 5 == 0
+                if (!archived) expectedIds.add(id)
+                """{"component":{"id":"$id","name":"$id","archived":$archived},"variants":{}}"""
+            }
+        return body to expectedIds
     }
 
     private fun respondJson(
@@ -58,23 +78,73 @@ class RegistryClientTest {
     }
 
     @Test
-    @DisplayName("componentIds parses the id nested under \"component\" (real CRS shape)")
-    fun `componentIds parses nested ids`() {
+    @DisplayName("componentIds parses the id nested under \"component\" and SKIPS archived")
+    fun `componentIds parses nested ids and skips archived`() {
         val stub = startStub()
         // Real CRS GET /rest/api/3/components returns the id NESTED under "component",
-        // not a top-level "id" — each element is {"component":{"id":...},"variants":{...}}.
+        // not a top-level "id" — each element is
+        // {"component":{"id":...,"archived":...},"variants":{...}}.
+        // Archived components must be excluded from the sweep.
         stub.createContext("/rest/api/3/components") { exchange ->
             respondJson(
                 exchange,
                 200,
-                """[{"component":{"id":"comp-a","name":"comp-a"},"variants":{}},""" +
+                """[{"component":{"id":"comp-a","name":"comp-a","archived":false},"variants":{}},""" +
+                    """{"component":{"id":"comp-archived","name":"comp-archived","archived":true},"variants":{}},""" +
                     """{"component":{"id":"comp-b"},"variants":{}}]""",
             )
         }
 
         val ids = client(stub).componentIds().block(Duration.ofSeconds(10))!!
 
+        // comp-archived is dropped; comp-b has no "archived" field → defaults to not-archived.
         assertEquals(listOf("comp-a", "comp-b"), ids)
+    }
+
+    @Test
+    @DisplayName("componentIds parses a body LARGER than the default 256 KB codec limit and skips archived")
+    fun `componentIds parses large body over default codec limit`() {
+        val stub = startStub()
+        // ~7000 elements ≈ well over WebClient's default 256 KB in-memory buffer
+        // (each element is ~70+ bytes). This FAILS against the default 256 KB codec
+        // (DataBufferLimitException) and PASSES with the configured maxResponseBytes.
+        // expectedIds excludes the archived entries, so this also guards the archived filter.
+        val (body, expectedIds) = largeComponentsBody(count = 7_000)
+        assertTrue(
+            body.toByteArray().size > 256 * 1024,
+            "test body must exceed the default 256 KB limit to be meaningful, was ${body.toByteArray().size} bytes",
+        )
+        stub.createContext("/rest/api/3/components") { exchange ->
+            respondJson(exchange, 200, body)
+        }
+
+        // Use the new default maxResponseBytes (16 MiB) so the configured buffer is exercised.
+        val ids = client(stub).componentIds().block(Duration.ofSeconds(20))!!
+
+        assertEquals(expectedIds, ids)
+    }
+
+    @Test
+    @DisplayName("componentIds fails when the body exceeds the configured maxResponseBytes (knob works)")
+    fun `componentIds fails when body exceeds configured buffer`() {
+        val stub = startStub()
+        val (body, _) = largeComponentsBody(count = 7_000)
+        val bodyBytes = body.toByteArray().size
+        stub.createContext("/rest/api/3/components") { exchange ->
+            respondJson(exchange, 200, body)
+        }
+
+        // Set the buffer BELOW the body size: the call must fail (proves the knob is honored).
+        val ex =
+            assertThrows(RuntimeException::class.java) {
+                client(stub, maxResponseBytes = bodyBytes / 2)
+                    .componentIds()
+                    .block(Duration.ofSeconds(20))
+            }
+        val bufferLimited =
+            generateSequence(ex as Throwable) { it.cause }
+                .any { it.message?.contains("buffer", ignoreCase = true) == true }
+        assertTrue(bufferLimited, "expected a buffer-limit failure, got: $ex")
     }
 
     @Test
