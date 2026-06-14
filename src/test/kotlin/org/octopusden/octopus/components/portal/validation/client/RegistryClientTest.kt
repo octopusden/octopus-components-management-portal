@@ -58,16 +58,23 @@ class RegistryClientTest {
     }
 
     @Test
-    @DisplayName("componentIds parses the id field")
-    fun `componentIds parses ids`() {
+    @DisplayName("componentIds parses the id nested under \"component\" (real CRS shape)")
+    fun `componentIds parses nested ids`() {
         val stub = startStub()
+        // Real CRS GET /rest/api/3/components returns the id NESTED under "component",
+        // not a top-level "id" — each element is {"component":{"id":...},"variants":{...}}.
         stub.createContext("/rest/api/3/components") { exchange ->
-            respondJson(exchange, 200, """[{"id":"a","name":"A"},{"id":"b","name":"B"}]""")
+            respondJson(
+                exchange,
+                200,
+                """[{"component":{"id":"comp-a","name":"comp-a"},"variants":{}},""" +
+                    """{"component":{"id":"comp-b"},"variants":{}}]""",
+            )
         }
 
         val ids = client(stub).componentIds().block(Duration.ofSeconds(10))!!
 
-        assertEquals(listOf("a", "b"), ids)
+        assertEquals(listOf("comp-a", "comp-b"), ids)
     }
 
     @Test
