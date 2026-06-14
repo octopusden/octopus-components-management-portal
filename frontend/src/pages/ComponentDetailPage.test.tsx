@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React, { useEffect } from 'react'
@@ -89,17 +90,12 @@ vi.mock('../components/editor/ComponentHistoryTab', () => ({
 vi.mock('../components/editor/WhoCanEditPanel', () => ({
   WhoCanEditPanel: () => React.createElement('div', { 'data-testid': 'who-can-edit' }),
 }))
-// ValidationProblemsSection fetches the live per-component result via react-query;
-// stub it so the page test only asserts whether the admin-gated section mounts
-// (and with which props). Its own behavior is covered in
-// ValidationProblemsSection.test.tsx.
-vi.mock('../components/editor/ValidationProblemsSection', () => ({
-  ValidationProblemsSection: ({ componentId, isAdmin }: { componentId: string; isAdmin: boolean }) =>
-    React.createElement(
-      'div',
-      { 'data-testid': 'validation-problems-section', 'data-admin': String(isAdmin) },
-      componentId,
-    ),
+// The Validation Problems tab is driven by the SAME cached report hook the list
+// page uses (useValidationProblems). Mock it so tests can supply a report keyed
+// by component name (HAS problems) or an empty report (clean), and assert the
+// enabled-gating contract (non-admin → hook called with enabled=false).
+vi.mock('../hooks/useValidationProblems', () => ({
+  useValidationProblems: vi.fn(),
 }))
 // CreateComponentDialog (copy mode) pulls hooks from the (mocked) useComponent
 // module; stub it so the page test only asserts the open/sourceId wiring.
@@ -116,9 +112,28 @@ import { useFieldConfigEntry } from '../hooks/useFieldConfig'
 import { GeneralTab } from '../components/editor/GeneralTab'
 import { CANNOT_EDIT_TITLE } from '../components/editor/editPermission'
 import { useAdminMode } from '../lib/adminModeStore'
+import { useValidationProblems } from '../hooks/useValidationProblems'
+import type { ComponentValidation } from '@/lib/types'
 
 const mockedUsePortalLinks = vi.mocked(usePortalLinks)
 const mockedUseFieldConfigEntry = vi.mocked(useFieldConfigEntry)
+const mockedUseValidationProblems = vi.mocked(useValidationProblems)
+
+/** Build a useValidationProblems result with the given component validations
+ *  keyed by their `component` field — the exact map the real hook produces. */
+function validationResult(cvs: ComponentValidation[]) {
+  const byComponent = new Map<string, ComponentValidation>()
+  for (const cv of cvs) byComponent.set(cv.component, cv)
+  return {
+    byComponent,
+    generatedAt: null,
+    lastAttemptAt: null,
+    refreshError: null,
+    isLoading: false,
+    isError: false,
+    error: null,
+  } as unknown as ReturnType<typeof useValidationProblems>
+}
 
 const mockedUseCurrentUser = vi.mocked(useCurrentUser)
 const mockedUseComponent = vi.mocked(useComponent)
@@ -252,9 +267,12 @@ function renderPage(component: ComponentDetail, user: User | null, opts: RenderP
 beforeEach(() => {
   vi.clearAllMocks()
   vi.unstubAllGlobals()
-  // The Validation Problems section is admin-mode only. Default adminMode OFF so
-  // existing tests render no section; the dedicated describe flips it on.
+  // The Validation Problems tab is admin-mode only. Default adminMode OFF so
+  // existing tests render no tab; the dedicated describe flips it on.
   useAdminMode.setState({ enabled: false })
+  // Default: an empty validation report → no Validation Problems tab. The
+  // dedicated describe overrides this to supply a problem-bearing report.
+  mockedUseValidationProblems.mockReturnValue(validationResult([]))
   mockedUsePortalLinks.mockReturnValue({
     data: undefined,
     isLoading: false,
@@ -1086,28 +1104,93 @@ describe('ComponentDetailPage — cross-tab 400 + displayName clear', () => {
   })
 })
 
-describe('ComponentDetailPage — Validation Problems section (admin gate)', () => {
-  it('renders the section for an admin (adminMode + IMPORT_DATA), passing the component id', () => {
+describe('ComponentDetailPage — Validation Problems tab (admin gate + lookup by name)', () => {
+  // A problem-bearing validation keyed by the COMPONENT NAME (`my-component`),
+  // NOT the id (`comp-1`). The detail tab must look it up by name — the same
+  // field the list overlay matches on — so an id != name component still shows
+  // its problems (the discrepancy this rework fixes).
+  function withProblems(versions: string[]): ComponentValidation {
+    return {
+      component: 'my-component',
+      problems: [
+        {
+          type: 'UNREGISTERED_RELEASED_VERSIONS',
+          severity: 'ERROR',
+          message: `${versions.length} released version(s) not registered`,
+          details: { versions, missingCount: versions.length },
+        },
+      ],
+      checkFailed: false,
+      checkError: null,
+    } as unknown as ComponentValidation
+  }
+
+  it('renders a RED Validation Problems tab (last) for an admin when the component has problems, and shows the full versions list when selected', async () => {
     useAdminMode.setState({ enabled: true })
+    const versions = ['v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7']
+    mockedUseValidationProblems.mockReturnValue(validationResult([withProblems(versions)]))
     const user = makeUser(['ACCESS_COMPONENTS', 'IMPORT_DATA'])
     renderPage(baseComponent, user)
-    const section = screen.getByTestId('validation-problems-section')
-    expect(section).toBeDefined()
-    expect(section.getAttribute('data-admin')).toBe('true')
-    expect(section.textContent).toBe('comp-1')
+
+    // The hook is enabled for an admin.
+    expect(mockedUseValidationProblems).toHaveBeenCalledWith(true)
+
+    const tab = screen.getByRole('tab', { name: /validation problems/i })
+    expect(tab).toBeDefined()
+    // Red styling applied to the trigger.
+    expect(tab.className).toContain('text-destructive')
+    // Last tab in the list.
+    const tabs = within(screen.getByRole('tablist')).getAllByRole('tab')
+    expect((tabs[tabs.length - 1]!.textContent ?? '')).toMatch(/validation problems/i)
+
+    // Selecting it shows the full versions list (untruncated). Radix Tabs ignore
+    // plain fireEvent.click in jsdom (the trigger uses pointer-down/keyboard
+    // semantics); userEvent simulates the full pointerdown → click → focus chain.
+    await userEvent.setup().click(tab)
+    await waitFor(() => {
+      for (const v of versions) expect(screen.getByText(v)).toBeDefined()
+    })
   })
 
-  it('does not render the section when adminMode is off (even with IMPORT_DATA)', () => {
-    // adminMode defaults OFF (beforeEach)
+  it('does NOT render the tab for an admin when the component is clean (not in report)', () => {
+    useAdminMode.setState({ enabled: true })
+    // Empty report (default in beforeEach) → component absent → no tab.
     const user = makeUser(['ACCESS_COMPONENTS', 'IMPORT_DATA'])
     renderPage(baseComponent, user)
-    expect(screen.queryByTestId('validation-problems-section')).toBeNull()
+    expect(screen.queryByRole('tab', { name: /validation problems/i })).toBeNull()
   })
 
-  it('does not render the section for a non-IMPORT_DATA user even with adminMode on', () => {
+  it('does NOT render the tab for an admin when the report entry has no issues', () => {
     useAdminMode.setState({ enabled: true })
+    const cleanCv = {
+      component: 'my-component',
+      problems: [],
+      checkFailed: false,
+      checkError: null,
+    } as unknown as ComponentValidation
+    mockedUseValidationProblems.mockReturnValue(validationResult([cleanCv]))
+    const user = makeUser(['ACCESS_COMPONENTS', 'IMPORT_DATA'])
+    renderPage(baseComponent, user)
+    expect(screen.queryByRole('tab', { name: /validation problems/i })).toBeNull()
+  })
+
+  it('does NOT render the tab when adminMode is off (even with IMPORT_DATA), and disables the fetch', () => {
+    // adminMode defaults OFF (beforeEach). Provide a problem-bearing report to
+    // prove the gate is admin, not data.
+    mockedUseValidationProblems.mockReturnValue(validationResult([withProblems(['v1'])]))
+    const user = makeUser(['ACCESS_COMPONENTS', 'IMPORT_DATA'])
+    renderPage(baseComponent, user)
+    expect(screen.queryByRole('tab', { name: /validation problems/i })).toBeNull()
+    // Non-admin → hook gated disabled (no /portal/validation request).
+    expect(mockedUseValidationProblems).toHaveBeenCalledWith(false)
+  })
+
+  it('does NOT render the tab for a non-IMPORT_DATA user even with adminMode on, and disables the fetch', () => {
+    useAdminMode.setState({ enabled: true })
+    mockedUseValidationProblems.mockReturnValue(validationResult([withProblems(['v1'])]))
     const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
     renderPage(baseComponent, user)
-    expect(screen.queryByTestId('validation-problems-section')).toBeNull()
+    expect(screen.queryByRole('tab', { name: /validation problems/i })).toBeNull()
+    expect(mockedUseValidationProblems).toHaveBeenCalledWith(false)
   })
 })
