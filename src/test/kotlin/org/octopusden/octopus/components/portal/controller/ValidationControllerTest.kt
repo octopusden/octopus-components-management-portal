@@ -147,7 +147,14 @@ class ValidationControllerTest {
         open fun validationService(): ValidationService {
             val crs = newServer()
             crs.createContext("/rest/api/3/components") { exchange ->
-                respond(exchange, 200, """[{"id":"clean"},{"id":"problem"},{"id":"broken"}]""")
+                // Real CRS shape: id nested under "component".
+                respond(
+                    exchange,
+                    200,
+                    """[{"component":{"id":"clean"},"variants":{}},""" +
+                        """{"component":{"id":"problem"},"variants":{}},""" +
+                        """{"component":{"id":"broken"},"variants":{}}]""",
+                )
             }
             crs.createContext("/rest/api/2/components") { exchange ->
                 val path = exchange.requestURI.path

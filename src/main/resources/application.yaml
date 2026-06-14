@@ -75,6 +75,11 @@ portal:
   # resolver. registry-base-url reuses the same CRS env var as the gateway routes;
   # release-management-base-url is new. All timeout budgets are env-tunable so
   # QA/prod can adjust without a rebuild.
+  #
+  # IMPORTANT: registry-base-url and release-management-base-url MUST be https.
+  # Over http these services issue an http->https redirect; WebClient follows it
+  # but downgrades the detailed-versions POST to a GET on the redirect, which CRS
+  # rejects as HTTP 405. Use https base URLs so the POST is preserved (200).
   validation:
     registry-base-url: ${COMPONENTS_REGISTRY_SERVICE_URL:http://localhost:4567}
     release-management-base-url: ${RELEASE_MANAGEMENT_SERVICE_URL:http://localhost:4568}

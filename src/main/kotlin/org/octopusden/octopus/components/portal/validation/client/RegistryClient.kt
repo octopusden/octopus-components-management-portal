@@ -26,14 +26,19 @@ class RegistryClient(
     private val webClient: WebClient = WebClient.builder().baseUrl(properties.registryBaseUrl).build()
     private val requestTimeout: Duration = Duration.ofSeconds(properties.requestTimeoutSeconds)
 
-    /** GET /rest/api/3/components → list of component ids. */
+    /**
+     * GET /rest/api/3/components → list of component ids.
+     *
+     * Each element is `{"component":{"id":...},"variants":{...}}` — the id is
+     * NESTED under "component", not a top-level "id".
+     */
     fun componentIds(): Mono<List<String>> =
         webClient
             .get()
             .uri("/rest/api/3/components")
             .retrieve()
             .bodyToMono<List<ComponentRef>>()
-            .map { refs -> refs.mapNotNull { it.id } }
+            .map { refs -> refs.mapNotNull { it.component?.id } }
             .timeout(requestTimeout)
 
     /**
@@ -58,7 +63,10 @@ class RegistryClient(
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    data class ComponentRef(val id: String? = null)
+    data class ComponentRef(val component: ComponentInner? = null)
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    data class ComponentInner(val id: String? = null)
 
     data class VersionsRequest(val versions: List<String>)
 

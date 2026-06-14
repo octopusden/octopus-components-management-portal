@@ -84,7 +84,12 @@ class ValidationServiceTest {
     fun `sweep aggregates and caches`() {
         val crs = newServer()
         crs.createContext("/rest/api/3/components") { exchange ->
-            respondJson(exchange, 200, """[{"id":"good"},{"id":"bad"}]""")
+            // Real CRS shape: id nested under "component".
+            respondJson(
+                exchange,
+                200,
+                """[{"component":{"id":"good"},"variants":{}},{"component":{"id":"bad"},"variants":{}}]""",
+            )
         }
         crs.createContext("/rest/api/2/components") { exchange ->
             // "good" resolves everything; "bad" resolves nothing → a missing problem.
@@ -124,7 +129,7 @@ class ValidationServiceTest {
     fun `per component error surfaces as checkFailed`() {
         val crs = newServer()
         crs.createContext("/rest/api/3/components") { exchange ->
-            respondJson(exchange, 200, """[{"id":"broken"}]""")
+            respondJson(exchange, 200, """[{"component":{"id":"broken"},"variants":{}}]""")
         }
         crs.createContext("/rest/api/2/components") { exchange ->
             respondJson(exchange, 200, """{"versions":{}}""")
@@ -153,7 +158,7 @@ class ValidationServiceTest {
         // Phase 1: a good sweep populates the cache.
         val crsGood = newServer()
         crsGood.createContext("/rest/api/3/components") { exchange ->
-            respondJson(exchange, 200, """[{"id":"good"}]""")
+            respondJson(exchange, 200, """[{"component":{"id":"good"},"variants":{}}]""")
         }
         crsGood.createContext("/rest/api/2/components") { exchange ->
             respondJson(exchange, 200, """{"versions":{"1.0.1":{}}}""")
