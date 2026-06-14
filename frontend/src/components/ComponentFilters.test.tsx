@@ -1194,4 +1194,3 @@ describe('ComponentFilters — with validation problems toggle', () => {
     expect(onProblemsOnlyChange).toHaveBeenCalledWith(false)
   })
 })
-

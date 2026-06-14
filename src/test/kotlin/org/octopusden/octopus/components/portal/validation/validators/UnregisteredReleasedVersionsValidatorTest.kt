@@ -86,14 +86,14 @@ class UnregisteredReleasedVersionsValidatorTest {
     @Test
     @DisplayName("sub-component-qualified versions are passed verbatim and flagged when unresolvable")
     fun `subcomponent qualified version flagged verbatim`() {
-        val released = listOf("SessionsService.1.0.667", "1.0.1")
+        val released = listOf("ExampleService.1.0.1", "1.0.1")
         // CRS resolves only the plain version; the sub-component-qualified one is missing.
         val validator = validatorReturning(resolvable = setOf("1.0.1"))
 
-        val problems = validator.validate("mcloud-sessions-service", released).block(Duration.ofSeconds(10))!!
+        val problems = validator.validate("example-component", released).block(Duration.ofSeconds(10))!!
 
         val problem = problems.single()
-        assertEquals(listOf("SessionsService.1.0.667"), problem.details["versions"])
+        assertEquals(listOf("ExampleService.1.0.1"), problem.details["versions"])
         assertEquals(1, problem.details["missingCount"])
         assertEquals(2, problem.details["releasedCount"])
     }
