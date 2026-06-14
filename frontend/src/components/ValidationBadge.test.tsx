@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { TooltipProvider } from './ui/tooltip'
 import { ValidationBadge } from './ValidationBadge'
@@ -122,5 +122,66 @@ describe('ValidationBadge rendering', () => {
     expect(tooltip).toHaveTextContent('+1 more')
     // The 6th version is not listed individually.
     expect(tooltip.textContent).not.toContain('v6')
+  })
+})
+
+describe('ValidationBadge full-list dialog', () => {
+  it('opens a dialog with the COMPLETE version list (no "+N more") on click', async () => {
+    const user = userEvent.setup()
+    // 7 versions > MAX_EXAMPLE_VERSIONS (5): the dialog must show every one,
+    // including v6/v7 which the tooltip would truncate.
+    const versions = ['v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7']
+    renderBadge(withProblems(7, versions))
+
+    await user.click(screen.getByRole('button', { name: /7 validation problems/i }))
+
+    const dialog = await screen.findByRole('dialog')
+    // Every version is present individually — including beyond the tooltip cap.
+    for (const v of versions) {
+      expect(dialog).toHaveTextContent(v)
+    }
+    // The dialog never truncates with the tooltip's overflow line.
+    expect(dialog.textContent).not.toContain('+1 more')
+    expect(dialog.textContent).not.toContain('more')
+    // The Copy affordance is present.
+    expect(screen.getByRole('button', { name: /copy versions/i })).toBeDefined()
+  })
+
+  it('opens the dialog with the keyboard (Enter) and closes with Escape', async () => {
+    const user = userEvent.setup()
+    renderBadge(withProblems(2, ['a1', 'a2']))
+
+    screen.getByRole('button', { name: /2 validation problems/i }).focus()
+    await user.keyboard('{Enter}')
+    expect(await screen.findByRole('dialog')).toBeDefined()
+
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('surfaces a failed check in the dialog rather than rendering it clean', async () => {
+    const user = userEvent.setup()
+    renderBadge(failedCheck())
+
+    await user.click(screen.getByRole('button', { name: /validation check failed/i }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveTextContent(/check failed/i)
+    expect(dialog).toHaveTextContent('RM returned 500')
+  })
+
+  it('copies the full newline-joined version list to the clipboard', async () => {
+    const user = userEvent.setup()
+    const writeText = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    const versions = ['x1', 'x2', 'x3']
+    renderBadge(withProblems(3, versions))
+
+    await user.click(screen.getByRole('button', { name: /3 validation problems/i }))
+    await screen.findByRole('dialog')
+    await user.click(screen.getByRole('button', { name: /copy versions/i }))
+
+    expect(writeText).toHaveBeenCalledWith('x1\nx2\nx3')
+    vi.unstubAllGlobals()
   })
 })

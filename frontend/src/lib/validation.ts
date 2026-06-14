@@ -28,6 +28,16 @@ export function problemExampleVersions(problem: ValidationProblem): string[] {
 }
 
 /**
+ * Every version string across ALL of a component's problems, in problem order,
+ * for the "Copy" affordance in the full-list dialog. Newline-join at the call
+ * site. Versions can legally repeat across problems; we do not dedup so the
+ * copied list mirrors exactly what is rendered.
+ */
+export function allProblemVersions(cv: ComponentValidation): string[] {
+  return cv.problems.flatMap((p) => problemExampleVersions(p))
+}
+
+/**
  * The number to display on the badge. Prefer the summed problem-specific
  * `missingCount` (most meaningful to a maintainer); fall back to the issue
  * count when no problem carries a numeric missingCount.

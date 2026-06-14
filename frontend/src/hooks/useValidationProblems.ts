@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, type UseQueryResult } from '@tanstack/react-query'
 import { apiAbsolute } from '../lib/api'
 import type { ComponentValidation, ValidationReport } from '../lib/types'
 
@@ -103,4 +103,40 @@ export function useValidationProblems(enabled = true): UseValidationProblemsResu
  */
 export function useComponentsWithProblems(enabled: boolean): UseValidationProblemsResult {
   return useValidationReport(true, enabled)
+}
+
+/**
+ * Fetch the LIVE per-component validation result via
+ * `GET /portal/validation/components/{component}`. Unlike the report hooks
+ * above (which read a scheduled Portal-wide sweep), this hits the single-
+ * component endpoint so the component DETAIL page surfaces a fresh result for
+ * just that one component rather than overlaying a cached report.
+ *
+ * `enabled` gates the request: the Validation Problems facility is admin-only,
+ * so the detail page passes `enabled = isAdmin`. A non-admin therefore issues
+ * no `/portal/validation` call at all.
+ *
+ * `data` is undefined while loading / on error; a returned `ComponentValidation`
+ * may itself carry `checkFailed = true` (a "could not verify" state — NOT a
+ * clean pass), which callers must surface honestly rather than render as clean.
+ */
+export function useComponentValidation(
+  component: string,
+  enabled: boolean,
+): UseQueryResult<ComponentValidation> {
+  return useQuery<ComponentValidation>({
+    queryKey: ['validation', 'component', component],
+    queryFn: () =>
+      apiAbsolute.get<ComponentValidation>(
+        `/${VALIDATION_PATH}/${encodeURIComponent(component)}`,
+      ),
+    // Same freshness budget as the report hooks — the server recomputes on a
+    // schedule, so a 5 min stale window keeps the section reasonably fresh.
+    staleTime: 5 * 60 * 1000,
+    // A failed fetch must not break the detail page — the section renders an
+    // error/empty affordance, the rest of the page still loads.
+    retry: false,
+    // Skip entirely for non-admins (and before we know the component id).
+    enabled: enabled && component.length > 0,
+  })
 }
