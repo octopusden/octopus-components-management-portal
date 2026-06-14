@@ -22,8 +22,9 @@ import { Badge, badgeVariants } from './ui/badge'
 import { Button } from './ui/button'
 import { EmptyState } from './ui/empty-state'
 import { SkeletonTable } from './ui/skeleton-table'
+import { ValidationBadge } from './ValidationBadge'
 import { cn, safeHttpUrl } from '../lib/utils'
-import type { ComponentSummary, PortalLinks } from '../lib/types'
+import type { ComponentSummary, ComponentValidation, PortalLinks } from '../lib/types'
 import { usePortalLinks } from '../hooks/useInfo'
 
 declare module '@tanstack/react-table' {
@@ -31,6 +32,10 @@ declare module '@tanstack/react-table' {
   interface TableMeta<TData> {
     links?: PortalLinks | null
     onCopy?: (id: string) => void
+    // Validation overlay: componentKey -> ComponentValidation. When provided,
+    // the Validation column is rendered and each row looks up its own entry by
+    // component key (ComponentSummary.name). Absent → no Validation column.
+    validationByComponent?: Map<string, ComponentValidation>
   }
 }
 
@@ -43,6 +48,12 @@ interface ComponentTableProps {
    * rendered at all, so permission gating stays at the page level.
    */
   onCopy?: (id: string) => void
+  /**
+   * Validation overlay: componentKey -> ComponentValidation. When provided, a
+   * "Validation" column is rendered and each row shows its problem badge. When
+   * omitted (e.g. the report failed to load) the column is not rendered at all.
+   */
+  validationByComponent?: Map<string, ComponentValidation>
 }
 
 const columnHelper = createColumnHelper<ComponentSummary>()
@@ -293,6 +304,22 @@ const columns = [
   }),
 ]
 
+// Per-row "Validation Problems" indicator — appended to `columns` only when the
+// page supplies a validation overlay map via meta. Each row looks up its own
+// ComponentValidation by component key (ComponentSummary.name, which equals the
+// CRS component id used as the validation key). Clean components render an
+// em-dash; problem/check-failed components render an error badge with a tooltip.
+const validationColumn = columnHelper.display({
+  id: 'validation',
+  header: 'Validation',
+  cell: ({ row, table }) => {
+    const map = table.options.meta?.validationByComponent
+    if (!map) return null
+    return <ValidationBadge validation={map.get(row.original.name)} />
+  },
+  enableSorting: false,
+})
+
 // Per-row Copy action — appended to `columns` only when the page provides an
 // `onCopy` callback (CREATE_COMPONENTS holders), so viewers never see the
 // column. The handler travels via table meta like `links` does.
@@ -317,14 +344,23 @@ const actionsColumn = columnHelper.display({
   enableSorting: false,
 })
 
-export function ComponentTable({ data, isLoading, onCopy }: ComponentTableProps) {
+export function ComponentTable({
+  data,
+  isLoading,
+  onCopy,
+  validationByComponent,
+}: ComponentTableProps) {
   const [sorting, setSorting] = useState<SortingState>([])
   const { data: portalLinks } = usePortalLinks()
 
-  const visibleColumns = useMemo(
-    () => (onCopy ? [...columns, actionsColumn] : columns),
-    [onCopy],
-  )
+  const visibleColumns = useMemo(() => {
+    const cols = [...columns]
+    // Validation column sits before the actions column (when present) so the
+    // Copy affordance stays at the far right.
+    if (validationByComponent) cols.push(validationColumn)
+    if (onCopy) cols.push(actionsColumn)
+    return cols
+  }, [onCopy, validationByComponent])
 
   const table = useReactTable({
     data,
@@ -334,7 +370,7 @@ export function ComponentTable({ data, isLoading, onCopy }: ComponentTableProps)
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     manualSorting: false,
-    meta: { links: portalLinks, onCopy },
+    meta: { links: portalLinks, onCopy, validationByComponent },
   })
 
   if (isLoading) {
