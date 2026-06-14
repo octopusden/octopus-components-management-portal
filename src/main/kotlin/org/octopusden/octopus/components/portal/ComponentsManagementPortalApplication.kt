@@ -1,12 +1,15 @@
 package org.octopusden.octopus.components.portal
 
 import org.octopusden.octopus.components.portal.configuration.PortalLinksProperties
+import org.octopusden.octopus.components.portal.validation.ValidationProperties
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.runApplication
+import org.springframework.scheduling.annotation.EnableScheduling
 
 @SpringBootApplication
-@EnableConfigurationProperties(PortalLinksProperties::class)
+@EnableScheduling
+@EnableConfigurationProperties(PortalLinksProperties::class, ValidationProperties::class)
 open class ComponentsManagementPortalApplication
 
 fun main(args: Array<String>) {

@@ -5,7 +5,8 @@ import { MemoryRouter } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 import { ComponentTable } from './ComponentTable'
-import type { ComponentSummary, PortalLinks } from '../lib/types'
+import { TooltipProvider } from './ui/tooltip'
+import type { ComponentSummary, ComponentValidation, PortalLinks } from '../lib/types'
 
 vi.mock('../hooks/useInfo', () => ({
   usePortalLinks: vi.fn(),
@@ -414,6 +415,73 @@ describe('ComponentTable', () => {
       expect(rows[0]!.className).not.toContain('opacity-50')
       expect(rows[1]!.className).toContain('opacity-50')
     })
+  })
+})
+
+function renderTableWithValidation(
+  data: ComponentSummary[],
+  validationByComponent: Map<string, ComponentValidation>,
+) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    React.createElement(
+      QueryClientProvider,
+      { client },
+      <MemoryRouter>
+        <TooltipProvider>
+          <ComponentTable
+            data={data}
+            isLoading={false}
+            validationByComponent={validationByComponent}
+          />
+        </TooltipProvider>
+      </MemoryRouter>,
+    ),
+  )
+}
+
+describe('ComponentTable — Validation column', () => {
+  beforeEach(() => {
+    mockLinks(null)
+  })
+
+  it('does not render a Validation column when no map is supplied', () => {
+    renderTable([makeComponent({ name: 'alpha' })])
+    expect(screen.queryByRole('columnheader', { name: 'Validation' })).toBeNull()
+  })
+
+  it('renders a Validation column header when a map is supplied', () => {
+    renderTableWithValidation([makeComponent({ name: 'alpha' })], new Map())
+    expect(screen.getByRole('columnheader', { name: 'Validation' })).toBeDefined()
+  })
+
+  it('renders an error badge for a component with problems (matched by key)', () => {
+    const map = new Map<string, ComponentValidation>([
+      [
+        'alpha',
+        {
+          component: 'alpha',
+          problems: [
+            {
+              type: 'UNREGISTERED_RELEASED_VERSIONS',
+              severity: 'ERROR',
+              message: '2 released version(s) not registered in components-registry',
+              details: { versions: ['v1', 'v2'], missingCount: 2, releasedCount: 4 },
+            },
+          ],
+          checkFailed: false,
+          checkError: null,
+        },
+      ],
+    ])
+    renderTableWithValidation([makeComponent({ name: 'alpha' })], map)
+    expect(screen.getByRole('button', { name: /2 validation problems/i })).toBeDefined()
+  })
+
+  it('renders an em-dash for a clean / unmatched component', () => {
+    renderTableWithValidation([makeComponent({ name: 'clean-one' })], new Map())
+    expect(cellForColumn('Validation').textContent).toContain('—')
+    expect(screen.queryByRole('button', { name: /validation problem/i })).toBeNull()
   })
 })
 

@@ -20,22 +20,60 @@ import { ApiError } from '@/lib/api'
 
 vi.mock('@/hooks/useCurrentUser', () => ({ useCurrentUser: vi.fn() }))
 vi.mock('../hooks/useComponents', () => ({ useComponents: vi.fn() }))
+// Validation Problems hooks: the page consumes both the full-report overlay
+// and the problemsOnly list source. Stub them to a benign empty result so the
+// page tests stay focused on the gating/error contracts (the hooks have their
+// own unit tests). Tests that exercise the toggle override these.
+vi.mock('../hooks/useValidationProblems', () => ({
+  useValidationProblems: vi.fn(),
+  useComponentsWithProblems: vi.fn(),
+}))
 
 vi.mock('../components/Layout', () => ({
   Layout: ({ children }: { children: React.ReactNode }) =>
     React.createElement('div', { 'data-testid': 'layout' }, children),
 }))
+// Filters stub surfaces the page→filters "Only with problems" contract: a
+// trigger that flips problemsOnly so a page test can exercise the list swap.
 vi.mock('../components/ComponentFilters', () => ({
-  ComponentFilters: () => React.createElement('div', { 'data-testid': 'filters' }),
+  ComponentFilters: ({
+    onProblemsOnlyChange,
+  }: {
+    onProblemsOnlyChange?: (v: boolean) => void
+  }) =>
+    React.createElement(
+      'div',
+      { 'data-testid': 'filters' },
+      onProblemsOnlyChange
+        ? React.createElement('button', {
+            'data-testid': 'problems-only-trigger',
+            onClick: () => onProblemsOnlyChange(true),
+          })
+        : null,
+    ),
 }))
 // The table stub surfaces the page→table `onCopy` contract: when the page
 // passes the callback (CREATE_COMPONENTS holders only) the stub renders a
 // trigger that reports a fixed row id, mirroring a real per-row Copy click.
 vi.mock('../components/ComponentTable', () => ({
-  ComponentTable: ({ onCopy }: { onCopy?: (id: string) => void }) =>
+  ComponentTable: ({
+    data,
+    onCopy,
+    validationByComponent,
+  }: {
+    data: { name: string }[]
+    onCopy?: (id: string) => void
+    validationByComponent?: Map<string, unknown>
+  }) =>
     React.createElement(
       'div',
-      { 'data-testid': 'table' },
+      {
+        'data-testid': 'table',
+        // Expose the row count + whether a validation overlay was supplied so a
+        // page test can assert the list source swapped in problemsOnly mode.
+        'data-row-count': String(data.length),
+        'data-has-validation': validationByComponent ? 'yes' : 'no',
+      },
       onCopy
         ? React.createElement('button', {
             'data-testid': 'table-copy-trigger',
@@ -61,9 +99,30 @@ vi.mock('../components/CreateComponentDialog', async (importOriginal) => {
 
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { useComponents } from '../hooks/useComponents'
+import {
+  useValidationProblems,
+  useComponentsWithProblems,
+} from '../hooks/useValidationProblems'
+import { useAdminMode } from '@/lib/adminModeStore'
+import type { ComponentValidation } from '@/lib/types'
 
 const mockedUseCurrentUser = vi.mocked(useCurrentUser)
 const mockedUseComponents = vi.mocked(useComponents)
+const mockedUseValidationProblems = vi.mocked(useValidationProblems)
+const mockedUseComponentsWithProblems = vi.mocked(useComponentsWithProblems)
+
+function makeValidationResult(byComponent = new Map<string, ComponentValidation>(), over = {}) {
+  return {
+    byComponent,
+    generatedAt: null,
+    lastAttemptAt: null,
+    refreshError: null,
+    isLoading: false,
+    isError: false,
+    error: null,
+    ...over,
+  }
+}
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
@@ -165,6 +224,23 @@ function renderPage() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // Validation Problems is admin-mode only. Default adminMode OFF so the
+  // baseline tests (New Component gating, error rendering, copy) see the list
+  // exactly as a non-admin would — no validation UI. The dedicated Validation
+  // Problems describe flips adminMode on + uses an IMPORT_DATA user.
+  useAdminMode.setState({ enabled: false })
+  // Benign validation defaults; toggle tests override useComponentsWithProblems.
+  mockedUseValidationProblems.mockReturnValue(
+    makeValidationResult() as unknown as ReturnType<typeof useValidationProblems>,
+  )
+  mockedUseComponentsWithProblems.mockReturnValue(
+    makeValidationResult() as unknown as ReturnType<typeof useComponentsWithProblems>,
+  )
+})
+
+afterEach(() => {
+  // Reset the persisted zustand store so adminMode doesn't bleed across tests.
+  useAdminMode.setState({ enabled: false })
 })
 
 afterEach(() => {
@@ -255,5 +331,140 @@ describe('ComponentListPage — per-row Copy gating + dialog wiring', () => {
     mockComponentsOk()
     renderPage()
     expect(screen.queryByTestId('table-copy-trigger')).toBeNull()
+  })
+})
+
+describe('ComponentListPage — Validation Problems', () => {
+  const problemValidation: ComponentValidation = {
+    component: 'example-component',
+    problems: [
+      {
+        type: 'UNREGISTERED_RELEASED_VERSIONS',
+        severity: 'ERROR',
+        message: '1 released version(s) not registered in components-registry',
+        details: { versions: ['ExampleService.1.0.1'], missingCount: 1, releasedCount: 5 },
+      },
+    ],
+    checkFailed: false,
+    checkError: null,
+  }
+
+  // ── Admin mode ON + IMPORT_DATA user: the facility is visible/active. ──
+  describe('admin mode on (IMPORT_DATA user)', () => {
+    beforeEach(() => {
+      useAdminMode.setState({ enabled: true })
+      mockUser(adminUser)
+    })
+
+    it('passes the full-report overlay to the table in the normal paged view', () => {
+      mockComponentsOk()
+      mockedUseValidationProblems.mockReturnValue(
+        makeValidationResult(
+          new Map([['example-component', problemValidation]]),
+        ) as unknown as ReturnType<typeof useValidationProblems>,
+      )
+      renderPage()
+      expect(screen.getByTestId('table').getAttribute('data-has-validation')).toBe('yes')
+    })
+
+    it('does not pass an overlay when the report is empty (so no Validation column)', () => {
+      mockComponentsOk()
+      renderPage()
+      expect(screen.getByTestId('table').getAttribute('data-has-validation')).toBe('no')
+    })
+
+    it('surfaces a stale-report warning (categorized reason + config hint) when the latest refresh failed', () => {
+      mockComponentsOk()
+      // The backend now returns a categorized, host-free reason; the banner shows
+      // it plus a generic actionable config hint (no URL/host in the UI text).
+      mockedUseValidationProblems.mockReturnValue(
+        makeValidationResult(new Map(), {
+          refreshError: 'components-registry unreachable: WebClientRequestException',
+        }) as unknown as ReturnType<typeof useValidationProblems>,
+      )
+      renderPage()
+      // The banner renders three adjacent text nodes (static lead, the
+      // interpolated reason, static hint). Match each on its own node with a
+      // substring regex (normalizer collapses whitespace).
+      const normalize = (s: string) => s.replace(/\s+/g, ' ').trim()
+      expect(
+        screen.getByText(/Validation report may be stale — last refresh failed:/i),
+      ).toBeDefined()
+      expect(
+        screen.getByText(/components-registry unreachable: WebClientRequestException/),
+      ).toBeDefined()
+      expect(
+        screen.getByText((content) =>
+          normalize(content).includes(
+            'Check that the validation service URLs (components-registry / release-management) ' +
+              'are configured and reachable over https',
+          ),
+        ),
+      ).toBeDefined()
+    })
+
+    it('renders the "with validation problems" filter toggle', () => {
+      mockComponentsOk()
+      renderPage()
+      expect(screen.getByTestId('problems-only-trigger')).toBeDefined()
+    })
+
+    it('swaps the list source to the problem set when "with validation problems" is toggled on', async () => {
+      // Paged CRS list has many rows; the problem set has just one.
+      mockComponentsOk({ ...emptyPage, totalElements: 99 })
+      mockedUseComponentsWithProblems.mockReturnValue(
+        makeValidationResult(
+          new Map([['example-component', problemValidation]]),
+        ) as unknown as ReturnType<typeof useComponentsWithProblems>,
+      )
+      renderPage()
+      // Before toggle: table fed from the (empty content) CRS page.
+      expect(screen.getByTestId('table').getAttribute('data-row-count')).toBe('0')
+      await userEvent.click(screen.getByTestId('problems-only-trigger'))
+      // After toggle: table fed from the 1-entry problem set.
+      expect(screen.getByTestId('table').getAttribute('data-row-count')).toBe('1')
+      expect(screen.getByTestId('table').getAttribute('data-has-validation')).toBe('yes')
+    })
+  })
+
+  // ── NOT admin: no filter, no badge column, no validation fetch. ──
+  describe('non-admin (hidden + no fetch)', () => {
+    it('does not render the filter toggle for a non-admin user (adminMode off)', () => {
+      mockUser(adminUser) // has IMPORT_DATA, but adminMode is OFF (default)
+      mockComponentsOk()
+      renderPage()
+      expect(screen.queryByTestId('problems-only-trigger')).toBeNull()
+    })
+
+    it('does not render the filter toggle for a viewer even with adminMode on (no IMPORT_DATA)', () => {
+      useAdminMode.setState({ enabled: true })
+      mockUser(viewerUser) // adminMode on but lacks IMPORT_DATA → not admin
+      mockComponentsOk()
+      renderPage()
+      expect(screen.queryByTestId('problems-only-trigger')).toBeNull()
+    })
+
+    it('passes no validation overlay to the table (no Validation column) when not admin', () => {
+      mockUser(viewerUser)
+      mockComponentsOk()
+      // Even if the report hook somehow returned data, the page must not pass it.
+      mockedUseValidationProblems.mockReturnValue(
+        makeValidationResult(
+          new Map([['example-component', problemValidation]]),
+        ) as unknown as ReturnType<typeof useValidationProblems>,
+      )
+      renderPage()
+      expect(screen.getByTestId('table').getAttribute('data-has-validation')).toBe('no')
+    })
+
+    it('disables the validation report fetch (enabled=false) when not admin', () => {
+      mockUser(viewerUser)
+      mockComponentsOk()
+      renderPage()
+      // The page gates the fetch via the hook's `enabled` flag = isAdmin.
+      expect(mockedUseValidationProblems).toHaveBeenCalledWith(false)
+      // The problems-set hook is gated on (showProblemsOnly && isAdmin) → false.
+      expect(mockedUseComponentsWithProblems).toHaveBeenCalledWith(false)
+    })
   })
 })
