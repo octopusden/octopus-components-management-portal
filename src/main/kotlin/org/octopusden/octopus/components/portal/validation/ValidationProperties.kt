@@ -41,4 +41,13 @@ class ValidationProperties {
     /** Overall budget for one live per-component check (P3). */
     @field:Positive
     var liveTimeoutSeconds: Long = 60
+
+    /**
+     * Max in-memory buffer (bytes) for a single downstream response body, applied
+     * to both client WebClients' codecs. The CRS `/rest/api/3/components` list is
+     * already ~1.3 MB (≈979 components) and grows; WebClient's default 256 KB codec
+     * limit overflows it with DataBufferLimitException. 16 MiB gives generous headroom.
+     */
+    @field:Positive
+    var maxResponseBytes: Int = 16 * 1024 * 1024
 }

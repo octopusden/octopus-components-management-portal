@@ -88,6 +88,10 @@ portal:
     request-timeout-seconds: ${PORTAL_VALIDATION_REQUEST_TIMEOUT_SECONDS:30}
     sweep-timeout-seconds: ${PORTAL_VALIDATION_SWEEP_TIMEOUT_SECONDS:600}
     live-timeout-seconds: ${PORTAL_VALIDATION_LIVE_TIMEOUT_SECONDS:60}
+    # Max in-memory buffer per downstream response body. The CRS /rest/api/3/components
+    # list is ~1.3 MB and grows; WebClient's default 256 KB limit overflows it
+    # (DataBufferLimitException). 16 MiB (16777216) gives generous headroom.
+    max-response-bytes: ${PORTAL_VALIDATION_MAX_RESPONSE_BYTES:16777216}
 
 management:
   endpoints:

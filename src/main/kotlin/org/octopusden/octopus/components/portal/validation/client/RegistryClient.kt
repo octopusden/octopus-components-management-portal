@@ -23,14 +23,21 @@ import java.time.Duration
 class RegistryClient(
     properties: ValidationProperties,
 ) {
-    private val webClient: WebClient = WebClient.builder().baseUrl(properties.registryBaseUrl).build()
+    private val webClient: WebClient =
+        WebClient.builder()
+            .baseUrl(properties.registryBaseUrl)
+            .codecs { it.defaultCodecs().maxInMemorySize(properties.maxResponseBytes) }
+            .build()
     private val requestTimeout: Duration = Duration.ofSeconds(properties.requestTimeoutSeconds)
 
     /**
      * GET /rest/api/3/components → list of component ids.
      *
-     * Each element is `{"component":{"id":...},"variants":{...}}` — the id is
-     * NESTED under "component", not a top-level "id".
+     * Each element is `{"component":{"id":...,"archived":...},"variants":{...}}` —
+     * the id is NESTED under "component", not a top-level "id".
+     *
+     * Archived components are EXCLUDED: there's no point validating decommissioned
+     * components, and dropping them trims the per-component fan-out.
      */
     fun componentIds(): Mono<List<String>> =
         webClient
@@ -38,7 +45,7 @@ class RegistryClient(
             .uri("/rest/api/3/components")
             .retrieve()
             .bodyToMono<List<ComponentRef>>()
-            .map { refs -> refs.mapNotNull { it.component?.id } }
+            .map { refs -> refs.mapNotNull { it.component }.filterNot { it.archived == true }.mapNotNull { it.id } }
             .timeout(requestTimeout)
 
     /**
@@ -66,7 +73,7 @@ class RegistryClient(
     data class ComponentRef(val component: ComponentInner? = null)
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    data class ComponentInner(val id: String? = null)
+    data class ComponentInner(val id: String? = null, val archived: Boolean? = null)
 
     data class VersionsRequest(val versions: List<String>)
 

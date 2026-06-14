@@ -25,7 +25,11 @@ import java.time.Duration
 class ReleaseManagementClient(
     properties: ValidationProperties,
 ) {
-    private val webClient: WebClient = WebClient.builder().baseUrl(properties.releaseManagementBaseUrl).build()
+    private val webClient: WebClient =
+        WebClient.builder()
+            .baseUrl(properties.releaseManagementBaseUrl)
+            .codecs { it.defaultCodecs().maxInMemorySize(properties.maxResponseBytes) }
+            .build()
     private val requestTimeout: Duration = Duration.ofSeconds(properties.requestTimeoutSeconds)
 
     /**
