@@ -89,6 +89,18 @@ vi.mock('../components/editor/ComponentHistoryTab', () => ({
 vi.mock('../components/editor/WhoCanEditPanel', () => ({
   WhoCanEditPanel: () => React.createElement('div', { 'data-testid': 'who-can-edit' }),
 }))
+// ValidationProblemsSection fetches the live per-component result via react-query;
+// stub it so the page test only asserts whether the admin-gated section mounts
+// (and with which props). Its own behavior is covered in
+// ValidationProblemsSection.test.tsx.
+vi.mock('../components/editor/ValidationProblemsSection', () => ({
+  ValidationProblemsSection: ({ componentId, isAdmin }: { componentId: string; isAdmin: boolean }) =>
+    React.createElement(
+      'div',
+      { 'data-testid': 'validation-problems-section', 'data-admin': String(isAdmin) },
+      componentId,
+    ),
+}))
 // CreateComponentDialog (copy mode) pulls hooks from the (mocked) useComponent
 // module; stub it so the page test only asserts the open/sourceId wiring.
 vi.mock('../components/CreateComponentDialog', () => ({
@@ -103,6 +115,7 @@ import { usePortalLinks } from '../hooks/useInfo'
 import { useFieldConfigEntry } from '../hooks/useFieldConfig'
 import { GeneralTab } from '../components/editor/GeneralTab'
 import { CANNOT_EDIT_TITLE } from '../components/editor/editPermission'
+import { useAdminMode } from '../lib/adminModeStore'
 
 const mockedUsePortalLinks = vi.mocked(usePortalLinks)
 const mockedUseFieldConfigEntry = vi.mocked(useFieldConfigEntry)
@@ -239,6 +252,9 @@ function renderPage(component: ComponentDetail, user: User | null, opts: RenderP
 beforeEach(() => {
   vi.clearAllMocks()
   vi.unstubAllGlobals()
+  // The Validation Problems section is admin-mode only. Default adminMode OFF so
+  // existing tests render no section; the dedicated describe flips it on.
+  useAdminMode.setState({ enabled: false })
   mockedUsePortalLinks.mockReturnValue({
     data: undefined,
     isLoading: false,
@@ -1067,5 +1083,31 @@ describe('ComponentDetailPage — cross-tab 400 + displayName clear', () => {
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce())
     const payload = (mutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
     expect(payload['displayName']).toBe('')
+  })
+})
+
+describe('ComponentDetailPage — Validation Problems section (admin gate)', () => {
+  it('renders the section for an admin (adminMode + IMPORT_DATA), passing the component id', () => {
+    useAdminMode.setState({ enabled: true })
+    const user = makeUser(['ACCESS_COMPONENTS', 'IMPORT_DATA'])
+    renderPage(baseComponent, user)
+    const section = screen.getByTestId('validation-problems-section')
+    expect(section).toBeDefined()
+    expect(section.getAttribute('data-admin')).toBe('true')
+    expect(section.textContent).toBe('comp-1')
+  })
+
+  it('does not render the section when adminMode is off (even with IMPORT_DATA)', () => {
+    // adminMode defaults OFF (beforeEach)
+    const user = makeUser(['ACCESS_COMPONENTS', 'IMPORT_DATA'])
+    renderPage(baseComponent, user)
+    expect(screen.queryByTestId('validation-problems-section')).toBeNull()
+  })
+
+  it('does not render the section for a non-IMPORT_DATA user even with adminMode on', () => {
+    useAdminMode.setState({ enabled: true })
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage(baseComponent, user)
+    expect(screen.queryByTestId('validation-problems-section')).toBeNull()
   })
 })

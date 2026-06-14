@@ -31,6 +31,7 @@ import { FieldOverrides } from '../components/editor/FieldOverrides'
 import { ConfigurationsTab } from '../components/editor/ConfigurationsTab'
 import { AsCodeTab } from '../components/editor/AsCodeTab'
 import { ComponentHistoryTab } from '../components/editor/ComponentHistoryTab'
+import { ValidationProblemsSection } from '../components/editor/ValidationProblemsSection'
 import { CreateComponentDialog } from '../components/CreateComponentDialog'
 import { useComponent, useUpdateComponent, useDeleteComponent, type ComponentUpdateRequest } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
@@ -43,6 +44,7 @@ import type { ComponentDetail } from '../lib/types'
 import { selectBaseRow } from '../lib/api/baseRow'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../lib/auth'
+import { useAdminMode } from '../lib/adminModeStore'
 import { useFieldConfigEntry } from '../hooks/useFieldConfig'
 import { parseServerFieldErrors } from '../lib/serverErrors'
 import { usePortalLinks } from '../hooks/useInfo'
@@ -91,6 +93,13 @@ export function ComponentDetailPage() {
   const updateMutation = useUpdateComponent(id ?? '')
   const deleteMutation = useDeleteComponent(id ?? '')
   const { data: user } = useCurrentUser()
+
+  // The Validation Problems section is admin-mode only — reuse the app's
+  // canonical admin predicate (same double-gate as ComponentListPage / Layout):
+  // the persisted adminMode toggle AND the real IMPORT_DATA permission. A
+  // non-admin renders no section and issues no /portal/validation request.
+  const adminMode = useAdminMode((s) => s.enabled)
+  const isAdmin = adminMode && hasPermission(user, PERMISSIONS.IMPORT_DATA)
 
   const canArchive = hasPermission(user, PERMISSIONS.DELETE_COMPONENTS)
   const canUnarchive = hasPermission(user, PERMISSIONS.ARCHIVE_COMPONENTS)
@@ -732,6 +741,15 @@ export function ComponentDetailPage() {
             </TabsContent>
           </div>
         </Tabs>
+
+        {/* Admin-only Validation Problems section — live per-component result.
+            Renders nothing (and fetches nothing) for non-admins. */}
+        {isAdmin && (
+          <>
+            <Separator />
+            <ValidationProblemsSection componentId={component.id} isAdmin={isAdmin} />
+          </>
+        )}
       </div>
 
       {/* Create-similar dialog (sourceId → pre-filled from this component) */}
