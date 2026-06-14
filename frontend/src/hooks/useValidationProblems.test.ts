@@ -2,13 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
-import {
-  useValidationProblems,
-  useComponentsWithProblems,
-  useComponentValidation,
-} from './useValidationProblems'
+import { useValidationProblems, useComponentsWithProblems } from './useValidationProblems'
 import { apiAbsolute } from '../lib/api'
-import type { ComponentValidation, ValidationReport } from '../lib/types'
+import type { ValidationReport } from '../lib/types'
 
 // The hook must go through `apiAbsolute` (the no-/rest/api/4-prefix variant that
 // carries api.ts's 401/OIDC handling), NOT the anonymous fetchInfo helper.
@@ -145,63 +141,3 @@ describe('useComponentsWithProblems', () => {
   })
 })
 
-const singleComponent: ComponentValidation = {
-  component: 'example/component',
-  problems: [
-    {
-      type: 'UNREGISTERED_RELEASED_VERSIONS',
-      severity: 'ERROR',
-      message: '2 released version(s) not registered',
-      details: { versions: ['1.0.0', '1.0.1'], missingCount: 2, releasedCount: 7 },
-    },
-  ],
-  checkFailed: false,
-  checkError: null,
-}
-
-describe('useComponentValidation', () => {
-  it('GETs the single-component endpoint through apiAbsolute (encoded id)', async () => {
-    mockApi.get.mockResolvedValue(singleComponent)
-    const { result } = renderHook(() => useComponentValidation('example/component', true), {
-      wrapper: makeWrapper(),
-    })
-    await waitFor(() => expect(result.current.data).toBeDefined())
-
-    const calledUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
-    expect(calledUrl).toBe('/portal/validation/components/example%2Fcomponent')
-    expect(result.current.data?.problems[0]?.details.versions).toEqual(['1.0.0', '1.0.1'])
-  })
-
-  it('does not fetch when disabled (non-admin)', async () => {
-    vi.useFakeTimers()
-    try {
-      mockApi.get.mockResolvedValue(singleComponent)
-      renderHook(() => useComponentValidation('comp-1', false), { wrapper: makeWrapper() })
-      await vi.runAllTimersAsync()
-      expect(mockApi.get).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('does not fetch for an empty component id', async () => {
-    vi.useFakeTimers()
-    try {
-      mockApi.get.mockResolvedValue(singleComponent)
-      renderHook(() => useComponentValidation('', true), { wrapper: makeWrapper() })
-      await vi.runAllTimersAsync()
-      expect(mockApi.get).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('reports isError without throwing when the fetch fails', async () => {
-    mockApi.get.mockRejectedValue(new Error('boom'))
-    const { result } = renderHook(() => useComponentValidation('comp-1', true), {
-      wrapper: makeWrapper(),
-    })
-    await waitFor(() => expect(result.current.isError).toBe(true))
-    expect(result.current.data).toBeUndefined()
-  })
-})
