@@ -41,7 +41,10 @@ class ValidationServiceTest {
     }
 
     private fun newServer(): HttpServer {
-        val stub = HttpServer.create(InetSocketAddress(0), 0)
+        // Non-zero backlog: under full-suite load several WebClient connections can
+        // arrive at once; a backlog of 0 lets the OS refuse the overflow, which
+        // surfaced as intermittent "component list came back short" failures.
+        val stub = HttpServer.create(InetSocketAddress(0), SERVER_BACKLOG)
         stub.start()
         servers.add(stub)
         return stub
@@ -193,6 +196,49 @@ class ValidationServiceTest {
     }
 
     @Test
+    @DisplayName("P1: a connection-class sweep failure sets a CATEGORIZED refreshError and retains components")
+    fun `sweep connection failure sets categorized refreshError`() {
+        // Phase 1: a good sweep populates the cache.
+        val crs = newServer()
+        crs.createContext("/rest/api/3/components") { exchange ->
+            respondJson(exchange, 200, """[{"component":{"id":"good"},"variants":{}}]""")
+        }
+        crs.createContext("/rest/api/2/components") { exchange ->
+            respondJson(exchange, 200, """{"versions":{"1.0.1":{}}}""")
+        }
+        val rm = newServer()
+        rm.createContext("/rest/api/1/builds/component") { exchange ->
+            respondJson(exchange, 200, """[{"version":"1.0.1","status":"RELEASE"}]""")
+        }
+        val svc = service(crs, rm)
+        svc.refresh()
+        val firstGeneratedAt = svc.currentReport().generatedAt
+        assertNotNull(firstGeneratedAt)
+
+        // Phase 2: kill the CRS server entirely → the next componentIds() call hits a
+        // refused connection (a WebClientRequestException-class failure), distinct from
+        // a 5xx response. This must produce the CATEGORIZED, host-free refreshError.
+        crs.stop(0)
+        servers.remove(crs)
+
+        svc.refresh()
+
+        val stale = svc.currentReport()
+        val reason = stale.refreshError
+        assertNotNull(reason)
+        assertTrue(
+            reason!!.startsWith("components-registry unreachable: "),
+            "expected a categorized unreachable reason, got: $reason",
+        )
+        // Still sanitized: no host/port/URL leaks into the client-facing value.
+        assertFalse(reason.contains("localhost"))
+        assertFalse(reason.contains("http"))
+        // Previous good components + last-success generatedAt retained (stale-but-honest).
+        assertEquals(firstGeneratedAt, stale.generatedAt, "generatedAt must point at the last SUCCESS")
+        assertEquals(listOf("good"), stale.components.map { it.component }, "previous good components retained")
+    }
+
+    @Test
     @DisplayName("single-flight guard: a concurrent refresh() is a no-op (only one sweep runs)")
     fun `single flight guard makes concurrent refresh a no-op`() {
         val listCalls = AtomicInteger(0)
@@ -273,5 +319,9 @@ class ValidationServiceTest {
         assertTrue(cv.checkFailed, "a live-check timeout must surface as checkFailed, not an error")
         assertTrue(cv.problems.isEmpty())
         assertNotNull(cv.checkError)
+    }
+
+    private companion object {
+        private const val SERVER_BACKLOG = 16
     }
 }

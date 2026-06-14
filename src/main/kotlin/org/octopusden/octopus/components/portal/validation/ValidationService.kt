@@ -10,12 +10,17 @@ import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.event.EventListener
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
+import org.springframework.web.reactive.function.client.WebClientRequestException
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import reactor.core.scheduler.Schedulers
+import java.net.ConnectException
+import java.net.UnknownHostException
 import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicBoolean
+import javax.net.ssl.SSLException
 
 /**
  * Orchestrates the validation sweep, caches the report in memory, and refreshes
@@ -106,7 +111,7 @@ class ValidationService(
             }
             .map { problems: List<ValidationProblem> -> ComponentValidation(component, problems) }
             .onErrorResume { e ->
-                log.warn("Validation check failed for component '{}': {}", component, e.toString())
+                logPerComponentFailure(component, e)
                 Mono.just(
                     ComponentValidation(
                         component = component,
@@ -156,8 +161,28 @@ class ValidationService(
             // Broad catch is intentional: .block() can throw reactor's ReactiveException
             // wrapper or an IllegalStateException on sweep-timeout — all must retain the
             // previous report rather than crash the scheduler thread.
-            log.warn("Validation sweep failed, retaining previous report: {}", e.toString())
-            retainStale(shortReason(e))
+            //
+            // The sweep starts with registry.componentIds(), so a whole-sweep failure is
+            // almost always the components-registry being unreachable/misconfigured. Emit
+            // an ACTIONABLE server-side warning that includes the configured base URL and
+            // the env var to set — this detail stays in the SERVER log only; the
+            // client-facing refreshError is the sanitized, host-free category below.
+            val connectionClass = isConnectionClass(e)
+            if (connectionClass) {
+                log.warn(
+                    "Validation sweep failed reaching components-registry at {} — set " +
+                        "portal.validation.registry-base-url (env COMPONENTS_REGISTRY_SERVICE_URL) " +
+                        "to a reachable https URL",
+                    properties.registryBaseUrl,
+                    e,
+                )
+            } else {
+                log.warn("Validation sweep failed, retaining previous report: {}", e.toString())
+            }
+            // Categorized, still host-free client-facing reason: name the downstream +
+            // failure kind for connection-class errors, else the bare class name.
+            val reason = if (connectionClass) "$REGISTRY_LABEL unreachable: ${shortReason(e)}" else shortReason(e)
+            retainStale(reason)
         } finally {
             refreshing.set(false)
         }
@@ -168,6 +193,32 @@ class ValidationService(
     }
 
     /**
+     * Per-component failure log. The per-component check calls release-management
+     * first, then components-registry (via the validator), so a connection-class
+     * failure here is most often an unreachable/misconfigured RM or CRS. Emit an
+     * ACTIONABLE server-side warning naming both base URLs and their env vars so
+     * the operator can tell which downstream to fix. URLs stay in the SERVER log
+     * only — the client-facing `checkError` is the sanitized [shortReason].
+     */
+    private fun logPerComponentFailure(component: String, e: Throwable) {
+        if (isConnectionClass(e)) {
+            log.warn(
+                "Validation check failed for component '{}' reaching a downstream — verify " +
+                    "release-management (portal.validation.release-management-base-url / env " +
+                    "RELEASE_MANAGEMENT_SERVICE_URL) at {} and components-registry " +
+                    "(portal.validation.registry-base-url / env COMPONENTS_REGISTRY_SERVICE_URL) at {} " +
+                    "are configured and reachable over https",
+                component,
+                properties.releaseManagementBaseUrl,
+                properties.registryBaseUrl,
+                e,
+            )
+        } else {
+            log.warn("Validation check failed for component '{}': {}", component, e.toString())
+        }
+    }
+
+    /**
      * Client-facing failure reason. Deliberately sanitized to the exception's
      * simple class name only — the raw `e.message` can carry downstream URLs,
      * hostnames/ports or other internal detail and is returned to API callers via
@@ -175,4 +226,32 @@ class ValidationService(
      * server-side at the call sites; only this short, safe form is exposed.
      */
     private fun shortReason(e: Throwable): String = e.javaClass.simpleName
+
+    /**
+     * True when [e] (or anything in its cause chain) is a connection-class
+     * failure: a WebClient transport error, a refused/unresolvable connection, a
+     * TLS handshake failure, or a timeout. These are the cases that point at a
+     * misconfigured/unreachable downstream URL rather than a bad response.
+     * Reactor wraps the real cause, so we walk the chain.
+     */
+    private fun isConnectionClass(e: Throwable): Boolean {
+        var cur: Throwable? = e
+        val seen = HashSet<Throwable>()
+        while (cur != null && seen.add(cur)) {
+            when (cur) {
+                is WebClientRequestException,
+                is ConnectException,
+                is UnknownHostException,
+                is SSLException,
+                is TimeoutException,
+                -> return true
+            }
+            cur = cur.cause
+        }
+        return false
+    }
+
+    private companion object {
+        private const val REGISTRY_LABEL = "components-registry"
+    }
 }

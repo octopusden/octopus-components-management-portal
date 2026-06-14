@@ -132,7 +132,9 @@ export function ComponentListPage() {
           <InlineError
             message={
               <>
-                Validation report may be stale — last refresh failed: {validation.refreshError}
+                Validation report may be stale — last refresh failed: {validation.refreshError}.
+                Check that the validation service URLs (components-registry / release-management)
+                are configured and reachable over https.
               </>
             }
           />

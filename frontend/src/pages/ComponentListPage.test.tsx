@@ -373,16 +373,34 @@ describe('ComponentListPage — Validation Problems', () => {
       expect(screen.getByTestId('table').getAttribute('data-has-validation')).toBe('no')
     })
 
-    it('surfaces a stale-report warning when the latest refresh failed', () => {
+    it('surfaces a stale-report warning (categorized reason + config hint) when the latest refresh failed', () => {
       mockComponentsOk()
+      // The backend now returns a categorized, host-free reason; the banner shows
+      // it plus a generic actionable config hint (no URL/host in the UI text).
       mockedUseValidationProblems.mockReturnValue(
         makeValidationResult(new Map(), {
-          refreshError: 'CRS component-list fetch timed out',
+          refreshError: 'components-registry unreachable: WebClientRequestException',
         }) as unknown as ReturnType<typeof useValidationProblems>,
       )
       renderPage()
-      expect(screen.getByText(/Validation report may be stale/i)).toBeDefined()
-      expect(screen.getByText(/CRS component-list fetch timed out/i)).toBeDefined()
+      // The banner renders three adjacent text nodes (static lead, the
+      // interpolated reason, static hint). Match each on its own node with a
+      // substring regex (normalizer collapses whitespace).
+      const normalize = (s: string) => s.replace(/\s+/g, ' ').trim()
+      expect(
+        screen.getByText(/Validation report may be stale — last refresh failed:/i),
+      ).toBeDefined()
+      expect(
+        screen.getByText(/components-registry unreachable: WebClientRequestException/),
+      ).toBeDefined()
+      expect(
+        screen.getByText((content) =>
+          normalize(content).includes(
+            'Check that the validation service URLs (components-registry / release-management) ' +
+              'are configured and reachable over https',
+          ),
+        ),
+      ).toBeDefined()
     })
 
     it('renders the "with validation problems" filter toggle', () => {
