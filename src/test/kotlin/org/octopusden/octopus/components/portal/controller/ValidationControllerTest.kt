@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.portal.controller
 
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.octopusden.octopus.components.portal.configuration.TestSecurityConfig
@@ -58,11 +59,16 @@ class ValidationControllerTest {
             .expectStatus().isOk
             .expectBody()
             .jsonPath("$.generatedAt").exists()
-            // refreshError is a short exception reason (contains a random stub port),
-            // so assert it passes through non-empty rather than an exact match.
+            // refreshError is a SANITIZED reason (exception simpleName only) — it must
+            // pass through non-empty but must NOT leak internal detail like the stub
+            // host/port or the raw HTTP message.
             .jsonPath("$.refreshError").value<String> { reason ->
                 assertTrue(reason.isNotBlank(), "refreshError must pass through non-empty")
-                assertTrue(reason.contains("500"), "refreshError should describe the 500: $reason")
+                assertTrue(
+                    reason.endsWith("Exception") || reason.endsWith("Error"),
+                    "refreshError should be a sanitized exception simpleName: $reason",
+                )
+                assertFalse(reason.contains("localhost"), "refreshError must not leak the downstream host: $reason")
             }
             .jsonPath("$.components.length()").isEqualTo(3)
     }

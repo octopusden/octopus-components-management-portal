@@ -1,27 +1,44 @@
 package org.octopusden.octopus.components.portal.validation
 
+import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Positive
 import org.springframework.boot.context.properties.ConfigurationProperties
+import org.springframework.validation.annotation.Validated
 
+/**
+ * Bean-validated so a misconfigured deployment fails fast at startup rather than
+ * silently sweeping against a blank/zeroed config. Hibernate Validator is already
+ * on the classpath (spring-boot-starter-validation, pulled transitively via
+ * spring-cloud-starter), so no extra dependency is needed.
+ */
+@Validated
 @ConfigurationProperties(prefix = "portal.validation")
 class ValidationProperties {
     /** Base URL of release-management-service (RELEASE_MANAGEMENT_SERVICE_URL). No context-path. */
+    @field:NotBlank
     var releaseManagementBaseUrl: String = ""
 
     /** Base URL of components-registry (defaults to COMPONENTS_REGISTRY_SERVICE_URL). */
+    @field:NotBlank
     var registryBaseUrl: String = ""
 
     /** Background sweep cadence (fixedDelay). Default 1h. */
+    @field:Positive
     var refreshIntervalMs: Long = 3_600_000
 
     /** Max in-flight per-component checks during a sweep. */
+    @field:Positive
     var concurrency: Int = 8
 
     /** Per single downstream RM/CRS call timeout (P3) — applied in both clients. */
+    @field:Positive
     var requestTimeoutSeconds: Long = 30
 
     /** Overall budget for one full background sweep (P2). */
+    @field:Positive
     var sweepTimeoutSeconds: Long = 600
 
     /** Overall budget for one live per-component check (P3). */
+    @field:Positive
     var liveTimeoutSeconds: Long = 60
 }

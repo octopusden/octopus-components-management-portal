@@ -85,7 +85,9 @@ class ValidationService(
                     generatedAt = now,
                     lastAttemptAt = now,
                     refreshError = null,
-                    components = components,
+                    // Sort by component name so the API output is stable across runs
+                    // (flatMap with concurrency collects in completion order).
+                    components = components.sortedBy { it.component },
                 )
             }
 
@@ -165,8 +167,12 @@ class ValidationService(
         report = report.copy(lastAttemptAt = Instant.now(), refreshError = reason)
     }
 
-    private fun shortReason(e: Throwable): String {
-        val msg = e.message
-        return if (msg.isNullOrBlank()) e.javaClass.simpleName else "${e.javaClass.simpleName}: $msg"
-    }
+    /**
+     * Client-facing failure reason. Deliberately sanitized to the exception's
+     * simple class name only — the raw `e.message` can carry downstream URLs,
+     * hostnames/ports or other internal detail and is returned to API callers via
+     * `checkError`/`refreshError`. The full detail (incl. `e.message`) is logged
+     * server-side at the call sites; only this short, safe form is exposed.
+     */
+    private fun shortReason(e: Throwable): String = e.javaClass.simpleName
 }
