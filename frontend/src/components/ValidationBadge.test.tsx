@@ -41,22 +41,27 @@ function renderBadge(validation: ComponentValidation | undefined) {
 }
 
 describe('ValidationBadge rendering', () => {
-  it('renders an em-dash for a clean component', () => {
+  it('renders nothing (no triangle) for a clean component', () => {
     const { container } = renderBadge(clean())
-    expect(container.textContent).toContain('—')
+    expect(container.textContent).not.toContain('—')
     expect(screen.queryByRole('button')).toBeNull()
   })
 
-  it('renders an em-dash for a component absent from the report', () => {
+  it('renders nothing for a component absent from the report', () => {
     const { container } = renderBadge(undefined)
-    expect(container.textContent).toContain('—')
+    expect(container.textContent?.trim()).toBe('')
+    expect(screen.queryByRole('button')).toBeNull()
   })
 
-  it('renders the missingCount on the badge for problem components', () => {
+  it('renders an icon-only triangle (no count pill text) for problem components', () => {
     renderBadge(withProblems(3, ['v1', 'v2', 'v3']))
+    // The accessible name still carries the count for AT/assertions, but the
+    // visible trigger is a bare red triangle — no rendered count text.
     const btn = screen.getByRole('button', { name: /3 validation problems/i })
     expect(btn).toBeDefined()
-    expect(btn.textContent).toContain('3')
+    expect(btn.textContent).toBe('')
+    // The red AlertTriangle is an svg child of the trigger.
+    expect(btn.querySelector('svg')).not.toBeNull()
   })
 
   it('uses singular wording for a single missing version', () => {
@@ -64,11 +69,13 @@ describe('ValidationBadge rendering', () => {
     expect(screen.getByRole('button', { name: /1 validation problem$/i })).toBeDefined()
   })
 
-  it('renders a distinct "check failed" badge when only the check failed', () => {
+  it('renders the same icon-only triangle (no "check failed" text) when only the check failed', () => {
     renderBadge(failedCheck())
     const btn = screen.getByRole('button', { name: /validation check failed/i })
     expect(btn).toBeDefined()
-    expect(btn.textContent?.toLowerCase()).toContain('check failed')
+    // No visible "check failed" label text on the trigger anymore — it is a bare
+    // triangle; the wording lives in the aria-label, tooltip and dialog only.
+    expect(btn.textContent).toBe('')
   })
 
   it('sums missingCount across multiple problems for the badge number', () => {

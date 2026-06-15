@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { AlertTriangle, Copy } from 'lucide-react'
-import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip'
 import {
@@ -33,25 +32,28 @@ interface ValidationBadgeProps {
 }
 
 /**
- * Per-row "Validation Problems" indicator. Renders nothing for a clean (or
+ * Inline "Validation Problems" indicator. Renders NOTHING (null) for a clean (or
  * absent-from-report) component — only flags components that have problems or a
- * failed check. The badge shows a count and, on hover/focus, a tooltip listing
- * each problem's message plus a few example versions (the quick peek). Clicking
- * (or Enter/Space) opens a Dialog with the FULL, untruncated list of every
- * problem and every version — rendered from the already-loaded
- * ComponentValidation (no extra fetch). Relies on the <TooltipProvider> mounted
- * in App (same as FieldInfo).
+ * failed check, as a bare red AlertTriangle shown immediately before the
+ * component name in the list. On hover/focus a tooltip lists each problem's
+ * message plus a few example versions (the quick peek). Clicking (or Enter/Space)
+ * opens a Dialog with the FULL, untruncated list of every problem and every
+ * version — rendered from the already-loaded ComponentValidation (no extra
+ * fetch). Relies on the <TooltipProvider> mounted in App (same as FieldInfo).
  */
 export function ValidationBadge({ validation }: ValidationBadgeProps) {
   const { toast } = useToast()
   const [open, setOpen] = useState(false)
 
+  // Invisible inline for clean / unmatched / non-admin (absent) components — no
+  // placeholder, no pill: just nothing rendered before the name.
   if (!hasValidationIssue(validation) || !validation) {
-    return <span className="text-muted-foreground">—</span>
+    return null
   }
 
-  // A failed check (no problems learned) is a "could not verify" state — render
-  // a neutral-but-attention badge distinct from confirmed problems.
+  // A failed check (no problems learned) is a "could not verify" state — it
+  // drives the accessible label only; the inline trigger is the same red
+  // triangle either way.
   const onlyCheckFailed = validation.problems.length === 0 && validation.checkFailed
   const count = validationBadgeCount(validation)
   const label = onlyCheckFailed
@@ -79,15 +81,9 @@ export function ValidationBadge({ validation }: ValidationBadgeProps) {
             title="Click for the full list of validation problems"
             aria-haspopup="dialog"
             onClick={() => setOpen(true)}
-            className="inline-flex cursor-pointer rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="inline-flex shrink-0 cursor-pointer rounded-sm align-middle text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            <Badge
-              variant={onlyCheckFailed ? 'warning' : 'destructive'}
-              className="gap-1 font-mono"
-            >
-              <AlertTriangle className="h-3 w-3" aria-hidden="true" />
-              {onlyCheckFailed ? 'check failed' : count}
-            </Badge>
+            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
           </button>
         </TooltipTrigger>
         <TooltipContent className="max-w-sm whitespace-normal leading-snug">
