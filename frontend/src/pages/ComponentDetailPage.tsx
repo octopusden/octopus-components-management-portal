@@ -2,7 +2,7 @@ import { useParams, useNavigate, Link } from 'react-router'
 import { useForm } from 'react-hook-form'
 import { ArrowLeft, Copy, Save, Trash2, AlertTriangle, LockKeyhole } from 'lucide-react'
 import { JiraIcon, BitbucketIcon, TeamCityIcon } from '../components/ui/icons/brand-icons'
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Layout } from '../components/Layout'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
@@ -117,6 +117,17 @@ export function ComponentDetailPage() {
   const componentValidation = component ? validationByComponent.get(component.name) : undefined
   const hasProblems =
     isAdmin && componentValidation != null && hasValidationIssue(componentValidation)
+
+  // The Validation Problems tab is conditional (only rendered while hasProblems).
+  // If it's the active tab and hasProblems flips to false — admin mode turned off,
+  // IMPORT_DATA lost, or the report refreshes clean — the now-removed tab would
+  // leave the Tabs panel blank. Reset to the always-present default tab so the
+  // view never goes blank.
+  useEffect(() => {
+    if (activeTab === 'validation-problems' && !hasProblems) {
+      setActiveTab('general')
+    }
+  }, [activeTab, hasProblems])
 
   const canArchive = hasPermission(user, PERMISSIONS.DELETE_COMPONENTS)
   const canUnarchive = hasPermission(user, PERMISSIONS.ARCHIVE_COMPONENTS)

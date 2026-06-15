@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -1241,5 +1241,50 @@ describe('ComponentDetailPage — Validation Problems tab (admin gate + lookup b
     renderPage(baseComponent, user)
     expect(screen.queryByRole('tab', { name: /validation problems/i })).toBeNull()
     expect(mockedUseValidationProblems).toHaveBeenCalledWith(false)
+  })
+
+  it('falls back to the General tab (no blank panel) when the selected Validation Problems tab disappears', async () => {
+    // Regression (independent review P2): the Validation Problems tab is
+    // conditional on hasProblems. If the admin selects it and hasProblems then
+    // flips false (admin mode off / IMPORT_DATA lost / report refreshes clean),
+    // the controlled Tabs `activeTab` still points at the now-removed tab and
+    // the panel goes blank. The reset effect must move activeTab back to the
+    // always-present 'general' tab. Here we drop hasProblems by flipping
+    // adminMode off.
+    //
+    // `useAdminMode` is a Zustand store with a live subscription, so mutating it
+    // in place re-renders the already-mounted tree — no `rerender()` (which would
+    // replace the root and drop the QueryClientProvider, crashing
+    // useOptimisticConflict with "No QueryClient set").
+    useAdminMode.setState({ enabled: true })
+    mockedUseValidationProblems.mockReturnValue(validationResult([withProblems(['v1', 'v2'])]))
+    const user = makeUser(['ACCESS_COMPONENTS', 'IMPORT_DATA'])
+    renderPage(baseComponent, user)
+
+    // Select the conditional Validation Problems tab and confirm its content shows.
+    const tab = screen.getByRole('tab', { name: /validation problems/i })
+    await userEvent.setup().click(tab)
+    await waitFor(() => expect(screen.getByText('v1')).toBeDefined())
+
+    // hasProblems flips false: admin mode turned off. Mutate the store in place
+    // (wrapped in act so the subscription-driven re-render + reset effect flush).
+    act(() => {
+      useAdminMode.setState({ enabled: false })
+    })
+
+    // The tab is gone …
+    await waitFor(() =>
+      expect(screen.queryByRole('tab', { name: /validation problems/i })).toBeNull(),
+    )
+    // … and the view falls back to General content — not a blank panel. The
+    // General tab's content (the mocked GeneralTab) is visible, and the General
+    // trigger is the selected tab.
+    expect(screen.getByTestId('general-tab')).toBeDefined()
+    expect(screen.getByRole('tab', { name: 'General' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    // No stale Validation-Problems content lingering.
+    expect(screen.queryByText('v1')).toBeNull()
   })
 })
