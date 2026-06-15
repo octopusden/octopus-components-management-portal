@@ -47,7 +47,7 @@ export function ValidationBadge({ validation }: ValidationBadgeProps) {
 
   // Invisible inline for clean / unmatched / non-admin (absent) components — no
   // placeholder, no pill: just nothing rendered before the name.
-  if (!hasValidationIssue(validation) || !validation) {
+  if (!validation || !hasValidationIssue(validation)) {
     return null
   }
 
@@ -81,7 +81,7 @@ export function ValidationBadge({ validation }: ValidationBadgeProps) {
             title="Click for the full list of validation problems"
             aria-haspopup="dialog"
             onClick={() => setOpen(true)}
-            className="inline-flex shrink-0 cursor-pointer rounded-sm align-middle text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="inline-flex shrink-0 cursor-pointer rounded-sm text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             <AlertTriangle className="h-4 w-4" aria-hidden="true" />
           </button>
