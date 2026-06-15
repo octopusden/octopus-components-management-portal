@@ -97,6 +97,10 @@ vi.mock('../components/editor/WhoCanEditPanel', () => ({
 vi.mock('../hooks/useValidationProblems', () => ({
   useValidationProblems: vi.fn(),
 }))
+// The Validation Problems tab's "Copy versions" button calls copyToClipboard;
+// mock the module so the test can assert the newline-joined version list
+// without touching the real clipboard API (same pattern as AsCodeTab.test).
+vi.mock('../lib/clipboard', () => ({ copyToClipboard: vi.fn() }))
 // CreateComponentDialog (copy mode) pulls hooks from the (mocked) useComponent
 // module; stub it so the page test only asserts the open/sourceId wiring.
 vi.mock('../components/CreateComponentDialog', () => ({
@@ -113,11 +117,13 @@ import { GeneralTab } from '../components/editor/GeneralTab'
 import { CANNOT_EDIT_TITLE } from '../components/editor/editPermission'
 import { useAdminMode } from '../lib/adminModeStore'
 import { useValidationProblems } from '../hooks/useValidationProblems'
+import { copyToClipboard } from '../lib/clipboard'
 import type { ComponentValidation } from '@/lib/types'
 
 const mockedUsePortalLinks = vi.mocked(usePortalLinks)
 const mockedUseFieldConfigEntry = vi.mocked(useFieldConfigEntry)
 const mockedUseValidationProblems = vi.mocked(useValidationProblems)
+const mockedCopyToClipboard = vi.mocked(copyToClipboard)
 
 /** Build a useValidationProblems result with the given component validations
  *  keyed by their `component` field — the exact map the real hook produces. */
@@ -1125,6 +1131,17 @@ describe('ComponentDetailPage — Validation Problems tab (admin gate + lookup b
     } as unknown as ComponentValidation
   }
 
+  // A check-failed validation (no problems) keyed by the component NAME. The
+  // tab still renders (could-not-verify is not a clean pass) but there are no
+  // versions, so the "Copy versions" button must be absent. Structurally
+  // complete — no cast needed.
+  const checkFailedCv: ComponentValidation = {
+    component: 'my-component',
+    problems: [],
+    checkFailed: true,
+    checkError: 'RM returned 500',
+  }
+
   it('renders a RED Validation Problems tab (last) for an admin when the component has problems, and shows the full versions list when selected', async () => {
     useAdminMode.setState({ enabled: true })
     const versions = ['v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7']
@@ -1150,6 +1167,38 @@ describe('ComponentDetailPage — Validation Problems tab (admin gate + lookup b
     await waitFor(() => {
       for (const v of versions) expect(screen.getByText(v)).toBeDefined()
     })
+  })
+
+  it('Copy versions (in the tab) copies the newline-joined version list to the clipboard', async () => {
+    useAdminMode.setState({ enabled: true })
+    const versions = ['v1', 'v2', 'v3']
+    mockedUseValidationProblems.mockReturnValue(validationResult([withProblems(versions)]))
+    const user = makeUser(['ACCESS_COMPONENTS', 'IMPORT_DATA'])
+    renderPage(baseComponent, user)
+
+    const ue = userEvent.setup()
+    await ue.click(screen.getByRole('tab', { name: /validation problems/i }))
+    const copyBtn = await screen.findByRole('button', { name: /copy versions/i })
+    await ue.click(copyBtn)
+
+    await waitFor(() => expect(mockedCopyToClipboard).toHaveBeenCalledWith(versions.join('\n')))
+  })
+
+  it('check-failed (no problems): renders the RED tab with the Check failed block but NO Copy versions button', async () => {
+    useAdminMode.setState({ enabled: true })
+    mockedUseValidationProblems.mockReturnValue(validationResult([checkFailedCv]))
+    const user = makeUser(['ACCESS_COMPONENTS', 'IMPORT_DATA'])
+    renderPage(baseComponent, user)
+
+    const tab = screen.getByRole('tab', { name: /validation problems/i })
+    expect(tab).toBeDefined()
+    expect(tab.className).toContain('text-destructive')
+
+    await userEvent.setup().click(tab)
+    await waitFor(() => expect(screen.getByText('Check failed')).toBeDefined())
+    expect(screen.getByText('RM returned 500')).toBeDefined()
+    // No versions → no Copy versions affordance.
+    expect(screen.queryByRole('button', { name: /copy versions/i })).toBeNull()
   })
 
   it('does NOT render the tab for an admin when the component is clean (not in report)', () => {
