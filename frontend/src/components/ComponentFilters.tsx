@@ -36,6 +36,13 @@ interface ComponentFiltersProps {
    */
   problemsOnly?: boolean
   onProblemsOnlyChange?: (value: boolean) => void
+  /**
+   * Number of components with validation problems, shown beside the
+   * problems-only hint (mirrors how a normal search shows its result count).
+   * `undefined` while the report is still loading — the hint then renders
+   * without a count.
+   */
+  problemsCount?: number
 }
 
 // Debounced free-text filter. Mirrors the main search box's 300ms debounce so
@@ -115,6 +122,7 @@ export function ComponentFilters({
   onFilterChange,
   problemsOnly = false,
   onProblemsOnlyChange,
+  problemsCount,
 }: ComponentFiltersProps) {
   const [searchValue, setSearchValue] = useState(filter.search ?? '')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -644,6 +652,11 @@ export function ComponentFilters({
         {/* Hint that CRS filters are inert while problems-only is on. */}
         {crsFiltersDisabled && (
           <span className="text-xs text-muted-foreground">
+            {typeof problemsCount === 'number' && (
+              <>
+                {problemsCount} component{problemsCount === 1 ? '' : 's'} with validation problems.{' '}
+              </>
+            )}
             Component filters don’t apply in “with validation problems” mode.
           </span>
         )}

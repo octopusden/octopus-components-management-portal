@@ -112,6 +112,11 @@ export function ComponentListPage() {
           filter={filter}
           onFilterChange={handleFilterChange}
           problemsOnly={showProblemsOnly}
+          // Found-count shown beside the problems-only hint, mirroring how a
+          // normal search shows its result count. Only meaningful in
+          // problems-only mode and once the report has loaded; undefined
+          // otherwise (so the hint renders without a count while loading).
+          problemsCount={showProblemsOnly && !problems.isLoading ? problemRows.length : undefined}
           // Admin-mode only: pass the handler (which is what renders the toggle)
           // solely to admins. Non-admins get no "with validation problems" toggle.
           onProblemsOnlyChange={

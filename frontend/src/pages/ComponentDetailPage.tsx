@@ -2,7 +2,7 @@ import { useParams, useNavigate, Link } from 'react-router'
 import { useForm } from 'react-hook-form'
 import { ArrowLeft, Copy, Save, Trash2, AlertTriangle, LockKeyhole } from 'lucide-react'
 import { JiraIcon, BitbucketIcon, TeamCityIcon } from '../components/ui/icons/brand-icons'
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Layout } from '../components/Layout'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
@@ -31,7 +31,7 @@ import { FieldOverrides } from '../components/editor/FieldOverrides'
 import { ConfigurationsTab } from '../components/editor/ConfigurationsTab'
 import { AsCodeTab } from '../components/editor/AsCodeTab'
 import { ComponentHistoryTab } from '../components/editor/ComponentHistoryTab'
-import { ValidationProblemsSection } from '../components/editor/ValidationProblemsSection'
+import { ValidationProblemsList } from '../components/ValidationProblemsList'
 import { CreateComponentDialog } from '../components/CreateComponentDialog'
 import { useComponent, useUpdateComponent, useDeleteComponent, type ComponentUpdateRequest } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
@@ -49,6 +49,9 @@ import { useFieldConfigEntry } from '../hooks/useFieldConfig'
 import { parseServerFieldErrors } from '../lib/serverErrors'
 import { usePortalLinks } from '../hooks/useInfo'
 import { safeHttpUrl } from '../lib/utils'
+import { useValidationProblems } from '../hooks/useValidationProblems'
+import { allProblemVersions, hasValidationIssue, validationBadgeCount } from '../lib/validation'
+import { copyToClipboard } from '../lib/clipboard'
 
 export type UpdateMutation = UseMutationResult<ComponentDetail, Error, ComponentUpdateRequest>
 
@@ -94,12 +97,37 @@ export function ComponentDetailPage() {
   const deleteMutation = useDeleteComponent(id ?? '')
   const { data: user } = useCurrentUser()
 
-  // The Validation Problems section is admin-mode only — reuse the app's
+  // The Validation Problems tab is admin-mode only — reuse the app's
   // canonical admin predicate (same double-gate as ComponentListPage / Layout):
   // the persisted adminMode toggle AND the real IMPORT_DATA permission. A
-  // non-admin renders no section and issues no /portal/validation request.
+  // non-admin renders no tab and issues no /portal/validation request.
   const adminMode = useAdminMode((s) => s.enabled)
   const isAdmin = adminMode && hasPermission(user, PERMISSIONS.IMPORT_DATA)
+
+  // Drive the Validation Problems tab from the SAME cached report the list page
+  // uses (react-query dedupes/caches by the shared query key), rather than the
+  // live per-component endpoint. The report is keyed by the CRS component key —
+  // the exact field (`ComponentSummary.name` / `ComponentDetail.name`) the list
+  // overlay matches on (ComponentTable: `byComponent.get(row.original.name)`).
+  // Keying by `component.id` here was the source of the list-vs-detail
+  // discrepancy: for components where `id != name`, the live call used the wrong
+  // key and came back empty even though the list showed problems. `enabled =
+  // isAdmin` keeps non-admins from issuing any /portal/validation request.
+  const { byComponent: validationByComponent } = useValidationProblems(isAdmin)
+  const componentValidation = component ? validationByComponent.get(component.name) : undefined
+  const hasProblems =
+    isAdmin && componentValidation != null && hasValidationIssue(componentValidation)
+
+  // The Validation Problems tab is conditional (only rendered while hasProblems).
+  // If it's the active tab and hasProblems flips to false — admin mode turned off,
+  // IMPORT_DATA lost, or the report refreshes clean — the now-removed tab would
+  // leave the Tabs panel blank. Reset to the always-present default tab so the
+  // view never goes blank.
+  useEffect(() => {
+    if (activeTab === 'validation-problems' && !hasProblems) {
+      setActiveTab('general')
+    }
+  }, [activeTab, hasProblems])
 
   const canArchive = hasPermission(user, PERMISSIONS.DELETE_COMPONENTS)
   const canUnarchive = hasPermission(user, PERMISSIONS.ARCHIVE_COMPONENTS)
@@ -385,6 +413,16 @@ export function ComponentDetailPage() {
     }
   }
 
+  async function handleCopyVersions() {
+    if (!componentValidation) return
+    try {
+      await copyToClipboard(allProblemVersions(componentValidation).join('\n'))
+      toast({ title: 'Copied to clipboard' })
+    } catch {
+      toast({ title: 'Copy failed', variant: 'destructive' })
+    }
+  }
+
   async function handleArchive() {
     try {
       await deleteMutation.mutateAsync()
@@ -665,6 +703,22 @@ export function ComponentDetailPage() {
             <TabsTrigger value="as-code">As Code</TabsTrigger>
             <TabsTrigger value="overrides">Overrides</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
+            {/* Validation Problems — conditional, last, and RED. Only present for
+                an admin AND when this component has problems / a failed check in
+                the cached report. A clean component renders neither trigger nor
+                content (no tab at all). */}
+            {hasProblems && componentValidation && (
+              <TabsTrigger
+                value="validation-problems"
+                className="text-destructive hover:text-destructive data-[state=active]:border-destructive data-[state=active]:text-destructive"
+              >
+                <AlertTriangle className="mr-1.5 h-4 w-4 text-destructive" aria-hidden="true" />
+                Validation Problems
+                <span className="ml-1.5 rounded-full bg-destructive/15 px-1.5 text-xs text-destructive">
+                  {validationBadgeCount(componentValidation)}
+                </span>
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <div className="mt-4">
@@ -739,17 +793,31 @@ export function ComponentDetailPage() {
             <TabsContent value="history">
               <ComponentHistoryTab componentId={component.id} />
             </TabsContent>
+
+            {/* Matching content for the conditional Validation Problems tab. The
+                full, untruncated renderer (same one the list badge dialog uses),
+                fed the component's ComponentValidation looked up from the cached
+                report by `component.name` — guaranteed consistent with the list. */}
+            {hasProblems && componentValidation && (
+              <TabsContent value="validation-problems">
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Released versions checked against the registry. Admin-only.
+                  </p>
+                  <div className="max-h-[60vh] overflow-auto">
+                    <ValidationProblemsList validation={componentValidation} />
+                  </div>
+                  {allProblemVersions(componentValidation).length > 0 && (
+                    <Button variant="outline" size="sm" onClick={handleCopyVersions}>
+                      <Copy className="mr-1.5 h-4 w-4" />
+                      Copy versions
+                    </Button>
+                  )}
+                </div>
+              </TabsContent>
+            )}
           </div>
         </Tabs>
-
-        {/* Admin-only Validation Problems section — live per-component result.
-            Renders nothing (and fetches nothing) for non-admins. */}
-        {isAdmin && (
-          <>
-            <Separator />
-            <ValidationProblemsSection componentId={component.id} isAdmin={isAdmin} />
-          </>
-        )}
       </div>
 
       {/* Create-similar dialog (sourceId → pre-filled from this component) */}

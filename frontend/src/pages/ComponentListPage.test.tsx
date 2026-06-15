@@ -367,7 +367,7 @@ describe('ComponentListPage — Validation Problems', () => {
       expect(screen.getByTestId('table').getAttribute('data-has-validation')).toBe('yes')
     })
 
-    it('does not pass an overlay when the report is empty (so no Validation column)', () => {
+    it('does not pass an overlay when the report is empty (so no inline triangles)', () => {
       mockComponentsOk()
       renderPage()
       expect(screen.getByTestId('table').getAttribute('data-has-validation')).toBe('no')
@@ -427,7 +427,7 @@ describe('ComponentListPage — Validation Problems', () => {
     })
   })
 
-  // ── NOT admin: no filter, no badge column, no validation fetch. ──
+  // ── NOT admin: no filter, no inline triangle, no validation fetch. ──
   describe('non-admin (hidden + no fetch)', () => {
     it('does not render the filter toggle for a non-admin user (adminMode off)', () => {
       mockUser(adminUser) // has IMPORT_DATA, but adminMode is OFF (default)
@@ -444,7 +444,7 @@ describe('ComponentListPage — Validation Problems', () => {
       expect(screen.queryByTestId('problems-only-trigger')).toBeNull()
     })
 
-    it('passes no validation overlay to the table (no Validation column) when not admin', () => {
+    it('passes no validation overlay to the table (no inline triangles) when not admin', () => {
       mockUser(viewerUser)
       mockComponentsOk()
       // Even if the report hook somehow returned data, the page must not pass it.

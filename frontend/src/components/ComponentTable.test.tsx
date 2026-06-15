@@ -440,48 +440,105 @@ function renderTableWithValidation(
   )
 }
 
-describe('ComponentTable — Validation column', () => {
+function validationWithProblems(component: string): ComponentValidation {
+  return {
+    component,
+    problems: [
+      {
+        type: 'UNREGISTERED_RELEASED_VERSIONS',
+        severity: 'ERROR',
+        message: '2 released version(s) not registered in components-registry',
+        details: { versions: ['v1', 'v2'], missingCount: 2, releasedCount: 4 },
+      },
+    ],
+    checkFailed: false,
+    checkError: null,
+  }
+}
+
+function validationCheckFailed(component: string): ComponentValidation {
+  return {
+    component,
+    problems: [],
+    checkFailed: true,
+    checkError: 'RM returned 500',
+  }
+}
+
+describe('ComponentTable — inline validation triangle', () => {
   beforeEach(() => {
     mockLinks(null)
   })
 
-  it('does not render a Validation column when no map is supplied', () => {
-    renderTable([makeComponent({ name: 'alpha' })])
+  it('does not render a separate Validation column header', () => {
+    renderTableWithValidation([makeComponent({ name: 'alpha' })], new Map())
     expect(screen.queryByRole('columnheader', { name: 'Validation' })).toBeNull()
   })
 
-  it('renders a Validation column header when a map is supplied', () => {
-    renderTableWithValidation([makeComponent({ name: 'alpha' })], new Map())
-    expect(screen.getByRole('columnheader', { name: 'Validation' })).toBeDefined()
-  })
-
-  it('renders an error badge for a component with problems (matched by key)', () => {
-    const map = new Map<string, ComponentValidation>([
-      [
-        'alpha',
-        {
-          component: 'alpha',
-          problems: [
-            {
-              type: 'UNREGISTERED_RELEASED_VERSIONS',
-              severity: 'ERROR',
-              message: '2 released version(s) not registered in components-registry',
-              details: { versions: ['v1', 'v2'], missingCount: 2, releasedCount: 4 },
-            },
-          ],
-          checkFailed: false,
-          checkError: null,
-        },
-      ],
-    ])
+  it('does not render a separate Validation column header even with problems present', () => {
+    const map = new Map<string, ComponentValidation>([['alpha', validationWithProblems('alpha')]])
     renderTableWithValidation([makeComponent({ name: 'alpha' })], map)
-    expect(screen.getByRole('button', { name: /2 validation problems/i })).toBeDefined()
+    expect(screen.queryByRole('columnheader', { name: 'Validation' })).toBeNull()
   })
 
-  it('renders an em-dash for a clean / unmatched component', () => {
+  it('renders a red triangle before the name for a component with problems (matched by key)', () => {
+    const map = new Map<string, ComponentValidation>([['alpha', validationWithProblems('alpha')]])
+    renderTableWithValidation([makeComponent({ name: 'alpha' })], map)
+    // The triangle trigger is a button carrying the problem-count aria-label,
+    // and it lives inside the Component Key cell, before the name link.
+    const trigger = screen.getByRole('button', { name: /2 validation problems/i })
+    expect(trigger).toBeDefined()
+    const nameCell = cellForColumn('Component Key')
+    expect(nameCell.contains(trigger)).toBe(true)
+    expect(within(nameCell).getByRole('link', { name: 'alpha' })).toBeDefined()
+  })
+
+  it('clicking the triangle opens the full-list dialog showing the versions', async () => {
+    const map = new Map<string, ComponentValidation>([['alpha', validationWithProblems('alpha')]])
+    renderTableWithValidation([makeComponent({ name: 'alpha' })], map)
+    await userEvent.click(screen.getByRole('button', { name: /2 validation problems/i }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('Validation Problems')).toBeDefined()
+    expect(within(dialog).getByText('v1')).toBeDefined()
+    expect(within(dialog).getByText('v2')).toBeDefined()
+    // The full-list copy affordance is present in the dialog.
+    expect(within(dialog).getByRole('button', { name: /copy versions/i })).toBeDefined()
+  })
+
+  it('renders a red triangle before the name for a check-failed component (no problems)', () => {
+    const map = new Map<string, ComponentValidation>([['alpha', validationCheckFailed('alpha')]])
+    renderTableWithValidation([makeComponent({ name: 'alpha' })], map)
+    // A failed check (no problems) still flags the component — the trigger
+    // carries the "check failed" aria-label and lives in the Component Key
+    // cell, before the name link.
+    const trigger = screen.getByRole('button', { name: /validation check failed/i })
+    expect(trigger).toBeDefined()
+    const nameCell = cellForColumn('Component Key')
+    expect(nameCell.contains(trigger)).toBe(true)
+    expect(within(nameCell).getByRole('link', { name: 'alpha' })).toBeDefined()
+  })
+
+  it('clicking the triangle opens the dialog showing the Check failed block + error for a check-failed component', async () => {
+    const map = new Map<string, ComponentValidation>([['alpha', validationCheckFailed('alpha')]])
+    renderTableWithValidation([makeComponent({ name: 'alpha' })], map)
+    await userEvent.click(screen.getByRole('button', { name: /validation check failed/i }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('Validation Problems')).toBeDefined()
+    expect(within(dialog).getByText('Check failed')).toBeDefined()
+    expect(within(dialog).getByText('RM returned 500')).toBeDefined()
+  })
+
+  it('renders no triangle for a clean / unmatched component', () => {
     renderTableWithValidation([makeComponent({ name: 'clean-one' })], new Map())
-    expect(cellForColumn('Validation').textContent).toContain('—')
     expect(screen.queryByRole('button', { name: /validation problem/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /validation check failed/i })).toBeNull()
+  })
+
+  it('renders no triangle for a non-admin (validation map not passed at all)', () => {
+    // renderTable() omits validationByComponent entirely — the non-admin path.
+    renderTable([makeComponent({ name: 'alpha' })])
+    expect(screen.queryByRole('button', { name: /validation problem/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /validation check failed/i })).toBeNull()
   })
 })
 

@@ -1193,4 +1193,48 @@ describe('ComponentFilters — with validation problems toggle', () => {
     await userEvent.click(screen.getByLabelText('with validation problems'))
     expect(onProblemsOnlyChange).toHaveBeenCalledWith(false)
   })
+
+  it('shows the found-count beside the hint when problemsCount is given (plural)', () => {
+    render(
+      <ComponentFilters
+        filter={{ archived: false }}
+        onFilterChange={onFilterChange}
+        problemsOnly
+        onProblemsOnlyChange={onProblemsOnlyChange}
+        problemsCount={3}
+      />,
+    )
+    // The count and the existing hint share one line.
+    expect(screen.getByText(/3 components with validation problems/i)).toBeDefined()
+    expect(screen.getByText(/don.t apply in .with validation problems. mode/i)).toBeDefined()
+  })
+
+  it('uses the singular noun (no plural "s") when problemsCount is 1', () => {
+    render(
+      <ComponentFilters
+        filter={{ archived: false }}
+        onFilterChange={onFilterChange}
+        problemsOnly
+        onProblemsOnlyChange={onProblemsOnlyChange}
+        problemsCount={1}
+      />,
+    )
+    expect(screen.getByText(/1 component with validation problems/i)).toBeDefined()
+    // Guard against the plural form leaking in for the singular case.
+    expect(screen.queryByText(/1 components with validation problems/i)).toBeNull()
+  })
+
+  it('omits the count while the report is still loading (problemsCount undefined)', () => {
+    render(
+      <ComponentFilters
+        filter={{ archived: false }}
+        onFilterChange={onFilterChange}
+        problemsOnly
+        onProblemsOnlyChange={onProblemsOnlyChange}
+      />,
+    )
+    // Hint shows, but no found-count yet.
+    expect(screen.getByText(/don.t apply in .with validation problems. mode/i)).toBeDefined()
+    expect(screen.queryByText(/with validation problems\./i)).toBeNull()
+  })
 })
