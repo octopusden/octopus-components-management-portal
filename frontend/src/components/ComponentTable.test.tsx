@@ -456,6 +456,15 @@ function validationWithProblems(component: string): ComponentValidation {
   }
 }
 
+function validationCheckFailed(component: string): ComponentValidation {
+  return {
+    component,
+    problems: [],
+    checkFailed: true,
+    checkError: 'RM returned 500',
+  }
+}
+
 describe('ComponentTable — inline validation triangle', () => {
   beforeEach(() => {
     mockLinks(null)
@@ -494,6 +503,29 @@ describe('ComponentTable — inline validation triangle', () => {
     expect(within(dialog).getByText('v2')).toBeDefined()
     // The full-list copy affordance is present in the dialog.
     expect(within(dialog).getByRole('button', { name: /copy versions/i })).toBeDefined()
+  })
+
+  it('renders a red triangle before the name for a check-failed component (no problems)', () => {
+    const map = new Map<string, ComponentValidation>([['alpha', validationCheckFailed('alpha')]])
+    renderTableWithValidation([makeComponent({ name: 'alpha' })], map)
+    // A failed check (no problems) still flags the component — the trigger
+    // carries the "check failed" aria-label and lives in the Component Key
+    // cell, before the name link.
+    const trigger = screen.getByRole('button', { name: /validation check failed/i })
+    expect(trigger).toBeDefined()
+    const nameCell = cellForColumn('Component Key')
+    expect(nameCell.contains(trigger)).toBe(true)
+    expect(within(nameCell).getByRole('link', { name: 'alpha' })).toBeDefined()
+  })
+
+  it('clicking the triangle opens the dialog showing the Check failed block + error for a check-failed component', async () => {
+    const map = new Map<string, ComponentValidation>([['alpha', validationCheckFailed('alpha')]])
+    renderTableWithValidation([makeComponent({ name: 'alpha' })], map)
+    await userEvent.click(screen.getByRole('button', { name: /validation check failed/i }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('Validation Problems')).toBeDefined()
+    expect(within(dialog).getByText('Check failed')).toBeDefined()
+    expect(within(dialog).getByText('RM returned 500')).toBeDefined()
   })
 
   it('renders no triangle for a clean / unmatched component', () => {
