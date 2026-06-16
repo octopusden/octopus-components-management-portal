@@ -66,13 +66,14 @@ class ValidationServiceTest {
         rm: HttpServer,
         timeoutSeconds: Long = 10,
         liveTimeoutSeconds: Long = 30,
+        sweepTimeoutSeconds: Long = 30,
     ): ValidationService {
         val properties =
             ValidationProperties().apply {
                 registryBaseUrl = "http://localhost:${crs.address.port}"
                 releaseManagementBaseUrl = "http://localhost:${rm.address.port}"
                 requestTimeoutSeconds = timeoutSeconds
-                sweepTimeoutSeconds = 30
+                this.sweepTimeoutSeconds = sweepTimeoutSeconds
                 this.liveTimeoutSeconds = liveTimeoutSeconds
                 concurrency = 4
             }
@@ -234,6 +235,54 @@ class ValidationServiceTest {
         assertFalse(reason.contains("localhost"))
         assertFalse(reason.contains("http"))
         // Previous good components + last-success generatedAt retained (stale-but-honest).
+        assertEquals(firstGeneratedAt, stale.generatedAt, "generatedAt must point at the last SUCCESS")
+        assertEquals(listOf("good"), stale.components.map { it.component }, "previous good components retained")
+    }
+
+    @Test
+    @DisplayName("a sweep timeout yields a TIMED-OUT refreshError (NOT 'unreachable') + retains components")
+    fun `sweep timeout sets timed out refreshError`() {
+        // Phase 1: a fast, good sweep populates the cache.
+        val crs = newServer()
+        val slow = java.util.concurrent.atomic.AtomicBoolean(false)
+        crs.createContext("/rest/api/3/components") { exchange ->
+            // Phase 2 makes the list call stall past the (1s) sweep budget — reachable but slow.
+            if (slow.get()) {
+                Thread.sleep(3_000)
+            }
+            respondJson(exchange, 200, """[{"component":{"id":"good"},"variants":{}}]""")
+        }
+        crs.createContext("/rest/api/2/components") { exchange ->
+            respondJson(exchange, 200, """{"versions":{"1.0.1":{}}}""")
+        }
+        val rm = newServer()
+        rm.createContext("/rest/api/1/builds/component") { exchange ->
+            respondJson(exchange, 200, """[{"version":"1.0.1","status":"RELEASE"}]""")
+        }
+
+        // requestTimeout high (10s) so the per-request timeout does NOT fire — it's the
+        // 1s whole-sweep budget that trips, exercising the .block(timeout) path.
+        val svc = service(crs, rm, timeoutSeconds = 10, sweepTimeoutSeconds = 1)
+        svc.refresh()
+        val firstGeneratedAt = svc.currentReport().generatedAt
+        assertNotNull(firstGeneratedAt)
+
+        // Phase 2: stall the list call → whole-sweep budget (1s) overruns.
+        slow.set(true)
+        svc.refresh()
+
+        val stale = svc.currentReport()
+        val reason = stale.refreshError
+        assertNotNull(reason, "a sweep timeout must set refreshError")
+        assertTrue(reason!!.contains("timed out"), "expected a timed-out reason, got: $reason")
+        assertFalse(
+            reason.contains("unreachable"),
+            "a timeout must NOT be reported as unreachable (URL/connectivity is fine): $reason",
+        )
+        // Still sanitized: no host/port/URL leaks into the client-facing value.
+        assertFalse(reason.contains("localhost"))
+        assertFalse(reason.contains("http"))
+        // Stale-but-honest: previous good components + last-success generatedAt retained.
         assertEquals(firstGeneratedAt, stale.generatedAt, "generatedAt must point at the last SUCCESS")
         assertEquals(listOf("good"), stale.components.map { it.component }, "previous good components retained")
     }

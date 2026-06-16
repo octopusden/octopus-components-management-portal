@@ -83,8 +83,11 @@ portal:
   validation:
     registry-base-url: ${COMPONENTS_REGISTRY_SERVICE_URL:http://localhost:4567}
     release-management-base-url: ${RELEASE_MANAGEMENT_SERVICE_URL:http://localhost:4568}
-    refresh-interval-ms: ${PORTAL_VALIDATION_REFRESH_INTERVAL_MS:3600000}
-    concurrency: ${PORTAL_VALIDATION_CONCURRENCY:8}
+    refresh-interval-ms: ${PORTAL_VALIDATION_REFRESH_INTERVAL_MS:14400000}
+    # Per-component fan-out cap. Kept modest so the sweep does not overload a single
+    # components-registry instance (no CRS replicas in test) — the sweep is the only
+    # bulk load on it. Env-tunable per environment.
+    concurrency: ${PORTAL_VALIDATION_CONCURRENCY:4}
     request-timeout-seconds: ${PORTAL_VALIDATION_REQUEST_TIMEOUT_SECONDS:30}
     sweep-timeout-seconds: ${PORTAL_VALIDATION_SWEEP_TIMEOUT_SECONDS:600}
     live-timeout-seconds: ${PORTAL_VALIDATION_LIVE_TIMEOUT_SECONDS:60}
