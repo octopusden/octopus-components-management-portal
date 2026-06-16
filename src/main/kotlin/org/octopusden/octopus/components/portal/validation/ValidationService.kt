@@ -162,27 +162,48 @@ class ValidationService(
             // wrapper or an IllegalStateException on sweep-timeout — all must retain the
             // previous report rather than crash the scheduler thread.
             //
-            // The sweep starts with registry.componentIds(), so a whole-sweep failure is
-            // almost always the components-registry being unreachable/misconfigured. Emit
-            // an ACTIONABLE server-side warning that includes the configured base URL and
-            // the env var to set — this detail stays in the SERVER log only; the
-            // client-facing refreshError is the sanitized, host-free category below.
-            val connectionClass = isConnectionClass(e)
-            if (connectionClass) {
-                log.warn(
-                    "Validation sweep failed reaching components-registry at {} — set " +
-                        "portal.validation.registry-base-url (env COMPONENTS_REGISTRY_SERVICE_URL) " +
-                        "to a reachable https URL",
-                    properties.registryBaseUrl,
-                    e,
-                )
-            } else {
-                log.warn("Validation sweep failed, retaining previous report: {}", e.toString())
+            // Three distinct outcomes, because they need DIFFERENT operator action and a
+            // timeout must NOT masquerade as "unreachable" (the URL/connectivity is fine,
+            // the sweep is just slow/over-loaded):
+            //   • timeout    → tuning problem (budget too low / concurrency too high / CRS
+            //                  under load). The sweep's .block(sweepTimeoutSeconds) surfaces
+            //                  this as IllegalStateException("Timeout on blocking read…")
+            //                  whose cause is a TimeoutException.
+            //   • unreachable→ genuine connectivity (refused / unresolved host / TLS): name
+            //                  the env var to fix.
+            //   • other      → bare class name.
+            // The actionable detail (configured base URL) stays in the SERVER log; the
+            // client-facing refreshError is the sanitized, host-free category.
+            when (classifyFailure(e)) {
+                FailureKind.TIMEOUT -> {
+                    log.warn(
+                        "Validation sweep did not finish within its {}s budget (components-registry at {}) — " +
+                            "downstream slow or under load; consider raising " +
+                            "portal.validation.sweep-timeout-seconds, lowering portal.validation.concurrency, " +
+                            "or adding components-registry capacity",
+                        properties.sweepTimeoutSeconds,
+                        properties.registryBaseUrl,
+                        e,
+                    )
+                    retainStale(SWEEP_TIMED_OUT)
+                }
+
+                FailureKind.UNREACHABLE -> {
+                    log.warn(
+                        "Validation sweep failed reaching components-registry at {} — set " +
+                            "portal.validation.registry-base-url (env COMPONENTS_REGISTRY_SERVICE_URL) " +
+                            "to a reachable https URL",
+                        properties.registryBaseUrl,
+                        e,
+                    )
+                    retainStale("$REGISTRY_LABEL unreachable: ${shortReason(e)}")
+                }
+
+                FailureKind.OTHER -> {
+                    log.warn("Validation sweep failed, retaining previous report: {}", e.toString())
+                    retainStale(shortReason(e))
+                }
             }
-            // Categorized, still host-free client-facing reason: name the downstream +
-            // failure kind for connection-class errors, else the bare class name.
-            val reason = if (connectionClass) "$REGISTRY_LABEL unreachable: ${shortReason(e)}" else shortReason(e)
-            retainStale(reason)
         } finally {
             refreshing.set(false)
         }
@@ -201,20 +222,32 @@ class ValidationService(
      * only — the client-facing `checkError` is the sanitized [shortReason].
      */
     private fun logPerComponentFailure(component: String, e: Throwable) {
-        if (isConnectionClass(e)) {
-            log.warn(
-                "Validation check failed for component '{}' reaching a downstream — verify " +
-                    "release-management (portal.validation.release-management-base-url / env " +
-                    "RELEASE_MANAGEMENT_SERVICE_URL) at {} and components-registry " +
-                    "(portal.validation.registry-base-url / env COMPONENTS_REGISTRY_SERVICE_URL) at {} " +
-                    "are configured and reachable over https",
-                component,
-                properties.releaseManagementBaseUrl,
-                properties.registryBaseUrl,
-                e,
-            )
-        } else {
-            log.warn("Validation check failed for component '{}': {}", component, e.toString())
+        when (classifyFailure(e)) {
+            // Slow downstream, not unreachable: no stack (one per slow component would flood
+            // the log during a sweep) — just the actionable tuning hint.
+            FailureKind.TIMEOUT ->
+                log.warn(
+                    "Validation check for component '{}' timed out (request-timeout {}s) — " +
+                        "release-management / components-registry slow or under load",
+                    component,
+                    properties.requestTimeoutSeconds,
+                )
+
+            FailureKind.UNREACHABLE ->
+                log.warn(
+                    "Validation check failed for component '{}' reaching a downstream — verify " +
+                        "release-management (portal.validation.release-management-base-url / env " +
+                        "RELEASE_MANAGEMENT_SERVICE_URL) at {} and components-registry " +
+                        "(portal.validation.registry-base-url / env COMPONENTS_REGISTRY_SERVICE_URL) at {} " +
+                        "are configured and reachable over https",
+                    component,
+                    properties.releaseManagementBaseUrl,
+                    properties.registryBaseUrl,
+                    e,
+                )
+
+            FailureKind.OTHER ->
+                log.warn("Validation check failed for component '{}': {}", component, e.toString())
         }
     }
 
@@ -228,30 +261,52 @@ class ValidationService(
     private fun shortReason(e: Throwable): String = e.javaClass.simpleName
 
     /**
-     * True when [e] (or anything in its cause chain) is a connection-class
-     * failure: a WebClient transport error, a refused/unresolvable connection, a
-     * TLS handshake failure, or a timeout. These are the cases that point at a
-     * misconfigured/unreachable downstream URL rather than a bad response.
-     * Reactor wraps the real cause, so we walk the chain.
+     * Categorize a sweep/refresh failure by walking [e]'s cause chain once (reactor
+     * wraps the real cause; first matching link wins):
+     *  • [FailureKind.TIMEOUT] — a per-request timeout (`TimeoutException`) or the
+     *    whole-sweep budget overrun, which `Mono.block(Duration)` surfaces as an
+     *    `IllegalStateException("Timeout on blocking read for N NANOSECONDS")`. The
+     *    downstream is reachable but slow/over-loaded — NOT unreachable.
+     *  • [FailureKind.UNREACHABLE] — a genuine connectivity failure (transport error,
+     *    refused/unresolved host, TLS): a misconfigured/unreachable downstream URL.
+     *  • [FailureKind.OTHER] — anything else (e.g. a 5xx mapped to an exception).
      */
-    private fun isConnectionClass(e: Throwable): Boolean {
+    private fun classifyFailure(e: Throwable): FailureKind {
         var cur: Throwable? = e
         val seen = HashSet<Throwable>()
+        var kind = FailureKind.OTHER
         while (cur != null && seen.add(cur)) {
-            when (cur) {
-                is WebClientRequestException,
-                is ConnectException,
-                is UnknownHostException,
-                is SSLException,
-                is TimeoutException,
-                -> return true
-            }
-            cur = cur.cause
+            val c = cur
+            val timedOut =
+                c is TimeoutException ||
+                    (c is IllegalStateException && c.message?.contains("Timeout on blocking read") == true)
+            kind =
+                when {
+                    timedOut -> FailureKind.TIMEOUT
+                    UNREACHABLE_TYPES.any { it.isInstance(c) } -> FailureKind.UNREACHABLE
+                    else -> FailureKind.OTHER
+                }
+            if (kind != FailureKind.OTHER) break
+            cur = c.cause
         }
-        return false
+        return kind
     }
+
+    private enum class FailureKind { TIMEOUT, UNREACHABLE, OTHER }
 
     private companion object {
         private const val REGISTRY_LABEL = "components-registry"
+
+        /** Host-free, client-facing reason for a whole-sweep timeout (distinct from "unreachable"). */
+        private const val SWEEP_TIMED_OUT = "validation sweep timed out"
+
+        /** Cause-chain types that mean a genuinely unreachable downstream (NOT a timeout). */
+        private val UNREACHABLE_TYPES =
+            listOf(
+                WebClientRequestException::class,
+                ConnectException::class,
+                UnknownHostException::class,
+                SSLException::class,
+            )
     }
 }

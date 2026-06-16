@@ -22,13 +22,13 @@ class ValidationProperties {
     @field:NotBlank
     var registryBaseUrl: String = ""
 
-    /** Background sweep cadence (fixedDelay). Default 1h. */
+    /** Background sweep cadence (fixedDelay). Default 4h. */
     @field:Positive
-    var refreshIntervalMs: Long = 3_600_000
+    var refreshIntervalMs: Long = 14_400_000
 
-    /** Max in-flight per-component checks during a sweep. */
+    /** Max in-flight per-component checks during a sweep (kept modest to not overload a single CRS). */
     @field:Positive
-    var concurrency: Int = 8
+    var concurrency: Int = 4
 
     /** Per single downstream RM/CRS call timeout (P3) — applied in both clients. */
     @field:Positive
