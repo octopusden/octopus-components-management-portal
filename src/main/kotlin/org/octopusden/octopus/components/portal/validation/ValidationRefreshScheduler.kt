@@ -27,7 +27,10 @@ import java.time.Instant
  * The sweep runs on a scheduler thread (never the Netty event loop), so the blocking
  * .block() inside refresh() is safe.
  */
-@Configuration
+// proxyBeanMethods=false: this class has no @Bean methods needing CGLIB enhancement,
+// and Kotlin classes are final (CGLIB cannot subclass them) — without this the context
+// fails to start with "Cannot subclass final class".
+@Configuration(proxyBeanMethods = false)
 class ValidationRefreshScheduler(
     private val validationService: ValidationService,
 ) : SchedulingConfigurer {
