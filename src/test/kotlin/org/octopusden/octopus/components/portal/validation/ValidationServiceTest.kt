@@ -67,6 +67,8 @@ class ValidationServiceTest {
         timeoutSeconds: Long = 10,
         liveTimeoutSeconds: Long = 30,
         sweepTimeoutSeconds: Long = 30,
+        refreshIntervalMs: Long = 14_400_000,
+        retryIntervalMs: Long = 600_000,
     ): ValidationService {
         val properties =
             ValidationProperties().apply {
@@ -75,6 +77,8 @@ class ValidationServiceTest {
                 requestTimeoutSeconds = timeoutSeconds
                 this.sweepTimeoutSeconds = sweepTimeoutSeconds
                 this.liveTimeoutSeconds = liveTimeoutSeconds
+                this.refreshIntervalMs = refreshIntervalMs
+                this.retryIntervalMs = retryIntervalMs
                 concurrency = 4
             }
         val registry = RegistryClient(properties)
@@ -325,6 +329,95 @@ class ValidationServiceTest {
     }
 
     @Test
+    @DisplayName("failure-backoff: before any sweep the next delay is the normal refresh interval")
+    fun `next delay is refresh interval before any sweep`() {
+        val crs = newServer()
+        val rm = newServer()
+        val svc = service(crs, rm, refreshIntervalMs = 14_400_000, retryIntervalMs = 600_000)
+
+        // No refresh yet → no refreshError → normal cadence (the startup sweep owns the
+        // immediate first run; the scheduled trigger must not hammer at the retry rate).
+        assertEquals(14_400_000, svc.nextDelayMillis())
+    }
+
+    @Test
+    @DisplayName("failure-backoff: after a SUCCESSFUL sweep the next delay is the normal refresh interval")
+    fun `next delay is refresh interval after success`() {
+        val crs = newServer()
+        crs.createContext("/rest/api/3/components") { exchange ->
+            respondJson(exchange, 200, """[{"component":{"id":"good"},"variants":{}}]""")
+        }
+        crs.createContext("/rest/api/2/components") { exchange ->
+            respondJson(exchange, 200, """{"versions":{"1.0.1":{}}}""")
+        }
+        val rm = newServer()
+        rm.createContext("/rest/api/1/builds/component") { exchange ->
+            respondJson(exchange, 200, """[{"version":"1.0.1","status":"RELEASE"}]""")
+        }
+
+        val svc = service(crs, rm, refreshIntervalMs = 14_400_000, retryIntervalMs = 600_000)
+        svc.refresh()
+
+        assertNull(svc.currentReport().refreshError)
+        assertEquals(14_400_000, svc.nextDelayMillis())
+    }
+
+    @Test
+    @DisplayName("failure-backoff: after a FAILED sweep the next delay is the SHORT retry interval")
+    fun `next delay is retry interval after failure`() {
+        // CRS list endpoint 500s → whole-sweep failure → refreshError set.
+        val crs = newServer()
+        crs.createContext("/rest/api/3/components") { exchange ->
+            respondJson(exchange, 500, """{"error":"list-down"}""")
+        }
+        val rm = newServer()
+        rm.createContext("/rest/api/1/builds/component") { exchange ->
+            respondJson(exchange, 200, """[]""")
+        }
+
+        val svc = service(crs, rm, refreshIntervalMs = 14_400_000, retryIntervalMs = 600_000)
+        svc.refresh()
+
+        assertNotNull(svc.currentReport().refreshError, "a whole-sweep failure must set refreshError")
+        assertEquals(
+            600_000,
+            svc.nextDelayMillis(),
+            "after a failed refresh the next sweep must be scheduled at the short retry interval",
+        )
+    }
+
+    @Test
+    @DisplayName("failure-backoff: a recovered sweep returns the cadence to the normal interval")
+    fun `next delay returns to refresh interval after recovery`() {
+        val crs = newServer()
+        val down = java.util.concurrent.atomic.AtomicBoolean(true)
+        crs.createContext("/rest/api/3/components") { exchange ->
+            if (down.get()) {
+                respondJson(exchange, 500, """{"error":"list-down"}""")
+            } else {
+                respondJson(exchange, 200, """[{"component":{"id":"good"},"variants":{}}]""")
+            }
+        }
+        crs.createContext("/rest/api/2/components") { exchange ->
+            respondJson(exchange, 200, """{"versions":{"1.0.1":{}}}""")
+        }
+        val rm = newServer()
+        rm.createContext("/rest/api/1/builds/component") { exchange ->
+            respondJson(exchange, 200, """[{"version":"1.0.1","status":"RELEASE"}]""")
+        }
+
+        val svc = service(crs, rm, refreshIntervalMs = 14_400_000, retryIntervalMs = 600_000)
+        svc.refresh()
+        assertEquals(600_000, svc.nextDelayMillis(), "failed sweep → retry interval")
+
+        // Recover: the next sweep succeeds and clears refreshError → back to normal cadence.
+        down.set(false)
+        svc.refresh()
+        assertNull(svc.currentReport().refreshError)
+        assertEquals(14_400_000, svc.nextDelayMillis(), "recovered sweep → normal interval")
+    }
+
+    @Test
     @DisplayName("validateLive runs a per-component check on demand (bypassing cache)")
     fun `validateLive returns live per-component result`() {
         val crs = newServer()
@@ -368,6 +461,37 @@ class ValidationServiceTest {
         assertTrue(cv.checkFailed, "a live-check timeout must surface as checkFailed, not an error")
         assertTrue(cv.problems.isEmpty())
         assertNotNull(cv.checkError)
+    }
+
+    @Test
+    @DisplayName("ValidationProperties: retry interval >= refresh interval is rejected (backoff guard)")
+    fun `retry interval must be shorter than refresh interval`() {
+        jakarta.validation.Validation.buildDefaultValidatorFactory().use { factory ->
+            val validator = factory.validator
+            val base = { url: String ->
+                ValidationProperties().apply {
+                    registryBaseUrl = url
+                    releaseManagementBaseUrl = url
+                }
+            }
+
+            // retry < refresh → valid
+            val ok = base("http://localhost").apply {
+                refreshIntervalMs = 14_400_000
+                retryIntervalMs = 600_000
+            }
+            assertTrue(validator.validate(ok).none { it.propertyPath.toString().contains("RetryInterval") })
+
+            // retry >= refresh → a violation on the cross-field guard
+            val bad = base("http://localhost").apply {
+                refreshIntervalMs = 600_000
+                retryIntervalMs = 600_000
+            }
+            assertTrue(
+                validator.validate(bad).any { it.message.contains("shorter than refresh-interval-ms") },
+                "retry >= refresh must be rejected",
+            )
+        }
     }
 
     private companion object {

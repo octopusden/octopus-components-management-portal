@@ -8,7 +8,6 @@ import org.octopusden.octopus.components.portal.validation.model.ValidationRepor
 import org.slf4j.LoggerFactory
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.event.EventListener
-import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.web.reactive.function.client.WebClientRequestException
 import reactor.core.publisher.Flux
@@ -122,11 +121,25 @@ class ValidationService(
                 )
             }
 
-    /** Scheduled background refresh (fixedDelay → no pile-up). Runs on a Spring scheduler thread. */
-    @Scheduled(fixedDelayString = "\${portal.validation.refresh-interval-ms}")
+    /**
+     * Scheduled background refresh. Invoked by [ValidationRefreshScheduler]'s dynamic
+     * trigger (NOT a static fixedDelay) so the gap to the next run can shrink to
+     * [ValidationProperties.retryIntervalMs] after a failure — see [nextDelayMillis].
+     * Runs on a Spring scheduler thread; single-flight guarded in [refresh].
+     */
     fun scheduledRefresh() {
         refresh()
     }
+
+    /**
+     * Delay (ms) the scheduler should wait before the NEXT sweep, based on the outcome
+     * of the most recent one: the short [ValidationProperties.retryIntervalMs] while the
+     * last refresh FAILED (refreshError set — the report is stale), else the normal
+     * [ValidationProperties.refreshIntervalMs]. Before the first sweep there is no error,
+     * so the normal cadence applies (the startup sweep owns the immediate first run).
+     */
+    fun nextDelayMillis(): Long =
+        if (report.refreshError != null) properties.retryIntervalMs else properties.refreshIntervalMs
 
     /** One-shot refresh at startup, off the boot thread so it never blocks readiness. */
     @EventListener(ApplicationReadyEvent::class)
