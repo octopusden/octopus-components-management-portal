@@ -298,6 +298,35 @@ class ValidationServiceTest {
     }
 
     @Test
+    @DisplayName("a per-request component-list timeout (well under the sweep budget) is still TIMEOUT, not unreachable")
+    fun `component list request timeout yields timed out refreshError`() {
+        // The QA case: the component-list fetch itself exceeds the per-request timeout
+        // (downstream busy) and propagates, aborting the sweep far inside the budget.
+        // It must classify as TIMEOUT (the client reason stays "validation sweep timed
+        // out"), NOT unreachable — connectivity is fine, the downstream is just slow.
+        val crs = newServer()
+        crs.createContext("/rest/api/3/components") { exchange ->
+            Thread.sleep(2_000) // > the 1s request timeout, << the 30s sweep budget
+            respondJson(exchange, 200, """[{"component":{"id":"good"},"variants":{}}]""")
+        }
+        val rm = newServer()
+        rm.createContext("/rest/api/1/builds/component") { exchange ->
+            respondJson(exchange, 200, """[]""")
+        }
+
+        // requestTimeout low (1s) so the LIST fetch's per-request timeout fires; sweep
+        // budget high (30s) so it is NOT the .block() budget that trips.
+        val svc = service(crs, rm, timeoutSeconds = 1, sweepTimeoutSeconds = 30)
+        svc.refresh()
+
+        val reason = svc.currentReport().refreshError
+        assertNotNull(reason, "a list-fetch request timeout must set refreshError")
+        assertTrue(reason!!.contains("timed out"), "expected a timed-out reason, got: $reason")
+        assertFalse(reason.contains("unreachable"), "a timeout must NOT be reported as unreachable: $reason")
+        assertEquals(600_000, svc.nextDelayMillis(), "a timed-out sweep must back off to the retry interval")
+    }
+
+    @Test
     @DisplayName("single-flight guard: a concurrent refresh() is a no-op (only one sweep runs)")
     fun `single flight guard makes concurrent refresh a no-op`() {
         val listCalls = AtomicInteger(0)
