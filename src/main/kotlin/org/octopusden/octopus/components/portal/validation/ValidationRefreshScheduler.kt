@@ -16,8 +16,16 @@ import java.time.Instant
  * redeploy running its multi-minute DSL→DB migration) self-heals within minutes rather
  * than leaving a stale report until the next full interval.
  *
- * The immediate first sweep is still owned by [ValidationService.refreshOnStartup]
- * (ApplicationReadyEvent); this trigger schedules every run AFTER that.
+ * This trigger ALSO owns the immediate first sweep (it fires right after the context is
+ * ready) instead of a separate ApplicationReadyEvent listener. That is what makes the
+ * backoff work for a FAILED startup sweep — the exact QA migration-collision case: once
+ * the first run completes and fails, the trigger recomputes the next run via
+ * [ValidationService.nextDelayMillis] and retries on the short interval. A separate
+ * startup listener would not feed the trigger context, so the first retry would stay a
+ * full refresh-interval away.
+ *
+ * The sweep runs on a scheduler thread (never the Netty event loop), so the blocking
+ * .block() inside refresh() is safe.
  */
 @Configuration
 class ValidationRefreshScheduler(
@@ -27,11 +35,16 @@ class ValidationRefreshScheduler(
         registrar.addTriggerTask(
             { validationService.scheduledRefresh() },
             Trigger { context: TriggerContext ->
-                // Base the next run on the previous completion (no pile-up: the gap is
-                // measured from when the last sweep finished). Before the first scheduled
-                // run there is no completion yet, so anchor on "now".
-                val base: Instant = context.lastCompletion() ?: context.clock.instant()
-                base.plusMillis(validationService.nextDelayMillis())
+                val lastCompletion: Instant? = context.lastCompletion()
+                if (lastCompletion == null) {
+                    // First run: fire immediately (replaces a startup-event sweep).
+                    context.clock.instant()
+                } else {
+                    // Subsequent runs anchor on the previous completion (fixedDelay
+                    // semantics → no pile-up); the gap shrinks to the retry interval
+                    // while the last sweep failed. See [ValidationService.nextDelayMillis].
+                    lastCompletion.plusMillis(validationService.nextDelayMillis())
+                }
             },
         )
     }

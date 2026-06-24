@@ -6,13 +6,10 @@ import org.octopusden.octopus.components.portal.validation.model.ComponentValida
 import org.octopusden.octopus.components.portal.validation.model.ValidationProblem
 import org.octopusden.octopus.components.portal.validation.model.ValidationReport
 import org.slf4j.LoggerFactory
-import org.springframework.boot.context.event.ApplicationReadyEvent
-import org.springframework.context.event.EventListener
 import org.springframework.stereotype.Service
 import org.springframework.web.reactive.function.client.WebClientRequestException
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
-import reactor.core.scheduler.Schedulers
 import java.net.ConnectException
 import java.net.UnknownHostException
 import java.time.Duration
@@ -135,19 +132,14 @@ class ValidationService(
      * Delay (ms) the scheduler should wait before the NEXT sweep, based on the outcome
      * of the most recent one: the short [ValidationProperties.retryIntervalMs] while the
      * last refresh FAILED (refreshError set — the report is stale), else the normal
-     * [ValidationProperties.refreshIntervalMs]. Before the first sweep there is no error,
-     * so the normal cadence applies (the startup sweep owns the immediate first run).
+     * [ValidationProperties.refreshIntervalMs].
+     *
+     * [ValidationRefreshScheduler] owns the immediate first sweep and recomputes this
+     * after every run, so a FAILED startup sweep (the QA migration-collision case) is
+     * retried after [ValidationProperties.retryIntervalMs] rather than the full interval.
      */
     fun nextDelayMillis(): Long =
         if (report.refreshError != null) properties.retryIntervalMs else properties.refreshIntervalMs
-
-    /** One-shot refresh at startup, off the boot thread so it never blocks readiness. */
-    @EventListener(ApplicationReadyEvent::class)
-    fun refreshOnStartup() {
-        Mono.fromRunnable<Unit> { refresh() }
-            .subscribeOn(Schedulers.boundedElastic())
-            .subscribe()
-    }
 
     /**
      * Runs a sweep under the single-flight guard, blocking up to the sweep
