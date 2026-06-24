@@ -17,6 +17,12 @@ import { useAdminMode } from '@/lib/adminModeStore'
 import { ApiError } from '../lib/api'
 import type { ComponentFilter, ComponentSummary } from '../lib/types'
 
+// Verbatim client-facing reason the backend sets for a whole-sweep TIMEOUT (must match
+// ValidationService.SWEEP_TIMED_OUT). A timeout means the downstream is reachable but
+// slow/over-loaded, so the banner shows a "will retry" hint instead of the misleading
+// "check the URLs are reachable" hint used for genuine connectivity failures.
+const SWEEP_TIMED_OUT = 'validation sweep timed out'
+
 // Build a minimal ComponentSummary row for a component that exists only in the
 // validation report (problemsOnly mode). The validation report keys by CRS
 // component id, which equals ComponentSummary.name AND the detail-route id, so
@@ -132,15 +138,31 @@ export function ComponentListPage() {
         {/* The validation report is a scheduled Portal sweep; when its most
             recent refresh failed the held data may be stale. Surface that so a
             stale report is never silently read as "all clean". Admin-only (the
-            report is only fetched for admins). */}
+            report is only fetched for admins).
+
+            Two distinct hints, because a TIMEOUT and an UNREACHABLE downstream need
+            different operator action — and a timeout must not be misread as a URL
+            misconfiguration (connectivity is fine; the sweep is just slow/over-loaded,
+            e.g. during a registry redeploy). The timeout reason string is produced
+            verbatim by the backend (ValidationService.SWEEP_TIMED_OUT). On timeout the
+            sweep also retries on a short backoff, so the report self-heals. */}
         {isAdmin && validation.refreshError && (
           <InlineError
             message={
-              <>
-                Validation report may be stale — last refresh failed: {validation.refreshError}.
-                Check that the validation service URLs (components-registry / release-management)
-                are configured and reachable over https.
-              </>
+              validation.refreshError === SWEEP_TIMED_OUT ? (
+                <>
+                  Validation report may be stale — the last refresh timed out: a validation
+                  service (components-registry / release-management) was slow or under load
+                  (for example during a registry redeploy). The sweep retries automatically
+                  shortly; no action is needed unless this persists.
+                </>
+              ) : (
+                <>
+                  Validation report may be stale — last refresh failed: {validation.refreshError}.
+                  Check that the validation service URLs (components-registry / release-management)
+                  are configured and reachable over https.
+                </>
+              )
             }
           />
         )}

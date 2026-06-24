@@ -6,14 +6,10 @@ import org.octopusden.octopus.components.portal.validation.model.ComponentValida
 import org.octopusden.octopus.components.portal.validation.model.ValidationProblem
 import org.octopusden.octopus.components.portal.validation.model.ValidationReport
 import org.slf4j.LoggerFactory
-import org.springframework.boot.context.event.ApplicationReadyEvent
-import org.springframework.context.event.EventListener
-import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.web.reactive.function.client.WebClientRequestException
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
-import reactor.core.scheduler.Schedulers
 import java.net.ConnectException
 import java.net.UnknownHostException
 import java.time.Duration
@@ -122,19 +118,28 @@ class ValidationService(
                 )
             }
 
-    /** Scheduled background refresh (fixedDelay → no pile-up). Runs on a Spring scheduler thread. */
-    @Scheduled(fixedDelayString = "\${portal.validation.refresh-interval-ms}")
+    /**
+     * Scheduled background refresh. Invoked by [ValidationRefreshScheduler]'s dynamic
+     * trigger (NOT a static fixedDelay) so the gap to the next run can shrink to
+     * [ValidationProperties.retryIntervalMs] after a failure — see [nextDelayMillis].
+     * Runs on a Spring scheduler thread; single-flight guarded in [refresh].
+     */
     fun scheduledRefresh() {
         refresh()
     }
 
-    /** One-shot refresh at startup, off the boot thread so it never blocks readiness. */
-    @EventListener(ApplicationReadyEvent::class)
-    fun refreshOnStartup() {
-        Mono.fromRunnable<Unit> { refresh() }
-            .subscribeOn(Schedulers.boundedElastic())
-            .subscribe()
-    }
+    /**
+     * Delay (ms) the scheduler should wait before the NEXT sweep, based on the outcome
+     * of the most recent one: the short [ValidationProperties.retryIntervalMs] while the
+     * last refresh FAILED (refreshError set — the report is stale), else the normal
+     * [ValidationProperties.refreshIntervalMs].
+     *
+     * [ValidationRefreshScheduler] owns the immediate first sweep and recomputes this
+     * after every run, so a FAILED startup sweep (the QA migration-collision case) is
+     * retried after [ValidationProperties.retryIntervalMs] rather than the full interval.
+     */
+    fun nextDelayMillis(): Long =
+        if (report.refreshError != null) properties.retryIntervalMs else properties.refreshIntervalMs
 
     /**
      * Runs a sweep under the single-flight guard, blocking up to the sweep
@@ -158,30 +163,34 @@ class ValidationService(
                 retainStale("sweep produced no report")
             }
         } catch (e: Exception) {
-            // Broad catch is intentional: .block() can throw reactor's ReactiveException
-            // wrapper or an IllegalStateException on sweep-timeout — all must retain the
-            // previous report rather than crash the scheduler thread.
-            //
-            // Three distinct outcomes, because they need DIFFERENT operator action and a
-            // timeout must NOT masquerade as "unreachable" (the URL/connectivity is fine,
-            // the sweep is just slow/over-loaded):
-            //   • timeout    → tuning problem (budget too low / concurrency too high / CRS
-            //                  under load). The sweep's .block(sweepTimeoutSeconds) surfaces
-            //                  this as IllegalStateException("Timeout on blocking read…")
-            //                  whose cause is a TimeoutException.
-            //   • unreachable→ genuine connectivity (refused / unresolved host / TLS): name
-            //                  the env var to fix.
-            //   • other      → bare class name.
-            // The actionable detail (configured base URL) stays in the SERVER log; the
-            // client-facing refreshError is the sanitized, host-free category.
+            // Broad catch is intentional: .block() throws reactor's ReactiveException wrapper
+            // or an IllegalStateException on the sweep-budget timeout — all must retain the
+            // previous report rather than crash the scheduler thread. Each kind needs a
+            // DIFFERENT operator hint, and a timeout must NOT masquerade as "unreachable"
+            // (connectivity is fine; the sweep is just slow). The host-bearing detail stays
+            // in the SERVER log; the client-facing refreshError is the sanitized category.
             when (classifyFailure(e)) {
                 FailureKind.TIMEOUT -> {
+                    // Distinguish the whole-sweep .block(budget) overrun from a propagated
+                    // per-request timeout (in practice the un-isolated component-list fetch),
+                    // because the operator hint differs.
+                    val budgetExceeded =
+                        generateSequence(e as Throwable?) { it.cause }
+                            .take(MAX_CAUSE_CHAIN)
+                            .any { it is IllegalStateException && it.message?.contains(BLOCKING_READ_TIMEOUT) == true }
+                    val detail =
+                        if (budgetExceeded) {
+                            "did not finish within its ${properties.sweepTimeoutSeconds}s budget; consider raising " +
+                                "portal.validation.sweep-timeout-seconds or lowering portal.validation.concurrency"
+                        } else {
+                            "aborted: a request exceeded the ${properties.requestTimeoutSeconds}s " +
+                                "per-request timeout (most likely the component-list fetch); consider " +
+                                "raising portal.validation.request-timeout-seconds"
+                        }
                     log.warn(
-                        "Validation sweep did not finish within its {}s budget (components-registry at {}) — " +
-                            "downstream slow or under load; consider raising " +
-                            "portal.validation.sweep-timeout-seconds, lowering portal.validation.concurrency, " +
-                            "or adding components-registry capacity",
-                        properties.sweepTimeoutSeconds,
+                        "Validation sweep {} (components-registry at {}) — downstream slow or under load, " +
+                            "or add components-registry capacity",
+                        detail,
                         properties.registryBaseUrl,
                         e,
                     )
@@ -279,7 +288,7 @@ class ValidationService(
             val c = cur
             val timedOut =
                 c is TimeoutException ||
-                    (c is IllegalStateException && c.message?.contains("Timeout on blocking read") == true)
+                    (c is IllegalStateException && c.message?.contains(BLOCKING_READ_TIMEOUT) == true)
             kind =
                 when {
                     timedOut -> FailureKind.TIMEOUT
@@ -299,6 +308,18 @@ class ValidationService(
 
         /** Host-free, client-facing reason for a whole-sweep timeout (distinct from "unreachable"). */
         private const val SWEEP_TIMED_OUT = "validation sweep timed out"
+
+        /**
+         * Marker in the message of the `IllegalStateException` that `Mono.block(Duration)`
+         * throws when the whole-sweep budget is exceeded. Its ABSENCE in a TIMEOUT chain
+         * means the timeout instead came from a per-request `.timeout(requestTimeout)` that
+         * propagated (in practice the un-isolated component-list fetch) — a different cause
+         * needing a different operator hint, hence the two server-log messages.
+         */
+        private const val BLOCKING_READ_TIMEOUT = "Timeout on blocking read"
+
+        /** Cap the inline cause-chain walk so a (pathological) cyclic chain can't loop forever. */
+        private const val MAX_CAUSE_CHAIN = 20
 
         /** Cause-chain types that mean a genuinely unreachable downstream (NOT a timeout). */
         private val UNREACHABLE_TYPES =
