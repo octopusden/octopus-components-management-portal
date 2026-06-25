@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState } from 'react'
 import type {
   ComponentDetail,
   MavenArtifact,
@@ -9,7 +8,8 @@ import type {
 } from '../../lib/types'
 import { selectBaseRow } from '../../lib/api/baseRow'
 import type { SectionSlice, DiffEntry } from '../../lib/editor/combineRequest'
-import { deepEqual, boolDiff, listDiff } from '../../lib/editor/diffUtil'
+import { boolDiff, listDiff } from '../../lib/editor/diffUtil'
+import { useSectionSnapshot } from './useSectionSnapshot'
 
 export interface MavenState { groupPattern: string; artifactPattern: string; extension: string; classifier: string }
 export interface FileUrlState { url: string; artifactId: string; classifier: string }
@@ -62,29 +62,14 @@ export interface DistributionSection {
 }
 
 export function useDistributionSection(component: ComponentDetail): DistributionSection {
-  const [state, setState] = useState<DistState>(() => snapshotFrom(component))
-  const snapshotRef = useRef<DistState>(state)
-  const isDirty = !deepEqual(state, snapshotRef.current)
-
-  useEffect(() => {
-    if (!isDirty) {
-      const next = snapshotFrom(component)
-      snapshotRef.current = next
-      setState((prev) => (deepEqual(prev, next) ? prev : next))
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [component])
+  const { state, setState, snapshotRef, isDirty, reseed } = useSectionSnapshot(component, snapshotFrom)
 
   type Lists = 'maven' | 'fileUrl' | 'docker' | 'packages' | 'securityGroups'
   function mutateList<T>(key: Lists, fn: (arr: T[]) => T[]) {
     setState((p) => ({ ...p, [key]: fn(p[key] as unknown as T[]) }))
   }
 
-  function reset() {
-    const next = snapshotFrom(component)
-    snapshotRef.current = next
-    setState(next)
-  }
+  const reset = reseed
 
   // Drop rows whose required fields are still blank — mirrors the legacy save guard.
   const cleanedMaven = state.maven

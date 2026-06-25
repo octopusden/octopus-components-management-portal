@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
 import type { ComponentDetail, VcsEntry } from '../../lib/types'
 import { selectBaseRow } from '../../lib/api/baseRow'
 import type { SectionSlice, DiffEntry } from '../../lib/editor/combineRequest'
-import { deepEqual, scalarDiff, listDiff } from '../../lib/editor/diffUtil'
+import { scalarDiff, listDiff } from '../../lib/editor/diffUtil'
+import { useSectionSnapshot } from './useSectionSnapshot'
 
 export interface VcsEntryState {
   id?: string | null
@@ -50,18 +50,7 @@ export interface VcsSection {
 }
 
 export function useVcsSection(component: ComponentDetail): VcsSection {
-  const [state, setState] = useState<VcsState>(() => snapshotFrom(component))
-  const snapshotRef = useRef<VcsState>(state)
-  const isDirty = !deepEqual(state, snapshotRef.current)
-
-  useEffect(() => {
-    if (!isDirty) {
-      const next = snapshotFrom(component)
-      snapshotRef.current = next
-      setState((prev) => (deepEqual(prev, next) ? prev : next))
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [component])
+  const { state, setState, snapshotRef, isDirty, reseed } = useSectionSnapshot(component, snapshotFrom)
 
   const setExternalRegistry = (v: string) => setState((p) => ({ ...p, externalRegistry: v }))
   const updateEntry = (index: number, field: keyof VcsEntryState, value: string) =>
@@ -74,11 +63,7 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
   const removeEntry = (index: number) =>
     setState((p) => ({ ...p, entries: p.entries.filter((_, i) => i !== index) }))
 
-  function reset() {
-    const next = snapshotFrom(component)
-    snapshotRef.current = next
-    setState(next)
-  }
+  const reset = reseed
 
   // Drop rows whose required vcsPath is blank — same guard the legacy tab applied
   // before sending (an empty required string would 400).

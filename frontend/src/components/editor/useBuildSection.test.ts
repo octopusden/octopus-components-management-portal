@@ -95,4 +95,34 @@ describe('useBuildSection', () => {
     expect(result.current.state.javaVersion).toBe('17')
     expect(result.current.slice.isDirty).toBe(false)
   })
+
+  // Acceptance #3: after a successful save the server value now EQUALS the draft;
+  // the snapshot must catch up so the section reads clean — no phantom dirty —
+  // even though it was dirty against the stale snapshot.
+  it('clears dirty when the saved component arrives matching the draft (own save, no phantom dirty)', () => {
+    const c1 = makeComponent()
+    const { result, rerender } = renderHook(({ c }) => useBuildSection(c), { initialProps: { c: c1 } })
+    act(() => result.current.set('javaVersion', '21'))
+    expect(result.current.slice.isDirty).toBe(true)
+    // The save lands: server now reports java 21 (same id, bumped version).
+    const saved = makeComponent({ version: 2, configurations: [baseRow({ build: { buildSystem: 'GRADLE', javaVersion: '21' } })] })
+    rerender({ c: saved })
+    expect(result.current.slice.isDirty).toBe(false)
+    expect(result.current.state.javaVersion).toBe('21')
+  })
+
+  // Acceptance #4: switching to a DIFFERENT component id starts a FRESH draft,
+  // even if the section was dirty — no leak of the previous component's edits.
+  it('starts a fresh, clean draft when the component id changes, even while dirty (no leak)', () => {
+    const c1 = makeComponent({ id: 'comp-1' })
+    const { result, rerender } = renderHook(({ c }) => useBuildSection(c), { initialProps: { c: c1 } })
+    act(() => result.current.set('javaVersion', '99'))
+    expect(result.current.slice.isDirty).toBe(true)
+    // Navigate to a different component (different id + different build values).
+    const other = makeComponent({ id: 'comp-2', configurations: [baseRow({ build: { buildSystem: 'MAVEN', javaVersion: '11' } })] })
+    rerender({ c: other })
+    expect(result.current.state.javaVersion).toBe('11') // comp-2's value, not the leaked '99'
+    expect(result.current.state.buildSystem).toBe('MAVEN')
+    expect(result.current.slice.isDirty).toBe(false)
+  })
 })

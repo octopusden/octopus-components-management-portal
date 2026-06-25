@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import type { ComponentDetail } from '../../lib/types'
 import { selectBaseRow, selectOverrideRows } from '../../lib/api/baseRow'
 import { useFieldConfig } from '../../hooks/useAdminConfig'
 import { labelFor } from '../../hooks/useFieldConfig'
 import type { SectionSlice, DiffEntry } from '../../lib/editor/combineRequest'
-import { deepEqual, scalarDiff } from '../../lib/editor/diffUtil'
+import { scalarDiff } from '../../lib/editor/diffUtil'
+import { useSectionSnapshot } from './useSectionSnapshot'
 
 /** Build-tab BASE-row scalars this section owns (the toolchain knobs; the
  *  escrow/automation knobs migrated to the Escrow section). */
@@ -50,38 +51,15 @@ export interface BuildSection {
  * section is never clobbered by another section's `setQueryData`.
  */
 export function useBuildSection(component: ComponentDetail): BuildSection {
-  const [state, setState] = useState<BuildState>(() => snapshotFrom(component))
-  const snapshotRef = useRef<BuildState>(state)
+  const { state, setState, snapshotRef, isDirty, reseed } = useSectionSnapshot(component, snapshotFrom)
   const [buildSystemTouched, setBuildSystemTouched] = useState(false)
-
-  const isDirty = !deepEqual(state, snapshotRef.current)
-
-  useEffect(() => {
-    // Re-seed from the server snapshot only when clean. Killing the old
-    // per-tab `useEffect([component]) → reset` clobber: a sibling section's
-    // post-save setQueryData re-runs this effect, but a dirty Build section
-    // keeps its in-progress edits.
-    if (!isDirty) {
-      const next = snapshotFrom(component)
-      snapshotRef.current = next
-      // Only re-render when the server snapshot actually differs from current
-      // state — a fresh-but-equal object would otherwise schedule a needless
-      // re-render every time the effect re-runs.
-      setState((prev) => (deepEqual(prev, next) ? prev : next))
-    }
-    // isDirty intentionally omitted — re-seed is keyed on the component identity,
-    // and the guard reads the latest isDirty via closure at effect run time.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [component])
 
   function set<K extends keyof BuildState>(field: K, value: BuildState[K]) {
     setState((prev) => ({ ...prev, [field]: value }))
   }
 
   function reset() {
-    const next = snapshotFrom(component)
-    snapshotRef.current = next
-    setState(next)
+    reseed()
     setBuildSystemTouched(false)
   }
 

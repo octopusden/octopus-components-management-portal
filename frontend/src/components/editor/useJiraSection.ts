@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
 import type { ComponentDetail } from '../../lib/types'
 import type { FieldVisibility } from '../../hooks/useFieldConfig'
 import { selectBaseRow } from '../../lib/api/baseRow'
 import type { SectionSlice, DiffEntry } from '../../lib/editor/combineRequest'
-import { deepEqual, scalarDiff, boolDiff } from '../../lib/editor/diffUtil'
+import { scalarDiff, boolDiff } from '../../lib/editor/diffUtil'
+import { useSectionSnapshot } from './useSectionSnapshot'
 
 interface JiraState {
   projectKey: string
@@ -48,27 +48,12 @@ export interface JiraSection {
 }
 
 export function useJiraSection(component: ComponentDetail, visibilities: JiraVisibilities): JiraSection {
-  const [state, setState] = useState<JiraState>(() => snapshotFrom(component))
-  const snapshotRef = useRef<JiraState>(state)
-  const isDirty = !deepEqual(state, snapshotRef.current)
-
-  useEffect(() => {
-    if (!isDirty) {
-      const next = snapshotFrom(component)
-      snapshotRef.current = next
-      setState((prev) => (deepEqual(prev, next) ? prev : next))
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [component])
+  const { state, setState, snapshotRef, isDirty, reseed } = useSectionSnapshot(component, snapshotFrom)
 
   const set = <K extends keyof JiraState>(field: K, value: JiraState[K]) =>
     setState((p) => ({ ...p, [field]: value }))
 
-  function reset() {
-    const next = snapshotFrom(component)
-    snapshotRef.current = next
-    setState(next)
-  }
+  const reset = reseed
 
   const prior = snapshotRef.current
   const diff: DiffEntry[] = []

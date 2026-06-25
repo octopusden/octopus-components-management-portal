@@ -107,3 +107,54 @@ describe('collectDiff / anyDirty', () => {
     ).toBe(true)
   })
 })
+
+// Acceptance #6: the review diff and the PATCH body are derived from the SAME
+// dirty slices, so what the user reviews equals what is sent. collectDiff and
+// combineRequest both filter on `isDirty` over the identical slice array —
+// a clean slice contributes to NEITHER; a dirty slice's change appears in BOTH
+// (incl. the cleared-scalar no-op annotation and the deep-merged build result).
+describe('review diff ⇔ combined payload equivalence (#6)', () => {
+  it('the same dirty slices feed both: clean contributes to neither, dirty to both', () => {
+    const slices: SectionSlice[] = [
+      // Build: a cleared scalar (no-op annotation) — must show in the diff AND
+      // land in the payload as build.javaVersion: null.
+      {
+        isDirty: true,
+        request: { baseConfiguration: { build: { javaVersion: null, buildSystem: 'GRADLE' } } },
+        diff: [
+          { label: 'Build · Java Version', oldValue: '17', newValue: '—', clearedScalarNoop: true },
+        ],
+      },
+      // Escrow: deep-merges into the same build object.
+      {
+        isDirty: true,
+        request: { baseConfiguration: { build: { buildTasks: 'assemble' } } },
+        diff: [{ label: 'Escrow · Build Tasks', oldValue: '—', newValue: 'assemble' }],
+      },
+      // Clean slice: must appear in NEITHER the diff NOR the payload.
+      {
+        isDirty: false,
+        request: { displayName: 'should-not-appear' },
+        diff: [{ label: 'Display Name', oldValue: 'a', newValue: 'b' }],
+      },
+    ]
+
+    const diff = collectDiff(slices)
+    const body = combineRequest(5, slices)
+
+    // Clean slice contributes to neither.
+    expect(diff.find((d) => d.label === 'Display Name')).toBeUndefined()
+    expect('displayName' in body).toBe(false)
+
+    // Both dirty slices' changes are in the diff...
+    expect(diff.map((d) => d.label)).toEqual(['Build · Java Version', 'Escrow · Build Tasks'])
+    // ...and the SAME changes are in the single payload's deep-merged build.
+    expect(body.baseConfiguration?.build).toEqual({
+      javaVersion: null, // the cleared scalar the diff flagged as a no-op
+      buildSystem: 'GRADLE',
+      buildTasks: 'assemble', // the Escrow edit, deep-merged into the same object
+    })
+    // The no-op annotation rides the same slice whose field is in the payload.
+    expect(diff.find((d) => d.label === 'Build · Java Version')?.clearedScalarNoop).toBe(true)
+  })
+})

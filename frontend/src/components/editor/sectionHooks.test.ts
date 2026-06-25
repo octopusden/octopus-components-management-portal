@@ -54,6 +54,26 @@ describe('useVcsSection', () => {
     rerender({ c: makeComponent({ vcsExternalRegistry: 'b' }) })
     expect(result.current.externalRegistry).toBe('edited')
   })
+
+  // #4: id change → fresh, clean draft even while dirty (no leak).
+  it('starts a fresh clean draft on component id change, even while dirty', () => {
+    const c1 = makeComponent({ id: 'comp-1', vcsExternalRegistry: 'a' })
+    const { result, rerender } = renderHook(({ c }) => useVcsSection(c), { initialProps: { c: c1 } })
+    act(() => result.current.setExternalRegistry('edited'))
+    rerender({ c: makeComponent({ id: 'comp-2', vcsExternalRegistry: 'b' }) })
+    expect(result.current.externalRegistry).toBe('b')
+    expect(result.current.slice.isDirty).toBe(false)
+  })
+
+  // #3: own save lands (same id, server now matches the draft) → dirty clears.
+  it('clears dirty when the saved component arrives matching the draft (own save)', () => {
+    const c1 = makeComponent({ id: 'comp-1', vcsExternalRegistry: 'a' })
+    const { result, rerender } = renderHook(({ c }) => useVcsSection(c), { initialProps: { c: c1 } })
+    act(() => result.current.setExternalRegistry('edited'))
+    expect(result.current.slice.isDirty).toBe(true)
+    rerender({ c: makeComponent({ id: 'comp-1', version: 2, vcsExternalRegistry: 'edited' }) })
+    expect(result.current.slice.isDirty).toBe(false)
+  })
 })
 
 describe('useDistributionSection', () => {
@@ -71,6 +91,27 @@ describe('useDistributionSection', () => {
     act(() => result.current.updateSecurityGroup(0, 'groupName', 'grp'))
     expect(result.current.slice.request.securityGroups).toEqual([{ groupType: 'read', groupName: 'grp' }])
     expect('securityGroups' in (result.current.slice.request.baseConfiguration ?? {})).toBe(false)
+  })
+
+  // #4: id change → fresh, clean draft even while dirty.
+  it('starts a fresh clean draft on component id change, even while dirty', () => {
+    const c1 = makeComponent({ id: 'comp-1', distributionExplicit: false })
+    const { result, rerender } = renderHook(({ c }) => useDistributionSection(c), { initialProps: { c: c1 } })
+    act(() => result.current.setExplicit(true))
+    expect(result.current.slice.isDirty).toBe(true)
+    rerender({ c: makeComponent({ id: 'comp-2', distributionExplicit: false }) })
+    expect(result.current.state.explicit).toBe(false)
+    expect(result.current.slice.isDirty).toBe(false)
+  })
+
+  // #3: own save lands (same id, server now matches the draft) → dirty clears.
+  it('clears dirty when the saved component arrives matching the draft (own save)', () => {
+    const c1 = makeComponent({ id: 'comp-1', distributionExplicit: false })
+    const { result, rerender } = renderHook(({ c }) => useDistributionSection(c), { initialProps: { c: c1 } })
+    act(() => result.current.setExplicit(true))
+    expect(result.current.slice.isDirty).toBe(true)
+    rerender({ c: makeComponent({ id: 'comp-1', version: 2, distributionExplicit: true }) })
+    expect(result.current.slice.isDirty).toBe(false)
   })
 })
 
@@ -96,6 +137,27 @@ describe('useJiraSection', () => {
     expect('releasesInDefaultBranch' in result.current.slice.request).toBe(false)
     act(() => result.current.set('releasesInDefaultBranch', true))
     expect(result.current.slice.request.releasesInDefaultBranch).toBe(true)
+  })
+
+  // #4: id change → fresh, clean draft even while dirty.
+  it('starts a fresh clean draft on component id change, even while dirty', () => {
+    const c1 = makeComponent({ id: 'comp-1' }, { jira: { projectKey: 'OLD' } })
+    const { result, rerender } = renderHook(({ c }) => useJiraSection(c, vis), { initialProps: { c: c1 } })
+    act(() => result.current.set('projectKey', 'EDITED'))
+    expect(result.current.slice.isDirty).toBe(true)
+    rerender({ c: makeComponent({ id: 'comp-2' }, { jira: { projectKey: 'NEW' } }) })
+    expect(result.current.state.projectKey).toBe('NEW')
+    expect(result.current.slice.isDirty).toBe(false)
+  })
+
+  // #3: own save lands (same id, server now matches the draft) → dirty clears.
+  it('clears dirty when the saved component arrives matching the draft (own save)', () => {
+    const c1 = makeComponent({ id: 'comp-1' }, { jira: { projectKey: 'OLD' } })
+    const { result, rerender } = renderHook(({ c }) => useJiraSection(c, vis), { initialProps: { c: c1 } })
+    act(() => result.current.set('projectKey', 'NEW'))
+    expect(result.current.slice.isDirty).toBe(true)
+    rerender({ c: makeComponent({ id: 'comp-1', version: 2 }, { jira: { projectKey: 'NEW' } }) })
+    expect(result.current.slice.isDirty).toBe(false)
   })
 })
 
@@ -129,5 +191,26 @@ describe('useEscrowSection', () => {
     const { result } = renderHook(() => useEscrowSection(makeComponent(), vis))
     act(() => result.current.set('requiredToolsInput', 'a, b , a'))
     expect(result.current.slice.request.baseConfiguration?.requiredTools).toEqual(['a', 'b'])
+  })
+
+  // #4: id change → fresh, clean draft even while dirty.
+  it('starts a fresh clean draft on component id change, even while dirty', () => {
+    const c1 = makeComponent({ id: 'comp-1' }, { escrow: { generation: 'G1' } })
+    const { result, rerender } = renderHook(({ c }) => useEscrowSection(c, vis), { initialProps: { c: c1 } })
+    act(() => result.current.set('generation', 'EDITED'))
+    expect(result.current.slice.isDirty).toBe(true)
+    rerender({ c: makeComponent({ id: 'comp-2' }, { escrow: { generation: 'G2' } }) })
+    expect(result.current.state.generation).toBe('G2')
+    expect(result.current.slice.isDirty).toBe(false)
+  })
+
+  // #3: own save lands (same id, server now matches the draft) → dirty clears.
+  it('clears dirty when the saved component arrives matching the draft (own save)', () => {
+    const c1 = makeComponent({ id: 'comp-1' }, { escrow: { generation: 'G1' } })
+    const { result, rerender } = renderHook(({ c }) => useEscrowSection(c, vis), { initialProps: { c: c1 } })
+    act(() => result.current.set('generation', 'G2'))
+    expect(result.current.slice.isDirty).toBe(true)
+    rerender({ c: makeComponent({ id: 'comp-1', version: 2 }, { escrow: { generation: 'G2' } }) })
+    expect(result.current.slice.isDirty).toBe(false)
   })
 })

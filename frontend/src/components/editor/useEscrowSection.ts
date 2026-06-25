@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
 import type { ComponentDetail } from '../../lib/types'
 import type { FieldVisibility } from '../../hooks/useFieldConfig'
 import { selectBaseRow } from '../../lib/api/baseRow'
 import type { SectionSlice, DiffEntry } from '../../lib/editor/combineRequest'
-import { deepEqual, scalarDiff, boolDiff, listDiff } from '../../lib/editor/diffUtil'
+import { scalarDiff, boolDiff, listDiff } from '../../lib/editor/diffUtil'
+import { useSectionSnapshot } from './useSectionSnapshot'
 
 interface EscrowState {
   productType: string
@@ -64,27 +64,12 @@ export interface EscrowSection {
 }
 
 export function useEscrowSection(component: ComponentDetail, visibilities: EscrowVisibilities): EscrowSection {
-  const [state, setState] = useState<EscrowState>(() => snapshotFrom(component))
-  const snapshotRef = useRef<EscrowState>(state)
-  const isDirty = !deepEqual(state, snapshotRef.current)
-
-  useEffect(() => {
-    if (!isDirty) {
-      const next = snapshotFrom(component)
-      snapshotRef.current = next
-      setState((prev) => (deepEqual(prev, next) ? prev : next))
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [component])
+  const { state, setState, snapshotRef, isDirty, reseed } = useSectionSnapshot(component, snapshotFrom)
 
   const set = <K extends keyof EscrowState>(field: K, value: EscrowState[K]) =>
     setState((p) => ({ ...p, [field]: value }))
 
-  function reset() {
-    const next = snapshotFrom(component)
-    snapshotRef.current = next
-    setState(next)
-  }
+  const reset = reseed
 
   const parsedRequiredTools = parseTools(state.requiredToolsInput)
   // Guard against wiping server-side requiredTools / build when no BASE row was

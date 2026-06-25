@@ -307,4 +307,97 @@ describe('ComponentDetailPage — combined PATCH (Phase 3b)', () => {
     // Switched to the Jira section (the offending field's owner).
     await waitFor(() => expect(screen.getByRole('tab', { name: /^Jira/ })).toHaveAttribute('aria-current', 'page'))
   })
+
+  // NOTE on acceptance #3 (a successful save re-seeds the snapshot AND clears
+  // dirty — no phantom dirty): the post-save re-seed lives in the section
+  // snapshot engine and is verified at the hook level in useBuildSection.test.ts
+  // ("clears dirty when the saved component arrives matching the draft"). It
+  // can't be driven here because the data router memoises the route element, so
+  // re-rendering the page tree does not re-invoke ComponentDetailPage with the
+  // updated useComponent mock (only navigation / react-query updates do). #1
+  // (no clobber on a sibling query update) is likewise hook-tested.
+
+  // Acceptance #2: Discard restores the unified snapshot across BOTH the RHF
+  // General fields and a section hook (not just one section).
+  it('Discard restores every section — General (RHF) and Build — to the server snapshot', async () => {
+    renderPage(baseComponent)
+
+    // Edit General (RHF displayName via the stub) and Build (section hook).
+    fireEvent.click(screen.getByTestId('edit-display-name'))
+    await openTab(/^Build/)
+    fireEvent.change(screen.getByTestId('enum-build-javaVersion'), { target: { value: '21' } })
+    await waitFor(() => expect(screen.getByText('Unsaved changes')).toBeDefined())
+
+    fireEvent.click(screen.getByRole('button', { name: /discard/i }))
+    await waitFor(() => expect(screen.getByText('All changes saved')).toBeDefined())
+
+    // Build reverted to the server value.
+    expect((screen.getByTestId('enum-build-javaVersion') as HTMLInputElement).value).toBe('17')
+    // And no dirty remains anywhere (General RHF reverted too — otherwise the bar
+    // would still read "Unsaved changes").
+    expect(screen.queryByText('Unsaved changes')).toBeNull()
+  })
+
+  // Acceptance #4: navigating to a DIFFERENT component id starts a FRESH draft —
+  // no draft/dirty leakage from the previous component, even if the previous one
+  // was dirty when we left.
+  it('navigating to a different component id starts a fresh, clean draft (no leak)', async () => {
+    // comp-2 has a different java version + display name so a leak is detectable.
+    const compTwo: ComponentDetail = {
+      ...baseComponent,
+      id: 'comp-2',
+      name: 'other-component',
+      displayName: 'Other Component',
+      version: 3,
+      configurations: [
+        {
+          id: 'cfg-2', versionRange: '(,0),[0,)', rowType: 'BASE', overriddenAttribute: null, isSyntheticBase: false,
+          build: { buildSystem: 'MAVEN', javaVersion: '11' }, escrow: null, jira: { projectKey: 'OTHER' },
+          vcsEntries: [], mavenArtifacts: [], fileUrlArtifacts: [], dockerImages: [], packages: [], requiredTools: [],
+        },
+      ],
+    }
+    // useComponent resolves per-id so navigation swaps the data.
+    vi.mocked(useComponent).mockImplementation(
+      ((wanted: string) =>
+        ({ data: wanted === 'comp-2' ? compTwo : baseComponent, isLoading: false, error: null }) as unknown) as typeof useComponent,
+    )
+    vi.mocked(useCurrentUser).mockReturnValue({ data: makeUser(), isLoading: false, isError: false, error: null, refetch: vi.fn() } as unknown as ReturnType<typeof useCurrentUser>)
+    vi.mocked(useUpdateComponent).mockReturnValue({ ...idleMutation } as unknown as ReturnType<typeof useUpdateComponent>)
+    vi.mocked(useDeleteComponent).mockReturnValue({ ...idleMutation } as unknown as ReturnType<typeof useDeleteComponent>)
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const router = createMemoryRouter(
+      [
+        { path: '/components', element: <div data-testid="list-page" /> },
+        { path: '/components/:id', element: <ComponentDetailPage /> },
+      ],
+      { initialEntries: ['/components/comp-1'] },
+    )
+    render(
+      <QueryClientProvider client={client}>
+        <TooltipProvider>
+          <RouterProvider router={router} />
+        </TooltipProvider>
+      </QueryClientProvider>,
+    )
+
+    // Dirty comp-1's Build draft.
+    await openTab(/^Build/)
+    fireEvent.change(screen.getByTestId('enum-build-javaVersion'), { target: { value: '99' } })
+    await waitFor(() => expect(screen.getByText('Unsaved changes')).toBeDefined())
+
+    // Navigate to comp-2. The UnsavedChangesGuard blocks (dirty) and shows the
+    // confirm dialog; the user confirms "Leave without saving".
+    void router.navigate('/components/comp-2')
+    const leave = await screen.findByRole('button', { name: /leave without saving/i })
+    fireEvent.click(leave)
+
+    // comp-2 renders with ITS data, CLEAN — no leak of comp-1's '99'.
+    await waitFor(() => expect(screen.getByText('other-component')).toBeDefined())
+    await openTab(/^Build/)
+    expect((screen.getByTestId('enum-build-javaVersion') as HTMLInputElement).value).toBe('11')
+    expect(screen.getByText('All changes saved')).toBeDefined()
+    expect(screen.queryByText('Unsaved changes')).toBeNull()
+  })
 })
