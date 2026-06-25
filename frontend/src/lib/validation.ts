@@ -5,14 +5,38 @@ import type { ComponentValidation, ValidationProblem } from './types'
 // (react-refresh/only-export-components) and so the logic is unit-testable in
 // isolation from the DOM.
 
-/** Total number of "issues" a validation carries — problems + a failed check. */
+/**
+ * Number of genuine, actionable problems a validation carries.
+ *
+ * A failed check (`checkFailed`) is deliberately NOT counted: it is a system
+ * condition (we could not verify the component), not a problem with the
+ * component itself, and is surfaced once at report level — never per component.
+ */
 export function validationIssueCount(cv: ComponentValidation): number {
-  return cv.problems.length + (cv.checkFailed ? 1 : 0)
+  return cv.problems.length
 }
 
-/** A component is worth flagging when it has any problem OR its check failed. */
+/**
+ * A component is worth flagging in the UI (red triangle / Validation Problems
+ * tab) ONLY when it has a genuine problem. A failed check is intentionally
+ * excluded — see [validationIssueCount] / [countCheckFailed].
+ */
 export function hasValidationIssue(cv: ComponentValidation | undefined): boolean {
-  return !!cv && (cv.problems.length > 0 || cv.checkFailed)
+  return !!cv && cv.problems.length > 0
+}
+
+/**
+ * How many components in a report could NOT be checked (a system/infra failure
+ * such as the release-management or components-registry service being briefly
+ * unreachable). Drives the single report-level "validation temporarily
+ * unavailable" banner instead of lighting up every affected row.
+ */
+export function countCheckFailed(cvs: Iterable<ComponentValidation>): number {
+  let n = 0
+  for (const cv of cvs) {
+    if (cv.checkFailed) n++
+  }
+  return n
 }
 
 /**

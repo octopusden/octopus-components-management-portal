@@ -32,10 +32,12 @@ interface ValidationBadgeProps {
 }
 
 /**
- * Inline "Validation Problems" indicator. Renders NOTHING (null) for a clean (or
- * absent-from-report) component — only flags components that have problems or a
- * failed check, as a bare red AlertTriangle shown immediately before the
- * component name in the list. On hover/focus a tooltip lists each problem's
+ * Inline "Validation Problems" indicator. Renders NOTHING (null) for a clean,
+ * absent-from-report, OR check-failed component — it only flags components with
+ * a genuine, actionable problem, as a bare red AlertTriangle shown immediately
+ * before the component name in the list. (A failed check is a system condition
+ * surfaced once at report level on the list page, not a per-component problem.)
+ * On hover/focus a tooltip lists each problem's
  * message plus a few example versions (the quick peek). Clicking (or Enter/Space)
  * opens a Dialog with the FULL, untruncated list of every problem and every
  * version — rendered from the already-loaded ComponentValidation (no extra
@@ -51,14 +53,11 @@ export function ValidationBadge({ validation }: ValidationBadgeProps) {
     return null
   }
 
-  // A failed check (no problems learned) is a "could not verify" state — it
-  // drives the accessible label only; the inline trigger is the same red
-  // triangle either way.
-  const onlyCheckFailed = validation.problems.length === 0 && validation.checkFailed
+  // hasValidationIssue() guards above, so we only reach here with genuine
+  // problems — a failed check never renders a badge (it is a system condition
+  // shown once at report level, not a per-component problem).
   const count = validationBadgeCount(validation)
-  const label = onlyCheckFailed
-    ? 'Validation check failed'
-    : `${count} validation problem${count === 1 ? '' : 's'}`
+  const label = `${count} validation problem${count === 1 ? '' : 's'}`
 
   const allVersions = allProblemVersions(validation)
 
@@ -88,14 +87,6 @@ export function ValidationBadge({ validation }: ValidationBadgeProps) {
         </TooltipTrigger>
         <TooltipContent className="max-w-sm whitespace-normal leading-snug">
           <div className="flex flex-col gap-2">
-            {validation.checkFailed && (
-              <div>
-                <div className="font-semibold">Check failed</div>
-                {validation.checkError && (
-                  <div className="text-xs opacity-90">{validation.checkError}</div>
-                )}
-              </div>
-            )}
             {validation.problems.map((p, i) => {
               const versions = problemExampleVersions(p)
               const shown = versions.slice(0, MAX_EXAMPLE_VERSIONS)

@@ -704,9 +704,10 @@ export function ComponentDetailPage() {
             <TabsTrigger value="overrides">Overrides</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
             {/* Validation Problems — conditional, last, and RED. Only present for
-                an admin AND when this component has problems / a failed check in
-                the cached report. A clean component renders neither trigger nor
-                content (no tab at all). */}
+                an admin AND when this component has a genuine problem in the
+                cached report. A clean component — OR one whose check merely
+                failed (a system condition, shown only on the list banner) —
+                renders neither trigger nor content (no tab at all). */}
             {hasProblems && componentValidation && (
               <TabsTrigger
                 value="validation-problems"

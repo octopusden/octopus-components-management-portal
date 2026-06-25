@@ -349,6 +349,10 @@ describe('ComponentListPage — Validation Problems', () => {
     checkError: null,
   }
 
+  function checkFailedValidation(component: string): ComponentValidation {
+    return { component, problems: [], checkFailed: true, checkError: 'DecodingException' }
+  }
+
   // ── Admin mode ON + IMPORT_DATA user: the facility is visible/active. ──
   describe('admin mode on (IMPORT_DATA user)', () => {
     beforeEach(() => {
@@ -401,6 +405,36 @@ describe('ComponentListPage — Validation Problems', () => {
           ),
         ),
       ).toBeDefined()
+    })
+
+    it('surfaces ONE system-level banner (not per-component triangles) when the report has check-failed components', () => {
+      mockComponentsOk()
+      mockedUseValidationProblems.mockReturnValue(
+        makeValidationResult(
+          new Map<string, ComponentValidation>([
+            ['a', checkFailedValidation('a')],
+            ['b', checkFailedValidation('b')],
+            ['c', problemValidation],
+          ]),
+        ) as unknown as ReturnType<typeof useValidationProblems>,
+      )
+      renderPage()
+      const banner = screen.getByTestId('validation-system-failure')
+      // Counts only the check-failed components (2), NOT the genuine problem (c).
+      expect(banner).toHaveTextContent(/2 components could not be checked/i)
+      // The raw exception class is never shown to the user.
+      expect(banner.textContent).not.toContain('DecodingException')
+    })
+
+    it('does NOT render the system-failure banner when no check failed', () => {
+      mockComponentsOk()
+      mockedUseValidationProblems.mockReturnValue(
+        makeValidationResult(
+          new Map([['c', problemValidation]]),
+        ) as unknown as ReturnType<typeof useValidationProblems>,
+      )
+      renderPage()
+      expect(screen.queryByTestId('validation-system-failure')).toBeNull()
     })
 
     it('shows a TIMEOUT-specific stale warning (retry hint, no "reachable over https" config hint)', () => {
@@ -484,6 +518,20 @@ describe('ComponentListPage — Validation Problems', () => {
       )
       renderPage()
       expect(screen.getByTestId('table').getAttribute('data-has-validation')).toBe('no')
+    })
+
+    it('does not render the system-failure banner for a non-admin even if the report has check failures', () => {
+      mockUser(viewerUser)
+      mockComponentsOk()
+      mockedUseValidationProblems.mockReturnValue(
+        makeValidationResult(
+          new Map<string, ComponentValidation>([
+            ['a', { component: 'a', problems: [], checkFailed: true, checkError: 'x' }],
+          ]),
+        ) as unknown as ReturnType<typeof useValidationProblems>,
+      )
+      renderPage()
+      expect(screen.queryByTestId('validation-system-failure')).toBeNull()
     })
 
     it('disables the validation report fetch (enabled=false) when not admin', () => {
