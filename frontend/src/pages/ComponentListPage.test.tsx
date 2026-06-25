@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, useLocation } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 import { ComponentListPage } from './ComponentListPage'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import type { User } from '@/lib/auth'
 import type { ComponentSummary, Page } from '@/lib/types'
 import { ApiError } from '@/lib/api'
@@ -33,24 +34,16 @@ vi.mock('../components/Layout', () => ({
   Layout: ({ children }: { children: React.ReactNode }) =>
     React.createElement('div', { 'data-testid': 'layout' }, children),
 }))
-// Filters stub surfaces the page→filters "Only with problems" contract: a
-// trigger that flips problemsOnly so a page test can exercise the list swap.
+// Filters stub: the "With problems" facility moved to the preset bar (the page
+// renders the real ListPresetBar), so the filters stub just surfaces whether the
+// page told it problems-only is active (via the `problemsOnly` prop) for the
+// "filters dimmed" contract — no toggle of its own anymore.
 vi.mock('../components/ComponentFilters', () => ({
-  ComponentFilters: ({
-    onProblemsOnlyChange,
-  }: {
-    onProblemsOnlyChange?: (v: boolean) => void
-  }) =>
-    React.createElement(
-      'div',
-      { 'data-testid': 'filters' },
-      onProblemsOnlyChange
-        ? React.createElement('button', {
-            'data-testid': 'problems-only-trigger',
-            onClick: () => onProblemsOnlyChange(true),
-          })
-        : null,
-    ),
+  ComponentFilters: ({ problemsOnly }: { problemsOnly?: boolean }) =>
+    React.createElement('div', {
+      'data-testid': 'filters',
+      'data-problems-only': problemsOnly ? 'yes' : 'no',
+    }),
 }))
 // The table stub surfaces the page→table `onCopy` contract: when the page
 // passes the callback (CREATE_COMPONENTS holders only) the stub renders a
@@ -209,14 +202,24 @@ function mockComponentsError(error: unknown) {
   } as unknown as ReturnType<typeof useComponents>)
 }
 
-function renderPage() {
+// Exposes the live router search string so a test can assert URL round-trip.
+function LocationProbe() {
+  const loc = useLocation()
+  return React.createElement('div', { 'data-testid': 'loc-search' }, loc.search)
+}
+
+function renderPage(initialEntries: string[] = ['/components']) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     React.createElement(
       QueryClientProvider,
       { client },
-      <MemoryRouter initialEntries={['/components']}>
-        <ComponentListPage />
+      // The real ListPresetBar uses Tooltip (deferred presets) → needs a provider.
+      <MemoryRouter initialEntries={initialEntries}>
+        <TooltipProvider delayDuration={0}>
+          <ComponentListPage />
+          <LocationProbe />
+        </TooltipProvider>
       </MemoryRouter>,
     ),
   )
@@ -331,6 +334,104 @@ describe('ComponentListPage — per-row Copy gating + dialog wiring', () => {
     mockComponentsOk()
     renderPage()
     expect(screen.queryByTestId('table-copy-trigger')).toBeNull()
+  })
+})
+
+describe('ComponentListPage — presets + active-filter chips (spec §1.1/1.2)', () => {
+  beforeEach(() => {
+    mockComponentsOk()
+  })
+
+  it('defaults to the "All" preset active for a bare /components URL', () => {
+    mockUser(editorUser)
+    renderPage()
+    expect(screen.getByRole('button', { name: 'All' }).getAttribute('aria-pressed')).toBe('true')
+    // No chips for the active-only default.
+    expect(screen.queryByTestId('active-filter-chips')).toBeNull()
+  })
+
+  it('selecting "My Components" scopes owner to the current user and renders the matching chips', async () => {
+    mockUser(editorUser) // username: bob
+    renderPage()
+    await userEvent.click(screen.getByRole('button', { name: 'My Components' }))
+    // The segment lights up...
+    expect(
+      screen.getByRole('button', { name: 'My Components' }).getAttribute('aria-pressed'),
+    ).toBe('true')
+    // ...and the chips reflect both the preset and the owner filter it set.
+    expect(screen.getByText(/Preset: My Components/i)).toBeDefined()
+    expect(screen.getByText(/Owner: bob/i)).toBeDefined()
+  })
+
+  it('round-trips a deep-linked preset + filter from the URL (My Components)', () => {
+    mockUser(editorUser) // username: bob
+    renderPage(['/components?preset=mine&owner=bob'])
+    expect(
+      screen.getByRole('button', { name: 'My Components' }).getAttribute('aria-pressed'),
+    ).toBe('true')
+    expect(screen.getByText(/Owner: bob/i)).toBeDefined()
+  })
+
+  it('selecting "Archived" activates the archived preset and shows a Status chip', async () => {
+    mockUser(editorUser)
+    renderPage()
+    await userEvent.click(screen.getByRole('button', { name: 'Archived' }))
+    expect(screen.getByRole('button', { name: 'Archived' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    )
+    expect(screen.getByText(/Status: Archived/i)).toBeDefined()
+  })
+
+  it('removing the owner chip drops just that value and returns to the All preset', async () => {
+    mockUser(editorUser) // username: bob
+    renderPage(['/components?preset=mine&owner=bob'])
+    expect(screen.getByText(/Owner: bob/i)).toBeDefined()
+    await userEvent.click(screen.getByRole('button', { name: /remove owner: bob/i }))
+    // Owner cleared → back to the default "All" preset, no owner chip.
+    expect(screen.queryByText(/Owner: bob/i)).toBeNull()
+    expect(screen.getByRole('button', { name: 'All' }).getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('"Clear all" resets every filter + preset back to the active-only default', async () => {
+    mockUser(editorUser)
+    renderPage(['/components?preset=mine&owner=bob&search=foo'])
+    expect(screen.getByTestId('active-filter-chips')).toBeDefined()
+    await userEvent.click(screen.getByRole('button', { name: /clear all/i }))
+    expect(screen.queryByTestId('active-filter-chips')).toBeNull()
+    expect(screen.getByRole('button', { name: 'All' }).getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('selecting a preset records it in the URL (round-trip)', async () => {
+    mockUser(editorUser)
+    renderPage()
+    await userEvent.click(screen.getByRole('button', { name: 'Archived' }))
+    // The Archived preset writes both its filter footprint and the preset name.
+    const search = screen.getByTestId('loc-search').textContent ?? ''
+    expect(search).toContain('preset=archived')
+    expect(search).toContain('archived=true')
+  })
+
+  it('removing the preset chip clears to the bare URL (no redundant preset=all)', async () => {
+    mockUser(editorUser) // username: bob
+    renderPage(['/components?preset=mine&owner=bob'])
+    await userEvent.click(screen.getByRole('button', { name: /remove preset: my components/i }))
+    // Back to the active-only default: no chips, "All" active, and crucially the
+    // URL is bare — not ?preset=all (which would be redundant clutter).
+    expect(screen.queryByTestId('active-filter-chips')).toBeNull()
+    expect(screen.getByRole('button', { name: 'All' }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByTestId('loc-search').textContent).toBe('')
+  })
+
+  it('renders the two Phase 1b presets disabled (RM / SC)', () => {
+    mockUser(editorUser)
+    renderPage()
+    expect(
+      (screen.getByRole('button', { name: 'I am Release Manager' }) as HTMLButtonElement).disabled,
+    ).toBe(true)
+    expect(
+      (screen.getByRole('button', { name: 'I am Security Champion' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true)
   })
 })
 
@@ -466,13 +567,13 @@ describe('ComponentListPage — Validation Problems', () => {
       ).toBeNull()
     })
 
-    it('renders the "with validation problems" filter toggle', () => {
+    it('renders the "With problems" preset for an admin', () => {
       mockComponentsOk()
       renderPage()
-      expect(screen.getByTestId('problems-only-trigger')).toBeDefined()
+      expect(screen.getByRole('button', { name: 'With problems' })).toBeDefined()
     })
 
-    it('swaps the list source to the problem set when "with validation problems" is toggled on', async () => {
+    it('swaps the list source to the problem set when the "With problems" preset is selected', async () => {
       // Paged CRS list has many rows; the problem set has just one.
       mockComponentsOk({ ...emptyPage, totalElements: 99 })
       mockedUseComponentsWithProblems.mockReturnValue(
@@ -481,10 +582,10 @@ describe('ComponentListPage — Validation Problems', () => {
         ) as unknown as ReturnType<typeof useComponentsWithProblems>,
       )
       renderPage()
-      // Before toggle: table fed from the (empty content) CRS page.
+      // Before selection: table fed from the (empty content) CRS page.
       expect(screen.getByTestId('table').getAttribute('data-row-count')).toBe('0')
-      await userEvent.click(screen.getByTestId('problems-only-trigger'))
-      // After toggle: table fed from the 1-entry problem set.
+      await userEvent.click(screen.getByRole('button', { name: 'With problems' }))
+      // After selecting the preset: table fed from the 1-entry problem set.
       expect(screen.getByTestId('table').getAttribute('data-row-count')).toBe('1')
       expect(screen.getByTestId('table').getAttribute('data-has-validation')).toBe('yes')
     })
@@ -492,19 +593,19 @@ describe('ComponentListPage — Validation Problems', () => {
 
   // ── NOT admin: no filter, no inline triangle, no validation fetch. ──
   describe('non-admin (hidden + no fetch)', () => {
-    it('does not render the filter toggle for a non-admin user (adminMode off)', () => {
+    it('does not render the "With problems" preset for a non-admin user (adminMode off)', () => {
       mockUser(adminUser) // has IMPORT_DATA, but adminMode is OFF (default)
       mockComponentsOk()
       renderPage()
-      expect(screen.queryByTestId('problems-only-trigger')).toBeNull()
+      expect(screen.queryByRole('button', { name: 'With problems' })).toBeNull()
     })
 
-    it('does not render the filter toggle for a viewer even with adminMode on (no IMPORT_DATA)', () => {
+    it('does not render the "With problems" preset for a viewer even with adminMode on (no IMPORT_DATA)', () => {
       useAdminMode.setState({ enabled: true })
       mockUser(viewerUser) // adminMode on but lacks IMPORT_DATA → not admin
       mockComponentsOk()
       renderPage()
-      expect(screen.queryByTestId('problems-only-trigger')).toBeNull()
+      expect(screen.queryByRole('button', { name: 'With problems' })).toBeNull()
     })
 
     it('passes no validation overlay to the table (no inline triangles) when not admin', () => {

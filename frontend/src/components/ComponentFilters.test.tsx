@@ -189,151 +189,16 @@ describe('ComponentFilters', () => {
     vi.useRealTimers()
   })
 
-  it('shows Clear filters button only when filters are active', () => {
-    const { rerender } = render(
-      <ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />,
-    )
-    // archived: false is the default — should NOT show Clear filters
-    expect(screen.queryByText('Clear filters')).toBeNull()
-
-    rerender(<ComponentFilters filter={{ search: 'foo', archived: false }} onFilterChange={onFilterChange} />)
-    expect(screen.getByText('Clear filters')).toBeDefined()
-  })
-
-  it('resets all filters when Clear filters is clicked', async () => {
-    render(
-      <ComponentFilters filter={{ search: 'foo', system: ['ALFA'], archived: false }} onFilterChange={onFilterChange} />,
-    )
-
-    await userEvent.click(screen.getByText('Clear filters'))
-
-    // Clear resets to default: archived: false
-    expect(onFilterChange).toHaveBeenCalledWith({ archived: false })
-  })
+  // "Clear filters" / "Clear all" moved to the active-filter chips row at the
+  // page level (spec §1.2 / ActiveFilterChips.test.tsx); ComponentFilters no
+  // longer owns a clear-all control.
 })
 
-describe('ComponentFilters archived filter (§7.0/2e)', () => {
-  const onFilterChange = vi.fn()
-
-  beforeEach(() => {
-    vi.clearAllMocks()
-    // vi.clearAllMocks wipes the per-field useFieldOptions implementation;
-    // reset the seed map and re-install the dispatcher every test.
-    for (const k of Object.keys(fieldOptionSeeds)) delete fieldOptionSeeds[k]
-    applyFieldOptionsMock()
-    mockLabels()
-    mockCurrentUser('testuser')
-    mockFieldConfig([])
-  })
-
-  it('default filter archived=false shows "Show archived components" button', () => {
-    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
-    expect(screen.getByRole('button', { name: 'Show archived components' })).toBeDefined()
-  })
-
-  it('clicking "Show archived components" toggles archived to undefined', async () => {
-    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
-    await userEvent.click(screen.getByRole('button', { name: 'Show archived components' }))
-    expect(onFilterChange).toHaveBeenCalledWith({ archived: undefined })
-  })
-
-  it('filter archived=undefined shows "Hide archived components" button', () => {
-    render(<ComponentFilters filter={{ archived: undefined }} onFilterChange={onFilterChange} />)
-    expect(screen.getByRole('button', { name: 'Hide archived components' })).toBeDefined()
-  })
-
-  it('clicking "Hide archived components" toggles archived back to false', async () => {
-    render(<ComponentFilters filter={{ archived: undefined }} onFilterChange={onFilterChange} />)
-    await userEvent.click(screen.getByRole('button', { name: 'Hide archived components' }))
-    expect(onFilterChange).toHaveBeenCalledWith({ archived: false })
-  })
-
-  it('hasActiveFilters does not count archived=false as an active filter', () => {
-    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
-    // No "Clear filters" when only the default archived:false is set
-    expect(screen.queryByText('Clear filters')).toBeNull()
-  })
-
-  it('hasActiveFilters counts archived=undefined as an active filter', () => {
-    render(<ComponentFilters filter={{ archived: undefined }} onFilterChange={onFilterChange} />)
-    expect(screen.getByText('Clear filters')).toBeDefined()
-  })
-})
-
-describe('ComponentFilters My Components (§7.0/2e)', () => {
-  const onFilterChange = vi.fn()
-
-  beforeEach(() => {
-    vi.clearAllMocks()
-    // vi.clearAllMocks wipes the per-field useFieldOptions implementation;
-    // reset the seed map and re-install the dispatcher every test.
-    for (const k of Object.keys(fieldOptionSeeds)) delete fieldOptionSeeds[k]
-    applyFieldOptionsMock()
-    mockLabels()
-    mockFieldConfig([])
-  })
-
-  it('renders My Components switch', () => {
-    mockCurrentUser('alice')
-    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
-    expect(screen.getByLabelText('My Components')).toBeDefined()
-  })
-
-  it('switch is disabled when currentUser is null', () => {
-    mockCurrentUser(null)
-    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
-    const sw = screen.getByLabelText('My Components') as HTMLButtonElement
-    expect(sw.disabled).toBe(true)
-  })
-
-  it('checking My Components sets owner to a single-element array with currentUser.username', async () => {
-    mockCurrentUser('alice')
-    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
-    const sw = screen.getByLabelText('My Components')
-    await userEvent.click(sw)
-    expect(onFilterChange).toHaveBeenCalledWith({ archived: false, owner: ['alice'] })
-  })
-
-  it('unchecking My Components clears owner', async () => {
-    mockCurrentUser('alice')
-    render(
-      <ComponentFilters filter={{ archived: false, owner: ['alice'] }} onFilterChange={onFilterChange} />,
-    )
-    const sw = screen.getByLabelText('My Components')
-    await userEvent.click(sw)
-    expect(onFilterChange).toHaveBeenCalledWith({ archived: false, owner: undefined })
-  })
-
-  it('Owner picker trigger is disabled when My Components is checked', () => {
-    mockCurrentUser('alice')
-    render(
-      <ComponentFilters filter={{ archived: false, owner: ['alice'] }} onFilterChange={onFilterChange} />,
-    )
-    const ownerTrigger = screen.getByRole('button', { name: /all owners|alice/i })
-    expect((ownerTrigger as HTMLButtonElement).disabled).toBe(true)
-  })
-
-  it('Owner picker trigger is enabled when My Components is not checked', () => {
-    mockCurrentUser('alice')
-    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
-    const ownerTrigger = screen.getByRole('button', { name: /all owners/i })
-    expect((ownerTrigger as HTMLButtonElement).disabled).toBe(false)
-  })
-
-  it('My Components is NOT checked when owner array has multiple values, even if it includes the current user', () => {
-    // Multi-select means "alice + bob" is no longer "only my components" —
-    // the switch stays unchecked so it can be flipped on to reduce to ['alice'].
-    mockCurrentUser('alice')
-    render(
-      <ComponentFilters
-        filter={{ archived: false, owner: ['alice', 'bob'] }}
-        onFilterChange={onFilterChange}
-      />,
-    )
-    const sw = screen.getByLabelText('My Components') as HTMLButtonElement
-    expect(sw.getAttribute('data-state')).toBe('unchecked')
-  })
-})
+// The archived toggle button and the "My Components" switch were removed from
+// ComponentFilters in the list redesign (spec §1.1/1.3): archived is now the
+// "Archived" preset and My Components is the "My Components" preset, both on the
+// preset bar (covered by ListPresetBar.test.tsx + ComponentListPage.test.tsx).
+// The owner field-config placement is still exercised below.
 
 describe('ComponentFilters Owner multi-select (B7.1.1)', () => {
   const onFilterChange = vi.fn()
@@ -389,29 +254,6 @@ describe('ComponentFilters Owner multi-select (B7.1.1)', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: 'bob' }))
     const lastCall = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
     expect(lastCall.owner).toEqual(['alice', 'bob'])
-  })
-
-  it('Clear filters drops owner from the filter', async () => {
-    render(
-      <ComponentFilters
-        filter={{ owner: ['alice'], archived: false }}
-        onFilterChange={onFilterChange}
-      />,
-    )
-    await userEvent.click(screen.getByText('Clear filters'))
-    expect(onFilterChange).toHaveBeenCalledWith({ archived: false })
-    const lastArg = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
-    expect(lastArg.owner).toBeUndefined()
-  })
-
-  it('shows Clear filters when owner is the only active filter', () => {
-    render(
-      <ComponentFilters
-        filter={{ owner: ['alice'], archived: false }}
-        onFilterChange={onFilterChange}
-      />,
-    )
-    expect(screen.getByText('Clear filters')).toBeDefined()
   })
 })
 
@@ -471,29 +313,6 @@ describe('ComponentFilters Build System multi-select', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: 'MAVEN' }))
     const lastCall = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
     expect(lastCall.buildSystem).toEqual(['GRADLE', 'MAVEN'])
-  })
-
-  it('Clear filters drops buildSystem from the filter', async () => {
-    render(
-      <ComponentFilters
-        filter={{ buildSystem: ['GRADLE'], archived: false }}
-        onFilterChange={onFilterChange}
-      />,
-    )
-    await userEvent.click(screen.getByText('Clear filters'))
-    expect(onFilterChange).toHaveBeenCalledWith({ archived: false })
-    const lastArg = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
-    expect(lastArg.buildSystem).toBeUndefined()
-  })
-
-  it('shows Clear filters when buildSystem is the only active filter', () => {
-    render(
-      <ComponentFilters
-        filter={{ buildSystem: ['GRADLE'], archived: false }}
-        onFilterChange={onFilterChange}
-      />,
-    )
-    expect(screen.getByText('Clear filters')).toBeDefined()
   })
 
   it('shows "No build systems available" when field-config has no options', async () => {
@@ -591,29 +410,6 @@ describe('ComponentFilters labels multi-select', () => {
     // Last call carries both selected labels.
     const lastCall = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
     expect(lastCall.labels).toEqual(['alpha', 'gamma'])
-  })
-
-  it('Clear filters drops labels from the filter', async () => {
-    render(
-      <ComponentFilters
-        filter={{ labels: ['alpha'], archived: false }}
-        onFilterChange={onFilterChange}
-      />,
-    )
-    await userEvent.click(screen.getByText('Clear filters'))
-    expect(onFilterChange).toHaveBeenCalledWith({ archived: false })
-    const lastArg = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
-    expect(lastArg.labels).toBeUndefined()
-  })
-
-  it('shows Clear filters when labels is the only active filter', () => {
-    render(
-      <ComponentFilters
-        filter={{ labels: ['alpha'], archived: false }}
-        onFilterChange={onFilterChange}
-      />,
-    )
-    expect(screen.getByText('Clear filters')).toBeDefined()
   })
 
   it('ArrowDown / ArrowUp move focus between option rows (stops at last)', async () => {
@@ -757,29 +553,6 @@ describe('ComponentFilters System multi-select', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: 'BRAVO' }))
     const lastCall = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
     expect(lastCall.system).toEqual(['ALFA', 'BRAVO'])
-  })
-
-  it('Clear filters drops system from the filter', async () => {
-    render(
-      <ComponentFilters
-        filter={{ system: ['ALFA'], archived: false }}
-        onFilterChange={onFilterChange}
-      />,
-    )
-    await userEvent.click(screen.getByText('Clear filters'))
-    expect(onFilterChange).toHaveBeenCalledWith({ archived: false })
-    const lastArg = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
-    expect(lastArg.system).toBeUndefined()
-  })
-
-  it('shows Clear filters when system is the only active filter', () => {
-    render(
-      <ComponentFilters
-        filter={{ system: ['ALFA'], archived: false }}
-        onFilterChange={onFilterChange}
-      />,
-    )
-    expect(screen.getByText('Clear filters')).toBeDefined()
   })
 
   it('does NOT render the System control when admin field-config marks it filterable: false', () => {
@@ -952,18 +725,6 @@ describe('ComponentFilters extended search (items 5 / 10)', () => {
     expect(screen.getByLabelText('VCS path')).toBeDefined()
   })
 
-  it('counts an active extended filter toward Clear filters and clears it', async () => {
-    render(
-      <ComponentFilters
-        filter={{ archived: false, groupKey: ['org.acme'] }}
-        onFilterChange={onFilterChange}
-      />,
-    )
-    expect(screen.getByText('Clear filters')).toBeDefined()
-    await userEvent.click(screen.getByText('Clear filters'))
-    expect(onFilterChange).toHaveBeenCalledWith({ archived: false })
-  })
-
   it('renders a searchable:Main extended field in the always-visible bar (no toggle needed)', () => {
     mockUseFieldConfig.mockReturnValue({
       data: { component: { clientCode: { searchable: 'Main' } } },
@@ -976,14 +737,13 @@ describe('ComponentFilters extended search (items 5 / 10)', () => {
     expect(screen.getByRole('button', { name: /extended search/i })).toBeDefined()
   })
 
-  it('owner searchable:None hides the owner picker AND the My Components shortcut', () => {
+  it('owner searchable:None hides the owner picker', () => {
     mockUseFieldConfig.mockReturnValue({
       data: { component: { componentOwner: { searchable: 'None' } } },
       isLoading: false,
     } as unknown as ReturnType<typeof useFieldConfig>)
     render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
     expect(screen.queryByRole('button', { name: /all owners/i })).toBeNull()
-    expect(screen.queryByLabelText('My Components')).toBeNull()
     // A sibling classic filter with no override still renders (default Main).
     expect(screen.getByRole('button', { name: /all systems/i })).toBeDefined()
   })
@@ -1010,20 +770,17 @@ describe('ComponentFilters extended search (items 5 / 10)', () => {
     expect(screen.queryByRole('button', { name: /all labels/i })).toBeNull()
   })
 
-  it('owner searchable:Extended moves BOTH the owner picker and My Components into the toggle row', async () => {
+  it('owner searchable:Extended moves the owner picker into the toggle row', async () => {
     mockUseFieldConfig.mockReturnValue({
       data: { component: { componentOwner: { searchable: 'Extended' } } },
       isLoading: false,
     } as unknown as ReturnType<typeof useFieldConfig>)
     render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
-    // Collapsed: neither the owner picker nor the My Components shortcut sits in
-    // the always-visible bar — My Components follows the owner field's placement.
+    // Collapsed: the owner picker no longer sits in the always-visible bar.
     expect(screen.queryByRole('button', { name: /all owners/i })).toBeNull()
-    expect(screen.queryByLabelText('My Components')).toBeNull()
-    // Opening Extended search reveals both together.
+    // Opening Extended search reveals it.
     await userEvent.click(screen.getByRole('button', { name: /extended search/i }))
     expect(screen.getByRole('button', { name: /all owners/i })).toBeDefined()
-    expect(screen.getByLabelText('My Components')).toBeDefined()
   })
 })
 
@@ -1069,7 +826,6 @@ describe('ComponentFilters multi-value extended filters + distribution (SYS-045/
     )
     // No toggle click — a populated groupKey array forces the row open.
     expect(screen.getByLabelText('Group key')).toBeDefined()
-    expect(screen.getByText('Clear filters')).toBeDefined()
   })
 
   it('selecting "Yes" on the Distribution explicit tri-state emits distributionExplicit: true', async () => {
@@ -1093,9 +849,12 @@ describe('ComponentFilters multi-value extended filters + distribution (SYS-045/
   })
 })
 
-describe('ComponentFilters — with validation problems toggle', () => {
+// The "with validation problems" SWITCH moved to the preset bar (the "With
+// problems" preset; see ListPresetBar.test.tsx + ComponentListPage.test.tsx).
+// ComponentFilters keeps only the problems-only DIMMING + hint, driven by the
+// `problemsOnly` prop the page passes when that preset is active.
+describe('ComponentFilters — problems-only dimming + hint', () => {
   const onFilterChange = vi.fn()
-  const onProblemsOnlyChange = vi.fn()
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -1106,92 +865,36 @@ describe('ComponentFilters — with validation problems toggle', () => {
     mockFieldConfig([])
   })
 
-  it('does not render the toggle when no handler is supplied', () => {
-    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+  it('no longer renders an in-bar "with validation problems" switch', () => {
+    render(
+      <ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} problemsOnly />,
+    )
     expect(screen.queryByLabelText('with validation problems')).toBeNull()
   })
 
-  it('renders the toggle when a handler is supplied', () => {
+  it('leaves the CRS filter group enabled when problemsOnly is off', () => {
     render(
       <ComponentFilters
         filter={{ archived: false }}
         onFilterChange={onFilterChange}
         problemsOnly={false}
-        onProblemsOnlyChange={onProblemsOnlyChange}
-      />,
-    )
-    expect(screen.getByLabelText('with validation problems')).toBeDefined()
-  })
-
-  it('fires onProblemsOnlyChange(true) when toggled on', async () => {
-    render(
-      <ComponentFilters
-        filter={{ archived: false }}
-        onFilterChange={onFilterChange}
-        problemsOnly={false}
-        onProblemsOnlyChange={onProblemsOnlyChange}
-      />,
-    )
-    await userEvent.click(screen.getByLabelText('with validation problems'))
-    expect(onProblemsOnlyChange).toHaveBeenCalledWith(true)
-  })
-
-  it('reflects the checked state from the prop', () => {
-    render(
-      <ComponentFilters
-        filter={{ archived: false }}
-        onFilterChange={onFilterChange}
-        problemsOnly
-        onProblemsOnlyChange={onProblemsOnlyChange}
-      />,
-    )
-    expect(screen.getByLabelText('with validation problems').getAttribute('aria-checked')).toBe('true')
-  })
-
-  it('leaves the CRS filter group enabled when the toggle is off', () => {
-    render(
-      <ComponentFilters
-        filter={{ archived: false }}
-        onFilterChange={onFilterChange}
-        problemsOnly={false}
-        onProblemsOnlyChange={onProblemsOnlyChange}
       />,
     )
     const group = screen.getByTestId('crs-filter-controls')
     expect(group.className).not.toContain('pointer-events-none')
     expect(group.getAttribute('aria-disabled')).toBeNull()
-    expect(screen.queryByText(/don.t apply in .with validation problems. mode/i)).toBeNull()
+    expect(screen.queryByText(/don.t apply in the .With problems. preset/i)).toBeNull()
   })
 
-  it('dims + disables the CRS filter group and shows a hint when the toggle is on', () => {
+  it('dims + disables the CRS filter group and shows a hint when problemsOnly is on', () => {
     render(
-      <ComponentFilters
-        filter={{ archived: false }}
-        onFilterChange={onFilterChange}
-        problemsOnly
-        onProblemsOnlyChange={onProblemsOnlyChange}
-      />,
+      <ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} problemsOnly />,
     )
     const group = screen.getByTestId('crs-filter-controls')
     expect(group.className).toContain('opacity-50')
     expect(group.className).toContain('pointer-events-none')
     expect(group.getAttribute('aria-disabled')).toBe('true')
-    expect(screen.getByText(/don.t apply in .with validation problems. mode/i)).toBeDefined()
-  })
-
-  it('keeps the "with validation problems" toggle interactive while CRS filters are disabled', async () => {
-    render(
-      <ComponentFilters
-        filter={{ archived: false }}
-        onFilterChange={onFilterChange}
-        problemsOnly
-        onProblemsOnlyChange={onProblemsOnlyChange}
-      />,
-    )
-    // The toggle is rendered OUTSIDE the inert group, so it can still be clicked
-    // (here: toggled back off).
-    await userEvent.click(screen.getByLabelText('with validation problems'))
-    expect(onProblemsOnlyChange).toHaveBeenCalledWith(false)
+    expect(screen.getByText(/don.t apply in the .With problems. preset/i)).toBeDefined()
   })
 
   it('shows the found-count beside the hint when problemsCount is given (plural)', () => {
@@ -1200,13 +903,12 @@ describe('ComponentFilters — with validation problems toggle', () => {
         filter={{ archived: false }}
         onFilterChange={onFilterChange}
         problemsOnly
-        onProblemsOnlyChange={onProblemsOnlyChange}
         problemsCount={3}
       />,
     )
     // The count and the existing hint share one line.
     expect(screen.getByText(/3 components with validation problems/i)).toBeDefined()
-    expect(screen.getByText(/don.t apply in .with validation problems. mode/i)).toBeDefined()
+    expect(screen.getByText(/don.t apply in the .With problems. preset/i)).toBeDefined()
   })
 
   it('uses the singular noun (no plural "s") when problemsCount is 1', () => {
@@ -1215,7 +917,6 @@ describe('ComponentFilters — with validation problems toggle', () => {
         filter={{ archived: false }}
         onFilterChange={onFilterChange}
         problemsOnly
-        onProblemsOnlyChange={onProblemsOnlyChange}
         problemsCount={1}
       />,
     )
@@ -1226,15 +927,10 @@ describe('ComponentFilters — with validation problems toggle', () => {
 
   it('omits the count while the report is still loading (problemsCount undefined)', () => {
     render(
-      <ComponentFilters
-        filter={{ archived: false }}
-        onFilterChange={onFilterChange}
-        problemsOnly
-        onProblemsOnlyChange={onProblemsOnlyChange}
-      />,
+      <ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} problemsOnly />,
     )
     // Hint shows, but no found-count yet.
-    expect(screen.getByText(/don.t apply in .with validation problems. mode/i)).toBeDefined()
+    expect(screen.getByText(/don.t apply in the .With problems. preset/i)).toBeDefined()
     expect(screen.queryByText(/with validation problems\./i)).toBeNull()
   })
 })
