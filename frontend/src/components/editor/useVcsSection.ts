@@ -1,7 +1,7 @@
 import type { ComponentDetail, VcsEntry } from '../../lib/types'
 import { selectBaseRow } from '../../lib/api/baseRow'
 import type { SectionSlice, DiffEntry } from '../../lib/editor/combineRequest'
-import { scalarDiff, listDiff } from '../../lib/editor/diffUtil'
+import { scalarDiff } from '../../lib/editor/diffUtil'
 import { useSectionSnapshot } from './useSectionSnapshot'
 
 export interface VcsEntryState {
@@ -79,19 +79,55 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
     .filter((e) => e.vcsPath !== '')
 
   const prior = snapshotRef.current
+  // Normalize the prior snapshot entries the SAME way as cleanedEntries so the
+  // diff compares like-for-like against exactly what the request persists.
+  const cleanedPriorEntries = prior.entries
+    .map((e) => ({
+      name: (e.name || '').trim(),
+      vcsPath: e.vcsPath.trim(),
+      branch: (e.branch || '').trim(),
+      tag: (e.tag || '').trim(),
+      hotfixBranch: (e.hotfixBranch || '').trim(),
+      repositoryType: (e.repositoryType || '').trim(),
+    }))
+    .filter((e) => e.vcsPath !== '')
+
   const diff: DiffEntry[] = []
   const push = (d: DiffEntry | null) => { if (d) diff.push(d) }
   if (isDirty) {
     // vcsExternalRegistry is a top-level component scalar (not an aspect), so a clear persists.
     push(scalarDiff('VCS · External Registry', prior.externalRegistry, state.externalRegistry))
-    // Entry-list change → one summary row (path list); per-field row noise isn't useful here.
-    push(
-      listDiff(
-        'VCS · Entries',
-        prior.entries.map((e) => e.vcsPath).filter(Boolean),
-        cleanedEntries.map((e) => e.vcsPath),
-      ),
-    )
+    // Field-level entry diff (P1-2): the request persists name/branch/tag/
+    // hotfixBranch/repositoryType, so editing ANY of them must surface a row —
+    // not just a vcsPath change. Compare index-by-index over the normalized
+    // entries; emit one row per changed field, plus added/removed rows. A vcs
+    // entry is a collection child (REPLACE semantics) so no scalar-aspect no-op.
+    const ENTRY_FIELDS: { key: keyof (typeof cleanedEntries)[number]; label: string }[] = [
+      { key: 'vcsPath', label: 'Path' },
+      { key: 'name', label: 'Name' },
+      { key: 'branch', label: 'Branch' },
+      { key: 'tag', label: 'Tag' },
+      { key: 'hotfixBranch', label: 'Hotfix Branch' },
+      { key: 'repositoryType', label: 'Repository Type' },
+    ]
+    const maxLen = Math.max(cleanedPriorEntries.length, cleanedEntries.length)
+    for (let i = 0; i < maxLen; i++) {
+      const before = cleanedPriorEntries[i]
+      const after = cleanedEntries[i]
+      const rowLabel = (field: string) => `VCS · ${after?.vcsPath || before?.vcsPath || `entry ${i + 1}`} · ${field}`
+      if (before && !after) {
+        push({ label: `VCS · ${before.vcsPath}`, oldValue: 'present', newValue: '—' })
+        continue
+      }
+      if (!before && after) {
+        push({ label: `VCS · ${after.vcsPath}`, oldValue: '—', newValue: 'added' })
+        continue
+      }
+      if (!before || !after) continue
+      for (const { key, label } of ENTRY_FIELDS) {
+        push(scalarDiff(rowLabel(label), before[key], after[key]))
+      }
+    }
   }
 
   const slice: SectionSlice = {

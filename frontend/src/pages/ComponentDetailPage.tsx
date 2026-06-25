@@ -2,7 +2,7 @@ import { useParams, useNavigate, Link } from 'react-router'
 import { useForm } from 'react-hook-form'
 import { ArrowLeft, Copy, Trash2, AlertTriangle, LockKeyhole } from 'lucide-react'
 import { JiraIcon, BitbucketIcon, TeamCityIcon } from '../components/ui/icons/brand-icons'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Layout } from '../components/Layout'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
@@ -81,6 +81,31 @@ function EditSurface({
       {children}
     </fieldset>
   )
+}
+
+// Server component → RHF General/Misc form values. The single source of truth
+// for hydrating the page-level form, used both by the on-id-change reset effect
+// (P1-1: GeneralTab may be unmounted at navigation time, so hydration cannot
+// live only inside GeneralTab) and by Discard. Mirrors GeneralTab's mapping.
+function mapComponentToForm(component: ComponentDetail): GeneralFormValues {
+  return {
+    name: component.name,
+    displayName: component.displayName ?? '',
+    componentOwner: component.componentOwner ?? '',
+    productType: component.productType ?? '',
+    system: component.system ?? '',
+    clientCode: component.clientCode ?? '',
+    solution: component.solution ?? false,
+    archived: component.archived,
+    parentComponentName: component.parentComponentName ?? '',
+    canBeParent: component.canBeParent ?? false,
+    releaseManager: component.releaseManager ?? [],
+    securityChampion: component.securityChampion ?? [],
+    copyright: component.copyright ?? '',
+    labels: component.labels ?? [],
+    docs: (component.docs ?? []).map((d) => ({ docComponentKey: d.docComponentKey, majorVersion: d.majorVersion ?? '' })),
+    artifactIds: (component.artifactIds ?? []).map((a) => ({ groupPattern: a.groupPattern, artifactPattern: a.artifactPattern })),
+  }
 }
 
 // Maps a server 400 field error (or a tab section) to the sidebar section that
@@ -185,6 +210,27 @@ export function ComponentDetailPage() {
   void form.formState.touchedFields
   void form.watch()
 
+  // P1-1: re-hydrate the page-level RHF form when the component id CHANGES to a
+  // DIFFERENT id — independent of which tab is mounted. GeneralTab's own
+  // mount-effect only fires while it is mounted, so navigating A→B from a
+  // non-General tab would otherwise leave the form holding A's name/owner/parent
+  // and build a spurious patch against B (even a rename B→A). Keyed on id (not
+  // the component object) so a same-id sibling-save setQueryData does NOT
+  // form.reset over an in-progress General edit. The FIRST load is intentionally
+  // skipped (we only record the id): GeneralTab is the default-mounted tab and
+  // owns initial hydration incl. its touched-not-dirty interactions (e.g. the
+  // labels clear-all signal), which a reset here would stomp.
+  const hydratedIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!component) return
+    const prevId = hydratedIdRef.current
+    if (prevId === component.id) return
+    hydratedIdRef.current = component.id
+    if (prevId === null) return // first load — GeneralTab hydrates on mount
+    form.reset(mapComponentToForm(component))
+    form.clearErrors()
+  }, [component, form])
+
   // ── Section state hooks (the five ex-useState tabs). Each owns its local
   // state + last-saved snapshot and contributes a payload slice + dirty flag.
   // A non-loaded component renders a skeleton before any hook is read, but the
@@ -254,6 +300,12 @@ export function ComponentDetailPage() {
     systemFc.visibility !== 'hidden' &&
     (component.system ?? '') !== '' &&
     ((form.getValues('system') as string | undefined) ?? '') === ''
+  // P1-3: Build System is required when a BASE build aspect exists. Block the
+  // save if it has been cleared to empty (server had one, draft is now blank) —
+  // mirrors systemClearNeedsAttention. `buildSystemMissing` = !draft.buildSystem.
+  const serverBuildSystem = selectBaseRow(component ?? EMPTY_COMPONENT)?.build?.buildSystem ?? ''
+  const buildSystemNeedsAttention =
+    !!component && serverBuildSystem !== '' && buildSection.buildSystemMissing
   const genSlice = component
     ? generalSlice(component, pendingGeneralPatch, systemClearNeedsAttention)
     : { isDirty: false, request: {}, diff: [] }
@@ -274,26 +326,9 @@ export function ComponentDetailPage() {
     // Reset the RHF form to the COMPONENT's values (not the empty form
     // defaults) — resetting to defaults would set system='' against a server
     // system, tripping systemClearNeedsAttention and leaving the bar "dirty".
-    // This mirrors GeneralTab's server→form hydration mapping.
+    // Same mapping as the on-id-change hydration effect (mapComponentToForm).
     if (component) {
-      form.reset({
-        name: component.name,
-        displayName: component.displayName ?? '',
-        componentOwner: component.componentOwner ?? '',
-        productType: component.productType ?? '',
-        system: component.system ?? '',
-        clientCode: component.clientCode ?? '',
-        solution: component.solution ?? false,
-        archived: component.archived,
-        parentComponentName: component.parentComponentName ?? '',
-        canBeParent: component.canBeParent ?? false,
-        releaseManager: component.releaseManager ?? [],
-        securityChampion: component.securityChampion ?? [],
-        copyright: component.copyright ?? '',
-        labels: component.labels ?? [],
-        docs: (component.docs ?? []).map((d) => ({ docComponentKey: d.docComponentKey, majorVersion: d.majorVersion ?? '' })),
-        artifactIds: (component.artifactIds ?? []).map((a) => ({ groupPattern: a.groupPattern, artifactPattern: a.artifactPattern })),
-      })
+      form.reset(mapComponentToForm(component))
     }
     buildSection.reset()
     vcsSection.reset()
@@ -313,6 +348,13 @@ export function ComponentDetailPage() {
     if (systemClearNeedsAttention) {
       setActiveTab('general')
       form.setError('system', { type: 'required', message: 'System is required' })
+      return
+    }
+    // Build System is REQUIRED too (P1-3). Clearing it would PATCH null = a CRS
+    // no-op, so block and surface the Build section's inline required error.
+    if (buildSystemNeedsAttention) {
+      setActiveTab('build')
+      buildSection.setBuildSystemTouched(true)
       return
     }
 
@@ -382,6 +424,12 @@ export function ComponentDetailPage() {
     if (systemClearNeedsAttention) {
       setActiveTab('general')
       form.setError('system', { type: 'required', message: 'System is required' })
+      return
+    }
+    // Same gate for the required Build System (P1-3).
+    if (buildSystemNeedsAttention) {
+      setActiveTab('build')
+      buildSection.setBuildSystemTouched(true)
       return
     }
     setReviewOpen(true)

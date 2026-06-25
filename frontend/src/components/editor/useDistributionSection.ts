@@ -94,9 +94,28 @@ export function useDistributionSection(component: ComponentDetail): Distribution
   if (isDirty) {
     push(boolDiff('Distribution · Explicit', prior.explicit, state.explicit))
     push(boolDiff('Distribution · External', prior.external, state.external))
-    push(listDiff('Distribution · Maven Artifacts', prior.maven.map((a) => `${a.groupPattern}:${a.artifactPattern}`), cleanedMaven.map((a) => `${a.groupPattern}:${a.artifactPattern}`)))
-    push(listDiff('Distribution · File URL Artifacts', prior.fileUrl.map((a) => a.url), cleanedFileUrl.map((a) => a.url)))
-    push(listDiff('Distribution · Docker Images', prior.docker.map((d) => d.imageName), cleanedDocker.map((d) => d.imageName)))
+    // P1-2: key each list row off the COMPLETE persisted entry (every field the
+    // request sends), not just the identity columns — otherwise editing only a
+    // classifier / flavor / artifactId persists silently with "0 fields change".
+    // Normalize prior the same way as the cleaned* (request) projections.
+    const priorMaven = prior.maven.filter((a) => a.groupPattern.trim() !== '' && a.artifactPattern.trim() !== '')
+    push(listDiff(
+      'Distribution · Maven Artifacts',
+      priorMaven.map((a) => `${a.groupPattern}:${a.artifactPattern}:${a.extension || ''}:${a.classifier || ''}`),
+      cleanedMaven.map((a) => `${a.groupPattern}:${a.artifactPattern}:${a.extension || ''}:${a.classifier || ''}`),
+    ))
+    const priorFileUrl = prior.fileUrl.filter((a) => a.url.trim() !== '')
+    push(listDiff(
+      'Distribution · File URL Artifacts',
+      priorFileUrl.map((a) => `${a.url}:${a.artifactId || ''}:${a.classifier || ''}`),
+      cleanedFileUrl.map((a) => `${a.url}:${a.artifactId || ''}:${a.classifier || ''}`),
+    ))
+    const priorDocker = prior.docker.filter((d) => d.imageName.trim() !== '')
+    push(listDiff(
+      'Distribution · Docker Images',
+      priorDocker.map((d) => `${d.imageName}:${d.flavor || ''}`),
+      cleanedDocker.map((d) => `${d.imageName}:${d.flavor || ''}`),
+    ))
     push(listDiff('Distribution · Packages', prior.packages.map((p) => `${p.packageType}/${p.packageName}`), cleanedPackages.map((p) => `${p.packageType}/${p.packageName}`)))
     push(listDiff('Distribution · Security Groups', prior.securityGroups.map((g) => `${g.groupType}:${g.groupName}`), cleanedSecGroups.map((g) => `${g.groupType}:${g.groupName}`)))
   }

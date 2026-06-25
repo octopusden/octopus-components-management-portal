@@ -43,17 +43,28 @@ vi.mock('../components/editor/GeneralTab', async () => {
   return {
     ...actual,
     GeneralTab: vi.fn(({ component, form }) => {
+      // Mirrors the real GeneralTab: hydrates server→form ONLY while mounted
+      // (the inactive tab is unmounted by Radix Tabs). This is exactly the P1-1
+      // hazard — if you navigate A→B from a non-General tab, GeneralTab never
+      // mounts for B, so any hydration that lived only here would miss B.
       useEffect(() => {
         form.setValue('system', component.system ?? '')
         form.setValue('displayName', component.displayName ?? '')
+        form.setValue('name', component.name)
+        form.setValue('componentOwner', component.componentOwner ?? '')
+        form.setValue('parentComponentName', component.parentComponentName ?? '')
       }, [component, form])
       return (
-        <button
-          data-testid="edit-display-name"
-          onClick={() => form.setValue('displayName', 'New General Name', { shouldDirty: true })}
-        >
-          edit general
-        </button>
+        <div>
+          <button
+            data-testid="edit-display-name"
+            onClick={() => form.setValue('displayName', 'New General Name', { shouldDirty: true })}
+          >
+            edit general
+          </button>
+          <span data-testid="form-name">{form.watch('name')}</span>
+          <span data-testid="form-owner">{form.watch('componentOwner')}</span>
+        </div>
       )
     }),
   }
@@ -241,6 +252,27 @@ describe('ComponentDetailPage — combined PATCH (Phase 3b)', () => {
     expect(within(dialog).getByText('21')).toBeDefined()
   })
 
+  // P1-3: required Build System guard must be wired into the page Save path.
+  // Clearing the required Build System then Save must NOT open Review / fire a
+  // PATCH; it must switch to Build and surface the inline required error.
+  it('blocks Save + Review when the required Build System is cleared (P1-3)', async () => {
+    const mutateAsync = vi.fn(() => Promise.resolve())
+    renderPage(baseComponent, mutateAsync)
+    await openTab(/^Build/)
+    // Clear the required Build System (also makes the section dirty → Save shown).
+    fireEvent.change(screen.getByTestId('enum-build-buildSystem'), { target: { value: '' } })
+    await waitFor(() => expect(screen.getByText('Unsaved changes')).toBeDefined())
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+
+    // Review must NOT open and no PATCH fires.
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(mutateAsync).not.toHaveBeenCalled()
+    // Stays on / switches to Build and surfaces the inline required error.
+    await waitFor(() => expect(screen.getByRole('tab', { name: /^Build/ })).toHaveAttribute('aria-current', 'page'))
+    expect(screen.getByText(/Build System is required/i)).toBeDefined()
+  })
+
   it('Review dialog flags a cleared build scalar as a no-op', async () => {
     renderPage(baseComponent)
     await openTab(/^Build/)
@@ -399,5 +431,75 @@ describe('ComponentDetailPage — combined PATCH (Phase 3b)', () => {
     expect((screen.getByTestId('enum-build-javaVersion') as HTMLInputElement).value).toBe('11')
     expect(screen.getByText('All changes saved')).toBeDefined()
     expect(screen.queryByText('Unsaved changes')).toBeNull()
+  })
+
+  // P1-1: the General/Misc RHF form must re-hydrate on component-id change even
+  // when GeneralTab is UNMOUNTED at navigation time. Navigate A→B while sitting
+  // on the Build tab (General never mounts for A's tail or B's head until we open
+  // it) — General must show B's name/owner, the bar must be clean, and the
+  // would-be PATCH must NOT carry A's name (no spurious rename B→A).
+  it('re-hydrates the RHF form on id change when navigating from a non-General tab (P1-1)', async () => {
+    const compTwo: ComponentDetail = {
+      ...baseComponent,
+      id: 'comp-2',
+      name: 'other-component',
+      displayName: 'Other Component',
+      componentOwner: 'bob',
+      version: 3,
+      configurations: [
+        {
+          id: 'cfg-2', versionRange: '(,0),[0,)', rowType: 'BASE', overriddenAttribute: null, isSyntheticBase: false,
+          build: { buildSystem: 'MAVEN', javaVersion: '11' }, escrow: null, jira: { projectKey: 'OTHER' },
+          vcsEntries: [], mavenArtifacts: [], fileUrlArtifacts: [], dockerImages: [], packages: [], requiredTools: [],
+        },
+      ],
+    }
+    const patchSpy = vi.fn(() => Promise.resolve())
+    vi.mocked(useComponent).mockImplementation(
+      ((wanted: string) =>
+        ({ data: wanted === 'comp-2' ? compTwo : baseComponent, isLoading: false, error: null }) as unknown) as typeof useComponent,
+    )
+    vi.mocked(useCurrentUser).mockReturnValue({ data: makeUser(), isLoading: false, isError: false, error: null, refetch: vi.fn() } as unknown as ReturnType<typeof useCurrentUser>)
+    vi.mocked(useUpdateComponent).mockReturnValue({ ...idleMutation, mutateAsync: patchSpy } as unknown as ReturnType<typeof useUpdateComponent>)
+    vi.mocked(useDeleteComponent).mockReturnValue({ ...idleMutation } as unknown as ReturnType<typeof useDeleteComponent>)
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const router = createMemoryRouter(
+      [
+        { path: '/components', element: <div data-testid="list-page" /> },
+        { path: '/components/:id', element: <ComponentDetailPage /> },
+      ],
+      { initialEntries: ['/components/comp-1'] },
+    )
+    render(
+      <QueryClientProvider client={client}>
+        <TooltipProvider>
+          <RouterProvider router={router} />
+        </TooltipProvider>
+      </QueryClientProvider>,
+    )
+
+    // Move OFF General to Build so GeneralTab is unmounted, then navigate A→B.
+    // (No edit — a clean navigation; the only risk is the page form keeping A's
+    // identity fields because GeneralTab's mount-effect never ran for B.)
+    await openTab(/^Build/)
+    await router.navigate('/components/comp-2')
+    await waitFor(() => expect(screen.getByText('other-component')).toBeDefined())
+
+    // The bar must be clean — a stale A-name in the form would build a patch with
+    // name:'my-component' against B and read dirty.
+    expect(screen.getByText('All changes saved')).toBeDefined()
+    expect(screen.queryByText('Unsaved changes')).toBeNull()
+
+    // Open General: it must show B's identity, not A's leaked values.
+    await openTab(/^General/)
+    expect(screen.getByTestId('form-name').textContent).toBe('other-component')
+    expect(screen.getByTestId('form-owner').textContent).toBe('bob')
+
+    // And a save would NOT propose renaming B→A.
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    // Bar is clean, so Save is a no-op (review won't open / nothing to confirm).
+    expect(screen.queryByRole('button', { name: /^confirm$/i })).toBeNull()
+    expect(patchSpy).not.toHaveBeenCalled()
   })
 })

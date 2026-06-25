@@ -47,6 +47,38 @@ describe('useVcsSection', () => {
     expect(result.current.slice.request.baseConfiguration?.vcsEntries).toEqual([])
   })
 
+  // P1-2: editing ONLY a branch (vcsPath unchanged) must still produce a diff
+  // row — the request persists branch/tag/name/etc., so the diff must too
+  // (acceptance #6: diff == what's sent). The old vcsPath-only listDiff missed this.
+  it('shows a diff row when only a non-path entry field (branch) changes', () => {
+    const c = makeComponent({}, {
+      vcsEntries: [{ id: 'v1', vcsPath: 'proj/repo', branch: 'master', tag: null, hotfixBranch: null, name: null, repositoryType: null, sortOrder: 0 }],
+    })
+    const { result } = renderHook(() => useVcsSection(c))
+    expect(result.current.slice.isDirty).toBe(false)
+    act(() => result.current.updateEntry(0, 'branch', 'develop'))
+    expect(result.current.slice.isDirty).toBe(true)
+    // The request persists the new branch...
+    expect(result.current.slice.request.baseConfiguration?.vcsEntries?.[0]?.branch).toBe('develop')
+    // ...and the diff must reflect it (master → develop), not be empty.
+    const branchRow = result.current.slice.diff.find((d) => /branch/i.test(d.label))
+    expect(branchRow).toBeDefined()
+    expect(branchRow).toMatchObject({ oldValue: 'master', newValue: 'develop' })
+  })
+
+  // P1-2 (field-level completeness): editing several non-path fields at once
+  // must surface a diff row for EACH — none silently persisted.
+  it('surfaces a diff row for every changed entry field (tag + repositoryType)', () => {
+    const c = makeComponent({}, {
+      vcsEntries: [{ id: 'v1', vcsPath: 'proj/repo', branch: 'master', tag: 'v1', hotfixBranch: null, name: null, repositoryType: 'GIT', sortOrder: 0 }],
+    })
+    const { result } = renderHook(() => useVcsSection(c))
+    act(() => result.current.updateEntry(0, 'tag', 'v2'))
+    act(() => result.current.updateEntry(0, 'repositoryType', 'HG'))
+    expect(result.current.slice.diff.find((d) => /tag/i.test(d.label))).toMatchObject({ oldValue: 'v1', newValue: 'v2' })
+    expect(result.current.slice.diff.find((d) => /repository type/i.test(d.label))).toMatchObject({ oldValue: 'GIT', newValue: 'HG' })
+  })
+
   it('does not clobber a dirty section on component re-seed', () => {
     const c1 = makeComponent({ vcsExternalRegistry: 'a' })
     const { result, rerender } = renderHook(({ c }) => useVcsSection(c), { initialProps: { c: c1 } })
@@ -91,6 +123,25 @@ describe('useDistributionSection', () => {
     act(() => result.current.updateSecurityGroup(0, 'groupName', 'grp'))
     expect(result.current.slice.request.securityGroups).toEqual([{ groupType: 'read', groupName: 'grp' }])
     expect('securityGroups' in (result.current.slice.request.baseConfiguration ?? {})).toBe(false)
+  })
+
+  // P1-2: editing ONLY a maven classifier (group/artifact unchanged) must still
+  // produce a diff row — the request persists classifier/extension, so the diff
+  // must too. The old key (group:artifact only) missed sub-field edits.
+  it('shows a diff row when only a maven classifier changes', () => {
+    const c = makeComponent({}, {
+      mavenArtifacts: [{ id: 'm1', groupPattern: 'com.acme', artifactPattern: 'lib', extension: 'jar', classifier: '', sortOrder: 0 }],
+    })
+    const { result } = renderHook(() => useDistributionSection(c))
+    expect(result.current.slice.isDirty).toBe(false)
+    act(() => result.current.updateMaven(0, 'classifier', 'sources'))
+    expect(result.current.slice.isDirty).toBe(true)
+    // The request persists the new classifier...
+    expect(result.current.slice.request.baseConfiguration?.mavenArtifacts?.[0]?.classifier).toBe('sources')
+    // ...and the diff must reflect the maven change, not be empty.
+    const mavenRow = result.current.slice.diff.find((d) => /maven/i.test(d.label))
+    expect(mavenRow).toBeDefined()
+    expect(mavenRow!.newValue).toMatch(/sources/)
   })
 
   // #4: id change → fresh, clean draft even while dirty.
