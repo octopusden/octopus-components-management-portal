@@ -1092,3 +1092,149 @@ describe('ComponentFilters multi-value extended filters + distribution (SYS-045/
     )
   })
 })
+
+describe('ComponentFilters — with validation problems toggle', () => {
+  const onFilterChange = vi.fn()
+  const onProblemsOnlyChange = vi.fn()
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    for (const k of Object.keys(fieldOptionSeeds)) delete fieldOptionSeeds[k]
+    applyFieldOptionsMock()
+    mockLabels()
+    mockCurrentUser('testuser')
+    mockFieldConfig([])
+  })
+
+  it('does not render the toggle when no handler is supplied', () => {
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    expect(screen.queryByLabelText('with validation problems')).toBeNull()
+  })
+
+  it('renders the toggle when a handler is supplied', () => {
+    render(
+      <ComponentFilters
+        filter={{ archived: false }}
+        onFilterChange={onFilterChange}
+        problemsOnly={false}
+        onProblemsOnlyChange={onProblemsOnlyChange}
+      />,
+    )
+    expect(screen.getByLabelText('with validation problems')).toBeDefined()
+  })
+
+  it('fires onProblemsOnlyChange(true) when toggled on', async () => {
+    render(
+      <ComponentFilters
+        filter={{ archived: false }}
+        onFilterChange={onFilterChange}
+        problemsOnly={false}
+        onProblemsOnlyChange={onProblemsOnlyChange}
+      />,
+    )
+    await userEvent.click(screen.getByLabelText('with validation problems'))
+    expect(onProblemsOnlyChange).toHaveBeenCalledWith(true)
+  })
+
+  it('reflects the checked state from the prop', () => {
+    render(
+      <ComponentFilters
+        filter={{ archived: false }}
+        onFilterChange={onFilterChange}
+        problemsOnly
+        onProblemsOnlyChange={onProblemsOnlyChange}
+      />,
+    )
+    expect(screen.getByLabelText('with validation problems').getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('leaves the CRS filter group enabled when the toggle is off', () => {
+    render(
+      <ComponentFilters
+        filter={{ archived: false }}
+        onFilterChange={onFilterChange}
+        problemsOnly={false}
+        onProblemsOnlyChange={onProblemsOnlyChange}
+      />,
+    )
+    const group = screen.getByTestId('crs-filter-controls')
+    expect(group.className).not.toContain('pointer-events-none')
+    expect(group.getAttribute('aria-disabled')).toBeNull()
+    expect(screen.queryByText(/don.t apply in .with validation problems. mode/i)).toBeNull()
+  })
+
+  it('dims + disables the CRS filter group and shows a hint when the toggle is on', () => {
+    render(
+      <ComponentFilters
+        filter={{ archived: false }}
+        onFilterChange={onFilterChange}
+        problemsOnly
+        onProblemsOnlyChange={onProblemsOnlyChange}
+      />,
+    )
+    const group = screen.getByTestId('crs-filter-controls')
+    expect(group.className).toContain('opacity-50')
+    expect(group.className).toContain('pointer-events-none')
+    expect(group.getAttribute('aria-disabled')).toBe('true')
+    expect(screen.getByText(/don.t apply in .with validation problems. mode/i)).toBeDefined()
+  })
+
+  it('keeps the "with validation problems" toggle interactive while CRS filters are disabled', async () => {
+    render(
+      <ComponentFilters
+        filter={{ archived: false }}
+        onFilterChange={onFilterChange}
+        problemsOnly
+        onProblemsOnlyChange={onProblemsOnlyChange}
+      />,
+    )
+    // The toggle is rendered OUTSIDE the inert group, so it can still be clicked
+    // (here: toggled back off).
+    await userEvent.click(screen.getByLabelText('with validation problems'))
+    expect(onProblemsOnlyChange).toHaveBeenCalledWith(false)
+  })
+
+  it('shows the found-count beside the hint when problemsCount is given (plural)', () => {
+    render(
+      <ComponentFilters
+        filter={{ archived: false }}
+        onFilterChange={onFilterChange}
+        problemsOnly
+        onProblemsOnlyChange={onProblemsOnlyChange}
+        problemsCount={3}
+      />,
+    )
+    // The count and the existing hint share one line.
+    expect(screen.getByText(/3 components with validation problems/i)).toBeDefined()
+    expect(screen.getByText(/don.t apply in .with validation problems. mode/i)).toBeDefined()
+  })
+
+  it('uses the singular noun (no plural "s") when problemsCount is 1', () => {
+    render(
+      <ComponentFilters
+        filter={{ archived: false }}
+        onFilterChange={onFilterChange}
+        problemsOnly
+        onProblemsOnlyChange={onProblemsOnlyChange}
+        problemsCount={1}
+      />,
+    )
+    expect(screen.getByText(/1 component with validation problems/i)).toBeDefined()
+    // Guard against the plural form leaking in for the singular case.
+    expect(screen.queryByText(/1 components with validation problems/i)).toBeNull()
+  })
+
+  it('omits the count while the report is still loading (problemsCount undefined)', () => {
+    render(
+      <ComponentFilters
+        filter={{ archived: false }}
+        onFilterChange={onFilterChange}
+        problemsOnly
+        onProblemsOnlyChange={onProblemsOnlyChange}
+      />,
+    )
+    // Hint shows, but no found-count yet.
+    expect(screen.getByText(/don.t apply in .with validation problems. mode/i)).toBeDefined()
+    expect(screen.queryByText(/with validation problems\./i)).toBeNull()
+  })
+})

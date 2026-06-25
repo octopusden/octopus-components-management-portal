@@ -22,8 +22,9 @@ import { Badge, badgeVariants } from './ui/badge'
 import { Button } from './ui/button'
 import { EmptyState } from './ui/empty-state'
 import { SkeletonTable } from './ui/skeleton-table'
+import { ValidationBadge } from './ValidationBadge'
 import { cn, safeHttpUrl } from '../lib/utils'
-import type { ComponentSummary, PortalLinks } from '../lib/types'
+import type { ComponentSummary, ComponentValidation, PortalLinks } from '../lib/types'
 import { usePortalLinks } from '../hooks/useInfo'
 
 declare module '@tanstack/react-table' {
@@ -31,6 +32,12 @@ declare module '@tanstack/react-table' {
   interface TableMeta<TData> {
     links?: PortalLinks | null
     onCopy?: (id: string) => void
+    // Validation overlay: componentKey -> ComponentValidation. When provided
+    // (admin only), the Name cell renders a red AlertTriangle before the name
+    // for any component that has a validation issue; each row looks up its own
+    // entry by component key (ComponentSummary.name). Absent (non-admin / empty
+    // report) → no indicator anywhere.
+    validationByComponent?: Map<string, ComponentValidation>
   }
 }
 
@@ -43,6 +50,13 @@ interface ComponentTableProps {
    * rendered at all, so permission gating stays at the page level.
    */
   onCopy?: (id: string) => void
+  /**
+   * Validation overlay: componentKey -> ComponentValidation. When provided
+   * (admin only), each row with an issue shows a red AlertTriangle before its
+   * name (click → full-list dialog). When omitted (non-admin / the report
+   * failed to load) no indicator is rendered at all.
+   */
+  validationByComponent?: Map<string, ComponentValidation>
 }
 
 const columnHelper = createColumnHelper<ComponentSummary>()
@@ -149,21 +163,31 @@ const columns = [
         )}
       </button>
     ),
-    cell: ({ row }) => (
-      <div className="flex flex-col">
-        <Link
-          to={`/components/${row.original.id}`}
-          className="font-medium text-primary hover:underline"
-        >
-          {row.original.name}
-        </Link>
-        {/* displayName is nullable (null when no componentDisplayName); show the secondary
-            line only when present AND distinct from the name (not a redundant echo). */}
-        {row.original.displayName && row.original.displayName !== row.original.name && (
-          <span className="text-xs text-muted-foreground">{row.original.displayName}</span>
-        )}
-      </div>
-    ),
+    cell: ({ row, table }) => {
+      // Validation overlay (admin only): look the row up by component key
+      // (ComponentSummary.name — the established CRS validation key). When the
+      // map is absent (non-admin / empty report) or the component is clean,
+      // ValidationBadge renders null, so nothing extra appears before the name.
+      const validation = table.options.meta?.validationByComponent?.get(row.original.name)
+      return (
+        <div className="flex items-start gap-1.5">
+          <ValidationBadge validation={validation} />
+          <div className="flex flex-col">
+            <Link
+              to={`/components/${row.original.id}`}
+              className="font-medium text-primary hover:underline"
+            >
+              {row.original.name}
+            </Link>
+            {/* displayName is nullable (null when no componentDisplayName); show the secondary
+                line only when present AND distinct from the name (not a redundant echo). */}
+            {row.original.displayName && row.original.displayName !== row.original.name && (
+              <span className="text-xs text-muted-foreground">{row.original.displayName}</span>
+            )}
+          </div>
+        </div>
+      )
+    },
     enableSorting: true,
   }),
   columnHelper.accessor('componentOwner', {
@@ -317,14 +341,20 @@ const actionsColumn = columnHelper.display({
   enableSorting: false,
 })
 
-export function ComponentTable({ data, isLoading, onCopy }: ComponentTableProps) {
+export function ComponentTable({
+  data,
+  isLoading,
+  onCopy,
+  validationByComponent,
+}: ComponentTableProps) {
   const [sorting, setSorting] = useState<SortingState>([])
   const { data: portalLinks } = usePortalLinks()
 
-  const visibleColumns = useMemo(
-    () => (onCopy ? [...columns, actionsColumn] : columns),
-    [onCopy],
-  )
+  const visibleColumns = useMemo(() => {
+    const cols = [...columns]
+    if (onCopy) cols.push(actionsColumn)
+    return cols
+  }, [onCopy])
 
   const table = useReactTable({
     data,
@@ -334,7 +364,7 @@ export function ComponentTable({ data, isLoading, onCopy }: ComponentTableProps)
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     manualSorting: false,
-    meta: { links: portalLinks, onCopy },
+    meta: { links: portalLinks, onCopy, validationByComponent },
   })
 
   if (isLoading) {

@@ -6,6 +6,7 @@ import { FilterBar } from './ui/filter-bar'
 import { Switch } from './ui/switch'
 import { Label } from './ui/label'
 import type { ComponentFilter } from '../lib/types'
+import { cn } from '../lib/utils'
 import { useOwners } from '../hooks/useOwners'
 import { useLabels } from '../hooks/useLabels'
 import { useClientCodes } from '../hooks/useClientCodes'
@@ -25,6 +26,23 @@ import { MultiSelectFilter } from './ui/MultiSelectFilter'
 interface ComponentFiltersProps {
   filter: ComponentFilter
   onFilterChange: (filter: ComponentFilter) => void
+  /**
+   * "Only with problems" mode (Validation Problems facility). This is NOT a CRS
+   * query param — problems are computed in Portal — so it is tracked separately
+   * from `ComponentFilter` and lifted to the page, which swaps the displayed
+   * list to the validation report's problem-bearing set when on. Optional so
+   * existing callers/tests need not supply it; the toggle is hidden when the
+   * handler is absent.
+   */
+  problemsOnly?: boolean
+  onProblemsOnlyChange?: (value: boolean) => void
+  /**
+   * Number of components with validation problems, shown beside the
+   * problems-only hint (mirrors how a normal search shows its result count).
+   * `undefined` while the report is still loading — the hint then renders
+   * without a count.
+   */
+  problemsCount?: number
 }
 
 // Debounced free-text filter. Mirrors the main search box's 300ms debounce so
@@ -99,7 +117,13 @@ function TriStateFilter({
   )
 }
 
-export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersProps) {
+export function ComponentFilters({
+  filter,
+  onFilterChange,
+  problemsOnly = false,
+  onProblemsOnlyChange,
+  problemsCount,
+}: ComponentFiltersProps) {
   const [searchValue, setSearchValue] = useState(filter.search ?? '')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Extended-search mode (item 5): a toggle that reveals the Extended-placed
@@ -543,51 +567,110 @@ export function ComponentFilters({ filter, onFilterChange }: ComponentFiltersPro
   const mainRow = placeable.filter((c) => c.place === 'Main')
   const rowExtended = placeable.filter((c) => c.place === 'Extended')
 
+  // In "Only with problems" mode the displayed list is driven by the Portal
+  // validation report, not a CRS query — so the CRS filter controls have no
+  // effect. Visually disable (dim + non-interactive) the whole CRS filter group
+  // while the toggle is on, so the inert controls don't read as "active". The
+  // "Only with problems" toggle itself stays interactive (rendered outside the
+  // disabled group).
+  const crsFiltersDisabled = problemsOnly
+  const disabledGroupClass = crsFiltersDisabled ? 'opacity-50 pointer-events-none' : undefined
+
   return (
     <div className="space-y-2">
       <FilterBar>
-        <div className="relative flex-1 min-w-[200px] max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search components..."
-            value={searchValue}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-
-        {/* Every Main-placed control renders here: the classic multi-selects
-            (system / buildSystem / labels / owner), the My Components shortcut,
-            plus any admin-promoted extended field. None-placed are dropped;
-            Extended-placed move to the toggle row below. */}
-        {mainRow.map((c) => c.node)}
-
-        <Button variant="outline" size="sm" onClick={handleArchivedToggle}>
-          {archivedLabel}
-        </Button>
-
-        {rowExtended.length > 0 && (
-          <Button
-            variant={extendedOpen ? 'secondary' : 'outline'}
-            size="sm"
-            onClick={() => setExtendedOpen((o) => !o)}
-            aria-expanded={extendedOpen}
-          >
-            <SlidersHorizontal className="h-4 w-4" />
-            Extended search
-          </Button>
+        {/* "with validation problems" (Validation Problems facility, admin-mode
+            only — the page only wires the handler for admins). Driven by the
+            Portal validation report, not a CRS query param — see the page-level
+            list swap. Hidden when no handler is wired (non-admins / older
+            callers / tests). Rendered first and OUTSIDE the disabled group so it
+            stays interactive while the CRS filters are dimmed. */}
+        {onProblemsOnlyChange && (
+          <div className="flex items-center gap-2">
+            {/* Single accessible-name source: the associated <Label htmlFor>
+                (no redundant aria-label), matching the surrounding switches. */}
+            <Switch
+              id="problems-only"
+              checked={problemsOnly}
+              onCheckedChange={onProblemsOnlyChange}
+            />
+            <Label htmlFor="problems-only" className="cursor-pointer text-sm">
+              with validation problems
+            </Label>
+          </div>
         )}
 
-        {hasActiveFilters && (
-          <Button variant="ghost" size="sm" onClick={handleClearAll}>
-            Clear filters
+        {/* CRS filter controls — dimmed + inert in problems-only mode. */}
+        <div
+          data-testid="crs-filter-controls"
+          className={cn('flex flex-wrap items-center gap-2', disabledGroupClass)}
+          // Belt-and-braces alongside pointer-events-none: `inert` (React 19)
+          // removes the group from the tab order + pointer/AT interaction when
+          // disabled, and aria-disabled marks it for assistive tech.
+          aria-disabled={crsFiltersDisabled || undefined}
+          inert={crsFiltersDisabled}
+        >
+          <div className="relative flex-1 min-w-[200px] max-w-xs">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search components..."
+              value={searchValue}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+
+          {/* Every Main-placed control renders here: the classic multi-selects
+              (system / buildSystem / labels / owner), the My Components shortcut,
+              plus any admin-promoted extended field. None-placed are dropped;
+              Extended-placed move to the toggle row below. */}
+          {mainRow.map((c) => c.node)}
+
+          <Button variant="outline" size="sm" onClick={handleArchivedToggle}>
+            {archivedLabel}
           </Button>
+
+          {rowExtended.length > 0 && (
+            <Button
+              variant={extendedOpen ? 'secondary' : 'outline'}
+              size="sm"
+              onClick={() => setExtendedOpen((o) => !o)}
+              aria-expanded={extendedOpen}
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Extended search
+            </Button>
+          )}
+
+          {hasActiveFilters && (
+            <Button variant="ghost" size="sm" onClick={handleClearAll}>
+              Clear filters
+            </Button>
+          )}
+        </div>
+
+        {/* Hint that CRS filters are inert while problems-only is on. */}
+        {crsFiltersDisabled && (
+          <span className="text-xs text-muted-foreground">
+            {typeof problemsCount === 'number' && (
+              <>
+                {problemsCount} component{problemsCount === 1 ? '' : 's'} with validation problems.{' '}
+              </>
+            )}
+            Component filters don’t apply in “with validation problems” mode.
+          </span>
         )}
       </FilterBar>
 
       {extendedOpen && rowExtended.length > 0 && (
         <FilterBar>
-          {rowExtended.map((c) => c.node)}
+          <div
+            className={cn('flex flex-wrap items-center gap-2', disabledGroupClass)}
+            aria-disabled={crsFiltersDisabled || undefined}
+            inert={crsFiltersDisabled}
+          >
+            {rowExtended.map((c) => c.node)}
+          </div>
         </FilterBar>
       )}
     </div>

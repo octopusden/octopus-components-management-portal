@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React, { useEffect } from 'react'
@@ -89,6 +90,17 @@ vi.mock('../components/editor/ComponentHistoryTab', () => ({
 vi.mock('../components/editor/WhoCanEditPanel', () => ({
   WhoCanEditPanel: () => React.createElement('div', { 'data-testid': 'who-can-edit' }),
 }))
+// The Validation Problems tab is driven by the SAME cached report hook the list
+// page uses (useValidationProblems). Mock it so tests can supply a report keyed
+// by component name (HAS problems) or an empty report (clean), and assert the
+// enabled-gating contract (non-admin → hook called with enabled=false).
+vi.mock('../hooks/useValidationProblems', () => ({
+  useValidationProblems: vi.fn(),
+}))
+// The Validation Problems tab's "Copy versions" button calls copyToClipboard;
+// mock the module so the test can assert the newline-joined version list
+// without touching the real clipboard API (same pattern as AsCodeTab.test).
+vi.mock('../lib/clipboard', () => ({ copyToClipboard: vi.fn() }))
 // CreateComponentDialog (copy mode) pulls hooks from the (mocked) useComponent
 // module; stub it so the page test only asserts the open/sourceId wiring.
 vi.mock('../components/CreateComponentDialog', () => ({
@@ -103,9 +115,31 @@ import { usePortalLinks } from '../hooks/useInfo'
 import { useFieldConfigEntry } from '../hooks/useFieldConfig'
 import { GeneralTab } from '../components/editor/GeneralTab'
 import { CANNOT_EDIT_TITLE } from '../components/editor/editPermission'
+import { useAdminMode } from '../lib/adminModeStore'
+import { useValidationProblems } from '../hooks/useValidationProblems'
+import { copyToClipboard } from '../lib/clipboard'
+import type { ComponentValidation } from '@/lib/types'
 
 const mockedUsePortalLinks = vi.mocked(usePortalLinks)
 const mockedUseFieldConfigEntry = vi.mocked(useFieldConfigEntry)
+const mockedUseValidationProblems = vi.mocked(useValidationProblems)
+const mockedCopyToClipboard = vi.mocked(copyToClipboard)
+
+/** Build a useValidationProblems result with the given component validations
+ *  keyed by their `component` field — the exact map the real hook produces. */
+function validationResult(cvs: ComponentValidation[]) {
+  const byComponent = new Map<string, ComponentValidation>()
+  for (const cv of cvs) byComponent.set(cv.component, cv)
+  return {
+    byComponent,
+    generatedAt: null,
+    lastAttemptAt: null,
+    refreshError: null,
+    isLoading: false,
+    isError: false,
+    error: null,
+  } as unknown as ReturnType<typeof useValidationProblems>
+}
 
 const mockedUseCurrentUser = vi.mocked(useCurrentUser)
 const mockedUseComponent = vi.mocked(useComponent)
@@ -239,6 +273,12 @@ function renderPage(component: ComponentDetail, user: User | null, opts: RenderP
 beforeEach(() => {
   vi.clearAllMocks()
   vi.unstubAllGlobals()
+  // The Validation Problems tab is admin-mode only. Default adminMode OFF so
+  // existing tests render no tab; the dedicated describe flips it on.
+  useAdminMode.setState({ enabled: false })
+  // Default: an empty validation report → no Validation Problems tab. The
+  // dedicated describe overrides this to supply a problem-bearing report.
+  mockedUseValidationProblems.mockReturnValue(validationResult([]))
   mockedUsePortalLinks.mockReturnValue({
     data: undefined,
     isLoading: false,
@@ -1067,5 +1107,179 @@ describe('ComponentDetailPage — cross-tab 400 + displayName clear', () => {
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce())
     const payload = (mutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
     expect(payload['displayName']).toBe('')
+  })
+})
+
+describe('ComponentDetailPage — Validation Problems tab (admin gate + lookup by name)', () => {
+  // A problem-bearing validation keyed by the COMPONENT NAME (`my-component`),
+  // NOT the id (`comp-1`). The detail tab must look it up by name — the same
+  // field the list overlay matches on — so an id != name component still shows
+  // its problems (the discrepancy this rework fixes).
+  function withProblems(versions: string[]): ComponentValidation {
+    return {
+      component: 'my-component',
+      problems: [
+        {
+          type: 'UNREGISTERED_RELEASED_VERSIONS',
+          severity: 'ERROR',
+          message: `${versions.length} released version(s) not registered`,
+          details: { versions, missingCount: versions.length },
+        },
+      ],
+      checkFailed: false,
+      checkError: null,
+    } as unknown as ComponentValidation
+  }
+
+  // A check-failed validation (no problems) keyed by the component NAME. A
+  // failed check is a SYSTEM condition (we could not verify), not a problem
+  // with the component — it must NOT open a per-component Validation Problems
+  // tab. It is surfaced once at report level on the list page instead.
+  const checkFailedCv: ComponentValidation = {
+    component: 'my-component',
+    problems: [],
+    checkFailed: true,
+    checkError: 'RM returned 500',
+  }
+
+  it('renders a RED Validation Problems tab (last) for an admin when the component has problems, and shows the full versions list when selected', async () => {
+    useAdminMode.setState({ enabled: true })
+    const versions = ['v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7']
+    mockedUseValidationProblems.mockReturnValue(validationResult([withProblems(versions)]))
+    const user = makeUser(['ACCESS_COMPONENTS', 'IMPORT_DATA'])
+    renderPage(baseComponent, user)
+
+    // The hook is enabled for an admin.
+    expect(mockedUseValidationProblems).toHaveBeenCalledWith(true)
+
+    const tab = screen.getByRole('tab', { name: /validation problems/i })
+    expect(tab).toBeDefined()
+    // Red styling applied to the trigger.
+    expect(tab.className).toContain('text-destructive')
+    // Last tab in the list.
+    const tabs = within(screen.getByRole('tablist')).getAllByRole('tab')
+    expect((tabs[tabs.length - 1]!.textContent ?? '')).toMatch(/validation problems/i)
+
+    // Selecting it shows the full versions list (untruncated). Radix Tabs ignore
+    // plain fireEvent.click in jsdom (the trigger uses pointer-down/keyboard
+    // semantics); userEvent simulates the full pointerdown → click → focus chain.
+    await userEvent.setup().click(tab)
+    await waitFor(() => {
+      for (const v of versions) expect(screen.getByText(v)).toBeDefined()
+    })
+  })
+
+  it('Copy versions (in the tab) copies the newline-joined version list to the clipboard', async () => {
+    useAdminMode.setState({ enabled: true })
+    const versions = ['v1', 'v2', 'v3']
+    mockedUseValidationProblems.mockReturnValue(validationResult([withProblems(versions)]))
+    const user = makeUser(['ACCESS_COMPONENTS', 'IMPORT_DATA'])
+    renderPage(baseComponent, user)
+
+    const ue = userEvent.setup()
+    await ue.click(screen.getByRole('tab', { name: /validation problems/i }))
+    const copyBtn = await screen.findByRole('button', { name: /copy versions/i })
+    await ue.click(copyBtn)
+
+    await waitFor(() => expect(mockedCopyToClipboard).toHaveBeenCalledWith(versions.join('\n')))
+  })
+
+  it('check-failed (no problems): does NOT render a Validation Problems tab (system failure is not a per-component problem)', () => {
+    useAdminMode.setState({ enabled: true })
+    mockedUseValidationProblems.mockReturnValue(validationResult([checkFailedCv]))
+    const user = makeUser(['ACCESS_COMPONENTS', 'IMPORT_DATA'])
+    renderPage(baseComponent, user)
+
+    // No tab at all — and the raw exception text never reaches the UI.
+    expect(screen.queryByRole('tab', { name: /validation problems/i })).toBeNull()
+    expect(screen.queryByText('Check failed')).toBeNull()
+    expect(screen.queryByText('RM returned 500')).toBeNull()
+  })
+
+  it('does NOT render the tab for an admin when the component is clean (not in report)', () => {
+    useAdminMode.setState({ enabled: true })
+    // Empty report (default in beforeEach) → component absent → no tab.
+    const user = makeUser(['ACCESS_COMPONENTS', 'IMPORT_DATA'])
+    renderPage(baseComponent, user)
+    expect(screen.queryByRole('tab', { name: /validation problems/i })).toBeNull()
+  })
+
+  it('does NOT render the tab for an admin when the report entry has no issues', () => {
+    useAdminMode.setState({ enabled: true })
+    const cleanCv = {
+      component: 'my-component',
+      problems: [],
+      checkFailed: false,
+      checkError: null,
+    } as unknown as ComponentValidation
+    mockedUseValidationProblems.mockReturnValue(validationResult([cleanCv]))
+    const user = makeUser(['ACCESS_COMPONENTS', 'IMPORT_DATA'])
+    renderPage(baseComponent, user)
+    expect(screen.queryByRole('tab', { name: /validation problems/i })).toBeNull()
+  })
+
+  it('does NOT render the tab when adminMode is off (even with IMPORT_DATA), and disables the fetch', () => {
+    // adminMode defaults OFF (beforeEach). Provide a problem-bearing report to
+    // prove the gate is admin, not data.
+    mockedUseValidationProblems.mockReturnValue(validationResult([withProblems(['v1'])]))
+    const user = makeUser(['ACCESS_COMPONENTS', 'IMPORT_DATA'])
+    renderPage(baseComponent, user)
+    expect(screen.queryByRole('tab', { name: /validation problems/i })).toBeNull()
+    // Non-admin → hook gated disabled (no /portal/validation request).
+    expect(mockedUseValidationProblems).toHaveBeenCalledWith(false)
+  })
+
+  it('does NOT render the tab for a non-IMPORT_DATA user even with adminMode on, and disables the fetch', () => {
+    useAdminMode.setState({ enabled: true })
+    mockedUseValidationProblems.mockReturnValue(validationResult([withProblems(['v1'])]))
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage(baseComponent, user)
+    expect(screen.queryByRole('tab', { name: /validation problems/i })).toBeNull()
+    expect(mockedUseValidationProblems).toHaveBeenCalledWith(false)
+  })
+
+  it('falls back to the General tab (no blank panel) when the selected Validation Problems tab disappears', async () => {
+    // Regression (independent review P2): the Validation Problems tab is
+    // conditional on hasProblems. If the admin selects it and hasProblems then
+    // flips false (admin mode off / IMPORT_DATA lost / report refreshes clean),
+    // the controlled Tabs `activeTab` still points at the now-removed tab and
+    // the panel goes blank. The reset effect must move activeTab back to the
+    // always-present 'general' tab. Here we drop hasProblems by flipping
+    // adminMode off.
+    //
+    // `useAdminMode` is a Zustand store with a live subscription, so mutating it
+    // in place re-renders the already-mounted tree — no `rerender()` (which would
+    // replace the root and drop the QueryClientProvider, crashing
+    // useOptimisticConflict with "No QueryClient set").
+    useAdminMode.setState({ enabled: true })
+    mockedUseValidationProblems.mockReturnValue(validationResult([withProblems(['v1', 'v2'])]))
+    const user = makeUser(['ACCESS_COMPONENTS', 'IMPORT_DATA'])
+    renderPage(baseComponent, user)
+
+    // Select the conditional Validation Problems tab and confirm its content shows.
+    const tab = screen.getByRole('tab', { name: /validation problems/i })
+    await userEvent.setup().click(tab)
+    await waitFor(() => expect(screen.getByText('v1')).toBeDefined())
+
+    // hasProblems flips false: admin mode turned off. Mutate the store in place
+    // (wrapped in act so the subscription-driven re-render + reset effect flush).
+    act(() => {
+      useAdminMode.setState({ enabled: false })
+    })
+
+    // The tab is gone …
+    await waitFor(() =>
+      expect(screen.queryByRole('tab', { name: /validation problems/i })).toBeNull(),
+    )
+    // … and the view falls back to General content — not a blank panel. The
+    // General tab's content (the mocked GeneralTab) is visible, and the General
+    // trigger is the selected tab.
+    expect(screen.getByTestId('general-tab')).toBeDefined()
+    expect(screen.getByRole('tab', { name: 'General' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    // No stale Validation-Problems content lingering.
+    expect(screen.queryByText('v1')).toBeNull()
   })
 })

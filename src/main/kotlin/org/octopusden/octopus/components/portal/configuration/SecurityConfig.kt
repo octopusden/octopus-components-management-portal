@@ -64,7 +64,7 @@ open class SecurityConfig(
 ) {
     @Bean
     open fun securityFilterChain(http: ServerHttpSecurity): SecurityWebFilterChain {
-        val apiMatcher: ServerWebExchangeMatcher = pathMatchers("/rest/**", "/auth/**")
+        val apiMatcher: ServerWebExchangeMatcher = pathMatchers("/rest/**", "/auth/**", "/portal/validation/**")
         val apiEntryPoint =
             ServerAuthenticationEntryPoint { exchange, _ ->
                 apiJson401Writer.write(exchange, ApiJson401Reason.UNAUTHENTICATED)

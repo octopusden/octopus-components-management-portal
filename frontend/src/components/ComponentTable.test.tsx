@@ -5,7 +5,8 @@ import { MemoryRouter } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 import { ComponentTable } from './ComponentTable'
-import type { ComponentSummary, PortalLinks } from '../lib/types'
+import { TooltipProvider } from './ui/tooltip'
+import type { ComponentSummary, ComponentValidation, PortalLinks } from '../lib/types'
 
 vi.mock('../hooks/useInfo', () => ({
   usePortalLinks: vi.fn(),
@@ -414,6 +415,119 @@ describe('ComponentTable', () => {
       expect(rows[0]!.className).not.toContain('opacity-50')
       expect(rows[1]!.className).toContain('opacity-50')
     })
+  })
+})
+
+function renderTableWithValidation(
+  data: ComponentSummary[],
+  validationByComponent: Map<string, ComponentValidation>,
+) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    React.createElement(
+      QueryClientProvider,
+      { client },
+      <MemoryRouter>
+        <TooltipProvider>
+          <ComponentTable
+            data={data}
+            isLoading={false}
+            validationByComponent={validationByComponent}
+          />
+        </TooltipProvider>
+      </MemoryRouter>,
+    ),
+  )
+}
+
+function validationWithProblems(component: string): ComponentValidation {
+  return {
+    component,
+    problems: [
+      {
+        type: 'UNREGISTERED_RELEASED_VERSIONS',
+        severity: 'ERROR',
+        message: '2 released version(s) not registered in components-registry',
+        details: { versions: ['v1', 'v2'], missingCount: 2, releasedCount: 4 },
+      },
+    ],
+    checkFailed: false,
+    checkError: null,
+  }
+}
+
+function validationCheckFailed(component: string): ComponentValidation {
+  return {
+    component,
+    problems: [],
+    checkFailed: true,
+    checkError: 'RM returned 500',
+  }
+}
+
+describe('ComponentTable — inline validation triangle', () => {
+  beforeEach(() => {
+    mockLinks(null)
+  })
+
+  it('does not render a separate Validation column header', () => {
+    renderTableWithValidation([makeComponent({ name: 'alpha' })], new Map())
+    expect(screen.queryByRole('columnheader', { name: 'Validation' })).toBeNull()
+  })
+
+  it('does not render a separate Validation column header even with problems present', () => {
+    const map = new Map<string, ComponentValidation>([['alpha', validationWithProblems('alpha')]])
+    renderTableWithValidation([makeComponent({ name: 'alpha' })], map)
+    expect(screen.queryByRole('columnheader', { name: 'Validation' })).toBeNull()
+  })
+
+  it('renders a red triangle before the name for a component with problems (matched by key)', () => {
+    const map = new Map<string, ComponentValidation>([['alpha', validationWithProblems('alpha')]])
+    renderTableWithValidation([makeComponent({ name: 'alpha' })], map)
+    // The triangle trigger is a button carrying the problem-count aria-label,
+    // and it lives inside the Component Key cell, before the name link.
+    const trigger = screen.getByRole('button', { name: /2 validation problems/i })
+    expect(trigger).toBeDefined()
+    const nameCell = cellForColumn('Component Key')
+    expect(nameCell.contains(trigger)).toBe(true)
+    expect(within(nameCell).getByRole('link', { name: 'alpha' })).toBeDefined()
+  })
+
+  it('clicking the triangle opens the full-list dialog showing the versions', async () => {
+    const map = new Map<string, ComponentValidation>([['alpha', validationWithProblems('alpha')]])
+    renderTableWithValidation([makeComponent({ name: 'alpha' })], map)
+    await userEvent.click(screen.getByRole('button', { name: /2 validation problems/i }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('Validation Problems')).toBeDefined()
+    expect(within(dialog).getByText('v1')).toBeDefined()
+    expect(within(dialog).getByText('v2')).toBeDefined()
+    // The full-list copy affordance is present in the dialog.
+    expect(within(dialog).getByRole('button', { name: /copy versions/i })).toBeDefined()
+  })
+
+  it('renders NO triangle for a check-failed component (a system failure is not a per-component problem)', () => {
+    const map = new Map<string, ComponentValidation>([['alpha', validationCheckFailed('alpha')]])
+    renderTableWithValidation([makeComponent({ name: 'alpha' })], map)
+    // A failed check is an operational condition surfaced once at report level
+    // (the list-page system banner), never as a per-row triangle — so a
+    // transient backend outage cannot light up every row in the table.
+    expect(screen.queryByRole('button', { name: /validation check failed/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /validation problem/i })).toBeNull()
+    // The name link still renders normally.
+    expect(within(cellForColumn('Component Key')).getByRole('link', { name: 'alpha' })).toBeDefined()
+  })
+
+  it('renders no triangle for a clean / unmatched component', () => {
+    renderTableWithValidation([makeComponent({ name: 'clean-one' })], new Map())
+    expect(screen.queryByRole('button', { name: /validation problem/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /validation check failed/i })).toBeNull()
+  })
+
+  it('renders no triangle for a non-admin (validation map not passed at all)', () => {
+    // renderTable() omits validationByComponent entirely — the non-admin path.
+    renderTable([makeComponent({ name: 'alpha' })])
+    expect(screen.queryByRole('button', { name: /validation problem/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /validation check failed/i })).toBeNull()
   })
 })
 
