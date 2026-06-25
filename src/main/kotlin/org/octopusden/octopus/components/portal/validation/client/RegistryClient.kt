@@ -49,6 +49,35 @@ class RegistryClient(
             .timeout(requestTimeout)
 
     /**
+     * GET /rest/api/4/migration-status → true iff CRS reports a migration / resync
+     * job RUNNING. The validation sweep reads this and skips while it is true:
+     * mid Git→DB migration the legacy v2/v3 resolver can serve not-yet-migrated
+     * archived flags, which would otherwise make the sweep flag spurious problems
+     * on already-archived components.
+     *
+     * TRANSITIONAL — paired with CRS's permitAll MigrationStatusControllerV4; both
+     * go away once the migration era ends.
+     *
+     * Degrades to false on ANY non-2xx (notably 404 from a CRS predating the probe)
+     * or transport error: an undeterminable signal must NEVER permanently wedge the
+     * sweep. A genuinely unreachable CRS instead surfaces through the sweep's own
+     * failure handling (checkFailed / refreshError).
+     */
+    fun migrationInProgress(): Mono<Boolean> =
+        webClient
+            .get()
+            .uri("/rest/api/4/migration-status")
+            .exchangeToMono { response ->
+                if (response.statusCode().is2xxSuccessful) {
+                    response.bodyToMono<MigrationStatusResponse>().map { it.running }
+                } else {
+                    response.releaseBody().thenReturn(false)
+                }
+            }
+            .timeout(requestTimeout)
+            .onErrorReturn(false)
+
+    /**
      * POST /rest/api/2/components/{component}/detailed-versions body {"versions":[…]} →
      * {"versions": {version: {…}}}. CRS omits unresolvable versions, so the KEYS of
      * the returned map are exactly the resolvable versions.
@@ -80,5 +109,16 @@ class RegistryClient(
     @JsonIgnoreProperties(ignoreUnknown = true)
     data class DetailedVersionsResponse(
         val versions: Map<String, Any?> = emptyMap(),
+    )
+
+    /**
+     * CRS migration-status probe body. Only [running] is load-bearing; [kind]
+     * (COMPONENTS / HISTORY / TC_RESYNC) is carried for diagnostics. Defaults make
+     * a partial/older body parse safely to not-running.
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    data class MigrationStatusResponse(
+        val running: Boolean = false,
+        val kind: String? = null,
     )
 }

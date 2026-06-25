@@ -4,6 +4,7 @@ import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
@@ -145,6 +146,37 @@ class RegistryClientTest {
             generateSequence(ex as Throwable) { it.cause }
                 .any { it.message?.contains("buffer", ignoreCase = true) == true }
         assertTrue(bufferLimited, "expected a buffer-limit failure, got: $ex")
+    }
+
+    @Test
+    @DisplayName("migrationInProgress is true when the anonymous probe reports running")
+    fun `migrationInProgress true when probe running`() {
+        val stub = startStub()
+        stub.createContext("/rest/api/4/migration-status") { exchange ->
+            respondJson(exchange, 200, """{"running":true,"kind":"COMPONENTS"}""")
+        }
+
+        assertTrue(client(stub).migrationInProgress().block(Duration.ofSeconds(10))!!)
+    }
+
+    @Test
+    @DisplayName("migrationInProgress is false when the probe reports not running")
+    fun `migrationInProgress false when probe idle`() {
+        val stub = startStub()
+        stub.createContext("/rest/api/4/migration-status") { exchange ->
+            respondJson(exchange, 200, """{"running":false,"kind":null}""")
+        }
+
+        assertFalse(client(stub).migrationInProgress().block(Duration.ofSeconds(10))!!)
+    }
+
+    @Test
+    @DisplayName("migrationInProgress degrades to false on 404 (older CRS without the probe)")
+    fun `migrationInProgress false on 404`() {
+        val stub = startStub()
+        // No /rest/api/4/migration-status context registered → the stub returns 404,
+        // exactly like a CRS that predates the probe. Must NOT block the sweep.
+        assertFalse(client(stub).migrationInProgress().block(Duration.ofSeconds(10))!!)
     }
 
     @Test

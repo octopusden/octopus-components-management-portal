@@ -129,6 +129,75 @@ class ValidationServiceTest {
     }
 
     @Test
+    @DisplayName("a sweep is SKIPPED while CRS migration is in progress — no component-list fetch, no error")
+    fun `sweep skipped while migration in progress`() {
+        val listCalls = AtomicInteger(0)
+        val crs = newServer()
+        // The anonymous probe reports a migration RUNNING → the sweep must not run.
+        crs.createContext("/rest/api/4/migration-status") { exchange ->
+            respondJson(exchange, 200, """{"running":true,"kind":"COMPONENTS"}""")
+        }
+        crs.createContext("/rest/api/3/components") { exchange ->
+            listCalls.incrementAndGet()
+            respondJson(exchange, 200, """[{"component":{"id":"good"},"variants":{}}]""")
+        }
+        crs.createContext("/rest/api/2/components") { exchange ->
+            respondJson(exchange, 200, """{"versions":{}}""")
+        }
+        val rm = newServer()
+        rm.createContext("/rest/api/1/builds/component") { exchange ->
+            respondJson(exchange, 200, """[]""")
+        }
+
+        val svc = service(crs, rm)
+        svc.refresh()
+
+        assertEquals(0, listCalls.get(), "the component list must NOT be fetched while CRS is migrating")
+        val report = svc.currentReport()
+        assertTrue(report.components.isEmpty(), "a skipped sweep caches no components")
+        // A migration skip is intentional, not a failure: no refreshError, generatedAt
+        // stays null (no successful sweep yet), but the attempt timestamp is bumped.
+        assertNull(report.refreshError, "a migration skip is not an error")
+        assertNull(report.generatedAt, "no successful sweep yet")
+        assertNotNull(report.lastAttemptAt, "the refresh attempt is still recorded")
+    }
+
+    @Test
+    @DisplayName("a migration skip CLEARS a refreshError left by a previous failed sweep")
+    fun `migration skip clears prior refreshError`() {
+        val migrating = java.util.concurrent.atomic.AtomicBoolean(false)
+        val crs = newServer()
+        crs.createContext("/rest/api/4/migration-status") { exchange ->
+            val body = if (migrating.get()) """{"running":true,"kind":"COMPONENTS"}""" else """{"running":false}"""
+            respondJson(exchange, 200, body)
+        }
+        // The component-list fetch 500s → a non-migrating sweep fails and sets refreshError.
+        crs.createContext("/rest/api/3/components") { exchange ->
+            respondJson(exchange, 500, """{"error":"list-down"}""")
+        }
+        crs.createContext("/rest/api/2/components") { exchange ->
+            respondJson(exchange, 200, """{"versions":{}}""")
+        }
+        val rm = newServer()
+        rm.createContext("/rest/api/1/builds/component") { exchange ->
+            respondJson(exchange, 200, """[]""")
+        }
+
+        val svc = service(crs, rm)
+        // Phase 1: not migrating → the sweep runs, the list fetch fails → refreshError set.
+        svc.refresh()
+        assertNotNull(svc.currentReport().refreshError, "precondition: a failed sweep must set refreshError")
+
+        // Phase 2: CRS now reports migrating → the clean skip must CLEAR the stale refreshError
+        // so the stale-report banner / health-DOWN left by the prior failure does not persist.
+        migrating.set(true)
+        svc.refresh()
+
+        assertNull(svc.currentReport().refreshError, "a migration skip clears the prior failure's refreshError")
+        assertNotNull(svc.currentReport().lastAttemptAt)
+    }
+
+    @Test
     @DisplayName("P1: a per-component client error yields checkFailed=true (NOT empty/clean)")
     fun `per component error surfaces as checkFailed`() {
         val crs = newServer()
