@@ -724,6 +724,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/rest/api/4/health/statistics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["statistics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rest/api/4/info": {
         parameters: {
             query?: never;
@@ -969,6 +985,8 @@ export interface components {
             labels: string[];
             name: string;
             productType?: string;
+            releaseManagers: string[];
+            securityChampions: string[];
             system?: string;
             teamcityProjectId?: string;
             teamcityProjectUrl?: string;
@@ -1110,6 +1128,21 @@ export interface components {
             defaults: {
                 [key: string]: Record<string, never>;
             };
+        };
+        HealthStatisticsResponse: {
+            /** Format: int64 */
+            activeComponents: number;
+            componentsByOwner: {
+                [key: string]: number;
+            };
+            componentsByReleaseManager: {
+                [key: string]: number;
+            };
+            componentsBySecurityChampion: {
+                [key: string]: number;
+            };
+            /** Format: int64 */
+            totalComponents: number;
         };
         HistoryImportResult: {
             /** Format: int32 */
@@ -3125,6 +3158,8 @@ export interface operations {
                 archived?: boolean;
                 search?: string;
                 owner?: string[];
+                releaseManager?: string[];
+                securityChampion?: string[];
                 buildSystem?: string[];
                 labels?: string[];
                 canBeParent?: boolean;
@@ -5606,6 +5641,89 @@ export interface operations {
                     "*/*": {
                         [key: string]: Record<string, never>;
                     };
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Early */
+            425: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    statistics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["HealthStatisticsResponse"];
                 };
             };
             /** @description Bad Request */
