@@ -762,6 +762,7 @@ export interface components {
             /** Format: date-time */
             changedAt: string;
             changedBy?: string;
+            componentKey?: string;
             correlationId?: string;
             entityId: string;
             entityType: string;
