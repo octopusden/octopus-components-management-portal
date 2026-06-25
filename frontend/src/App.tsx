@@ -4,6 +4,7 @@ import { ComponentListPage } from './pages/ComponentListPage'
 import { ComponentDetailPage } from './pages/ComponentDetailPage'
 import { AuditLogPage } from './pages/AuditLogPage'
 import { AdminSettingsPage } from './pages/AdminSettingsPage'
+import { RegistryHealthPage } from './pages/RegistryHealthPage'
 import { RequirePermission } from './components/RequirePermission'
 import { PERMISSIONS, restoreContinuePath } from './lib/auth'
 import { Toaster } from './components/ui/toaster'
@@ -40,6 +41,14 @@ export function App() {
               element={
                 <RequirePermission permission={PERMISSIONS.ACCESS_AUDIT}>
                   <AuditLogPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/health"
+              element={
+                <RequirePermission permission={PERMISSIONS.IMPORT_DATA}>
+                  <RegistryHealthPage />
                 </RequirePermission>
               }
             />

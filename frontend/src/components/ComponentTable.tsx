@@ -24,6 +24,7 @@ import { EmptyState } from './ui/empty-state'
 import { SkeletonTable } from './ui/skeleton-table'
 import { ValidationBadge } from './ValidationBadge'
 import { cn, safeHttpUrl } from '../lib/utils'
+import { formatAbsoluteDate } from '../lib/date'
 import type { ComponentSummary, ComponentValidation, PortalLinks } from '../lib/types'
 import { usePortalLinks } from '../hooks/useInfo'
 
@@ -61,18 +62,9 @@ interface ComponentTableProps {
 
 const columnHelper = createColumnHelper<ComponentSummary>()
 
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '—'
-  try {
-    return new Date(dateStr).toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    })
-  } catch {
-    return dateStr
-  }
-}
+// Thin alias kept so the column cell below reads the same; the formatting logic
+// now lives in lib/date so RelativeTime's tooltip shares one source of truth.
+const formatDate = formatAbsoluteDate
 
 interface IconLinkProps {
   href: string
