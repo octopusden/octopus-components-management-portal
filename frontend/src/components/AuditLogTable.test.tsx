@@ -50,6 +50,38 @@ describe('AuditLogTable', () => {
     expect(screen.getByText('system')).toBeDefined()
   })
 
+  it('renders the When column as relative time with the full timestamp in the title tooltip', () => {
+    // Redesign alignment: the When column uses the shared RelativeTime
+    // primitive — a human-friendly relative label ("... ago") with the precise
+    // instant one hover away. The clock is frozen so the relative bucket is
+    // deterministic regardless of when the suite runs (without freezing, a
+    // far-future run would cross the 365-day threshold and the "ago" label
+    // would flip to an absolute date).
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-25T12:00:00Z'))
+    try {
+      render(
+        <AuditLogTable
+          data={[makeEntry({ changedAt: '2026-04-30T10:00:00Z' })]}
+          isLoading={false}
+        />,
+      )
+      const when = screen.getByText(/ago$/)
+      const title = when.getAttribute('title') ?? ''
+      // Full timestamp (date AND time-of-day) is preserved in the tooltip so
+      // same-day audit rows remain distinguishable — the RelativeTime default
+      // (date-only) would collapse them. Locale field order and TZ depend on
+      // the test environment (e.g. "Apr 30, 2026, 01:00:00 PM"), which we don't
+      // control; assert the date parts are present and a HH:MM(:SS) time is too.
+      expect(title).toMatch(/Apr/)
+      expect(title).toMatch(/30/)
+      expect(title).toMatch(/2026/)
+      expect(title).toMatch(/\d{1,2}:\d{2}/)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('expands row on click and shows AuditDiffViewer', async () => {
     render(<AuditLogTable data={[makeEntry()]} isLoading={false} />)
     expect(screen.queryByTestId('audit-diff-viewer')).toBeNull()

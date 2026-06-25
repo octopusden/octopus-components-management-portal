@@ -51,4 +51,14 @@ describe('RelativeTime', () => {
     const span = screen.getByText('—')
     expect(span).toHaveAttribute('title', '—')
   })
+
+  it('uses an explicit title override for the tooltip when provided', () => {
+    freezeNow('2026-06-25T12:00:00Z')
+    // Callers that need finer precision than the default date-only tooltip
+    // (e.g. the audit log, whose entries can repeat within a day) pass the
+    // full timestamp via `title` while keeping the relative-time label.
+    render(<RelativeTime ts="2026-06-22T12:00:00Z" title="22 Jun 2026, 12:00:00" />)
+    const span = screen.getByText('3 days ago')
+    expect(span).toHaveAttribute('title', '22 Jun 2026, 12:00:00')
+  })
 })
