@@ -52,20 +52,33 @@ function formatDate(dateStr: string): string {
 }
 
 /**
- * The audit `entityId` is the component's UUID, not a human-readable key. The
- * component key (CRS calls it `name`) rides along in the value snapshot, so we
- * surface that as the visible label and keep the UUID only for routing.
+ * The audit `entityId` is the component's UUID, not a human-readable key, so
+ * we resolve a display key and keep the UUID only for routing.
  *
- * Order matters: prefer `newValue.name` (current key, and the post-rename name
- * on RENAME rows) and fall back to `oldValue.name` for DELETE rows where the
- * new snapshot is null. Returns null when neither carries a usable name (e.g.
- * pre-schema-v2 partial snapshots) so the caller can fall back to the UUID.
+ * Resolution order, most to least authoritative:
+ *  1. `entry.componentKey` — server-resolved (CRS AuditLogResponse). The only
+ *     source that covers field-override rows (whose snapshot carries no key at
+ *     all) and is correct for deleted components.
+ *  2. value-snapshot `name` — component CREATE/UPDATE/DELETE/RENAME snapshots.
+ *     `newValue` first (current key, and the post-rename name), then `oldValue`
+ *     for DELETE rows where the new snapshot is null.
+ *  3. value-snapshot `moduleName` — git-history (MIGRATED) snapshots key the
+ *     component under `moduleName`, not `name`.
+ *
+ * Returns null when nothing usable is present so the caller can fall back to
+ * the UUID. Fallbacks 2–3 keep older rows / a pre-field CRS readable.
  */
 function componentKey(entry: AuditLogEntry): string | null {
-  const fromNew = entry.newValue?.name
-  if (typeof fromNew === 'string' && fromNew) return fromNew
-  const fromOld = entry.oldValue?.name
-  if (typeof fromOld === 'string' && fromOld) return fromOld
+  const candidates = [
+    entry.componentKey,
+    entry.newValue?.name,
+    entry.oldValue?.name,
+    entry.newValue?.moduleName,
+    entry.oldValue?.moduleName,
+  ]
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate) return candidate
+  }
   return null
 }
 

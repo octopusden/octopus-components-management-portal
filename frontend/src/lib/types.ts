@@ -474,6 +474,13 @@ export interface AuditLogEntry {
   id: number
   entityType: string
   entityId: string
+  // Server-resolved, human-readable component key (CRS AuditLogResponse.
+  // componentKey). Authoritative because field-override and git-history
+  // (MIGRATED) snapshots don't carry the key under a uniform field — the
+  // former carries none, the latter uses `moduleName`. Optional so the portal
+  // tolerates older payloads / a CRS deployed before this field lands; the
+  // table falls back to the value-snapshot name and finally the entityId UUID.
+  componentKey?: string | null
   action: string
   changedBy: string | null
   changedAt: string
