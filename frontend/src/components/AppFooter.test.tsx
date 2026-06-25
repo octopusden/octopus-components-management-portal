@@ -2,9 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
+import userEvent from '@testing-library/user-event'
 import { AppFooter } from './AppFooter'
 import type { User } from '@/lib/auth'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
+import { useUiOverlay } from '@/lib/uiOverlayStore'
 
 // AppFooter has two responsibilities:
 //   1. render the build labels — but degrade gracefully when one or both
@@ -53,6 +55,7 @@ function renderFooter() {
 beforeEach(() => {
   localStorage.clear()
   vi.clearAllMocks()
+  useUiOverlay.setState({ paletteOpen: false, shortcutsOpen: false })
 })
 
 afterEach(() => {
@@ -108,6 +111,18 @@ describe('AppFooter — version line', () => {
     await waitFor(() => {
       expect(screen.getByText(/Components Registry by F1 team/i).textContent).not.toMatch(/[()]/)
     })
+  })
+})
+
+describe('AppFooter — keyboard shortcuts link', () => {
+  it('opens the shortcuts panel via the store when the link is clicked', async () => {
+    const user = userEvent.setup()
+    mockUser(viewerUser)
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response('{}', { status: 200 }))))
+
+    renderFooter()
+    await user.click(screen.getByRole('button', { name: /keyboard shortcuts/i }))
+    expect(useUiOverlay.getState().shortcutsOpen).toBe(true)
   })
 })
 

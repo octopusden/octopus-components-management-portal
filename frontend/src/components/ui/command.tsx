@@ -2,7 +2,7 @@ import * as React from 'react'
 import { Command as CommandPrimitive } from 'cmdk'
 import { Search } from 'lucide-react'
 import { cn } from '../../lib/utils'
-import { Dialog, DialogContent } from './dialog'
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from './dialog'
 
 const Command = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive>,
@@ -19,10 +19,41 @@ const Command = React.forwardRef<
 ))
 Command.displayName = CommandPrimitive.displayName
 
-const CommandDialog = ({ children, ...props }: React.ComponentProps<typeof Dialog>) => (
-  <Dialog {...props}>
+// Dialog open/close is owned by the Radix Dialog; any remaining props (e.g.
+// cmdk's `shouldFilter` / `filter` / `value`) are forwarded to the inner
+// Command so callers can disable cmdk's built-in filtering for server-side
+// search.
+type CommandDialogProps = Pick<
+  React.ComponentProps<typeof Dialog>,
+  'open' | 'onOpenChange' | 'defaultOpen' | 'modal'
+> &
+  React.ComponentPropsWithoutRef<typeof Command> & {
+    /** Accessible (visually-hidden) dialog label/description for screen readers. */
+    title?: string
+    description?: string
+  }
+
+const CommandDialog = ({
+  open,
+  onOpenChange,
+  defaultOpen,
+  modal,
+  title = 'Command palette',
+  description = 'Search and run commands',
+  children,
+  ...commandProps
+}: CommandDialogProps) => (
+  <Dialog open={open} onOpenChange={onOpenChange} defaultOpen={defaultOpen} modal={modal}>
     <DialogContent className="overflow-hidden p-0 shadow-lg">
-      <Command className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5">
+      {/* Radix requires a labelled Dialog for screen readers; the palette's own
+          input placeholder is the visible affordance, so the title/description
+          are visually hidden but present in the a11y tree. */}
+      <DialogTitle className="sr-only">{title}</DialogTitle>
+      <DialogDescription className="sr-only">{description}</DialogDescription>
+      <Command
+        className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5"
+        {...commandProps}
+      >
         {children}
       </Command>
     </DialogContent>

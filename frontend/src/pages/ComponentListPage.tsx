@@ -7,6 +7,7 @@ import { ActiveFilterChips } from '../components/ActiveFilterChips'
 import { Pagination } from '../components/Pagination'
 import { CreateComponentButton } from '../components/CreateComponentDialog'
 import { CreateComponentDialog } from '../components/CreateComponentDialog'
+import { SearchCommandButton } from '../components/SearchCommandButton'
 import { InlineError } from '../components/ui/inline-error'
 import { StatusBanner } from '../components/ui/status-banner'
 import { useComponents } from '../hooks/useComponents'
@@ -201,7 +202,10 @@ export function ComponentListPage() {
                   </span>
                 )}
           </div>
-          {canCreate && <CreateComponentButton />}
+          <div className="flex items-center gap-2">
+            <SearchCommandButton />
+            {canCreate && <CreateComponentButton />}
+          </div>
         </div>
 
         {/* Preset segmented control (spec §1.1): sugar over the filter state.

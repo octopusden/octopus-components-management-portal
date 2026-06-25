@@ -7,6 +7,10 @@ interface UseComponentsParams {
   page?: number
   size?: number
   sort?: string
+  // When false, the query is held (e.g. the command palette's component search
+  // skips the request until the user has typed something). Defaults to true so
+  // the list page is unaffected.
+  enabled?: boolean
 }
 
 // Default sort is `componentKey,asc`. The CRS v4 JPA entity's primary text
@@ -16,7 +20,7 @@ interface UseComponentsParams {
 // PropertyReferenceException inside JPA → 500. Pinning the default here
 // keeps the SPA aligned with the entity property; the v4 DTO continues to
 // expose the value under the `name` field for API consumers.
-export function useComponents({ filter, page = 0, size = 20, sort = 'componentKey,asc' }: UseComponentsParams = {}) {
+export function useComponents({ filter, page = 0, size = 20, sort = 'componentKey,asc', enabled = true }: UseComponentsParams = {}) {
   const params = new URLSearchParams()
   params.set('page', String(page))
   params.set('size', String(size))
@@ -56,5 +60,6 @@ export function useComponents({ filter, page = 0, size = 20, sort = 'componentKe
   return useQuery({
     queryKey: ['components', { filter, page, size, sort }],
     queryFn: () => api.get<Page<ComponentSummary>>(`/components?${params.toString()}`),
+    enabled,
   })
 }
