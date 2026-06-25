@@ -1,155 +1,29 @@
-import { useState, useEffect } from 'react'
-import { Save } from 'lucide-react'
 import { Label } from '../ui/label'
 import { Input } from '../ui/input'
 import { Switch } from '../ui/switch'
-import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
 import { EnumSelect } from '../ui/EnumSelect'
 import { FieldInfo } from '../ui/FieldInfo'
 import { FieldLabelText } from '../ui/FieldLabelText'
 import { FieldOverrideInline } from './FieldOverrideInline'
-import { CANNOT_EDIT_TITLE } from './editPermission'
 import type { ComponentDetail } from '../../lib/types'
-import type { ComponentUpdateRequest } from '../../hooks/useComponent'
-import type { UseMutationResult } from '@tanstack/react-query'
-import { useOptimisticConflict } from '../../hooks/useOptimisticConflict'
 import { useFieldConfigEntry } from '../../hooks/useFieldConfig'
-import { selectBaseRow } from '../../lib/api/baseRow'
+import type { EscrowSection } from './useEscrowSection'
 
 interface EscrowTabProps {
   component: ComponentDetail
-  updateMutation: UseMutationResult<ComponentDetail, Error, ComponentUpdateRequest>
-  toast: (opts: { title: string; description?: string; variant?: 'default' | 'destructive' }) => void
+  section: EscrowSection
   canEdit: boolean
 }
 
-export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowTabProps) {
-  const handleConflict = useOptimisticConflict(component.id)
-  const baseRow = selectBaseRow(component)
-  const escrow = baseRow?.escrow
-
-  // productType migrated here from GeneralTab (§7.0/2c).
-  // Semantic: product-line classifier (values configured via FieldConfig options) used for
-  // escrow-specific classification; lives on the top-level ComponentDetail but
-  // is conceptually escrow metadata.
+/** Escrow tab — presentational. State + slice live in `useEscrowSection`. */
+export function EscrowTab({ component, section, canEdit }: EscrowTabProps) {
+  const { state, set, parsedRequiredTools } = section
   const { entry: productTypeEntry } = useFieldConfigEntry('component.productType')
-  const [productType, setProductType] = useState(component.productType ?? '')
-
-  const [generation, setGeneration] = useState(escrow?.generation ?? '')
-  const [diskSpace, setDiskSpace] = useState(escrow?.diskSpace ?? '')
-  const [reusable, setReusable] = useState(escrow?.reusable ?? false)
-  const [providedDependencies, setProvidedDependencies] = useState(escrow?.providedDependencies ?? '')
-  const [additionalSources, setAdditionalSources] = useState(escrow?.additionalSources ?? '')
-  const [gradleIncludeConfigurations, setGradleIncludeConfigurations] = useState(escrow?.gradleIncludeConfigurations ?? '')
-  const [gradleExcludeConfigurations, setGradleExcludeConfigurations] = useState(escrow?.gradleExcludeConfigurations ?? '')
-  const [gradleIncludeTestConfigurations, setGradleIncludeTestConfigurations] = useState(escrow?.gradleIncludeTestConfigurations ?? false)
-
-  // Build-settings fields migrated from the Build tab (escrow/automation knobs:
-  // build tasks, system properties, deprecation, required project/tools, project
-  // version). They keep their build.* / row-level payload paths — only the UI
-  // placement moved.
-  const build = baseRow?.build
-  const [buildTasks, setBuildTasks] = useState(build?.buildTasks ?? '')
-  const [systemProperties, setSystemProperties] = useState(build?.systemProperties ?? '')
-  const [deprecated, setDeprecated] = useState(build?.deprecated ?? false)
-  const [requiredProject, setRequiredProject] = useState(build?.requiredProject ?? false)
-  const [projectVersion, setProjectVersion] = useState(build?.projectVersion ?? '')
-  const [requiredToolsInput, setRequiredToolsInput] = useState((baseRow?.requiredTools ?? []).join(', '))
-
-  useEffect(() => {
-    const br = selectBaseRow(component)
-    const e = br?.escrow
-    setProductType(component.productType ?? '')
-    setGeneration(e?.generation ?? '')
-    setDiskSpace(e?.diskSpace ?? '')
-    setReusable(e?.reusable ?? false)
-    setProvidedDependencies(e?.providedDependencies ?? '')
-    setAdditionalSources(e?.additionalSources ?? '')
-    setGradleIncludeConfigurations(e?.gradleIncludeConfigurations ?? '')
-    setGradleExcludeConfigurations(e?.gradleExcludeConfigurations ?? '')
-    setGradleIncludeTestConfigurations(e?.gradleIncludeTestConfigurations ?? false)
-    const b = br?.build
-    setBuildTasks(b?.buildTasks ?? '')
-    setSystemProperties(b?.systemProperties ?? '')
-    setDeprecated(b?.deprecated ?? false)
-    setRequiredProject(b?.requiredProject ?? false)
-    setProjectVersion(b?.projectVersion ?? '')
-    setRequiredToolsInput((br?.requiredTools ?? []).join(', '))
-  }, [component])
-
-  async function handleSave() {
-    if (!canEdit) return // Save is disabled when !canEdit; guard the handler too (backend also 403s).
-    try {
-      const requiredToolsArray = [...new Set(
-        requiredToolsInput.split(',').map((t) => t.trim()).filter(Boolean)
-      )]
-      // Guard against wiping server-side requiredTools when no BASE row was
-      // loaded yet. The form's requiredToolsInput would be '' (parsed to []),
-      // and BaseConfigurationRequest.requiredTools = [] is an explicit clear.
-      // Sending null = "don't touch" preserves whatever the server has.
-      const baseRowPresent = selectBaseRow(component) !== undefined
-      const requiredToolsPayload = baseRowPresent ? requiredToolsArray : null
-
-      await updateMutation.mutateAsync({
-        version: component.version,
-        clearGroup: false,
-        // productType: hidden → don't include (undefined = no change);
-        // editable/readonly → send only when a value is present.
-        ...(productTypeEntry.visibility !== 'hidden' && productType
-          ? { productType }
-          : {}),
-        baseConfiguration: {
-          escrow: {
-            providedDependencies: providedDependencies || null,
-            reusable,
-            generation: generation || null,
-            diskSpace: diskSpace || null,
-            additionalSources: additionalSources || null,
-            gradleIncludeConfigurations: gradleIncludeConfigurations || null,
-            gradleExcludeConfigurations: gradleExcludeConfigurations || null,
-            gradleIncludeTestConfigurations,
-          },
-          // Migrated build settings. Only the fields THIS tab renders are sent —
-          // CRS PATCH applies per-field (?.let), so omitted scalars (buildSystem,
-          // versions, ...) stay untouched and the Build tab remains their only
-          // writer. Same no-BASE-row guard as requiredTools: with nothing loaded
-          // the booleans are bare defaults and would write zero-values into the
-          // row the server auto-creates.
-          ...(baseRowPresent
-            ? {
-                build: {
-                  buildTasks: buildTasks || null,
-                  systemProperties: systemProperties || null,
-                  deprecated,
-                  requiredProject,
-                  projectVersion: projectVersion || null,
-                },
-              }
-            : {}),
-          // requiredTools lives at the BaseConfigurationRequest level, not inside build
-          requiredTools: requiredToolsPayload,
-        },
-      })
-      toast({ title: 'Escrow configuration saved' })
-    } catch (err) {
-      const conflict = await handleConflict(err)
-      if (conflict) {
-        toast({ ...conflict, variant: 'destructive' })
-        return
-      }
-      toast({ title: 'Save failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' })
-    }
-  }
-
-  const parsedRequiredTools = [...new Set(
-    requiredToolsInput.split(',').map((t) => t.trim()).filter(Boolean)
-  )]
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {/* Product Type — migrated from GeneralTab (§7.0/2c); visibility-gated */}
         {productTypeEntry.visibility !== 'hidden' && (
           <div className="space-y-1.5">
             <div className="flex items-center gap-1">
@@ -158,8 +32,8 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
             </div>
             <EnumSelect
               fieldPath="component.productType"
-              value={productType}
-              onValueChange={setProductType}
+              value={state.productType}
+              onValueChange={(v) => set('productType', v)}
               placeholder="Select product type"
               disabled={productTypeEntry.visibility === 'readonly'}
             />
@@ -171,12 +45,7 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
             <Label><FieldLabelText path="escrow.generation" fallback="Generation" /></Label>
             <FieldInfo path="escrow.generation" label="Generation" />
           </div>
-          <EnumSelect
-            fieldPath="generation"
-            value={generation}
-            onValueChange={setGeneration}
-            placeholder="Select generation"
-          />
+          <EnumSelect fieldPath="generation" value={state.generation} onValueChange={(v) => set('generation', v)} placeholder="Select generation" />
           <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="escrow.generation" />
         </div>
 
@@ -185,22 +54,14 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
             <Label><FieldLabelText path="escrow.diskSpace" fallback="Disk Space" /></Label>
             <FieldInfo path="escrow.diskSpace" label="Disk Space" />
           </div>
-          <Input
-            value={diskSpace}
-            onChange={(e) => setDiskSpace(e.target.value)}
-            placeholder="e.g. 10GB"
-          />
+          <Input value={state.diskSpace} onChange={(e) => set('diskSpace', e.target.value)} placeholder="e.g. 10GB" />
           <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="escrow.diskSpace" />
         </div>
       </div>
 
       <div className="space-y-1.5">
         <div className="flex items-center gap-3">
-          <Switch
-            id="escrow-reusable"
-            checked={reusable}
-            onCheckedChange={setReusable}
-          />
+          <Switch id="escrow-reusable" checked={state.reusable} onCheckedChange={(v) => set('reusable', v)} />
           <Label htmlFor="escrow-reusable" className="cursor-pointer"><FieldLabelText path="escrow.reusable" fallback="Reusable" /></Label>
           <FieldInfo path="escrow.reusable" label="Reusable" />
         </div>
@@ -214,8 +75,8 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
         </div>
         <textarea
           className="w-full h-24 rounded-md border bg-background px-3 py-2 text-xs font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-y"
-          value={providedDependencies}
-          onChange={(e) => setProvidedDependencies(e.target.value)}
+          value={state.providedDependencies}
+          onChange={(e) => set('providedDependencies', e.target.value)}
           spellCheck={false}
           placeholder="Comma-separated list of provided dependencies"
         />
@@ -227,11 +88,7 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
           <Label><FieldLabelText path="escrow.additionalSources" fallback="Additional Sources" /></Label>
           <FieldInfo path="escrow.additionalSources" label="Additional Sources" />
         </div>
-        <Input
-          value={additionalSources}
-          onChange={(e) => setAdditionalSources(e.target.value)}
-          placeholder="Additional source paths"
-        />
+        <Input value={state.additionalSources} onChange={(e) => set('additionalSources', e.target.value)} placeholder="Additional source paths" />
         <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="escrow.additionalSources" />
       </div>
 
@@ -241,11 +98,7 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
             <Label><FieldLabelText path="escrow.gradleIncludeConfigurations" fallback="Gradle Include Configurations" /></Label>
             <FieldInfo path="escrow.gradleIncludeConfigurations" label="Gradle Include Configurations" />
           </div>
-          <Input
-            value={gradleIncludeConfigurations}
-            onChange={(e) => setGradleIncludeConfigurations(e.target.value)}
-            placeholder="e.g. compile,runtimeClasspath"
-          />
+          <Input value={state.gradleIncludeConfigurations} onChange={(e) => set('gradleIncludeConfigurations', e.target.value)} placeholder="e.g. compile,runtimeClasspath" />
           <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="escrow.gradleIncludeConfigurations" />
         </div>
 
@@ -254,42 +107,27 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
             <Label><FieldLabelText path="escrow.gradleExcludeConfigurations" fallback="Gradle Exclude Configurations" /></Label>
             <FieldInfo path="escrow.gradleExcludeConfigurations" label="Gradle Exclude Configurations" />
           </div>
-          <Input
-            value={gradleExcludeConfigurations}
-            onChange={(e) => setGradleExcludeConfigurations(e.target.value)}
-            placeholder="e.g. testCompile,testRuntime"
-          />
+          <Input value={state.gradleExcludeConfigurations} onChange={(e) => set('gradleExcludeConfigurations', e.target.value)} placeholder="e.g. testCompile,testRuntime" />
           <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="escrow.gradleExcludeConfigurations" />
         </div>
       </div>
 
       <div className="space-y-1.5">
         <div className="flex items-center gap-3">
-          <Switch
-            id="escrow-gradle-include-test"
-            checked={gradleIncludeTestConfigurations}
-            onCheckedChange={setGradleIncludeTestConfigurations}
-          />
+          <Switch id="escrow-gradle-include-test" checked={state.gradleIncludeTestConfigurations} onCheckedChange={(v) => set('gradleIncludeTestConfigurations', v)} />
           <Label htmlFor="escrow-gradle-include-test" className="cursor-pointer"><FieldLabelText path="escrow.gradleIncludeTestConfigurations" fallback="Gradle Include Test Configurations" /></Label>
           <FieldInfo path="escrow.gradleIncludeTestConfigurations" label="Gradle Include Test Configurations" />
         </div>
         <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="escrow.gradleIncludeTestConfigurations" />
       </div>
 
-      {/* ── Build settings migrated from the Build tab ──────────────────────
-          Escrow/automation knobs that live on the build aspect (build.* paths
-          unchanged): build tasks, system properties, project version,
-          deprecation, required project/tools. */}
+      {/* ── Build settings migrated from the Build tab (build.* paths unchanged) ── */}
       <div className="space-y-1.5">
         <div className="flex items-center gap-1">
           <Label><FieldLabelText path="build.buildTasks" fallback="Build Tasks" /></Label>
           <FieldInfo path="build.buildTasks" label="Build Tasks" />
         </div>
-        <Input
-          value={buildTasks}
-          onChange={(e) => setBuildTasks(e.target.value)}
-          placeholder="clean install / assemble"
-        />
+        <Input value={state.buildTasks} onChange={(e) => set('buildTasks', e.target.value)} placeholder="clean install / assemble" />
         <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.buildTasks" />
       </div>
 
@@ -300,8 +138,8 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
         </div>
         <textarea
           className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-y min-h-[80px]"
-          value={systemProperties}
-          onChange={(e) => setSystemProperties(e.target.value)}
+          value={state.systemProperties}
+          onChange={(e) => set('systemProperties', e.target.value)}
           placeholder="-Dproperty=value"
           spellCheck={false}
         />
@@ -313,21 +151,13 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
           <Label><FieldLabelText path="build.projectVersion" fallback="Project Version" /></Label>
           <FieldInfo path="build.projectVersion" label="Project Version" />
         </div>
-        <Input
-          value={projectVersion}
-          onChange={(e) => setProjectVersion(e.target.value)}
-          placeholder="1.0.0"
-        />
+        <Input value={state.projectVersion} onChange={(e) => set('projectVersion', e.target.value)} placeholder="1.0.0" />
         <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.projectVersion" />
       </div>
 
       <div className="space-y-1.5">
         <div className="flex items-center gap-3">
-          <Switch
-            id="build-deprecated"
-            checked={deprecated}
-            onCheckedChange={setDeprecated}
-          />
+          <Switch id="build-deprecated" checked={state.deprecated} onCheckedChange={(v) => set('deprecated', v)} />
           <Label htmlFor="build-deprecated" className="cursor-pointer"><FieldLabelText path="build.deprecated" fallback="Deprecated" /></Label>
           <FieldInfo path="build.deprecated" label="Deprecated" />
         </div>
@@ -336,11 +166,7 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
 
       <div className="space-y-1.5">
         <div className="flex items-center gap-3">
-          <Switch
-            id="build-required-project"
-            checked={requiredProject}
-            onCheckedChange={setRequiredProject}
-          />
+          <Switch id="build-required-project" checked={state.requiredProject} onCheckedChange={(v) => set('requiredProject', v)} />
           <Label htmlFor="build-required-project" className="cursor-pointer"><FieldLabelText path="build.requiredProject" fallback="Required Project" /></Label>
           <FieldInfo path="build.requiredProject" label="Required Project" />
         </div>
@@ -352,11 +178,7 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
           <Label><FieldLabelText path="build.requiredTools" fallback="Required Tools" /></Label>
           <FieldInfo path="build.requiredTools" label="Required Tools" />
         </div>
-        <Input
-          value={requiredToolsInput}
-          onChange={(e) => setRequiredToolsInput(e.target.value)}
-          placeholder="tool-a, tool-b"
-        />
+        <Input value={state.requiredToolsInput} onChange={(e) => set('requiredToolsInput', e.target.value)} placeholder="tool-a, tool-b" />
         {parsedRequiredTools.length > 0 && (
           <div className="flex flex-wrap gap-2 pt-1">
             {parsedRequiredTools.map((tool) => (
@@ -366,27 +188,13 @@ export function EscrowTab({ component, updateMutation, toast, canEdit }: EscrowT
         )}
       </div>
 
-      {/* Build Task is registered in CRS SCALAR_ATTRIBUTE_PATHS and overridable
-          per-version, but the generated v4 EscrowAspectRequest does not yet
-          expose it — no BASE input here until the CRS contract is widened.
-          Inline override remains available as the entry point. */}
+      {/* Build Task — overridable per-version; no BASE input until the CRS contract widens. */}
       <div className="space-y-1.5">
         <div className="flex items-center gap-1">
           <Label><FieldLabelText path="escrow.buildTask" fallback="Build Task" /></Label>
           <FieldInfo path="escrow.buildTask" label="Build Task" />
         </div>
         <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="escrow.buildTask" />
-      </div>
-
-      <div className="flex justify-end">
-        {/* title on the wrapping span: a disabled Button has pointer-events-none, so a
-            title on it would never show on hover. */}
-        <span className="inline-flex" title={!canEdit ? CANNOT_EDIT_TITLE : undefined}>
-          <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending || !canEdit}>
-            <Save className="h-4 w-4" />
-            {updateMutation.isPending ? 'Saving...' : 'Save Escrow'}
-          </Button>
-        </span>
       </div>
     </div>
   )

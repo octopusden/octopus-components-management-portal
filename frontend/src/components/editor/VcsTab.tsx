@@ -1,117 +1,20 @@
-import { useState, useEffect } from 'react'
-import { Save, Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { Label } from '../ui/label'
 import { Input } from '../ui/input'
 import { Button } from '../ui/button'
 import { FieldInfo } from '../ui/FieldInfo'
 import { FieldLabelText } from '../ui/FieldLabelText'
 import { Separator } from '../ui/separator'
-import type { ComponentDetail, VcsEntry } from '../../lib/types'
-import type { ComponentUpdateRequest } from '../../hooks/useComponent'
-import type { UseMutationResult } from '@tanstack/react-query'
-import { useOptimisticConflict } from '../../hooks/useOptimisticConflict'
-import { selectBaseRow } from '../../lib/api/baseRow'
-import { CANNOT_EDIT_TITLE } from './editPermission'
+import type { VcsSection } from './useVcsSection'
 
 interface VcsTabProps {
-  component: ComponentDetail
-  updateMutation: UseMutationResult<ComponentDetail, Error, ComponentUpdateRequest>
-  toast: (opts: { title: string; description?: string; variant?: 'default' | 'destructive' }) => void
+  section: VcsSection
   canEdit: boolean
 }
 
-interface EntryState {
-  id?: string | null
-  name: string
-  vcsPath: string
-  repositoryType: string
-  tag: string
-  branch: string
-  hotfixBranch: string
-}
-
-function toEntryState(e: VcsEntry): EntryState {
-  return {
-    id: e.id,
-    name: e.name ?? '',
-    vcsPath: e.vcsPath ?? '',
-    repositoryType: e.repositoryType ?? '',
-    tag: e.tag ?? '',
-    branch: e.branch ?? '',
-    hotfixBranch: e.hotfixBranch ?? '',
-  }
-}
-
-export function VcsTab({ component, updateMutation, toast, canEdit }: VcsTabProps) {
-  const handleConflict = useOptimisticConflict(component.id)
-  const [externalRegistry, setExternalRegistry] = useState(component.vcsExternalRegistry ?? '')
-  const [entries, setEntries] = useState<EntryState[]>(
-    selectBaseRow(component)?.vcsEntries?.map(toEntryState) ?? [],
-  )
-
-  useEffect(() => {
-    setExternalRegistry(component.vcsExternalRegistry ?? '')
-    setEntries(selectBaseRow(component)?.vcsEntries?.map(toEntryState) ?? [])
-  }, [component])
-
-  function updateEntry(index: number, field: keyof EntryState, value: string) {
-    setEntries((prev) => prev.map((e, i) => (i === index ? { ...e, [field]: value } : e)))
-  }
-
-  function addEntry() {
-    setEntries((prev) => [
-      ...prev,
-      { name: '', vcsPath: '', repositoryType: '', tag: '', branch: '', hotfixBranch: '' },
-    ])
-  }
-
-  function removeEntry(index: number) {
-    setEntries((prev) => prev.filter((_, i) => i !== index))
-  }
-
-  async function handleSave() {
-    if (!canEdit) return // Save is disabled when !canEdit; guard the handler too (backend also 403s).
-    // Drop rows whose required `vcsPath` is still blank — the wire shape's
-    // required string would otherwise hit the server as an empty value and
-    // 400. Save is a button click (not a form submit), so HTML `required`
-    // doesn't gate; this is the equivalent guard server-side contracts assume.
-    const cleanedEntries = entries
-      .map((e) => ({
-        name: (e.name || '').trim(),
-        vcsPath: e.vcsPath.trim(),
-        branch: (e.branch || '').trim(),
-        tag: (e.tag || '').trim(),
-        hotfixBranch: (e.hotfixBranch || '').trim(),
-        repositoryType: (e.repositoryType || '').trim(),
-      }))
-      .filter((e) => e.vcsPath !== '')
-
-    try {
-      await updateMutation.mutateAsync({
-        version: component.version,
-        clearGroup: false,
-        vcsExternalRegistry: externalRegistry || null,
-        baseConfiguration: {
-          vcsEntries: cleanedEntries.map((e) => ({
-            name: e.name || null,
-            vcsPath: e.vcsPath,
-            branch: e.branch || null,
-            tag: e.tag || null,
-            hotfixBranch: e.hotfixBranch || null,
-            repositoryType: e.repositoryType || null,
-          })),
-        },
-      })
-      toast({ title: 'VCS settings saved' })
-    } catch (err) {
-      const conflict = await handleConflict(err)
-      if (conflict) {
-        toast({ ...conflict, variant: 'destructive' })
-        return
-      }
-      toast({ title: 'Save failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' })
-    }
-  }
+/** VCS tab — presentational. State + slice live in `useVcsSection` (page-owned). */
+export function VcsTab({ section, canEdit }: VcsTabProps) {
+  const { externalRegistry, setExternalRegistry, entries, updateEntry, addEntry, removeEntry } = section
 
   return (
     <div className="space-y-6">
@@ -171,7 +74,7 @@ export function VcsTab({ component, updateMutation, toast, canEdit }: VcsTabProp
                   <Label className="text-xs"><FieldLabelText path="vcs.repositoryType" fallback="Repository Type" /></Label>
                   <FieldInfo path="vcs.repositoryType" label="Repository Type" />
                 </div>
-                {/* Read-only: repository type is not user-editable (it follows the VCS host). */}
+                {/* Read-only: repository type follows the VCS host. */}
                 <Input value={entry.repositoryType} disabled readOnly className="bg-muted font-mono text-xs" placeholder="GIT" />
               </div>
               <div className="space-y-1">
@@ -204,17 +107,6 @@ export function VcsTab({ component, updateMutation, toast, canEdit }: VcsTabProp
             No VCS entries. Click "Add Entry" to create one.
           </div>
         )}
-      </div>
-
-      <div className="flex justify-end">
-        {/* title on the wrapping span: a disabled Button has pointer-events-none, so a
-            title on it would never show on hover. */}
-        <span className="inline-flex" title={!canEdit ? CANNOT_EDIT_TITLE : undefined}>
-          <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending || !canEdit}>
-            <Save className="h-4 w-4" />
-            {updateMutation.isPending ? 'Saving...' : 'Save VCS'}
-          </Button>
-        </span>
       </div>
     </div>
   )
