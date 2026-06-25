@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { FieldOverrides } from './FieldOverrides'
@@ -169,9 +169,12 @@ describe('FieldOverrides', () => {
       isLoading: false,
     })
     renderComponent()
-    expect(screen.getByText('build.javaVersion')).toBeDefined()
-    expect(screen.getByText('SCALAR_OVERRIDE')).toBeDefined()
-    expect(screen.getByText('[11,12)')).toBeDefined()
+    // The attribute now appears in both the timeline track label and the table
+    // cell; scope this assertion to the table row's contents.
+    const table = screen.getByRole('table')
+    expect(within(table).getByText('build.javaVersion')).toBeDefined()
+    expect(within(table).getByText('SCALAR_OVERRIDE')).toBeDefined()
+    expect(within(table).getByText('[11,12)')).toBeDefined()
   })
 
   it('Edit button on SCALAR_OVERRIDE row opens editor in edit mode with correct attribute', async () => {
@@ -285,7 +288,7 @@ describe('FieldOverrides — EDIT_METADATA gating', () => {
     mockUser.mockReturnValue({ data: EDITOR_USER })
     renderComponent()
     // Row data still renders (read-only audit view)...
-    expect(screen.getByText('build.javaVersion')).toBeInTheDocument()
+    expect(within(screen.getByRole('table')).getByText('build.javaVersion')).toBeInTheDocument()
     // ...but no edit surface.
     expect(screen.queryByRole('button', { name: /add override/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /edit override/i })).toBeNull()
