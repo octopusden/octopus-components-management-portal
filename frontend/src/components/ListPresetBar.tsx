@@ -1,13 +1,5 @@
 import { Button } from './ui/button'
-import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip'
 import { PRESETS, type PresetId } from '../lib/listPresets'
-
-// Phase 1b: shown on the disabled RM / SC presets. Their CRS list filters
-// (releaseManager= / securityChampion=) are not deployed in this branch and
-// ComponentSummary carries no RM/SC field — so the buttons are inert until
-// the registry ships support. Surfaced both as a hover tooltip and the native
-// `title` so the reason is discoverable without a pointer hover (and assertable).
-const DEFERRED_TOOLTIP = 'Coming soon — needs registry support'
 
 interface ListPresetBarProps {
   /** The currently-active preset, or null for a custom/ad-hoc filter. */
@@ -20,8 +12,9 @@ interface ListPresetBarProps {
 /**
  * Segmented control of list presets (spec §1.1) above the filter bar. Each
  * preset is sugar over the filter state (see lib/listPresets). The active
- * preset gets the primary fill; the two Phase 1b presets render disabled with a
- * "coming soon" tooltip and never call onSelect.
+ * preset gets the primary fill. The admin-only "With problems" preset is hidden
+ * for non-admins; the personal RM/SC presets filter on the current user's own
+ * roles and are shown to everyone.
  */
 export function ListPresetBar({ active, isAdmin, onSelect }: ListPresetBarProps) {
   return (
@@ -31,31 +24,6 @@ export function ListPresetBar({ active, isAdmin, onSelect }: ListPresetBarProps)
         if (preset.adminOnly && !isAdmin) return null
 
         const isActive = active === preset.id
-
-        // Phase 1b — deferred presets are disabled with an explanatory tooltip.
-        if (preset.deferred) {
-          return (
-            <Tooltip key={preset.id}>
-              <TooltipTrigger asChild>
-                {/* A disabled <button> swallows pointer events, so the tooltip
-                    trigger wraps it; the native title carries the same reason as
-                    a no-hover fallback. */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled
-                  aria-pressed={false}
-                  title={DEFERRED_TOOLTIP}
-                  // Phase 1b: wired to the future filter.releaseManager /
-                  // filter.securityChampion params once CRS ships them.
-                >
-                  {preset.label}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{DEFERRED_TOOLTIP}</TooltipContent>
-            </Tooltip>
-          )
-        }
 
         return (
           <Button

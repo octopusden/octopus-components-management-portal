@@ -5,8 +5,8 @@ import { TooltipProvider } from './ui/tooltip'
 import { ListPresetBar } from './ListPresetBar'
 import type { ComponentProps } from 'react'
 
-// The deferred presets use Tooltip, which needs a provider (mounted in App in
-// production, same as ValidationBadge). Wrap each render here.
+// Wrap in a TooltipProvider to match the App mount context (harmless even
+// though ListPresetBar no longer renders tooltips of its own).
 function renderBar(props: ComponentProps<typeof ListPresetBar>) {
   return render(
     <TooltipProvider delayDuration={0}>
@@ -50,23 +50,25 @@ describe('ListPresetBar', () => {
     expect(screen.getByRole('button', { name: 'All' }).getAttribute('aria-pressed')).toBe('false')
   })
 
-  it('renders the two Phase 1b presets disabled with a "coming soon" tooltip label', () => {
+  it('renders the personal RM / SC presets enabled (Phase 1b) for a non-admin', () => {
     renderBar({ active: 'all', isAdmin: false, onSelect })
     const rm = screen.getByRole('button', { name: 'I am Release Manager' }) as HTMLButtonElement
     const sc = screen.getByRole('button', {
       name: 'I am Security Champion',
     }) as HTMLButtonElement
-    expect(rm.disabled).toBe(true)
-    expect(sc.disabled).toBe(true)
-    // The deferred reason is surfaced (title attr) so the user knows why it is inert.
-    expect(rm.getAttribute('title')).toMatch(/coming soon/i)
-    expect(sc.getAttribute('title')).toMatch(/coming soon/i)
+    // No longer deferred — clickable, no "coming soon" affordance.
+    expect(rm.disabled).toBe(false)
+    expect(sc.disabled).toBe(false)
+    expect(rm.getAttribute('title')).toBeNull()
+    expect(sc.getAttribute('title')).toBeNull()
   })
 
-  it('does not fire onSelect when a disabled (deferred) preset is clicked', async () => {
+  it('fires onSelect with the RM / SC preset id when clicked (Phase 1b)', async () => {
     renderBar({ active: 'all', isAdmin: false, onSelect })
     await userEvent.click(screen.getByRole('button', { name: 'I am Release Manager' }))
-    expect(onSelect).not.toHaveBeenCalled()
+    expect(onSelect).toHaveBeenCalledWith('release-manager')
+    await userEvent.click(screen.getByRole('button', { name: 'I am Security Champion' }))
+    expect(onSelect).toHaveBeenCalledWith('security-champion')
   })
 
   it('shows no active highlight when active is null (custom filter)', () => {

@@ -53,6 +53,11 @@ export function useComponents({ filter, page = 0, size = 20, sort = 'componentKe
   if (filter?.productionBranch) params.set('productionBranch', filter.productionBranch)
   if (filter?.parentComponentName?.length) params.set('parentComponentName', filter.parentComponentName.join(','))
   if (filter?.groupKey?.length) params.set('groupKey', filter.groupKey.join(','))
+  // Phase 1b: personal RM/SC presets + Health people deep-links. Multi-value
+  // CSV, OR semantics — CRS now binds `List<String>?` for these (same wire
+  // shape as owner/system/buildSystem).
+  if (filter?.releaseManager?.length) params.set('releaseManager', filter.releaseManager.join(','))
+  if (filter?.securityChampion?.length) params.set('securityChampion', filter.securityChampion.join(','))
   // Distribution boolean filters (SYS-045); `=false` excludes NULL rows server-side.
   if (filter?.distributionExplicit !== undefined) params.set('distributionExplicit', String(filter.distributionExplicit))
   if (filter?.distributionExternal !== undefined) params.set('distributionExternal', String(filter.distributionExternal))

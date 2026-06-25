@@ -23,6 +23,11 @@ const ARRAY_KEYS = [
   'parentComponentName',
   'groupKey',
   'buildSystem',
+  // Phase 1b: the personal RM/SC presets and the Health page's people
+  // breakdowns deep-link via these CSV params (?releaseManager=…), so they
+  // round-trip through the URL like the other multi-value filters.
+  'releaseManager',
+  'securityChampion',
 ] as const satisfies readonly (keyof ComponentFilter)[]
 
 // Scalar free-text filters.

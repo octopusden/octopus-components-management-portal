@@ -22,12 +22,9 @@ describe('PRESETS catalogue', () => {
     ])
   })
 
-  it('marks release-manager and security-champion as deferred (Phase 1b)', () => {
-    expect(presetById('release-manager')!.deferred).toBe(true)
-    expect(presetById('security-champion')!.deferred).toBe(true)
-    // The two live, non-deferred presets are not flagged.
-    expect(presetById('all')!.deferred).toBeUndefined()
-    expect(presetById('mine')!.deferred).toBeUndefined()
+  it('does NOT admin-gate the personal RM / SC presets (only problems is admin-only)', () => {
+    expect(presetById('release-manager')!.adminOnly).toBeUndefined()
+    expect(presetById('security-champion')!.adminOnly).toBeUndefined()
   })
 
   it('marks problems as admin-only and the rest as not admin-only', () => {
@@ -78,12 +75,27 @@ describe('applyPreset — preset is sugar over filter state', () => {
     expect(next).toEqual<ComponentFilter>({ archived: false, owner: ['alice'] })
   })
 
-  // Phase 1b: the deferred presets carry future filter params we cannot apply
-  // yet (CRS list filters not deployed). applyPreset must not fabricate any
-  // client-side filtering for them — it just returns the default footprint.
-  it('release-manager / security-champion → default footprint (Phase 1b, no client filtering)', () => {
-    expect(applyPreset('release-manager', DEFAULT, 'alice')).toEqual<ComponentFilter>({ archived: false })
-    expect(applyPreset('security-champion', DEFAULT, 'alice')).toEqual<ComponentFilter>({ archived: false })
+  // Phase 1b: CRS now supports releaseManager= / securityChampion= list filters,
+  // so these personal presets scope to the current user's own RM/SC role.
+  it('release-manager → releaseManager == [currentUser], archived=false', () => {
+    expect(applyPreset('release-manager', DEFAULT, 'alice')).toEqual<ComponentFilter>({
+      archived: false,
+      releaseManager: ['alice'],
+    })
+  })
+
+  it('security-champion → securityChampion == [currentUser], archived=false', () => {
+    expect(applyPreset('security-champion', DEFAULT, 'alice')).toEqual<ComponentFilter>({
+      archived: false,
+      securityChampion: ['alice'],
+    })
+  })
+
+  it('release-manager / security-champion → default when there is no current user', () => {
+    // Personal presets need a username to scope; without one fall back to the
+    // default rather than emitting releaseManager: [undefined].
+    expect(applyPreset('release-manager', DEFAULT, null)).toEqual<ComponentFilter>({ archived: false })
+    expect(applyPreset('security-champion', DEFAULT, null)).toEqual<ComponentFilter>({ archived: false })
   })
 })
 

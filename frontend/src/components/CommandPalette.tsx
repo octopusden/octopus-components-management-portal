@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
-import { Package, History, Activity, Plus, Filter, ListFilter } from 'lucide-react'
+import { Package, History, Activity, Plus, ListFilter } from 'lucide-react'
 import {
   CommandDialog,
   CommandInput,
@@ -20,18 +20,16 @@ import { useAdminMode } from '@/lib/adminModeStore'
 import { presetUrl } from '@/lib/presetUrl'
 import { PRESETS, type PresetId } from '@/lib/listPresets'
 
-// Filter presets the palette can apply. Mirrors ListPresetBar: the deferred
-// (Phase 1b) RM/SC presets render disabled with a hint; "problems" is
-// admin-only. "all"/"archived" are reachable from the list itself and omitted
-// here to keep the palette focused on the common scoped views.
+// Filter presets the palette can apply. Mirrors ListPresetBar: "problems" is
+// admin-only; the personal RM/SC presets scope to the current user's own roles.
+// "all"/"archived" are reachable from the list itself and omitted here to keep
+// the palette focused on the common scoped views.
 const PALETTE_FILTER_IDS = [
   'problems',
   'mine',
   'release-manager',
   'security-champion',
 ] as const satisfies readonly PresetId[]
-
-const DEFERRED_HINT = 'Coming soon — needs registry support'
 
 export function CommandPalette() {
   const open = useUiOverlay((s) => s.paletteOpen)
@@ -135,16 +133,6 @@ export function CommandPalette() {
               // Admin-only presets (With problems) are hidden for non-admins,
               // mirroring the list's ListPresetBar.
               if (preset.adminOnly && !isAdmin) return null
-              if (preset.deferred) {
-                // Phase 1b — disabled with a "coming soon" hint, no navigation.
-                return (
-                  <CommandItem key={id} value={`filter ${preset.label}`} disabled>
-                    <Filter />
-                    {preset.label}
-                    <span className="ml-auto text-xs text-muted-foreground">{DEFERRED_HINT}</span>
-                  </CommandItem>
-                )
-              }
               return (
                 <CommandItem
                   key={id}

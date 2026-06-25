@@ -128,10 +128,10 @@ describe('CommandPalette — sections + gating', () => {
     expect(screen.queryByText('With problems')).not.toBeInTheDocument()
   })
 
-  it('renders the RM / SC presets disabled (Phase 1b)', () => {
+  it('renders the RM / SC presets enabled (Phase 1b)', () => {
     renderPalette()
     const rm = screen.getByText('I am Release Manager').closest('[cmdk-item]')
-    expect(rm).toHaveAttribute('aria-disabled', 'true')
+    expect(rm).not.toHaveAttribute('aria-disabled', 'true')
   })
 })
 
@@ -151,6 +151,16 @@ describe('CommandPalette — navigation', () => {
     const params = new URL(arg, 'http://x').searchParams
     expect(params.get('owner')).toBe('alice')
     expect(params.get('preset')).toBe('mine')
+  })
+
+  it('Filter > I am Release Manager navigates to /components?releaseManager=…&preset=release-manager (Phase 1b)', async () => {
+    const user = userEvent.setup()
+    renderPalette()
+    await user.click(screen.getByText('I am Release Manager'))
+    const arg = mockNavigate.mock.calls[0]![0] as string
+    const params = new URL(arg, 'http://x').searchParams
+    expect(params.get('releaseManager')).toBe('alice')
+    expect(params.get('preset')).toBe('release-manager')
   })
 
   it('Filter > With problems navigates with the problems preset and no filter footprint', async () => {

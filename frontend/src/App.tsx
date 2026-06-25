@@ -42,6 +42,9 @@ function AppShell() {
       <Outlet />
       <CommandPalette />
       <KeyboardShortcutsDialog />
+      {/* Inside the router tree (not a sibling of RouterProvider) so a toast
+          action containing a <Link>/navigate still has router context. */}
+      <Toaster />
     </>
   )
 }
@@ -100,7 +103,6 @@ export function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider delayDuration={200}>
         <RouterProvider router={router} />
-        <Toaster />
       </TooltipProvider>
     </QueryClientProvider>
   )

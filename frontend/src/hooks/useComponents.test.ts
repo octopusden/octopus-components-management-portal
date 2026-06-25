@@ -303,6 +303,34 @@ describe('useComponents — URL params', () => {
     expect(url).toContain('groupKey=org.a%2Corg.b')
   })
 
+  it('passes multi-value releaseManager / securityChampion as CSV (Phase 1b)', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result } = renderHook(
+      () =>
+        useComponents({
+          filter: { releaseManager: ['alice', 'bob'], securityChampion: ['carol'] },
+        }),
+      { wrapper: makeWrapper() },
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const url = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    // URLSearchParams percent-encodes the CSV comma.
+    expect(url).toContain('releaseManager=alice%2Cbob')
+    expect(url).toContain('securityChampion=carol')
+  })
+
+  it('omits releaseManager / securityChampion when the arrays are empty', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result } = renderHook(
+      () => useComponents({ filter: { releaseManager: [], securityChampion: [] } }),
+      { wrapper: makeWrapper() },
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const url = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    expect(url).not.toContain('releaseManager=')
+    expect(url).not.toContain('securityChampion=')
+  })
+
   it('passes distributionExplicit / distributionExternal booleans (SYS-045)', async () => {
     mockApi.get.mockResolvedValue(emptyPage)
     const { result } = renderHook(

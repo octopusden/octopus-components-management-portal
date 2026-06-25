@@ -17,6 +17,12 @@ describe('parseFilterParams', () => {
   })
 
   it('parses a CSV array param into a string array', () => {
+    const rmsc = parseFilterParams(
+      new URLSearchParams('releaseManager=alice&securityChampion=bob,carol'),
+    )
+    expect(rmsc.filter.releaseManager).toEqual(['alice'])
+    expect(rmsc.filter.securityChampion).toEqual(['bob', 'carol'])
+
     const state = parseFilterParams(new URLSearchParams('owner=alice,bob&labels=core,infra'))
     expect(state.filter.owner).toEqual(['alice', 'bob'])
     expect(state.filter.labels).toEqual(['core', 'infra'])
@@ -101,6 +107,8 @@ describe('round-trip', () => {
         parentComponentName: ['parent-a'],
         groupKey: ['g1'],
         buildSystem: ['MAVEN'],
+        releaseManager: ['alice'],
+        securityChampion: ['bob', 'carol'],
         search: 'foo',
         vcsPath: 'proj/repo',
         productionBranch: 'main',

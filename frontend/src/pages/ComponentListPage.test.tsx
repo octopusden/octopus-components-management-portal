@@ -214,7 +214,7 @@ function renderPage(initialEntries: string[] = ['/components']) {
     React.createElement(
       QueryClientProvider,
       { client },
-      // The real ListPresetBar uses Tooltip (deferred presets) → needs a provider.
+      // Matches the App mount context (TooltipProvider wraps the tree).
       <MemoryRouter initialEntries={initialEntries}>
         <TooltipProvider delayDuration={0}>
           <ComponentListPage />
@@ -422,16 +422,35 @@ describe('ComponentListPage — presets + active-filter chips (spec §1.1/1.2)',
     expect(screen.getByTestId('loc-search').textContent).toBe('')
   })
 
-  it('renders the two Phase 1b presets disabled (RM / SC)', () => {
-    mockUser(editorUser)
+  it('selecting "I am Release Manager" scopes releaseManager to the current user and records it in the URL (Phase 1b)', async () => {
+    mockUser(editorUser) // username: bob
     renderPage()
+    await userEvent.click(screen.getByRole('button', { name: 'I am Release Manager' }))
     expect(
-      (screen.getByRole('button', { name: 'I am Release Manager' }) as HTMLButtonElement).disabled,
-    ).toBe(true)
+      screen.getByRole('button', { name: 'I am Release Manager' }).getAttribute('aria-pressed'),
+    ).toBe('true')
+    const search = screen.getByTestId('loc-search').textContent ?? ''
+    expect(search).toContain('preset=release-manager')
+    expect(search).toContain('releaseManager=bob')
+  })
+
+  it('selecting "I am Security Champion" scopes securityChampion to the current user (Phase 1b)', async () => {
+    mockUser(editorUser) // username: bob
+    renderPage()
+    await userEvent.click(screen.getByRole('button', { name: 'I am Security Champion' }))
     expect(
-      (screen.getByRole('button', { name: 'I am Security Champion' }) as HTMLButtonElement)
-        .disabled,
-    ).toBe(true)
+      screen.getByRole('button', { name: 'I am Security Champion' }).getAttribute('aria-pressed'),
+    ).toBe('true')
+    const search = screen.getByTestId('loc-search').textContent ?? ''
+    expect(search).toContain('preset=security-champion')
+    expect(search).toContain('securityChampion=bob')
+  })
+
+  it('hydrates a Health "people" deep-link (?releaseManager=<u>) into the list filter on mount (Phase 1b)', () => {
+    mockUser(editorUser) // username: bob — but the deep-link names someone else
+    renderPage(['/components?releaseManager=carol'])
+    // The list filter is hydrated from the URL: the RM filter chip is shown.
+    expect(screen.getByText(/Release manager: carol/i)).toBeDefined()
   })
 })
 
