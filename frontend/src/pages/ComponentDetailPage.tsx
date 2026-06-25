@@ -9,7 +9,7 @@ import { Badge } from '../components/ui/badge'
 import { Separator } from '../components/ui/separator'
 import { InlineError } from '../components/ui/inline-error'
 import { SkeletonBlock } from '../components/ui/skeleton-block'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
+import { Tabs, TabsContent } from '../components/ui/tabs'
 import {
   Dialog,
   DialogContent,
@@ -31,6 +31,7 @@ import { FieldOverrides } from '../components/editor/FieldOverrides'
 import { ConfigurationsTab } from '../components/editor/ConfigurationsTab'
 import { AsCodeTab } from '../components/editor/AsCodeTab'
 import { ComponentHistoryTab } from '../components/editor/ComponentHistoryTab'
+import { EditorSidebarNav, type EditorNavSection } from '../components/editor/EditorSidebarNav'
 import { ValidationProblemsList } from '../components/ValidationProblemsList'
 import { CreateComponentDialog } from '../components/CreateComponentDialog'
 import { useComponent, useUpdateComponent, useDeleteComponent, type ComponentUpdateRequest } from '../hooks/useComponent'
@@ -656,73 +657,79 @@ export function ComponentDetailPage() {
 
         <Separator />
 
-        {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} variant="underline">
-          <TabsList className="flex-wrap gap-1">
-            <TabsTrigger value="general">General</TabsTrigger>
-            {(() => {
-              // schema-v2: counts derived from the BASE row. Build/Jira/Escrow are
-              // 0-or-1 (presence of the aspect); VCS counts vcsEntries; Distribution
-              // sums the four typed families + component-level securityGroups[].
-              const baseRow = selectBaseRow(component)
-              const vcsCount = baseRow?.vcsEntries.length ?? 0
-              const distCount =
-                (baseRow?.mavenArtifacts.length ?? 0) +
-                (baseRow?.fileUrlArtifacts.length ?? 0) +
-                (baseRow?.dockerImages.length ?? 0) +
-                (baseRow?.packages.length ?? 0)
-              const buildPresent = baseRow?.build ? 1 : 0
-              const jiraPresent = baseRow?.jira ? 1 : 0
-              const escrowPresent = baseRow?.escrow ? 1 : 0
-              const tabBadge = (n: number) =>
-                n > 0 && (
-                  <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 text-xs">
-                    {n}
-                  </span>
-                )
-              return (
-                <>
-                  <TabsTrigger value="build">Build{tabBadge(buildPresent)}</TabsTrigger>
-                  <TabsTrigger value="vcs">VCS{tabBadge(vcsCount)}</TabsTrigger>
-                  <TabsTrigger value="distribution">Distribution{tabBadge(distCount)}</TabsTrigger>
-                  <TabsTrigger value="jira">Jira{tabBadge(jiraPresent)}</TabsTrigger>
-                  <TabsTrigger value="escrow">Escrow{tabBadge(escrowPresent)}</TabsTrigger>
-                </>
-              )
-            })()}
-            <TabsTrigger value="misc">Misc</TabsTrigger>
-            <TabsTrigger value="configurations">
-              Configurations
-              {(() => {
-                const n = component.configurations?.length ?? 0
-                return n > 0 && (
-                  <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 text-xs">{n}</span>
-                )
-              })()}
-            </TabsTrigger>
-            <TabsTrigger value="as-code">As Code</TabsTrigger>
-            <TabsTrigger value="overrides">Overrides</TabsTrigger>
-            <TabsTrigger value="history">History</TabsTrigger>
-            {/* Validation Problems — conditional, last, and RED. Only present for
-                an admin AND when this component has a genuine problem in the
-                cached report. A clean component — OR one whose check merely
-                failed (a system condition, shown only on the list banner) —
-                renders neither trigger nor content (no tab at all). */}
-            {hasProblems && componentValidation && (
-              <TabsTrigger
-                value="validation-problems"
-                className="text-destructive hover:text-destructive data-[state=active]:border-destructive data-[state=active]:text-destructive"
-              >
-                <AlertTriangle className="mr-1.5 h-4 w-4 text-destructive" aria-hidden="true" />
-                Validation Problems
-                <span className="ml-1.5 rounded-full bg-destructive/15 px-1.5 text-xs text-destructive">
-                  {validationBadgeCount(componentValidation)}
-                </span>
-              </TabsTrigger>
-            )}
-          </TabsList>
+        {/* Editor — grouped left sidebar nav (spec §2.1), content in a card on
+            the right. The Tabs wrapper still owns activeTab/setActiveTab so the
+            parseServerFieldErrors auto-switch and the hasProblems reset effect
+            keep working against the SAME tab identifiers; the sidebar only
+            replaces the horizontal trigger strip. */}
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          variant="underline"
+          orientation="vertical"
+          className="flex flex-col gap-4 lg:flex-row lg:gap-6"
+        >
+          {(() => {
+            // schema-v2: counts derived from the BASE row. Build/Jira/Escrow are
+            // 0-or-1 (presence of the aspect); VCS counts vcsEntries; Distribution
+            // sums the four typed families. (Same derivation as the old tab badges.)
+            const baseRow = selectBaseRow(component)
+            const vcsCount = baseRow?.vcsEntries.length ?? 0
+            const distCount =
+              (baseRow?.mavenArtifacts.length ?? 0) +
+              (baseRow?.fileUrlArtifacts.length ?? 0) +
+              (baseRow?.dockerImages.length ?? 0) +
+              (baseRow?.packages.length ?? 0)
+            const configCount = component.configurations?.length ?? 0
+            const sections: EditorNavSection[] = [
+              { label: 'Overview', items: [{ value: 'general', label: 'General' }] },
+              {
+                label: 'Build & Release',
+                items: [
+                  { value: 'build', label: 'Build', count: baseRow?.build ? 1 : 0 },
+                  { value: 'vcs', label: 'VCS', count: vcsCount },
+                  { value: 'jira', label: 'Jira', count: baseRow?.jira ? 1 : 0 },
+                  { value: 'escrow', label: 'Escrow', count: baseRow?.escrow ? 1 : 0 },
+                ],
+              },
+              {
+                label: 'Distribution',
+                items: [{ value: 'distribution', label: 'Distribution', count: distCount }],
+              },
+              {
+                label: 'Metadata',
+                items: [
+                  { value: 'misc', label: 'Misc' },
+                  { value: 'configurations', label: 'Configurations', count: configCount },
+                ],
+              },
+              {
+                label: 'Tools',
+                items: [
+                  { value: 'as-code', label: 'As Code' },
+                  { value: 'overrides', label: 'Overrides' },
+                  { value: 'history', label: 'History' },
+                ],
+              },
+            ]
+            // Validation Problems — conditional + RED, pinned at the top. Only for
+            // an admin AND when this component has a genuine problem in the cached
+            // report. A clean component — OR one whose check merely failed (a system
+            // condition, shown only on the list banner) — yields no entry at all.
+            const problems =
+              hasProblems && componentValidation
+                ? {
+                    value: 'validation-problems',
+                    label: 'Validation Problems',
+                    count: validationBadgeCount(componentValidation),
+                  }
+                : null
+            return (
+              <EditorSidebarNav sections={sections} problems={problems} activeValue={activeTab} />
+            )
+          })()}
 
-          <div className="mt-4">
+          <div className="min-w-0 flex-1 rounded-lg border bg-card p-4 sm:p-6">
             <TabsContent value="general">
               {/* key={component.id} forces a remount when the user navigates
                   between component detail pages without unmounting the route

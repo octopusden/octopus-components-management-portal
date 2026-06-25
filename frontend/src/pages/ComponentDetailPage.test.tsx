@@ -523,25 +523,53 @@ describe('ComponentDetailPage — breadcrumb badges', () => {
   })
 })
 
-describe('ComponentDetailPage — tab order', () => {
-  it('renders Misc right after Escrow (aspect tabs first, Misc before the meta tabs)', () => {
+describe('ComponentDetailPage — sidebar nav order', () => {
+  it('renders the grouped sidebar order (Overview → Build & Release → Distribution → Metadata → Tools)', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(baseComponent, user)
     const tabs = within(screen.getByRole('tablist')).getAllByRole('tab')
     // Strip count badges ("Build1" → "Build") so the assertion only pins order.
+    // The grouping (spec §2.1) puts Jira/Escrow under Build & Release before the
+    // single-item Distribution group, then Metadata (Misc, Configurations), then
+    // Tools (As Code, Overrides, History).
     expect(tabs.map((t) => (t.textContent ?? '').replace(/\d+$/, ''))).toEqual([
       'General',
       'Build',
       'VCS',
-      'Distribution',
       'Jira',
       'Escrow',
+      'Distribution',
       'Misc',
       'Configurations',
       'As Code',
       'Overrides',
       'History',
     ])
+  })
+
+  it('renders every group heading in the sidebar', () => {
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    renderPage(baseComponent, user)
+    for (const heading of ['Overview', 'Build & Release', 'Metadata', 'Tools']) {
+      expect(screen.getByText(heading)).toBeDefined()
+    }
+    // "Distribution" is both a group heading and the lone item under it.
+    expect(screen.getAllByText('Distribution').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('shows per-section counts inside the sidebar items (VCS entries, Distribution items)', () => {
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    // baseComponent's BASE row has 1 vcsEntry and a present build/jira aspect.
+    renderPage(baseComponent, user)
+    // VCS item carries its entry count (1), Build carries the aspect-present 1.
+    expect(within(screen.getByRole('tab', { name: /^VCS/ })).getByText('1')).toBeDefined()
+    expect(within(screen.getByRole('tab', { name: /^Build/ })).getByText('1')).toBeDefined()
+  })
+
+  it('marks the active sidebar item with aria-current', () => {
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    renderPage(baseComponent, user)
+    expect(screen.getByRole('tab', { name: 'General' })).toHaveAttribute('aria-current', 'page')
   })
 })
 
@@ -1142,7 +1170,7 @@ describe('ComponentDetailPage — Validation Problems tab (admin gate + lookup b
     checkError: 'RM returned 500',
   }
 
-  it('renders a RED Validation Problems tab (last) for an admin when the component has problems, and shows the full versions list when selected', async () => {
+  it('renders a RED Validation Problems item (pinned at the top) for an admin when the component has problems, and shows the full versions list when selected', async () => {
     useAdminMode.setState({ enabled: true })
     const versions = ['v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7']
     mockedUseValidationProblems.mockReturnValue(validationResult([withProblems(versions)]))
@@ -1156,9 +1184,9 @@ describe('ComponentDetailPage — Validation Problems tab (admin gate + lookup b
     expect(tab).toBeDefined()
     // Red styling applied to the trigger.
     expect(tab.className).toContain('text-destructive')
-    // Last tab in the list.
+    // Pinned at the TOP of the sidebar (spec §2.1), i.e. the first tab.
     const tabs = within(screen.getByRole('tablist')).getAllByRole('tab')
-    expect((tabs[tabs.length - 1]!.textContent ?? '')).toMatch(/validation problems/i)
+    expect((tabs[0]!.textContent ?? '')).toMatch(/validation problems/i)
 
     // Selecting it shows the full versions list (untruncated). Radix Tabs ignore
     // plain fireEvent.click in jsdom (the trigger uses pointer-down/keyboard
