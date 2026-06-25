@@ -6,6 +6,7 @@ import { Pagination } from '../components/Pagination'
 import { CreateComponentButton } from '../components/CreateComponentDialog'
 import { CreateComponentDialog } from '../components/CreateComponentDialog'
 import { InlineError } from '../components/ui/inline-error'
+import { StatusBanner } from '../components/ui/status-banner'
 import { useComponents } from '../hooks/useComponents'
 import {
   useValidationProblems,
@@ -14,8 +15,15 @@ import {
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '@/lib/auth'
 import { useAdminMode } from '@/lib/adminModeStore'
+import { countCheckFailed } from '../lib/validation'
 import { ApiError } from '../lib/api'
 import type { ComponentFilter, ComponentSummary } from '../lib/types'
+
+// Verbatim client-facing reason the backend sets for a whole-sweep TIMEOUT (must match
+// ValidationService.SWEEP_TIMED_OUT). A timeout means the downstream is reachable but
+// slow/over-loaded, so the banner shows a "will retry" hint instead of the misleading
+// "check the URLs are reachable" hint used for genuine connectivity failures.
+const SWEEP_TIMED_OUT = 'validation sweep timed out'
 
 // Build a minimal ComponentSummary row for a component that exists only in the
 // validation report (problemsOnly mode). The validation report keys by CRS
@@ -69,10 +77,30 @@ export function ComponentListPage() {
   // pay for it.
   const problems = useComponentsWithProblems(showProblemsOnly)
 
-  // The component keys-with-problems list, rendered as minimal rows.
+  // The component keys-with-problems list, rendered as minimal rows. The
+  // backend's problems-only report also includes check-failed components (a
+  // failure must never read as clean server-side), but those are a system
+  // condition — surfaced by the banner above, not as list rows — so we keep
+  // only components that carry a genuine problem here.
   const problemRows = useMemo<ComponentSummary[]>(
-    () => Array.from(problems.byComponent.keys()).sort().map(summaryFromValidationKey),
+    () =>
+      Array.from(problems.byComponent.values())
+        .filter((cv) => cv.problems.length > 0)
+        .map((cv) => cv.component)
+        .sort()
+        .map(summaryFromValidationKey),
     [problems.byComponent],
+  )
+
+  // How many components the most recent sweep could NOT verify (a downstream
+  // service was briefly unreachable / returned an unexpected response). This is
+  // a SYSTEM condition, surfaced ONCE as a banner below — never as per-row
+  // triangles — so a transient backend blip does not make every component look
+  // broken. Counted from the full report (always fetched for admins, regardless
+  // of the problems-only toggle), so the figure is the whole registry's.
+  const checkFailedCount = useMemo(
+    () => countCheckFailed(validation.byComponent.values()),
+    [validation.byComponent],
   )
 
   const canCreate = hasPermission(user, PERMISSIONS.CREATE_COMPONENTS)
@@ -132,17 +160,50 @@ export function ComponentListPage() {
         {/* The validation report is a scheduled Portal sweep; when its most
             recent refresh failed the held data may be stale. Surface that so a
             stale report is never silently read as "all clean". Admin-only (the
-            report is only fetched for admins). */}
+            report is only fetched for admins).
+
+            Two distinct hints, because a TIMEOUT and an UNREACHABLE downstream need
+            different operator action — and a timeout must not be misread as a URL
+            misconfiguration (connectivity is fine; the sweep is just slow/over-loaded,
+            e.g. during a registry redeploy). The timeout reason string is produced
+            verbatim by the backend (ValidationService.SWEEP_TIMED_OUT). On timeout the
+            sweep also retries on a short backoff, so the report self-heals. */}
         {isAdmin && validation.refreshError && (
           <InlineError
             message={
-              <>
-                Validation report may be stale — last refresh failed: {validation.refreshError}.
-                Check that the validation service URLs (components-registry / release-management)
-                are configured and reachable over https.
-              </>
+              validation.refreshError === SWEEP_TIMED_OUT ? (
+                <>
+                  Validation report may be stale — the last refresh timed out: a validation
+                  service (components-registry / release-management) was slow or under load
+                  (for example during a registry redeploy). The sweep retries automatically
+                  shortly; no action is needed unless this persists.
+                </>
+              ) : (
+                <>
+                  Validation report may be stale — last refresh failed: {validation.refreshError}.
+                  Check that the validation service URLs (components-registry / release-management)
+                  are configured and reachable over https.
+                </>
+              )
             }
           />
+        )}
+
+        {/* System-level (not per-component) signal: when the last sweep could
+            not verify some components — a downstream service was briefly
+            unreachable / returned an unexpected response — say so ONCE here
+            instead of flagging every affected row. This is an operational
+            condition, not a problem with the components, so no raw exception
+            text is shown and the affected rows carry no red triangle. */}
+        {isAdmin && checkFailedCount > 0 && (
+          <StatusBanner variant="warning" data-testid="validation-system-failure">
+            <div className="font-semibold">Validation temporarily unavailable</div>
+            <p>
+              {checkFailedCount} component{checkFailedCount === 1 ? '' : 's'} could not be checked —
+              this is a system issue (a validation service was briefly unreachable), not a problem
+              with the components. The check runs again automatically on the next sweep.
+            </p>
+          </StatusBanner>
         )}
 
         {error && !showProblemsOnly && (

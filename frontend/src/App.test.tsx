@@ -20,8 +20,8 @@ vi.mock('./hooks/useCurrentUser', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks()
-  // Layout (environment badge) and AppFooter both query the anonymous info
-  // endpoints via plain fetch — answer those with "no data" ({} → no badge, no
+  // Layout (environment banner) and AppFooter both query the anonymous info
+  // endpoints via plain fetch — answer those with "no data" ({} → no banner, no
   // version label). Every OTHER fetch rejects, mirroring jsdom's no-network
   // behavior this suite has always relied on: components like MultiSelectFilter
   // expect array payloads and must take their isError fallback, not parse {}.

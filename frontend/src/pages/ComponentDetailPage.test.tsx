@@ -27,8 +27,8 @@ vi.mock('../components/AppFooter', () => ({
 vi.mock('../hooks/useInfo', () => ({
   usePortalLinks: vi.fn(),
   useCrsInfo: vi.fn(),
-  // Layout consumes usePortalInfo for the environment badge; return "no data"
-  // so these page tests render without a badge.
+  // Layout consumes usePortalInfo for the environment banner; return "no data"
+  // so these page tests render without a banner.
   usePortalInfo: vi.fn(() => ({ data: undefined })),
 }))
 // Field-config hook — mocked so individual tests can pin TC fields to
@@ -1131,10 +1131,10 @@ describe('ComponentDetailPage — Validation Problems tab (admin gate + lookup b
     } as unknown as ComponentValidation
   }
 
-  // A check-failed validation (no problems) keyed by the component NAME. The
-  // tab still renders (could-not-verify is not a clean pass) but there are no
-  // versions, so the "Copy versions" button must be absent. Structurally
-  // complete — no cast needed.
+  // A check-failed validation (no problems) keyed by the component NAME. A
+  // failed check is a SYSTEM condition (we could not verify), not a problem
+  // with the component — it must NOT open a per-component Validation Problems
+  // tab. It is surfaced once at report level on the list page instead.
   const checkFailedCv: ComponentValidation = {
     component: 'my-component',
     problems: [],
@@ -1184,21 +1184,16 @@ describe('ComponentDetailPage — Validation Problems tab (admin gate + lookup b
     await waitFor(() => expect(mockedCopyToClipboard).toHaveBeenCalledWith(versions.join('\n')))
   })
 
-  it('check-failed (no problems): renders the RED tab with the Check failed block but NO Copy versions button', async () => {
+  it('check-failed (no problems): does NOT render a Validation Problems tab (system failure is not a per-component problem)', () => {
     useAdminMode.setState({ enabled: true })
     mockedUseValidationProblems.mockReturnValue(validationResult([checkFailedCv]))
     const user = makeUser(['ACCESS_COMPONENTS', 'IMPORT_DATA'])
     renderPage(baseComponent, user)
 
-    const tab = screen.getByRole('tab', { name: /validation problems/i })
-    expect(tab).toBeDefined()
-    expect(tab.className).toContain('text-destructive')
-
-    await userEvent.setup().click(tab)
-    await waitFor(() => expect(screen.getByText('Check failed')).toBeDefined())
-    expect(screen.getByText('RM returned 500')).toBeDefined()
-    // No versions → no Copy versions affordance.
-    expect(screen.queryByRole('button', { name: /copy versions/i })).toBeNull()
+    // No tab at all — and the raw exception text never reaches the UI.
+    expect(screen.queryByRole('tab', { name: /validation problems/i })).toBeNull()
+    expect(screen.queryByText('Check failed')).toBeNull()
+    expect(screen.queryByText('RM returned 500')).toBeNull()
   })
 
   it('does NOT render the tab for an admin when the component is clean (not in report)', () => {

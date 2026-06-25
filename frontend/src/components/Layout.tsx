@@ -7,6 +7,7 @@ import { hasPermission, logout, PERMISSIONS } from '@/lib/auth'
 import { AppFooter } from './AppFooter'
 import { EmployeeIntegrationAlert } from './EmployeeIntegrationAlert'
 import { Badge } from './ui/badge'
+import { StatusBanner } from './ui/status-banner'
 import { useAdminMode } from '@/lib/adminModeStore'
 
 interface LayoutProps {
@@ -30,12 +31,12 @@ export function Layout({ children }: LayoutProps) {
   const location = useLocation()
   const { data: user, isError } = useCurrentUser()
   const adminMode = useAdminMode((s) => s.enabled)
-  // Environment badge (e.g. "TEST" on QA) so a non-prod instance is identifiable
-  // on every page. Comes from /portal/info (PORTAL_ENVIRONMENT_LABEL runtime
-  // config) — prod leaves the var unset, the backend omits the key, and nothing
-  // renders. The backend already collapses blank labels; trim() here is
+  // Environment banner (e.g. "TEST INSTANCE" on QA) so a non-prod instance is
+  // unmistakable on every page. Comes from /portal/info (portal.environment-label
+  // runtime config) — prod leaves it unset, the backend omits the key, and
+  // nothing renders. The backend already collapses blank labels; trim() here is
   // defence-in-depth so a whitespace-only value from a drifted backend can
-  // never render an empty badge pill ('' is falsy, so the && below skips it).
+  // never render an empty banner strip ('' is falsy, so the && below skips it).
   const { data: portalInfo } = usePortalInfo()
   const environmentLabel = portalInfo?.environmentLabel?.trim()
 
@@ -50,11 +51,22 @@ export function Layout({ children }: LayoutProps) {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <header className="border-b bg-card sticky top-0 z-50">
+        {/* Inside the sticky header (unlike EmployeeIntegrationAlert below it)
+            so the environment strip stays visible while scrolling — the whole
+            point is that a test stand can never be mistaken for prod. */}
+        {environmentLabel && (
+          <StatusBanner
+            variant="warning"
+            data-testid="environment-banner"
+            className="rounded-none border-x-0 border-t-0 py-1.5 text-center font-semibold tracking-wide"
+          >
+            {environmentLabel}
+          </StatusBanner>
+        )}
         <div className="max-w-screen-xl mx-auto px-4 flex items-center h-14 gap-6">
           <span className="font-semibold text-foreground text-base tracking-tight mr-2">
             Components Registry
           </span>
-          {environmentLabel && <Badge variant="warning">{environmentLabel}</Badge>}
           <nav className="flex items-center gap-1">
             {visibleItems.map(({ href, label, icon: Icon }) => {
               const isActive = location.pathname === href || location.pathname.startsWith(href + '/')

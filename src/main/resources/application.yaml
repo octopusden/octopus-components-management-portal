@@ -57,9 +57,10 @@ portal:
   # env var feeds the gateway routes above; the health indicator reuses it to
   # mirror the registry's anonymous `employeeService` health component.
   registry-health-base-url: ${COMPONENTS_REGISTRY_SERVICE_URL:http://localhost:4567}
-  # Environment label shown as a header badge in the SPA (e.g. "TEST" on QA),
-  # so a test instance can't be mistaken for production. Unset/blank → the
-  # field is omitted from /portal/info and no badge is rendered (prod default).
+  # Environment label shown as a full-width warning banner in the SPA header
+  # (e.g. "TEST INSTANCE" on QA), so a test instance can't be mistaken for
+  # production. Unset/blank → the field is omitted from /portal/info and no
+  # banner is rendered (prod default).
   # Per environment, prefer setting `portal.environment-label` in service-config
   # (config-server property sources override this default); the env var is the
   # fallback for local/dev/docker runs. Startup-bound (@Value) — a service-config
@@ -84,6 +85,12 @@ portal:
     registry-base-url: ${COMPONENTS_REGISTRY_SERVICE_URL:http://localhost:4567}
     release-management-base-url: ${RELEASE_MANAGEMENT_SERVICE_URL:http://localhost:4568}
     refresh-interval-ms: ${PORTAL_VALIDATION_REFRESH_INTERVAL_MS:14400000}
+    # Failure-backoff cadence: after a FAILED whole-sweep (timeout/unreachable) the next
+    # sweep is scheduled after this short interval instead of refresh-interval-ms, so a
+    # transient downstream outage (e.g. a CRS redeploy running its multi-minute DSL→DB
+    # migration, which starves requests and trips the sweep timeout) self-heals within
+    # minutes rather than leaving a stale report until the next full interval. Default 10m.
+    retry-interval-ms: ${PORTAL_VALIDATION_RETRY_INTERVAL_MS:600000}
     # Per-component fan-out cap. Kept modest so the sweep does not overload a single
     # components-registry instance (no CRS replicas in test) — the sweep is the only
     # bulk load on it. Env-tunable per environment.

@@ -69,13 +69,13 @@ describe('ValidationBadge rendering', () => {
     expect(screen.getByRole('button', { name: /1 validation problem$/i })).toBeDefined()
   })
 
-  it('renders the same icon-only triangle (no "check failed" text) when only the check failed', () => {
-    renderBadge(failedCheck())
-    const btn = screen.getByRole('button', { name: /validation check failed/i })
-    expect(btn).toBeDefined()
-    // No visible "check failed" label text on the trigger anymore — it is a bare
-    // triangle; the wording lives in the aria-label, tooltip and dialog only.
-    expect(btn.textContent).toBe('')
+  it('renders nothing when only the check failed (a system failure is not a per-component problem)', () => {
+    // A failed check is no longer surfaced per component — it is an operational
+    // condition shown once at report level. The badge renders no triangle, so a
+    // transient backend blip cannot light up every row.
+    const { container } = renderBadge(failedCheck())
+    expect(container.textContent?.trim()).toBe('')
+    expect(screen.queryByRole('button')).toBeNull()
   })
 
   it('sums missingCount across multiple problems for the badge number', () => {
@@ -164,17 +164,6 @@ describe('ValidationBadge full-list dialog', () => {
 
     await user.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-  })
-
-  it('surfaces a failed check in the dialog rather than rendering it clean', async () => {
-    const user = userEvent.setup()
-    renderBadge(failedCheck())
-
-    await user.click(screen.getByRole('button', { name: /validation check failed/i }))
-
-    const dialog = await screen.findByRole('dialog')
-    expect(dialog).toHaveTextContent(/check failed/i)
-    expect(dialog).toHaveTextContent('RM returned 500')
   })
 
   it('copies the full newline-joined version list to the clipboard', async () => {

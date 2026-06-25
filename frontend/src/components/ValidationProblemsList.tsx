@@ -13,25 +13,15 @@ interface ValidationProblemsListProps {
  * versions with a "+N more" line), this lists EVERY problem and its COMPLETE
  * `details.versions` array in a scrollable monospace block.
  *
- * A failed check (`checkFailed`) is surfaced as its own "Check failed" block —
- * NOT silently rendered as clean — so a component we could not verify reads
- * honestly. No host/URL is shown: only versions, messages, severity and type.
+ * Only genuine, actionable problems are rendered. A failed check
+ * (`checkFailed`) is NOT shown here — it is a system condition (we could not
+ * verify the component, e.g. a downstream service was briefly unreachable),
+ * surfaced once at report level on the list page, never as a per-component
+ * problem. No host/URL or raw exception text is shown anywhere.
  */
 export function ValidationProblemsList({ validation }: ValidationProblemsListProps) {
   return (
     <div className="flex flex-col gap-4">
-      {validation.checkFailed && (
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
-          <div className="font-semibold">Check failed</div>
-          <p className="text-sm text-muted-foreground">
-            This component could not be verified — the result is not a clean pass.
-          </p>
-          {validation.checkError && (
-            <p className="mt-1 text-xs font-mono opacity-90">{validation.checkError}</p>
-          )}
-        </div>
-      )}
-
       {validation.problems.map((p, i) => {
         const versions = problemExampleVersions(p)
         return (
