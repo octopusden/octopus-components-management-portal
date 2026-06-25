@@ -31,6 +31,10 @@ import javax.net.ssl.SSLException
  *   leaving `generatedAt` at the last success.
  */
 @Service
+// Orchestrator with many small single-purpose helpers (sweep / perComponent / refresh /
+// migration-skip / failure classification + logging). Splitting it would scatter one
+// cohesive sweep lifecycle across classes for no readability gain.
+@Suppress("TooManyFunctions")
 class ValidationService(
     private val registryClient: RegistryClient,
     private val releaseManagementClient: ReleaseManagementClient,
@@ -155,6 +159,9 @@ class ValidationService(
             return
         }
         try {
+            if (skipSweepWhileMigrating()) {
+                return
+            }
             val fresh = sweep().block(Duration.ofSeconds(properties.sweepTimeoutSeconds))
             if (fresh != null) {
                 report = fresh
@@ -216,6 +223,29 @@ class ValidationService(
         } finally {
             refreshing.set(false)
         }
+    }
+
+    /**
+     * Skip the sweep while CRS is migrating, returning true when it did.
+     *
+     * Mid Git→DB migration the legacy resolver serves not-yet-migrated archived flags,
+     * which would make the sweep cache spurious problems on archived components.
+     * migrationInProgress() degrades to false on any probe error, so an undeterminable
+     * signal proceeds to a normal sweep rather than wedging.
+     *
+     * A skip is NOT a failure: retain the previous components, bump lastAttemptAt, and
+     * CLEAR refreshError so a banner/health-DOWN left by an earlier failed attempt does
+     * not persist (staleness still shows via generatedAt vs lastAttemptAt).
+     */
+    private fun skipSweepWhileMigrating(): Boolean {
+        val migrating =
+            registryClient.migrationInProgress().block(Duration.ofSeconds(properties.requestTimeoutSeconds))
+        if (migrating != true) {
+            return false
+        }
+        log.info("CRS migration in progress — skipping validation sweep, retaining previous report")
+        report = report.copy(lastAttemptAt = Instant.now(), refreshError = null)
+        return true
     }
 
     private fun retainStale(reason: String) {
