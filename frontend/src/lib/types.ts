@@ -62,6 +62,10 @@ export interface ComponentDetail {
   version: number
   createdAt: string | null
   updatedAt: string | null
+  // Optional last-modifier username. Absent against backends that don't surface
+  // it; the detail header's "Updated <date> by <user>" subline shows the "by
+  // <user>" segment only when this is present.
+  updatedBy?: string | null
   // SYS-039 — releaseManager / securityChampion are now ordered multi-value
   // lists (CRS v4 ordered child rows). componentOwner stays single-value.
   // The server emits [] for empty, never omits the key (default emptyList()).
