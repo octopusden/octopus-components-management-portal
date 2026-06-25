@@ -2,7 +2,7 @@
 
 ## Status
 
-Open.
+Open. **Now blocks prod HA** — prod is pinned to a single replica specifically because of this gap (see Context); resolving this TD is the prerequisite for running >1 replica.
 
 ## Context
 
@@ -14,6 +14,10 @@ For a small admin tool this is annoying but not catastrophic. As the Portal beco
 
 - Two-pod deploys: a session created on pod A is invalid on pod B; even with sticky sessions, a rolling deploy drops half the sessions.
 - Cross-region or HA deployments: not addressable with the current model.
+
+> **This already caused a prod outage — not hypothetical.** When prod briefly ran 2 replicas, fresh logins looped with `ERR_TOO_MANY_REDIRECTS`: the OAuth2 authorization request (state/nonce/PKCE) is saved in the in-memory session on the pod that *starts* the login, and the Keycloak callback landed on the *other* pod, which had no saved request → redirect back to authorization → loop. OpenShift router cookie-stickiness did not hold it across pod rollouts.
+>
+> **Interim mitigation (in place):** prod is pinned to `replicas: 1` in `service-deployment` (`okd/deployments/production/components-management-portal.yml`), matching `dms-ui-production`. **Resolving this TD is what unblocks running >1 replica — until then, do not raise the replica count.**
 
 ## Proposed work
 
