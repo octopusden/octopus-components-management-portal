@@ -13,8 +13,14 @@ import org.junit.jupiter.api.Test
 import org.octopusden.octopus.components.portal.validation.client.RegistryClient
 import org.octopusden.octopus.components.portal.validation.client.ReleaseManagementClient
 import org.octopusden.octopus.components.portal.validation.validators.UnregisteredReleasedVersionsValidator
+import org.springframework.scheduling.Trigger
+import org.springframework.scheduling.TriggerContext
+import org.springframework.scheduling.config.ScheduledTaskRegistrar
 import java.net.InetSocketAddress
+import java.time.Clock
 import java.time.Duration
+import java.time.Instant
+import java.time.ZoneOffset
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -67,6 +73,8 @@ class ValidationServiceTest {
         timeoutSeconds: Long = 10,
         liveTimeoutSeconds: Long = 30,
         sweepTimeoutSeconds: Long = 30,
+        refreshIntervalMs: Long = 14_400_000,
+        retryIntervalMs: Long = 600_000,
     ): ValidationService {
         val properties =
             ValidationProperties().apply {
@@ -75,6 +83,8 @@ class ValidationServiceTest {
                 requestTimeoutSeconds = timeoutSeconds
                 this.sweepTimeoutSeconds = sweepTimeoutSeconds
                 this.liveTimeoutSeconds = liveTimeoutSeconds
+                this.refreshIntervalMs = refreshIntervalMs
+                this.retryIntervalMs = retryIntervalMs
                 concurrency = 4
             }
         val registry = RegistryClient(properties)
@@ -288,6 +298,35 @@ class ValidationServiceTest {
     }
 
     @Test
+    @DisplayName("a per-request component-list timeout (well under the sweep budget) is still TIMEOUT, not unreachable")
+    fun `component list request timeout yields timed out refreshError`() {
+        // The QA case: the component-list fetch itself exceeds the per-request timeout
+        // (downstream busy) and propagates, aborting the sweep far inside the budget.
+        // It must classify as TIMEOUT (the client reason stays "validation sweep timed
+        // out"), NOT unreachable — connectivity is fine, the downstream is just slow.
+        val crs = newServer()
+        crs.createContext("/rest/api/3/components") { exchange ->
+            Thread.sleep(2_000) // > the 1s request timeout, << the 30s sweep budget
+            respondJson(exchange, 200, """[{"component":{"id":"good"},"variants":{}}]""")
+        }
+        val rm = newServer()
+        rm.createContext("/rest/api/1/builds/component") { exchange ->
+            respondJson(exchange, 200, """[]""")
+        }
+
+        // requestTimeout low (1s) so the LIST fetch's per-request timeout fires; sweep
+        // budget high (30s) so it is NOT the .block() budget that trips.
+        val svc = service(crs, rm, timeoutSeconds = 1, sweepTimeoutSeconds = 30)
+        svc.refresh()
+
+        val reason = svc.currentReport().refreshError
+        assertNotNull(reason, "a list-fetch request timeout must set refreshError")
+        assertTrue(reason!!.contains("timed out"), "expected a timed-out reason, got: $reason")
+        assertFalse(reason.contains("unreachable"), "a timeout must NOT be reported as unreachable: $reason")
+        assertEquals(600_000, svc.nextDelayMillis(), "a timed-out sweep must back off to the retry interval")
+    }
+
+    @Test
     @DisplayName("single-flight guard: a concurrent refresh() is a no-op (only one sweep runs)")
     fun `single flight guard makes concurrent refresh a no-op`() {
         val listCalls = AtomicInteger(0)
@@ -322,6 +361,95 @@ class ValidationServiceTest {
         first.join(10_000)
 
         assertEquals(1, listCalls.get(), "only one sweep may run; the concurrent refresh must be a no-op")
+    }
+
+    @Test
+    @DisplayName("failure-backoff: before any sweep the next delay is the normal refresh interval")
+    fun `next delay is refresh interval before any sweep`() {
+        val crs = newServer()
+        val rm = newServer()
+        val svc = service(crs, rm, refreshIntervalMs = 14_400_000, retryIntervalMs = 600_000)
+
+        // No refresh yet → no refreshError → normal cadence (the startup sweep owns the
+        // immediate first run; the scheduled trigger must not hammer at the retry rate).
+        assertEquals(14_400_000, svc.nextDelayMillis())
+    }
+
+    @Test
+    @DisplayName("failure-backoff: after a SUCCESSFUL sweep the next delay is the normal refresh interval")
+    fun `next delay is refresh interval after success`() {
+        val crs = newServer()
+        crs.createContext("/rest/api/3/components") { exchange ->
+            respondJson(exchange, 200, """[{"component":{"id":"good"},"variants":{}}]""")
+        }
+        crs.createContext("/rest/api/2/components") { exchange ->
+            respondJson(exchange, 200, """{"versions":{"1.0.1":{}}}""")
+        }
+        val rm = newServer()
+        rm.createContext("/rest/api/1/builds/component") { exchange ->
+            respondJson(exchange, 200, """[{"version":"1.0.1","status":"RELEASE"}]""")
+        }
+
+        val svc = service(crs, rm, refreshIntervalMs = 14_400_000, retryIntervalMs = 600_000)
+        svc.refresh()
+
+        assertNull(svc.currentReport().refreshError)
+        assertEquals(14_400_000, svc.nextDelayMillis())
+    }
+
+    @Test
+    @DisplayName("failure-backoff: after a FAILED sweep the next delay is the SHORT retry interval")
+    fun `next delay is retry interval after failure`() {
+        // CRS list endpoint 500s → whole-sweep failure → refreshError set.
+        val crs = newServer()
+        crs.createContext("/rest/api/3/components") { exchange ->
+            respondJson(exchange, 500, """{"error":"list-down"}""")
+        }
+        val rm = newServer()
+        rm.createContext("/rest/api/1/builds/component") { exchange ->
+            respondJson(exchange, 200, """[]""")
+        }
+
+        val svc = service(crs, rm, refreshIntervalMs = 14_400_000, retryIntervalMs = 600_000)
+        svc.refresh()
+
+        assertNotNull(svc.currentReport().refreshError, "a whole-sweep failure must set refreshError")
+        assertEquals(
+            600_000,
+            svc.nextDelayMillis(),
+            "after a failed refresh the next sweep must be scheduled at the short retry interval",
+        )
+    }
+
+    @Test
+    @DisplayName("failure-backoff: a recovered sweep returns the cadence to the normal interval")
+    fun `next delay returns to refresh interval after recovery`() {
+        val crs = newServer()
+        val down = java.util.concurrent.atomic.AtomicBoolean(true)
+        crs.createContext("/rest/api/3/components") { exchange ->
+            if (down.get()) {
+                respondJson(exchange, 500, """{"error":"list-down"}""")
+            } else {
+                respondJson(exchange, 200, """[{"component":{"id":"good"},"variants":{}}]""")
+            }
+        }
+        crs.createContext("/rest/api/2/components") { exchange ->
+            respondJson(exchange, 200, """{"versions":{"1.0.1":{}}}""")
+        }
+        val rm = newServer()
+        rm.createContext("/rest/api/1/builds/component") { exchange ->
+            respondJson(exchange, 200, """[{"version":"1.0.1","status":"RELEASE"}]""")
+        }
+
+        val svc = service(crs, rm, refreshIntervalMs = 14_400_000, retryIntervalMs = 600_000)
+        svc.refresh()
+        assertEquals(600_000, svc.nextDelayMillis(), "failed sweep → retry interval")
+
+        // Recover: the next sweep succeeds and clears refreshError → back to normal cadence.
+        down.set(false)
+        svc.refresh()
+        assertNull(svc.currentReport().refreshError)
+        assertEquals(14_400_000, svc.nextDelayMillis(), "recovered sweep → normal interval")
     }
 
     @Test
@@ -369,6 +497,114 @@ class ValidationServiceTest {
         assertTrue(cv.problems.isEmpty())
         assertNotNull(cv.checkError)
     }
+
+    @Test
+    @DisplayName("scheduler trigger OWNS the first sweep (fires immediately, not one interval out)")
+    fun `trigger fires the first sweep immediately`() {
+        val crs = newServer()
+        val rm = newServer()
+        val svc = service(crs, rm, refreshIntervalMs = 14_400_000, retryIntervalMs = 600_000)
+        val trigger = triggerOf(svc)
+        val clock = Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC)
+
+        // No prior completion → the very first run must fire NOW, not now + refresh-interval.
+        // (This is what makes a FAILED startup sweep retry on the backoff: the old design
+        // scheduled the first run 4h out before the startup sweep could even fail.)
+        val first = trigger.nextExecution(triggerContext(clock, lastCompletion = null))
+        assertEquals(clock.instant(), first)
+    }
+
+    @Test
+    @DisplayName("scheduler trigger backs off after a FAILED sweep, then returns to normal cadence")
+    fun `trigger gap follows the last sweep outcome`() {
+        val crs = newServer()
+        val down = java.util.concurrent.atomic.AtomicBoolean(true)
+        crs.createContext("/rest/api/3/components") { exchange ->
+            if (down.get()) {
+                respondJson(exchange, 500, """{"error":"down"}""")
+            } else {
+                respondJson(exchange, 200, """[{"component":{"id":"good"},"variants":{}}]""")
+            }
+        }
+        crs.createContext("/rest/api/2/components") { exchange ->
+            respondJson(exchange, 200, """{"versions":{"1.0.1":{}}}""")
+        }
+        val rm = newServer()
+        rm.createContext("/rest/api/1/builds/component") { exchange ->
+            respondJson(exchange, 200, """[{"version":"1.0.1","status":"RELEASE"}]""")
+        }
+        val svc = service(crs, rm, refreshIntervalMs = 14_400_000, retryIntervalMs = 600_000)
+        val trigger = triggerOf(svc)
+        val clock = Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC)
+        val completion = Instant.parse("2026-01-01T01:00:00Z")
+
+        // Failed sweep → next run is one RETRY interval after the completion.
+        svc.refresh()
+        assertNotNull(svc.currentReport().refreshError)
+        assertEquals(
+            completion.plusMillis(600_000),
+            trigger.nextExecution(triggerContext(clock, lastCompletion = completion)),
+        )
+
+        // Recovered sweep → cadence returns to the normal refresh interval.
+        down.set(false)
+        svc.refresh()
+        assertNull(svc.currentReport().refreshError)
+        assertEquals(
+            completion.plusMillis(14_400_000),
+            trigger.nextExecution(triggerContext(clock, lastCompletion = completion)),
+        )
+    }
+
+    @Test
+    @DisplayName("ValidationProperties: retry interval >= refresh interval is rejected (backoff guard)")
+    fun `retry interval must be shorter than refresh interval`() {
+        jakarta.validation.Validation.buildDefaultValidatorFactory().use { factory ->
+            val validator = factory.validator
+            val base = { url: String ->
+                ValidationProperties().apply {
+                    registryBaseUrl = url
+                    releaseManagementBaseUrl = url
+                }
+            }
+
+            // retry < refresh → valid
+            val ok = base("http://localhost").apply {
+                refreshIntervalMs = 14_400_000
+                retryIntervalMs = 600_000
+            }
+            assertTrue(validator.validate(ok).none { it.propertyPath.toString().contains("RetryInterval") })
+
+            // retry >= refresh → a violation on the cross-field guard
+            val bad = base("http://localhost").apply {
+                refreshIntervalMs = 600_000
+                retryIntervalMs = 600_000
+            }
+            assertTrue(
+                validator.validate(bad).any { it.message.contains("shorter than refresh-interval-ms") },
+                "retry >= refresh must be rejected",
+            )
+        }
+    }
+
+    /** The single Trigger that [ValidationRefreshScheduler] registers for [svc]. */
+    private fun triggerOf(svc: ValidationService): Trigger {
+        val registrar = ScheduledTaskRegistrar()
+        ValidationRefreshScheduler(svc).configureTasks(registrar)
+        return registrar.triggerTaskList.single().trigger
+    }
+
+    /** Minimal [TriggerContext] exposing a fixed clock and a chosen lastCompletion. */
+    private fun triggerContext(clock: Clock, lastCompletion: Instant?): TriggerContext =
+        object : TriggerContext {
+            override fun getClock(): Clock = clock
+
+            override fun lastScheduledExecution(): Instant? = lastCompletion
+
+            override fun lastActualExecution(): Instant? = lastCompletion
+
+            override fun lastCompletion(): Instant? = lastCompletion
+        }
 
     private companion object {
         private const val SERVER_BACKLOG = 16

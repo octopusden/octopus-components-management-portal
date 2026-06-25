@@ -437,6 +437,35 @@ describe('ComponentListPage — Validation Problems', () => {
       expect(screen.queryByTestId('validation-system-failure')).toBeNull()
     })
 
+    it('shows a TIMEOUT-specific stale warning (retry hint, no "reachable over https" config hint)', () => {
+      mockComponentsOk()
+      // A whole-sweep timeout: the backend sets this exact reason. The downstream is
+      // reachable but slow, so the banner must NOT tell the operator to check URLs.
+      mockedUseValidationProblems.mockReturnValue(
+        makeValidationResult(new Map(), {
+          refreshError: 'validation sweep timed out',
+        }) as unknown as ReturnType<typeof useValidationProblems>,
+      )
+      renderPage()
+      const normalize = (s: string) => s.replace(/\s+/g, ' ').trim()
+      expect(
+        screen.getByText((content) =>
+          normalize(content).includes('the last refresh timed out'),
+        ),
+      ).toBeDefined()
+      expect(
+        screen.getByText((content) =>
+          normalize(content).includes('retries automatically'),
+        ),
+      ).toBeDefined()
+      // The misleading config hint must be absent for a timeout.
+      expect(
+        screen.queryByText((content) =>
+          normalize(content).includes('reachable over https'),
+        ),
+      ).toBeNull()
+    })
+
     it('renders the "with validation problems" filter toggle', () => {
       mockComponentsOk()
       renderPage()
