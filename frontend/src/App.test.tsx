@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { App } from './App'
+import { useUiOverlay } from './lib/uiOverlayStore'
 
 // Prevent real API calls from the components list page
 vi.mock('./hooks/useComponents', () => ({
-  useComponents: vi.fn(() => ({ data: undefined, isLoading: true, error: null })),
+  useComponents: vi.fn(() => ({ data: undefined, isLoading: true, isFetching: false, error: null })),
 }))
 
 // Mock /auth/me so Layout exercises the happy path, not the isError fallback.
@@ -20,6 +22,7 @@ vi.mock('./hooks/useCurrentUser', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks()
+  useUiOverlay.setState({ paletteOpen: false, shortcutsOpen: false })
   // Layout (environment banner) and AppFooter both query the anonymous info
   // endpoints via plain fetch — answer those with "no data" ({} → no banner, no
   // version label). Every OTHER fetch rejects, mirroring jsdom's no-network
@@ -52,6 +55,37 @@ describe('App routing', () => {
     render(<App />)
 
     expect(screen.getByText('Components Registry')).toBeDefined()
+  })
+})
+
+describe('App command palette wiring', () => {
+  it('opens the palette on ⌘K and closes it on Esc', async () => {
+    const user = userEvent.setup()
+    window.history.pushState({}, '', '/components')
+    render(<App />)
+
+    // Not open initially.
+    expect(screen.queryByPlaceholderText(/jump to a page/i)).toBeNull()
+
+    // ⌘K opens it (the global hotkey listener lives on window).
+    fireEvent.keyDown(window, { key: 'k', metaKey: true })
+    expect(await screen.findByPlaceholderText(/jump to a page/i)).toBeInTheDocument()
+
+    // Esc closes it.
+    await user.keyboard('{Escape}')
+    await waitFor(() =>
+      expect(screen.queryByPlaceholderText(/jump to a page/i)).toBeNull(),
+    )
+  })
+
+  it('opens the keyboard shortcuts panel on "?"', async () => {
+    window.history.pushState({}, '', '/components')
+    render(<App />)
+
+    fireEvent.keyDown(window, { key: '?' })
+    // "Keyboard shortcuts" is also the footer link text, so target the dialog
+    // heading specifically.
+    expect(await screen.findByRole('heading', { name: 'Keyboard shortcuts' })).toBeInTheDocument()
   })
 })
 

@@ -3,7 +3,6 @@ import { Search, SlidersHorizontal } from 'lucide-react'
 import { Input } from './ui/input'
 import { Button } from './ui/button'
 import { FilterBar } from './ui/filter-bar'
-import { Switch } from './ui/switch'
 import { Label } from './ui/label'
 import type { ComponentFilter } from '../lib/types'
 import { cn } from '../lib/utils'
@@ -13,7 +12,6 @@ import { useClientCodes } from '../hooks/useClientCodes'
 import { useJiraProjectKeys } from '../hooks/useJiraProjectKeys'
 import { useParentComponentNames } from '../hooks/useParentComponentNames'
 import { useGroupKeys } from '../hooks/useGroupKeys'
-import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useFieldOptions } from '../hooks/useFieldOptions'
 import {
   useFieldConfigEntry,
@@ -30,12 +28,11 @@ interface ComponentFiltersProps {
    * "Only with problems" mode (Validation Problems facility). This is NOT a CRS
    * query param — problems are computed in Portal — so it is tracked separately
    * from `ComponentFilter` and lifted to the page, which swaps the displayed
-   * list to the validation report's problem-bearing set when on. Optional so
-   * existing callers/tests need not supply it; the toggle is hidden when the
-   * handler is absent.
+   * list to the validation report's problem-bearing set when on. The toggle UI
+   * itself moved to the preset bar (spec §1.1/1.3); this prop only drives the
+   * "filters don't apply" dimming + hint while problems-only is active.
    */
   problemsOnly?: boolean
-  onProblemsOnlyChange?: (value: boolean) => void
   /**
    * Number of components with validation problems, shown beside the
    * problems-only hint (mirrors how a normal search shows its result count).
@@ -121,7 +118,6 @@ export function ComponentFilters({
   filter,
   onFilterChange,
   problemsOnly = false,
-  onProblemsOnlyChange,
   problemsCount,
 }: ComponentFiltersProps) {
   const [searchValue, setSearchValue] = useState(filter.search ?? '')
@@ -196,31 +192,6 @@ export function ComponentFilters({
     onFilterChange({ ...filter, groupKey: next.length ? next : undefined })
   }
 
-  // Archived filter: 2-state cycle — false (active only, default) ↔ undefined (all)
-  const handleArchivedToggle = () => {
-    if (filter.archived === false) {
-      onFilterChange({ ...filter, archived: undefined })
-    } else {
-      onFilterChange({ ...filter, archived: false })
-    }
-  }
-
-  const handleClearAll = () => {
-    setSearchValue('')
-    // Reset to default: archived: false (active only). Extended filters cleared too.
-    onFilterChange({ archived: false })
-  }
-
-  // archived: false is the default — does not count as an active filter
-  const hasActiveFilters =
-    !!filter.search ||
-    !!filter.system?.length ||
-    !!filter.owner?.length ||
-    !!filter.buildSystem?.length ||
-    !!filter.labels?.length ||
-    filter.archived === undefined ||
-    extendedActive
-
   const { data: owners = [], isLoading: ownersLoading } = useOwners()
   const { options: buildSystemOptions, isLoading: buildSystemLoading } =
     useFieldOptions('buildSystem')
@@ -254,7 +225,6 @@ export function ComponentFilters({
   const { data: groupKeyOptions = [], isLoading: groupKeysLoading } = useGroupKeys({
     enabled: groupKeysActivated,
   })
-  const { data: currentUser } = useCurrentUser()
 
   // Field-config entries for the extended filters — `searchabilityFor` resolves
   // the effective placement (Main / Extended / None) per field, falling back to
@@ -282,21 +252,6 @@ export function ComponentFilters({
   const buildSystemPlace = place('buildSystem', buildSystemEntry)
   const labelsPlace = place('component.labels', labelsFilterEntry)
   const ownerPlace = place('component.componentOwner', ownerFilterEntry)
-
-  const myComponentsChecked =
-    !!currentUser &&
-    filter.owner?.length === 1 &&
-    filter.owner[0] === currentUser.username
-  const handleMyComponentsChange = (checked: boolean) => {
-    if (checked && currentUser) {
-      onFilterChange({ ...filter, owner: [currentUser.username] })
-    } else {
-      onFilterChange({ ...filter, owner: undefined })
-    }
-  }
-
-  const archivedLabel =
-    filter.archived === false ? 'Show archived components' : 'Hide archived components'
 
   // Each extended control is defined once and placed by its searchability:
   // 'None' → never rendered; 'Extended' → rendered in the toggle-gated row;
@@ -523,6 +478,9 @@ export function ComponentFilters({
       ),
     },
     {
+      // The "My Components" shortcut moved to the preset bar (spec §1.1/1.3);
+      // the owner picker stays here, placed by the owner field's searchability
+      // (Main / Extended / None) so an admin can still demote or hide it.
       place: ownerPlace,
       node: (
         <MultiSelectFilter
@@ -533,30 +491,7 @@ export function ComponentFilters({
           isLoading={ownersLoading}
           placeholder="All owners"
           unitLabel="owner"
-          disabled={myComponentsChecked}
         />
-      ),
-    },
-    {
-      // My Components is the owner-filter shortcut (it sets owner=[currentUser]),
-      // so it follows the OWNER field's placement rather than living in a fixed
-      // row: Main → main bar, Extended → moves into the toggle row beside the
-      // owner picker, None → hidden. Keeping it always-Main while the owner
-      // picker moved to Extended would half-honour the admin's setting.
-      place: ownerPlace,
-      node: (
-        <div key="my-components" className="flex items-center gap-2">
-          <Switch
-            id="my-components"
-            checked={myComponentsChecked}
-            onCheckedChange={handleMyComponentsChange}
-            disabled={!currentUser}
-            aria-label="My Components"
-          />
-          <Label htmlFor="my-components" className="cursor-pointer text-sm">
-            My Components
-          </Label>
-        </div>
       ),
     },
   ]
@@ -579,28 +514,9 @@ export function ComponentFilters({
   return (
     <div className="space-y-2">
       <FilterBar>
-        {/* "with validation problems" (Validation Problems facility, admin-mode
-            only — the page only wires the handler for admins). Driven by the
-            Portal validation report, not a CRS query param — see the page-level
-            list swap. Hidden when no handler is wired (non-admins / older
-            callers / tests). Rendered first and OUTSIDE the disabled group so it
-            stays interactive while the CRS filters are dimmed. */}
-        {onProblemsOnlyChange && (
-          <div className="flex items-center gap-2">
-            {/* Single accessible-name source: the associated <Label htmlFor>
-                (no redundant aria-label), matching the surrounding switches. */}
-            <Switch
-              id="problems-only"
-              checked={problemsOnly}
-              onCheckedChange={onProblemsOnlyChange}
-            />
-            <Label htmlFor="problems-only" className="cursor-pointer text-sm">
-              with validation problems
-            </Label>
-          </div>
-        )}
-
-        {/* CRS filter controls — dimmed + inert in problems-only mode. */}
+        {/* CRS filter controls — dimmed + inert in problems-only mode (the
+            "With problems" preset, driven from the preset bar; problems are
+            Portal-computed, so the CRS filters have no effect while it is on). */}
         <div
           data-testid="crs-filter-controls"
           className={cn('flex flex-wrap items-center gap-2', disabledGroupClass)}
@@ -621,14 +537,11 @@ export function ComponentFilters({
           </div>
 
           {/* Every Main-placed control renders here: the classic multi-selects
-              (system / buildSystem / labels / owner), the My Components shortcut,
-              plus any admin-promoted extended field. None-placed are dropped;
-              Extended-placed move to the toggle row below. */}
+              (system / buildSystem / labels / owner), plus any admin-promoted
+              extended field. None-placed are dropped; Extended-placed move to the
+              toggle row below. Archived is now the "Archived" preset, and "Clear
+              all" lives in the active-filter chips row — neither is duplicated here. */}
           {mainRow.map((c) => c.node)}
-
-          <Button variant="outline" size="sm" onClick={handleArchivedToggle}>
-            {archivedLabel}
-          </Button>
 
           {rowExtended.length > 0 && (
             <Button
@@ -641,15 +554,9 @@ export function ComponentFilters({
               Extended search
             </Button>
           )}
-
-          {hasActiveFilters && (
-            <Button variant="ghost" size="sm" onClick={handleClearAll}>
-              Clear filters
-            </Button>
-          )}
         </div>
 
-        {/* Hint that CRS filters are inert while problems-only is on. */}
+        {/* Hint that CRS filters are inert while the "With problems" preset is on. */}
         {crsFiltersDisabled && (
           <span className="text-xs text-muted-foreground">
             {typeof problemsCount === 'number' && (
@@ -657,7 +564,7 @@ export function ComponentFilters({
                 {problemsCount} component{problemsCount === 1 ? '' : 's'} with validation problems.{' '}
               </>
             )}
-            Component filters don’t apply in “with validation problems” mode.
+            Component filters don’t apply in the “With problems” preset.
           </span>
         )}
       </FilterBar>

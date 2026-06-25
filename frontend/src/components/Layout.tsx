@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router'
-import { Package, History, Settings, LogOut, AlertTriangle } from 'lucide-react'
+import { Package, History, Settings, LogOut, AlertTriangle, Activity } from 'lucide-react'
 import { cn, initials } from '../lib/utils'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { usePortalInfo } from '@/hooks/useInfo'
@@ -19,11 +19,22 @@ interface NavItem {
   label: string
   icon: React.ComponentType<{ className?: string }>
   requires?: string
+  // When set, the item is gated on adminMode being on in ADDITION to `requires`,
+  // mirroring the ADMIN badge's double-gate. Used for admin-tooling entries
+  // (Health) that should stay hidden until the operator opts into admin mode.
+  adminOnly?: boolean
 }
 
 const navItems: NavItem[] = [
   { href: '/components', label: 'Components', icon: Package },
   { href: '/audit', label: 'Audit', icon: History, requires: PERMISSIONS.ACCESS_AUDIT },
+  {
+    href: '/health',
+    label: 'Health',
+    icon: Activity,
+    requires: PERMISSIONS.IMPORT_DATA,
+    adminOnly: true,
+  },
   { href: '/admin', label: 'Admin', icon: Settings, requires: PERMISSIONS.IMPORT_DATA },
 ]
 
@@ -44,9 +55,15 @@ export function Layout({ children }: LayoutProps) {
   // undefined. Don't hide admin/audit in that case — the user may be a valid admin;
   // the nav items remain clickable and the backend will still enforce authorization.
   // A visible banner tells the operator what's wrong.
-  const visibleItems = isError
-    ? navItems
-    : navItems.filter((it) => !it.requires || hasPermission(user, it.requires))
+  // adminOnly items keep their double-gate (adminMode + permission) even in the
+  // fail-open path: an item the operator hasn't opted into via adminMode should
+  // never appear just because the auth check errored. Permission/audit gates
+  // still fail open (the server remains authoritative) as before.
+  const visibleItems = navItems.filter((it) => {
+    if (it.adminOnly && !(adminMode && hasPermission(user, PERMISSIONS.IMPORT_DATA))) return false
+    if (isError) return true
+    return !it.requires || hasPermission(user, it.requires)
+  })
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
