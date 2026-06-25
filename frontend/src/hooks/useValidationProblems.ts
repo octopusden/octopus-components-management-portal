@@ -94,10 +94,13 @@ export function useValidationProblems(enabled = true): UseValidationProblemsResu
 }
 
 /**
- * Fetch only the components that have problems OR a failed check
- * (problemsOnly=true). Used by the "Only with problems" filter mode, which
- * drives the displayed list from the validation report rather than a CRS page
- * (the CRS list is server-paged and cannot filter on Portal-computed problems).
+ * Fetch the problem-bearing report (problemsOnly=true). Used by the "Only with
+ * problems" filter mode, which drives the displayed list from the validation
+ * report rather than a CRS page (the CRS list is server-paged and cannot filter
+ * on Portal-computed problems). The backend also includes check-failed
+ * components here (server-side a failure must never read as clean); those are
+ * filtered out client-side in ComponentListPage's `problemRows` and surfaced via
+ * the system banner instead, not shown as list rows.
  *
  * `enabled` lets the caller skip the request entirely when the toggle is off.
  */

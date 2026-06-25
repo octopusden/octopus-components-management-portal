@@ -505,27 +505,16 @@ describe('ComponentTable — inline validation triangle', () => {
     expect(within(dialog).getByRole('button', { name: /copy versions/i })).toBeDefined()
   })
 
-  it('renders a red triangle before the name for a check-failed component (no problems)', () => {
+  it('renders NO triangle for a check-failed component (a system failure is not a per-component problem)', () => {
     const map = new Map<string, ComponentValidation>([['alpha', validationCheckFailed('alpha')]])
     renderTableWithValidation([makeComponent({ name: 'alpha' })], map)
-    // A failed check (no problems) still flags the component — the trigger
-    // carries the "check failed" aria-label and lives in the Component Key
-    // cell, before the name link.
-    const trigger = screen.getByRole('button', { name: /validation check failed/i })
-    expect(trigger).toBeDefined()
-    const nameCell = cellForColumn('Component Key')
-    expect(nameCell.contains(trigger)).toBe(true)
-    expect(within(nameCell).getByRole('link', { name: 'alpha' })).toBeDefined()
-  })
-
-  it('clicking the triangle opens the dialog showing the Check failed block + error for a check-failed component', async () => {
-    const map = new Map<string, ComponentValidation>([['alpha', validationCheckFailed('alpha')]])
-    renderTableWithValidation([makeComponent({ name: 'alpha' })], map)
-    await userEvent.click(screen.getByRole('button', { name: /validation check failed/i }))
-    const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByText('Validation Problems')).toBeDefined()
-    expect(within(dialog).getByText('Check failed')).toBeDefined()
-    expect(within(dialog).getByText('RM returned 500')).toBeDefined()
+    // A failed check is an operational condition surfaced once at report level
+    // (the list-page system banner), never as a per-row triangle — so a
+    // transient backend outage cannot light up every row in the table.
+    expect(screen.queryByRole('button', { name: /validation check failed/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /validation problem/i })).toBeNull()
+    // The name link still renders normally.
+    expect(within(cellForColumn('Component Key')).getByRole('link', { name: 'alpha' })).toBeDefined()
   })
 
   it('renders no triangle for a clean / unmatched component', () => {
