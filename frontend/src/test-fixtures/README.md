@@ -23,7 +23,7 @@ the contract drift before it reaches an E2E build.
 - `portal-info.contract.json` — `/portal/info` prod shape: `{name, version}`
   only, no `environmentLabel` key (env var `PORTAL_ENVIRONMENT_LABEL` unset).
 - `portal-info.labelled.contract.json` — `/portal/info` with
-  `environmentLabel` present (non-prod instances; drives the header badge).
+  `environmentLabel` present (non-prod instances; drives the header banner).
 
 The `portal-links*` files drive `PortalLinksControllerContractTest.kt`, the
 `portal-info*` files drive `PortalInfoControllerTest.kt` /

@@ -27,8 +27,8 @@ vi.mock('../components/AppFooter', () => ({
 vi.mock('../hooks/useInfo', () => ({
   usePortalLinks: vi.fn(),
   useCrsInfo: vi.fn(),
-  // Layout consumes usePortalInfo for the environment badge; return "no data"
-  // so these page tests render without a badge.
+  // Layout consumes usePortalInfo for the environment banner; return "no data"
+  // so these page tests render without a banner.
   usePortalInfo: vi.fn(() => ({ data: undefined })),
 }))
 // Field-config hook — mocked so individual tests can pin TC fields to

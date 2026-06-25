@@ -24,7 +24,7 @@ function renderLayout(portalInfo: Record<string, unknown> = {}) {
   // Without a QueryClient in the tree, those hooks throw — failing the
   // existing nav-visibility tests. Stub fetch as well so the footer's info
   // queries don't reach the network in jsdom. The /portal/info request gets
-  // `portalInfo` (environment-badge tests inject a payload); everything else `{}`.
+  // `portalInfo` (environment-banner tests inject a payload); everything else `{}`.
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.stubGlobal(
     'fetch',
@@ -251,7 +251,7 @@ describe('Layout ADMIN badge — double-gate', () => {
   })
 })
 
-describe('Layout environment badge', () => {
+describe('Layout environment banner', () => {
   const viewer: User = {
     username: 'carol',
     roles: [{ name: 'ROLE_COMPONENTS_REGISTRY_VIEWER', permissions: ['ACCESS_COMPONENTS'] }],
@@ -268,18 +268,24 @@ describe('Layout environment badge', () => {
     } as unknown as ReturnType<typeof useCurrentUser>)
   })
 
-  it('shows the environment badge in the header when /portal/info returns environmentLabel', async () => {
+  it('shows a full-width warning banner in the sticky header when /portal/info returns environmentLabel', async () => {
     renderLayout({ name: 'portal', version: '9.9.9', environmentLabel: 'TEST' })
     // findByText: the label arrives async via the /portal/info query.
     expect(await screen.findByText('TEST')).toBeDefined()
+    const banner = screen.getByTestId('environment-banner')
+    expect(banner.getAttribute('data-variant')).toBe('warning')
+    // Must live INSIDE the sticky <header> so it stays visible on scroll —
+    // EmployeeIntegrationAlert sits below the header and scrolls away; the
+    // environment strip must not.
+    expect(banner.closest('header')).not.toBeNull()
   })
 
-  it('shows no environment badge when environmentLabel is absent (prod shape)', async () => {
+  it('shows no environment banner when environmentLabel is absent (prod shape)', async () => {
     renderLayout({ name: 'portal', version: '9.9.9' })
     // Wait until the /portal/info query has resolved AND rendered — the footer
     // version label is driven by the same query — so the absence check below
-    // cannot false-pass on a not-yet-rendered badge.
+    // cannot false-pass on a not-yet-rendered banner.
     await screen.findByText(/portal 9\.9\.9/)
-    expect(screen.queryByText('TEST')).toBeNull()
+    expect(screen.queryByTestId('environment-banner')).toBeNull()
   })
 })
