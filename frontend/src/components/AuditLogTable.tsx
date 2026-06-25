@@ -51,6 +51,37 @@ function formatDate(dateStr: string): string {
   }
 }
 
+/**
+ * The audit `entityId` is the component's UUID, not a human-readable key, so
+ * we resolve a display key and keep the UUID only for routing.
+ *
+ * Resolution order, most to least authoritative:
+ *  1. `entry.componentKey` — server-resolved (CRS AuditLogResponse). The only
+ *     source that covers field-override rows (whose snapshot carries no key at
+ *     all) and is correct for deleted components.
+ *  2. value-snapshot `name` — component CREATE/UPDATE/DELETE/RENAME snapshots.
+ *     `newValue` first (current key, and the post-rename name), then `oldValue`
+ *     for DELETE rows where the new snapshot is null.
+ *  3. value-snapshot `moduleName` — git-history (MIGRATED) snapshots key the
+ *     component under `moduleName`, not `name`.
+ *
+ * Returns null when nothing usable is present so the caller can fall back to
+ * the UUID. Fallbacks 2–3 keep older rows / a pre-field CRS readable.
+ */
+function componentKey(entry: AuditLogEntry): string | null {
+  const candidates = [
+    entry.componentKey,
+    entry.newValue?.name,
+    entry.oldValue?.name,
+    entry.newValue?.moduleName,
+    entry.oldValue?.moduleName,
+  ]
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate) return candidate
+  }
+  return null
+}
+
 function diffSummary(entry: AuditLogEntry): string | null {
   if (!entry.changeDiff) return null
   const keys = Object.keys(entry.changeDiff)
@@ -77,7 +108,7 @@ export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
             <TableHead>Who</TableHead>
             <TableHead>When</TableHead>
             <TableHead>Entity Type</TableHead>
-            <TableHead>Entity ID</TableHead>
+            <TableHead>Component Key</TableHead>
             <TableHead>Action</TableHead>
             <TableHead>Changed Fields</TableHead>
           </TableRow>
@@ -130,7 +161,7 @@ export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
                             to={`/components/${entry.entityId}`}
                             className="font-medium text-primary hover:underline"
                           >
-                            {entry.entityId}
+                            {componentKey(entry) ?? entry.entityId}
                           </Link>
                         ) : (
                           <span className="font-mono text-xs">{entry.entityId}</span>

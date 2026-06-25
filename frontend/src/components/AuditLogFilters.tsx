@@ -194,26 +194,35 @@ export function AuditLogFilters({ filter, onChange }: AuditLogFiltersProps) {
         </Select>
       </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="audit-filter-from">From</Label>
-        <Input
-          id="audit-filter-from"
-          type="datetime-local"
-          value={instantToLocal(filter.from)}
-          onChange={(e) => handleFrom(e.target.value)}
-          className="w-[200px]"
-        />
-      </div>
+      {/*
+        From/To kept together as a single flex item so the range stays on one
+        line (the surrounding FilterBar wraps the pair as a unit, never between
+        them). Inputs are widened past the prior 200px so the native picker's
+        calendar indicator isn't clipped by the long "dd/mm/yyyy, --:-- --"
+        datetime-local mask.
+      */}
+      <div className="flex items-end gap-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="audit-filter-from">From</Label>
+          <Input
+            id="audit-filter-from"
+            type="datetime-local"
+            value={instantToLocal(filter.from)}
+            onChange={(e) => handleFrom(e.target.value)}
+            className="w-[230px]"
+          />
+        </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="audit-filter-to">To</Label>
-        <Input
-          id="audit-filter-to"
-          type="datetime-local"
-          value={instantToLocal(filter.to)}
-          onChange={(e) => handleTo(e.target.value)}
-          className="w-[200px]"
-        />
+        <div className="space-y-1.5">
+          <Label htmlFor="audit-filter-to">To</Label>
+          <Input
+            id="audit-filter-to"
+            type="datetime-local"
+            value={instantToLocal(filter.to)}
+            onChange={(e) => handleTo(e.target.value)}
+            className="w-[230px]"
+          />
+        </div>
       </div>
 
       <div className="space-y-1.5">

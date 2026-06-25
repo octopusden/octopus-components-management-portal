@@ -134,6 +134,142 @@ describe('AuditLogTable', () => {
     expect(link.getAttribute('href')).toBe('/components/comp-42')
   })
 
+  it('shows the component key (newValue.name) as the link text while routing by the entityId UUID', () => {
+    render(
+      <MemoryRouter>
+        <AuditLogTable
+          data={[
+            makeEntry({
+              entityType: 'Component',
+              entityId: '9d2c9e21-84af-42d6-b342-353cc6a4718b',
+              newValue: { name: 'payment-gateway', labels: ['x'] },
+            }),
+          ]}
+          isLoading={false}
+        />
+      </MemoryRouter>,
+    )
+    const link = screen.getByRole('link', { name: 'payment-gateway' })
+    expect(link.getAttribute('href')).toBe('/components/9d2c9e21-84af-42d6-b342-353cc6a4718b')
+    // The raw UUID is no longer surfaced as a column value.
+    expect(screen.queryByText('9d2c9e21-84af-42d6-b342-353cc6a4718b')).toBeNull()
+  })
+
+  it('falls back to oldValue.name for DELETE rows (newValue is null)', () => {
+    render(
+      <MemoryRouter>
+        <AuditLogTable
+          data={[
+            makeEntry({
+              entityType: 'Component',
+              entityId: 'uuid-del',
+              action: 'DELETE',
+              oldValue: { name: 'gamma' },
+              newValue: null,
+            }),
+          ]}
+          isLoading={false}
+        />
+      </MemoryRouter>,
+    )
+    expect(screen.getByRole('link', { name: 'gamma' }).getAttribute('href')).toBe('/components/uuid-del')
+  })
+
+  it('prefers the new name on RENAME rows', () => {
+    render(
+      <MemoryRouter>
+        <AuditLogTable
+          data={[
+            makeEntry({
+              entityType: 'Component',
+              entityId: 'uuid-ren',
+              action: 'RENAME',
+              oldValue: { name: 'old-name' },
+              newValue: { name: 'new-name' },
+            }),
+          ]}
+          isLoading={false}
+        />
+      </MemoryRouter>,
+    )
+    expect(screen.getByRole('link', { name: 'new-name' })).toBeDefined()
+    expect(screen.queryByRole('link', { name: 'old-name' })).toBeNull()
+  })
+
+  it('prefers the server-resolved componentKey over the value snapshot', () => {
+    render(
+      <MemoryRouter>
+        <AuditLogTable
+          data={[
+            makeEntry({
+              entityType: 'Component',
+              entityId: 'uuid-srv',
+              componentKey: 'billing-core',
+              newValue: { name: 'stale-snapshot-name' },
+            }),
+          ]}
+          isLoading={false}
+        />
+      </MemoryRouter>,
+    )
+    expect(screen.getByRole('link', { name: 'billing-core' }).getAttribute('href')).toBe('/components/uuid-srv')
+  })
+
+  it('uses the componentKey for field-override rows whose snapshot carries no name', () => {
+    render(
+      <MemoryRouter>
+        <AuditLogTable
+          data={[
+            makeEntry({
+              entityType: 'Component',
+              entityId: 'uuid-fo',
+              componentKey: 'payment-gateway',
+              // Field-override snapshots carry only the override payload.
+              oldValue: { 'fieldOverride[build.buildFilePath]': { versionRange: '[1.0,2.0)' } },
+              newValue: {},
+            }),
+          ]}
+          isLoading={false}
+        />
+      </MemoryRouter>,
+    )
+    expect(screen.getByRole('link', { name: 'payment-gateway' })).toBeDefined()
+  })
+
+  it('falls back to snapshot moduleName for git-history MIGRATED rows (no componentKey, no name)', () => {
+    render(
+      <MemoryRouter>
+        <AuditLogTable
+          data={[
+            makeEntry({
+              entityType: 'Component',
+              entityId: 'uuid-mig',
+              action: 'MIGRATED',
+              oldValue: null,
+              newValue: { moduleName: 'legacy-module', moduleConfigurations: [] },
+            }),
+          ]}
+          isLoading={false}
+        />
+      </MemoryRouter>,
+    )
+    expect(screen.getByRole('link', { name: 'legacy-module' }).getAttribute('href')).toBe('/components/uuid-mig')
+  })
+
+  it('falls back to the entityId as link text when neither old nor new value carries a name', () => {
+    render(
+      <MemoryRouter>
+        <AuditLogTable
+          data={[
+            makeEntry({ entityType: 'Component', entityId: 'comp-42', newValue: { labels: ['x'] } }),
+          ]}
+          isLoading={false}
+        />
+      </MemoryRouter>,
+    )
+    expect(screen.getByRole('link', { name: 'comp-42' }).getAttribute('href')).toBe('/components/comp-42')
+  })
+
   it('renders entityId as mono text (not a link) when entityType is not Component', () => {
     render(
       <MemoryRouter>
