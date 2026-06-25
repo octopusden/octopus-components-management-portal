@@ -13,6 +13,7 @@ import { Badge } from './ui/badge'
 import type { BadgeProps } from './ui/badge'
 import { Button } from './ui/button'
 import { EmptyState } from './ui/empty-state'
+import { RelativeTime } from './ui/RelativeTime'
 import { SkeletonTable } from './ui/skeleton-table'
 import { AuditDiffViewer } from './AuditDiffViewer'
 import type { AuditLogEntry } from '../lib/types'
@@ -36,7 +37,13 @@ const ACTION_BADGE_VARIANT: Record<string, BadgeProps['variant']> = {
   MIGRATED: 'secondary',
 }
 
-function formatDate(dateStr: string): string {
+/**
+ * Full date-and-time tooltip for the When column. Audit entries can repeat
+ * within a single day, so the precise instant (down to seconds) is kept one
+ * hover away — the RelativeTime default (date-only) would collapse same-day
+ * rows to the same tooltip. Falls back to the raw string on a parse error.
+ */
+function formatTimestamp(dateStr: string): string {
   try {
     return new Intl.DateTimeFormat(undefined, {
       year: 'numeric',
@@ -148,7 +155,10 @@ export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
                         {entry.changedBy ?? <span className="text-muted-foreground italic">system</span>}
                       </TableCell>
                       <TableCell className="text-muted-foreground whitespace-nowrap">
-                        {formatDate(entry.changedAt)}
+                        <RelativeTime
+                          ts={entry.changedAt}
+                          title={formatTimestamp(entry.changedAt)}
+                        />
                       </TableCell>
                       <TableCell>
                         <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">

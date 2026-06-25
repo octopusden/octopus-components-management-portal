@@ -4,6 +4,13 @@ interface RelativeTimeProps {
   /** ISO timestamp (or null). Null renders an em-dash. */
   ts: string | null
   className?: string
+  /**
+   * Override for the native `title` tooltip. Defaults to the date-only absolute
+   * date (`formatAbsoluteDate`). Callers that need finer precision — e.g. the
+   * audit log, where entries can repeat within a day — pass the full
+   * date-and-time timestamp here so the exact instant stays one hover away.
+   */
+  title?: string
 }
 
 /**
@@ -12,9 +19,9 @@ interface RelativeTimeProps {
  * the precise value is one hover away. Recomputed on each render against the
  * current clock — fine for a list cell; no timer churn.
  */
-export function RelativeTime({ ts, className }: RelativeTimeProps) {
+export function RelativeTime({ ts, className, title }: RelativeTimeProps) {
   return (
-    <span title={formatAbsoluteDate(ts)} className={className}>
+    <span title={title ?? formatAbsoluteDate(ts)} className={className}>
       {formatRelativeTime(ts)}
     </span>
   )
