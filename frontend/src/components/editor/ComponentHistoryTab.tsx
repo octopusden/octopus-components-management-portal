@@ -16,8 +16,8 @@ interface ComponentHistoryTabProps {
  * (see CRS technical-design.md §6.4 and AuditLogFilterTest fixture).
  *
  * We deliberately reuse `AuditLogTable` rather than minting a per-component
- * variant. The duplicate "Entity Type" + "Entity ID" columns are noise on
- * this page (they're constant `Component` + the page's id) but trimming
+ * variant. The duplicate "Entity Type" + "Component Key" columns are noise on
+ * this page (they're constant `Component` + the page's own key) but trimming
  * them now would fork the table for a cosmetic win — that's a 7.2 polish
  * if we ever pick it up.
  *

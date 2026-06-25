@@ -51,6 +51,24 @@ function formatDate(dateStr: string): string {
   }
 }
 
+/**
+ * The audit `entityId` is the component's UUID, not a human-readable key. The
+ * component key (CRS calls it `name`) rides along in the value snapshot, so we
+ * surface that as the visible label and keep the UUID only for routing.
+ *
+ * Order matters: prefer `newValue.name` (current key, and the post-rename name
+ * on RENAME rows) and fall back to `oldValue.name` for DELETE rows where the
+ * new snapshot is null. Returns null when neither carries a usable name (e.g.
+ * pre-schema-v2 partial snapshots) so the caller can fall back to the UUID.
+ */
+function componentKey(entry: AuditLogEntry): string | null {
+  const fromNew = entry.newValue?.name
+  if (typeof fromNew === 'string' && fromNew) return fromNew
+  const fromOld = entry.oldValue?.name
+  if (typeof fromOld === 'string' && fromOld) return fromOld
+  return null
+}
+
 function diffSummary(entry: AuditLogEntry): string | null {
   if (!entry.changeDiff) return null
   const keys = Object.keys(entry.changeDiff)
@@ -77,7 +95,7 @@ export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
             <TableHead>Who</TableHead>
             <TableHead>When</TableHead>
             <TableHead>Entity Type</TableHead>
-            <TableHead>Entity ID</TableHead>
+            <TableHead>Component Key</TableHead>
             <TableHead>Action</TableHead>
             <TableHead>Changed Fields</TableHead>
           </TableRow>
@@ -130,7 +148,7 @@ export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
                             to={`/components/${entry.entityId}`}
                             className="font-medium text-primary hover:underline"
                           >
-                            {entry.entityId}
+                            {componentKey(entry) ?? entry.entityId}
                           </Link>
                         ) : (
                           <span className="font-mono text-xs">{entry.entityId}</span>
