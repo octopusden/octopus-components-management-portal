@@ -21,10 +21,10 @@ import { hasValidationIssue, validationBadgeCount } from './validation'
  * out — so `withProblems` is inherently active-only, and the denominator must
  * match. `healthy = active − withProblems`; the ratios divide by `active`.
  * `total` is carried through unchanged only to back the "Total components" KPI
- * card (the grand total incl. archived); it is NOT used in the health math.
+ * tile (the grand total incl. archived); it is NOT used in the health math.
  */
 export interface HealthKpis {
-  /** Grand total incl. archived (CRS totalComponents) — KPI card only. */
+  /** Grand total incl. archived (CRS totalComponents) — KPI tile only. */
   total: number
   /** Active (non-archived) count — the base for all health math. */
   active: number

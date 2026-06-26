@@ -27,7 +27,7 @@ function unregistered(missingCount: number): ComponentValidation['problems'][num
 
 describe('computeHealthKpis', () => {
   // Signature: computeHealthKpis(total, active, validations). `total` is the
-  // grand total (the "Total components" KPI card); `active` is the base for the
+  // grand total (the "Total components" KPI tile); `active` is the base for the
   // health math (healthy + ratios), because the validation sweep is active-only
   // (RegistryClient.componentIds filters archived out) so problems are
   // active-only and the denominator must be too.

@@ -91,7 +91,7 @@ describe('RegistryHealthPage — KPIs', () => {
     mockValidation.mockReturnValue(validationResult())
     renderPage()
 
-    // Total card shows the grand total (12); the active count (10) is the hint.
+    // Total tile shows the grand total (12); the active count (10) is the hint.
     const total = screen.getByText('Total components').closest('div')!.parentElement!
     expect(within(total).getByText('12')).toBeInTheDocument()
     expect(within(total).getByText(/10 active/)).toBeInTheDocument()
