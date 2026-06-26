@@ -23,8 +23,8 @@
 The Portal is a BFF/gateway; it has no data of its own. Two backend services and one scaling
 constraint must be accounted for before/at prod deploy:
 
-- **components-registry-service (CRS) — deploy first.** The BFF proxies `/auth/me` and `/rest/api/**`
-  to CRS, so the Portal shows the `auth check failed` banner and `/rest/api/**` 404s until CRS is live
+- **components-registry-service (CRS) — deploy first.** The BFF proxies `/auth/**` and `/rest/**`
+  to CRS, so the Portal shows the `auth check failed` banner and `/rest/**` 404s until CRS is live
   in prod. **Deploy ordering is CRS → Portal.**
 - **Release Management service — set `RELEASE_MANAGEMENT_SERVICE_URL` in prod config.** The "Validation
   Problems" facility reconciles CRS components against Release Management builds; it needs the RM
