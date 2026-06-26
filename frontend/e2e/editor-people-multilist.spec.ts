@@ -221,8 +221,13 @@ async function addPerson(page: Page, label: string, person: string) {
 
 // The single save flow that replaced the old per-tab / header Save button:
 // the sticky SaveBar "Save changes" → the "Review changes" dialog → "Confirm".
+// Waits for the bar to arm first: a people edit commits only after its async
+// directory lookup resolves (the SaveBar stays disabled with a validating /
+// not-yet-dirty reason until then), so clicking too early would no-op and hang.
 async function saveViaReviewBar(page: Page) {
-  await page.getByRole('button', { name: 'Save changes' }).click()
+  const saveButton = page.getByRole('button', { name: 'Save changes' })
+  await expect(saveButton).toBeEnabled()
+  await saveButton.click()
   const dialog = page.getByRole('dialog', { name: /review changes/i })
   await expect(dialog).toBeVisible()
   await dialog.getByRole('button', { name: 'Confirm', exact: true }).click()
