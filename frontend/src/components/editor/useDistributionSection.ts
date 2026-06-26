@@ -48,6 +48,48 @@ function snapshotFrom(component: ComponentDetail): DistState {
   }
 }
 
+// Cleaned/persisted projections — the request, diff, AND dirty compare all run
+// off these, so a blank/incomplete row contributes to none of them (P1-4).
+function cleanMaven(rows: MavenState[]) {
+  return rows
+    .map((a) => ({ groupPattern: a.groupPattern.trim(), artifactPattern: a.artifactPattern.trim(), extension: (a.extension || '').trim(), classifier: (a.classifier || '').trim() }))
+    .filter((a) => a.groupPattern !== '' && a.artifactPattern !== '')
+}
+function cleanFileUrl(rows: FileUrlState[]) {
+  return rows
+    .map((a) => ({ url: a.url.trim(), artifactId: (a.artifactId || '').trim(), classifier: (a.classifier || '').trim() }))
+    .filter((a) => a.url !== '')
+}
+function cleanDocker(rows: DockerState[]) {
+  return rows
+    .map((d) => ({ imageName: d.imageName.trim(), flavor: (d.flavor || '').trim() }))
+    .filter((d) => d.imageName !== '')
+}
+function cleanPackages(rows: PackageState[]) {
+  return rows
+    .map((p) => ({ packageType: p.packageType.trim(), packageName: p.packageName.trim() }))
+    .filter((p) => p.packageType !== '' && p.packageName !== '')
+}
+function cleanSecGroups(rows: SecurityGroupState[]) {
+  return rows
+    .map((g) => ({ groupType: g.groupType.trim(), groupName: g.groupName.trim() }))
+    .filter((g) => g.groupName !== '')
+}
+
+// Normalized view for the dirty compare (P1-4): the two flags + every cleaned
+// list. dirty ⇔ this differs from the snapshot's view (no blank-row dirtiness).
+function normalizeDist(s: DistState): unknown {
+  return {
+    explicit: s.explicit,
+    external: s.external,
+    maven: cleanMaven(s.maven),
+    fileUrl: cleanFileUrl(s.fileUrl),
+    docker: cleanDocker(s.docker),
+    packages: cleanPackages(s.packages),
+    securityGroups: cleanSecGroups(s.securityGroups),
+  }
+}
+
 export interface DistributionSection {
   state: DistState
   setExplicit: (v: boolean) => void
@@ -62,7 +104,11 @@ export interface DistributionSection {
 }
 
 export function useDistributionSection(component: ComponentDetail): DistributionSection {
-  const { state, setState, snapshotRef, isDirty, reseed } = useSectionSnapshot(component, snapshotFrom)
+  const { state, setState, snapshotRef, isDirty, reseed } = useSectionSnapshot(
+    component,
+    snapshotFrom,
+    normalizeDist,
+  )
 
   type Lists = 'maven' | 'fileUrl' | 'docker' | 'packages' | 'securityGroups'
   function mutateList<T>(key: Lists, fn: (arr: T[]) => T[]) {
@@ -71,22 +117,13 @@ export function useDistributionSection(component: ComponentDetail): Distribution
 
   const reset = reseed
 
-  // Drop rows whose required fields are still blank — mirrors the legacy save guard.
-  const cleanedMaven = state.maven
-    .map((a) => ({ groupPattern: a.groupPattern.trim(), artifactPattern: a.artifactPattern.trim(), extension: (a.extension || '').trim(), classifier: (a.classifier || '').trim() }))
-    .filter((a) => a.groupPattern !== '' && a.artifactPattern !== '')
-  const cleanedFileUrl = state.fileUrl
-    .map((a) => ({ url: a.url.trim(), artifactId: (a.artifactId || '').trim(), classifier: (a.classifier || '').trim() }))
-    .filter((a) => a.url !== '')
-  const cleanedDocker = state.docker
-    .map((d) => ({ imageName: d.imageName.trim(), flavor: (d.flavor || '').trim() }))
-    .filter((d) => d.imageName !== '')
-  const cleanedPackages = state.packages
-    .map((p) => ({ packageType: p.packageType.trim(), packageName: p.packageName.trim() }))
-    .filter((p) => p.packageType !== '' && p.packageName !== '')
-  const cleanedSecGroups = state.securityGroups
-    .map((g) => ({ groupType: g.groupType.trim(), groupName: g.groupName.trim() }))
-    .filter((g) => g.groupName !== '')
+  // Drop rows whose required fields are still blank — the request, diff, and
+  // dirty compare all run off these (one source of truth).
+  const cleanedMaven = cleanMaven(state.maven)
+  const cleanedFileUrl = cleanFileUrl(state.fileUrl)
+  const cleanedDocker = cleanDocker(state.docker)
+  const cleanedPackages = cleanPackages(state.packages)
+  const cleanedSecGroups = cleanSecGroups(state.securityGroups)
 
   const prior = snapshotRef.current
   const diff: DiffEntry[] = []
@@ -110,8 +147,13 @@ export function useDistributionSection(component: ComponentDetail): Distribution
     const dockerKey = (d: { imageName: string; flavor?: string | null }) => `${d.imageName.trim()}:${(d.flavor || '').trim()}`
     const priorDocker = prior.docker.filter((d) => d.imageName.trim() !== '')
     push(listDiff('Distribution · Docker Images', priorDocker.map(dockerKey), cleanedDocker.map(dockerKey)))
-    push(listDiff('Distribution · Packages', prior.packages.map((p) => `${p.packageType}/${p.packageName}`), cleanedPackages.map((p) => `${p.packageType}/${p.packageName}`)))
-    push(listDiff('Distribution · Security Groups', prior.securityGroups.map((g) => `${g.groupType}:${g.groupName}`), cleanedSecGroups.map((g) => `${g.groupType}:${g.groupName}`)))
+    // Prior side also goes through the shared clean* helpers, symmetric with the
+    // maven/fileUrl/docker rows above (snapshots carry no blank rows today, so
+    // this is defensive — keeps prior↔request projections identical).
+    const packageKey = (p: { packageType: string; packageName: string }) => `${p.packageType}/${p.packageName}`
+    push(listDiff('Distribution · Packages', cleanPackages(prior.packages).map(packageKey), cleanedPackages.map(packageKey)))
+    const secGroupKey = (g: { groupType: string; groupName: string }) => `${g.groupType}:${g.groupName}`
+    push(listDiff('Distribution · Security Groups', cleanSecGroups(prior.securityGroups).map(secGroupKey), cleanedSecGroups.map(secGroupKey)))
   }
 
   const slice: SectionSlice = {

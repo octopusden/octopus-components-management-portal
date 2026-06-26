@@ -23,10 +23,21 @@ import { deepEqual } from '../../lib/editor/diffUtil'
  *
  * `snapshotFrom` maps a component to the section's flat draft shape; pass the
  * same mapper used for the initial state.
+ *
+ * `normalize` (optional, P1-4): for sections with list rows (VCS / Distribution)
+ * the draft can hold UI-only junk — a blank/whitespace/incomplete row that the
+ * request/diff projection drops. Dirty must be computed from that SAME cleaned
+ * projection so the invariant holds: dirty ⇔ cleaned payload differs ⇔ diff
+ * non-empty. Pass `normalize` to compare `normalize(state)` vs
+ * `normalize(snapshot)` for BOTH the exported `isDirty` and every re-seed
+ * decision — so a blank row never reads as dirty and never leaves the section
+ * stuck-dirty after a save. Scalar sections (Build/Jira/Escrow) omit it and
+ * compare raw, exactly as before.
  */
 export function useSectionSnapshot<S>(
   component: ComponentDetail,
   snapshotFrom: (c: ComponentDetail) => S,
+  normalize?: (s: S) => unknown,
 ): {
   state: S
   setState: React.Dispatch<React.SetStateAction<S>>
@@ -42,7 +53,11 @@ export function useSectionSnapshot<S>(
   // snapshot (a ref mutation alone does not re-render). See #3 below.
   const [, bumpSnapshot] = useState(0)
 
-  const isDirty = !deepEqual(state, snapshotRef.current)
+  // Compare via the cleaned projection when one is supplied (P1-4), else raw.
+  const sameDraft = (a: S, b: S) =>
+    normalize ? deepEqual(normalize(a), normalize(b)) : deepEqual(a, b)
+
+  const isDirty = !sameDraft(state, snapshotRef.current)
 
   useEffect(() => {
     const next = snapshotFrom(component)
@@ -51,17 +66,24 @@ export function useSectionSnapshot<S>(
     // Re-seed on a new component (fresh draft, #4), while clean (#1 leaves a
     // dirty sibling alone), or when the arriving server value already matches
     // the draft (#3 — the save we just fired landed, so drop the stale-snapshot
-    // phantom dirty). Otherwise keep the in-progress edit untouched.
-    if (idChanged || !isDirty || deepEqual(state, next)) {
+    // phantom dirty; under `normalize`, a leftover blank row is invisible here
+    // so it can't keep the section stuck-dirty). Otherwise keep the edit.
+    if (idChanged || !isDirty || sameDraft(state, next)) {
+      // The snapshot ref must always advance to the real server `next` (raw, not
+      // normalized) so the persisted baseline is exact; dirty stays driven by
+      // the normalized compare.
       const snapshotChanged = !deepEqual(snapshotRef.current, next)
-      const stateChanged = !deepEqual(state, next)
       snapshotRef.current = next
-      if (stateChanged) {
+      // Overwrite the visible draft with the server value ONLY for a genuinely
+      // different committed value (id change → fresh draft #4, or a clean
+      // refetch that brought new server data). When state and next are
+      // `sameDraft` (normalized-equal — the own-save-landed case #3, OR the
+      // draft holds only UI-only junk like a blank row being typed), DO NOT
+      // overwrite: that would wipe the row the user is mid-edit. Just advance
+      // the snapshot ref and force a render so `isDirty` recomputes to false.
+      if (idChanged || (!sameDraft(state, next) && !deepEqual(state, next))) {
         setState(next)
       } else if (snapshotChanged) {
-        // State unchanged but the snapshot moved (our own save landed and the
-        // server value now equals the draft) — `isDirty` flips false, but
-        // setState with an equal value won't re-render, so force one.
         bumpSnapshot((n) => n + 1)
       }
     }

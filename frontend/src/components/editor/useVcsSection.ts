@@ -38,6 +38,37 @@ function snapshotFrom(component: ComponentDetail): VcsState {
   }
 }
 
+// The cleaned/persisted entry projection: trim every field and drop rows whose
+// required vcsPath is blank (an empty required string would 400). The request,
+// the diff, AND the dirty compare all run off THIS — so a blank/whitespace/
+// path-less row contributes to none of them (P1-4 invariant). One source of truth.
+interface CleanVcsEntry {
+  name: string
+  vcsPath: string
+  branch: string
+  tag: string
+  hotfixBranch: string
+  repositoryType: string
+}
+function cleanVcsEntries(entries: VcsEntryState[]): CleanVcsEntry[] {
+  return entries
+    .map((e) => ({
+      name: (e.name || '').trim(),
+      vcsPath: e.vcsPath.trim(),
+      branch: (e.branch || '').trim(),
+      tag: (e.tag || '').trim(),
+      hotfixBranch: (e.hotfixBranch || '').trim(),
+      repositoryType: (e.repositoryType || '').trim(),
+    }))
+    .filter((e) => e.vcsPath !== '')
+}
+
+// Normalized view for the dirty compare (P1-4): the cleaned entries plus the
+// trimmed external-registry. dirty ⇔ this differs from the snapshot's view.
+function normalizeVcs(s: VcsState): unknown {
+  return { externalRegistry: (s.externalRegistry || '').trim(), entries: cleanVcsEntries(s.entries) }
+}
+
 export interface VcsSection {
   externalRegistry: string
   setExternalRegistry: (v: string) => void
@@ -50,7 +81,11 @@ export interface VcsSection {
 }
 
 export function useVcsSection(component: ComponentDetail): VcsSection {
-  const { state, setState, snapshotRef, isDirty, reseed } = useSectionSnapshot(component, snapshotFrom)
+  const { state, setState, snapshotRef, isDirty, reseed } = useSectionSnapshot(
+    component,
+    snapshotFrom,
+    normalizeVcs,
+  )
 
   const setExternalRegistry = (v: string) => setState((p) => ({ ...p, externalRegistry: v }))
   const updateEntry = (index: number, field: keyof VcsEntryState, value: string) =>
@@ -65,32 +100,10 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
 
   const reset = reseed
 
-  // Drop rows whose required vcsPath is blank — same guard the legacy tab applied
-  // before sending (an empty required string would 400).
-  const cleanedEntries = state.entries
-    .map((e) => ({
-      name: (e.name || '').trim(),
-      vcsPath: e.vcsPath.trim(),
-      branch: (e.branch || '').trim(),
-      tag: (e.tag || '').trim(),
-      hotfixBranch: (e.hotfixBranch || '').trim(),
-      repositoryType: (e.repositoryType || '').trim(),
-    }))
-    .filter((e) => e.vcsPath !== '')
-
+  // The request + diff + dirty all run off this one cleaned projection.
+  const cleanedEntries = cleanVcsEntries(state.entries)
   const prior = snapshotRef.current
-  // Normalize the prior snapshot entries the SAME way as cleanedEntries so the
-  // diff compares like-for-like against exactly what the request persists.
-  const cleanedPriorEntries = prior.entries
-    .map((e) => ({
-      name: (e.name || '').trim(),
-      vcsPath: e.vcsPath.trim(),
-      branch: (e.branch || '').trim(),
-      tag: (e.tag || '').trim(),
-      hotfixBranch: (e.hotfixBranch || '').trim(),
-      repositoryType: (e.repositoryType || '').trim(),
-    }))
-    .filter((e) => e.vcsPath !== '')
+  const cleanedPriorEntries = cleanVcsEntries(prior.entries)
 
   const diff: DiffEntry[] = []
   const push = (d: DiffEntry | null) => { if (d) diff.push(d) }

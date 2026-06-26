@@ -47,6 +47,40 @@ describe('useVcsSection', () => {
     expect(result.current.slice.request.baseConfiguration?.vcsEntries).toEqual([])
   })
 
+  // P1-4: dirty must be computed from the CLEANED projection (what diff + request
+  // use), not the raw draft. The invariant: dirty ⇔ cleaned payload differs ⇔
+  // diff non-empty. A blank/whitespace/path-less row is dropped from the payload,
+  // so it must NOT make the bar dirty (else Review opens "0 fields will change").
+  it('(a) adding a blank entry row does NOT make the section dirty', () => {
+    const { result } = renderHook(() => useVcsSection(makeComponent()))
+    act(() => result.current.addEntry())
+    expect(result.current.slice.isDirty).toBe(false)
+    expect(result.current.slice.diff).toEqual([])
+  })
+
+  it('(b) whitespace-only / name-without-vcsPath edits do not count as dirty', () => {
+    const { result } = renderHook(() => useVcsSection(makeComponent()))
+    act(() => result.current.addEntry())
+    act(() => result.current.updateEntry(0, 'name', 'has-no-path'))
+    act(() => result.current.updateEntry(0, 'branch', '   ')) // whitespace only
+    expect(result.current.slice.isDirty).toBe(false)
+    expect(result.current.slice.diff).toEqual([])
+  })
+
+  it('(c) a real edit alongside a leftover blank row clears dirty after save (no stuck-dirty)', () => {
+    const c1 = makeComponent({ vcsExternalRegistry: 'reg' })
+    const { result, rerender } = renderHook(({ c }) => useVcsSection(c), { initialProps: { c: c1 } })
+    // Real change + a junk blank row that the payload will drop.
+    act(() => result.current.setExternalRegistry('reg2'))
+    act(() => result.current.addEntry())
+    expect(result.current.slice.isDirty).toBe(true)
+    expect(result.current.slice.request.vcsExternalRegistry).toBe('reg2')
+    // The save lands: server now reports reg2 (the cleaned payload). The leftover
+    // blank row must NOT keep the section stuck dirty.
+    rerender({ c: makeComponent({ vcsExternalRegistry: 'reg2', version: 2 }) })
+    expect(result.current.slice.isDirty).toBe(false)
+  })
+
   // P1-2: editing ONLY a branch (vcsPath unchanged) must still produce a diff
   // row — the request persists branch/tag/name/etc., so the diff must too
   // (acceptance #6: diff == what's sent). The old vcsPath-only listDiff missed this.
@@ -142,6 +176,22 @@ describe('useDistributionSection', () => {
     const mavenRow = result.current.slice.diff.find((d) => /maven/i.test(d.label))
     expect(mavenRow).toBeDefined()
     expect(mavenRow!.newValue).toMatch(/sources/)
+  })
+
+  // P1-4: a blank/incomplete distribution row is dropped from the payload, so it
+  // must not make the section dirty (dirty ⇔ cleaned payload differs).
+  it('(a) adding a blank maven row does NOT make the section dirty', () => {
+    const { result } = renderHook(() => useDistributionSection(makeComponent()))
+    act(() => result.current.addMaven())
+    expect(result.current.slice.isDirty).toBe(false)
+    expect(result.current.slice.diff).toEqual([])
+  })
+
+  it('(b) a partial maven row (group only, no artifact) is not dirty', () => {
+    const { result } = renderHook(() => useDistributionSection(makeComponent()))
+    act(() => result.current.addMaven())
+    act(() => result.current.updateMaven(0, 'groupPattern', 'com.acme')) // artifact still blank → filtered
+    expect(result.current.slice.isDirty).toBe(false)
   })
 
   // #4: id change → fresh, clean draft even while dirty.
