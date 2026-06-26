@@ -345,7 +345,10 @@ test.describe('Create component from scratch — admin smoke', () => {
     const state = await setupRoutes(page)
     await page.goto('/components')
 
-    await page.getByRole('button', { name: /new component/i }).click()
+    // Exact match: the per-row Clone action's aria-label ("Clone <key> into a
+    // new component") also matches /new component/i, so a regex resolves to 2
+    // buttons (strict-mode violation). The header create button is exactly "New Component".
+    await page.getByRole('button', { name: 'New Component', exact: true }).click()
     const dialog = page.getByRole('dialog')
     await expect(dialog.getByText('Create Component')).toBeVisible()
 
