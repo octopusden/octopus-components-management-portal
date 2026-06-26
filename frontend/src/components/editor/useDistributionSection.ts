@@ -97,25 +97,19 @@ export function useDistributionSection(component: ComponentDetail): Distribution
     // P1-2: key each list row off the COMPLETE persisted entry (every field the
     // request sends), not just the identity columns — otherwise editing only a
     // classifier / flavor / artifactId persists silently with "0 fields change".
-    // Normalize prior the same way as the cleaned* (request) projections.
+    // Normalize prior the SAME way as the cleaned* (request) projections — incl.
+    // trim — so a like-for-like compare never shows a spurious whitespace diff.
+    const mavenKey = (a: { groupPattern: string; artifactPattern: string; extension?: string | null; classifier?: string | null }) =>
+      `${a.groupPattern.trim()}:${a.artifactPattern.trim()}:${(a.extension || '').trim()}:${(a.classifier || '').trim()}`
     const priorMaven = prior.maven.filter((a) => a.groupPattern.trim() !== '' && a.artifactPattern.trim() !== '')
-    push(listDiff(
-      'Distribution · Maven Artifacts',
-      priorMaven.map((a) => `${a.groupPattern}:${a.artifactPattern}:${a.extension || ''}:${a.classifier || ''}`),
-      cleanedMaven.map((a) => `${a.groupPattern}:${a.artifactPattern}:${a.extension || ''}:${a.classifier || ''}`),
-    ))
+    push(listDiff('Distribution · Maven Artifacts', priorMaven.map(mavenKey), cleanedMaven.map(mavenKey)))
+    const fileUrlKey = (a: { url: string; artifactId?: string | null; classifier?: string | null }) =>
+      `${a.url.trim()}:${(a.artifactId || '').trim()}:${(a.classifier || '').trim()}`
     const priorFileUrl = prior.fileUrl.filter((a) => a.url.trim() !== '')
-    push(listDiff(
-      'Distribution · File URL Artifacts',
-      priorFileUrl.map((a) => `${a.url}:${a.artifactId || ''}:${a.classifier || ''}`),
-      cleanedFileUrl.map((a) => `${a.url}:${a.artifactId || ''}:${a.classifier || ''}`),
-    ))
+    push(listDiff('Distribution · File URL Artifacts', priorFileUrl.map(fileUrlKey), cleanedFileUrl.map(fileUrlKey)))
+    const dockerKey = (d: { imageName: string; flavor?: string | null }) => `${d.imageName.trim()}:${(d.flavor || '').trim()}`
     const priorDocker = prior.docker.filter((d) => d.imageName.trim() !== '')
-    push(listDiff(
-      'Distribution · Docker Images',
-      priorDocker.map((d) => `${d.imageName}:${d.flavor || ''}`),
-      cleanedDocker.map((d) => `${d.imageName}:${d.flavor || ''}`),
-    ))
+    push(listDiff('Distribution · Docker Images', priorDocker.map(dockerKey), cleanedDocker.map(dockerKey)))
     push(listDiff('Distribution · Packages', prior.packages.map((p) => `${p.packageType}/${p.packageName}`), cleanedPackages.map((p) => `${p.packageType}/${p.packageName}`)))
     push(listDiff('Distribution · Security Groups', prior.securityGroups.map((g) => `${g.groupType}:${g.groupName}`), cleanedSecGroups.map((g) => `${g.groupType}:${g.groupName}`)))
   }

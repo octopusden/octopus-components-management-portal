@@ -229,6 +229,8 @@ export function ComponentDetailPage() {
     if (prevId === null) return // first load — GeneralTab hydrates on mount
     form.reset(mapComponentToForm(component))
     form.clearErrors()
+    // `form` is a stable RHF ref (never changes identity); listed for
+    // exhaustive-deps lint only — the id ref-compare is the real gate.
   }, [component, form])
 
   // ── Section state hooks (the five ex-useState tabs). Each owns its local

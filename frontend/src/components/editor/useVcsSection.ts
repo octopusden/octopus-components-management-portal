@@ -102,6 +102,8 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
     // not just a vcsPath change. Compare index-by-index over the normalized
     // entries; emit one row per changed field, plus added/removed rows. A vcs
     // entry is a collection child (REPLACE semantics) so no scalar-aspect no-op.
+    // NOTE: positional compare can mislabel a mid-list insertion as "edit + add"
+    // — cosmetic only; the request payload (whole-list REPLACE) is still correct.
     const ENTRY_FIELDS: { key: keyof (typeof cleanedEntries)[number]; label: string }[] = [
       { key: 'vcsPath', label: 'Path' },
       { key: 'name', label: 'Name' },
