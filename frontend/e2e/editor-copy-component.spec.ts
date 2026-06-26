@@ -277,11 +277,14 @@ test.describe('Copy component — admin smoke', () => {
     expect('group' in body, 'group is migration-owned').toBe(false)
   })
 
-  test('list-row Copy: dialog fetches the source detail itself and prefills', async ({ page }) => {
+  test('list-row Clone: dialog fetches the source detail itself and prefills', async ({ page }) => {
     await setupRoutes(page)
     await page.goto('/components')
 
-    await page.getByRole('button', { name: 'Create similar to svc-copy-source' }).click()
+    // The list-row action is now "Clone" (was "Create similar"); its aria-label
+    // is "Clone <key> into a new component". The detail-page button stays
+    // "Create Similar".
+    await page.getByRole('button', { name: 'Clone svc-copy-source into a new component' }).click()
     const dialog = page.getByRole('dialog')
     await expect(dialog.getByText('Create Similar Component')).toBeVisible()
     // Owner prefill proves the dialog loaded the FULL detail from a summary-only row.

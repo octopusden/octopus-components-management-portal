@@ -12,13 +12,14 @@ import { test, expect, type Page } from '@playwright/test'
 // futile reload loop on a plain single-user save (the QA incident reproduced
 // by the Build-tab Java Version test below).
 //
-// Matrix coverage — ONE robust field per tab, all six main-attribute tabs:
-//   General      → Display Name        (header Save, 'Component saved')
-//   Build        → Build File Path     ('Save Build', 'Build configuration saved')
-//   VCS          → External Registry   ('Save VCS', 'VCS settings saved')
-//   Jira         → Project Key         ('Save Jira', 'Jira configuration saved')
-//   Distribution → Docker image name   ('Save Distribution', 'Distribution saved')
-//   Escrow       → Disk Space          ('Save Escrow', 'Escrow configuration saved')
+// Matrix coverage — ONE robust field per tab, all six main-attribute tabs.
+// The per-tab Save buttons + per-tab success toasts are GONE: the editor now
+// has ONE sticky SaveBar ("Save changes") → a "Review changes" dialog
+// ("Confirm") → a SINGLE combined PATCH → ONE 'Component saved' toast. Every
+// matrix row therefore edits its field on its tab, then saves through that one
+// bar+dialog flow (see saveViaReviewBar). Tabs covered:
+//   General → Display Name, Build → Build File Path, VCS → External Registry,
+//   Jira → Project Key, Distribution → Docker image, Escrow → Disk Space.
 // No tab is omitted. VCS is exercised via the per-component External Registry
 // scalar rather than a VCS entry row (an entry needs a plausible vcsPath and
 // drags in host/path semantics — the scalar exercises the same PATCH + version
@@ -68,6 +69,16 @@ async function mutationHeaders(page: Page): Promise<Record<string, string>> {
 async function openTab(page: Page, componentId: string, tab: RegExp): Promise<void> {
   await page.goto(`/components/${componentId}`, { waitUntil: 'networkidle' })
   await page.getByRole('tab', { name: tab }).click()
+}
+
+// The single save flow that replaced the per-tab Save buttons: click the
+// sticky SaveBar "Save changes", then the "Review changes" dialog's "Confirm".
+// One combined PATCH fires; the caller asserts the outcome toast.
+async function saveViaReviewBar(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Save changes' }).click()
+  const dialog = page.getByRole('dialog', { name: /review changes/i })
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('button', { name: 'Confirm', exact: true }).click()
 }
 
 // The two texts the optimistic-lock path renders (lib/conflict.ts): the toast
@@ -143,10 +154,11 @@ test.describe.serial('Editor attribute matrix — every tab saves without a fals
     expect(target, 'CRS /meta/java-versions returned no selectable Java versions').toBeTruthy()
     await page.getByRole('option', { name: target!, exact: true }).click()
 
-    await page.getByRole('button', { name: 'Save Build' }).click()
+    await saveViaReviewBar(page)
     // .first(): the toast text renders twice (toast body + the toaster's
     // aria-live status region) — strict mode would reject the bare locator.
-    await expect(page.getByText('Build configuration saved').first()).toBeVisible({ timeout: 10_000 })
+    // ONE combined-save toast now, not the old per-tab 'Build configuration saved'.
+    await expect(page.getByText('Component saved').first()).toBeVisible({ timeout: 10_000 })
     // The incident: a single-user save was answered with the optimistic-lock
     // "updated by another user, reload" toast. Assert it stays gone.
     await expectNoOptimisticConflictToast(page)
@@ -157,22 +169,20 @@ test.describe.serial('Editor attribute matrix — every tab saves without a fals
     await expect(page.locator('#build-javaVersion')).toContainText(target!)
   })
 
-  // One main attribute per tab: edit → save → success toast (and no conflict
-  // toast) → reload → the value survived the round-trip. Locators lean on
-  // stable placeholders/ids from the tab components (BuildTab/VcsTab/…).
+  // One main attribute per tab: edit → save via the SaveBar + Review dialog →
+  // ONE 'Component saved' toast (and no conflict toast) → reload → the value
+  // survived the round-trip. Locators lean on stable placeholders/ids from the
+  // tab components (BuildTab/VcsTab/…). The save step is identical across rows
+  // now (saveViaReviewBar) — there are no per-tab Save buttons or toasts.
   const matrix: Array<{
     title: string
     tab: RegExp
-    saveButton: string
-    successToast: string
     edit: (page: Page) => Promise<void>
     assertPersisted: (page: Page) => Promise<void>
   }> = [
     {
       title: 'General — Display Name',
       tab: /general/i,
-      saveButton: 'Save',
-      successToast: 'Component saved',
       // Display name is globally UNIQUE server-side — keep the run suffix in
       // the value so reruns against a long-lived stand don't 409. Field-config
       // can hide the field entirely (GeneralTab renders it conditionally) —
@@ -189,8 +199,6 @@ test.describe.serial('Editor attribute matrix — every tab saves without a fals
     {
       title: 'Build — Build File Path',
       tab: /build/i,
-      saveButton: 'Save Build',
-      successToast: 'Build configuration saved',
       edit: async (page) => {
         await page.getByPlaceholder('pom.xml / build.gradle').fill(`e2e/${SUFFIX}/pom.xml`)
       },
@@ -201,8 +209,6 @@ test.describe.serial('Editor attribute matrix — every tab saves without a fals
     {
       title: 'VCS — External Registry',
       tab: /vcs/i,
-      saveButton: 'Save VCS',
-      successToast: 'VCS settings saved',
       edit: async (page) => {
         await page.getByPlaceholder('External registry URL').fill(`e2e-registry-${SUFFIX}`)
       },
@@ -213,8 +219,6 @@ test.describe.serial('Editor attribute matrix — every tab saves without a fals
     {
       title: 'Jira — Project Key',
       tab: /jira/i,
-      saveButton: 'Save Jira',
-      successToast: 'Jira configuration saved',
       // (projectKey, versionPrefix) is unique among non-archived components —
       // suffix the key so it can't clash with the fixture's 'E2E' project.
       // Last 6 suffix chars keep the key short (headroom vs key-length limits)
@@ -229,8 +233,6 @@ test.describe.serial('Editor attribute matrix — every tab saves without a fals
     {
       title: 'Distribution — Docker image',
       tab: /distribution/i,
-      saveButton: 'Save Distribution',
-      successToast: 'Distribution saved',
       // Image names are globally unique — suffix again. Scope to the section's
       // data-testid (Maven/FileUrl/Packages/SecurityGroups all render their own
       // Add button, and the heading text is field-config-relabelable).
@@ -248,8 +250,6 @@ test.describe.serial('Editor attribute matrix — every tab saves without a fals
     {
       title: 'Escrow — Disk Space',
       tab: /escrow/i,
-      saveButton: 'Save Escrow',
-      successToast: 'Escrow configuration saved',
       edit: async (page) => {
         await page.getByPlaceholder('e.g. 10GB').fill('42GB')
       },
@@ -265,10 +265,9 @@ test.describe.serial('Editor attribute matrix — every tab saves without a fals
       await openTab(page, idA!, entry.tab)
 
       await entry.edit(page)
-      // /^save$/i for General matches ONLY the header Save (the per-tab
-      // buttons are 'Save Build' / 'Save VCS' / … — full-name regex match).
-      await page.getByRole('button', { name: new RegExp(`^${entry.saveButton}$`, 'i') }).click()
-      await expect(page.getByText(entry.successToast).first()).toBeVisible({ timeout: 10_000 })
+      // ONE combined save for every tab now — the per-tab Save buttons are gone.
+      await saveViaReviewBar(page)
+      await expect(page.getByText('Component saved').first()).toBeVisible({ timeout: 10_000 })
       await expectNoOptimisticConflictToast(page)
 
       // Reload → fresh GET → the edit survived the server round-trip.
@@ -329,7 +328,8 @@ test.describe.serial('Editor attribute matrix — every tab saves without a fals
     const extensionInput = page.getByPlaceholder('jar')
     await expect(extensionInput).toHaveValue('apk')
     await extensionInput.fill('zip')
-    await page.getByRole('button', { name: 'Save Distribution' }).click()
+    // Save through the combined bar+dialog; the 409 surfaces from the one PATCH.
+    await saveViaReviewBar(page)
 
     // Title is the fixed 'Uniqueness violation'; the description is the
     // SERVER's message verbatim ("uniqueness violation: distribution GAV …").
