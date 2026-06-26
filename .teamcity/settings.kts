@@ -14,8 +14,14 @@ project {
         param("COMPONENT_NAME", "components-management-portal")
         param("OCTOPUS_MODULE_NAME", "octopus-components-management-portal")
         param("OKD_IMAGE_NAME", "components-management-portal")
+        // Placeholder until the first real release through the chain (read by
+        // id50ReleasePostProcessingAuto as %LAST_RELEASE_VERSION%); bump it to the
+        // released value afterwards.
         param("LAST_RELEASE_VERSION", "0.0.1")
-        param("PROJECT_VERSION", "0.0.1")
+        // Empty so the OctopusRelease template computes the version at build time
+        // (mirrors CRS, which keeps PROJECT_VERSION ""). id40 reads the computed
+        // value via id10CompileUtAuto.depParamRefs["PROJECT_VERSION"].
+        param("PROJECT_VERSION", "")
         // Base URL for Vite build — set to sub-path (e.g. /components-management-portal/)
         // when serving via API gateway prefix, or "/" when serving from a dedicated domain.
         param("env.VITE_APP_BASE_URL", "/")
@@ -244,6 +250,13 @@ object id40ReleaseManual : BuildType({
 
     dependencies {
         snapshot(id20DeployToOkdQaManual) {
+            onDependencyFailure = FailureAction.FAIL_TO_START
+        }
+        // E2E is a release blocker: release can only cut when [1.5] E2E passed for
+        // the SAME source revision. id15 and id20 both snapshot id10, so TeamCity
+        // pins all three to one id10 build — release params still come from id10,
+        // id15 only gates (it is not a source of release parameters).
+        snapshot(id15E2eAuto) {
             onDependencyFailure = FailureAction.FAIL_TO_START
         }
     }
