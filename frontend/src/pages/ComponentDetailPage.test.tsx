@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router'
+import { createMemoryRouter, RouterProvider } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React, { useEffect } from 'react'
 import { ComponentDetailPage } from './ComponentDetailPage'
@@ -220,6 +220,15 @@ function makeUser(permissions: string[]): User {
   }
 }
 
+// Phase 3b save flow: click the sticky bar's "Save changes" to open the Review
+// dialog, then "Confirm" to fire the single combined PATCH. Helper centralises
+// that two-step interaction so the mutation-firing tests read cleanly.
+async function clickSaveAndConfirm() {
+  fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+  const confirm = await screen.findByRole('button', { name: /^confirm$/i })
+  fireEvent.click(confirm)
+}
+
 interface RenderPageOptions {
   updateMutation?: Partial<typeof idleMutation>
   deleteMutation?: Partial<typeof idleMutation>
@@ -253,18 +262,19 @@ function renderPage(component: ComponentDetail, user: User | null, opts: RenderP
     ...(opts.deleteMutation ?? {}),
   } as unknown as ReturnType<typeof useDeleteComponent>)
 
+  // A data router (createMemoryRouter) is required because the page's
+  // UnsavedChangesGuard uses react-router's useBlocker, which throws outside a
+  // data-router context. The /components route lets navigate('/components')
+  // resolve without a "no routes matched" warning.
+  const router = createMemoryRouter(
+    [
+      { path: '/components', element: <div data-testid="list-page" /> },
+      { path: '/components/:id', element: <ComponentDetailPage /> },
+    ],
+    { initialEntries: ['/components/comp-1'] },
+  )
   return render(
-    React.createElement(
-      QueryClientProvider,
-      { client },
-      // Add a /components route so navigate('/components') doesn't produce a "no routes matched" warning
-      <MemoryRouter initialEntries={['/components/comp-1']}>
-        <Routes>
-          <Route path="/components" element={<div data-testid="list-page" />} />
-          <Route path="/components/:id" element={<ComponentDetailPage />} />
-        </Routes>
-      </MemoryRouter>,
-    ),
+    React.createElement(QueryClientProvider, { client }, <RouterProvider router={router} />),
   )
 }
 
@@ -309,7 +319,7 @@ beforeEach(() => {
 describe('ComponentDetailPage — Save gating on canEdit', () => {
   // The header Save button is the only "Save" (tab-specific saves like "Save Build"
   // live in inactive, unmounted tabs); match its exact accessible name.
-  const SAVE = { name: 'Save' } as const
+  const SAVE = { name: 'Save changes' } as const
 
   // Render with a GeneralTab stub exposing an edit button; clicking it makes a real
   // (dirty) change so the merged Save dirty-gate is satisfied, isolating the canEdit
@@ -523,25 +533,53 @@ describe('ComponentDetailPage — breadcrumb badges', () => {
   })
 })
 
-describe('ComponentDetailPage — tab order', () => {
-  it('renders Misc right after Escrow (aspect tabs first, Misc before the meta tabs)', () => {
+describe('ComponentDetailPage — sidebar nav order', () => {
+  it('renders the grouped sidebar order (Overview → Build & Release → Distribution → Metadata → Tools)', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(baseComponent, user)
     const tabs = within(screen.getByRole('tablist')).getAllByRole('tab')
     // Strip count badges ("Build1" → "Build") so the assertion only pins order.
+    // The grouping (spec §2.1) puts Jira/Escrow under Build & Release before the
+    // single-item Distribution group, then Metadata (Misc, Configurations), then
+    // Tools (As Code, Overrides, History).
     expect(tabs.map((t) => (t.textContent ?? '').replace(/\d+$/, ''))).toEqual([
       'General',
       'Build',
       'VCS',
-      'Distribution',
       'Jira',
       'Escrow',
+      'Distribution',
       'Misc',
       'Configurations',
       'As Code',
       'Overrides',
       'History',
     ])
+  })
+
+  it('renders every group heading in the sidebar', () => {
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    renderPage(baseComponent, user)
+    for (const heading of ['Overview', 'Build & Release', 'Metadata', 'Tools']) {
+      expect(screen.getByText(heading)).toBeDefined()
+    }
+    // "Distribution" is both a group heading and the lone item under it.
+    expect(screen.getAllByText('Distribution').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('shows per-section counts inside the sidebar items (VCS entries, Distribution items)', () => {
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    // baseComponent's BASE row has 1 vcsEntry and a present build/jira aspect.
+    renderPage(baseComponent, user)
+    // VCS item carries its entry count (1), Build carries the aspect-present 1.
+    expect(within(screen.getByRole('tab', { name: /^VCS/ })).getByText('1')).toBeDefined()
+    expect(within(screen.getByRole('tab', { name: /^Build/ })).getByText('1')).toBeDefined()
+  })
+
+  it('marks the active sidebar item with aria-current', () => {
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    renderPage(baseComponent, user)
+    expect(screen.getByRole('tab', { name: 'General' })).toHaveAttribute('aria-current', 'page')
   })
 })
 
@@ -708,11 +746,11 @@ describe('ComponentDetailPage — solution flag dirty-gate', () => {
     // Wait for GeneralTab's hydration useEffect to settle (system mirrored from
     // the server) — the gate then sees a pristine form and disables Save.
     await waitFor(() => {
-      const btn = screen.getByRole('button', { name: /^save$/i }) as HTMLButtonElement
+      const btn = screen.getByRole('button', { name: /save changes/i }) as HTMLButtonElement
       expect(btn.disabled).toBe(true)
     })
 
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
     // Disabled Save fires no handler, so no need to await: assert directly.
     expect(updateMutateAsync).not.toHaveBeenCalled()
   })
@@ -750,15 +788,15 @@ describe('ComponentDetailPage — Save gating on owner validation', () => {
 
     // Dirty edit so the dirty-gate passes and Save starts enabled.
     fireEvent.click(screen.getByTestId('edit'))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save changes' })).not.toBeDisabled())
 
     fireEvent.click(screen.getByTestId('validating-on'))
-    const save = screen.getByRole('button', { name: 'Save' })
+    const save = screen.getByRole('button', { name: 'Save changes' })
     expect(save).toBeDisabled()
     expect(save.parentElement).toHaveAttribute('title', 'Validating component owner…')
 
     fireEvent.click(screen.getByTestId('validating-off'))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save changes' })).not.toBeDisabled())
   })
 })
 
@@ -784,21 +822,23 @@ describe('ComponentDetailPage — Save dirty-gate', () => {
 
     // Pristine (system hydrated, nothing else changed) → Save disabled.
     await waitFor(() => {
-      const btn = screen.getByRole('button', { name: /^save$/i }) as HTMLButtonElement
+      const btn = screen.getByRole('button', { name: /save changes/i }) as HTMLButtonElement
       expect(btn.disabled).toBe(true)
     })
 
     // A real edit → Save enables.
     fireEvent.click(screen.getByTestId('edit-display-name'))
     await waitFor(() => {
-      const btn = screen.getByRole('button', { name: /^save$/i }) as HTMLButtonElement
+      const btn = screen.getByRole('button', { name: /save changes/i }) as HTMLButtonElement
       expect(btn.disabled).toBe(false)
     })
 
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+    await clickSaveAndConfirm()
     await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
     const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
     expect(payload['displayName']).toBe('New Name')
+    // Single combined PATCH carries exactly one version (the page snapshot).
+    expect(payload['version']).toBe(baseComponent.version)
   })
 
   it('renders (Save button present) even when the API omits docs/artifactIds', () => {
@@ -815,7 +855,7 @@ describe('ComponentDetailPage — Save dirty-gate', () => {
       artifactIds: undefined,
     } as unknown as ComponentDetail
     renderPage(seeded, user)
-    expect(screen.getByRole('button', { name: /^save$/i })).toBeDefined()
+    expect(screen.getByRole('button', { name: /save changes/i })).toBeDefined()
   })
 })
 
@@ -839,7 +879,7 @@ describe('ComponentDetailPage — system clear-blocks-save guard (task #14 singl
     await waitFor(() => {
       expect(screen.getByTestId('general-tab-systems-cleared')).toBeDefined()
     })
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
 
     // Give React-Query a tick to settle if the mutation were to fire.
     // Disabled Save fires no handler, so no need to await: assert directly.
@@ -882,10 +922,10 @@ describe('ComponentDetailPage — system clear-blocks-save guard (task #14 singl
     // Make the edit, then wait for Save to enable before clicking it.
     fireEvent.click(screen.getByTestId('edit-display-name'))
     await waitFor(() => {
-      const btn = screen.getByRole('button', { name: /^save$/i }) as HTMLButtonElement
+      const btn = screen.getByRole('button', { name: /save changes/i }) as HTMLButtonElement
       expect(btn.disabled).toBe(false)
     })
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+    await clickSaveAndConfirm()
 
     await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
   })
@@ -929,7 +969,7 @@ describe('ComponentDetailPage — labels clear-all sends [] (PR #44 follow-up: c
     await waitFor(() => {
       expect(screen.getByTestId('general-tab-labels-cleared')).toBeDefined()
     })
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+    await clickSaveAndConfirm()
 
     await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
     const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
@@ -949,10 +989,10 @@ describe('ComponentDetailPage — labels clear-all sends [] (PR #44 follow-up: c
     renderPage(seeded, user, { updateMutation: { mutateAsync: updateMutateAsync } })
 
     await waitFor(() => {
-      const btn = screen.getByRole('button', { name: /^save$/i }) as HTMLButtonElement
+      const btn = screen.getByRole('button', { name: /save changes/i }) as HTMLButtonElement
       expect(btn.disabled).toBe(true)
     })
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
     // Disabled Save fires no handler, so no need to await: assert directly.
     expect(updateMutateAsync).not.toHaveBeenCalled()
   })
@@ -972,10 +1012,10 @@ describe('ComponentDetailPage — labels clear-all sends [] (PR #44 follow-up: c
     renderPage(seeded, user, { updateMutation: { mutateAsync: updateMutateAsync } })
 
     await waitFor(() => {
-      const btn = screen.getByRole('button', { name: /^save$/i }) as HTMLButtonElement
+      const btn = screen.getByRole('button', { name: /save changes/i }) as HTMLButtonElement
       expect(btn.disabled).toBe(true)
     })
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
     // Disabled Save fires no handler, so no need to await: assert directly.
     expect(updateMutateAsync).not.toHaveBeenCalled()
   })
@@ -998,10 +1038,10 @@ describe('ComponentDetailPage — labels clear-all sends [] (PR #44 follow-up: c
     renderPage(seeded, user, { updateMutation: { mutateAsync: updateMutateAsync } })
 
     await waitFor(() => {
-      const btn = screen.getByRole('button', { name: /^save$/i }) as HTMLButtonElement
+      const btn = screen.getByRole('button', { name: /save changes/i }) as HTMLButtonElement
       expect(btn.disabled).toBe(true)
     })
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
     // Disabled Save fires no handler, so no need to await: assert directly.
     expect(updateMutateAsync).not.toHaveBeenCalled()
   })
@@ -1071,7 +1111,7 @@ describe('ComponentDetailPage — cross-tab 400 + displayName clear', () => {
     renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
 
     fireEvent.click(screen.getByTestId('edit'))
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+    await clickSaveAndConfirm()
 
     await waitFor(() => expect(screen.getByTestId('misc-tab')).toBeDefined())
   })
@@ -1100,10 +1140,10 @@ describe('ComponentDetailPage — cross-tab 400 + displayName clear', () => {
 
     fireEvent.click(screen.getByTestId('clear-dn'))
     await waitFor(() => {
-      const btn = screen.getByRole('button', { name: /^save$/i }) as HTMLButtonElement
+      const btn = screen.getByRole('button', { name: /save changes/i }) as HTMLButtonElement
       expect(btn.disabled).toBe(false)
     })
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+    await clickSaveAndConfirm()
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce())
     const payload = (mutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
     expect(payload['displayName']).toBe('')
@@ -1142,7 +1182,7 @@ describe('ComponentDetailPage — Validation Problems tab (admin gate + lookup b
     checkError: 'RM returned 500',
   }
 
-  it('renders a RED Validation Problems tab (last) for an admin when the component has problems, and shows the full versions list when selected', async () => {
+  it('renders a RED Validation Problems item (pinned at the top) for an admin when the component has problems, and shows the full versions list when selected', async () => {
     useAdminMode.setState({ enabled: true })
     const versions = ['v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7']
     mockedUseValidationProblems.mockReturnValue(validationResult([withProblems(versions)]))
@@ -1156,9 +1196,9 @@ describe('ComponentDetailPage — Validation Problems tab (admin gate + lookup b
     expect(tab).toBeDefined()
     // Red styling applied to the trigger.
     expect(tab.className).toContain('text-destructive')
-    // Last tab in the list.
+    // Pinned at the TOP of the sidebar (spec §2.1), i.e. the first tab.
     const tabs = within(screen.getByRole('tablist')).getAllByRole('tab')
-    expect((tabs[tabs.length - 1]!.textContent ?? '')).toMatch(/validation problems/i)
+    expect((tabs[0]!.textContent ?? '')).toMatch(/validation problems/i)
 
     // Selecting it shows the full versions list (untruncated). Radix Tabs ignore
     // plain fireEvent.click in jsdom (the trigger uses pointer-down/keyboard

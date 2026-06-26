@@ -68,7 +68,10 @@ function renderTable(data: ComponentSummary[], onCopy?: (id: string) => void) {
       QueryClientProvider,
       { client },
       <MemoryRouter>
-        <ComponentTable data={data} isLoading={false} onCopy={onCopy} />
+        {/* The Clone row action uses Tooltip, which needs a provider. */}
+        <TooltipProvider>
+          <ComponentTable data={data} isLoading={false} onCopy={onCopy} />
+        </TooltipProvider>
       </MemoryRouter>,
     ),
   )
@@ -388,6 +391,26 @@ describe('ComponentTable', () => {
     })
   })
 
+  describe('Updated column — relative time', () => {
+    it('renders a relative-time label with the absolute date in the title tooltip', () => {
+      // A timestamp ~3 days in the past. RelativeTime renders "N days ago" with
+      // the en-GB absolute date in the native title (one hover away).
+      const then = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+      renderTable([makeComponent({ updatedAt: then })])
+      const cell = cellForColumn('Updated')
+      expect(cell.textContent).toMatch(/days ago/i)
+      // The absolute date lives in the title attribute of the inner span.
+      const span = cell.querySelector('span[title]')
+      expect(span).not.toBeNull()
+      expect(span!.getAttribute('title')).toMatch(/\d{4}/) // year present in en-GB date
+    })
+
+    it('renders an em-dash for a null updatedAt', () => {
+      renderTable([makeComponent({ updatedAt: null })])
+      expect(cellForColumn('Updated').textContent).toContain('—')
+    })
+  })
+
   describe('archived row dimming', () => {
     it('applies opacity-50 class to archived rows', () => {
       const { container } = renderTable([makeComponent({ archived: true })])
@@ -531,12 +554,12 @@ describe('ComponentTable — inline validation triangle', () => {
   })
 })
 
-describe('ComponentTable — per-row Copy action', () => {
+describe('ComponentTable — per-row Clone action', () => {
   beforeEach(() => {
     mockLinks(null)
   })
 
-  it('renders a Copy button per row and reports the row id when onCopy is provided', async () => {
+  it('renders a Clone button per row (icon + label) and reports the row id when onCopy is provided', async () => {
     const onCopy = vi.fn()
     renderTable(
       [
@@ -545,14 +568,34 @@ describe('ComponentTable — per-row Copy action', () => {
       ],
       onCopy,
     )
-    const alphaCopy = screen.getByRole('button', { name: 'Create similar to alpha' })
-    expect(screen.getByRole('button', { name: 'Create similar to beta' })).toBeDefined()
-    await userEvent.click(alphaCopy)
+    // The action is labelled "Clone" with a "Clone <key> into a new component"
+    // accessible name (used as both aria-label and the tooltip text).
+    const alphaClone = screen.getByRole('button', { name: 'Clone alpha into a new component' })
+    expect(screen.getByRole('button', { name: 'Clone beta into a new component' })).toBeDefined()
+    // The visible label reads "Clone" (not the old "Create similar" copy).
+    expect(alphaClone.textContent).toContain('Clone')
+    await userEvent.click(alphaClone)
     expect(onCopy).toHaveBeenCalledWith('c1')
   })
 
-  it('renders no Copy buttons or actions column when onCopy is omitted', () => {
+  it('exposes the Clone tooltip text on hover (Clone <key> into a new component)', async () => {
+    const onCopy = vi.fn()
+    renderTable([makeComponent({ id: 'c1', name: 'alpha' })], onCopy)
+    await userEvent.hover(screen.getByRole('button', { name: 'Clone alpha into a new component' }))
+    // Radix renders the tooltip content into a portal on hover; the text
+    // "Clone alpha into a new component" appears (possibly more than once across
+    // the a11y mirror + visible content).
+    const tips = await screen.findAllByText('Clone alpha into a new component')
+    expect(tips.length).toBeGreaterThan(0)
+  })
+
+  it('no longer uses the old "Create similar" label', () => {
+    renderTable([makeComponent({ id: 'c1', name: 'alpha' })], vi.fn())
+    expect(screen.queryByRole('button', { name: /create similar/i })).toBeNull()
+  })
+
+  it('renders no Clone buttons or actions column when onCopy is omitted', () => {
     renderTable([makeComponent({ id: 'c1', name: 'alpha' })])
-    expect(screen.queryByRole('button', { name: /^create similar to /i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /clone .* into a new component/i })).toBeNull()
   })
 })

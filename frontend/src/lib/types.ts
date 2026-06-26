@@ -30,6 +30,12 @@ export interface ComponentSummary {
   // Required on the wire per ComponentSummaryResponse — server emits []
   // for empty, never omits the key. Matches ComponentDetail.labels.
   labels: string[]
+  // People aspects surfaced on the list row (CRS Health/redesign API). Server
+  // emits [] for empty, never omits the key — same treatment as `labels`. Drive
+  // the Health page's people breakdowns cross-reference and any future list
+  // columns.
+  releaseManagers?: string[]
+  securityChampions?: string[]
   // SYS-040 list-view extras — derived by the v4 mapper from the BASE
   // configuration row + first child (sort_order = 0); blank strings normalized to null.
   buildSystem?: string | null
@@ -62,6 +68,10 @@ export interface ComponentDetail {
   version: number
   createdAt: string | null
   updatedAt: string | null
+  // Optional last-modifier username. Absent against backends that don't surface
+  // it; the detail header's "Updated <date> by <user>" subline shows the "by
+  // <user>" segment only when this is present.
+  updatedBy?: string | null
   // SYS-039 — releaseManager / securityChampion are now ordered multi-value
   // lists (CRS v4 ordered child rows). componentOwner stays single-value.
   // The server emits [] for empty, never omits the key (default emptyList()).
@@ -431,6 +441,10 @@ export interface ComponentFilter {
    */
   /** Exact-match OR across values (each component has exactly one componentOwner). CSV on the wire. */
   owner?: string[]
+  /** Exact-match OR across values (a component may have several release managers). CSV on the wire. */
+  releaseManager?: string[]
+  /** Exact-match OR across values (a component may have several security champions). CSV on the wire. */
+  securityChampion?: string[]
   /** Exact-match OR across values (a component has exactly one buildSystem). CSV on the wire. */
   buildSystem?: string[]
   /** Exact-match AND across values; sourced from /components/meta/labels. CSV on the wire. */
@@ -607,6 +621,22 @@ export interface ValidationReport {
   // is never silently rendered as "all clean".
   refreshError: string | null
   components: ComponentValidation[]
+}
+
+/**
+ * Aggregated registry counts served by CRS `GET /health/statistics`
+ * (HealthStatisticsResponse). The `componentsBy*` maps are `person -> count`
+ * and are emitted as `{}` (never null) when empty — mirror that. Backs the
+ * admin Registry Health page's total/active KPIs and the three people
+ * breakdowns. The wire integers are `int64`; JSON deserializes them to JS
+ * `number`, which is exact for any realistic registry size.
+ */
+export interface HealthStatistics {
+  totalComponents: number
+  activeComponents: number
+  componentsByOwner: Record<string, number>
+  componentsByReleaseManager: Record<string, number>
+  componentsBySecurityChampion: Record<string, number>
 }
 
 // ---------------------------------------------------------------------------

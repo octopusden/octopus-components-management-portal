@@ -70,7 +70,9 @@ test.describe('§7.0.6 match mockup — PR-C zinc primary token', () => {
 
     await page.goto(`/components/${summary.id}`)
 
-    const save = page.getByRole('button', { name: /^save$/i }).first()
+    // The single sticky SaveBar button (was the per-tab "Save"); label is now
+    // "Save changes". It carries the same default Button variant / primary token.
+    const save = page.getByRole('button', { name: 'Save changes' }).first()
     await expect(save).toBeVisible()
     // Default Button variant uses bg-primary; zinc-900 → rgb(24, 24, 27).
     await expect(save).toHaveCSS('background-color', 'rgb(24, 24, 27)')

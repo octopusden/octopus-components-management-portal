@@ -28,6 +28,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../../lib/auth'
 import type { FieldOverride } from '../../lib/types'
 import { OverrideRowEditor } from './OverrideRowEditor'
+import { OverridesTimeline } from './OverridesTimeline'
 
 interface FieldOverridesProps {
   componentId: string
@@ -143,7 +144,12 @@ export function FieldOverrides({ componentId }: FieldOverridesProps) {
           <EmptyState message="No field overrides defined." className="py-8" />
         </div>
       ) : (
-        <div className="rounded-md border overflow-hidden">
+        <>
+          {/* Version timeline above the table: one track per attribute, each
+              override placed by its version range. Overlaps on one attribute
+              render destructive with a disjoint-rule banner. */}
+          <OverridesTimeline overrides={overrides} />
+          <div className="rounded-md border overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow>
@@ -205,7 +211,8 @@ export function FieldOverrides({ componentId }: FieldOverridesProps) {
               })}
             </TableBody>
           </Table>
-        </div>
+          </div>
+        </>
       )}
 
       {/* Edit surfaces are admin-only; non-admins never reach these. */}

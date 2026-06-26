@@ -75,6 +75,7 @@ describe('Layout nav visibility', () => {
     expect(screen.getByRole('link', { name: /Components/i })).toBeDefined()
     expect(screen.queryByRole('link', { name: /Audit/i })).toBeNull()
     expect(screen.queryByRole('link', { name: /Admin/i })).toBeNull()
+    expect(screen.queryByRole('link', { name: /Health/i })).toBeNull()
   })
 
   it('shows Audit and Admin for F1_ADMIN', () => {
@@ -101,6 +102,9 @@ describe('Layout nav visibility', () => {
     expect(screen.getByRole('link', { name: /Audit/i })).toBeDefined()
     expect(screen.getByRole('link', { name: /Admin/i })).toBeDefined()
     expect(screen.getByText('alice')).toBeDefined()
+    // Health is admin-mode-gated (not just permission-gated); adminMode is
+    // false here, so even an IMPORT_DATA holder must not see it.
+    expect(screen.queryByRole('link', { name: /Health/i })).toBeNull()
   })
 
   it('renders a <footer> region with the brand line so the version label has a host', () => {
@@ -248,6 +252,53 @@ describe('Layout ADMIN badge — double-gate', () => {
 
     renderLayout()
     expect(screen.queryByText('ADMIN')).toBeNull()
+  })
+})
+
+describe('Layout Health nav — adminMode + IMPORT_DATA double-gate', () => {
+  const adminUser: User = {
+    username: 'alice',
+    roles: [
+      { name: 'ROLE_F1_ADMIN', permissions: ['ACCESS_COMPONENTS', 'ACCESS_AUDIT', 'IMPORT_DATA'] },
+    ],
+    groups: [],
+  }
+
+  const viewerUser: User = {
+    username: 'carol',
+    roles: [{ name: 'ROLE_COMPONENTS_REGISTRY_VIEWER', permissions: ['ACCESS_COMPONENTS'] }],
+    groups: [],
+  }
+
+  function mockUser(user: User | undefined) {
+    mockedUseCurrentUser.mockReturnValue({
+      data: user,
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useCurrentUser>)
+  }
+
+  it('shows Health for an IMPORT_DATA holder when adminMode is on', () => {
+    setAdminMode(true)
+    mockUser(adminUser)
+    renderLayout()
+    expect(screen.getByRole('link', { name: /Health/i })).toBeDefined()
+  })
+
+  it('hides Health when adminMode is off (even with IMPORT_DATA)', () => {
+    setAdminMode(false)
+    mockUser(adminUser)
+    renderLayout()
+    expect(screen.queryByRole('link', { name: /Health/i })).toBeNull()
+  })
+
+  it('hides Health for a viewer even with adminMode forced on (security canary)', () => {
+    setAdminMode(true)
+    mockUser(viewerUser)
+    renderLayout()
+    expect(screen.queryByRole('link', { name: /Health/i })).toBeNull()
   })
 })
 

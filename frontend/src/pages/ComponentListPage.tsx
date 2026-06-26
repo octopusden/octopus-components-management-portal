@@ -2,9 +2,12 @@ import { useMemo, useState } from 'react'
 import { Layout } from '../components/Layout'
 import { ComponentFilters } from '../components/ComponentFilters'
 import { ComponentTable } from '../components/ComponentTable'
+import { ListPresetBar } from '../components/ListPresetBar'
+import { ActiveFilterChips } from '../components/ActiveFilterChips'
 import { Pagination } from '../components/Pagination'
 import { CreateComponentButton } from '../components/CreateComponentDialog'
 import { CreateComponentDialog } from '../components/CreateComponentDialog'
+import { SearchCommandButton } from '../components/SearchCommandButton'
 import { InlineError } from '../components/ui/inline-error'
 import { StatusBanner } from '../components/ui/status-banner'
 import { useComponents } from '../hooks/useComponents'
@@ -15,6 +18,8 @@ import {
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '@/lib/auth'
 import { useAdminMode } from '@/lib/adminModeStore'
+import { useFilterUrlState } from '../hooks/useFilterUrlState'
+import { applyPreset, matchPreset, type PresetId } from '../lib/listPresets'
 import { countCheckFailed } from '../lib/validation'
 import { ApiError } from '../lib/api'
 import type { ComponentFilter, ComponentSummary } from '../lib/types'
@@ -44,16 +49,17 @@ function summaryFromValidationKey(componentKey: string): ComponentSummary {
 }
 
 export function ComponentListPage() {
-  const [filter, setFilter] = useState<ComponentFilter>({ archived: false })
+  // Filter + preset are URL-shareable (spec §1.1/1.2): the query string is the
+  // single source of truth, round-tripped via useFilterUrlState. Page/size stay
+  // local (ephemeral paging is not worth a URL entry).
+  const { filter, preset: urlPreset, setState } = useFilterUrlState()
   const [page, setPage] = useState(0)
   const [size, setSize] = useState(20)
-  // "Only with problems" mode — driven by the Portal validation report, not a
-  // CRS query param (problems are computed in Portal, the CRS list is paged).
-  const [problemsOnly, setProblemsOnly] = useState(false)
-  // Source component id for the per-row Copy action; non-null = dialog open.
+  // Source component id for the per-row Clone action; non-null = dialog open.
   const [copySourceId, setCopySourceId] = useState<string | null>(null)
 
   const { data: user } = useCurrentUser()
+  const username = user?.username ?? null
   const { data, isLoading, error } = useComponents({ filter, page, size })
 
   // The Validation Problems facility is admin-mode only (a maintainer concern).
@@ -64,9 +70,17 @@ export function ComponentListPage() {
   const adminMode = useAdminMode((s) => s.enabled)
   const isAdmin = adminMode && hasPermission(user, PERMISSIONS.IMPORT_DATA)
 
-  // Effective problems-only mode: the toggle only takes effect for admins. If
-  // admin mode is turned off while the toggle was on, the page falls back to the
+  // The active preset: an explicit URL preset wins (it is the only way to encode
+  // `problems`, which has no filter footprint); otherwise derive it from the
+  // filter so a bare filter URL still lights up the matching segment.
+  const activePreset: PresetId | null =
+    (urlPreset as PresetId | null) ?? matchPreset(filter, username)
+
+  // "Only with problems" mode — the `problems` preset. Driven by the Portal
+  // validation report, not a CRS query param (problems are Portal-computed, the
+  // CRS list is paged). Admin-gated: if admin mode is off, fall back to the
   // normal paged list rather than getting stuck on an empty/forbidden view.
+  const problemsOnly = activePreset === 'problems'
   const showProblemsOnly = problemsOnly && isAdmin
 
   // Full report → badge overlay on the normal paged list (toggle off). Gated on
@@ -105,9 +119,64 @@ export function ComponentListPage() {
 
   const canCreate = hasPermission(user, PERMISSIONS.CREATE_COMPONENTS)
 
+  // The preset reflected in the UI (segmented control + chip). A `problems`
+  // preset that the current user can't actually use (not admin) is suppressed
+  // so a shared admin link doesn't surface a preset with no matching button.
+  const effectivePreset: PresetId | null =
+    activePreset === 'problems' && !isAdmin ? null : activePreset
+
+  // A filter edit replaces the filter and re-derives the preset from it (so
+  // manually reproducing a preset's combo lights the segment, and any other
+  // combo clears it). matchPreset never yields `problems` (it has no filter
+  // footprint), so editing a CRS filter naturally drops the problems preset —
+  // those controls are inert in problems mode anyway.
   const handleFilterChange = (newFilter: ComponentFilter) => {
-    setFilter(newFilter)
+    setState({ filter: newFilter, preset: matchPreset(newFilter, username) })
     setPage(0) // reset to first page on filter change
+  }
+
+  // Preset selection is sugar over the filter state (lib/listPresets): apply the
+  // preset's filter combo and record the preset in the URL.
+  const handlePresetSelect = (id: PresetId) => {
+    setState({ filter: applyPreset(id, filter, username), preset: id })
+    setPage(0)
+  }
+
+  // Clear all → back to the active-only default (no preset, no filters, bare URL).
+  const handleClearAll = () => {
+    setState({ filter: { archived: false }, preset: null })
+    setPage(0)
+  }
+
+  // Remove a single active-filter chip. The synthetic `preset` chip resets to
+  // the active-only default ("All") — same as Clear all, so a shared link is the
+  // bare URL, not `?preset=all`; array chips drop just that value; scalar /
+  // tri-state chips clear the whole field.
+  const handleChipRemove = (
+    key: keyof ComponentFilter | 'preset',
+    value: string | undefined,
+  ) => {
+    if (key === 'preset') {
+      handleClearAll()
+      return
+    }
+    const next: ComponentFilter = { ...filter }
+    const current = next[key]
+    if (value !== undefined && Array.isArray(current)) {
+      const remaining = current.filter((v) => v !== value)
+      if (remaining.length) {
+        // `next[key]` is the string-array field this chip came from.
+        ;(next as Record<string, string[]>)[key] = remaining
+      } else {
+        delete next[key]
+      }
+    } else if (key === 'archived') {
+      // archived has no "unset" — removing the chip returns to the active-only default.
+      next.archived = false
+    } else {
+      delete next[key]
+    }
+    handleFilterChange(next)
   }
 
   const handleSizeChange = (newSize: number) => {
@@ -133,8 +202,15 @@ export function ComponentListPage() {
                   </span>
                 )}
           </div>
-          {canCreate && <CreateComponentButton />}
+          <div className="flex items-center gap-2">
+            <SearchCommandButton />
+            {canCreate && <CreateComponentButton />}
+          </div>
         </div>
+
+        {/* Preset segmented control (spec §1.1): sugar over the filter state.
+            The admin-only "With problems" preset is hidden for non-admins. */}
+        <ListPresetBar active={effectivePreset} isAdmin={isAdmin} onSelect={handlePresetSelect} />
 
         <ComponentFilters
           filter={filter}
@@ -145,16 +221,16 @@ export function ComponentListPage() {
           // problems-only mode and once the report has loaded; undefined
           // otherwise (so the hint renders without a count while loading).
           problemsCount={showProblemsOnly && !problems.isLoading ? problemRows.length : undefined}
-          // Admin-mode only: pass the handler (which is what renders the toggle)
-          // solely to admins. Non-admins get no "with validation problems" toggle.
-          onProblemsOnlyChange={
-            isAdmin
-              ? (v) => {
-                  setProblemsOnly(v)
-                  setPage(0)
-                }
-              : undefined
-          }
+        />
+
+        {/* Active-filter chips (spec §1.2): one removable chip per active filter
+            (incl. the active preset); each × clears just that filter, "Clear all"
+            resets everything. Reflects live state only. */}
+        <ActiveFilterChips
+          filter={filter}
+          preset={effectivePreset}
+          onRemove={handleChipRemove}
+          onClearAll={handleClearAll}
         />
 
         {/* The validation report is a scheduled Portal sweep; when its most

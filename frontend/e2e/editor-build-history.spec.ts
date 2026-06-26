@@ -38,7 +38,16 @@ test.describe('Components Management Portal – Build tab edit lands in History 
     cleanup = undefined
   })
 
-  test('changing Maven Version via Save Build writes a History entry with build.mavenVersion', async ({ page }) => {
+  // The single save flow that replaced the per-tab Save buttons: SaveBar
+  // "Save changes" → "Review changes" dialog → "Confirm" → one combined PATCH.
+  async function saveViaReviewBar(page: import('@playwright/test').Page): Promise<void> {
+    await page.getByRole('button', { name: 'Save changes' }).click()
+    const dialog = page.getByRole('dialog', { name: /review changes/i })
+    await expect(dialog).toBeVisible()
+    await dialog.getByRole('button', { name: 'Confirm', exact: true }).click()
+  }
+
+  test('changing Maven Version via the save bar writes a History entry with build.mavenVersion', async ({ page }) => {
     const api = page.request
     const headers = await mutationHeaders(page)
 
@@ -86,10 +95,11 @@ test.describe('Components Management Portal – Build tab edit lands in History 
     test.skip(target === undefined, 'no alternative Maven version configured in /meta/maven-versions')
     await page.getByRole('option', { name: target!, exact: true }).click()
 
-    await page.getByRole('button', { name: 'Save Build' }).click()
+    await saveViaReviewBar(page)
     // .first(): the toast text renders twice (toast body + the toaster's
     // aria-live status region) — strict mode would reject the bare locator.
-    await expect(page.getByText('Build configuration saved').first()).toBeVisible({ timeout: 10_000 })
+    // ONE combined-save toast now, not the old per-tab 'Build configuration saved'.
+    await expect(page.getByText('Component saved').first()).toBeVisible({ timeout: 10_000 })
 
     // History tab: the API probe + the UI save = two UPDATE entries, each
     // carrying the field-level diff key in the "Changed Fields" column.

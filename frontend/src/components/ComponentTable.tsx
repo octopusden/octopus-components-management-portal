@@ -7,7 +7,7 @@ import {
   createColumnHelper,
   type SortingState,
 } from '@tanstack/react-table'
-import { ArrowUpDown, ArrowUp, ArrowDown, Copy, Package } from 'lucide-react'
+import { ArrowUpDown, ArrowUp, ArrowDown, CopyPlus, Package } from 'lucide-react'
 import { JiraIcon, BitbucketIcon, TeamCityIcon } from './ui/icons/brand-icons'
 import { useMemo, useState } from 'react'
 import {
@@ -23,6 +23,8 @@ import { Button } from './ui/button'
 import { EmptyState } from './ui/empty-state'
 import { SkeletonTable } from './ui/skeleton-table'
 import { ValidationBadge } from './ValidationBadge'
+import { RelativeTime } from './ui/RelativeTime'
+import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip'
 import { cn, safeHttpUrl } from '../lib/utils'
 import type { ComponentSummary, ComponentValidation, PortalLinks } from '../lib/types'
 import { usePortalLinks } from '../hooks/useInfo'
@@ -60,19 +62,6 @@ interface ComponentTableProps {
 }
 
 const columnHelper = createColumnHelper<ComponentSummary>()
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '—'
-  try {
-    return new Date(dateStr).toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    })
-  } catch {
-    return dateStr
-  }
-}
 
 interface IconLinkProps {
   href: string
@@ -310,32 +299,42 @@ const columns = [
         )}
       </button>
     ),
+    // Relative "3 days ago" label with the exact date one hover away (the
+    // RelativeTime primitive carries the absolute date in its title tooltip).
     cell: ({ getValue }) => (
-      <span className="text-muted-foreground text-xs">{formatDate(getValue())}</span>
+      <RelativeTime ts={getValue() ?? null} className="text-muted-foreground text-xs" />
     ),
     enableSorting: true,
   }),
 ]
 
-// Per-row Copy action — appended to `columns` only when the page provides an
+// Per-row Clone action — appended to `columns` only when the page provides an
 // `onCopy` callback (CREATE_COMPONENTS holders), so viewers never see the
-// column. The handler travels via table meta like `links` does.
+// column. The handler travels via table meta like `links` does. The action is
+// labelled "Clone" (icon + text) with a "Clone <key> into a new component"
+// tooltip; the underlying prefill (sourceId) and gating are unchanged.
 const actionsColumn = columnHelper.display({
   id: 'actions',
   header: '',
   cell: ({ row, table }) => {
     const onCopy = table.options.meta?.onCopy
     if (!onCopy) return null
+    const tooltip = `Clone ${row.original.name} into a new component`
     return (
-      <Button
-        variant="ghost"
-        size="sm"
-        title={`Create similar to ${row.original.name}`}
-        aria-label={`Create similar to ${row.original.name}`}
-        onClick={() => onCopy(row.original.id)}
-      >
-        <Copy className="h-4 w-4" />
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label={tooltip}
+            onClick={() => onCopy(row.original.id)}
+          >
+            <CopyPlus className="h-4 w-4" />
+            Clone
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{tooltip}</TooltipContent>
+      </Tooltip>
     )
   },
   enableSorting: false,

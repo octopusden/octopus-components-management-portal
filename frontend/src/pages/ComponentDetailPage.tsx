@@ -1,15 +1,16 @@
 import { useParams, useNavigate, Link } from 'react-router'
 import { useForm } from 'react-hook-form'
-import { ArrowLeft, Copy, Save, Trash2, AlertTriangle, LockKeyhole } from 'lucide-react'
+import { ArrowLeft, Copy, Trash2, AlertTriangle, LockKeyhole } from 'lucide-react'
 import { JiraIcon, BitbucketIcon, TeamCityIcon } from '../components/ui/icons/brand-icons'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Layout } from '../components/Layout'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
 import { Separator } from '../components/ui/separator'
 import { InlineError } from '../components/ui/inline-error'
 import { SkeletonBlock } from '../components/ui/skeleton-block'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
+import { RelativeTime } from '../components/ui/RelativeTime'
+import { Tabs, TabsContent } from '../components/ui/tabs'
 import {
   Dialog,
   DialogContent,
@@ -25,21 +26,30 @@ import { VcsTab } from '../components/editor/VcsTab'
 import { DistributionTab } from '../components/editor/DistributionTab'
 import { JiraTab } from '../components/editor/JiraTab'
 import { EscrowTab } from '../components/editor/EscrowTab'
+import { useBuildSection } from '../components/editor/useBuildSection'
+import { useVcsSection } from '../components/editor/useVcsSection'
+import { useDistributionSection } from '../components/editor/useDistributionSection'
+import { useJiraSection } from '../components/editor/useJiraSection'
+import { useEscrowSection } from '../components/editor/useEscrowSection'
+import { generalSlice } from '../components/editor/generalSlice'
+import { combineRequest, collectDiff, anyDirty } from '../lib/editor/combineRequest'
+import { SaveBar } from '../components/editor/SaveBar'
+import { ReviewChangesDialog } from '../components/editor/ReviewChangesDialog'
+import { UnsavedChangesGuard } from '../components/editor/UnsavedChangesGuard'
+import { completenessPercent } from '../lib/component/completeness'
 import { CANNOT_EDIT_TITLE } from '../components/editor/editPermission'
 import { WhoCanEditPanel } from '../components/editor/WhoCanEditPanel'
 import { FieldOverrides } from '../components/editor/FieldOverrides'
 import { ConfigurationsTab } from '../components/editor/ConfigurationsTab'
 import { AsCodeTab } from '../components/editor/AsCodeTab'
 import { ComponentHistoryTab } from '../components/editor/ComponentHistoryTab'
+import { EditorSidebarNav, type EditorNavSection } from '../components/editor/EditorSidebarNav'
 import { ValidationProblemsList } from '../components/ValidationProblemsList'
 import { CreateComponentDialog } from '../components/CreateComponentDialog'
-import { useComponent, useUpdateComponent, useDeleteComponent, type ComponentUpdateRequest } from '../hooks/useComponent'
+import { useComponent, useUpdateComponent, useDeleteComponent } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
 import { ApiError } from '../lib/api'
 import { useOptimisticConflict } from '../hooks/useOptimisticConflict'
-import { type UseMutationResult } from '@tanstack/react-query'
-// queryClient + describeOptimisticConflict were moved into
-// useOptimisticConflict — the hook owns refetch + toast-shape composition.
 import type { ComponentDetail } from '../lib/types'
 import { selectBaseRow } from '../lib/api/baseRow'
 import { useCurrentUser } from '../hooks/useCurrentUser'
@@ -52,8 +62,6 @@ import { safeHttpUrl } from '../lib/utils'
 import { useValidationProblems } from '../hooks/useValidationProblems'
 import { allProblemVersions, hasValidationIssue, validationBadgeCount } from '../lib/validation'
 import { copyToClipboard } from '../lib/clipboard'
-
-export type UpdateMutation = UseMutationResult<ComponentDetail, Error, ComponentUpdateRequest>
 
 function EditSurface({
   canEdit,
@@ -75,6 +83,44 @@ function EditSurface({
   )
 }
 
+// Server component → RHF General/Misc form values. The single source of truth
+// for hydrating the page-level form, used both by the on-id-change reset effect
+// (P1-1: GeneralTab may be unmounted at navigation time, so hydration cannot
+// live only inside GeneralTab) and by Discard. Mirrors GeneralTab's mapping.
+function mapComponentToForm(component: ComponentDetail): GeneralFormValues {
+  return {
+    name: component.name,
+    displayName: component.displayName ?? '',
+    componentOwner: component.componentOwner ?? '',
+    productType: component.productType ?? '',
+    system: component.system ?? '',
+    clientCode: component.clientCode ?? '',
+    solution: component.solution ?? false,
+    archived: component.archived,
+    parentComponentName: component.parentComponentName ?? '',
+    canBeParent: component.canBeParent ?? false,
+    releaseManager: component.releaseManager ?? [],
+    securityChampion: component.securityChampion ?? [],
+    copyright: component.copyright ?? '',
+    labels: component.labels ?? [],
+    docs: (component.docs ?? []).map((d) => ({ docComponentKey: d.docComponentKey, majorVersion: d.majorVersion ?? '' })),
+    artifactIds: (component.artifactIds ?? []).map((a) => ({ groupPattern: a.groupPattern, artifactPattern: a.artifactPattern })),
+  }
+}
+
+// Maps a server 400 field error (or a tab section) to the sidebar section that
+// should auto-switch into view. Identifiers match the Phase 3a nav values.
+function sectionForField(field: string): string | null {
+  if ((GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(field)) return 'general'
+  if ((MISC_TAB_FIELDS as ReadonlyArray<string>).includes(field)) return 'misc'
+  if (field.startsWith('build')) return 'build'
+  if (field.startsWith('vcs')) return 'vcs'
+  if (field.startsWith('jira')) return 'jira'
+  if (field.startsWith('escrow') || field === 'productType') return 'escrow'
+  if (field.startsWith('distribution') || field === 'securityGroups') return 'distribution'
+  return null
+}
+
 export function ComponentDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -82,14 +128,12 @@ export function ComponentDetailPage() {
   const handleConflict = useOptimisticConflict(id)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [copyDialogOpen, setCopyDialogOpen] = useState(false)
-  // Controlled tab so a server 400 on a field that lives on a non-active tab can auto-switch
-  // to the owning tab (otherwise the inline error renders on a hidden tab).
+  const [reviewOpen, setReviewOpen] = useState(false)
+  // Controlled tab so a server 400 on a field that lives on a non-active tab can
+  // auto-switch to the owning tab (otherwise the inline error renders on a hidden tab).
   const [activeTab, setActiveTab] = useState('general')
   // GeneralTab's owner PeopleInput commits a typed value only after its async
-  // directory lookup resolves. Hold Save while that is in flight — a save in
-  // the window would read componentOwner='' and silently omit the user's edit
-  // from the PATCH. PeopleInput releases the flag on resolve/cancel/unmount
-  // (tab switches unmount GeneralTab), so it cannot stick.
+  // directory lookup resolves. Hold Save while that is in flight.
   const [ownerValidating, setOwnerValidating] = useState(false)
 
   const { data: component, isLoading, error } = useComponent(id ?? '')
@@ -97,32 +141,14 @@ export function ComponentDetailPage() {
   const deleteMutation = useDeleteComponent(id ?? '')
   const { data: user } = useCurrentUser()
 
-  // The Validation Problems tab is admin-mode only — reuse the app's
-  // canonical admin predicate (same double-gate as ComponentListPage / Layout):
-  // the persisted adminMode toggle AND the real IMPORT_DATA permission. A
-  // non-admin renders no tab and issues no /portal/validation request.
   const adminMode = useAdminMode((s) => s.enabled)
   const isAdmin = adminMode && hasPermission(user, PERMISSIONS.IMPORT_DATA)
 
-  // Drive the Validation Problems tab from the SAME cached report the list page
-  // uses (react-query dedupes/caches by the shared query key), rather than the
-  // live per-component endpoint. The report is keyed by the CRS component key —
-  // the exact field (`ComponentSummary.name` / `ComponentDetail.name`) the list
-  // overlay matches on (ComponentTable: `byComponent.get(row.original.name)`).
-  // Keying by `component.id` here was the source of the list-vs-detail
-  // discrepancy: for components where `id != name`, the live call used the wrong
-  // key and came back empty even though the list showed problems. `enabled =
-  // isAdmin` keeps non-admins from issuing any /portal/validation request.
   const { byComponent: validationByComponent } = useValidationProblems(isAdmin)
   const componentValidation = component ? validationByComponent.get(component.name) : undefined
   const hasProblems =
     isAdmin && componentValidation != null && hasValidationIssue(componentValidation)
 
-  // The Validation Problems tab is conditional (only rendered while hasProblems).
-  // If it's the active tab and hasProblems flips to false — admin mode turned off,
-  // IMPORT_DATA lost, or the report refreshes clean — the now-removed tab would
-  // leave the Tabs panel blank. Reset to the always-present default tab so the
-  // view never goes blank.
   useEffect(() => {
     if (activeTab === 'validation-problems' && !hasProblems) {
       setActiveTab('general')
@@ -131,43 +157,25 @@ export function ComponentDetailPage() {
 
   const canArchive = hasPermission(user, PERMISSIONS.DELETE_COMPONENTS)
   const canUnarchive = hasPermission(user, PERMISSIONS.ARCHIVE_COMPONENTS)
-  // Copy creates a NEW component, so it gates on the global CREATE_COMPONENTS
-  // permission — not on the per-component `canEdit` affordance below.
   const canCreate = hasPermission(user, PERMISSIONS.CREATE_COMPONENTS)
-
-  // Per-component edit gate. CRS returns `canEdit` on the detail response (true for
-  // the component's owner/RM/SC or an admin); fall back to the global CREATE_COMPONENTS
-  // permission when an older backend omits the flag. Drives the Save buttons and the
-  // inline field-override controls so non-owners don't act and then hit a 403.
   const canEdit = component?.canEdit ?? hasPermission(user, PERMISSIONS.CREATE_COMPONENTS)
 
   // Field-config visibility — used to filter hidden fields from the save payload.
-  // Portal-side enforcement is required because CRS server-side does NOT filter
-  // by field-config (ComponentManagementServiceImpl.kt:163 writes any field that
-  // arrives in the request). Sending a hidden field would silently overwrite the
-  // server value. See §7.0 critical contract #1 and #2.
   const { entry: displayNameFc, isLoading: displayNameFcLoading } =
     useFieldConfigEntry('component.displayName')
   const { entry: componentOwnerFc, isLoading: componentOwnerFcLoading } =
     useFieldConfigEntry('component.componentOwner')
-  // CRS PR #301: scalar `component.system` field-config key (renamed
-  // from plural `component.systems` along with the DTO collapse).
   const { entry: systemFc, isLoading: systemFcLoading } = useFieldConfigEntry('component.system')
   const { entry: clientCodeFc, isLoading: clientCodeFcLoading } =
     useFieldConfigEntry('component.clientCode')
-  // SYS-039 FC entries
   const { entry: releaseManagerFc } = useFieldConfigEntry('component.releaseManager')
   const { entry: securityChampionFc } = useFieldConfigEntry('component.securityChampion')
   const { entry: copyrightFc } = useFieldConfigEntry('component.copyright')
   const { entry: canBeParentFc } = useFieldConfigEntry('component.canBeParent')
   const { entry: labelsFc } = useFieldConfigEntry('component.labels')
-  // Race-guard: while field-config is still loading, every FC entry falls
-  // back to visibility='editable', which would let a fast-clicking user
-  // overwrite hidden/readonly fields with form defaults before the real
-  // policy arrives. All useFieldConfigEntry calls share the same
-  // underlying useFieldConfig query, so any one loading flag implies all
-  // are loading — checking the four pre-SYS-039 entries is sufficient.
-  // Save button is disabled until at least one entry resolves.
+  // Section send-gating visibilities (Jira / Escrow).
+  const { entry: releasesInDefaultBranchFc } = useFieldConfigEntry('component.releasesInDefaultBranch')
+  const { entry: productTypeFc } = useFieldConfigEntry('component.productType')
   const fieldConfigLoading =
     displayNameFcLoading || componentOwnerFcLoading || systemFcLoading || clientCodeFcLoading
 
@@ -186,49 +194,63 @@ export function ComponentDetailPage() {
       solution: false,
       archived: false,
       parentComponentName: '',
-      // SYS-039 — must match GeneralFormValues (no `?` modifier on those
-      // fields). Without these defaults, an early Save (before useEffect
-      // populates from `component`) would read `undefined` for labels and
-      // friends and emit empty / wrong wire shapes.
       canBeParent: false,
-      // Multi-value people lists — default [] (mirrors labels). An early Save
-      // before useEffect hydrates from `component` reads [] here; the dirty-
-      // gate in the dirtyFields assembly below blocks that from clobbering
-      // server data.
       releaseManager: [],
       securityChampion: [],
       copyright: '',
       labels: [],
-      // schema-v2 list defaults — empty arrays so an early Save before useEffect
-      // populates from `component` still produces a coherent form value.
       docs: [],
       artifactIds: [],
     },
   })
 
-  // RHF v7's formState is a lazy proxy: dirtyFields / touchedFields only
-  // populate if a render-time read subscribes to them. handleSave runs
-  // outside the render path, so reading form.formState.dirtyFields there
-  // would silently return `{}`. Touch the proxy properties during render
-  // so the in-handleSave reads see live data. Confirmed behaviour, not
-  // micro-optimisation: without this, the systems guard's
-  // form.formState.dirtyFields.system === true check and the labels
-  // synth-dirty's form.formState.touchedFields.labels === true check
-  // would both always be false at handleSave time. `void` keeps TS happy
-  // about the otherwise-unused expressions.
+  // Subscribe RHF's lazy formState proxy + values so the in-handleSave reads see
+  // live data and the render-time dirty gate recomputes on edit / after hydration.
   void form.formState.dirtyFields
   void form.formState.touchedFields
-  // Subscribe to form VALUES too (not just dirty/touched flags) so the Save
-  // dirty-gate below recomputes as the user edits and after GeneralTab's
-  // useEffect hydrates the form from the server — `setValue` during hydration
-  // doesn't flip a dirty flag, so without a value subscription the gate would
-  // stay stuck on the pre-hydration snapshot.
   void form.watch()
 
-  // Assemble the General-tab PATCH from current form + server snapshot + FC
-  // visibility. Shared by handleSave (the actual write) and the render-time
-  // dirty gate below so the two never disagree about what counts as a change.
-  function buildPatchRequest(): ComponentUpdateRequest | null {
+  // P1-1: re-hydrate the page-level RHF form when the component id CHANGES to a
+  // DIFFERENT id — independent of which tab is mounted. GeneralTab's own
+  // mount-effect only fires while it is mounted, so navigating A→B from a
+  // non-General tab would otherwise leave the form holding A's name/owner/parent
+  // and build a spurious patch against B (even a rename B→A). Keyed on id (not
+  // the component object) so a same-id sibling-save setQueryData does NOT
+  // form.reset over an in-progress General edit. The FIRST load is intentionally
+  // skipped (we only record the id): GeneralTab is the default-mounted tab and
+  // owns initial hydration incl. its touched-not-dirty interactions (e.g. the
+  // labels clear-all signal), which a reset here would stomp.
+  const hydratedIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!component) return
+    const prevId = hydratedIdRef.current
+    if (prevId === component.id) return
+    hydratedIdRef.current = component.id
+    if (prevId === null) return // first load — GeneralTab hydrates on mount
+    form.reset(mapComponentToForm(component))
+    form.clearErrors()
+    // `form` is a stable RHF ref (never changes identity); listed for
+    // exhaustive-deps lint only — the id ref-compare is the real gate.
+  }, [component, form])
+
+  // ── Section state hooks (the five ex-useState tabs). Each owns its local
+  // state + last-saved snapshot and contributes a payload slice + dirty flag.
+  // A non-loaded component renders a skeleton before any hook is read, but the
+  // hooks must be called unconditionally (rules of hooks) — feed a stable empty
+  // shell until the data arrives.
+  const shell = component ?? EMPTY_COMPONENT
+  const buildSection = useBuildSection(shell)
+  const vcsSection = useVcsSection(shell)
+  const distributionSection = useDistributionSection(shell)
+  const jiraSection = useJiraSection(shell, {
+    releasesInDefaultBranch: releasesInDefaultBranchFc.visibility ?? 'editable',
+  })
+  const escrowSection = useEscrowSection(shell, {
+    productType: productTypeFc.visibility ?? 'editable',
+  })
+
+  // ── General/Misc slice (RHF touched-not-dirty gate, preserved verbatim) ──
+  function buildPatchRequest() {
     if (!component) return null
     return buildUpdateRequest({
       component,
@@ -247,9 +269,6 @@ export function ComponentDetailPage() {
       dirtyFields: {
         solution: form.formState.dirtyFields.solution === true,
         system: form.formState.dirtyFields.system === true,
-        // "interacted" (dirty OR touched) — buildUpdateRequest value-compares against the
-        // persisted displayName, so a clear back to the form default '' (not RHF-dirty) is
-        // still caught, while pre-hydration (untouched) stays omitted (no clobber).
         displayName:
           form.formState.dirtyFields.displayName === true ||
           form.formState.touchedFields.displayName === true,
@@ -257,160 +276,165 @@ export function ComponentDetailPage() {
           (form.formState.dirtyFields.labels as unknown) === true ||
           (labelsFc.visibility !== 'hidden' &&
             (form.formState.touchedFields.labels as unknown) === true &&
-            (component.labels?.length ?? 0) > 0 &&
-            (form.getValues('labels')?.length ?? 0) === 0),
+            ((component.labels?.length ?? 0) > 0) &&
+            ((form.getValues('labels')?.length ?? 0) === 0)),
         releaseManager:
           (form.formState.dirtyFields.releaseManager as unknown) === true ||
           (releaseManagerFc.visibility !== 'hidden' &&
             (form.formState.touchedFields.releaseManager as unknown) === true &&
-            (component.releaseManager?.length ?? 0) > 0 &&
-            (form.getValues('releaseManager')?.length ?? 0) === 0),
+            ((component.releaseManager?.length ?? 0) > 0) &&
+            ((form.getValues('releaseManager')?.length ?? 0) === 0)),
         securityChampion:
           (form.formState.dirtyFields.securityChampion as unknown) === true ||
           (securityChampionFc.visibility !== 'hidden' &&
             (form.formState.touchedFields.securityChampion as unknown) === true &&
-            (component.securityChampion?.length ?? 0) > 0 &&
-            (form.getValues('securityChampion')?.length ?? 0) === 0),
+            ((component.securityChampion?.length ?? 0) > 0) &&
+            ((form.getValues('securityChampion')?.length ?? 0) === 0)),
         docs: !!form.formState.dirtyFields.docs,
         artifactIds: !!form.formState.dirtyFields.artifactIds,
       },
     })
   }
 
-  // Save-button dirty gate (Portal companion to SYS-048). The header Save
-  // governs ONLY the General tab — the other tabs own their own save — so
-  // hasUnsavedChanges mirrors exactly what handleSave would PATCH, via the
-  // shared buildPatchRequest(). Computing it here at render is deliberate: it
-  // also subscribes RHF's lazy formState proxy to the nested dirtyFields /
-  // touchedFields that handleSave reads (labels / releaseManager /
-  // securityChampion / …) — a top-level `void form.formState.dirtyFields` alone
-  // does not reliably populate those array subfields, so without this the save
-  // would omit a just-edited people list. buildUpdateRequest is null-safe for
-  // absent collections (docs/artifactIds), so this render-time call cannot crash
-  // the page even when the API omits them. The system-required-clear case keeps
-  // Save enabled so the inline "System is required" error still surfaces.
-  const pendingPatch = buildPatchRequest()
+  const pendingGeneralPatch = component ? buildPatchRequest() : null
   const systemClearNeedsAttention =
+    !!component &&
     systemFc.visibility !== 'hidden' &&
-    (component?.system ?? '') !== '' &&
+    (component.system ?? '') !== '' &&
     ((form.getValues('system') as string | undefined) ?? '') === ''
-  // displayName is nullable server-side: clearing it sends "" (buildUpdateRequest), which the
-  // server clears to null — or rejects with 400 for an explicit+external component, routed
-  // inline by handleSave. So a meaningful clear ("Foo" → "") is RHF-dirty and flows through
-  // pendingPatch like any other edit; no dedicated clear-guard is needed (unlike `system`,
-  // whose wire has no clear path).
-  const hasUnsavedChanges =
-    systemClearNeedsAttention ||
-    (!!pendingPatch &&
-      Object.entries(pendingPatch).some(
-        ([key, value]) => key !== 'version' && key !== 'clearGroup' && value !== undefined,
-      ))
+  // P1-3: Build System is required when a BASE build aspect exists. Block the
+  // save if it has been cleared to empty (server had one, draft is now blank) —
+  // mirrors systemClearNeedsAttention. `buildSystemMissing` = !draft.buildSystem.
+  const serverBuildSystem = selectBaseRow(component ?? EMPTY_COMPONENT)?.build?.buildSystem ?? ''
+  const buildSystemNeedsAttention =
+    !!component && serverBuildSystem !== '' && buildSection.buildSystemMissing
+  const genSlice = component
+    ? generalSlice(component, pendingGeneralPatch, systemClearNeedsAttention)
+    : { isDirty: false, request: {}, diff: [] }
 
-  async function handleSave() {
+  // ── Combine every section into ONE request + ONE diff + ONE dirty flag ──
+  const slices = [
+    genSlice,
+    buildSection.slice,
+    vcsSection.slice,
+    distributionSection.slice,
+    jiraSection.slice,
+    escrowSection.slice,
+  ]
+  const dirty = anyDirty(slices)
+  const diff = collectDiff(slices)
+
+  function discardAll() {
+    // Reset the RHF form to the COMPONENT's values (not the empty form
+    // defaults) — resetting to defaults would set system='' against a server
+    // system, tripping systemClearNeedsAttention and leaving the bar "dirty".
+    // Same mapping as the on-id-change hydration effect (mapComponentToForm).
+    if (component) {
+      form.reset(mapComponentToForm(component))
+    }
+    buildSection.reset()
+    vcsSection.reset()
+    distributionSection.reset()
+    jiraSection.reset()
+    escrowSection.reset()
+    form.clearErrors()
+  }
+
+  async function runCombinedSave() {
     if (!component) return
-    // Defence-in-depth (both gates): the Save button is disabled when the user
-    // can't edit OR there's nothing to save; bail here too so any non-click trigger
-    // can't bypass either gate. The backend 403s a forbidden edit regardless; the
-    // system-required-clear case keeps hasUnsavedChanges true so its inline error
-    // still surfaces below.
-    if (!canEdit) return
-    if (!hasUnsavedChanges) return
-    // Server-side errors set on a previous failed submit don't auto-clear
-    // when the user fixes the input or when the next save succeeds (RHF
-    // only clears errors on its own validation passes). Wipe them at the
-    // start of each save so a successful retry doesn't leave stale red
-    // text behind.
+    if (!canEdit || !dirty) return
     form.clearErrors()
 
-    // System is REQUIRED server-side (CRS PR #301 keeps the not-null
-    // constraint, just renamed). buildUpdateRequest omits the field on
-    // empty (so we don't 400), but that combination means the server
-    // keeps the prior value while the user just cleared the dropdown.
-    // Surface the constraint inline so the user can recover or revert
-    // instead of walking away thinking their clear took.
-    //
-    // Gate semantics: compare form value against the server's
-    // `component.system` rather than RHF's `dirtyFields.system`. RHF
-    // doesn't mark the field dirty when setValue's new value equals the
-    // form default ('' here), so a clear-then-save flow can leave the
-    // dirty flag false. The "server had a system, form has none"
-    // comparison captures the user intent without depending on RHF
-    // internals.
-    //
-    // Skip when field-config hides the field (admin can't fix it from
-    // the form). The narrow pre-hydration race — server has a system,
-    // form is still the `''` default — fails closed: user re-clicks
-    // Save once GeneralTab's useEffect mirrors the server state.
-    if (systemFc.visibility !== 'hidden') {
-      const systemValue = (form.getValues('system') as string | undefined) ?? ''
-      const priorSystem = component.system ?? ''
-      if (priorSystem !== '' && systemValue === '') {
-        form.setError('system', {
-          type: 'required',
-          message: 'System is required',
-        })
-        return
-      }
+    // System is REQUIRED server-side — surface the inline error instead of a
+    // silent omit-then-walk-away.
+    if (systemClearNeedsAttention) {
+      setActiveTab('general')
+      form.setError('system', { type: 'required', message: 'System is required' })
+      return
+    }
+    // Build System is REQUIRED too (P1-3). Clearing it would PATCH null = a CRS
+    // no-op, so block and surface the Build section's inline required error.
+    if (buildSystemNeedsAttention) {
+      setActiveTab('build')
+      buildSection.setBuildSystemTouched(true)
+      return
     }
 
-    // displayName is nullable: clearing it is a valid edit (sent as "" → server stores null).
-    // The server still rejects a clear for an explicit+external component (400 keyed
-    // displayName), which is routed inline by the 400 handler below — no client guard needed.
-
-    // Group Key is now server-derived + read-only (items 1/2) — no group save
-    // guard. canBeParent invariants are enforced server-side; their 400s map
-    // inline via GENERAL_TAB_FIELDS below.
-
-    const request = buildPatchRequest()
-    if (!request) return
+    const request = combineRequest(component.version, slices)
 
     try {
       await updateMutation.mutateAsync(request)
+      setReviewOpen(false)
       toast({ title: 'Component saved', description: 'Changes have been saved successfully.' })
     } catch (err) {
-      // Optimistic-locking 409 (B7.1.6) — useOptimisticConflict refetches
-      // the component and returns the toast options; null means "not a 409,
-      // fall through to other branches".
+      // Optimistic-locking / uniqueness 409 — one page-level path. Close the
+      // review dialog first: a UNIQUENESS_VIOLATION can't be fixed by clicking
+      // Confirm again (re-clicking would just re-hit the same 409), and an
+      // OPTIMISTIC_LOCK refetch re-seeds the clean sections, so the open diff's
+      // "from" values would be stale.
       const conflict = await handleConflict(err)
       if (conflict) {
+        setReviewOpen(false)
         toast({ ...conflict, variant: 'destructive' })
         return
       }
       if (err instanceof ApiError && err.status === 400) {
         const fieldErrors = parseServerFieldErrors(err.rawBody)
-        // Only auto-switch to Misc when NO General-owned field also errored — General is the
-        // default tab, so a mixed 400 should leave the user there (where they can see both once
-        // they switch). Avoids hiding a General error behind the Misc switch.
         const hasGeneralError = [...fieldErrors.keys()].some((f) =>
           (GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(f),
         )
         let anyFieldMapped = false
+        let switchTo: string | null = null
         for (const [field, message] of fieldErrors) {
-          // Set errors for fields owned by the General OR Misc tab (both share this RHF form);
-          // fields from other tabs (buildConfiguration, vcsSettings, …) arrive in the same 400
-          // but should not pollute this form's state. A Misc-owned field's input lives on the
-          // Misc tab, so switch to it — otherwise the inline error would render on a hidden tab.
           const isGeneral = (GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(field)
           const isMisc = (MISC_TAB_FIELDS as ReadonlyArray<string>).includes(field)
           if (isGeneral || isMisc) {
             form.setError(field as keyof GeneralFormValues, { type: 'server', message })
             anyFieldMapped = true
-            if (isMisc && !hasGeneralError) setActiveTab('misc')
+          }
+          // First non-General offending field decides the section to switch to.
+          if (switchTo === null && !(isGeneral && !isMisc)) {
+            const target = sectionForField(field)
+            if (target && !(target === 'general')) switchTo = target
           }
         }
-        // Known gap: mixed 400 with both GeneralTab and other-tab field
-        // errors silently drops the non-tab errors here. Acceptable while
-        // CRS update validations don't combine cross-tab violations in
-        // one response; revisit when a shared-error-mapping helper lands.
-        if (anyFieldMapped) return
-        // No field mapped → fall through to generic toast so the error is still surfaced.
+        // Prefer keeping the user on General when a General field also errored.
+        if (switchTo && !hasGeneralError) setActiveTab(switchTo)
+        if (anyFieldMapped || switchTo) {
+          setReviewOpen(false)
+          // A General/Misc field 400 (anyFieldMapped) surfaces inline via
+          // form.setError, so we stop here (no toast). Non-RHF section fields
+          // (build/vcs/jira/escrow/distribution) have no inline-error slot, so
+          // we switch to the owning section AND fall through to the toast below
+          // — the toast is their only error surface.
+          if (anyFieldMapped) return
+        }
       }
+      setReviewOpen(false)
       toast({
         title: 'Save failed',
         description: err instanceof Error ? err.message : String(err),
         variant: 'destructive',
       })
     }
+  }
+
+  function handleOpenReview() {
+    if (!component || !canEdit || !dirty) return
+    // Surface the required-system error immediately rather than opening a diff
+    // that the save would reject anyway.
+    if (systemClearNeedsAttention) {
+      setActiveTab('general')
+      form.setError('system', { type: 'required', message: 'System is required' })
+      return
+    }
+    // Same gate for the required Build System (P1-3).
+    if (buildSystemNeedsAttention) {
+      setActiveTab('build')
+      buildSection.setBuildSystemTouched(true)
+      return
+    }
+    setReviewOpen(true)
   }
 
   async function handleCopyVersions() {
@@ -483,8 +507,12 @@ export function ComponentDetailPage() {
     )
   }
 
+  const baseRow = selectBaseRow(component)
+  const profilePct = completenessPercent(component)
+
   return (
     <Layout>
+      <UnsavedChangesGuard when={dirty} />
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
@@ -510,9 +538,7 @@ export function ComponentDetailPage() {
               {component.solution && (
                 <Badge variant="outline">Solution</Badge>
               )}
-              {/* Breadcrumb badges: system + build system (schema-v2: read from BASE row). */}
               {(() => {
-                const baseRow = selectBaseRow(component)
                 const system = component.system
                 const buildSystem = baseRow?.build?.buildSystem
                 const jiraProjectKey = baseRow?.jira?.projectKey
@@ -520,10 +546,6 @@ export function ComponentDetailPage() {
                   <>
                     {system && <Badge variant="outline">{system}</Badge>}
                     {buildSystem && <Badge variant="outline">{buildSystem}</Badge>}
-                    {/* Quick-links: Jira (Atlassian) and Bitbucket. aria-label mirrors
-                        the title so screen readers announce the icon-only link's
-                        destination — using brand-specific names so the cue matches
-                        the icon a sighted user sees. */}
                     {jiraBaseUrl && jiraProjectKey && (
                       <a
                         href={`${jiraBaseUrl}/browse/${jiraProjectKey}`}
@@ -560,9 +582,6 @@ export function ComponentDetailPage() {
                   </a>
                 )
               })()}
-              {/* TeamCity quick-links — one icon per project with a valid http(s)
-                  URL (safeHttpUrl allowlists the scheme). Read-only header links;
-                  the edit form no longer manages TeamCity projects (item 6). */}
               {(component.teamcityProjects ?? [])
                 .map((tc) => ({ tc, url: safeHttpUrl(tc.projectUrl ?? null) }))
                 .filter((x) => x.url)
@@ -580,25 +599,35 @@ export function ComponentDetailPage() {
                   </a>
                 ))}
             </div>
-            {/* displayName is nullable (null when no componentDisplayName); show the subtitle
-                only when present AND differs from the name so it isn't a redundant echo. */}
+            {/* Subline (spec §2.3/§2.5): Owner · Version · Updated <date> [by <user>] · Profile N% */}
+            <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm text-muted-foreground">
+              <span>Owner {component.componentOwner ?? '—'}</span>
+              <span aria-hidden>·</span>
+              <span>Version {component.version}</span>
+              {component.updatedAt && (
+                <>
+                  <span aria-hidden>·</span>
+                  <span>
+                    Updated <RelativeTime ts={component.updatedAt} />
+                    {component.updatedBy ? ` by ${component.updatedBy}` : ''}
+                  </span>
+                </>
+              )}
+              <span aria-hidden>·</span>
+              <span>Profile {profilePct}% complete</span>
+            </p>
             {component.displayName && component.displayName !== component.name && (
               <p className="text-sm text-muted-foreground">{component.displayName}</p>
             )}
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {/* Create Similar — creates a NEW component pre-filled from this
-                one (not an exact copy: unique fields and overrides are not
-                carried over). Gated on the global CREATE_COMPONENTS
-                permission, not per-component canEdit. */}
             {canCreate && (
               <Button variant="outline" size="sm" onClick={() => setCopyDialogOpen(true)}>
                 <Copy className="h-4 w-4" />
                 Create Similar
               </Button>
             )}
-            {/* Archive / Unarchive — permission-gated, not just disabled */}
             {!component.archived && canArchive && (
               <Button
                 variant="destructive"
@@ -620,116 +649,75 @@ export function ComponentDetailPage() {
                 Unarchive
               </Button>
             )}
-            {/* title lives on the wrapping span, not the Button: a disabled Button has
-                `pointer-events-none`, so a title on it would never show on hover. */}
-            <span
-              className="inline-flex"
-              title={
-                !canEdit
-                  ? CANNOT_EDIT_TITLE
-                  : fieldConfigLoading
-                    ? 'Loading field configuration…'
-                    : ownerValidating
-                      ? 'Validating component owner…'
-                      : !hasUnsavedChanges
-                        ? 'No changes to save'
-                        : undefined
-              }
-            >
-              <Button
-                size="sm"
-                onClick={handleSave}
-                disabled={updateMutation.isPending || fieldConfigLoading || !canEdit || !hasUnsavedChanges || ownerValidating}
-              >
-                <Save className="h-4 w-4" />
-                {updateMutation.isPending ? 'Saving…' : 'Save'}
-              </Button>
-            </span>
           </div>
         </div>
 
-        {/* Read-only viewers can't see the owner/RM/SC fields on the (disabled)
-            General form at a glance, so surface "who can edit" prominently right
-            under the component name. Editors get the same panel at the foot of the
-            General tab instead. */}
         {!canEdit && <WhoCanEditPanel componentId={component.id} />}
 
         <Separator />
 
-        {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} variant="underline">
-          <TabsList className="flex-wrap gap-1">
-            <TabsTrigger value="general">General</TabsTrigger>
-            {(() => {
-              // schema-v2: counts derived from the BASE row. Build/Jira/Escrow are
-              // 0-or-1 (presence of the aspect); VCS counts vcsEntries; Distribution
-              // sums the four typed families + component-level securityGroups[].
-              const baseRow = selectBaseRow(component)
-              const vcsCount = baseRow?.vcsEntries.length ?? 0
-              const distCount =
-                (baseRow?.mavenArtifacts.length ?? 0) +
-                (baseRow?.fileUrlArtifacts.length ?? 0) +
-                (baseRow?.dockerImages.length ?? 0) +
-                (baseRow?.packages.length ?? 0)
-              const buildPresent = baseRow?.build ? 1 : 0
-              const jiraPresent = baseRow?.jira ? 1 : 0
-              const escrowPresent = baseRow?.escrow ? 1 : 0
-              const tabBadge = (n: number) =>
-                n > 0 && (
-                  <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 text-xs">
-                    {n}
-                  </span>
-                )
-              return (
-                <>
-                  <TabsTrigger value="build">Build{tabBadge(buildPresent)}</TabsTrigger>
-                  <TabsTrigger value="vcs">VCS{tabBadge(vcsCount)}</TabsTrigger>
-                  <TabsTrigger value="distribution">Distribution{tabBadge(distCount)}</TabsTrigger>
-                  <TabsTrigger value="jira">Jira{tabBadge(jiraPresent)}</TabsTrigger>
-                  <TabsTrigger value="escrow">Escrow{tabBadge(escrowPresent)}</TabsTrigger>
-                </>
-              )
-            })()}
-            <TabsTrigger value="misc">Misc</TabsTrigger>
-            <TabsTrigger value="configurations">
-              Configurations
-              {(() => {
-                const n = component.configurations?.length ?? 0
-                return n > 0 && (
-                  <span className="ml-1.5 rounded-full bg-muted-foreground/20 px-1.5 text-xs">{n}</span>
-                )
-              })()}
-            </TabsTrigger>
-            <TabsTrigger value="as-code">As Code</TabsTrigger>
-            <TabsTrigger value="overrides">Overrides</TabsTrigger>
-            <TabsTrigger value="history">History</TabsTrigger>
-            {/* Validation Problems — conditional, last, and RED. Only present for
-                an admin AND when this component has a genuine problem in the
-                cached report. A clean component — OR one whose check merely
-                failed (a system condition, shown only on the list banner) —
-                renders neither trigger nor content (no tab at all). */}
-            {hasProblems && componentValidation && (
-              <TabsTrigger
-                value="validation-problems"
-                className="text-destructive hover:text-destructive data-[state=active]:border-destructive data-[state=active]:text-destructive"
-              >
-                <AlertTriangle className="mr-1.5 h-4 w-4 text-destructive" aria-hidden="true" />
-                Validation Problems
-                <span className="ml-1.5 rounded-full bg-destructive/15 px-1.5 text-xs text-destructive">
-                  {validationBadgeCount(componentValidation)}
-                </span>
-              </TabsTrigger>
-            )}
-          </TabsList>
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          variant="underline"
+          orientation="vertical"
+          className="flex flex-col gap-4 lg:flex-row lg:gap-6"
+        >
+          {(() => {
+            const br = selectBaseRow(component)
+            const vcsCount = br?.vcsEntries.length ?? 0
+            const distCount =
+              (br?.mavenArtifacts.length ?? 0) +
+              (br?.fileUrlArtifacts.length ?? 0) +
+              (br?.dockerImages.length ?? 0) +
+              (br?.packages.length ?? 0)
+            const configCount = component.configurations?.length ?? 0
+            const sections: EditorNavSection[] = [
+              { label: 'Overview', items: [{ value: 'general', label: 'General' }] },
+              {
+                label: 'Build & Release',
+                items: [
+                  { value: 'build', label: 'Build', count: br?.build ? 1 : 0 },
+                  { value: 'vcs', label: 'VCS', count: vcsCount },
+                  { value: 'jira', label: 'Jira', count: br?.jira ? 1 : 0 },
+                  { value: 'escrow', label: 'Escrow', count: br?.escrow ? 1 : 0 },
+                ],
+              },
+              {
+                label: 'Distribution',
+                items: [{ value: 'distribution', label: 'Distribution', count: distCount }],
+              },
+              {
+                label: 'Metadata',
+                items: [
+                  { value: 'misc', label: 'Misc' },
+                  { value: 'configurations', label: 'Configurations', count: configCount },
+                ],
+              },
+              {
+                label: 'Tools',
+                items: [
+                  { value: 'as-code', label: 'As Code' },
+                  { value: 'overrides', label: 'Overrides' },
+                  { value: 'history', label: 'History' },
+                ],
+              },
+            ]
+            const problems =
+              hasProblems && componentValidation
+                ? {
+                    value: 'validation-problems',
+                    label: 'Validation Problems',
+                    count: validationBadgeCount(componentValidation),
+                  }
+                : null
+            return (
+              <EditorSidebarNav sections={sections} problems={problems} activeValue={activeTab} />
+            )
+          })()}
 
-          <div className="mt-4">
+          <div className="min-w-0 flex-1 rounded-lg border bg-card p-4 sm:p-6">
             <TabsContent value="general">
-              {/* key={component.id} forces a remount when the user navigates
-                  between component detail pages without unmounting the route
-                  (react-router can reuse the page instance). Without it the
-                  internal state of ComponentSelect / PeopleInput would carry
-                  the previous component's typed-but-unblurred input over to
-                  the next component's form. */}
               <EditSurface canEdit={canEdit} label="General">
                 <GeneralTab
                   key={component.id}
@@ -743,31 +731,31 @@ export function ComponentDetailPage() {
 
             <TabsContent value="build">
               <EditSurface canEdit={canEdit} label="Build">
-                <BuildTab component={component} updateMutation={updateMutation} toast={toast} canEdit={canEdit} />
+                <BuildTab component={component} section={buildSection} canEdit={canEdit} />
               </EditSurface>
             </TabsContent>
 
             <TabsContent value="vcs">
               <EditSurface canEdit={canEdit} label="VCS">
-                <VcsTab component={component} updateMutation={updateMutation} toast={toast} canEdit={canEdit} />
+                <VcsTab section={vcsSection} canEdit={canEdit} />
               </EditSurface>
             </TabsContent>
 
             <TabsContent value="distribution">
               <EditSurface canEdit={canEdit} label="Distribution">
-                <DistributionTab component={component} updateMutation={updateMutation} toast={toast} canEdit={canEdit} />
+                <DistributionTab section={distributionSection} canEdit={canEdit} />
               </EditSurface>
             </TabsContent>
 
             <TabsContent value="jira">
               <EditSurface canEdit={canEdit} label="Jira">
-                <JiraTab component={component} updateMutation={updateMutation} toast={toast} canEdit={canEdit} />
+                <JiraTab component={component} section={jiraSection} canEdit={canEdit} />
               </EditSurface>
             </TabsContent>
 
             <TabsContent value="escrow">
               <EditSurface canEdit={canEdit} label="Escrow">
-                <EscrowTab component={component} updateMutation={updateMutation} toast={toast} canEdit={canEdit} />
+                <EscrowTab component={component} section={escrowSection} canEdit={canEdit} />
               </EditSurface>
             </TabsContent>
 
@@ -795,10 +783,6 @@ export function ComponentDetailPage() {
               <ComponentHistoryTab componentId={component.id} />
             </TabsContent>
 
-            {/* Matching content for the conditional Validation Problems tab. The
-                full, untruncated renderer (same one the list badge dialog uses),
-                fed the component's ComponentValidation looked up from the cached
-                report by `component.name` — guaranteed consistent with the list. */}
             {hasProblems && componentValidation && (
               <TabsContent value="validation-problems">
                 <div className="space-y-3">
@@ -817,18 +801,43 @@ export function ComponentDetailPage() {
                 </div>
               </TabsContent>
             )}
+
+            {/* Single sticky save bar — governs the WHOLE component (one combined
+                PATCH), replacing the old per-tab Save buttons. Rendered for
+                read-only viewers too (disabled, with the cannot-edit tooltip) so
+                the save affordance is consistent. */}
+            <SaveBar
+              dirty={dirty}
+              canEdit={canEdit}
+              isSaving={updateMutation.isPending}
+              blockedReason={
+                fieldConfigLoading
+                  ? 'Loading field configuration…'
+                  : ownerValidating
+                    ? 'Validating component owner…'
+                    : null
+              }
+              onDiscard={discardAll}
+              onSave={handleOpenReview}
+            />
           </div>
         </Tabs>
       </div>
 
-      {/* Create-similar dialog (sourceId → pre-filled from this component) */}
+      <ReviewChangesDialog
+        open={reviewOpen}
+        onOpenChange={setReviewOpen}
+        diff={diff}
+        onConfirm={runCombinedSave}
+        isSaving={updateMutation.isPending}
+      />
+
       <CreateComponentDialog
         sourceId={component.id}
         open={copyDialogOpen}
         onOpenChange={setCopyDialogOpen}
       />
 
-      {/* Archive confirmation dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -857,4 +866,29 @@ export function ComponentDetailPage() {
       </Dialog>
     </Layout>
   )
+}
+
+// Stable empty-component shell so the section hooks can be called
+// unconditionally (rules of hooks) before the real component loads. The page
+// returns a skeleton in that window, so this is never rendered.
+const EMPTY_COMPONENT: ComponentDetail = {
+  id: '',
+  name: '',
+  displayName: null,
+  componentOwner: null,
+  productType: null,
+  system: null,
+  clientCode: null,
+  archived: false,
+  solution: false,
+  parentComponentName: null,
+  version: 0,
+  createdAt: null,
+  updatedAt: null,
+  labels: [],
+  docs: [],
+  artifactIds: [],
+  securityGroups: [],
+  teamcityProjects: [],
+  configurations: [],
 }

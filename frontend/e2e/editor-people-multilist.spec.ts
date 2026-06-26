@@ -219,6 +219,20 @@ async function addPerson(page: Page, label: string, person: string) {
   await input.blur()
 }
 
+// The single save flow that replaced the old per-tab / header Save button:
+// the sticky SaveBar "Save changes" → the "Review changes" dialog → "Confirm".
+// Waits for the bar to arm first: a people edit commits only after its async
+// directory lookup resolves (the SaveBar stays disabled with a validating /
+// not-yet-dirty reason until then), so clicking too early would no-op and hang.
+async function saveViaReviewBar(page: Page) {
+  const saveButton = page.getByRole('button', { name: 'Save changes' })
+  await expect(saveButton).toBeEnabled()
+  await saveButton.click()
+  const dialog = page.getByRole('dialog', { name: /review changes/i })
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('button', { name: 'Confirm', exact: true }).click()
+}
+
 test.describe('Editor — multi-value Release Managers / Security Champions (SYS-039)', () => {
   test('plural labels are shown and componentOwner stays a single input (not a list)', async ({
     page,
@@ -294,10 +308,13 @@ test.describe('Editor — multi-value Release Managers / Security Champions (SYS
     const ownerInput = peopleField(page, 'Component Owner').getByRole('textbox')
     await ownerInput.fill('fired-fred')
     await ownerInput.blur()
-    // Save arms once the async commit lands (dirty + validating released).
-    const saveButton = page.getByRole('button', { name: /^save$/i })
+    // Save arms once the async commit lands (dirty + owner-validating released).
+    const saveButton = page.getByRole('button', { name: 'Save changes' })
     await expect(saveButton).toBeEnabled()
-    await saveButton.click()
+    // Combined save: Save changes → Review → Confirm fires the PATCH that 400s.
+    // The General-field error (componentOwner) is routed to form.setError and
+    // the review dialog is closed, so the inline message renders under the owner.
+    await saveViaReviewBar(page)
 
     await expect(
       peopleField(page, 'Component Owner').getByText('is not an active employee'),
@@ -347,8 +364,8 @@ test.describe('Editor — multi-value Release Managers / Security Champions (SYS
     await page.getByRole('button', { name: 'Remove rm-alice' }).click()
     await expect(rowNames(page, 'Release Managers')).toHaveText(['rm-carol', 'rm-bob'])
 
-    // Save.
-    await page.getByRole('button', { name: /^save$/i }).click()
+    // Save through the combined bar+dialog flow.
+    await saveViaReviewBar(page)
     await expect(page.getByText(/component saved/i).first()).toBeVisible({ timeout: 10_000 })
 
     // PATCH body carried the reordered, canonicalized array (REPLACE).
@@ -380,7 +397,7 @@ test.describe('Editor — multi-value Release Managers / Security Champions (SYS
     await addPerson(page, 'Security Champions', 'sc-dave')
     await expect(rowNames(page, 'Security Champions')).toHaveText(['sc-carol', 'sc-dave'])
 
-    await page.getByRole('button', { name: /^save$/i }).click()
+    await saveViaReviewBar(page)
     await expect(page.getByText(/component saved/i).first()).toBeVisible({ timeout: 10_000 })
 
     await expect.poll(() => state.patches.length).toBeGreaterThan(0)
