@@ -179,8 +179,13 @@ export function RegistryHealthPage() {
   const validation = useValidationProblems()
 
   const kpis = useMemo(
-    () => computeHealthKpis(stats.data?.totalComponents ?? 0, validation.byComponent.values()),
-    [stats.data?.totalComponents, validation.byComponent],
+    () =>
+      computeHealthKpis(
+        stats.data?.totalComponents ?? 0,
+        stats.data?.activeComponents ?? 0,
+        validation.byComponent.values(),
+      ),
+    [stats.data?.totalComponents, stats.data?.activeComponents, validation.byComponent],
   )
   const offenders = useMemo(
     () => topOffenders(validation.byComponent.values()),
@@ -260,7 +265,7 @@ export function RegistryHealthPage() {
               <KpiCard
                 label="With validation problems"
                 value={validation.isError ? null : kpis.withProblems}
-                hint={`${pct(kpis.withProblemsRatio)} of total`}
+                hint={`${pct(kpis.withProblemsRatio)} of active`}
                 icon={<AlertTriangle className="h-5 w-5" />}
                 tone="destructive"
               />
@@ -274,7 +279,7 @@ export function RegistryHealthPage() {
               <KpiCard
                 label="Healthy components"
                 value={validation.isError ? null : kpis.healthy}
-                hint={`${pct(kpis.healthyRatio)} of total`}
+                hint={`${pct(kpis.healthyRatio)} of active`}
                 icon={<ShieldCheck className="h-5 w-5" />}
                 tone="success"
               />

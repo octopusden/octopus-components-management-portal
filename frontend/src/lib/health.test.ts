@@ -26,8 +26,13 @@ function unregistered(missingCount: number): ComponentValidation['problems'][num
 }
 
 describe('computeHealthKpis', () => {
+  // Signature: computeHealthKpis(total, active, validations). `total` is the
+  // grand total (the "Total components" KPI card); `active` is the base for the
+  // health math (healthy + ratios), because the validation sweep is active-only
+  // (RegistryClient.componentIds filters archived out) so problems are
+  // active-only and the denominator must be too.
   it('counts only components with genuine problems, excluding check-failed', () => {
-    const k = computeHealthKpis(10, [
+    const k = computeHealthKpis(12, 10, [
       cv('a', [unregistered(3)]),
       cv('b', [unregistered(1)]),
       cv('c', [], true), // checkFailed, empty problems — not a problem
@@ -36,27 +41,29 @@ describe('computeHealthKpis', () => {
     ])
     expect(k.withProblems).toBe(2)
     expect(k.problemVersions).toBe(4) // 3 + 1; the check-failed x's 2 is not counted
-    expect(k.total).toBe(10)
+    expect(k.total).toBe(12)
+    expect(k.active).toBe(10)
   })
 
   it('sums problem versions across problem-bearing components', () => {
-    const k = computeHealthKpis(5, [cv('a', [unregistered(3)]), cv('b', [unregistered(2)])])
+    const k = computeHealthKpis(5, 5, [cv('a', [unregistered(3)]), cv('b', [unregistered(2)])])
     expect(k.problemVersions).toBe(5)
   })
 
-  it('derives healthy = total − withProblems and the ratios', () => {
-    const k = computeHealthKpis(10, [cv('a', [unregistered(1)]), cv('b', [unregistered(1)])])
+  it('derives healthy = active − withProblems and the ratios off ACTIVE (not total)', () => {
+    // 12 total, 10 active, 2 with problems → healthy 8, ratios over 10 (active).
+    const k = computeHealthKpis(12, 10, [cv('a', [unregistered(1)]), cv('b', [unregistered(1)])])
     expect(k.healthy).toBe(8)
-    expect(k.withProblemsRatio).toBeCloseTo(0.2)
-    expect(k.healthyRatio).toBeCloseTo(0.8)
+    expect(k.withProblemsRatio).toBeCloseTo(0.2) // 2/10, NOT 2/12
+    expect(k.healthyRatio).toBeCloseTo(0.8) // 8/10, NOT 8/12
   })
 
   it('guards against divide-by-zero and never goes negative', () => {
-    const empty = computeHealthKpis(0, [])
+    const empty = computeHealthKpis(0, 0, [])
     expect(empty.withProblemsRatio).toBe(0)
     expect(empty.healthyRatio).toBe(0)
-    // stale report with more problems than CRS total → healthy clamps at 0
-    const stale = computeHealthKpis(1, [cv('a', [unregistered(1)]), cv('b', [unregistered(1)])])
+    // stale report with more problems than active → healthy clamps at 0
+    const stale = computeHealthKpis(3, 1, [cv('a', [unregistered(1)]), cv('b', [unregistered(1)])])
     expect(stale.healthy).toBe(0)
   })
 })

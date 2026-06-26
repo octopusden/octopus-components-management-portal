@@ -35,8 +35,10 @@ function cv(component: string, missingCount: number): ComponentValidation {
 }
 
 const sampleStats: HealthStatistics = {
-  totalComponents: 10,
-  activeComponents: 9,
+  // total (12) ≠ active (10) so the active-based health math is provable: the
+  // ratios must divide by 10, not 12.
+  totalComponents: 12,
+  activeComponents: 10,
   componentsByOwner: { alice: 6, bob: 4 },
   componentsByReleaseManager: { carol: 3 },
   componentsBySecurityChampion: { dan: 2 },
@@ -89,24 +91,24 @@ describe('RegistryHealthPage — KPIs', () => {
     mockValidation.mockReturnValue(validationResult())
     renderPage()
 
-    // Total = 10, active = 9
+    // Total card shows the grand total (12); the active count (10) is the hint.
     const total = screen.getByText('Total components').closest('div')!.parentElement!
-    expect(within(total).getByText('10')).toBeInTheDocument()
-    expect(within(total).getByText(/9 active/)).toBeInTheDocument()
+    expect(within(total).getByText('12')).toBeInTheDocument()
+    expect(within(total).getByText(/10 active/)).toBeInTheDocument()
 
-    // With problems = 2 (20% of 10)
+    // With problems = 2 → 2/10 active = 20% (NOT 2/12 = 17%).
     const withProblems = screen.getByText('With validation problems').closest('div')!.parentElement!
     expect(within(withProblems).getByText('2')).toBeInTheDocument()
-    expect(within(withProblems).getByText('20% of total')).toBeInTheDocument()
+    expect(within(withProblems).getByText('20% of active')).toBeInTheDocument()
 
     // Problem versions = 2 + 5 = 7
     const problemVersions = screen.getByText('Problem versions').closest('div')!.parentElement!
     expect(within(problemVersions).getByText('7')).toBeInTheDocument()
 
-    // Healthy = 10 - 2 = 8 (80%)
+    // Healthy = active(10) − 2 = 8 → 8/10 = 80% (active-based, NOT 8/12).
     const healthy = screen.getByText('Healthy components').closest('div')!.parentElement!
     expect(within(healthy).getByText('8')).toBeInTheDocument()
-    expect(within(healthy).getByText('80% of total')).toBeInTheDocument()
+    expect(within(healthy).getByText('80% of active')).toBeInTheDocument()
   })
 })
 
@@ -203,10 +205,10 @@ describe('RegistryHealthPage — loading / error / stale', () => {
     // Problem-derived KPIs read em-dash, NOT 0 — a failed report must not look "clean".
     const withProblems = screen.getByText('With validation problems').closest('div')!.parentElement!
     expect(within(withProblems).getByText('—')).toBeInTheDocument()
-    expect(within(withProblems).queryByText('0% of total')).not.toBeInTheDocument()
+    expect(within(withProblems).queryByText('0% of active')).not.toBeInTheDocument()
     // Total / active (from CRS stats) are unaffected.
     const total = screen.getByText('Total components').closest('div')!.parentElement!
-    expect(within(total).getByText('10')).toBeInTheDocument()
+    expect(within(total).getByText('12')).toBeInTheDocument()
   })
 
   it('shows the top-offenders empty state when there are no problems', () => {

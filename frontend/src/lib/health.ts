@@ -15,23 +15,31 @@ import { hasValidationIssue, validationBadgeCount } from './validation'
  *
  * `problemVersions` sums `validationBadgeCount` across problem-bearing
  * components — the count of released versions implicated across the registry.
- * `healthy` is `total − withProblems`; it is derived from CRS's authoritative
- * `totalComponents` (passed in) rather than the report length, so it stays
- * correct even if the report covers a subset.
+ *
+ * Health math is ACTIVE-based (product decision): the validation sweep only
+ * covers active components — `RegistryClient.componentIds()` filters archived
+ * out — so `withProblems` is inherently active-only, and the denominator must
+ * match. `healthy = active − withProblems`; the ratios divide by `active`.
+ * `total` is carried through unchanged only to back the "Total components" KPI
+ * card (the grand total incl. archived); it is NOT used in the health math.
  */
 export interface HealthKpis {
+  /** Grand total incl. archived (CRS totalComponents) — KPI card only. */
   total: number
+  /** Active (non-archived) count — the base for all health math. */
+  active: number
   withProblems: number
   problemVersions: number
   healthy: number
-  /** withProblems / total, 0..1; 0 when total is 0. */
+  /** withProblems / active, 0..1; 0 when active is 0. */
   withProblemsRatio: number
-  /** healthy / total, 0..1; 0 when total is 0. */
+  /** healthy / active, 0..1; 0 when active is 0. */
   healthyRatio: number
 }
 
 export function computeHealthKpis(
   total: number,
+  active: number,
   validations: Iterable<ComponentValidation>,
 ): HealthKpis {
   let withProblems = 0
@@ -43,16 +51,17 @@ export function computeHealthKpis(
     withProblems += 1
     problemVersions += validationBadgeCount(cv)
   }
-  // Clamp healthy at 0: a report holding stale entries for components no longer
-  // in CRS could in theory exceed `total`; never show a negative count.
-  const healthy = Math.max(0, total - withProblems)
+  // Clamp healthy at 0: a stale report holding entries for components no longer
+  // active could in theory exceed `active`; never show a negative count.
+  const healthy = Math.max(0, active - withProblems)
   return {
     total,
+    active,
     withProblems,
     problemVersions,
     healthy,
-    withProblemsRatio: total > 0 ? withProblems / total : 0,
-    healthyRatio: total > 0 ? healthy / total : 0,
+    withProblemsRatio: active > 0 ? withProblems / active : 0,
+    healthyRatio: active > 0 ? healthy / active : 0,
   }
 }
 
