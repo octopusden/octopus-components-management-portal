@@ -1,10 +1,13 @@
 import type {
+  ArtifactIdMode,
+  ArtifactIdRequest,
   BaseConfigurationRequest,
   ComponentCreateRequest,
   ComponentDetail,
   JiraAspect,
 } from '../types'
 import { selectBaseRow } from '../api/baseRow'
+import { groupTokens } from '../artifactOwnership'
 
 // Distribution-coordinate enum for the package family — CRS validatePackageType
 // accepts only these (EnumValidValues.kt), so the form constrains them rather
@@ -76,6 +79,13 @@ export interface CreateFormValues {
     packageType: PackageType
     packageName: string
   }
+  // #357 base artifact-ownership. The dialog offers only the tokenless modes (ALL /
+  // ALL_EXCEPT_CLAIMED); EXPLICIT, multi-group and per-range overrides are added post-create in the
+  // editor. An empty group sends no ownership mapping.
+  ownership: {
+    groups: string
+    mode: ArtifactIdMode
+  }
 }
 
 // Builds the POST /components payload for both create modes.
@@ -136,6 +146,13 @@ function coordinatePatch(
   }
 }
 
+// Maps the dialog's base ownership section to a single base mapping (or none).
+function buildCreateOwnership(ownership: CreateFormValues['ownership'] | undefined): ArtifactIdRequest[] {
+  const tokens = groupTokens(ownership?.groups ?? '')
+  if (tokens.length === 0) return []
+  return [{ versionRange: null, groupPattern: tokens.join(','), mode: ownership!.mode, artifactTokens: [] }]
+}
+
 // Component-level fields whose presence on create is governed by field-config
 // visibility. A hidden/readonly field must NOT be sent on create (matching the
 // read-only create form) — including values copied from the source in "Create
@@ -187,9 +204,9 @@ export function buildCreateRequest(
       groupType: g.groupType,
       groupName: g.groupName,
     })),
-    // Required by the create contract but intentionally NOT copied (unique
-    // per component): explicit empty lists.
-    artifactIds: [],
+    // Base artifact-ownership from the dialog's ownership section (NOT copied from a source —
+    // ownership is unique per component). Empty group ⇒ no mapping (server then has none).
+    artifactIds: buildCreateOwnership(form.ownership),
     teamcityProjects: [],
   }
 

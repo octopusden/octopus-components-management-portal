@@ -9,6 +9,8 @@ import { Input } from './ui/input'
 import { Label } from './ui/label'
 import { PeopleInput } from './ui/PeopleInput'
 import { PeopleListInput } from './ui/PeopleListInput'
+import { ModeRadioGroup } from './ui/ModeRadioGroup'
+import { isBadToken } from '../lib/artifactOwnership'
 import { InlineError } from './ui/inline-error'
 import { SkeletonBlock } from './ui/skeleton-block'
 import {
@@ -85,6 +87,14 @@ function makeCreateSchema(editable: (field: string) => boolean) {
       packageType: z.enum(['DEB', 'RPM']),
       packageName: z.string(),
     }),
+    // #357 base artifact-ownership. Dialog offers only the tokenless modes; an empty group sends
+    // no ownership mapping (EXPLICIT / multi-group / per-range are added later in the editor).
+    ownership: z.object({
+      groups: z.string(),
+      // The dialog UI offers only ALL / ALL_EXCEPT_CLAIMED; EXPLICIT is in the type for parity with
+      // the shared ArtifactIdMode (and is never produced here — no token editor in the dialog).
+      mode: z.enum(['ALL', 'ALL_EXCEPT_CLAIMED', 'EXPLICIT']),
+    }),
   })
   .superRefine((v, ctx) => {
     // Legacy EscrowConfigValidator rule, lost in the DSL→portal migration: a
@@ -112,6 +122,26 @@ function makeCreateSchema(editable: (field: string) => boolean) {
           code: z.ZodIssueCode.custom,
           path: ['vcsBranch'],
           message: 'Production branch is required',
+        })
+      }
+    }
+    // Base ownership group allowlist + ALL_EXCEPT single-group rule (only when a group is given).
+    const ownGroups = v.ownership.groups.trim()
+    if (ownGroups) {
+      const tokens = ownGroups.split(',').map((t) => t.trim()).filter(Boolean)
+      const bad = tokens.find((t) => isBadToken(t))
+      if (bad) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['ownership', 'groups'],
+          message: `Invalid group "${bad}" — letters, digits, . _ - only`,
+        })
+      }
+      if (v.ownership.mode === 'ALL_EXCEPT_CLAIMED' && tokens.length > 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['ownership', 'groups'],
+          message: '"All unclaimed" supports a single group only',
         })
       }
     }
@@ -176,6 +206,7 @@ const SCRATCH_DEFAULTS: CreateFormValues = {
   vcsTag: '',
   vcsBranch: '',
   coordinate: EMPTY_COORDINATE,
+  ownership: { groups: '', mode: 'ALL' },
 }
 
 // vcs.tag / vcs.branch read from GET /config/component-defaults (absent fields
@@ -517,6 +548,39 @@ function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateCom
             {errors.buildSystem.message}
           </p>
         )}
+      </div>
+
+      {/* #357 base artifact ownership. Optional here (blank group ⇒ no mapping); EXPLICIT,
+          multi-group and per-range rules are added post-create in the editor, so only the
+          tokenless modes are offered. */}
+      <div className="space-y-1.5" data-testid="create-ownership">
+        <Label htmlFor="create-ownership-groups">Artifact ownership</Label>
+        <Input
+          id="create-ownership-groups"
+          className="font-mono"
+          placeholder="com.example.foo"
+          aria-invalid={Boolean(errors.ownership?.groups)}
+          {...register('ownership.groups')}
+        />
+        {errors.ownership?.groups && (
+          <p className="text-xs text-destructive">{errors.ownership.groups.message}</p>
+        )}
+        <Controller
+          control={control}
+          name="ownership.mode"
+          render={({ field }) => (
+            <ModeRadioGroup
+              value={field.value}
+              allowed={['ALL', 'ALL_EXCEPT_CLAIMED']}
+              idPrefix="create-mode"
+              onChange={field.onChange}
+            />
+          )}
+        />
+        <p className="text-xs text-muted-foreground">
+          A new component starts owning its group. Specific artifacts, multi-group and per-range rules are added
+          later in the editor.
+        </p>
       </div>
 
       {/* Legacy EscrowConfigValidator rule: a VCS root is mandatory for every

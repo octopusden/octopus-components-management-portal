@@ -57,7 +57,7 @@ const sourceDetail = {
   distributionExternal: false,
   group: null,
   docs: [{ id: 'd-1', docComponentKey: 'docs-a', majorVersion: '1.x', sortOrder: 0 }],
-  artifactIds: [{ id: 'a-1', groupPattern: 'org.x', artifactPattern: 'src-*' }],
+  artifactIds: [{ id: 'a-1', versionRange: null, groupPattern: 'org.x', mode: 'ALL', artifactTokens: [] }],
   securityGroups: [{ id: 'sg-1', groupType: 'LAS', groupName: 'las-src' }],
   teamcityProjects: [{ id: 'tc-1', projectId: 'SrcProject', projectUrl: null, sortOrder: 0 }],
   configurations: [

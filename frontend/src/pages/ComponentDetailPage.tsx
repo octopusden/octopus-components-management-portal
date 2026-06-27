@@ -51,6 +51,7 @@ import { useToast } from '../hooks/use-toast'
 import { ApiError } from '../lib/api'
 import { useOptimisticConflict } from '../hooks/useOptimisticConflict'
 import type { ComponentDetail } from '../lib/types'
+import { countOwnershipIssues, fromArtifactId } from '../lib/artifactOwnership'
 import { selectBaseRow } from '../lib/api/baseRow'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../lib/auth'
@@ -104,7 +105,7 @@ function mapComponentToForm(component: ComponentDetail): GeneralFormValues {
     copyright: component.copyright ?? '',
     labels: component.labels ?? [],
     docs: (component.docs ?? []).map((d) => ({ docComponentKey: d.docComponentKey, majorVersion: d.majorVersion ?? '' })),
-    artifactIds: (component.artifactIds ?? []).map((a) => ({ groupPattern: a.groupPattern, artifactPattern: a.artifactPattern })),
+    artifactIds: (component.artifactIds ?? []).map(fromArtifactId),
   }
 }
 
@@ -323,6 +324,11 @@ export function ComponentDetailPage() {
   ]
   const dirty = anyDirty(slices)
   const diff = collectDiff(slices)
+
+  // Client-side artifact-ownership validity gate: block save while the editor shows unresolved
+  // issues (invalid group, empty EXPLICIT, intra-component conflict, overlapping override ranges).
+  // The server is the authoritative gate (400/409); this avoids a round-trip on a known-bad state.
+  const ownershipIssues = countOwnershipIssues(form.watch('artifactIds') ?? [])
 
   function discardAll() {
     // Reset the RHF form to the COMPONENT's values (not the empty form
@@ -815,7 +821,9 @@ export function ComponentDetailPage() {
                   ? 'Loading field configuration…'
                   : ownerValidating
                     ? 'Validating component owner…'
-                    : null
+                    : ownershipIssues > 0
+                      ? `Resolve ${ownershipIssues} artifact-ownership ${ownershipIssues === 1 ? 'issue' : 'issues'} before saving`
+                      : null
               }
               onDiscard={discardAll}
               onSave={handleOpenReview}
