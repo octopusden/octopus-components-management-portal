@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { GeneralTab, type GeneralFormValues } from './GeneralTab'
-import { fromArtifactId } from '../../lib/artifactOwnership'
+import { fromArtifactId, OWNERSHIP_ALL_VERSIONS } from '../../lib/artifactOwnership'
 import { TooltipProvider } from '../ui/tooltip'
 import { fieldDescriptions } from '../../lib/fieldDescriptions'
 import { lookupEmployee } from '../../hooks/useEmployees'
@@ -805,5 +805,64 @@ describe('GeneralTab — owner validating propagation', () => {
 
     await waitFor(() => expect(onOwnerValidatingChange).toHaveBeenCalledWith(true))
     await waitFor(() => expect(onOwnerValidatingChange).toHaveBeenLastCalledWith(false))
+  })
+})
+
+// Guards that the ownership editor DISPLAYS persisted values (groupId, mode, artifact tokens) —
+// not merely that fromArtifactId maps them. This is the regression net for the v4
+// ArtifactIdResponse → editor binding: a field-shape drift (e.g. a CRS build that omits
+// `mode`/`artifactTokens`, or an empty `component_artifact_mappings` table) would otherwise
+// render blank/absent fields while every existing test stayed green. (#357)
+describe('GeneralTab artifact-ownership rendering (#357)', () => {
+  function withOwnership(): ComponentDetail {
+    return baseComponent({
+      artifactIds: [
+        {
+          id: 'ai-1',
+          versionRange: OWNERSHIP_ALL_VERSIONS,
+          groupPattern: 'com.example.alpha',
+          mode: 'ALL_EXCEPT_CLAIMED',
+          artifactTokens: [],
+          legacyArtifactIdPattern: '(?!(?:claimed-model)$)[\\w-\\.]+',
+        },
+        {
+          id: 'ai-2',
+          versionRange: OWNERSHIP_ALL_VERSIONS,
+          groupPattern: 'com.example.tools',
+          mode: 'EXPLICIT',
+          artifactTokens: ['claimed-model', 'claimed-api'],
+        },
+      ],
+    })
+  }
+
+  it('renders the persisted groupId for every mapping', () => {
+    renderWithProviders(<Harness component={withOwnership()} />)
+    const groups = (screen.getAllByLabelText('Group ID') as HTMLInputElement[]).map((i) => i.value)
+    expect(groups).toHaveLength(2)
+    expect(groups).toEqual(expect.arrayContaining(['com.example.alpha', 'com.example.tools']))
+  })
+
+  it('reflects the persisted mode per mapping (ALL_EXCEPT_CLAIMED + EXPLICIT)', () => {
+    renderWithProviders(<Harness component={withOwnership()} />)
+    const checkedLabels = screen.getAllByRole('radio', { checked: true }).map((r) => r.textContent ?? '')
+    expect(checkedLabels.length).toBe(2)
+    expect(checkedLabels.some((t) => t.includes('All unclaimed artifacts'))).toBe(true)
+    expect(checkedLabels.some((t) => t.includes('Specific artifacts'))).toBe(true)
+  })
+
+  it('renders persisted EXPLICIT artifact tokens as chips', () => {
+    renderWithProviders(<Harness component={withOwnership()} />)
+    expect(screen.getByLabelText('Remove claimed-model')).toBeTruthy()
+    expect(screen.getByLabelText('Remove claimed-api')).toBeTruthy()
+  })
+
+  it('empty artifactIds (e.g. an un-migrated component_artifact_mappings table) renders the section with NO mapping cards', () => {
+    // Reproduces the QA symptom: the v4 detail returns artifactIds: [] (the new table was
+    // never populated for the component), so the editor shows its header + add button but no
+    // Group ID / Artifact fields. A data/migration state — distinct from a binding bug above.
+    renderWithProviders(<Harness component={baseComponent({ artifactIds: [] })} />)
+    expect(screen.queryByLabelText('Group ID')).toBeNull()
+    expect(screen.getByRole('button', { name: /Add artifact coordinates/i })).toBeTruthy()
   })
 })
