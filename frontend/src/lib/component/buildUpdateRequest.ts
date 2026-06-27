@@ -1,6 +1,7 @@
-import type { ComponentDetail, ComponentUpdateRequest } from '../types'
+import type { ArtifactIdRequest, ComponentDetail, ComponentUpdateRequest } from '../types'
 import type { GeneralFormValues } from '../../components/editor/GeneralTab'
 import type { FieldVisibility } from '../../hooks/useFieldConfig'
+import { groupTokens, toArtifactIdRequest } from '../artifactOwnership'
 
 // System is single-value per component. CRS PR #301 collapsed
 // `Component.systems Set<String>` → `Component.system String?`; the
@@ -235,13 +236,12 @@ function buildArtifactIdsPatch(
   component: ComponentDetail,
   values: GeneralFormValues,
   dirtyFields: DirtyFlags,
-): { artifactIds?: { groupPattern: string; artifactPattern: string }[] } {
+): { artifactIds?: ArtifactIdRequest[] } {
+  // PATCH `artifactIds` is a FULL replacement of the component's ownership set. Drop mappings with
+  // no group token (incomplete rows); the server applies the remaining invariants.
   const cleaned = (values.artifactIds ?? [])
-    .map((a) => ({
-      groupPattern: (a.groupPattern ?? '').trim(),
-      artifactPattern: (a.artifactPattern ?? '').trim(),
-    }))
-    .filter((a) => a.groupPattern !== '' && a.artifactPattern !== '')
+    .filter((m) => groupTokens(m.groups).length > 0)
+    .map(toArtifactIdRequest)
   // `?? []` is defensive — see buildDocsPatch (older CRS omits artifactIds).
   const hadPrior = (component.artifactIds ?? []).length > 0
   const dirty = !!dirtyFields.artifactIds

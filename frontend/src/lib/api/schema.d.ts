@@ -777,14 +777,19 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         ArtifactIdRequest: {
-            artifactPattern: string;
+            artifactTokens: string[];
             groupPattern: string;
+            mode?: string;
+            versionRange?: string;
         };
         ArtifactIdResponse: {
-            artifactPattern: string;
+            artifactTokens: string[];
             groupPattern: string;
             /** Format: uuid */
             id: string;
+            legacyArtifactIdPattern?: string;
+            mode: string;
+            versionRange?: string;
         };
         AuditLogResponse: {
             action: string;

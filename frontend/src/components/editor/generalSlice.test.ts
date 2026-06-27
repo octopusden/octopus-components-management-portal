@@ -42,6 +42,34 @@ describe('generalSlice', () => {
   })
 })
 
+describe('generalSlice — artifactIds ownership (request shape)', () => {
+  // buildUpdateRequest emits the REQUEST shape (groupPattern + artifactTokens) and includes
+  // artifactIds whenever the component owns any — even on a clean load. The diff must read the
+  // request shape (not the form's OwnershipMappingValue) or it crashes with "n is not iterable".
+  const owned = makeComponent({
+    artifactIds: [
+      { id: 'm1', versionRange: '(,0),[0,)', groupPattern: 'com.example.foo', mode: 'ALL', artifactTokens: [] },
+      { id: 'm2', versionRange: '[1,2)', groupPattern: 'com.example.bar', mode: 'EXPLICIT', artifactTokens: ['svc-a'] },
+    ],
+  })
+  const sameRequest = [
+    { versionRange: null, groupPattern: 'com.example.foo', mode: 'ALL' as const, artifactTokens: [] },
+    { versionRange: '[1,2)', groupPattern: 'com.example.bar', mode: 'EXPLICIT' as const, artifactTokens: ['svc-a'] },
+  ]
+
+  it('does not crash and reads clean when a request-shaped artifactIds patch matches the component (load scenario)', () => {
+    const slice = generalSlice(owned, patch({ artifactIds: sameRequest }), false)
+    expect(slice.isDirty).toBe(false)
+    expect(slice.diff).toEqual([])
+  })
+
+  it('flags dirty when an ownership token actually changes', () => {
+    const changed = sameRequest.map((m, i) => (i === 1 ? { ...m, artifactTokens: ['svc-b'] } : m))
+    const slice = generalSlice(owned, patch({ artifactIds: changed }), false)
+    expect(slice.isDirty).toBe(true)
+  })
+})
+
 describe('generalDiff', () => {
   it('lists changed scalar with old → new', () => {
     const diff = generalDiff(makeComponent(), patch({ displayName: 'New Name' }))

@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { GeneralTab, type GeneralFormValues } from './GeneralTab'
+import { fromArtifactId } from '../../lib/artifactOwnership'
 import { TooltipProvider } from '../ui/tooltip'
 import { fieldDescriptions } from '../../lib/fieldDescriptions'
 import { lookupEmployee } from '../../hooks/useEmployees'
@@ -126,10 +127,7 @@ function Harness({ component, formRef, onOwnerValidatingChange, canEdit }: { com
         docComponentKey: d.docComponentKey,
         majorVersion: d.majorVersion ?? '',
       })),
-      artifactIds: (component.artifactIds ?? []).map((a) => ({
-        groupPattern: a.groupPattern,
-        artifactPattern: a.artifactPattern,
-      })),
+      artifactIds: (component.artifactIds ?? []).map(fromArtifactId),
     },
   })
   if (formRef) formRef.current = form

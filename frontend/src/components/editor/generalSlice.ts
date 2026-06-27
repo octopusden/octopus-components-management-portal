@@ -1,6 +1,27 @@
-import type { ComponentDetail, ComponentUpdateRequest } from '../../lib/types'
+import type { ArtifactId, ArtifactIdRequest, ComponentDetail, ComponentUpdateRequest } from '../../lib/types'
 import type { SectionSlice, DiffEntry } from '../../lib/editor/combineRequest'
 import { formatDiffValue } from '../../lib/editor/diffUtil'
+import { groupTokens, OWNERSHIP_ALL_VERSIONS } from '../../lib/artifactOwnership'
+
+/** Canonical, order-stable string for one ownership mapping — used for change detection. */
+function ownershipKey(
+  groupPattern: string,
+  mode: string | undefined,
+  tokens: string[] | undefined,
+  range: string | null | undefined,
+): string {
+  return `${groupTokens(groupPattern).join(',')}::${mode ?? ''}::${[...(tokens ?? [])].sort().join(',')}::${range ?? ''}`
+}
+const normRange = (r: string | null | undefined) => (r == null || r === OWNERSHIP_ALL_VERSIONS ? null : r)
+// Current value: the SERVER response shape (ArtifactId). Normalise the all-versions sentinel to ''
+// so a base mapping the server stores as `(,0),[0,)` matches the request's null/base range.
+const responseOwnershipKey = (a: ArtifactId) =>
+  ownershipKey(a.groupPattern, a.mode, a.artifactTokens, normRange(a.versionRange))
+// Next value: the PATCH/REQUEST shape (ArtifactIdRequest = groupPattern + mode + artifactTokens +
+// versionRange) — NOT the form's OwnershipMappingValue. `nextValueFor` receives the buildUpdateRequest
+// body; reading form-shape fields here yielded `undefined` tokens → `[...undefined]` crash on load.
+const requestOwnershipKey = (a: ArtifactIdRequest) =>
+  ownershipKey(a.groupPattern, a.mode, a.artifactTokens, normRange(a.versionRange))
 
 /**
  * Turn the General/Misc `buildUpdateRequest` output into a SectionSlice for the
@@ -52,14 +73,14 @@ function priorValueFor(component: ComponentDetail, key: string): unknown {
     case 'securityChampion': return component.securityChampion ?? []
     case 'labels': return component.labels ?? []
     case 'docs': return (component.docs ?? []).map((d) => d.docComponentKey)
-    case 'artifactIds': return (component.artifactIds ?? []).map((a) => `${a.groupPattern}:${a.artifactPattern}`)
+    case 'artifactIds': return (component.artifactIds ?? []).map(responseOwnershipKey)
     default: return undefined
   }
 }
 
 function nextValueFor(key: string, value: unknown): unknown {
   if (key === 'docs') return (value as { docComponentKey: string }[] | null)?.map((d) => d.docComponentKey) ?? []
-  if (key === 'artifactIds') return (value as { groupPattern: string; artifactPattern: string }[] | null)?.map((a) => `${a.groupPattern}:${a.artifactPattern}`) ?? []
+  if (key === 'artifactIds') return (value as ArtifactIdRequest[] | null)?.map(requestOwnershipKey) ?? []
   return value
 }
 

@@ -246,10 +246,22 @@ export interface DocLink {
   sortOrder: number
 }
 
+/**
+ * Artifact-ID ownership mode (#357). EXPLICIT = owns exactly the listed literal
+ * tokens; ALL_EXCEPT_CLAIMED = catch-all that yields to other components' EXPLICIT
+ * claims (single-group); ALL = owns every artifact under the group(s).
+ */
+export type ArtifactIdMode = 'EXPLICIT' | 'ALL_EXCEPT_CLAIMED' | 'ALL'
+
 export interface ArtifactId {
   id: string
+  /** `null`/ALL_VERSIONS for the base mapping; otherwise a per-range override. */
+  versionRange?: string | null
   groupPattern: string
-  artifactPattern: string
+  mode: ArtifactIdMode
+  artifactTokens: string[]
+  /** Server-computed legacy v1–v3 `artifactIdPattern` (read-only, for preview). */
+  legacyArtifactIdPattern?: string | null
 }
 
 export interface SecurityGroup {
@@ -312,8 +324,12 @@ export interface DocLinkRequest {
 }
 
 export interface ArtifactIdRequest {
+  /** Omit/`null` for the base mapping; else an existing configuration range. */
+  versionRange?: string | null
   groupPattern: string
-  artifactPattern: string
+  /** Omit to let the server default (ALL when tokenless, else EXPLICIT). */
+  mode?: ArtifactIdMode
+  artifactTokens: string[]
 }
 
 export interface SecurityGroupRequest {

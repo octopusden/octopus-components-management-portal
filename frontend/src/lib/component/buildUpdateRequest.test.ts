@@ -259,7 +259,7 @@ describe('buildUpdateRequest — dirtyFields gating (pre-hydration safety)', () 
     const req = buildUpdateRequest({
       component: makeComponent({
         docs: [{ id: 'd-1', docComponentKey: 'docs-a', majorVersion: '1.x', sortOrder: 0 }],
-        artifactIds: [{ id: 'a-1', groupPattern: 'org.x', artifactPattern: 'my-*' }],
+        artifactIds: [{ id: 'a-1', groupPattern: 'org.x', mode: 'ALL', artifactTokens: [] }],
       }),
       values: makeValues({ docs: [], artifactIds: [] }),
       visibilities: EDITABLE,
@@ -273,7 +273,7 @@ describe('buildUpdateRequest — dirtyFields gating (pre-hydration safety)', () 
     const req = buildUpdateRequest({
       component: makeComponent({
         docs: [{ id: 'd-1', docComponentKey: 'docs-a', majorVersion: '1.x', sortOrder: 0 }],
-        artifactIds: [{ id: 'a-1', groupPattern: 'org.x', artifactPattern: 'my-*' }],
+        artifactIds: [{ id: 'a-1', groupPattern: 'org.x', mode: 'ALL', artifactTokens: [] }],
       }),
       values: makeValues({ docs: [], artifactIds: [] }),
       visibilities: EDITABLE,
@@ -384,20 +384,23 @@ describe('buildUpdateRequest — list cleanup', () => {
     ])
   })
 
-  it('artifactIds rows with either pattern blank are dropped (both required)', () => {
+  it('artifactIds mappings with no group token are dropped; the rest map to ownership requests', () => {
     const req = buildUpdateRequest({
       component: makeComponent(),
       values: makeValues({
         artifactIds: [
-          { groupPattern: 'org.x', artifactPattern: '' },
-          { groupPattern: '', artifactPattern: 'my-*' },
-          { groupPattern: '  org.y  ', artifactPattern: '  svc-*  ' },
+          { id: 'm1', base: true, range: null, groups: '  org.y  ', mode: 'EXPLICIT', tokens: ['svc-a'] },
+          { id: 'm2', base: true, range: null, groups: '', mode: 'ALL', tokens: [] },
+          { id: 'm3', base: false, range: '[1.0,2.0)', groups: 'org.z', mode: 'ALL', tokens: [] },
         ],
       }),
       visibilities: EDITABLE,
       dirtyFields: { artifactIds: true },
     })
-    expect(req.artifactIds).toEqual([{ groupPattern: 'org.y', artifactPattern: 'svc-*' }])
+    expect(req.artifactIds).toEqual([
+      { versionRange: null, groupPattern: 'org.y', mode: 'EXPLICIT', artifactTokens: ['svc-a'] },
+      { versionRange: '[1.0,2.0)', groupPattern: 'org.z', mode: 'ALL', artifactTokens: [] },
+    ])
   })
 })
 

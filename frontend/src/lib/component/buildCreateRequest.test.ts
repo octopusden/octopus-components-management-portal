@@ -26,6 +26,7 @@ function makeForm(overrides: Partial<CreateFormValues> = {}): CreateFormValues {
       packageType: 'DEB',
       packageName: '',
     },
+    ownership: { groups: '', mode: 'ALL' },
     ...overrides,
   }
 }
@@ -77,7 +78,7 @@ function makeSource(overrides: Partial<ComponentDetail> = {}): ComponentDetail {
     distributionExternal: false,
     group: { groupKey: 'org.example.legacy', isFake: false, role: 'MEMBER' },
     docs: [{ id: 'd-1', docComponentKey: 'docs-a', majorVersion: '1.x', sortOrder: 0 }],
-    artifactIds: [{ id: 'a-1', groupPattern: 'org.x', artifactPattern: 'alpha-*' }],
+    artifactIds: [{ id: 'a-1', groupPattern: 'org.x', mode: 'ALL', artifactTokens: [] }],
     securityGroups: [{ id: 'sg-1', groupType: 'LAS', groupName: 'las-alpha' }],
     teamcityProjects: [{ id: 'tc-1', projectId: 'AlphaProject', projectUrl: 'https://tc/x', sortOrder: 0 }],
     configurations: [makeBaseRow({ build: { buildSystem: 'GRADLE', gradleVersion: '8.5' } })],
