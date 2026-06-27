@@ -44,7 +44,9 @@ export function AdminModeArmBar() {
             : 'Arm to enable the destructive Run actions on this tab.'}
         </span>
       </div>
-      <Switch checked={armed} onCheckedChange={setArmed} aria-label="Admin mode" />
+      {/* Distinct accessible name from the footer AdminPane switch ("Admin mode")
+          so both can coexist on /admin without an ambiguous role lookup. */}
+      <Switch checked={armed} onCheckedChange={setArmed} aria-label="Arm admin mode" />
     </div>
   )
 }

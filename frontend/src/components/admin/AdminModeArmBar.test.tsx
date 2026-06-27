@@ -14,20 +14,20 @@ describe('AdminModeArmBar', () => {
   it('reflects the disarmed state by default', () => {
     render(<AdminModeArmBar />)
     expect(screen.getByText(/Admin mode disarmed/i)).toBeDefined()
-    expect(screen.getByRole('switch')).not.toBeChecked()
+    expect(screen.getByRole('switch', { name: /arm admin mode/i })).not.toBeChecked()
   })
 
   it('reflects the armed state from the shared store', () => {
     useAdminMode.setState({ enabled: true })
     render(<AdminModeArmBar />)
     expect(screen.getByText(/Admin mode armed/i)).toBeDefined()
-    expect(screen.getByRole('switch')).toBeChecked()
+    expect(screen.getByRole('switch', { name: /arm admin mode/i })).toBeChecked()
   })
 
   it('toggling the switch flips the shared useAdminMode store', async () => {
     render(<AdminModeArmBar />)
     expect(useAdminMode.getState().enabled).toBe(false)
-    await userEvent.setup().click(screen.getByRole('switch'))
+    await userEvent.setup().click(screen.getByRole('switch', { name: /arm admin mode/i }))
     expect(useAdminMode.getState().enabled).toBe(true)
   })
 })
