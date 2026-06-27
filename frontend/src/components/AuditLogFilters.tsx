@@ -33,8 +33,10 @@ export interface AuditFilter {
    * default (SYS-049). Backs the "Show migration" toggle. Omitted unless on.
    */
   includeMigrated?: boolean
-  /** Exact-match on the change-metadata Jira task key recorded at save time. */
+  /** Case-insensitive substring match on the change-metadata Jira task key. */
   jiraTaskKey?: string
+  /** Case-insensitive substring match on the change-metadata comment. */
+  changeComment?: string
 }
 
 interface AuditLogFiltersProps {
@@ -83,6 +85,8 @@ export function AuditLogFilters({ filter, onChange }: AuditLogFiltersProps) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [jiraTaskKeyLocal, setJiraTaskKeyLocal] = useState(filter.jiraTaskKey ?? '')
   const jiraDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [changeCommentLocal, setChangeCommentLocal] = useState(filter.changeComment ?? '')
+  const commentDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     setChangedByLocal(filter.changedBy ?? '')
@@ -91,6 +95,10 @@ export function AuditLogFilters({ filter, onChange }: AuditLogFiltersProps) {
   useEffect(() => {
     setJiraTaskKeyLocal(filter.jiraTaskKey ?? '')
   }, [filter.jiraTaskKey])
+
+  useEffect(() => {
+    setChangeCommentLocal(filter.changeComment ?? '')
+  }, [filter.changeComment])
 
   const handleChangedBy = (value: string) => {
     setChangedByLocal(value)
@@ -105,6 +113,14 @@ export function AuditLogFilters({ filter, onChange }: AuditLogFiltersProps) {
     if (jiraDebounceRef.current) clearTimeout(jiraDebounceRef.current)
     jiraDebounceRef.current = setTimeout(() => {
       onChange({ ...filter, jiraTaskKey: value.trim() || undefined })
+    }, 300)
+  }
+
+  const handleChangeComment = (value: string) => {
+    setChangeCommentLocal(value)
+    if (commentDebounceRef.current) clearTimeout(commentDebounceRef.current)
+    commentDebounceRef.current = setTimeout(() => {
+      onChange({ ...filter, changeComment: value.trim() || undefined })
     }, 300)
   }
 
@@ -135,6 +151,7 @@ export function AuditLogFilters({ filter, onChange }: AuditLogFiltersProps) {
   const handleClear = () => {
     setChangedByLocal('')
     setJiraTaskKeyLocal('')
+    setChangeCommentLocal('')
     onChange({})
   }
 
@@ -146,7 +163,8 @@ export function AuditLogFilters({ filter, onChange }: AuditLogFiltersProps) {
     !!filter.from ||
     !!filter.to ||
     !!filter.includeMigrated ||
-    !!filter.jiraTaskKey
+    !!filter.jiraTaskKey ||
+    !!filter.changeComment
 
   return (
     <FilterBar withLabels>
@@ -186,6 +204,17 @@ export function AuditLogFilters({ filter, onChange }: AuditLogFiltersProps) {
           value={jiraTaskKeyLocal}
           onChange={(e) => handleJiraTaskKey(e.target.value)}
           className="w-[160px]"
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="audit-filter-changeComment">Comment</Label>
+        <Input
+          id="audit-filter-changeComment"
+          placeholder="search text"
+          value={changeCommentLocal}
+          onChange={(e) => handleChangeComment(e.target.value)}
+          className="w-[180px]"
         />
       </div>
 

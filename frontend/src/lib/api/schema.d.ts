@@ -2995,6 +2995,7 @@ export interface operations {
                 to?: string;
                 includeMigrated?: boolean;
                 jiraTaskKey?: string;
+                changeComment?: string;
                 pageable: components["schemas"]["Pageable"];
             };
             header?: never;

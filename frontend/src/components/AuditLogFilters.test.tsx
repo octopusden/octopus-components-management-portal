@@ -75,6 +75,25 @@ describe('AuditLogFilters (B7.1.3)', () => {
     expect(screen.getByRole('button', { name: /clear filters/i })).toBeDefined()
   })
 
+  it('debounces changeComment text input through onChange (trimmed)', () => {
+    vi.useFakeTimers()
+    render(<AuditLogFilters filter={{}} onChange={onChange} />)
+
+    const input = screen.getByLabelText(/^comment$/i) as HTMLInputElement
+    fireEvent.change(input, { target: { value: '  release prep ' } })
+
+    expect(onChange).not.toHaveBeenCalled()
+    act(() => { vi.advanceTimersByTime(300) })
+    expect(onChange).toHaveBeenCalledWith({ changeComment: 'release prep' })
+
+    vi.useRealTimers()
+  })
+
+  it('shows Clear filters when only changeComment filter is active', () => {
+    render(<AuditLogFilters filter={{ changeComment: 'prep' }} onChange={onChange} />)
+    expect(screen.getByRole('button', { name: /clear filters/i })).toBeDefined()
+  })
+
   it('exposes a source dropdown with api and git-history (and an All option)', async () => {
     render(<AuditLogFilters filter={{}} onChange={onChange} />)
 
