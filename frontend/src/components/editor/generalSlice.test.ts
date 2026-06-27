@@ -40,6 +40,26 @@ describe('generalSlice', () => {
     const slice = generalSlice(makeComponent({ parentComponentName: 'p' }), patch({ parentComponentName: null, clearParent: true }), false)
     expect(slice.request.clearParent).toBe(true)
   })
+
+  // Clearing componentOwner / clientCode / copyright must make the slice dirty (so the SaveBar
+  // arms and the Review dialog shows the clear) — buildUpdateRequest now emits '' for the clear
+  // instead of dropping it to undefined, so the diff/dirty path sees it. Regression for the
+  // silent clear-with-success-toast bug.
+  it('is dirty (and carries the clear) when componentOwner is cleared', () => {
+    const slice = generalSlice(makeComponent({ componentOwner: 'alice' }), patch({ componentOwner: '' }), false)
+    expect(slice.isDirty).toBe(true)
+    expect(slice.request.componentOwner).toBe('')
+  })
+
+  it('is dirty when clientCode is cleared', () => {
+    const slice = generalSlice(makeComponent({ clientCode: 'CC1' }), patch({ clientCode: '' }), false)
+    expect(slice.isDirty).toBe(true)
+  })
+
+  it('is dirty when copyright is cleared', () => {
+    const slice = generalSlice(makeComponent({ copyright: 'ACME' }), patch({ copyright: '' }), false)
+    expect(slice.isDirty).toBe(true)
+  })
 })
 
 describe('generalSlice — artifactIds ownership (request shape)', () => {
@@ -81,6 +101,11 @@ describe('generalDiff', () => {
     const row = diff.find((d) => d.label === 'Display Name')
     expect(row?.clearedScalarNoop).toBe(false)
     expect(row?.newValue).toBe('—')
+  })
+
+  it('renders a componentOwner clear as "alice → —"', () => {
+    const diff = generalDiff(makeComponent({ componentOwner: 'alice' }), patch({ componentOwner: '' }))
+    expect(diff).toContainEqual({ label: 'Component Owner', oldValue: 'alice', newValue: '—', clearedScalarNoop: false })
   })
 
   it('renders list fields (labels clear → []) readably', () => {

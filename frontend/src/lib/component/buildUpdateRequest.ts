@@ -38,6 +38,15 @@ export interface DirtyFlags {
   // clear back to the form default '' is caught (RHF clear-to-default blind-spot) while a
   // pristine/pre-hydration form omits it.
   displayName?: boolean
+  // componentOwner / clientCode / copyright are nullable top-level scalars with the SAME
+  // clear-to-default blind-spot as displayName: the old `values.X || undefined` collapsed a
+  // user's clear to `undefined` → omitted → JSON-merge-patch "don't touch" → the clear silently
+  // never persisted (and the SaveBar never went dirty). The page now passes these as "interacted"
+  // (dirty OR touched) so buildUpdateRequest value-compares against the persisted value and emits
+  // '' to clear (server stores null), exactly like displayName.
+  componentOwner?: boolean
+  clientCode?: boolean
+  copyright?: boolean
   // ui-swift-sloth §4: labels is now a multi-select array, and like systems
   // it needs a dirty-gate to block the form-default `[]` from clobbering
   // server data pre-hydration.
@@ -149,8 +158,17 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
       const prior = component.displayName ?? ''
       return next === prior ? undefined : next
     })(),
-    componentOwner:
-      visibilities.componentOwner === 'hidden' ? undefined : (values.componentOwner || undefined),
+    // componentOwner / clientCode / copyright: nullable top-level scalars. Mirror displayName —
+    // interacted-gated (dirty OR touched, passed by the page) value-compare against the persisted
+    // value: a real change is sent (a clear as "" — the server stores null), an unchanged value or
+    // a pre-hydration form is omitted. The old `values.X || undefined` silently dropped clears
+    // (`'' || undefined` → undefined → JSON-merge-patch "don't touch").
+    componentOwner: ((): string | undefined => {
+      if (visibilities.componentOwner === 'hidden' || dirtyFields.componentOwner !== true) return undefined
+      const next = (values.componentOwner ?? '').trim()
+      const prior = component.componentOwner ?? ''
+      return next === prior ? undefined : next
+    })(),
     // productType is owned by EscrowTab — never sent from the General save.
     // Two guards on `system`:
     //   - Pre-hydration: form mounts with `system: ''` BEFORE GeneralTab's
@@ -165,8 +183,12 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
       visibilities.system === 'hidden' || dirtyFields.system !== true || systemTrimmed === ''
         ? undefined
         : systemTrimmed,
-    clientCode:
-      visibilities.clientCode === 'hidden' ? undefined : (values.clientCode || undefined),
+    clientCode: ((): string | undefined => {
+      if (visibilities.clientCode === 'hidden' || dirtyFields.clientCode !== true) return undefined
+      const next = (values.clientCode ?? '').trim()
+      const prior = component.clientCode ?? ''
+      return next === prior ? undefined : next
+    })(),
     solution: solutionChanged ? values.solution : undefined,
     archived: archivedChanged ? values.archived : undefined,
     parentComponentName,
@@ -187,7 +209,12 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
       visibilities.securityChampion === 'hidden' || dirtyFields.securityChampion !== true
         ? undefined
         : securityChampionArray,
-    copyright: visibilities.copyright === 'hidden' ? undefined : (values.copyright || undefined),
+    copyright: ((): string | undefined => {
+      if (visibilities.copyright === 'hidden' || dirtyFields.copyright !== true) return undefined
+      const next = (values.copyright ?? '').trim()
+      const prior = component.copyright ?? ''
+      return next === prior ? undefined : next
+    })(),
     // labels semantics diverge from system (PR #44 P2 fix):
     //   - Pre-hydration guard mirrors system: !dirty → omit, so the
     //     form-default `[]` doesn't wipe server data before GeneralTab's

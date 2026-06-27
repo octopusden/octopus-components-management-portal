@@ -344,8 +344,12 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
                 ) : (
                   <PeopleInput
                     id="componentOwner"
+                    // shouldDirty/shouldTouch are required: componentOwner is written via setValue
+                    // (PeopleInput is not a native register()ed input), so without these flags an
+                    // edit/clear never marks the form interacted and buildUpdateRequest's
+                    // interacted-gate omits it — the clear would be silently dropped.
+                    onChange={(val) => setValue('componentOwner', val, { shouldDirty: true, shouldTouch: true })}
                     value={componentOwner}
-                    onChange={(val) => setValue('componentOwner', val)}
                     lookupFn={lookupEmployee}
                     status={employeeStatuses[componentOwner]}
                     onValidatingChange={onOwnerValidatingChange}

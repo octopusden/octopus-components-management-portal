@@ -101,9 +101,11 @@ export function generalDiff(component: ComponentDetail, patch: ComponentUpdateRe
     if (!label) continue // unknown / not user-facing
     const next = nextValueFor(key, value)
     const prior = priorValueFor(component, key)
-    // Skip always-emitted-but-unchanged fields (buildUpdateRequest sends
-    // componentOwner / clientCode / copyright whenever present, not dirty-gated).
-    // Only a genuine value change is a "change" for the dirty bar + diff.
+    // Defensive value-equality backstop: only a genuine value change is a "change"
+    // for the dirty bar + diff. buildUpdateRequest already omits unchanged scalars
+    // (incl. the interacted-gated componentOwner / clientCode / copyright value-compare),
+    // so this rarely fires now — kept so an always-emitted field can never produce a
+    // phantom-dirty row.
     if (normForCompare(next) === normForCompare(prior)) continue
     diff.push({
       label,
