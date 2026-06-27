@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import { Link } from 'react-router'
 import { Boxes, AlertTriangle, GitBranch, ShieldCheck, ChevronRight } from 'lucide-react'
 import { Layout } from '../components/Layout'
+import { RuntimeSection } from '../components/RuntimeSection'
 import { InlineError } from '../components/ui/inline-error'
 import { StatusBanner } from '../components/ui/status-banner'
 import { EmptyState } from '../components/ui/empty-state'
@@ -303,6 +304,11 @@ export function RegistryHealthPage() {
             </div>
           </>
         )}
+
+        {/* Admin-only runtime/system metrics. Self-gated (adminMode && IMPORT_DATA)
+            and fetches independently, so it never affects the registry-data
+            content above. */}
+        <RuntimeSection />
       </div>
     </Layout>
   )

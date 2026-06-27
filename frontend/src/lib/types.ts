@@ -640,6 +640,77 @@ export interface HealthStatistics {
 }
 
 // ---------------------------------------------------------------------------
+// System / runtime metrics — admin Runtime card on the Health page.
+// Served by the portal BFF `GET /portal/metrics` (not CRS). Portal fields are
+// always present; CRS fields are best-effort and omitted (Jackson NON_NULL)
+// when unavailable, hence the optional markers.
+// ---------------------------------------------------------------------------
+
+/** Full JVM/system readout for the portal itself. */
+export interface PortalJvm {
+  heapUsedBytes: number
+  heapCommittedBytes: number
+  // null/omitted when the JVM reports no configured max (-1) → render an em-dash.
+  heapMaxBytes?: number | null
+  nonHeapUsedBytes: number
+  nonHeapCommittedBytes: number
+  threadsLive: number
+  threadsPeak: number
+  threadsDaemon: number
+  classesLoaded: number
+  classesTotalLoaded: number
+  classesUnloaded: number
+  gcCount: number
+  gcTimeMillis: number
+  // omitted when the CPU/load reading is unavailable.
+  cpuProcess?: number | null
+  cpuSystem?: number | null
+  systemLoadAverage?: number | null
+  availableProcessors: number
+}
+
+/** Best-effort subset of CRS JVM metrics — every field optional (any can degrade). */
+export interface CrsJvm {
+  heapUsedBytes?: number | null
+  heapCommittedBytes?: number | null
+  heapMaxBytes?: number | null
+  threadsLive?: number | null
+  threadsPeak?: number | null
+  threadsDaemon?: number | null
+  gcCount?: number | null
+  gcTimeMillis?: number | null
+  cpuProcess?: number | null
+  cpuSystem?: number | null
+  availableProcessors?: number | null
+}
+
+/** One interactive login captured by the portal (per-pod, in-memory). */
+export interface RecentLogin {
+  username: string
+  loginAt: string
+}
+
+export interface PortalRuntime {
+  uptimeMillis: number
+  startedAt: string
+  jvm: PortalJvm
+  recentLogins: RecentLogin[]
+}
+
+export interface CrsRuntime {
+  available: boolean
+  reason?: string | null
+  status?: string | null
+  uptimeMillis?: number | null
+  jvm?: CrsJvm | null
+}
+
+export interface SystemMetrics {
+  portal: PortalRuntime
+  crs: CrsRuntime
+}
+
+// ---------------------------------------------------------------------------
 // Migration / async-job envelopes (unchanged by schema-v2; MIG-039 deferred,
 // so POST /admin/migrate currently returns 501 Not Implemented — UI gates that)
 // ---------------------------------------------------------------------------
