@@ -27,6 +27,8 @@ export interface RecentAuditLogFilter {
    * so the server default (hide) applies.
    */
   includeMigrated?: boolean
+  /** Exact-match on the change-metadata Jira task key recorded at save time. */
+  jiraTaskKey?: string
 }
 
 interface UseRecentAuditLogParams extends UseAuditLogParams {
@@ -50,6 +52,7 @@ export function useRecentAuditLog({
   if (filter?.from) params.set('from', filter.from)
   if (filter?.to) params.set('to', filter.to)
   if (filter?.includeMigrated) params.set('includeMigrated', 'true')
+  if (filter?.jiraTaskKey) params.set('jiraTaskKey', filter.jiraTaskKey)
 
   return useQuery({
     queryKey: ['audit', 'recent', { page, size, filter }],

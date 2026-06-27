@@ -33,6 +33,8 @@ export interface AuditFilter {
    * default (SYS-049). Backs the "Show migration" toggle. Omitted unless on.
    */
   includeMigrated?: boolean
+  /** Exact-match on the change-metadata Jira task key recorded at save time. */
+  jiraTaskKey?: string
 }
 
 interface AuditLogFiltersProps {
@@ -79,16 +81,30 @@ function instantToLocal(instant: string | undefined): string {
 export function AuditLogFilters({ filter, onChange }: AuditLogFiltersProps) {
   const [changedByLocal, setChangedByLocal] = useState(filter.changedBy ?? '')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [jiraTaskKeyLocal, setJiraTaskKeyLocal] = useState(filter.jiraTaskKey ?? '')
+  const jiraDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     setChangedByLocal(filter.changedBy ?? '')
   }, [filter.changedBy])
+
+  useEffect(() => {
+    setJiraTaskKeyLocal(filter.jiraTaskKey ?? '')
+  }, [filter.jiraTaskKey])
 
   const handleChangedBy = (value: string) => {
     setChangedByLocal(value)
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
       onChange({ ...filter, changedBy: value || undefined })
+    }, 300)
+  }
+
+  const handleJiraTaskKey = (value: string) => {
+    setJiraTaskKeyLocal(value)
+    if (jiraDebounceRef.current) clearTimeout(jiraDebounceRef.current)
+    jiraDebounceRef.current = setTimeout(() => {
+      onChange({ ...filter, jiraTaskKey: value.trim() || undefined })
     }, 300)
   }
 
@@ -118,6 +134,7 @@ export function AuditLogFilters({ filter, onChange }: AuditLogFiltersProps) {
 
   const handleClear = () => {
     setChangedByLocal('')
+    setJiraTaskKeyLocal('')
     onChange({})
   }
 
@@ -128,7 +145,8 @@ export function AuditLogFilters({ filter, onChange }: AuditLogFiltersProps) {
     !!filter.action ||
     !!filter.from ||
     !!filter.to ||
-    !!filter.includeMigrated
+    !!filter.includeMigrated ||
+    !!filter.jiraTaskKey
 
   return (
     <FilterBar withLabels>
@@ -157,6 +175,17 @@ export function AuditLogFilters({ filter, onChange }: AuditLogFiltersProps) {
           value={changedByLocal}
           onChange={(e) => handleChangedBy(e.target.value)}
           className="w-[180px]"
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="audit-filter-jiraTaskKey">Jira task key</Label>
+        <Input
+          id="audit-filter-jiraTaskKey"
+          placeholder="ABC-123"
+          value={jiraTaskKeyLocal}
+          onChange={(e) => handleJiraTaskKey(e.target.value)}
+          className="w-[160px]"
         />
       </div>
 

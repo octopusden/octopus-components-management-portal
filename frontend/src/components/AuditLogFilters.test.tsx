@@ -44,6 +44,37 @@ describe('AuditLogFilters (B7.1.3)', () => {
     vi.useRealTimers()
   })
 
+  it('debounces jiraTaskKey text input through onChange (trimmed)', () => {
+    vi.useFakeTimers()
+    render(<AuditLogFilters filter={{}} onChange={onChange} />)
+
+    const input = screen.getByLabelText(/jira task key/i) as HTMLInputElement
+    fireEvent.change(input, { target: { value: '  ABC-123 ' } })
+
+    expect(onChange).not.toHaveBeenCalled()
+    act(() => { vi.advanceTimersByTime(300) })
+    expect(onChange).toHaveBeenCalledWith({ jiraTaskKey: 'ABC-123' })
+
+    vi.useRealTimers()
+  })
+
+  it('blanks jiraTaskKey → undefined (clear) on debounce', () => {
+    vi.useFakeTimers()
+    render(<AuditLogFilters filter={{ jiraTaskKey: 'ABC-123' }} onChange={onChange} />)
+
+    const input = screen.getByLabelText(/jira task key/i) as HTMLInputElement
+    fireEvent.change(input, { target: { value: '   ' } })
+    act(() => { vi.advanceTimersByTime(300) })
+
+    expect(onChange).toHaveBeenCalledWith({ jiraTaskKey: undefined })
+    vi.useRealTimers()
+  })
+
+  it('shows Clear filters when only jiraTaskKey filter is active', () => {
+    render(<AuditLogFilters filter={{ jiraTaskKey: 'ABC-123' }} onChange={onChange} />)
+    expect(screen.getByRole('button', { name: /clear filters/i })).toBeDefined()
+  })
+
   it('exposes a source dropdown with api and git-history (and an All option)', async () => {
     render(<AuditLogFilters filter={{}} onChange={onChange} />)
 

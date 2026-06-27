@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AuditLogTable } from '../AuditLogTable'
 import { useEntityAuditLog } from '../../hooks/useAuditLog'
+import { usePortalLinks } from '../../hooks/useInfo'
 import { Switch } from '../ui/switch'
 import { Label } from '../ui/label'
 
@@ -33,6 +34,7 @@ export function ComponentHistoryTab({ componentId }: ComponentHistoryTabProps) {
     includeMigrated,
   })
   const entries = data?.content ?? []
+  const { data: portalLinks } = usePortalLinks()
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-end gap-2">
@@ -46,7 +48,7 @@ export function ComponentHistoryTab({ componentId }: ComponentHistoryTabProps) {
           onCheckedChange={setIncludeMigrated}
         />
       </div>
-      <AuditLogTable data={entries} isLoading={isLoading} />
+      <AuditLogTable data={entries} isLoading={isLoading} jiraBaseUrl={portalLinks?.jiraBaseUrl} />
     </div>
   )
 }

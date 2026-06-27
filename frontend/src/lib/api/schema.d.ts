@@ -793,6 +793,7 @@ export interface components {
         };
         AuditLogResponse: {
             action: string;
+            changeComment?: string;
             changeDiff?: {
                 [key: string]: Record<string, never>;
             };
@@ -805,6 +806,7 @@ export interface components {
             entityType: string;
             /** Format: int64 */
             id: number;
+            jiraTaskKey?: string;
             newValue?: {
                 [key: string]: Record<string, never>;
             };
@@ -903,6 +905,10 @@ export interface components {
             artifactIds?: components["schemas"]["ArtifactIdRequest"][];
             baseConfiguration: components["schemas"]["BaseConfigurationRequest"];
             canBeParent?: boolean;
+            /** @description Optional free-text comment describing the change; recorded on the audit row. */
+            changeComment?: string;
+            /** @description Optional Jira task key motivating the change (e.g. ABC-123); recorded on the audit row. */
+            jiraTaskKey?: string;
             clientCode?: string;
             componentOwner?: string;
             copyright?: string;
@@ -1004,6 +1010,10 @@ export interface components {
             artifactIds?: components["schemas"]["ArtifactIdRequest"][];
             baseConfiguration?: components["schemas"]["BaseConfigurationRequest"];
             canBeParent?: boolean;
+            /** @description Optional free-text comment describing the change; recorded on the audit row. */
+            changeComment?: string;
+            /** @description Optional Jira task key motivating the change (e.g. ABC-123); recorded on the audit row. */
+            jiraTaskKey?: string;
             clearGroup?: boolean;
             clearParent?: boolean;
             clientCode?: string;
@@ -2984,6 +2994,7 @@ export interface operations {
                 from?: string;
                 to?: string;
                 includeMigrated?: boolean;
+                jiraTaskKey?: string;
                 pageable: components["schemas"]["Pageable"];
             };
             header?: never;
