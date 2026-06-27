@@ -67,6 +67,9 @@ object id10CompileUtAuto : BuildType({
     id("10CompileUtAuto")
     name = "[1.0] Compile & UT [AUTO]"
 
+    // Cap simultaneous runs so a burst of pushes can't tie up every agent.
+    maxRunningBuilds = 5
+
     params {
         param("env.JAVA_HOME", "%env.JDK_ZULU_25_x64%")
         param("ARTIFACT_PATH", """
@@ -118,7 +121,7 @@ object id15E2eAuto : BuildType({
     // Cap parallel runs — each spins up Postgres/Keycloak/CRS/portal/
     // playwright, so unbounded concurrency would saturate any single
     // agent's docker daemon and disk.
-    maxRunningBuilds = 2
+    maxRunningBuilds = 5
 
     params {
         param("env.JAVA_HOME", "%env.JDK_ZULU_25_x64%")
