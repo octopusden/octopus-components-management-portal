@@ -9,7 +9,7 @@ import java.util.ArrayDeque
 
 /**
  * Tracks the most-recent interactive logins for the admin "Recent logins" card on
- * the Health page. Fed by a [org.springframework.security.web.server.authentication.ServerAuthenticationSuccessHandler]
+ * the admin System tab. Fed by a [org.springframework.security.web.server.authentication.ServerAuthenticationSuccessHandler]
  * wired into `oauth2Login` (see `SecurityConfig`) — NOT by the servlet-only
  * `InteractiveAuthenticationSuccessEvent`, which this reactive WebFlux app does
  * not publish reliably.

@@ -5,10 +5,11 @@ import org.octopusden.octopus.components.portal.security.RecentLogin
 import java.time.Instant
 
 /**
- * Wire model for `GET /portal/metrics` — the admin Runtime section on the Health
+ * Wire model for `GET /portal/metrics` — the admin System tab on the Admin Settings
  * page. Portal metrics are always present (read locally from JVM MXBeans); CRS
- * metrics are best-effort (queried credential-free from CRS actuator) and may be
- * unavailable, in which case only `available`/`reason` (+ `status`) carry.
+ * metrics are best-effort (queried with the caller's relayed bearer token; CRS
+ * health stays anonymous) and may be unavailable, in which case only
+ * `available`/`reason` (+ `status`) carry.
  */
 data class MetricsResponse(
     val portal: PortalRuntime,

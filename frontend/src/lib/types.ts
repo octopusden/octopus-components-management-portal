@@ -640,7 +640,7 @@ export interface HealthStatistics {
 }
 
 // ---------------------------------------------------------------------------
-// System / runtime metrics — admin Runtime card on the Health page.
+// System / runtime metrics — admin System tab on the Admin Settings page.
 // Served by the portal BFF `GET /portal/metrics` (not CRS). Portal fields are
 // always present; CRS fields are best-effort and omitted (Jackson NON_NULL)
 // when unavailable, hence the optional markers.

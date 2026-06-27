@@ -11,17 +11,19 @@ import java.time.Duration
 import java.util.Optional
 
 /**
- * Best-effort, credential-free reader of CRS's actuator runtime metrics for the
- * admin Runtime card. Mirrors EmployeeServiceIntegrationHealthIndicator:
- * a plain WebClient over the same portal.registry-health-base-url, short
- * timeouts, and every failure downgraded rather than propagated — the portal's
- * own metrics never depend on CRS answering.
+ * Best-effort reader of CRS's actuator runtime metrics for the admin System tab.
+ * Mirrors EmployeeServiceIntegrationHealthIndicator: a plain WebClient over the
+ * same portal.registry-health-base-url, short timeouts, and every failure
+ * downgraded rather than propagated — the portal's own metrics never depend on
+ * CRS answering.
  *
  * The actuator health path is anonymous on CRS (proven by the employee health
- * mirror). The actuator metrics paths very likely are NOT — a 401/403 there is
- * the expected case and surfaces as available=false with a reason, while the
- * health status is still shown. Micrometer process.uptime and jvm.gc.pause
- * TOTAL_TIME are in SECONDS, so both are multiplied by 1000 to milliseconds.
+ * mirror), so it is queried credential-free. The actuator metrics paths are
+ * authenticated() on CRS (any valid JWT, no special role), so the caller's
+ * bearer token is relayed to them; without a token (or if CRS rejects it) the
+ * metrics surface as available=false with a reason while the health status is
+ * still shown. Micrometer process.uptime and jvm.gc.pause TOTAL_TIME are in
+ * SECONDS, so both are multiplied by 1000 to milliseconds.
  */
 @Component
 class CrsRuntimeMetricsClient(

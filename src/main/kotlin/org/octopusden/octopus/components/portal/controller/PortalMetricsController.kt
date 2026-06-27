@@ -19,10 +19,11 @@ import java.time.Instant
 import java.util.Optional
 
 /**
- * `GET /portal/metrics` — runtime/system metrics for the admin Runtime card on the
- * Health page. Authenticated()-only (see SecurityConfig); admin visibility is
- * enforced in the SPA. Portal metrics are read locally from JVM MXBeans (always
- * present); CRS metrics are best-effort (see [CrsRuntimeMetricsClient]).
+ * `GET /portal/metrics` — runtime/system metrics for the admin System tab on the
+ * Admin Settings page. Authenticated()-only (see SecurityConfig); admin visibility
+ * is enforced in the SPA. Portal metrics are read locally from JVM MXBeans (always
+ * present); CRS metrics are best-effort and use the caller's relayed bearer token
+ * (see [CrsRuntimeMetricsClient]).
  */
 @RestController
 @RequestMapping("portal")
