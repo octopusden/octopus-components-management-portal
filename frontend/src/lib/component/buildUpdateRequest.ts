@@ -237,15 +237,20 @@ function buildArtifactIdsPatch(
   values: GeneralFormValues,
   dirtyFields: DirtyFlags,
 ): { artifactIds?: ArtifactIdRequest[] } {
-  // PATCH `artifactIds` is a FULL replacement of the component's ownership set. Drop mappings with
-  // no group token (incomplete rows); the server applies the remaining invariants.
+  // PATCH `artifactIds` is a FULL replacement of the component's ownership set, so it must be sent
+  // ONLY when the user actually edited ownership. Dirty-gate it exactly like labels/RM/SC: without
+  // this gate an unrelated General save (e.g. Display Name) re-sends a full ownership replacement that
+  // Review Changes shows as "unchanged" — a silent clobber risk. The editor's onChange sets
+  // shouldDirty, so a real edit flips the flag; pre-hydration / untouched stays !dirty → omit.
+  const dirty = !!dirtyFields.artifactIds
+  if (!dirty) return {}
+  // Drop mappings with no group token (incomplete rows); the server applies the remaining invariants.
   const cleaned = (values.artifactIds ?? [])
     .filter((m) => groupTokens(m.groups).length > 0)
     .map(toArtifactIdRequest)
   // `?? []` is defensive — see buildDocsPatch (older CRS omits artifactIds).
   const hadPrior = (component.artifactIds ?? []).length > 0
-  const dirty = !!dirtyFields.artifactIds
   if (cleaned.length > 0) return { artifactIds: cleaned }
-  if (dirty && hadPrior) return { artifactIds: [] }
+  if (hadPrior) return { artifactIds: [] }
   return {}
 }

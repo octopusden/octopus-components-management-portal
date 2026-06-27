@@ -402,6 +402,23 @@ describe('buildUpdateRequest — list cleanup', () => {
       { versionRange: '[1.0,2.0)', groupPattern: 'org.z', mode: 'ALL', artifactTokens: [] },
     ])
   })
+
+  it('ownership NOT dirty → artifactIds omitted even when mappings are present (unrelated General save must not full-replace ownership)', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({
+        artifactIds: [{ id: 'a-1', groupPattern: 'org.y', mode: 'EXPLICIT', artifactTokens: ['svc-a'] }],
+      }),
+      // The editor hydrated mappings into the form, but the user only changed Display Name —
+      // dirtyFields.artifactIds is false, so the full-replacement patch must be omitted.
+      values: makeValues({
+        displayName: 'Renamed',
+        artifactIds: [{ id: 'm1', base: true, range: null, groups: 'org.y', mode: 'EXPLICIT', tokens: ['svc-a'] }],
+      }),
+      visibilities: EDITABLE,
+      dirtyFields: { displayName: true },
+    })
+    expect(req.artifactIds).toBeUndefined()
+  })
 })
 
 describe('buildUpdateRequest — name / parentComponentName', () => {
