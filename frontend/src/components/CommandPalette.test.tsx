@@ -66,6 +66,20 @@ function mockSearch(content: ComponentSummary[], isFetching = false) {
   mockUseComponents.mockReturnValue({ data: { content }, isFetching })
 }
 
+function comp(name: string, displayName: string | null = null): ComponentSummary {
+  return {
+    id: name,
+    name,
+    displayName,
+    componentOwner: null,
+    system: null,
+    productType: null,
+    archived: false,
+    updatedAt: null,
+    labels: [],
+  }
+}
+
 function renderPalette() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
@@ -236,5 +250,38 @@ describe('CommandPalette — component search', () => {
     const item = await screen.findByText('svc-one')
     await user.click(item)
     expect(mockNavigate).toHaveBeenCalledWith('/components/svc-1')
+  })
+
+  it('ranks matching components first and hides non-matching static groups', async () => {
+    const user = userEvent.setup()
+    mockSearch([
+      comp('doc_log'),
+      comp('logbook', 'Log Book'),
+    ])
+    renderPalette()
+    await user.type(screen.getByPlaceholderText(/Search components/i), 'log')
+
+    // Components surface, ranked prefix (logbook) before boundary (doc_log)…
+    const prefix = await screen.findByText('logbook')
+    const boundary = screen.getByText('doc_log')
+    expect(prefix.compareDocumentPosition(boundary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+    // …and the static menu (no label matches "log") is gone, not buried below.
+    expect(screen.queryByText('Audit')).not.toBeInTheDocument()
+    expect(screen.queryByText('With problems')).not.toBeInTheDocument()
+    expect(screen.queryByText('New Component')).not.toBeInTheDocument()
+  })
+
+  it('surfaces a matching static entry (Go to > Audit) when the query matches its label', async () => {
+    const user = userEvent.setup()
+    mockSearch([])
+    renderPalette()
+    await user.type(screen.getByPlaceholderText(/Search components/i), 'aud')
+
+    // Once the debounced query is active, non-matching static entries drop out…
+    await waitFor(() => expect(screen.queryByText('With problems')).not.toBeInTheDocument())
+    expect(screen.queryByText('Health')).not.toBeInTheDocument()
+    // …while the entry whose label matches the query stays (under Go to).
+    expect(screen.getByText('Audit')).toBeInTheDocument()
   })
 })
