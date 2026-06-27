@@ -49,6 +49,17 @@ class RecentLoginsTrackerTest {
     }
 
     @Test
+    fun `recording the same user again collapses to one row at the front`() {
+        val tracker = RecentLoginsTracker(capacity = 10, clock = clock)
+        tracker.record("alice")
+        tracker.record("bob")
+        tracker.record("alice")
+
+        // alice is deduped and moved to the front — no duplicate row.
+        assertEquals(listOf("alice", "bob"), tracker.snapshot().map { it.username })
+    }
+
+    @Test
     fun `snapshot is an immutable copy decoupled from later records`() {
         val tracker = RecentLoginsTracker(capacity = 10, clock = clock)
         tracker.record("alice")

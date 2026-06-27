@@ -29,8 +29,14 @@ class CrsRuntimeMetricsClient(
 ) {
     private val webClient = WebClient.builder().baseUrl(registryBaseUrl).build()
 
-    fun fetch(): Mono<CrsRuntime> =
-        Mono.zip(fetchStatus(), probeMetrics()).map { tuple ->
+    /**
+     * @param bearerToken the caller's OAuth2 access token, relayed to CRS so its
+     *   authenticated() actuator metrics endpoints answer (CRS gates them on any
+     *   valid JWT, no special role). Null → credential-free: health still resolves
+     *   but metrics come back as require-authentication.
+     */
+    fun fetch(bearerToken: String? = null): Mono<CrsRuntime> =
+        Mono.zip(fetchStatus(), probeMetrics(bearerToken)).map { tuple ->
             val status = tuple.t1.orElse(null)
             when (val probe = tuple.t2) {
                 is MetricsProbe.Available ->
@@ -52,7 +58,11 @@ class CrsRuntimeMetricsClient(
             }
         }
 
-    /** CRS health status string (e.g. UP/DOWN); empty when unreachable/unparseable. */
+    /**
+     * CRS health status string (e.g. UP/DOWN); empty when unreachable/unparseable.
+     * Credential-free on purpose — CRS health is anonymous, so the token is not
+     * relayed here (only the authenticated() metrics endpoints get it).
+     */
     private fun fetchStatus(): Mono<Optional<String>> =
         webClient
             .get()
@@ -67,23 +77,24 @@ class CrsRuntimeMetricsClient(
      * Probe `process.uptime` to classify the metrics endpoint; on success fan out
      * the rest of the JVM metrics. The classification drives `available`/`reason`.
      */
-    private fun probeMetrics(): Mono<MetricsProbe> =
-        classifyProbe().flatMap { classification ->
+    private fun probeMetrics(bearerToken: String?): Mono<MetricsProbe> =
+        classifyProbe(bearerToken).flatMap { classification ->
             when (classification) {
                 // Fan out the rest only once the probe says metrics are reachable. The
                 // per-metric timeouts (see metricValue) bound the fan-out independently —
                 // the probe timeout below must NOT wrap it, or a slow LAN would let the
                 // probe timeout fire mid-fan-out and spuriously mark CRS unavailable.
-                is ProbeClassification.Ok -> fetchAvailable(classification.uptime)
+                is ProbeClassification.Ok -> fetchAvailable(classification.uptime, bearerToken)
                 is ProbeClassification.Unavailable -> Mono.just(MetricsProbe.Unavailable(classification.reason))
             }
         }
 
     /** Probe `process.uptime` to classify the metrics endpoint (bounded by TIMEOUT). */
-    private fun classifyProbe(): Mono<ProbeClassification> =
+    private fun classifyProbe(bearerToken: String?): Mono<ProbeClassification> =
         webClient
             .get()
             .uri("/actuator/metrics/process.uptime")
+            .headers { headers -> bearerToken?.let(headers::setBearerAuth) }
             .exchangeToMono { response ->
                 val code = response.statusCode()
                 when {
@@ -108,11 +119,11 @@ class CrsRuntimeMetricsClient(
                 Mono.just(ProbeClassification.Unavailable("CRS unreachable: ${e.javaClass.simpleName}"))
             }
 
-    private fun fetchAvailable(uptime: ActuatorMetric): Mono<MetricsProbe> {
+    private fun fetchAvailable(uptime: ActuatorMetric, bearerToken: String?): Mono<MetricsProbe> {
         val uptimeMillis = uptime.value("VALUE")?.let { (it * MILLIS_PER_SECOND).toLong() }
         return Flux
             .fromIterable(METRIC_SPECS)
-            .flatMap { spec -> metricValue(spec.path, spec.statistic).map { spec.key to it } }
+            .flatMap { spec -> metricValue(spec.path, spec.statistic, bearerToken).map { spec.key to it } }
             .collectMap({ it.first }, { it.second })
             .map { values -> MetricsProbe.Available(uptimeMillis, buildJvm(values)) }
     }
@@ -133,10 +144,11 @@ class CrsRuntimeMetricsClient(
         )
 
     /** A single metric measurement value; empty Mono when absent/unreachable. */
-    private fun metricValue(path: String, statistic: String): Mono<Double> =
+    private fun metricValue(path: String, statistic: String, bearerToken: String?): Mono<Double> =
         webClient
             .get()
             .uri("/actuator/metrics/$path")
+            .headers { headers -> bearerToken?.let(headers::setBearerAuth) }
             .exchangeToMono { response ->
                 if (response.statusCode().is2xxSuccessful) {
                     response.bodyToMono(ActuatorMetric::class.java).mapNotNull { it.value(statistic) }

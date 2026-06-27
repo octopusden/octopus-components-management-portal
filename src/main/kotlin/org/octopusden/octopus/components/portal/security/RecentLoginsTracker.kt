@@ -45,9 +45,17 @@ class RecentLoginsTracker(
     // so iteration order is already newest-first.
     private val entries = ArrayDeque<RecentLogin>(capacity)
 
+    /**
+     * Record a login as the user's latest. One row per user: an existing entry for
+     * the same username is removed and re-added at the front with the new time, so
+     * the card reads as "most recent login per user" and a single sign-in that
+     * fires the success handler more than once (the OIDC flow can) never shows as a
+     * duplicate row.
+     */
     fun record(username: String) {
         val entry = RecentLogin(username, clock.instant())
         synchronized(entries) {
+            entries.removeIf { it.username == username }
             entries.addFirst(entry)
             while (entries.size > capacity) {
                 entries.removeLast()

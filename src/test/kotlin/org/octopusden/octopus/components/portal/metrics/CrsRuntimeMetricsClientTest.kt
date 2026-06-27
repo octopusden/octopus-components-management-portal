@@ -65,8 +65,8 @@ class CrsRuntimeMetricsClientTest {
         return "http://localhost:${stub.address.port}"
     }
 
-    private fun fetch(baseUrl: String): CrsRuntime =
-        CrsRuntimeMetricsClient(baseUrl).fetch().block(Duration.ofSeconds(10))!!
+    private fun fetch(baseUrl: String, bearerToken: String? = null): CrsRuntime =
+        CrsRuntimeMetricsClient(baseUrl).fetch(bearerToken).block(Duration.ofSeconds(10))!!
 
     @Test
     fun `healthy CRS maps status, uptime (sec to ms) and the full jvm subset`() {
@@ -105,6 +105,32 @@ class CrsRuntimeMetricsClientTest {
         assertEquals("UP", crs.status) // health still surfaced
         assertNull(crs.jvm)
         assertNull(crs.uptimeMillis)
+    }
+
+    @Test
+    fun `relays the bearer token so a token-gated metrics endpoint answers`() {
+        val stub = HttpServer.create(InetSocketAddress(0), 0)
+        stub.createContext("/actuator/health") { json(it, 200, """{"status":"UP"}""") }
+        stub.createContext("/actuator/metrics/") { exchange ->
+            // Mirrors CRS: actuator metrics require a Bearer JWT (authenticated()).
+            if (exchange.requestHeaders.getFirst("Authorization") != "Bearer test-token") {
+                json(exchange, 401, """{"error":"Unauthorized"}""")
+                return@createContext
+            }
+            val name = exchange.requestURI.path.removePrefix("/actuator/metrics/")
+            val body = if (name == "process.uptime") metric(name, "VALUE", 60.0) else metric(name, "VALUE", 1)
+            json(exchange, 200, body)
+        }
+        stub.start()
+        server = stub
+        val baseUrl = "http://localhost:${stub.address.port}"
+
+        // Without a token the metrics endpoint 401s → unavailable.
+        assertFalse(fetch(baseUrl).available)
+        // With the relayed token it answers → available.
+        val withToken = fetch(baseUrl, "test-token")
+        assertTrue(withToken.available)
+        assertEquals(60_000L, withToken.uptimeMillis)
     }
 
     @Test

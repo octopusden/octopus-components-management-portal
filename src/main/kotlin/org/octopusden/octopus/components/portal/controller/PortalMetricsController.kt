@@ -1,16 +1,22 @@
 package org.octopusden.octopus.components.portal.controller
 
+import org.octopusden.octopus.components.portal.configuration.SecurityConfig
 import org.octopusden.octopus.components.portal.metrics.CrsRuntimeMetricsClient
 import org.octopusden.octopus.components.portal.metrics.MetricsResponse
 import org.octopusden.octopus.components.portal.metrics.PortalJvm
 import org.octopusden.octopus.components.portal.metrics.PortalRuntime
 import org.octopusden.octopus.components.portal.security.RecentLoginsTracker
+import org.springframework.security.core.context.ReactiveSecurityContextHolder
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClient
+import org.springframework.security.oauth2.client.web.server.ServerOAuth2AuthorizedClientRepository
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.server.ServerWebExchange
 import reactor.core.publisher.Mono
 import java.lang.management.ManagementFactory
 import java.time.Instant
+import java.util.Optional
 
 /**
  * `GET /portal/metrics` — runtime/system metrics for the admin Runtime card on the
@@ -23,10 +29,35 @@ import java.time.Instant
 class PortalMetricsController(
     private val crsRuntimeMetricsClient: CrsRuntimeMetricsClient,
     private val recentLoginsTracker: RecentLoginsTracker,
+    private val authorizedClientRepository: ServerOAuth2AuthorizedClientRepository,
 ) {
     @GetMapping("/metrics")
-    fun metrics(): Mono<MetricsResponse> =
-        crsRuntimeMetricsClient.fetch().map { crs -> MetricsResponse(portal = readPortalRuntime(), crs = crs) }
+    fun metrics(exchange: ServerWebExchange): Mono<MetricsResponse> =
+        crsAccessToken(exchange).flatMap { token ->
+            crsRuntimeMetricsClient
+                .fetch(token.orElse(null))
+                .map { crs -> MetricsResponse(portal = readPortalRuntime(), crs = crs) }
+        }
+
+    /**
+     * The caller's CRS access token from the BFF session, relayed to CRS actuator so
+     * its authenticated() metrics answer. Loaded leniently from the authorized-client
+     * repository (absent → empty, no re-authorization), so a non-OAuth2 principal
+     * (e.g. tests) yields no token and CRS metrics simply degrade.
+     */
+    private fun crsAccessToken(exchange: ServerWebExchange): Mono<Optional<String>> =
+        ReactiveSecurityContextHolder
+            .getContext()
+            .flatMap { context ->
+                authorizedClientRepository
+                    .loadAuthorizedClient<OAuth2AuthorizedClient>(
+                        SecurityConfig.OIDC_REGISTRATION_ID,
+                        context.authentication,
+                        exchange,
+                    )
+                    .map { Optional.ofNullable(it.accessToken?.tokenValue) }
+            }
+            .defaultIfEmpty(Optional.empty())
 
     private fun readPortalRuntime(): PortalRuntime {
         val runtime = ManagementFactory.getRuntimeMXBean()

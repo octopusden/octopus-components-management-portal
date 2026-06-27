@@ -81,6 +81,9 @@ class PortalMetricsControllerTest {
             .jsonPath("$.portal.recentLogins[0].loginAt").exists()
     }
 
+    // mockUser() has no OAuth2 authorized client in the session, so crsAccessToken
+    // resolves to no token → fetch(null). This test therefore covers BOTH the
+    // no-token path and the CRS-unreachable path (closed port) degrading cleanly.
     @Test
     fun `CRS section degrades gracefully when CRS is unreachable`() {
         webTestClient
