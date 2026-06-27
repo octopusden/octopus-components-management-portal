@@ -160,7 +160,7 @@ describe('TeamCityResyncPanel — admin-mode gate', () => {
   it('disables the button when adminMode is false', () => {
     renderPanel()
     expect(screen.getByRole('button', { name: /resync tc project ids/i })).toBeDisabled()
-    expect(screen.getByText(/Enable Admin mode in the footer/i)).toBeDefined()
+    expect(screen.getByText(/Arm Admin mode above/i)).toBeDefined()
   })
 
   it('enables the button once adminMode flips to true', () => {
