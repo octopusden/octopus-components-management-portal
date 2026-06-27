@@ -857,7 +857,7 @@ describe('GeneralTab artifact-ownership rendering (#357)', () => {
     expect(screen.getByLabelText('Remove claimed-api')).toBeTruthy()
   })
 
-  it('empty artifactIds (e.g. an un-migrated component_artifact_mappings table) renders the section with NO mapping cards', () => {
+  it('empty artifactIds (e.g. an un-migrated component_artifact_mappings table) renders the section with NO mapping rows', () => {
     // Reproduces the QA symptom: the v4 detail returns artifactIds: [] (the new table was
     // never populated for the component), so the editor shows its header + add button but no
     // Group ID / Artifact fields. A data/migration state — distinct from a binding bug above.
