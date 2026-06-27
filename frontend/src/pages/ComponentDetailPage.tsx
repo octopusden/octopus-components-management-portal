@@ -273,6 +273,18 @@ export function ComponentDetailPage() {
         displayName:
           form.formState.dirtyFields.displayName === true ||
           form.formState.touchedFields.displayName === true,
+        // componentOwner / clientCode / copyright: pass "interacted" (dirty OR touched) like
+        // displayName so buildUpdateRequest's value-compare catches a clear back to '' (RHF's
+        // clear-to-default blind-spot) while a pristine/pre-hydration form omits the field.
+        componentOwner:
+          form.formState.dirtyFields.componentOwner === true ||
+          form.formState.touchedFields.componentOwner === true,
+        clientCode:
+          form.formState.dirtyFields.clientCode === true ||
+          form.formState.touchedFields.clientCode === true,
+        copyright:
+          form.formState.dirtyFields.copyright === true ||
+          form.formState.touchedFields.copyright === true,
         labels:
           (form.formState.dirtyFields.labels as unknown) === true ||
           (labelsFc.visibility !== 'hidden' &&

@@ -841,6 +841,41 @@ describe('ComponentDetailPage — Save dirty-gate', () => {
     expect(payload['version']).toBe(baseComponent.version)
   })
 
+  it('clearing componentOwner flows through to the PATCH as "" (server clears to null)', async () => {
+    // Regression: clearing componentOwner used to collapse to undefined → omitted from the
+    // PATCH → JSON-merge-patch "don't touch" → the clear silently never persisted while the
+    // user saw a success toast. The page now passes componentOwner as interacted (dirty OR
+    // touched) so buildUpdateRequest emits '' (server stores null).
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('system', component.system ?? '')
+        form.setValue('componentOwner', component.componentOwner ?? '')
+      }, [component, form])
+      return React.createElement(
+        'button',
+        {
+          'data-testid': 'clear-owner',
+          onClick: () => form.setValue('componentOwner', '', { shouldDirty: true, shouldTouch: true }),
+        },
+        'clear',
+      )
+    })
+    const updateMutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage(baseComponent, user, { updateMutation: { mutateAsync: updateMutateAsync } })
+
+    fireEvent.click(screen.getByTestId('clear-owner'))
+    await waitFor(() => {
+      const btn = screen.getByRole('button', { name: /save changes/i }) as HTMLButtonElement
+      expect(btn.disabled).toBe(false)
+    })
+
+    await clickSaveAndConfirm()
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
+    const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
+    expect(payload['componentOwner']).toBe('')
+  })
+
   it('renders (Save button present) even when the API omits docs/artifactIds', () => {
     // Regression: the dirty-gate must never crash the whole page. Older CRS
     // images omit docs/artifactIds from ComponentDetailResponse; the TS type

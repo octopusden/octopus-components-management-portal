@@ -182,6 +182,104 @@ describe('buildUpdateRequest — displayName (nullable + value-compare)', () => 
   })
 })
 
+// Regression for the clear-to-empty silent-drop bug: componentOwner / clientCode /
+// copyright are nullable top-level scalars that were emitted as `values.X || undefined`,
+// so clearing them to '' collapsed to `undefined` → omitted from the PATCH → JSON merge
+// patch "don't touch" → the clear silently never persisted (and the SaveBar never even
+// went dirty). They must mirror displayName: interacted-gated value-compare, emit '' to
+// clear (server stores null), omit when unchanged or pre-hydration.
+const CLEARABLE_SCALARS = [
+  {
+    name: 'componentOwner',
+    comp: (v: string | null): Partial<ComponentDetail> => ({ componentOwner: v }),
+    vals: (v: string): Partial<GeneralFormValues> => ({ componentOwner: v }),
+    dirty: { componentOwner: true } as DirtyFlags,
+    hidden: (): FieldVisibilities => ({ ...EDITABLE, componentOwner: 'hidden' }),
+    read: (r: ReturnType<typeof buildUpdateRequest>) => r.componentOwner,
+  },
+  {
+    name: 'clientCode',
+    comp: (v: string | null): Partial<ComponentDetail> => ({ clientCode: v }),
+    vals: (v: string): Partial<GeneralFormValues> => ({ clientCode: v }),
+    dirty: { clientCode: true } as DirtyFlags,
+    hidden: (): FieldVisibilities => ({ ...EDITABLE, clientCode: 'hidden' }),
+    read: (r: ReturnType<typeof buildUpdateRequest>) => r.clientCode,
+  },
+  {
+    name: 'copyright',
+    comp: (v: string | null): Partial<ComponentDetail> => ({ copyright: v }),
+    vals: (v: string): Partial<GeneralFormValues> => ({ copyright: v }),
+    dirty: { copyright: true } as DirtyFlags,
+    hidden: (): FieldVisibilities => ({ ...EDITABLE, copyright: 'hidden' }),
+    read: (r: ReturnType<typeof buildUpdateRequest>) => r.copyright,
+  },
+] as const
+
+describe.each(CLEARABLE_SCALARS)(
+  'buildUpdateRequest — clearable nullable scalar: $name',
+  ({ comp, vals, dirty, hidden, read }) => {
+    it('clear (interacted, blank, server had a value) → emits "" (server clears to null)', () => {
+      const req = buildUpdateRequest({
+        component: makeComponent(comp('old-value')),
+        values: makeValues(vals('')),
+        visibilities: EDITABLE,
+        dirtyFields: dirty,
+      })
+      expect(read(req)).toBe('')
+    })
+
+    it('unchanged (interacted but equal to persisted) → omitted', () => {
+      const req = buildUpdateRequest({
+        component: makeComponent(comp('same')),
+        values: makeValues(vals('same')),
+        visibilities: EDITABLE,
+        dirtyFields: dirty,
+      })
+      expect(read(req)).toBeUndefined()
+    })
+
+    it('edit (interacted, new distinct value) → emits the trimmed value', () => {
+      const req = buildUpdateRequest({
+        component: makeComponent(comp('old')),
+        values: makeValues(vals('  New Value  ')),
+        visibilities: EDITABLE,
+        dirtyFields: dirty,
+      })
+      expect(read(req)).toBe('New Value')
+    })
+
+    it('set on a component whose value was null → emits the value', () => {
+      const req = buildUpdateRequest({
+        component: makeComponent(comp(null)),
+        values: makeValues(vals('First Value')),
+        visibilities: EDITABLE,
+        dirtyFields: dirty,
+      })
+      expect(read(req)).toBe('First Value')
+    })
+
+    it('not interacted (dirty/touched false) → omitted regardless of value (pre-hydration safety)', () => {
+      const req = buildUpdateRequest({
+        component: makeComponent(comp('old')),
+        values: makeValues(vals('')),
+        visibilities: EDITABLE,
+        dirtyFields: {},
+      })
+      expect(read(req)).toBeUndefined()
+    })
+
+    it('hidden field-config + interacted → omitted (hidden never written)', () => {
+      const req = buildUpdateRequest({
+        component: makeComponent(comp('old')),
+        values: makeValues(vals('changed')),
+        visibilities: hidden(),
+        dirtyFields: dirty,
+      })
+      expect(read(req)).toBeUndefined()
+    })
+  },
+)
+
 describe('buildUpdateRequest — dirtyFields gating (pre-hydration safety)', () => {
   it('solution form-default false on server-null component is omitted when not dirty', () => {
     const req = buildUpdateRequest({
