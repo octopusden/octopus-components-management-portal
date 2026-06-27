@@ -117,7 +117,9 @@ test.describe('Components Management Portal – Build tab edit lands in History 
       .filter({ hasText: 'build.mavenVersion' })
       .first()
       .click()
-    const expandedPanel = page.locator('td[colspan="7"]')
+    // The expanded-row cell spans the full audit table width. Keep this in sync
+    // with AuditLogTable's COLUMN_COUNT (now 9: + Task + Comment columns).
+    const expandedPanel = page.locator('td[colspan="9"]')
     await expect(expandedPanel.getByText(target!, { exact: true }).first()).toBeVisible()
   })
 })
