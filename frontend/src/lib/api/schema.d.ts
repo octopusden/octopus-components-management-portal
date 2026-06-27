@@ -907,8 +907,6 @@ export interface components {
             canBeParent?: boolean;
             /** @description Optional free-text comment describing the change; recorded on the audit row. */
             changeComment?: string;
-            /** @description Optional Jira task key motivating the change (e.g. ABC-123); recorded on the audit row. */
-            jiraTaskKey?: string;
             clientCode?: string;
             componentOwner?: string;
             copyright?: string;
@@ -919,6 +917,8 @@ export interface components {
             group?: components["schemas"]["ComponentGroupRequest"];
             jiraDisplayName?: string;
             jiraHotfixVersionFormat?: string;
+            /** @description Optional Jira task key motivating the change (e.g. ABC-123); recorded on the audit row. */
+            jiraTaskKey?: string;
             labels?: string[];
             name: string;
             parentComponentName?: string;
@@ -1012,8 +1012,6 @@ export interface components {
             canBeParent?: boolean;
             /** @description Optional free-text comment describing the change; recorded on the audit row. */
             changeComment?: string;
-            /** @description Optional Jira task key motivating the change (e.g. ABC-123); recorded on the audit row. */
-            jiraTaskKey?: string;
             clearGroup?: boolean;
             clearParent?: boolean;
             clientCode?: string;
@@ -1026,6 +1024,8 @@ export interface components {
             group?: components["schemas"]["ComponentGroupRequest"];
             jiraDisplayName?: string;
             jiraHotfixVersionFormat?: string;
+            /** @description Optional Jira task key motivating the change (e.g. ABC-123); recorded on the audit row. */
+            jiraTaskKey?: string;
             labels?: string[];
             name?: string;
             parentComponentName?: string;

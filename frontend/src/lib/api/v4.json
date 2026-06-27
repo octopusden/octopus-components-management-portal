@@ -455,11 +455,6 @@
             "description" : "Optional free-text comment describing the change; recorded on the audit row.",
             "type" : "string"
           },
-          "jiraTaskKey" : {
-            "description" : "Optional Jira task key motivating the change (e.g. ABC-123); recorded on the audit row.",
-            "pattern" : "^\\s*$|^[A-Z][A-Z0-9]+-\\d+$",
-            "type" : "string"
-          },
           "clientCode" : {
             "type" : "string"
           },
@@ -491,6 +486,11 @@
             "type" : "string"
           },
           "jiraHotfixVersionFormat" : {
+            "type" : "string"
+          },
+          "jiraTaskKey" : {
+            "description" : "Optional Jira task key motivating the change (e.g. ABC-123); recorded on the audit row.",
+            "pattern" : "^\\s*$|^[A-Z][A-Z0-9]+-\\d+$",
             "type" : "string"
           },
           "labels" : {
@@ -852,11 +852,6 @@
             "description" : "Optional free-text comment describing the change; recorded on the audit row.",
             "type" : "string"
           },
-          "jiraTaskKey" : {
-            "description" : "Optional Jira task key motivating the change (e.g. ABC-123); recorded on the audit row.",
-            "pattern" : "^\\s*$|^[A-Z][A-Z0-9]+-\\d+$",
-            "type" : "string"
-          },
           "clearGroup" : {
             "type" : "boolean"
           },
@@ -894,6 +889,11 @@
             "type" : "string"
           },
           "jiraHotfixVersionFormat" : {
+            "type" : "string"
+          },
+          "jiraTaskKey" : {
+            "description" : "Optional Jira task key motivating the change (e.g. ABC-123); recorded on the audit row.",
+            "pattern" : "^\\s*$|^[A-Z][A-Z0-9]+-\\d+$",
             "type" : "string"
           },
           "labels" : {
