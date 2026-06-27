@@ -88,6 +88,26 @@ export function AuditLogFilters({ filter, onChange }: AuditLogFiltersProps) {
   const [changeCommentLocal, setChangeCommentLocal] = useState(filter.changeComment ?? '')
   const commentDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Debounced handlers fire ~300ms later, by which point the user may have
+  // changed another filter (Action/Source/…). Merge against the LATEST filter
+  // via this ref, not the value closed over at keystroke time, so a delayed
+  // text update can't clobber a newer selection.
+  const filterRef = useRef(filter)
+  useEffect(() => {
+    filterRef.current = filter
+  }, [filter])
+
+  // Cancel any pending text debounces on unmount so a late timer can't call
+  // onChange into an unmounted parent.
+  useEffect(
+    () => () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      if (jiraDebounceRef.current) clearTimeout(jiraDebounceRef.current)
+      if (commentDebounceRef.current) clearTimeout(commentDebounceRef.current)
+    },
+    [],
+  )
+
   useEffect(() => {
     setChangedByLocal(filter.changedBy ?? '')
   }, [filter.changedBy])
@@ -104,7 +124,7 @@ export function AuditLogFilters({ filter, onChange }: AuditLogFiltersProps) {
     setChangedByLocal(value)
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
-      onChange({ ...filter, changedBy: value || undefined })
+      onChange({ ...filterRef.current, changedBy: value || undefined })
     }, 300)
   }
 
@@ -112,7 +132,7 @@ export function AuditLogFilters({ filter, onChange }: AuditLogFiltersProps) {
     setJiraTaskKeyLocal(value)
     if (jiraDebounceRef.current) clearTimeout(jiraDebounceRef.current)
     jiraDebounceRef.current = setTimeout(() => {
-      onChange({ ...filter, jiraTaskKey: value.trim() || undefined })
+      onChange({ ...filterRef.current, jiraTaskKey: value.trim() || undefined })
     }, 300)
   }
 
@@ -120,7 +140,7 @@ export function AuditLogFilters({ filter, onChange }: AuditLogFiltersProps) {
     setChangeCommentLocal(value)
     if (commentDebounceRef.current) clearTimeout(commentDebounceRef.current)
     commentDebounceRef.current = setTimeout(() => {
-      onChange({ ...filter, changeComment: value.trim() || undefined })
+      onChange({ ...filterRef.current, changeComment: value.trim() || undefined })
     }, 300)
   }
 
@@ -149,6 +169,11 @@ export function AuditLogFilters({ filter, onChange }: AuditLogFiltersProps) {
   }
 
   const handleClear = () => {
+    // Cancel pending text debounces first — otherwise a timer queued just before
+    // Clear would fire afterwards and resurrect the stale value over the cleared filter.
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (jiraDebounceRef.current) clearTimeout(jiraDebounceRef.current)
+    if (commentDebounceRef.current) clearTimeout(commentDebounceRef.current)
     setChangedByLocal('')
     setJiraTaskKeyLocal('')
     setChangeCommentLocal('')

@@ -75,6 +75,32 @@ describe('AuditLogFilters (B7.1.3)', () => {
     expect(screen.getByRole('button', { name: /clear filters/i })).toBeDefined()
   })
 
+  it('debounced text merges against the LATEST filter, not the one at keystroke time', () => {
+    vi.useFakeTimers()
+    const { rerender } = render(<AuditLogFilters filter={{}} onChange={onChange} />)
+    // Type a Jira key — debounce armed while filter is {}.
+    fireEvent.change(screen.getByLabelText(/jira task key/i), { target: { value: 'ABC-1' } })
+    // Parent applies an Action filter before the 300ms fires.
+    rerender(<AuditLogFilters filter={{ action: 'CREATE' }} onChange={onChange} />)
+    act(() => { vi.advanceTimersByTime(300) })
+    // The delayed onChange must keep the newer action, not drop it back to {}.
+    expect(onChange).toHaveBeenCalledWith({ action: 'CREATE', jiraTaskKey: 'ABC-1' })
+    vi.useRealTimers()
+  })
+
+  it('Clear cancels a pending text debounce so the stale value cannot reappear', () => {
+    vi.useFakeTimers()
+    render(<AuditLogFilters filter={{ source: 'api' }} onChange={onChange} />)
+    fireEvent.change(screen.getByLabelText(/jira task key/i), { target: { value: 'ABC-1' } })
+    // Clear before the debounce fires.
+    fireEvent.click(screen.getByRole('button', { name: /clear filters/i }))
+    expect(onChange).toHaveBeenLastCalledWith({})
+    act(() => { vi.advanceTimersByTime(300) })
+    // No second call resurrecting the typed Jira key.
+    expect(onChange).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
+  })
+
   it('debounces changeComment text input through onChange (trimmed)', () => {
     vi.useFakeTimers()
     render(<AuditLogFilters filter={{}} onChange={onChange} />)
