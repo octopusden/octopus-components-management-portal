@@ -115,6 +115,39 @@ describe('AuditLogTable', () => {
     expect(screen.queryByText(/Correlation ID/)).toBeNull()
   })
 
+  it('renders the Jira task key as a link to {jiraBaseUrl}/browse/{key} in the list row', () => {
+    render(
+      <AuditLogTable
+        data={[makeEntry({ jiraTaskKey: 'ABC-123' })]}
+        isLoading={false}
+        jiraBaseUrl="https://jira.example.com"
+      />,
+    )
+    const link = screen.getByRole('link', { name: 'ABC-123' })
+    expect(link.getAttribute('href')).toBe('https://jira.example.com/browse/ABC-123')
+    expect(link.getAttribute('target')).toBe('_blank')
+  })
+
+  it('renders the Jira task key as plain text when no jiraBaseUrl is configured', () => {
+    render(<AuditLogTable data={[makeEntry({ jiraTaskKey: 'ABC-123' })]} isLoading={false} />)
+    expect(screen.queryByRole('link', { name: 'ABC-123' })).toBeNull()
+    expect(screen.getByText('ABC-123')).toBeDefined()
+  })
+
+  it('shows the comment in the list row and the full comment when expanded', async () => {
+    render(<AuditLogTable data={[makeEntry({ changeComment: 'tidy up the build' })]} isLoading={false} />)
+    // Visible in the (truncated) list cell before expanding.
+    expect(screen.getByText('tidy up the build')).toBeDefined()
+    // Expanding reveals the full comment block too.
+    await userEvent.click(screen.getAllByRole('row')[1]!)
+    expect(screen.getAllByText('tidy up the build').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('leaves Task/Comment cells empty when both are absent (only Changed Fields shows —)', () => {
+    render(<AuditLogTable data={[makeEntry({ jiraTaskKey: null, changeComment: null })]} isLoading={false} />)
+    expect(screen.getAllByText('—')).toHaveLength(1)
+  })
+
   it('shows diff summary for ≤3 changed fields', () => {
     render(
       <AuditLogTable

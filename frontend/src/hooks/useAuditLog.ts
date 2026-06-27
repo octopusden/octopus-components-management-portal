@@ -27,6 +27,10 @@ export interface RecentAuditLogFilter {
    * so the server default (hide) applies.
    */
   includeMigrated?: boolean
+  /** Case-insensitive substring match on the change-metadata Jira task key. */
+  jiraTaskKey?: string
+  /** Case-insensitive substring match on the change-metadata comment. */
+  changeComment?: string
 }
 
 interface UseRecentAuditLogParams extends UseAuditLogParams {
@@ -50,6 +54,8 @@ export function useRecentAuditLog({
   if (filter?.from) params.set('from', filter.from)
   if (filter?.to) params.set('to', filter.to)
   if (filter?.includeMigrated) params.set('includeMigrated', 'true')
+  if (filter?.jiraTaskKey) params.set('jiraTaskKey', filter.jiraTaskKey)
+  if (filter?.changeComment) params.set('changeComment', filter.changeComment)
 
   return useQuery({
     queryKey: ['audit', 'recent', { page, size, filter }],

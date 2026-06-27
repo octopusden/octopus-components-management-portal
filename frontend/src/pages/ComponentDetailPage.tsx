@@ -35,6 +35,7 @@ import { generalSlice } from '../components/editor/generalSlice'
 import { combineRequest, collectDiff, anyDirty } from '../lib/editor/combineRequest'
 import { SaveBar } from '../components/editor/SaveBar'
 import { ReviewChangesDialog } from '../components/editor/ReviewChangesDialog'
+import type { ConfirmMeta } from '../components/editor/ReviewChangesDialog'
 import { UnsavedChangesGuard } from '../components/editor/UnsavedChangesGuard'
 import { completenessPercent } from '../lib/component/completeness'
 import { CANNOT_EDIT_TITLE } from '../components/editor/editPermission'
@@ -346,7 +347,7 @@ export function ComponentDetailPage() {
     form.clearErrors()
   }
 
-  async function runCombinedSave() {
+  async function runCombinedSave(meta: ConfirmMeta = {}) {
     if (!component) return
     if (!canEdit || !dirty) return
     form.clearErrors()
@@ -366,7 +367,14 @@ export function ComponentDetailPage() {
       return
     }
 
-    const request = combineRequest(component.version, slices)
+    // Change metadata (Jira task key + comment) is recorded on the audit row, not
+    // the component — merge it onto the combined PATCH. Values arrive already
+    // normalized (undefined when blank), so JSON.stringify omits them.
+    const request = {
+      ...combineRequest(component.version, slices),
+      jiraTaskKey: meta.jiraTaskKey,
+      changeComment: meta.changeComment,
+    }
 
     try {
       await updateMutation.mutateAsync(request)

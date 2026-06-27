@@ -391,6 +391,11 @@ export interface ComponentCreateRequest {
   securityGroups?: SecurityGroupRequest[]
   teamcityProjects?: TeamcityProjectRequest[]
   baseConfiguration?: BaseConfigurationRequest | null
+  // Change metadata recorded on the audit row (not on the component). Both
+  // optional; the Jira key, when non-blank, must match a Jira key (see
+  // lib/editor/jiraKey). Send a trimmed value or omit — never an empty string.
+  jiraTaskKey?: string | null
+  changeComment?: string | null
 }
 
 // JSON Merge Patch semantics: null scalar = "don't touch"; present collection
@@ -438,6 +443,12 @@ export interface ComponentUpdateRequest {
   securityGroups?: SecurityGroupRequest[] | null
   teamcityProjects?: TeamcityProjectRequest[] | null
   baseConfiguration?: BaseConfigurationRequest | null
+  // Change metadata recorded on the audit row (not on the component); not part
+  // of the component's patchable state. Both optional; the Jira key, when
+  // non-blank, must match a Jira key (see lib/editor/jiraKey). Send a trimmed
+  // value or omit — never an empty string.
+  jiraTaskKey?: string | null
+  changeComment?: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -522,6 +533,10 @@ export interface AuditLogEntry {
   newValue: Record<string, unknown> | null
   changeDiff: Record<string, unknown> | null
   correlationId: string | null
+  // Change metadata captured at save time (CRS AuditLogResponse). Optional so
+  // the portal tolerates older rows / a CRS deployed before this field landed.
+  jiraTaskKey?: string | null
+  changeComment?: string | null
 }
 
 // ---------------------------------------------------------------------------

@@ -43,6 +43,7 @@ import {
 import { FieldLabelText } from './ui/FieldLabelText'
 import { FieldInfo } from './ui/FieldInfo'
 import type { ComponentDetail } from '../lib/types'
+import { validateJiraKey, normalizeJiraKey, normalizeChangeComment } from '../lib/editor/jiraKey'
 
 const NAME_REGEX = /^[a-zA-Z0-9_\-./]+$/
 
@@ -434,11 +435,28 @@ function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateCom
   // "required" error.
   const [ownerValidating, setOwnerValidating] = useState(false)
 
-  const submitDisabled = isSubmitting || createMutation.isPending || ownerValidating
+  // Change metadata (Jira task key + comment) is recorded on the audit row, not
+  // the component, so it lives outside the RHF form (CreateFormValues stays the
+  // component's shape) and is merged onto the create request at submit time.
+  const [jiraTaskKey, setJiraTaskKey] = useState('')
+  const [changeComment, setChangeComment] = useState('')
+  const jiraError = validateJiraKey(jiraTaskKey)
+
+  const submitDisabled = isSubmitting || createMutation.isPending || ownerValidating || !!jiraError
 
   async function onSubmit(values: CreateFormValues) {
+    // The Jira key lives outside RHF, so zod validation can't gate it. The
+    // disabled Create button blocks a click, but an implicit submit (Enter in
+    // an input) still reaches here — guard explicitly so a malformed key never
+    // POSTs (the server @Pattern would 400 anyway; this is the friendly path).
+    if (jiraError) return
     try {
-      const component = await createMutation.mutateAsync(buildCreateRequest(values, source ?? undefined, editable))
+      const request = {
+        ...buildCreateRequest(values, source ?? undefined, editable),
+        jiraTaskKey: normalizeJiraKey(jiraTaskKey),
+        changeComment: normalizeChangeComment(changeComment),
+      }
+      const component = await createMutation.mutateAsync(request)
       toast({ title: 'Component created', description: `"${component.name}" was created.` })
       onClose()
       navigate(`/components/${component.id}`)
@@ -870,6 +888,39 @@ function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateCom
           </p>
         </div>
       )}
+
+      {/* Change metadata recorded on the CREATE audit row (optional). Lives
+          outside the RHF form — see the jiraTaskKey/changeComment state above. */}
+      <fieldset className="space-y-4 rounded-md border border-border p-3">
+        <legend className="px-1 text-xs font-medium text-muted-foreground">Change metadata</legend>
+        <div className="space-y-1.5">
+          <Label htmlFor="create-jira-key">Jira task key (optional)</Label>
+          <Input
+            id="create-jira-key"
+            placeholder="ABC-123"
+            value={jiraTaskKey}
+            onChange={(e) => setJiraTaskKey(e.target.value)}
+            aria-invalid={!!jiraError}
+            aria-describedby={jiraError ? 'create-jira-key-error' : undefined}
+          />
+          {jiraError && (
+            <p id="create-jira-key-error" className="text-xs text-destructive">
+              {jiraError}
+            </p>
+          )}
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="create-change-comment">Comment (optional)</Label>
+          <textarea
+            id="create-change-comment"
+            placeholder="What changed and why"
+            value={changeComment}
+            onChange={(e) => setChangeComment(e.target.value)}
+            rows={3}
+            className="flex min-h-[64px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          />
+        </div>
+      </fieldset>
 
       <DialogFooter>
         <DialogClose asChild>
