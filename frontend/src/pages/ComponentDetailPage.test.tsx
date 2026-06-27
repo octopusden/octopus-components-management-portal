@@ -876,6 +876,41 @@ describe('ComponentDetailPage — Save dirty-gate', () => {
     expect(payload['componentOwner']).toBe('')
   })
 
+  it('carries the entered Jira key + comment from the Review dialog on the combined PATCH', async () => {
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('system', component.system ?? '')
+        form.setValue('displayName', component.displayName ?? '')
+      }, [component, form])
+      return React.createElement(
+        'button',
+        {
+          'data-testid': 'edit-display-name',
+          onClick: () => form.setValue('displayName', 'New Name', { shouldDirty: true }),
+        },
+        'edit',
+      )
+    })
+    const updateMutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage(baseComponent, user, { updateMutation: { mutateAsync: updateMutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit-display-name'))
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: /save changes/i }) as HTMLButtonElement).disabled).toBe(false),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    fireEvent.change(await screen.findByLabelText(/jira task key/i), { target: { value: 'ABC-123' } })
+    fireEvent.change(screen.getByLabelText(/comment/i), { target: { value: 'tidy up' } })
+    fireEvent.click(screen.getByRole('button', { name: /^confirm$/i }))
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
+    const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
+    expect(payload['jiraTaskKey']).toBe('ABC-123')
+    expect(payload['changeComment']).toBe('tidy up')
+  })
+
   it('renders (Save button present) even when the API omits docs/artifactIds', () => {
     // Regression: the dirty-gate must never crash the whole page. Older CRS
     // images omit docs/artifactIds from ComponentDetailResponse; the TS type

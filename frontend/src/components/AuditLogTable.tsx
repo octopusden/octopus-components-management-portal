@@ -22,7 +22,16 @@ import { cn } from '../lib/utils'
 interface AuditLogTableProps {
   data: AuditLogEntry[]
   isLoading: boolean
+  /**
+   * Sanitized Jira base URL (from `usePortalLinks`). When present, the Task
+   * column renders `jiraTaskKey` as a link to `{base}/browse/{key}`; otherwise
+   * the key is shown as plain text. Optional so the presentational table needs
+   * no QueryClient in tests.
+   */
+  jiraBaseUrl?: string | null
 }
+
+const COLUMN_COUNT = 9
 
 // Action → semantic Badge variant. CRS emits CREATE/UPDATE/DELETE/RENAME
 // (see ComponentManagementServiceImpl) and MIGRATED for the git-history
@@ -97,7 +106,7 @@ function diffSummary(entry: AuditLogEntry): string | null {
   return `${keys.slice(0, 3).join(', ')} +${keys.length - 3} more`
 }
 
-export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
+export function AuditLogTable({ data, isLoading, jiraBaseUrl }: AuditLogTableProps) {
   const [expandedId, setExpandedId] = useState<number | null>(null)
 
   const toggleExpand = (id: number) => {
@@ -118,16 +127,18 @@ export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
             <TableHead>Component Key</TableHead>
             <TableHead>Action</TableHead>
             <TableHead>Changed Fields</TableHead>
+            <TableHead>Task</TableHead>
+            <TableHead>Comment</TableHead>
           </TableRow>
         </TableHeader>
         {isLoading ? (
-          <SkeletonTable rows={5} cols={7} showHeader={false} />
+          <SkeletonTable rows={5} cols={COLUMN_COUNT} showHeader={false} />
         ) : (
         <TableBody>
           {data.length === 0
             ? (
               <TableRow>
-                <TableCell colSpan={7} className="p-0">
+                <TableCell colSpan={COLUMN_COUNT} className="p-0">
                   <EmptyState message="No audit log entries found." />
                 </TableCell>
               </TableRow>
@@ -183,10 +194,38 @@ export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
                       <TableCell className="text-xs text-muted-foreground">
                         {summary ?? '—'}
                       </TableCell>
+                      <TableCell className="text-xs">
+                        {entry.jiraTaskKey && jiraBaseUrl && (
+                          <a
+                            href={`${jiraBaseUrl}/browse/${entry.jiraTaskKey}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-mono text-primary hover:underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {entry.jiraTaskKey}
+                          </a>
+                        )}
+                        {entry.jiraTaskKey && !jiraBaseUrl && (
+                          <span className="font-mono">{entry.jiraTaskKey}</span>
+                        )}
+                      </TableCell>
+                      <TableCell
+                        className="max-w-[220px] truncate text-xs text-muted-foreground"
+                        title={entry.changeComment ?? undefined}
+                      >
+                        {entry.changeComment}
+                      </TableCell>
                     </TableRow>
                     {isExpanded && (
                       <TableRow key={`${entry.id}-diff`}>
-                        <TableCell colSpan={7} className="bg-muted/20 p-4">
+                        <TableCell colSpan={COLUMN_COUNT} className="bg-muted/20 p-4">
+                          {entry.changeComment && (
+                            <div className="text-xs text-muted-foreground mb-3">
+                              Comment:{' '}
+                              <span className="text-foreground whitespace-pre-wrap">{entry.changeComment}</span>
+                            </div>
+                          )}
                           {entry.correlationId && (
                             <div className="text-xs text-muted-foreground mb-3">
                               Correlation ID:{' '}

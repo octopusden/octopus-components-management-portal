@@ -291,6 +291,44 @@ describe('CreateComponentDialog — scratch mode base', () => {
     })
     expect(mockNavigate).toHaveBeenCalledWith('/components/comp-1')
   })
+
+  it('includes the change metadata (jiraTaskKey + comment) in the create payload', async () => {
+    mockMutateAsync.mockResolvedValue({ id: 'comp-1', name: 'widget' })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await fillBaseFields()
+    await userEvent.type(screen.getByLabelText(/jira task key/i), 'ABC-123')
+    await userEvent.type(screen.getByLabelText(/^comment/i), 'initial setup')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalled())
+    expect(mockMutateAsync.mock.calls[0]![0]).toMatchObject({
+      jiraTaskKey: 'ABC-123',
+      changeComment: 'initial setup',
+    })
+  })
+
+  it('disables Create on a malformed Jira task key', async () => {
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await userEvent.type(screen.getByLabelText(/jira task key/i), 'not a key')
+    expect(screen.getByText(/jira task key like ABC-123/i)).toBeDefined()
+    expect((screen.getByRole('button', { name: /^create$/i }) as HTMLButtonElement).disabled).toBe(true)
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('does not POST a malformed Jira key on an implicit (Enter) form submit', async () => {
+    // The Jira key lives outside RHF, so the disabled button is not the only
+    // path: an implicit submit (Enter in a field) reaches handleSubmit. The
+    // onSubmit guard must still block the POST even with otherwise-valid fields.
+    mockMutateAsync.mockResolvedValue({ id: 'comp-1', name: 'widget' })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await fillBaseFields()
+    await userEvent.type(screen.getByLabelText(/jira task key/i), 'not a key')
+    fireEvent.submit(screen.getByPlaceholderText('my-component').closest('form')!)
+    await waitFor(() => expect(screen.getByText(/jira task key like ABC-123/i)).toBeDefined())
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
 })
 
 describe('CreateComponentDialog — VCS block (legacy build-system rule)', () => {

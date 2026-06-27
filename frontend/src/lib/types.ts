@@ -391,6 +391,11 @@ export interface ComponentCreateRequest {
   securityGroups?: SecurityGroupRequest[]
   teamcityProjects?: TeamcityProjectRequest[]
   baseConfiguration?: BaseConfigurationRequest | null
+  // Change metadata recorded on the audit row (not on the component). Both
+  // optional; the Jira key, when non-blank, must match a Jira key (see
+  // lib/editor/jiraKey). Send a trimmed value or omit — never an empty string.
+  jiraTaskKey?: string | null
+  changeComment?: string | null
 }
 
 // JSON Merge Patch semantics: null scalar = "don't touch"; present collection
@@ -438,6 +443,12 @@ export interface ComponentUpdateRequest {
   securityGroups?: SecurityGroupRequest[] | null
   teamcityProjects?: TeamcityProjectRequest[] | null
   baseConfiguration?: BaseConfigurationRequest | null
+  // Change metadata recorded on the audit row (not on the component); not part
+  // of the component's patchable state. Both optional; the Jira key, when
+  // non-blank, must match a Jira key (see lib/editor/jiraKey). Send a trimmed
+  // value or omit — never an empty string.
+  jiraTaskKey?: string | null
+  changeComment?: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -522,6 +533,10 @@ export interface AuditLogEntry {
   newValue: Record<string, unknown> | null
   changeDiff: Record<string, unknown> | null
   correlationId: string | null
+  // Change metadata captured at save time (CRS AuditLogResponse). Optional so
+  // the portal tolerates older rows / a CRS deployed before this field landed.
+  jiraTaskKey?: string | null
+  changeComment?: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -653,6 +668,79 @@ export interface HealthStatistics {
   componentsByOwner: Record<string, number>
   componentsByReleaseManager: Record<string, number>
   componentsBySecurityChampion: Record<string, number>
+}
+
+// ---------------------------------------------------------------------------
+// System / runtime metrics — admin System tab on the Admin Settings page.
+// Served by the portal BFF `GET /portal/metrics` (not CRS). Portal fields are
+// always present; CRS fields are best-effort and omitted (Jackson NON_NULL)
+// when unavailable, hence the optional markers.
+// ---------------------------------------------------------------------------
+
+/** Full JVM/system readout for the portal itself. */
+export interface PortalJvm {
+  heapUsedBytes: number
+  heapCommittedBytes: number
+  // null/omitted when the JVM reports no configured max (-1) → render an em-dash.
+  heapMaxBytes?: number | null
+  nonHeapUsedBytes: number
+  nonHeapCommittedBytes: number
+  threadsLive: number
+  threadsPeak: number
+  threadsDaemon: number
+  classesLoaded: number
+  classesTotalLoaded: number
+  classesUnloaded: number
+  gcCount: number
+  gcTimeMillis: number
+  // omitted when the CPU/load reading is unavailable.
+  cpuProcess?: number | null
+  cpuSystem?: number | null
+  systemLoadAverage?: number | null
+  availableProcessors: number
+}
+
+/** Best-effort subset of CRS JVM metrics — every field optional (any can degrade). */
+export interface CrsJvm {
+  heapUsedBytes?: number | null
+  heapCommittedBytes?: number | null
+  heapMaxBytes?: number | null
+  threadsLive?: number | null
+  threadsPeak?: number | null
+  threadsDaemon?: number | null
+  gcCount?: number | null
+  gcTimeMillis?: number | null
+  cpuProcess?: number | null
+  cpuSystem?: number | null
+  availableProcessors?: number | null
+}
+
+/** One interactive login captured by the portal (per-pod, in-memory). */
+export interface RecentLogin {
+  username: string
+  loginAt: string
+}
+
+export interface PortalRuntime {
+  uptimeMillis: number
+  startedAt: string
+  processId: number
+  javaVersion: string
+  jvm: PortalJvm
+  recentLogins: RecentLogin[]
+}
+
+export interface CrsRuntime {
+  available: boolean
+  reason?: string | null
+  status?: string | null
+  uptimeMillis?: number | null
+  jvm?: CrsJvm | null
+}
+
+export interface SystemMetrics {
+  portal: PortalRuntime
+  crs: CrsRuntime
 }
 
 // ---------------------------------------------------------------------------

@@ -5,6 +5,7 @@ import { AuditLogFilters, type AuditFilter } from '../components/AuditLogFilters
 import { Pagination } from '../components/Pagination'
 import { InlineError } from '../components/ui/inline-error'
 import { useRecentAuditLog } from '../hooks/useAuditLog'
+import { usePortalLinks } from '../hooks/useInfo'
 
 export function AuditLogPage() {
   const [page, setPage] = useState(0)
@@ -12,6 +13,7 @@ export function AuditLogPage() {
   const [filter, setFilter] = useState<AuditFilter>({})
 
   const { data, isLoading, error } = useRecentAuditLog({ page, size, filter })
+  const { data: portalLinks } = usePortalLinks()
 
   const handleSizeChange = (newSize: number) => {
     setSize(newSize)
@@ -51,7 +53,11 @@ export function AuditLogPage() {
           />
         )}
 
-        <AuditLogTable data={data?.content ?? []} isLoading={isLoading} />
+        <AuditLogTable
+          data={data?.content ?? []}
+          isLoading={isLoading}
+          jiraBaseUrl={portalLinks?.jiraBaseUrl}
+        />
 
         {data && data.totalElements > 0 && (
           <Pagination

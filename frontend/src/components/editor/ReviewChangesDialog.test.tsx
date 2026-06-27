@@ -41,6 +41,30 @@ describe('ReviewChangesDialog', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 
+  it('omits blank metadata (undefined) when the fields are empty', () => {
+    const { onConfirm } = setup()
+    fireEvent.click(screen.getByRole('button', { name: /^confirm$/i }))
+    expect(onConfirm).toHaveBeenCalledWith({ jiraTaskKey: undefined, changeComment: undefined })
+  })
+
+  it('passes the entered Jira key + comment (trimmed) to onConfirm', () => {
+    const { onConfirm } = setup()
+    fireEvent.change(screen.getByLabelText(/jira task key/i), { target: { value: '  ABC-123 ' } })
+    fireEvent.change(screen.getByLabelText(/comment/i), { target: { value: ' did a thing ' } })
+    fireEvent.click(screen.getByRole('button', { name: /^confirm$/i }))
+    expect(onConfirm).toHaveBeenCalledWith({ jiraTaskKey: 'ABC-123', changeComment: 'did a thing' })
+  })
+
+  it('blocks Confirm on a malformed Jira key and shows an inline error', () => {
+    const { onConfirm } = setup()
+    fireEvent.change(screen.getByLabelText(/jira task key/i), { target: { value: 'not a key' } })
+    expect(screen.getByText(/jira task key like ABC-123/i)).toBeDefined()
+    const confirm = screen.getByRole('button', { name: /^confirm$/i })
+    expect(confirm).toBeDisabled()
+    fireEvent.click(confirm)
+    expect(onConfirm).not.toHaveBeenCalled()
+  })
+
   it('disables both actions while saving', () => {
     setup({ isSaving: true })
     expect(screen.getByRole('button', { name: /saving/i })).toBeDisabled()

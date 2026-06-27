@@ -14,8 +14,11 @@ test.describe('Admin migration – admin journeys', () => {
     await page.getByRole('tab', { name: /migration/i }).click()
     await expect(page.getByRole('button', { name: /run migration/i })).toBeVisible()
 
-    // Footer Admin-mode switch.
-    await expect(page.getByRole('switch', { name: /admin mode/i })).toBeVisible()
+    // Footer Admin-mode switch (exact name — the Migration tab also has an
+    // "Arm admin mode" switch, so /admin mode/i would be ambiguous).
+    await expect(page.getByRole('switch', { name: 'Admin mode', exact: true })).toBeVisible()
+    // The inline arm bar is the on-tab control for the destructive actions.
+    await expect(page.getByRole('switch', { name: 'Arm admin mode', exact: true })).toBeVisible()
   })
 
   test('admin without Admin mode toggled sees disabled button + helper text', async ({ page }) => {
@@ -26,7 +29,7 @@ test.describe('Admin migration – admin journeys', () => {
     const runButton = page.getByRole('button', { name: /run migration/i })
     await expect(runButton).toBeDisabled()
     await expect(
-      page.getByText(/Enable Admin mode in the footer to run migration\./i),
+      page.getByText(/Arm Admin mode above to run migration\./i),
     ).toBeVisible()
   })
 
@@ -35,8 +38,9 @@ test.describe('Admin migration – admin journeys', () => {
     await page.goto('/admin')
 
     await page.getByRole('tab', { name: /migration/i }).click()
-    // Toggle Admin mode in the footer.
-    await page.getByRole('switch', { name: /admin mode/i }).click()
+    // Arm Admin mode via the inline arm bar on the Migration tab (shares the
+    // same store as the footer switch).
+    await page.getByRole('switch', { name: 'Arm admin mode', exact: true }).click()
     await page.getByRole('button', { name: /run migration/i }).click()
     // Confirm dialog → Confirm.
     await page.getByRole('button', { name: /^confirm$/i }).click()

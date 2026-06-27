@@ -9,8 +9,12 @@ import { ComponentDefaultsForm } from '../components/admin/ComponentDefaultsForm
 import { MigrationHistoryPanel } from '../components/admin/MigrationHistoryPanel'
 import { MigrationPanel } from '../components/admin/MigrationPanel'
 import { TeamCityResyncPanel } from '../components/admin/TeamCityResyncPanel'
+import { AdminModeArmBar } from '../components/admin/AdminModeArmBar'
+import { RuntimeSection } from '../components/RuntimeSection'
 import { useReloadConfig } from '../hooks/useAdminConfig'
+import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useAdminMode } from '../lib/adminModeStore'
+import { hasPermission, PERMISSIONS } from '../lib/auth'
 
 function ConfigReloadBar() {
   const adminMode = useAdminMode((s) => s.enabled)
@@ -43,7 +47,7 @@ function ConfigReloadBar() {
           variant="outline"
           onClick={() => mutate()}
           disabled={!adminMode || isPending}
-          title={adminMode ? 'Reload config from service-config' : 'Enable Admin mode in the footer to reload'}
+          title={adminMode ? 'Reload config from service-config' : 'Arm Admin mode on the Migration tab to reload'}
         >
           <RefreshCw className="h-4 w-4" />
           {isPending ? 'Reloading…' : 'Reload'}
@@ -54,6 +58,14 @@ function ConfigReloadBar() {
 }
 
 export function AdminSettingsPage() {
+  const { data: user } = useCurrentUser()
+  const adminMode = useAdminMode((s) => s.enabled)
+  // The System tab surfaces operational/runtime data (JVM, recent logins). It is
+  // admin/DevOps-only: gate on the same condition as the ADMIN badge — admin mode
+  // ON and the real IMPORT_DATA permission. Hidden entirely otherwise (not a
+  // disabled tab), and RuntimeSection passes the same gate into its polling hook.
+  const showSystem = adminMode && hasPermission(user, PERMISSIONS.IMPORT_DATA)
+
   return (
     <Layout>
       <div className="space-y-4">
@@ -68,6 +80,7 @@ export function AdminSettingsPage() {
             <TabsTrigger value="field-config">Field Configuration</TabsTrigger>
             <TabsTrigger value="component-defaults">Component Defaults</TabsTrigger>
             <TabsTrigger value="migration">Migration</TabsTrigger>
+            {showSystem && <TabsTrigger value="system">System</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="field-config" className="mt-4">
@@ -96,11 +109,13 @@ export function AdminSettingsPage() {
 
           <TabsContent value="migration" className="mt-4">
             <div className="rounded-lg border p-6 space-y-6">
+              <AdminModeArmBar />
+
               <div className="space-y-2">
                 <h2 className="text-lg font-semibold">Components</h2>
                 <p className="text-sm text-muted-foreground">
                   Migrate Groovy DSL components into the database. Defaults are rewritten in
-                  the same step. Enable Admin mode in the footer to arm the Run button.
+                  the same step. Arm Admin mode above to enable the Run button.
                 </p>
                 <div className="pt-2">
                   <MigrationPanel />
@@ -124,7 +139,7 @@ export function AdminSettingsPage() {
                 <p className="text-sm text-muted-foreground">
                   Resync persisted teamcityProjectId + teamcityProjectUrl from
                   TC project params. Overwrites manual overrides for matched
-                  components. Enable Admin mode in the footer to arm the button.
+                  components. Arm Admin mode above to enable the button.
                 </p>
                 <div className="pt-2">
                   <TeamCityResyncPanel />
@@ -132,6 +147,12 @@ export function AdminSettingsPage() {
               </div>
             </div>
           </TabsContent>
+
+          {showSystem && (
+            <TabsContent value="system" className="mt-4">
+              <RuntimeSection />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
     </Layout>
