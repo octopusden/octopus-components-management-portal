@@ -622,6 +622,30 @@ describe('GeneralTab — FieldOverrideInline gating (schema-v2 contract)', () =>
 })
 
 // ---------------------------------------------------------------------------
+// Regression: componentOwner is written via setValue (PeopleInput is not a
+// register()ed input). Without {shouldDirty, shouldTouch} on its onChange, a
+// real edit/clear never marks the form interacted, so buildUpdateRequest's
+// interacted-gate omits componentOwner and the clear is silently dropped (and
+// the SaveBar never arms). This pins that the owner onChange marks the field.
+// ---------------------------------------------------------------------------
+
+describe('GeneralTab — componentOwner edit marks the form interacted', () => {
+  it('clearing the owner via PeopleInput marks componentOwner dirty/touched', async () => {
+    setAllEditable()
+    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    renderWithProviders(<Harness component={baseComponent({ componentOwner: 'alice' })} formRef={formRef} />)
+
+    await userEvent.clear(screen.getByLabelText(/component owner/i, { selector: 'input' }))
+
+    await waitFor(() => {
+      expect(formRef.current?.getValues('componentOwner')).toBe('')
+      const state = formRef.current!.getFieldState('componentOwner', formRef.current!.formState)
+      expect(state.isDirty || state.isTouched).toBe(true)
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
 // task #14: system → single-select EnumSelect; labels stays chips.
 // ---------------------------------------------------------------------------
 
