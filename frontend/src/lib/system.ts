@@ -1,8 +1,37 @@
-// Null-tolerant formatters for the admin Runtime card (uptime, JVM/system
-// metrics). CRS metrics are best-effort and frequently absent, so every
+// Null-tolerant formatters + status derivation for the admin System tab (uptime,
+// JVM/system metrics). CRS metrics are best-effort and frequently absent, so every
 // formatter renders an em-dash for null/undefined rather than "NaN"/"0".
 
+import type { SystemMetrics } from './types'
+
 const EM_DASH = '—'
+
+export type SystemStatus = 'operational' | 'degraded' | 'down'
+
+/**
+ * Overall status driving the System tab summary banner (portal metrics are
+ * always loaded when this runs):
+ * - `operational` — CRS health UP **and** CRS JVM metrics available.
+ * - `degraded`   — CRS health UP but JVM metrics unavailable/partial (e.g. the
+ *   relayed token was rejected / actuator role-locked).
+ * - `down`       — CRS DOWN, UNKNOWN, or unreachable (no health status).
+ */
+export function deriveSystemStatus(metrics: SystemMetrics): SystemStatus {
+  const crs = metrics.crs
+  if (crs.status === 'UP') return crs.available ? 'operational' : 'degraded'
+  return 'down'
+}
+
+/** Compact local date-time, e.g. "25 Jun 18:51"; em-dash for null/invalid. */
+export function formatDateTimeShort(iso: string | null | undefined): string {
+  if (!iso) return EM_DASH
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return EM_DASH
+  const month = d.toLocaleString('en-US', { month: 'short' })
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${d.getDate()} ${month} ${hh}:${mm}`
+}
 
 const BYTE_UNITS = ['B', 'KiB', 'MiB', 'GiB', 'TiB'] as const
 

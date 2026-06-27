@@ -12,6 +12,7 @@ import { toast } from '@/hooks/use-toast'
 import { ApiError } from '@/lib/api'
 import { formatMigrationError } from '@/lib/migrationErrors'
 import { Button } from '@/components/ui/button'
+import { RelativeTime } from '@/components/ui/RelativeTime'
 import { StatusBanner } from '@/components/ui/status-banner'
 import {
   Dialog,
@@ -135,6 +136,7 @@ export function MigrationPanel() {
       <div className="flex items-center gap-3">
         <Button
           type="button"
+          variant={adminMode ? 'destructive' : 'default'}
           onClick={() => setConfirmOpen(true)}
           disabled={buttonDisabled}
           aria-busy={isRunning || startMigration.isPending}
@@ -144,12 +146,17 @@ export function MigrationPanel() {
         </Button>
         {!adminMode && (
           <span className="text-xs text-muted-foreground">
-            Enable Admin mode in the footer to run migration.
+            Arm Admin mode above to run migration.
           </span>
         )}
         {adminMode && historyRunning && !isRunning && (
           <span className="text-xs text-muted-foreground">
             History migration is running — wait for it to finish.
+          </span>
+        )}
+        {jobData?.finishedAt && !isRunning && (
+          <span className="ml-auto text-xs text-muted-foreground">
+            Last run <RelativeTime ts={jobData.finishedAt} />
           </span>
         )}
       </div>
@@ -252,7 +259,7 @@ export function MigrationPanel() {
             <Button type="button" variant="outline" onClick={() => setConfirmOpen(false)}>
               Cancel
             </Button>
-            <Button type="button" onClick={runMigration}>
+            <Button type="button" variant="destructive" onClick={runMigration}>
               Confirm
             </Button>
           </DialogFooter>

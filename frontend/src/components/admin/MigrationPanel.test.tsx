@@ -189,7 +189,7 @@ describe('MigrationPanel — status + Admin-mode gate', () => {
     renderPanel()
     const button = screen.getByRole('button', { name: /run migration/i })
     expect(button).toBeDisabled()
-    expect(screen.getByText(/Enable Admin mode in the footer/i)).toBeDefined()
+    expect(screen.getByText(/Arm Admin mode above/i)).toBeDefined()
   })
 
   it('enables Run migration once adminMode flips to true and no job is RUNNING', () => {

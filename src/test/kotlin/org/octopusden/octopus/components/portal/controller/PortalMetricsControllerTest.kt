@@ -12,6 +12,7 @@ import org.springframework.security.test.web.reactive.server.SecurityMockServerC
 import org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers.springSecurity
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.reactive.server.WebTestClient
+import java.time.Instant
 
 /**
  * Full-chain test for GET /portal/metrics. Authenticated() — so the WebTestClient
@@ -60,7 +61,12 @@ class PortalMetricsControllerTest {
             .expectStatus().isOk
             .expectBody()
             .jsonPath("$.portal.uptimeMillis").isNumber
-            .jsonPath("$.portal.startedAt").exists()
+            // startedAt must be an ISO-8601 string, not an epoch-seconds number —
+            // the SPA parses it with new Date(...) and a numeric value would render
+            // as ~1970. Parse it back to prove the wire format.
+            .jsonPath("$.portal.startedAt").value<String> { Instant.parse(it) }
+            .jsonPath("$.portal.processId").isNumber
+            .jsonPath("$.portal.javaVersion").exists()
             .jsonPath("$.portal.jvm.heapUsedBytes").isNumber
             .jsonPath("$.portal.jvm.threadsLive").isNumber
             .jsonPath("$.portal.jvm.availableProcessors").isNumber

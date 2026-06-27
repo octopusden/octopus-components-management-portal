@@ -693,6 +693,8 @@ export interface RecentLogin {
 export interface PortalRuntime {
   uptimeMillis: number
   startedAt: string
+  processId: number
+  javaVersion: string
   jvm: PortalJvm
   recentLogins: RecentLogin[]
 }

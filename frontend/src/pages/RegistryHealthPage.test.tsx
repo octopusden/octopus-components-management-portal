@@ -12,10 +12,6 @@ vi.mock('../components/Layout', () => ({
   Layout: ({ children }: { children: React.ReactNode }) =>
     React.createElement('div', { 'data-testid': 'layout' }, children),
 }))
-// RuntimeSection is an additive admin-only section with its own data hooks and
-// test coverage; stub it here so the page test stays focused on the registry-data
-// content and needs no QueryClient.
-vi.mock('../components/RuntimeSection', () => ({ RuntimeSection: () => null }))
 vi.mock('../hooks/useHealthStatistics', () => ({ useHealthStatistics: vi.fn() }))
 vi.mock('../hooks/useValidationProblems', () => ({ useValidationProblems: vi.fn() }))
 

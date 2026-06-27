@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { formatBytes, formatLoad, formatPercent, formatUptime } from './system'
+import {
+  deriveSystemStatus,
+  formatBytes,
+  formatDateTimeShort,
+  formatLoad,
+  formatPercent,
+  formatUptime,
+} from './system'
+import type { SystemMetrics } from './types'
 
 describe('formatUptime', () => {
   it('renders seconds under a minute', () => {
@@ -64,5 +72,39 @@ describe('formatLoad', () => {
   it('renders a load average to two decimals', () => {
     expect(formatLoad(2.345)).toBe('2.35')
     expect(formatLoad(0)).toBe('0.00')
+  })
+})
+
+describe('formatDateTimeShort', () => {
+  it('renders an em-dash for null/undefined/invalid', () => {
+    expect(formatDateTimeShort(null)).toBe('—')
+    expect(formatDateTimeShort(undefined)).toBe('—')
+    expect(formatDateTimeShort('not-a-date')).toBe('—')
+  })
+
+  it('renders compact local "DD Mon HH:MM"', () => {
+    // Construct via LOCAL components so the assertion is timezone-independent.
+    const local = new Date(2026, 5, 25, 18, 51) // 25 Jun 2026 18:51 local
+    expect(formatDateTimeShort(local.toISOString())).toBe('25 Jun 18:51')
+  })
+})
+
+describe('deriveSystemStatus', () => {
+  const base = (crs: SystemMetrics['crs']): SystemMetrics =>
+    ({ portal: {} as SystemMetrics['portal'], crs })
+
+  it('operational when CRS is UP and JVM available', () => {
+    expect(deriveSystemStatus(base({ available: true, status: 'UP' }))).toBe('operational')
+  })
+
+  it('degraded when CRS is UP but JVM unavailable', () => {
+    expect(
+      deriveSystemStatus(base({ available: false, status: 'UP', reason: 'CRS metrics require authentication' })),
+    ).toBe('degraded')
+  })
+
+  it('down when CRS is DOWN or unreachable (no status)', () => {
+    expect(deriveSystemStatus(base({ available: false, status: 'DOWN' }))).toBe('down')
+    expect(deriveSystemStatus(base({ available: false, reason: 'CRS unreachable: X' }))).toBe('down')
   })
 })

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, fireEvent, within } from '@testing-library/react'
 import { RuntimeSection } from './RuntimeSection'
 import { useAdminMode } from '@/lib/adminModeStore'
 import type { SystemMetrics } from '@/lib/types'
@@ -9,6 +9,7 @@ vi.mock('@/hooks/useCurrentUser', () => ({
   useCurrentUser: () => mockUseCurrentUser(),
 }))
 
+const mockRefetch = vi.fn()
 const mockUseSystemMetrics = vi.fn()
 vi.mock('@/hooks/useSystemMetrics', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -36,6 +37,8 @@ function fullMetrics(): SystemMetrics {
     portal: {
       uptimeMillis: 3 * 86_400_000 + 4 * 3_600_000,
       startedAt: '2026-06-24T06:00:00Z',
+      processId: 4821,
+      javaVersion: '21.0.3',
       jvm: {
         heapUsedBytes: 536_870_912,
         heapCommittedBytes: 805_306_368,
@@ -78,7 +81,16 @@ function fullMetrics(): SystemMetrics {
 }
 
 function query(overrides: Record<string, unknown>) {
-  return { data: undefined, isLoading: false, isError: false, error: null, dataUpdatedAt: Date.now(), ...overrides }
+  return {
+    data: undefined,
+    isLoading: false,
+    isError: false,
+    error: null,
+    isFetching: false,
+    dataUpdatedAt: Date.now(),
+    refetch: mockRefetch,
+    ...overrides,
+  }
 }
 
 beforeEach(() => {
@@ -89,62 +101,105 @@ beforeEach(() => {
 })
 
 describe('RuntimeSection', () => {
-  it('renders nothing when admin mode is off', () => {
+  it('renders nothing when admin mode is off and does not poll', () => {
     useAdminMode.setState({ enabled: false })
     render(<RuntimeSection />)
     expect(screen.queryByTestId('runtime-section')).toBeNull()
-    // and it must not poll when hidden
     expect(mockUseSystemMetrics).toHaveBeenCalledWith(false)
   })
 
-  it('renders nothing for a user without IMPORT_DATA even in admin mode', () => {
+  it('renders nothing for a non-IMPORT_DATA user even in admin mode', () => {
     mockUseCurrentUser.mockReturnValue({ data: VIEWER_USER })
     render(<RuntimeSection />)
     expect(screen.queryByTestId('runtime-section')).toBeNull()
     expect(mockUseSystemMetrics).toHaveBeenCalledWith(false)
   })
 
-  it('renders the full portal readout for an admin', () => {
+  it('Refresh button triggers a refetch', () => {
     render(<RuntimeSection />)
     expect(mockUseSystemMetrics).toHaveBeenCalledWith(true)
+    fireEvent.click(screen.getByTestId('runtime-refresh'))
+    expect(mockRefetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders the status summary banner (operational)', () => {
+    render(<RuntimeSection />)
+    const banner = screen.getByTestId('runtime-summary')
+    expect(banner).toHaveAttribute('data-status', 'operational')
+    expect(banner.textContent).toContain('All systems operational')
+  })
+
+  it('shows degraded status when CRS is UP but JVM unavailable', () => {
+    const m = fullMetrics()
+    m.crs = { available: false, status: 'UP', reason: 'CRS metrics require authentication' }
+    mockUseSystemMetrics.mockReturnValue(query({ data: m }))
+    render(<RuntimeSection />)
+    expect(screen.getByTestId('runtime-summary')).toHaveAttribute('data-status', 'degraded')
+  })
+
+  it('shows down status when CRS is DOWN', () => {
+    const m = fullMetrics()
+    m.crs = { available: false, status: 'DOWN' }
+    mockUseSystemMetrics.mockReturnValue(query({ data: m }))
+    render(<RuntimeSection />)
+    expect(screen.getByTestId('runtime-summary')).toHaveAttribute('data-status', 'down')
+  })
+
+  it('renders the Portal card with PID/JVM/since meta and full readout', () => {
+    render(<RuntimeSection />)
     const portal = screen.getByTestId('runtime-portal')
-    expect(portal.textContent).toContain('3d 4h 0m')
-    expect(portal.textContent).toContain('512 MiB / 1.00 GiB')
-    expect(portal.textContent).toContain('42 (peak 55, daemon 30)')
+    expect(portal.textContent).toContain('PID 4821')
+    expect(portal.textContent).toContain('JDK 21.0.3')
+    expect(portal.textContent).toContain('since')
     expect(portal.textContent).toContain('v1.2.3')
+    // gauge detail shows BOTH process and system CPU
+    expect(portal.textContent).toContain('proc 12% · sys 34%')
+    // 6 tiles incl. classes/load/processors
+    expect(portal.textContent).toContain('Non-heap')
+    expect(portal.textContent).toContain('Classes loaded')
+    expect(portal.textContent).toContain('Load average')
+    expect(portal.textContent).toContain('Processors')
   })
 
-  it('renders the CRS subset when available', () => {
+  it('renders CRS available tiles INCLUDING GC and Processors', () => {
     render(<RuntimeSection />)
     const crs = screen.getByTestId('runtime-crs')
-    expect(crs.textContent).toContain('UP')
-    expect(crs.textContent).toContain('2d 0h 0m')
     expect(crs.textContent).toContain('v2.0.88')
+    expect(crs.textContent).toContain('UP')
+    expect(crs.textContent).toContain('Uptime')
+    expect(crs.textContent).toContain('Heap')
+    expect(crs.textContent).toContain('Threads')
+    expect(crs.textContent).toContain('GC')
+    expect(crs.textContent).toContain('CPU')
+    expect(crs.textContent).toContain('Processors')
   })
 
-  it('shows the CRS reason when metrics are unavailable but keeps status', () => {
-    const metrics = fullMetrics()
-    metrics.crs = { available: false, reason: 'CRS metrics require authentication', status: 'UP' }
-    mockUseSystemMetrics.mockReturnValue(query({ data: metrics }))
+  it('shows the CRS unavailable panel with reason but keeps status + version', () => {
+    const m = fullMetrics()
+    m.crs = { available: false, status: 'UP', reason: 'CRS metrics require authentication' }
+    mockUseSystemMetrics.mockReturnValue(query({ data: m }))
     render(<RuntimeSection />)
     const crs = screen.getByTestId('runtime-crs')
-    expect(crs.textContent).toContain('UP')
+    expect(crs.textContent).toContain('JVM metrics unavailable')
     expect(crs.textContent).toContain('CRS metrics require authentication')
+    expect(crs.textContent).toContain('UP') // status pill still shown
+    expect(crs.textContent).toContain('v2.0.88') // version still shown
   })
 
-  it('lists recent logins, newest first', () => {
+  it('lists recent logins and the per-pod footer note', () => {
     render(<RuntimeSection />)
     const logins = screen.getByTestId('runtime-logins')
     expect(within(logins).getByText('alice')).toBeInTheDocument()
-    expect(logins.textContent).toContain('this instance only')
+    expect(logins.textContent).toContain('Last 1 · this instance')
+    expect(logins.textContent).toContain('resets on restart')
   })
 
   it('shows an empty state when there are no recent logins', () => {
-    const metrics = fullMetrics()
-    metrics.portal.recentLogins = []
-    mockUseSystemMetrics.mockReturnValue(query({ data: metrics }))
+    const m = fullMetrics()
+    m.portal.recentLogins = []
+    mockUseSystemMetrics.mockReturnValue(query({ data: m }))
     render(<RuntimeSection />)
-    expect(screen.getByTestId('runtime-logins').textContent).toContain('No logins recorded')
+    expect(screen.getByTestId('runtime-logins').textContent).toContain('No recent logins')
   })
 
   it('renders a skeleton while loading', () => {

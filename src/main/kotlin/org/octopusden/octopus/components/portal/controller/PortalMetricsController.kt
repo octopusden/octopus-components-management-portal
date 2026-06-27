@@ -84,6 +84,8 @@ class PortalMetricsController(
         return PortalRuntime(
             uptimeMillis = runtime.uptime,
             startedAt = Instant.ofEpochMilli(runtime.startTime),
+            processId = ProcessHandle.current().pid(),
+            javaVersion = System.getProperty("java.version").orEmpty(),
             jvm = PortalJvm(
                 heapUsedBytes = heap.used,
                 heapCommittedBytes = heap.committed,

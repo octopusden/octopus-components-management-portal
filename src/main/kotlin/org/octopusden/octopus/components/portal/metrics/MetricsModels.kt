@@ -18,6 +18,10 @@ data class MetricsResponse(
 data class PortalRuntime(
     val uptimeMillis: Long,
     val startedAt: Instant,
+    // OS process id + running JVM version, for the Portal card meta line
+    // ("PID … · JDK … · since …") on the admin System tab.
+    val processId: Long,
+    val javaVersion: String,
     val jvm: PortalJvm,
     val recentLogins: List<RecentLogin>,
 )
