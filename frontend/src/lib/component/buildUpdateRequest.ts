@@ -30,6 +30,13 @@ export interface FieldVisibilities {
 // Subset of RHF `formState.dirtyFields` that drives clear/omit/REPLACE
 // decisions for fields where the form default (false / '' / []) overlaps
 // with a legitimate server value.
+//
+// NOTE: every flag here is a PRE-NORMALIZED plain boolean. The caller
+// (ComponentDetailPage.buildPatchRequest) collapses RHF's raw dirtyFields —
+// which are a per-element array for array fields once anything subscribes
+// formState.isDirty (see lib/editor/dirtyField.ts: isFieldDirty) — into these
+// booleans. That is why the `!== true` gates below are correct and must NOT be
+// changed to isFieldDirty: the array shape never reaches this layer.
 export interface DirtyFlags {
   solution?: boolean
   system?: boolean

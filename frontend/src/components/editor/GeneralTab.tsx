@@ -201,7 +201,18 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
     // (dirty for register()ed inputs, touched for the setValue/chips fields). A genuine
     // component-id change is re-hydrated by the page-level reset (ComponentDetailPage
     // hydratedIdRef effect), not here.
-    if (form.formState.isDirty || Object.keys(form.formState.touchedFields).length > 0) return
+    //
+    // Use dirtyFields KEYS, NOT formState.isDirty: subscribing `isDirty` flips RHF's
+    // dirty tracking from a collapsed boolean to a per-element array for the whole
+    // form, which breaks the page's `dirtyFields.<arrayField> === true` save gates
+    // (labels / releaseManager / securityChampion never read as dirty → Save never
+    // arms). dirtyFields/touchedFields are already subscribed by the page, so reading
+    // their keys here adds no new subscription. (SYS-039 multi-list regression.)
+    if (
+      Object.keys(form.formState.dirtyFields).length > 0 ||
+      Object.keys(form.formState.touchedFields).length > 0
+    )
+      return
     // Form mirrors server state — hidden fields just stay unrendered. Visibility
     // filtering happens at save time in ComponentDetailPage.handleSave (hidden →
     // undefined in payload), so populating the form here cannot leak server data:
@@ -243,9 +254,9 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
       })),
     )
     setValue('artifactIds', (component.artifactIds ?? []).map(fromArtifactId))
-    // formState.isDirty / touchedFields are read as a point-in-time guard, NOT as
-    // triggers — adding them to deps would re-run hydration whenever dirtiness changes
-    // (i.e. on every edit) and re-stomp the form. Re-hydrate only on a new `component`.
+    // dirtyFields / touchedFields are read as a point-in-time guard, NOT as triggers —
+    // adding them to deps would re-run hydration whenever dirtiness changes (i.e. on
+    // every edit) and re-stomp the form. Re-hydrate only on a new `component`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [component, setValue])
 
