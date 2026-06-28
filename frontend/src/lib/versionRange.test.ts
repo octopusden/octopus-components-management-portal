@@ -1,15 +1,48 @@
 import { describe, it, expect } from 'vitest'
-import { formatVersionRange, isValidVersionRange, isClosedVersionRange, rangesOverlap, classifyRangeConflict, compareVersionRanges } from './versionRange'
+import { formatVersionRange, isValidVersionRange, isClosedVersionRange, rangesOverlap, classifyRangeConflict, compareVersionRanges, highestLowerBoundVersion } from './versionRange'
 
 describe('formatVersionRange', () => {
   it('formats (,) as "All versions"', () => {
     expect(formatVersionRange('(,)')).toBe('All versions')
   })
 
+  it('formats the two-segment base sentinel (,0),[0,) as "All versions"', () => {
+    expect(formatVersionRange('(,0),[0,)')).toBe('All versions')
+  })
+
+  it('tolerates whitespace and trailing zeros in the base sentinel', () => {
+    expect(formatVersionRange('(, 0), [0, )')).toBe('All versions')
+    expect(formatVersionRange('(,0.0),[0.0,)')).toBe('All versions')
+  })
+
   it('returns other ranges unchanged', () => {
     expect(formatVersionRange('[1.0,2.0)')).toBe('[1.0,2.0)')
     expect(formatVersionRange('(1.0,)')).toBe('(1.0,)')
     expect(formatVersionRange('[1.0.0,1.0.0]')).toBe('[1.0.0,1.0.0]')
+  })
+})
+
+describe('highestLowerBoundVersion', () => {
+  it('returns the numeric-highest lower bound as a dot-string', () => {
+    expect(highestLowerBoundVersion(['[1.5.0,1.5.1400)', '[1.5.1400,)'])).toBe('1.5.1400')
+  })
+
+  it('orders multi-digit segments numerically, not lexically', () => {
+    expect(highestLowerBoundVersion(['[1.2,)', '[1.10,)'])).toBe('1.10')
+  })
+
+  it('considers the lower bound of closed ranges too', () => {
+    expect(highestLowerBoundVersion(['[1.2,1.3)', '[1.4,1.5)', '[1.3,1.4)'])).toBe('1.4')
+  })
+
+  it('ignores entries with no usable lower bound', () => {
+    expect(highestLowerBoundVersion(['(,0),[0,)', '(,)', '(,2.0)'])).toBeNull()
+    expect(highestLowerBoundVersion([null, undefined, ''])).toBeNull()
+    expect(highestLowerBoundVersion([])).toBeNull()
+  })
+
+  it('mixes valid ranges with ignorable ones', () => {
+    expect(highestLowerBoundVersion([null, '(,0),[0,)', '[1.4,1.5)', '(,1.0)'])).toBe('1.4')
   })
 })
 

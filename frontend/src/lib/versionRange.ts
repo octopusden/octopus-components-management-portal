@@ -1,5 +1,11 @@
+// The two-segment "all versions" base sentinel CRS stores for a base row /
+// base ownership mapping (`(,0),[0,)`). Whitespace and trailing-zero variants
+// (`(, 0), [0, )`, `(,0.0),[0.0,)`) mean the same thing and also read as base.
+const BASE_SENTINEL_RE = /^\(,0(?:\.0+)?\),\[0(?:\.0+)?,\)$/
+
 export function formatVersionRange(range: string): string {
-  if (range === '(,)') return 'All versions'
+  const compact = range.replace(/\s+/g, '')
+  if (compact === '(,)' || BASE_SENTINEL_RE.test(compact)) return 'All versions'
   return range
 }
 
@@ -88,7 +94,7 @@ function parseDotNumeric(s: string): number[] | null {
   return trimmed.split('.').map((p) => Number.parseInt(p, 10))
 }
 
-function parseSimpleSegment(range: string): SimpleRange | null {
+export function parseSimpleSegment(range: string): SimpleRange | null {
   const compact = normalize(range)
   if (compact === '') return null
   // Reject composites — must be a single segment.
@@ -239,4 +245,27 @@ export function compareVersionRanges(a: string, b: string): number {
   const loCmp = compareLowerEdge(ra, rb)
   if (loCmp !== 0) return loCmp
   return compareUpperEdge(ra, rb)
+}
+
+/**
+ * The numeric-highest lower bound across a set of ranges, as a dot-string
+ * (e.g. `1.5.1400`), or `null` when none has a usable lower bound. Used to seed
+ * a sensible default version (the "current"/latest configured version) for the
+ * As-Code resolve box and similar.
+ *
+ * Entries are IGNORED when they have no lower bound to offer: `null`/`undefined`
+ * /blank, the universal `(,)` and the base sentinel `(,0),[0,)` (both composites
+ * or unbounded → `parseSimpleSegment` yields no `lo`), left-unbounded `(,X)`,
+ * and anything `parseSimpleSegment` can't parse (composites, qualifiers).
+ * Ordering is numeric (dot-segment aware), so `[1.10,)` ranks above `[1.2,)`.
+ */
+export function highestLowerBoundVersion(ranges: Array<string | null | undefined>): string | null {
+  let best: number[] | null = null
+  for (const r of ranges) {
+    if (!r) continue
+    const seg = parseSimpleSegment(r)
+    if (!seg || seg.lo === null) continue
+    if (best === null || compareVersionArrays(seg.lo, best) > 0) best = seg.lo
+  }
+  return best === null ? null : best.join('.')
 }
