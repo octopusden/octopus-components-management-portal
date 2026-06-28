@@ -13,6 +13,7 @@ describe('formatVersionRange', () => {
   it('tolerates whitespace and trailing zeros in the base sentinel', () => {
     expect(formatVersionRange('(, 0), [0, )')).toBe('All versions')
     expect(formatVersionRange('(,0.0),[0.0,)')).toBe('All versions')
+    expect(formatVersionRange('(,0.0.0),[0.0.0,)')).toBe('All versions')
   })
 
   it('returns other ranges unchanged', () => {
@@ -39,6 +40,11 @@ describe('highestLowerBoundVersion', () => {
     expect(highestLowerBoundVersion(['(,0),[0,)', '(,)', '(,2.0)'])).toBeNull()
     expect(highestLowerBoundVersion([null, undefined, ''])).toBeNull()
     expect(highestLowerBoundVersion([])).toBeNull()
+  })
+
+  it('ignores a degenerate all-zero lower bound', () => {
+    expect(highestLowerBoundVersion(['[0,)'])).toBeNull()
+    expect(highestLowerBoundVersion(['[0.0,)'])).toBeNull()
   })
 
   it('mixes valid ranges with ignorable ones', () => {

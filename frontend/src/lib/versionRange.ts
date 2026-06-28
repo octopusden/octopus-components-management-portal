@@ -1,7 +1,7 @@
 // The two-segment "all versions" base sentinel CRS stores for a base row /
 // base ownership mapping (`(,0),[0,)`). Whitespace and trailing-zero variants
 // (`(, 0), [0, )`, `(,0.0),[0.0,)`) mean the same thing and also read as base.
-const BASE_SENTINEL_RE = /^\(,0(?:\.0+)?\),\[0(?:\.0+)?,\)$/
+const BASE_SENTINEL_RE = /^\(,0(?:\.0+)*\),\[0(?:\.0+)*,\)$/
 
 export function formatVersionRange(range: string): string {
   const compact = range.replace(/\s+/g, '')
@@ -265,6 +265,9 @@ export function highestLowerBoundVersion(ranges: Array<string | null | undefined
     if (!r) continue
     const seg = parseSimpleSegment(r)
     if (!seg || seg.lo === null) continue
+    // An all-zero lower bound (`[0,)`, `[0.0,)`) means "from the start" — a
+    // degenerate base-like range, not a real version to suggest. Skip it.
+    if (seg.lo.every((v) => v === 0)) continue
     if (best === null || compareVersionArrays(seg.lo, best) > 0) best = seg.lo
   }
   return best === null ? null : best.join('.')
