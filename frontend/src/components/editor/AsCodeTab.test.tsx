@@ -83,7 +83,7 @@ describe('AsCodeTab — out-of-range resolve', () => {
       isLoading: false,
       isError: true,
       error: new ApiError(404, 'No configuration resolves'),
-    } as ReturnType<typeof useComponentAsCode>)
+    } as unknown as ReturnType<typeof useComponentAsCode>)
     render(<AsCodeTab component={rangedComponent()} />)
     await user.click(screen.getByRole('tab', { name: /resolved/i }))
     const input = screen.getByLabelText('Version')
