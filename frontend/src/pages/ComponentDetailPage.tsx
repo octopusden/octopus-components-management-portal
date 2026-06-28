@@ -33,6 +33,7 @@ import { useJiraSection } from '../components/editor/useJiraSection'
 import { useEscrowSection } from '../components/editor/useEscrowSection'
 import { generalSlice } from '../components/editor/generalSlice'
 import { combineRequest, collectDiff, anyDirty } from '../lib/editor/combineRequest'
+import { isFieldDirty } from '../lib/editor/dirtyField'
 import { SaveBar } from '../components/editor/SaveBar'
 import { ReviewChangesDialog } from '../components/editor/ReviewChangesDialog'
 import type { ConfirmMeta } from '../components/editor/ReviewChangesDialog'
@@ -286,26 +287,31 @@ export function ComponentDetailPage() {
         copyright:
           form.formState.dirtyFields.copyright === true ||
           form.formState.touchedFields.copyright === true,
+        // Array fields: isFieldDirty handles RHF's collapsed-boolean OR per-element-array
+        // dirtyFields shape (the shape flips to array once any component subscribes
+        // formState.isDirty — see dirtyField.ts). The second branch keeps the clear-all
+        // case (touched + had-prior + now-empty) that buildUpdateRequest's value-compare
+        // cannot see, because an emptied array equals the blank form default.
         labels:
-          (form.formState.dirtyFields.labels as unknown) === true ||
+          isFieldDirty(form.formState.dirtyFields.labels) ||
           (labelsFc.visibility !== 'hidden' &&
             (form.formState.touchedFields.labels as unknown) === true &&
             ((component.labels?.length ?? 0) > 0) &&
             ((form.getValues('labels')?.length ?? 0) === 0)),
         releaseManager:
-          (form.formState.dirtyFields.releaseManager as unknown) === true ||
+          isFieldDirty(form.formState.dirtyFields.releaseManager) ||
           (releaseManagerFc.visibility !== 'hidden' &&
             (form.formState.touchedFields.releaseManager as unknown) === true &&
             ((component.releaseManager?.length ?? 0) > 0) &&
             ((form.getValues('releaseManager')?.length ?? 0) === 0)),
         securityChampion:
-          (form.formState.dirtyFields.securityChampion as unknown) === true ||
+          isFieldDirty(form.formState.dirtyFields.securityChampion) ||
           (securityChampionFc.visibility !== 'hidden' &&
             (form.formState.touchedFields.securityChampion as unknown) === true &&
             ((component.securityChampion?.length ?? 0) > 0) &&
             ((form.getValues('securityChampion')?.length ?? 0) === 0)),
-        docs: !!form.formState.dirtyFields.docs,
-        artifactIds: !!form.formState.dirtyFields.artifactIds,
+        docs: isFieldDirty(form.formState.dirtyFields.docs),
+        artifactIds: isFieldDirty(form.formState.dirtyFields.artifactIds),
       },
     })
   }
