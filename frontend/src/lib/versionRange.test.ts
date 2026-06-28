@@ -47,6 +47,13 @@ describe('highestLowerBoundVersion', () => {
     expect(highestLowerBoundVersion(['[0.0,)'])).toBeNull()
   })
 
+  it('ignores exclusive lower bounds (the bound itself is outside the range)', () => {
+    expect(highestLowerBoundVersion(['(1.5,2.0]'])).toBeNull()
+    expect(highestLowerBoundVersion(['(1.5,2.0)'])).toBeNull()
+    // An inclusive range still wins over a higher exclusive one.
+    expect(highestLowerBoundVersion(['(9.0,10.0]', '[1.4,1.5)'])).toBe('1.4')
+  })
+
   it('mixes valid ranges with ignorable ones', () => {
     expect(highestLowerBoundVersion([null, '(,0),[0,)', '[1.4,1.5)', '(,1.0)'])).toBe('1.4')
   })

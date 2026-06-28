@@ -265,6 +265,10 @@ export function highestLowerBoundVersion(ranges: Array<string | null | undefined
     if (!r) continue
     const seg = parseSimpleSegment(r)
     if (!seg || seg.lo === null) continue
+    // The lower bound must be INSIDE the range to be a safe default: an exclusive
+    // lower bound (`(1.5,2.0]`) excludes 1.5 itself, so suggesting it would resolve
+    // to a version outside every range (404). Only inclusive `[` lower bounds count.
+    if (!seg.loIncl) continue
     // An all-zero lower bound (`[0,)`, `[0.0,)`) means "from the start" — a
     // degenerate base-like range, not a real version to suggest. Skip it.
     if (seg.lo.every((v) => v === 0)) continue
