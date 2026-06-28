@@ -50,16 +50,6 @@ class ValidationService(
     /** Single-flight guard: an overlapping refresh is a no-op rather than a double sweep. */
     private val refreshing = AtomicBoolean(false)
 
-    /**
-     * Whether the most recent refresh was a migration SKIP (not a real sweep). A skip
-     * clears `refreshError`, so without this flag the cadence would fall back to the long
-     * `refreshIntervalMs` while CRS is still migrating — leaving the report empty/stale for
-     * up to the full interval (4h) after the cutover migration finishes. Tracked separately
-     * so [nextDelayMillis] keeps the short retry cadence across the migration window.
-     */
-    @Volatile
-    private var lastRunWasSkip = false
-
     /** The current cached report. */
     fun currentReport(): ValidationReport = report
 
@@ -152,19 +142,23 @@ class ValidationService(
      * after every run, so a FAILED startup sweep (the QA migration-collision case) is
      * retried after [ValidationProperties.retryIntervalMs] rather than the full interval.
      */
-    fun nextDelayMillis(): Long =
+    fun nextDelayMillis(): Long {
+        // Read the report ONCE: it is an immutable snapshot carrying both the failure and the
+        // skip state, so this can never observe an inconsistent in-between (refreshError and
+        // the skip flag are now updated together in a single report assignment).
+        val snapshot = report
         // Short retry cadence while the last refresh FAILED (refreshError set) OR was a
-        // migration SKIP (lastRunWasSkip) — the latter is the cutover case: a skip clears
-        // refreshError, so without the skip flag the cadence would fall back to the long
-        // interval and leave the report empty for up to refreshIntervalMs (4h) after CRS
-        // finishes migrating. Otherwise (clean state or a successful sweep) use the long
-        // interval. (The scheduler owns the immediate first sweep, so the pre-first-sweep
-        // clean state — no error, no skip — intentionally maps to the normal interval.)
-        if (report.refreshError != null || lastRunWasSkip) {
+        // migration SKIP — the latter is the cutover case: a skip clears refreshError, so
+        // without the skip flag the cadence would fall back to the long interval and leave the
+        // report empty for up to refreshIntervalMs (4h) after CRS finishes migrating. Otherwise
+        // (clean state or a successful sweep) use the long interval. (The scheduler owns the
+        // immediate first sweep, so the pre-first-sweep clean state maps to the normal interval.)
+        return if (snapshot.refreshError != null || snapshot.lastRunWasSkip) {
             properties.retryIntervalMs
         } else {
             properties.refreshIntervalMs
         }
+    }
 
     /**
      * Runs a sweep under the single-flight guard, blocking up to the sweep
@@ -262,18 +256,17 @@ class ValidationService(
         val migrating =
             registryClient.migrationInProgress().block(Duration.ofSeconds(properties.requestTimeoutSeconds))
         if (migrating != true) {
-            // A real sweep is about to run (success or failure) — this run is not a skip.
-            lastRunWasSkip = false
             return false
         }
         log.info("CRS migration in progress — skipping validation sweep, retaining previous report")
-        report = report.copy(lastAttemptAt = Instant.now(), refreshError = null)
-        lastRunWasSkip = true
+        // One atomic assignment: clear the error AND mark the skip together.
+        report = report.copy(lastAttemptAt = Instant.now(), refreshError = null, lastRunWasSkip = true)
         return true
     }
 
     private fun retainStale(reason: String) {
-        report = report.copy(lastAttemptAt = Instant.now(), refreshError = reason)
+        // A real (failed) attempt — clear the skip flag so the cadence keys off refreshError.
+        report = report.copy(lastAttemptAt = Instant.now(), refreshError = reason, lastRunWasSkip = false)
     }
 
     /**
