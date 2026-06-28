@@ -5,6 +5,7 @@ import {
   groupError,
   groupTokens,
   hasOverlappingOverrides,
+  humanizeOwnership,
   isBadToken,
   legacyArtifactPattern,
   OWNERSHIP_ALL_VERSIONS,
@@ -136,5 +137,36 @@ describe('artifactOwnership helpers', () => {
     expect(fromArtifactId(base)).toMatchObject({ serverId: 's1', base: true, range: null, groups: 'g', mode: 'ALL' })
     const over: ArtifactId = { id: 's2', versionRange: '[1,2)', groupPattern: 'g', mode: 'EXPLICIT', artifactTokens: ['x'] }
     expect(fromArtifactId(over)).toMatchObject({ serverId: 's2', base: false, range: '[1,2)', tokens: ['x'] })
+  })
+})
+
+describe('humanizeOwnership', () => {
+  it('reads a base mapping (null range) as "All versions"', () => {
+    expect(humanizeOwnership({ groupPattern: 'com.example.foo', mode: 'ALL', versionRange: null })).toBe(
+      'All versions · All in group · com.example.foo',
+    )
+  })
+
+  it('reads the base sentinel range as "All versions"', () => {
+    expect(humanizeOwnership({ groupPattern: 'com.example.foo', mode: 'ALL', versionRange: OWNERSHIP_ALL_VERSIONS })).toBe(
+      'All versions · All in group · com.example.foo',
+    )
+  })
+
+  it('lists literal tokens for an EXPLICIT override at a range', () => {
+    expect(
+      humanizeOwnership({
+        groupPattern: 'com.example.foo',
+        mode: 'EXPLICIT',
+        artifactTokens: ['widget-a', 'widget-b'],
+        versionRange: '[1.4,1.5)',
+      }),
+    ).toBe('[1.4,1.5) · Specific · com.example.foo · widget-a, widget-b')
+  })
+
+  it('shows (none) for an EXPLICIT mapping with no tokens', () => {
+    expect(humanizeOwnership({ groupPattern: 'com.example.foo', mode: 'EXPLICIT', artifactTokens: [], versionRange: '[1,2)' })).toBe(
+      '[1,2) · Specific · com.example.foo · (none)',
+    )
   })
 })

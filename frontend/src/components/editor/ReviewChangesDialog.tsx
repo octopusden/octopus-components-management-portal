@@ -96,11 +96,31 @@ export function ReviewChangesDialog({ open, onOpenChange, diff, onConfirm, isSav
             {diff.map((entry, i) => (
               <li key={`${entry.label}-${i}`} className="px-3 py-2">
                 <div className="font-medium text-foreground">{entry.label}</div>
-                <div className="mt-0.5 flex flex-wrap items-center gap-1.5 font-mono text-xs">
-                  <span className="text-destructive line-through">{entry.oldValue}</span>
-                  <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground" />
-                  <span className="text-[color:var(--color-badge-green-fg)]">{entry.newValue}</span>
-                </div>
+                {entry.oldItems || entry.newItems ? (
+                  <div className="mt-1 flex flex-col gap-0.5 font-mono text-xs">
+                    {(entry.oldItems ?? []).map((line, j) => (
+                      <span key={`o-${j}`} className="text-destructive line-through">
+                        − {line}
+                      </span>
+                    ))}
+                    {(entry.newItems ?? []).map((line, j) => (
+                      <span key={`n-${j}`} className="text-[color:var(--color-badge-green-fg)]">
+                        + {line}
+                      </span>
+                    ))}
+                    {(entry.oldItems ?? []).length === 0 && (entry.newItems ?? []).length === 0 && (
+                      <span className="text-muted-foreground">
+                        {entry.oldValue} → {entry.newValue}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5 font-mono text-xs">
+                    <span className="text-destructive line-through">{entry.oldValue}</span>
+                    <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+                    <span className="text-[color:var(--color-badge-green-fg)]">{entry.newValue}</span>
+                  </div>
+                )}
                 {entry.clearedScalarNoop && (
                   <p className="mt-0.5 text-xs text-muted-foreground">(clearing not supported)</p>
                 )}

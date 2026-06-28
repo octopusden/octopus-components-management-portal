@@ -1294,7 +1294,10 @@ describe('ComponentDetailPage — 409 conflict handling in the Review dialog', (
     // Banner appears and the dialog stays open (Confirm still present) so the
     // user can fix the range and retry without losing the diff.
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(serverMsg))
-    expect(screen.getByRole('button', { name: /^confirm$/i })).toBeInTheDocument()
+    const confirm = screen.getByRole('button', { name: /^confirm$/i })
+    expect(confirm).toBeInTheDocument()
+    // Confirm is re-enabled so the user can fix the range and retry in place.
+    expect(confirm).not.toBeDisabled()
   })
 
   it('an optimistic-lock conflict closes the dialog (stale diff) instead of showing a banner', async () => {

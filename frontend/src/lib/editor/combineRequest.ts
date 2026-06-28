@@ -16,6 +16,15 @@ export interface DiffEntry {
   /** New value, stringified for display. '' renders as an em-dash. */
   newValue: string
   /**
+   * Optional itemized view for list-of-object fields (e.g. artifact ownership):
+   * the human-readable lines REMOVED (`oldItems`) and ADDED (`newItems`). When
+   * present the dialog renders these as stacked removed/added rows instead of the
+   * `oldValue → newValue` inline; `oldValue`/`newValue` stay set as a readable
+   * fallback (e.g. a count summary) for any consumer that ignores the items.
+   */
+  oldItems?: string[]
+  newItems?: string[]
+  /**
    * True when this row clears a SCALAR ASPECT field (build/escrow/jira scalar)
    * to empty — a no-op server-side under CRS v4 PATCH null semantics. The
    * dialog annotates these so the user isn't misled into thinking the clear

@@ -1,7 +1,7 @@
 import type { ArtifactId, ArtifactIdRequest, ComponentDetail, ComponentUpdateRequest } from '../../lib/types'
 import type { SectionSlice, DiffEntry } from '../../lib/editor/combineRequest'
 import { formatDiffValue } from '../../lib/editor/diffUtil'
-import { groupTokens, OWNERSHIP_ALL_VERSIONS } from '../../lib/artifactOwnership'
+import { groupTokens, humanizeOwnership, OWNERSHIP_ALL_VERSIONS } from '../../lib/artifactOwnership'
 
 /** Canonical, order-stable string for one ownership mapping — used for change detection. */
 function ownershipKey(
@@ -107,6 +107,26 @@ export function generalDiff(component: ComponentDetail, patch: ComponentUpdateRe
     // so this rarely fires now — kept so an always-emitted field can never produce a
     // phantom-dirty row.
     if (normForCompare(next) === normForCompare(prior)) continue
+    // Artifact ownership is a list of objects — the canonical `::`-keys used for
+    // change detection are unreadable in the dialog. Emit a humanized itemized
+    // diff (removed/added mapping lines) instead, with a count summary fallback.
+    if (key === 'artifactIds') {
+      const priorMaps = component.artifactIds ?? []
+      const nextMaps = (value as ArtifactIdRequest[] | null) ?? []
+      const priorLines = priorMaps.map(humanizeOwnership)
+      const nextLines = nextMaps.map(humanizeOwnership)
+      const priorSet = new Set(priorLines)
+      const nextSet = new Set(nextLines)
+      diff.push({
+        label,
+        oldValue: countSummary(priorMaps.length),
+        newValue: countSummary(nextMaps.length),
+        oldItems: priorLines.filter((l) => !nextSet.has(l)),
+        newItems: nextLines.filter((l) => !priorSet.has(l)),
+        clearedScalarNoop: false,
+      })
+      continue
+    }
     diff.push({
       label,
       oldValue: formatDiffValue(prior),
@@ -118,6 +138,10 @@ export function generalDiff(component: ComponentDetail, patch: ComponentUpdateRe
     })
   }
   return diff
+}
+
+function countSummary(n: number): string {
+  return n === 0 ? '—' : `${n} mapping${n === 1 ? '' : 's'}`
 }
 
 /**
