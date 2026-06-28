@@ -12,6 +12,7 @@ import { Toaster } from './components/ui/toaster'
 import { TooltipProvider } from './components/ui/tooltip'
 import { CommandPalette } from './components/CommandPalette'
 import { KeyboardShortcutsDialog } from './components/KeyboardShortcutsDialog'
+import { RouteError } from './components/RouteError'
 import { useGlobalHotkeys } from './hooks/useGlobalHotkeys'
 
 // If the user was deep-linked into a protected route, hit a 401, and was bounced
@@ -59,6 +60,9 @@ function buildRouter() {
     [
       {
         element: <AppShell />,
+        // Catch any uncaught render/loader error from a page route and show a
+        // recoverable surface instead of white-screening the whole SPA.
+        errorElement: <RouteError />,
         children: [
           { path: '/', element: <Navigate to="/components" replace /> },
           { path: '/components', element: <ComponentListPage /> },
