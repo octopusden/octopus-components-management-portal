@@ -646,6 +646,85 @@ describe('GeneralTab — componentOwner edit marks the form interacted', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Regression: GeneralTab's mount-effect re-hydrates the page-owned form from the
+// server component. Radix unmounts the inactive tab, so switching away from
+// General and back re-mounts GeneralTab → the effect re-runs → it would stomp an
+// in-progress edit with the server value and falsely clear the save bar. The
+// effect must NOT re-hydrate once the form has unsaved edits (dirty OR touched);
+// a genuine component-id change is handled by the page-level reset instead.
+// ---------------------------------------------------------------------------
+
+describe('GeneralTab — re-hydration guard (tab-switch / refetch must not clobber edits)', () => {
+  function RemountHarness({
+    component,
+    formRef,
+  }: {
+    component: ComponentDetail
+    formRef: React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+  }) {
+    const [mounted, setMounted] = React.useState(true)
+    // Mirror the page: BLANK defaults, the form lives ABOVE GeneralTab so it
+    // survives GeneralTab's unmount (Radix tab switch).
+    const form = useForm<GeneralFormValues>({
+      defaultValues: {
+        name: '', displayName: '', componentOwner: '', productType: '', system: '',
+        clientCode: '', solution: false, archived: false, parentComponentName: '',
+        canBeParent: false, releaseManager: [], securityChampion: [], copyright: '',
+        labels: [], docs: [], artifactIds: [],
+      },
+    })
+    formRef.current = form
+    return (
+      <>
+        <button data-testid="toggle-mount" onClick={() => setMounted((m) => !m)}>toggle</button>
+        {mounted && <GeneralTab component={component} form={form} />}
+      </>
+    )
+  }
+
+  it('preserves an in-progress Display Name edit across a tab-switch unmount/remount', async () => {
+    setAllEditable()
+    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    renderWithProviders(<RemountHarness component={baseComponent({ displayName: 'Old Name' })} formRef={formRef} />)
+
+    const input = () => screen.getByLabelText(/display name/i, { selector: 'input' })
+    await userEvent.clear(input())
+    await userEvent.type(input(), 'Edited Name')
+    expect(formRef.current!.getValues('displayName')).toBe('Edited Name')
+
+    // Simulate the Radix tab switch: GeneralTab unmounts then re-mounts under the
+    // same (page-owned) form that still holds the edit.
+    fireEvent.click(screen.getByTestId('toggle-mount')) // unmount General
+    fireEvent.click(screen.getByTestId('toggle-mount')) // remount General
+    await waitFor(() => expect(input()).toBeDefined())
+
+    // Without the guard, GeneralTab's mount-effect re-hydrates from component →
+    // 'Old Name', silently discarding the edit.
+    expect(formRef.current!.getValues('displayName')).toBe('Edited Name')
+  })
+
+  it('preserves a clear-to-default toggle (Solution true→false) across a tab-switch remount', async () => {
+    // Edge the dirty-only guard would miss: toggling Solution from the server value
+    // true back to false equals the RHF default, so dirtyFields is empty — only the
+    // shouldTouch flag on the Switch's onChange marks the field interacted. Without
+    // it, the remount re-hydrate would silently flip Solution back to true.
+    setAllEditable()
+    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    renderWithProviders(<RemountHarness component={baseComponent({ solution: true })} formRef={formRef} />)
+
+    await waitFor(() => expect(formRef.current!.getValues('solution')).toBe(true))
+    fireEvent.click(screen.getByRole('switch', { name: /solution/i })) // true → false (== default)
+    expect(formRef.current!.getValues('solution')).toBe(false)
+
+    fireEvent.click(screen.getByTestId('toggle-mount')) // unmount General
+    fireEvent.click(screen.getByTestId('toggle-mount')) // remount General
+    await waitFor(() => expect(screen.getByRole('switch', { name: /solution/i })).toBeDefined())
+
+    expect(formRef.current!.getValues('solution')).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // task #14: system → single-select EnumSelect; labels stays chips.
 // ---------------------------------------------------------------------------
 

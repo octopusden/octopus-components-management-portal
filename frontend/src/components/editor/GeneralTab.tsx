@@ -192,11 +192,20 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
   const { entry: labelsEntry } = useFieldConfigEntry('component.labels')
 
   useEffect(() => {
-    // Form mirrors server state unconditionally — hidden fields just stay
-    // unrendered. Visibility filtering happens at save time in
-    // ComponentDetailPage.handleSave (hidden → undefined in payload), so
-    // populating the form here cannot leak server data: there's no input
-    // to show it and no save path that emits it.
+    // Re-hydration guard. This effect re-runs on every (re)mount and whenever the
+    // `component` reference changes (a ['component',id] refetch). Radix unmounts the
+    // inactive tab, so switching away from General and back re-mounts GeneralTab and
+    // would re-run this — and the form is page-owned, so it survives the unmount. An
+    // unconditional re-hydrate there silently stomps in-progress edits with server
+    // values and falsely clears the save bar. So skip once the form has unsaved edits
+    // (dirty for register()ed inputs, touched for the setValue/chips fields). A genuine
+    // component-id change is re-hydrated by the page-level reset (ComponentDetailPage
+    // hydratedIdRef effect), not here.
+    if (form.formState.isDirty || Object.keys(form.formState.touchedFields).length > 0) return
+    // Form mirrors server state — hidden fields just stay unrendered. Visibility
+    // filtering happens at save time in ComponentDetailPage.handleSave (hidden →
+    // undefined in payload), so populating the form here cannot leak server data:
+    // there's no input to show it and no save path that emits it.
     setValue('name', component.name)
     setValue('displayName', component.displayName ?? '')
     setValue('componentOwner', component.componentOwner ?? '')
@@ -234,6 +243,10 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
       })),
     )
     setValue('artifactIds', (component.artifactIds ?? []).map(fromArtifactId))
+    // formState.isDirty / touchedFields are read as a point-in-time guard, NOT as
+    // triggers — adding them to deps would re-run hydration whenever dirtiness changes
+    // (i.e. on every edit) and re-stomp the form. Re-hydrate only on a new `component`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [component, setValue])
 
   return (
@@ -307,7 +320,11 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
               // dirtyFields.solution gate actually fires. Without this the
               // boolean is set on the form but never marked dirty, and the
               // save handler omits the field every time.
-              onCheckedChange={(checked) => setValue('solution', checked, { shouldDirty: true })}
+              // shouldTouch:true so the hydration re-guard (GeneralTab effect) does not
+              // clobber a clear-to-default toggle (true→false == RHF default) across a
+              // tab switch: such a toggle leaves dirtyFields empty (value==default), so
+              // `touched` is the only signal that the user interacted with the field.
+              onCheckedChange={(checked) => setValue('solution', checked, { shouldDirty: true, shouldTouch: true })}
             />
             <Label htmlFor="solution" className="cursor-pointer"><FieldLabelText path="component.solution" fallback="Solution" /></Label>
             <FieldInfo path="component.solution" label="Solution" />

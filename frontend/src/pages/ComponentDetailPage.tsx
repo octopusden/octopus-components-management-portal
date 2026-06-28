@@ -389,7 +389,17 @@ export function ComponentDetailPage() {
     }
 
     try {
-      await updateMutation.mutateAsync(request)
+      const saved = await updateMutation.mutateAsync(request)
+      // Re-baseline the General/Misc form to the SAVED (server-normalized) component.
+      // The GeneralTab re-hydration guard skips while the form is dirty/touched, so without
+      // an explicit reset here the form would stay dirty for the rest of the session and a
+      // later same-id refetch would never reflect a value CRS normalized on write. The
+      // section hooks re-seed themselves via their snapshot deep-equal; only the RHF form
+      // needs the nudge. (`if (saved)` keeps tests whose mutateAsync resolves undefined inert.)
+      if (saved) {
+        form.reset(mapComponentToForm(saved))
+        form.clearErrors()
+      }
       setReviewOpen(false)
       toast({ title: 'Component saved', description: 'Changes have been saved successfully.' })
     } catch (err) {
