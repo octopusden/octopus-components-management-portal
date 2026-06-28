@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { createBrowserRouter, RouterProvider, Navigate, Outlet } from 'react-router'
+import { createBrowserRouter, RouterProvider, Navigate, Outlet, type RouteObject } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ComponentListPage } from './pages/ComponentListPage'
 import { ComponentDetailPage } from './pages/ComponentDetailPage'
@@ -55,47 +55,53 @@ function AppShell() {
 // which requires a data-router context. Behaviour is otherwise identical — same
 // routes, same basename handling. All page routes are children of the AppShell
 // layout route so the palette stays mounted across navigations.
-function buildRouter() {
-  return createBrowserRouter(
-    [
+// Exported so a test can pin that the AppShell layout route keeps its RouteError
+// errorElement wired (the white-screen guard) — removing it must fail a test, not
+// silently regress. (Non-component export in a component file is fine here; this module
+// is the app entry, not a fast-refreshed leaf.)
+// eslint-disable-next-line react-refresh/only-export-components
+export const appRoutes: RouteObject[] = [
+  {
+    element: <AppShell />,
+    // Catch any uncaught render/loader error from a page route and show a
+    // recoverable surface instead of white-screening the whole SPA.
+    errorElement: <RouteError />,
+    children: [
+      { path: '/', element: <Navigate to="/components" replace /> },
+      { path: '/components', element: <ComponentListPage /> },
+      { path: '/components/:id', element: <ComponentDetailPage /> },
       {
-        element: <AppShell />,
-        // Catch any uncaught render/loader error from a page route and show a
-        // recoverable surface instead of white-screening the whole SPA.
-        errorElement: <RouteError />,
-        children: [
-          { path: '/', element: <Navigate to="/components" replace /> },
-          { path: '/components', element: <ComponentListPage /> },
-          { path: '/components/:id', element: <ComponentDetailPage /> },
-          {
-            path: '/audit',
-            element: (
-              <RequirePermission permission={PERMISSIONS.ACCESS_AUDIT}>
-                <AuditLogPage />
-              </RequirePermission>
-            ),
-          },
-          {
-            path: '/health',
-            element: (
-              <RequirePermission permission={PERMISSIONS.IMPORT_DATA}>
-                <RegistryHealthPage />
-              </RequirePermission>
-            ),
-          },
-          {
-            path: '/admin',
-            element: (
-              <RequirePermission permission={PERMISSIONS.IMPORT_DATA}>
-                <AdminSettingsPage />
-              </RequirePermission>
-            ),
-          },
-        ],
+        path: '/audit',
+        element: (
+          <RequirePermission permission={PERMISSIONS.ACCESS_AUDIT}>
+            <AuditLogPage />
+          </RequirePermission>
+        ),
+      },
+      {
+        path: '/health',
+        element: (
+          <RequirePermission permission={PERMISSIONS.IMPORT_DATA}>
+            <RegistryHealthPage />
+          </RequirePermission>
+        ),
+      },
+      {
+        path: '/admin',
+        element: (
+          <RequirePermission permission={PERMISSIONS.IMPORT_DATA}>
+            <AdminSettingsPage />
+          </RequirePermission>
+        ),
       },
     ],
-    { basename: import.meta.env.BASE_URL.replace(/\/$/, '') || '/' },
-  )
+  },
+]
+
+function buildRouter() {
+  return createBrowserRouter(appRoutes, {
+    basename: import.meta.env.BASE_URL.replace(/\/$/, '') || '/',
+  })
 }
 
 export function App() {
