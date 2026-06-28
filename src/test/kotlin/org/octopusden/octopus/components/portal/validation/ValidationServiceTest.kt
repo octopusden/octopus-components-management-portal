@@ -173,6 +173,39 @@ class ValidationServiceTest {
     }
 
     @Test
+    @DisplayName("a migration skip keeps the SHORT retry cadence (report populates soon after migration, not 4h later)")
+    fun `migration skip uses the retry interval not the long refresh interval`() {
+        val crs = newServer()
+        // CRS reports a migration RUNNING → every sweep is skipped; no successful report yet.
+        crs.createContext("/rest/api/4/migration-status") { exchange ->
+            respondJson(exchange, 200, """{"running":true,"kind":"COMPONENTS"}""")
+        }
+        crs.createContext("/rest/api/3/components") { exchange ->
+            respondJson(exchange, 200, """[]""")
+        }
+        crs.createContext("/rest/api/2/components") { exchange ->
+            respondJson(exchange, 200, """{"versions":{}}""")
+        }
+        val rm = newServer()
+        rm.createContext("/rest/api/1/builds/component") { exchange ->
+            respondJson(exchange, 200, """[]""")
+        }
+
+        val svc = service(crs, rm, refreshIntervalMs = 14_400_000, retryIntervalMs = 600_000)
+        svc.refresh() // migrating → skipped, refreshError cleared, still no report
+
+        assertNull(svc.currentReport().generatedAt, "no successful sweep yet")
+        // BUG GUARD: a skip clears refreshError, but with no successful report yet the cadence
+        // must stay SHORT so the report populates within minutes of CRS finishing migration —
+        // not after the full 4h refresh interval. (Previously returned refreshIntervalMs.)
+        assertEquals(
+            600_000,
+            svc.nextDelayMillis(),
+            "a migration skip with no fresh report must back off to the retry interval, not the long one",
+        )
+    }
+
+    @Test
     @DisplayName("a migration skip CLEARS a refreshError left by a previous failed sweep")
     fun `migration skip clears prior refreshError`() {
         val migrating = java.util.concurrent.atomic.AtomicBoolean(false)
