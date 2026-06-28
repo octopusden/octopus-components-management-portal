@@ -320,7 +320,11 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
               // dirtyFields.solution gate actually fires. Without this the
               // boolean is set on the form but never marked dirty, and the
               // save handler omits the field every time.
-              onCheckedChange={(checked) => setValue('solution', checked, { shouldDirty: true })}
+              // shouldTouch:true so the hydration re-guard (GeneralTab effect) does not
+              // clobber a clear-to-default toggle (true→false == RHF default) across a
+              // tab switch: such a toggle leaves dirtyFields empty (value==default), so
+              // `touched` is the only signal that the user interacted with the field.
+              onCheckedChange={(checked) => setValue('solution', checked, { shouldDirty: true, shouldTouch: true })}
             />
             <Label htmlFor="solution" className="cursor-pointer"><FieldLabelText path="component.solution" fallback="Solution" /></Label>
             <FieldInfo path="component.solution" label="Solution" />

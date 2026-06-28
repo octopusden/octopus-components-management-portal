@@ -702,6 +702,26 @@ describe('GeneralTab — re-hydration guard (tab-switch / refetch must not clobb
     // 'Old Name', silently discarding the edit.
     expect(formRef.current!.getValues('displayName')).toBe('Edited Name')
   })
+
+  it('preserves a clear-to-default toggle (Solution true→false) across a tab-switch remount', async () => {
+    // Edge the dirty-only guard would miss: toggling Solution from the server value
+    // true back to false equals the RHF default, so dirtyFields is empty — only the
+    // shouldTouch flag on the Switch's onChange marks the field interacted. Without
+    // it, the remount re-hydrate would silently flip Solution back to true.
+    setAllEditable()
+    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    renderWithProviders(<RemountHarness component={baseComponent({ solution: true })} formRef={formRef} />)
+
+    await waitFor(() => expect(formRef.current!.getValues('solution')).toBe(true))
+    fireEvent.click(screen.getByRole('switch', { name: /solution/i })) // true → false (== default)
+    expect(formRef.current!.getValues('solution')).toBe(false)
+
+    fireEvent.click(screen.getByTestId('toggle-mount')) // unmount General
+    fireEvent.click(screen.getByTestId('toggle-mount')) // remount General
+    await waitFor(() => expect(screen.getByRole('switch', { name: /solution/i })).toBeDefined())
+
+    expect(formRef.current!.getValues('solution')).toBe(false)
+  })
 })
 
 // ---------------------------------------------------------------------------

@@ -27,7 +27,10 @@ export function RouteError() {
       <h1 className="text-xl font-semibold">Something went wrong</h1>
       <p className="break-words text-sm text-muted-foreground">{message}</p>
       <div className="flex flex-wrap justify-center gap-3">
-        <Button onClick={() => window.location.reload()}>Reload</Button>
+        {/* autoFocus moves keyboard/screen-reader focus to the primary recovery
+            action when this boundary replaces the page, so recovery is reachable
+            without hunting for focus. */}
+        <Button autoFocus onClick={() => window.location.reload()}>Reload</Button>
         <Button variant="outline" asChild>
           <Link to="/components">Back to Components</Link>
         </Button>
