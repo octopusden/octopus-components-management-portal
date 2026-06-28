@@ -26,6 +26,13 @@ interface ReviewChangesDialogProps {
   diff: DiffEntry[]
   onConfirm: (meta: ConfirmMeta) => void
   isSaving: boolean
+  /**
+   * A persistent save-time conflict message (e.g. an overlapping/duplicate
+   * version range the server rejected with 409). Rendered as a destructive
+   * banner that stays put — unlike the auto-dismissing toast — so the user can
+   * read it, fix the value, and retry without losing the diff.
+   */
+  errorBanner?: string | null
 }
 
 /**
@@ -40,7 +47,7 @@ interface ReviewChangesDialogProps {
  * non-blank) and a free-text comment — recorded on the audit row by CRS. Both
  * are optional; blank values are omitted from the request.
  */
-export function ReviewChangesDialog({ open, onOpenChange, diff, onConfirm, isSaving }: ReviewChangesDialogProps) {
+export function ReviewChangesDialog({ open, onOpenChange, diff, onConfirm, isSaving, errorBanner }: ReviewChangesDialogProps) {
   const [jiraTaskKey, setJiraTaskKey] = useState('')
   const [changeComment, setChangeComment] = useState('')
 
@@ -73,6 +80,16 @@ export function ReviewChangesDialog({ open, onOpenChange, diff, onConfirm, isSav
             {diff.length === 1 ? '1 field will change.' : `${diff.length} fields will change.`} Confirm to save.
           </DialogDescription>
         </DialogHeader>
+
+        {errorBanner && (
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            <span aria-hidden="true">▲</span>
+            <span>{errorBanner}</span>
+          </div>
+        )}
 
         <div className="max-h-[40vh] overflow-auto rounded-md border">
           <ul className="divide-y text-sm">
