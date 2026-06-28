@@ -876,6 +876,48 @@ describe('ComponentDetailPage — Save dirty-gate', () => {
     expect(payload['componentOwner']).toBe('')
   })
 
+  it('re-baselines the General form to the saved (server-normalized) component after save', async () => {
+    // The GeneralTab re-hydration guard skips while the form is dirty/touched, so the page
+    // must form.reset() to the SAVED component after a successful save — otherwise the form
+    // stays dirty for the session and never reflects a value CRS normalized on write. The
+    // mock hydrates ONCE (deps []), isolating the page-level post-save reset.
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('system', component.system ?? '')
+        form.setValue('componentOwner', component.componentOwner ?? '')
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [])
+      return React.createElement('div', {}, [
+        React.createElement('span', { key: 'v', 'data-testid': 'owner-value' }, form.watch('componentOwner')),
+        React.createElement(
+          'button',
+          {
+            key: 'e',
+            'data-testid': 'edit-owner',
+            onClick: () => form.setValue('componentOwner', 'bob', { shouldDirty: true, shouldTouch: true }),
+          },
+          'edit',
+        ),
+      ])
+    })
+    // CRS normalizes the owner on write → the saved value differs from what the user typed.
+    const saved = { ...baseComponent, componentOwner: 'BOB' }
+    // The real mutateAsync resolves the saved ComponentDetail; the test harness option type
+    // is the void-returning idle shape, so type the mock as void (runtime resolves `saved`).
+    const updateMutateAsync = vi.fn((): Promise<void> => Promise.resolve(saved as unknown as void))
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage(baseComponent, user, { updateMutation: { mutateAsync: updateMutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit-owner'))
+    await waitFor(() => expect(screen.getByTestId('owner-value').textContent).toBe('bob'))
+
+    await clickSaveAndConfirm()
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
+
+    // Without the post-save reset the form keeps 'bob'; with it, it re-baselines to 'BOB'.
+    await waitFor(() => expect(screen.getByTestId('owner-value').textContent).toBe('BOB'))
+  })
+
   it('carries the entered Jira key + comment from the Review dialog on the combined PATCH', async () => {
     vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
       useEffect(() => {

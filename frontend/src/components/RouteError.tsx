@@ -1,4 +1,4 @@
-import { useRouteError, Link } from 'react-router'
+import { useRouteError, isRouteErrorResponse, Link } from 'react-router'
 import { AlertTriangle } from 'lucide-react'
 import { Button } from './ui/button'
 
@@ -12,11 +12,13 @@ import { Button } from './ui/button'
 export function RouteError() {
   const error = useRouteError()
   const message =
-    error instanceof Error
-      ? error.message
-      : typeof error === 'string'
-        ? error
-        : 'An unexpected error occurred.'
+    isRouteErrorResponse(error)
+      ? `${error.status} ${error.statusText}`.trim()
+      : error instanceof Error
+        ? error.message
+        : typeof error === 'string'
+          ? error
+          : 'An unexpected error occurred.'
 
   return (
     <div

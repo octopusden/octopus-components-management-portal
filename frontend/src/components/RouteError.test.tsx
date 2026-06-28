@@ -25,4 +25,27 @@ describe('RouteError', () => {
 
     spy.mockRestore()
   })
+
+  it('shows the status for a thrown route Response (e.g. a loader 404)', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const router = createMemoryRouter(
+      [
+        {
+          path: '/',
+          loader: () => {
+            throw new Response('Not Found', { status: 404, statusText: 'Not Found' })
+          },
+          element: <div>unreachable</div>,
+          errorElement: <RouteError />,
+        },
+      ],
+      { initialEntries: ['/'] },
+    )
+    render(<RouterProvider router={router} />)
+
+    // isRouteErrorResponse path → "404 Not Found", not the generic fallback message.
+    expect(await screen.findByText(/404 Not Found/i)).toBeDefined()
+    expect(screen.getByRole('heading', { name: /something went wrong/i })).toBeDefined()
+    spy.mockRestore()
+  })
 })
