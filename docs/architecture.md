@@ -145,9 +145,10 @@ When a new endpoint is consumed, **add a row here** so the boundary stays review
 ## Limits and known gaps
 
 - **Session store is in-memory.** Pod restart logs every browser user out. Tracked as [`TD-003`](tech-debt/TD-003-persisted-session-store.md).
-- **Frontend types are hand-written**, not generated from CRS OpenAPI. Drift risk. Tracked as [`TD-002`](tech-debt/TD-002-openapi-types.md) (mirror of CRS TD-004).
+- **Frontend types are hand-written**, not generated from CRS OpenAPI. Drift risk. Tracked as [`TD-002`](tech-debt/TD-002-openapi-types.md) (mirror of CRS TD-003 — published, drift-gated spec).
 - **Authenticated e2e is missing.** Only `frontend/e2e/smoke.spec.ts` runs unauthenticated. Tracked as [`TD-001`](tech-debt/TD-001-playwright-keycloak-fixture.md).
-- **TLS termination is inline on the prod Route**, with a cert that expires 2026-05-07. Migration to Ingress + shared wildcard Secret tracked as [`TD-004`](tech-debt/TD-004-tls-ingress-migration.md).
+
+Resolved: prod TLS now terminates at an OKD Ingress with a shared wildcard Secret (auto-rotating) — see [`TD-004`](tech-debt/TD-004-tls-ingress-migration.md) (done).
 
 ## See also
 

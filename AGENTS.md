@@ -22,7 +22,7 @@ Guidance for AI agents and developers working on this repository.
 
 ## Tech debt
 
-[`docs/tech-debt/`](docs/tech-debt/): TD-001 Playwright Keycloak fixture, TD-002 OpenAPI types, TD-003 persisted session store, TD-004 TLS Ingress migration (deadline 2026-05-07).
+[`docs/tech-debt/`](docs/tech-debt/): TD-001 Playwright Keycloak fixture, TD-002 OpenAPI types, TD-003 persisted session store, TD-004 TLS Ingress migration (done).
 
 ## Local dev stack
 

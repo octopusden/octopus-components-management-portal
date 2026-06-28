@@ -102,7 +102,7 @@ to the default branch or a released CRS tag** so Portal tracks released contract
 - [`docs/adr/`](docs/adr/) — Portal-specific ADRs (canonical decision is in CRS [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/012-portal-architecture.md)).
 - [`docs/features/`](docs/features/) — feature docs (admin-migration, admin-mode, app-footer).
 - [`docs/onboarding/components-management-portal.md`](docs/onboarding/components-management-portal.md) — OKD/Vault/TeamCity deployment checklist.
-- [`docs/tech-debt/`](docs/tech-debt/) — open tech-debt items (TD-001 e2e fixture, TD-002 OpenAPI types, TD-003 session store, TD-004 TLS migration).
+- [`docs/tech-debt/`](docs/tech-debt/) — tech-debt items (TD-001 e2e fixture, TD-002 OpenAPI types, TD-003 session store; TD-004 TLS migration — done).
 - [`AGENTS.md`](AGENTS.md) — agent / developer build commands and testing notes.
 
 ## License
