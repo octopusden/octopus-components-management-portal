@@ -183,8 +183,6 @@ class ValidationService(
             if (skipSweepWhileMigrating()) {
                 return
             }
-            // A real attempt is running (success or failure below) — no longer a skip.
-            lastRunWasSkip = false
             val fresh = sweep().block(Duration.ofSeconds(properties.sweepTimeoutSeconds))
             if (fresh != null) {
                 report = fresh
@@ -264,6 +262,8 @@ class ValidationService(
         val migrating =
             registryClient.migrationInProgress().block(Duration.ofSeconds(properties.requestTimeoutSeconds))
         if (migrating != true) {
+            // A real sweep is about to run (success or failure) — this run is not a skip.
+            lastRunWasSkip = false
             return false
         }
         log.info("CRS migration in progress — skipping validation sweep, retaining previous report")
