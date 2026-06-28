@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Copy } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -40,6 +40,13 @@ export function AsCodeTab({ component }: AsCodeTabProps) {
     [component.configurations, component.artifactIds],
   )
   const [versionInput, setVersionInput] = useState(() => defaultVersion ?? '')
+  // Re-seed when navigating to a different component without remounting (the
+  // data router can reuse this instance across :id changes). Keyed on id only,
+  // so a same-component refetch never clobbers what the user is typing.
+  useEffect(() => {
+    setVersionInput(defaultVersion ?? '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [component.id])
   const debouncedVersion = useDebouncedValue(versionInput, 350)
 
   const query = useComponentAsCode(component.id, { mode, version: debouncedVersion })
@@ -134,11 +141,14 @@ function AsCodeBody({
     // range — not a failure. Explain it and offer the latest configured version
     // (when known) instead of a bare error.
     if (mode === 'resolved' && notFound) {
+      // Only suggest the default when it's a *different*, resolvable version — if
+      // the user already typed the default and it still 404s, don't point back at it.
+      const canSuggest = defaultVersion !== null && defaultVersion !== version
       return (
         <div className="space-y-2 text-sm text-muted-foreground">
           <p>
             Version <span className="font-mono">{version}</span> falls outside every configured range
-            {defaultVersion ? (
+            {canSuggest ? (
               <>
                 {' '}— the latest configured version is <span className="font-mono">{defaultVersion}</span>.
               </>
@@ -146,7 +156,7 @@ function AsCodeBody({
               '.'
             )}
           </p>
-          {defaultVersion && defaultVersion !== version && (
+          {canSuggest && (
             <Button variant="outline" size="sm" onClick={onUseDefault}>
               Resolve {defaultVersion}
             </Button>
