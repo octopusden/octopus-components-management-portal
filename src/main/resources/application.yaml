@@ -59,9 +59,12 @@ portal:
   registry-health-base-url: ${COMPONENTS_REGISTRY_SERVICE_URL:http://localhost:4567}
   # Base URL of the release-management-service (RMS) this portal integrates with.
   # Used only by the admin System tab's RMS runtime card (anonymous actuator
-  # metrics — no bearer relayed). Same env var as the validation sweep's
-  # release-management-base-url below.
-  release-management-health-base-url: ${RELEASE_MANAGEMENT_SERVICE_URL:http://localhost:4568}
+  # metrics — no bearer relayed). Defaults to the validation sweep's already-wired
+  # `portal.validation.release-management-base-url` (config-server sets that per
+  # env, e.g. the in-cluster RMS URL on QA) so the card works without a dedicated
+  # service-config entry; falls back to the RELEASE_MANAGEMENT_SERVICE_URL env for
+  # local/docker. Set this key in config-server to point the health card elsewhere.
+  release-management-health-base-url: ${portal.validation.release-management-base-url:${RELEASE_MANAGEMENT_SERVICE_URL:http://localhost:4568}}
   # Environment label shown as a full-width warning banner in the SPA header
   # (e.g. "TEST INSTANCE" on QA), so a test instance can't be mistaken for
   # production. Unset/blank → the field is omitted from /portal/info and no
