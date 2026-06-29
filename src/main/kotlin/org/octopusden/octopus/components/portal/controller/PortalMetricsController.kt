@@ -1,11 +1,12 @@
 package org.octopusden.octopus.components.portal.controller
 
 import org.octopusden.octopus.components.portal.configuration.SecurityConfig
-import org.octopusden.octopus.components.portal.metrics.CrsRuntimeMetricsClient
 import org.octopusden.octopus.components.portal.metrics.MetricsResponse
 import org.octopusden.octopus.components.portal.metrics.PortalJvm
 import org.octopusden.octopus.components.portal.metrics.PortalRuntime
+import org.octopusden.octopus.components.portal.metrics.ServiceRuntimeMetricsClient
 import org.octopusden.octopus.components.portal.security.RecentLoginsTracker
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.security.core.context.ReactiveSecurityContextHolder
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClient
 import org.springframework.security.oauth2.client.web.server.ServerOAuth2AuthorizedClientRepository
@@ -23,21 +24,31 @@ import java.util.Optional
  * Admin Settings page. Authenticated()-only (see SecurityConfig); admin visibility
  * is enforced in the SPA. Portal metrics are read locally from JVM MXBeans (always
  * present); CRS metrics are best-effort and use the caller's relayed bearer token
- * (see [CrsRuntimeMetricsClient]).
+ * (see [ServiceRuntimeMetricsClient]). RMS (release-management-service) metrics are
+ * best-effort too but anonymous — the RMS client is wired with relayToken=false, so
+ * no bearer is attached regardless of the token passed here.
  */
 @RestController
 @RequestMapping("portal")
 class PortalMetricsController(
-    private val crsRuntimeMetricsClient: CrsRuntimeMetricsClient,
+    @Qualifier("crsRuntimeMetricsClient")
+    private val crsRuntimeMetricsClient: ServiceRuntimeMetricsClient,
+    @Qualifier("rmsRuntimeMetricsClient")
+    private val rmsRuntimeMetricsClient: ServiceRuntimeMetricsClient,
     private val recentLoginsTracker: RecentLoginsTracker,
     private val authorizedClientRepository: ServerOAuth2AuthorizedClientRepository,
 ) {
     @GetMapping("/metrics")
     fun metrics(exchange: ServerWebExchange): Mono<MetricsResponse> =
         crsAccessToken(exchange).flatMap { token ->
-            crsRuntimeMetricsClient
-                .fetch(token.orElse(null))
-                .map { crs -> MetricsResponse(portal = readPortalRuntime(), crs = crs) }
+            // CRS gets the caller's bearer (authenticated() metrics); RMS metrics are
+            // anonymous so the token is ignored by its client (relayToken=false).
+            Mono.zip(
+                crsRuntimeMetricsClient.fetch(token.orElse(null)),
+                rmsRuntimeMetricsClient.fetch(null),
+            ).map { tuple ->
+                MetricsResponse(portal = readPortalRuntime(), crs = tuple.t1, rms = tuple.t2)
+            }
         }
 
     /**

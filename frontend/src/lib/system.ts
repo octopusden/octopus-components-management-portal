@@ -2,24 +2,104 @@
 // JVM/system metrics). CRS metrics are best-effort and frequently absent, so every
 // formatter renders an em-dash for null/undefined rather than "NaN"/"0".
 
-import type { SystemMetrics } from './types'
+import type { ServiceRuntime, SystemMetrics } from './types'
 
 const EM_DASH = '—'
 
 export type SystemStatus = 'operational' | 'degraded' | 'down'
 
+/** Detail bundle for one service (or the overall banner): status + dynamic copy. */
+export interface ServiceStatusDetail {
+  status: SystemStatus
+  label: string
+  sub: string
+}
+
+// Integration components whose failure is a partial degradation (the service is
+// still up for everything else), NOT a full outage:
+//  - employeeService       — CRS person/owner validation (employee-service backend).
+//  - legacyRelengIndicator — RMS → legacy release-engineering integration.
+// A non-UP aggregate caused SOLELY by these reads as `degraded`, not `down`.
+const SOFT_COMPONENTS = new Set(['employeeService', 'legacyRelengIndicator'])
+
+// down beats degraded beats operational, so the overall banner shows the worst.
+const STATUS_RANK: Record<SystemStatus, number> = { operational: 0, degraded: 1, down: 2 }
+
+function worst(a: SystemStatus, b: SystemStatus): SystemStatus {
+  return STATUS_RANK[a] >= STATUS_RANK[b] ? a : b
+}
+
 /**
- * Overall status driving the System tab summary banner (portal metrics are
- * always loaded when this runs):
- * - `operational` — CRS health UP **and** CRS JVM metrics available.
- * - `degraded`   — CRS health UP but JVM metrics unavailable/partial (e.g. the
- *   relayed token was rejected / actuator role-locked).
- * - `down`       — CRS DOWN, UNKNOWN, or unreachable (no health status).
+ * Per-service status + dynamic copy for the System tab. `name` is the display
+ * name used in the copy (e.g. "CRS", "RMS"). Rules:
+ * - unreachable (or no status) → `down`, "<name> is unreachable".
+ * - status UP → available ? operational : degraded (JVM metrics unavailable).
+ * - status non-UP but reachable → if every named down component is a SOFT
+ *   integration component → `degraded` (name the reason / the component); else
+ *   → `down` (real service disruption, name the down components).
  */
+export function deriveServiceStatus(runtime: ServiceRuntime, name: string): ServiceStatusDetail {
+  const reachable = runtime.reachable ?? false
+  if (!reachable || runtime.status == null) {
+    return { status: 'down', label: `${name} unreachable`, sub: `${name} is unreachable` }
+  }
+
+  if (runtime.status === 'UP') {
+    return runtime.available
+      ? { status: 'operational', label: `${name} operational`, sub: `${name} health UP` }
+      : { status: 'degraded', label: `${name} degraded`, sub: `${name} JVM metrics unavailable` }
+  }
+
+  // Reachable but the aggregate health is non-UP.
+  const down = runtime.downComponents ?? []
+  const onlySoft = down.length > 0 && down.every((c) => SOFT_COMPONENTS.has(c))
+  if (onlySoft) {
+    // Prefer the employee-service reason when it is the cause (most actionable);
+    // otherwise name the degraded integration component(s).
+    const reason =
+      down.includes('employeeService') && runtime.employeeService?.reason
+        ? runtime.employeeService.reason
+        : `${down.join(', ')} degraded`
+    return {
+      status: 'degraded',
+      label: `${name} integration degraded`,
+      sub: `${name} reachable · ${reason}`,
+    }
+  }
+
+  const detail =
+    down.length > 0 ? `${name} components down: ${down.join(', ')}` : `${name} reported ${runtime.status}`
+  return { status: 'down', label: `${name} service disruption`, sub: detail }
+}
+
+/** The overall System-tab status: the worst of CRS and RMS. */
 export function deriveSystemStatus(metrics: SystemMetrics): SystemStatus {
-  const crs = metrics.crs
-  if (crs.status === 'UP') return crs.available ? 'operational' : 'degraded'
-  return 'down'
+  return deriveSystemBanner(metrics).status
+}
+
+/**
+ * The summary-banner detail: the worst of CRS and RMS, carrying that service's
+ * dynamic copy so the banner names the real cause (e.g. an employee-service
+ * outage shows the reason rather than a misleading "CRS is down or unreachable").
+ * Operational shows a steady all-systems message.
+ */
+export function deriveSystemBanner(metrics: SystemMetrics): ServiceStatusDetail {
+  const crs = deriveServiceStatus(metrics.crs, 'CRS')
+  // `rms` is optional on the wire (older backend / local dev) — fall back to CRS only.
+  const rms = metrics.rms ? deriveServiceStatus(metrics.rms, 'RMS') : null
+  const overall = rms ? worst(crs.status, rms.status) : crs.status
+  if (overall === 'operational') {
+    return {
+      status: 'operational',
+      label: 'All systems operational',
+      sub: rms
+        ? 'Portal metrics live · CRS & RMS health UP · polled every 10s'
+        : 'Portal metrics live · CRS health UP · polled every 10s',
+    }
+  }
+  // Show the worst service's detail; if both tie at the worst rank, CRS first.
+  const driver = rms && STATUS_RANK[rms.status] > STATUS_RANK[crs.status] ? rms : crs
+  return { status: overall, label: driver.label, sub: driver.sub }
 }
 
 /** Compact local date-time, e.g. "25 Jun 18:51"; em-dash for null/invalid. */

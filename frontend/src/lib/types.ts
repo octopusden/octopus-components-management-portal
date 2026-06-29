@@ -700,8 +700,8 @@ export interface PortalJvm {
   availableProcessors: number
 }
 
-/** Best-effort subset of CRS JVM metrics — every field optional (any can degrade). */
-export interface CrsJvm {
+/** Best-effort subset of a service's JVM metrics — every field optional (any can degrade). */
+export interface ServiceJvm {
   heapUsedBytes?: number | null
   heapCommittedBytes?: number | null
   heapMaxBytes?: number | null
@@ -713,6 +713,12 @@ export interface CrsJvm {
   cpuProcess?: number | null
   cpuSystem?: number | null
   availableProcessors?: number | null
+}
+
+/** A single actuator health component: its status and (best-effort) reason detail. */
+export interface ServiceComponentHealth {
+  status?: string | null
+  reason?: string | null
 }
 
 /** One interactive login captured by the portal (per-pod, in-memory). */
@@ -730,17 +736,30 @@ export interface PortalRuntime {
   recentLogins: RecentLogin[]
 }
 
-export interface CrsRuntime {
+/**
+ * Best-effort runtime readout for a downstream service (CRS or RMS) on the admin
+ * System tab. `reachable` distinguishes "answered the health probe but a component
+ * is degraded" from "unreachable"; `downComponents` names the DOWN aggregate
+ * components; `employeeService` mirrors the CRS person-validation component so the
+ * banner can name the real cause (absent for services without it, e.g. RMS).
+ */
+export interface ServiceRuntime {
   available: boolean
   reason?: string | null
   status?: string | null
   uptimeMillis?: number | null
-  jvm?: CrsJvm | null
+  jvm?: ServiceJvm | null
+  reachable?: boolean
+  downComponents?: string[]
+  employeeService?: ServiceComponentHealth | null
 }
 
 export interface SystemMetrics {
   portal: PortalRuntime
-  crs: CrsRuntime
+  crs: ServiceRuntime
+  // Optional so a frontend running against an older backend (rolling deploy /
+  // local dev) that omits `rms` degrades gracefully instead of crashing.
+  rms?: ServiceRuntime
 }
 
 // ---------------------------------------------------------------------------

@@ -15,7 +15,7 @@ class PortalInfoController(
     private val linksProperties: PortalLinksProperties,
     // Binds from PORTAL_ENVIRONMENT_LABEL via application.yaml. A single scalar,
     // so @Value instead of a dedicated @ConfigurationProperties class — same
-    // pattern as registry-health-base-url in EmployeeServiceIntegrationHealthIndicator.
+    // pattern as registry-base-url in EmployeeServiceIntegrationHealthIndicator.
     @Value("\${portal.environment-label:}") private val environmentLabel: String,
 ) {
     @GetMapping("/info")
