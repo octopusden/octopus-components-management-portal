@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatVersionRange, isValidVersionRange, isClosedVersionRange, rangesOverlap, classifyRangeConflict, compareVersionRanges } from './versionRange'
+import { formatVersionRange, isValidVersionRange, isClosedVersionRange, isAllowedOverrideRange, rangesOverlap, classifyRangeConflict, compareVersionRanges } from './versionRange'
 
 describe('formatVersionRange', () => {
   it('formats (,) as "All versions"', () => {
@@ -150,6 +150,36 @@ describe('isClosedVersionRange', () => {
 
   it('rejects open-upward with whitespace before closing paren [1.0, )', () => {
     expect(isClosedVersionRange('[1.0, )')).toBe(false)
+  })
+})
+
+describe('isAllowedOverrideRange (ADR-018: open-upper allowed, all-versions rejected)', () => {
+  it('rejects invalid syntax', () => {
+    expect(isAllowedOverrideRange('')).toBe(false)
+    expect(isAllowedOverrideRange('garbage')).toBe(false)
+    expect(isAllowedOverrideRange('[1.0')).toBe(false)
+  })
+
+  it('rejects the all-versions shapes (those are the base default)', () => {
+    expect(isAllowedOverrideRange('(,)')).toBe(false)
+    expect(isAllowedOverrideRange('(,0),[0,)')).toBe(false)
+    expect(isAllowedOverrideRange('(, )')).toBe(false) // whitespace-normalized
+  })
+
+  it('ALLOWS open-upper ranges (the former D5 restriction is relaxed)', () => {
+    expect(isAllowedOverrideRange('[1.0,)')).toBe(true)
+    expect(isAllowedOverrideRange('[2.0,)')).toBe(true)
+    expect(isAllowedOverrideRange('(1.0,)')).toBe(true)
+  })
+
+  it('allows closed and historical-left-unbounded ranges', () => {
+    expect(isAllowedOverrideRange('[1.0,2.0)')).toBe(true)
+    expect(isAllowedOverrideRange('(1.0,2.0]')).toBe(true)
+    expect(isAllowedOverrideRange('(,1.0)')).toBe(true)
+  })
+
+  it('allows a composite with an open-upper terminal segment', () => {
+    expect(isAllowedOverrideRange('[1.0,2.0),[5.0,)')).toBe(true)
   })
 })
 

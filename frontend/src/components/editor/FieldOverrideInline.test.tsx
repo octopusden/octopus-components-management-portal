@@ -38,7 +38,7 @@ function renderInline(overriddenAttribute = 'jira.releaseVersionFormat', canEdit
   )
 }
 
-describe('FieldOverrideInline — D5 closed-range enforcement', () => {
+describe('FieldOverrideInline — override range rules (ADR-018: open-upper allowed, all-versions rejected)', () => {
   beforeEach(() => {
     mockCreateMutate.mockReset()
     mockUpdateMutate.mockReset()
@@ -65,7 +65,7 @@ describe('FieldOverrideInline — D5 closed-range enforcement', () => {
     expect(mockCreateMutate).not.toHaveBeenCalled()
   })
 
-  it('does not POST when submitting with an open-upward range like [2.0,)', async () => {
+  it('DOES POST an open-upper range like [2.0,) (ADR-018: from-X-onward overrides are first-class)', async () => {
     renderInline()
     await userEvent.click(screen.getByRole('button', { name: /add override/i }))
     const rangeInput = screen.getByLabelText(/new override version range/i) as HTMLInputElement
@@ -73,16 +73,21 @@ describe('FieldOverrideInline — D5 closed-range enforcement', () => {
     const valueInput = screen.getByLabelText(/new override value/i)
     await userEvent.type(valueInput, 'some-value')
     fireEvent.click(screen.getByRole('button', { name: 'Confirm new override' }))
-    expect(mockCreateMutate).not.toHaveBeenCalled()
+    expect(mockCreateMutate).toHaveBeenCalledTimes(1)
+    expect(mockCreateMutate.mock.calls[0]?.[0]).toMatchObject({ versionRange: '[2.0,)' })
   })
 
-  it('surfaces an inline error message when the entered range is open-upward', async () => {
+  it('does not POST an all-versions range like (,) and surfaces a base-default error', async () => {
     renderInline()
     await userEvent.click(screen.getByRole('button', { name: /add override/i }))
     const rangeInput = screen.getByLabelText(/new override version range/i) as HTMLInputElement
-    fireEvent.change(rangeInput, { target: { value: '[2.0,)' } })
+    fireEvent.change(rangeInput, { target: { value: '(,)' } })
+    const valueInput = screen.getByLabelText(/new override value/i)
+    await userEvent.type(valueInput, 'some-value')
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm new override' }))
+    expect(mockCreateMutate).not.toHaveBeenCalled()
     await waitFor(() => {
-      expect(screen.getByText(/edit (the )?base/i)).toBeDefined()
+      expect(screen.getByText(/base default/i)).toBeDefined()
     })
   })
 

@@ -5,7 +5,7 @@ import { Input } from '../ui/input'
 import { Switch } from '../ui/switch'
 import { Badge } from '../ui/badge'
 import { useFieldOverrides, useCreateFieldOverride, useUpdateFieldOverride, useDeleteFieldOverride } from '../../hooks/useComponent'
-import { formatVersionRange, isValidVersionRange, isClosedVersionRange, classifyRangeConflict, compareVersionRanges } from '../../lib/versionRange'
+import { formatVersionRange, isValidVersionRange, isAllowedOverrideRange, classifyRangeConflict, compareVersionRanges } from '../../lib/versionRange'
 import type { FieldOverride } from '../../lib/types'
 
 // Scalar override paths whose column type is boolean (from CRS
@@ -47,9 +47,10 @@ export function FieldOverrideInline({ componentId, overriddenAttribute, canEdit 
   const isBoolean = BOOLEAN_OVERRIDE_PATHS.has(overriddenAttribute)
 
   const [adding, setAdding] = useState(false)
-  // D5: field-override ranges must be closed; no universal default. User
-  // enters an explicit closed range like `[1.0,2.0)` or historical-left-
-  // unbounded `(,1.0)`. Open-upward / universal forms belong to BASE.
+  // ADR-018: field-override ranges may be bounded (`[1.0,2.0)`), open-upper
+  // (`[2.0,)`, "from 2.0 onward"), or historical-left-unbounded (`(,1.0)`).
+  // Only the all-versions shapes (`(,)`, `(,0),[0,)`) are rejected — that is the
+  // base default; coverage is edited in the Supported-versions block.
   const [newRange, setNewRange] = useState('')
   const [newValue, setNewValue] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -73,7 +74,7 @@ export function FieldOverrideInline({ componentId, overriddenAttribute, canEdit 
   //                          add form doesn't nag with an error before the
   //                          user has interacted).
   //   - syntactically broken → invalid-syntax error
-  //   - open-upward      → "edit BASE instead" error
+  //   - all-versions     → "that is the base default" error
   // Button is disabled in all three cases regardless of the value-typed gate.
   // Walk siblings on the same attribute for a write-blocking conflict. Partial
   // overlap, strict containment, and semantic-equal duplicates all block submit
@@ -82,7 +83,7 @@ export function FieldOverrideInline({ componentId, overriddenAttribute, canEdit 
   // same disjoint-only rule server-side, so this preview and the server agree.
   type Conflict = { range: string; kind: 'partial' | 'contains' | 'equal' }
   function findConflict(range: string, excludeId: string | null): Conflict | null {
-    if (!isClosedVersionRange(range)) return null
+    if (!isAllowedOverrideRange(range)) return null
     for (const o of overrides) {
       if (o.id === excludeId) continue
       const kind = classifyRangeConflict(range, o.versionRange)
@@ -128,8 +129,8 @@ export function FieldOverrideInline({ componentId, overriddenAttribute, canEdit 
       return valueTouched ? 'Version range is required' : null
     }
     if (!isValidVersionRange(range)) return 'Invalid version range syntax'
-    if (!isClosedVersionRange(range)) {
-      return 'Open-upward range — edit the BASE field above instead'
+    if (!isAllowedOverrideRange(range)) {
+      return 'All-versions range — that is the base default; use a bounded or open-upper sub-range (e.g. [2.0,))'
     }
     if (conflict !== null) {
       return conflict.kind === 'equal'
@@ -143,8 +144,8 @@ export function FieldOverrideInline({ componentId, overriddenAttribute, canEdit 
   // Disabled state — separate from the visible error so the empty-untouched
   // case still blocks submit (no false visual nag for an unmodified blank
   // form).
-  const newRangeBlocks = !isClosedVersionRange(newRange) || newConflict !== null
-  const editRangeBlocks = !isClosedVersionRange(editRange) || editConflict !== null
+  const newRangeBlocks = !isAllowedOverrideRange(newRange) || newConflict !== null
+  const editRangeBlocks = !isAllowedOverrideRange(editRange) || editConflict !== null
 
   function handleAdd() {
     if (!canEdit || newRangeBlocks) return

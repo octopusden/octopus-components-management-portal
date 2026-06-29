@@ -43,6 +43,7 @@ import { CANNOT_EDIT_TITLE } from '../components/editor/editPermission'
 import { WhoCanEditPanel } from '../components/editor/WhoCanEditPanel'
 import { FieldOverrides } from '../components/editor/FieldOverrides'
 import { ConfigurationsTab } from '../components/editor/ConfigurationsTab'
+import { SupportedVersionsTab } from '../components/editor/SupportedVersionsTab'
 import { AsCodeTab } from '../components/editor/AsCodeTab'
 import { ComponentHistoryTab } from '../components/editor/ComponentHistoryTab'
 import { EditorSidebarNav, type EditorNavSection } from '../components/editor/EditorSidebarNav'
@@ -733,6 +734,7 @@ export function ComponentDetailPage() {
                 label: 'Metadata',
                 items: [
                   { value: 'misc', label: 'Misc' },
+                  { value: 'supported-versions', label: 'Supported Versions' },
                   { value: 'configurations', label: 'Configurations', count: configCount },
                 ],
               },
@@ -804,6 +806,12 @@ export function ComponentDetailPage() {
             <TabsContent value="misc">
               <EditSurface canEdit={canEdit} label="Misc">
                 <MiscTab key={component.id} component={component} form={form} />
+              </EditSurface>
+            </TabsContent>
+
+            <TabsContent value="supported-versions">
+              <EditSurface canEdit={canEdit} label="Supported Versions">
+                <SupportedVersionsTab componentId={component.id} canEdit={canEdit} />
               </EditSurface>
             </TabsContent>
 

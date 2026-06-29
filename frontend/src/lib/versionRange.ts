@@ -45,6 +45,28 @@ export function isClosedVersionRange(range: string): boolean {
   return true
 }
 
+const ALL_VERSIONS_SENTINEL = '(,0),[0,)'
+
+/**
+ * Returns true when `range` is allowed as a per-attribute field-override range under the decoupled
+ * version model (ADR-018). The former "D5" closed-only restriction is **relaxed**: open-upper
+ * segments (`[X,)`, "from version X onward") are now first-class overrides — the CRS server accepts
+ * them, and `resolve` applies them by containment.
+ *
+ * Still rejected: the all-versions shapes (`(,)` and the `(,0),[0,)` sentinel) — those denote the
+ * BASE default / full coverage, not a sub-range override; an override spanning all versions is
+ * indistinguishable from editing the base. Coverage itself is edited in the Supported-versions
+ * block, not here.
+ *
+ * Allowed: closed (`[X,Y)`, `[X,Y]`, `(X,Y)`, `(X,Y]`), open-upper (`[X,)`, `(X,)`),
+ * historical-left-unbounded (`(,X)`, `(,X]`), and composites whose segments satisfy the same rule.
+ */
+export function isAllowedOverrideRange(range: string): boolean {
+  if (!isValidVersionRange(range)) return false
+  const compact = normalize(range)
+  return compact !== '(,)' && compact !== ALL_VERSIONS_SENTINEL
+}
+
 // ─── Overlap detection (simple-segment best-effort) ──────────────────────────
 //
 // Maven version-range intersection is non-trivial for arbitrary inputs

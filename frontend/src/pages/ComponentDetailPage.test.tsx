@@ -550,6 +550,7 @@ describe('ComponentDetailPage — sidebar nav order', () => {
       'Escrow',
       'Distribution',
       'Misc',
+      'Supported Versions',
       'Configurations',
       'As Code',
       'Overrides',

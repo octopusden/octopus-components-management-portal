@@ -710,7 +710,7 @@ describe('OverrideRowEditor — D5 closed-range enforcement', () => {
     expect(mockCreateMutateAsync).not.toHaveBeenCalled()
   })
 
-  it('does not call createMutation when version range is open-upward [X,)', async () => {
+  it('DOES call createMutation for an open-upper range [X,) (ADR-018: first-class override)', async () => {
     renderEditor()
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
     await userEvent.selectOptions(select, 'build.javaVersion')
@@ -718,14 +718,26 @@ describe('OverrideRowEditor — D5 closed-range enforcement', () => {
     const valueInput = screen.getByPlaceholderText('Value for Java Version')
     await userEvent.type(valueInput, '17')
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(mockCreateMutateAsync).toHaveBeenCalledTimes(1))
+    expect(mockCreateMutateAsync.mock.calls[0]?.[0]).toMatchObject({ versionRange: '[2.0,)' })
+  })
+
+  it('does not call createMutation for an all-versions range (,) and renders a base-default error', async () => {
+    renderEditor()
+    const select = screen.getByTestId('attr-select') as HTMLSelectElement
+    await userEvent.selectOptions(select, 'build.javaVersion')
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '(,)' } })
+    const valueInput = screen.getByPlaceholderText('Value for Java Version')
+    await userEvent.type(valueInput, '17')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     expect(mockCreateMutateAsync).not.toHaveBeenCalled()
   })
 
-  it('renders inline error when range is open-upward', async () => {
+  it('renders inline error when range is all-versions (,)', async () => {
     renderEditor()
-    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[2.0,)' } })
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '(,)' } })
     await waitFor(() => {
-      expect(screen.getByText(/edit the base field instead/i)).toBeDefined()
+      expect(screen.getByText(/base default/i)).toBeDefined()
     })
   })
 

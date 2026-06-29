@@ -6,6 +6,8 @@ import type {
   ComponentUpdateRequest,
   FieldOverride,
   MarkerChildrenPayload,
+  SupportedVersionsRequest,
+  SupportedVersionsResponse,
 } from '../lib/types'
 
 // Request body types now live alongside the response types in
@@ -118,5 +120,30 @@ export function useDeleteFieldOverride(componentId: string) {
     mutationFn: (overrideId: string) =>
       api.delete(`/components/${componentId}/field-overrides/${overrideId}`),
     onSuccess: () => invalidateOverrideAndComponent(queryClient, componentId),
+  })
+}
+
+// Supported versions (coverage) — ADR-018 layer 1. GET reports `{all, ranges, warnings}`; the PUT
+// declaratively replaces the supported set and returns the resulting coverage plus any V1/V5
+// warnings (an override left outside supported). Editing coverage can re-align per-attribute
+// override breakpoints server-side (auto-split), so the PUT invalidates the supported-versions
+// cache AND the parent component (Configurations / Overrides views).
+export function useSupportedVersions(componentId: string) {
+  return useQuery({
+    queryKey: ['supported-versions', componentId],
+    queryFn: () => api.get<SupportedVersionsResponse>(`/components/${componentId}/supported-versions`),
+    enabled: !!componentId,
+  })
+}
+
+export function useUpdateSupportedVersions(componentId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: SupportedVersionsRequest) =>
+      api.put<SupportedVersionsResponse>(`/components/${componentId}/supported-versions`, request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['supported-versions', componentId] })
+      invalidateOverrideAndComponent(queryClient, componentId)
+    },
   })
 }
