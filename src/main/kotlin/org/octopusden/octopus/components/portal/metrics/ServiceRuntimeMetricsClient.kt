@@ -132,9 +132,7 @@ class ServiceRuntimeMetricsClient(
                             // would propagate through probeMetrics → Mono.zip and blank the whole
                             // /portal/metrics response (mirrors the fetchStatus fix). Degrade
                             // instead of vanishing.
-                            .switchIfEmpty(
-                                Mono.just(ProbeClassification.Unavailable("Service returned an empty process.uptime body")),
-                            )
+                            .switchIfEmpty(Mono.just(ProbeClassification.Unavailable(EMPTY_UPTIME_REASON)))
                     code.isSameCodeAs(HttpStatus.UNAUTHORIZED) || code.isSameCodeAs(HttpStatus.FORBIDDEN) ->
                         response.releaseBody().thenReturn(
                             ProbeClassification.Unavailable("Service metrics require authentication"),
@@ -258,6 +256,7 @@ class ServiceRuntimeMetricsClient(
     private companion object {
         private val TIMEOUT = Duration.ofSeconds(3)
         private const val MILLIS_PER_SECOND = 1000.0
+        private const val EMPTY_UPTIME_REASON = "Service returned an empty process.uptime body"
 
         // Actuator statuses that fail the aggregate. UNKNOWN (e.g. discoveryComposite)
         // does not, mirroring Spring Boot's default StatusAggregator ordering.
