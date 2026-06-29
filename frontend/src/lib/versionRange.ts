@@ -22,17 +22,17 @@ export function isValidVersionRange(range: string): boolean {
 }
 
 /**
- * Returns true when `range` is allowed as a field-override range under D5:
- * syntactically valid AND every segment has a non-empty upper bound (no
- * `,)` suffix in any segment).
+ * True when `range` is syntactically valid AND every segment has a non-empty upper bound (no
+ * `,)` suffix) — i.e. a fully closed / historical-left-unbounded range with no open-upward segment.
  *
- * Universal (`(,)`, `(,0),[0,)`) and any open-upward segment are rejected —
- * they belong to BASE, not overrides. Composite ranges are walked per
- * segment so a non-terminal open-upward segment is also rejected.
+ * NOTE (ADR-018): this is **no longer the production field-override gate** — open-upper overrides
+ * are now first-class, so the editors validate with [isAllowedOverrideRange]. This predicate is
+ * retained as a general "is this range closed-above" utility (and its test coverage of the closed
+ * vs open-upper distinction); it has no production call sites today.
  *
- * Allowed: closed (`[X,Y)`, `[X,Y]`, `(X,Y)`, `(X,Y]`) and
- * historical-left-unbounded (`(,X)`, `(,X]`), plus composites whose every
- * segment satisfies the same rule.
+ * Allowed: closed (`[X,Y)`, `[X,Y]`, `(X,Y)`, `(X,Y]`) and historical-left-unbounded (`(,X)`,
+ * `(,X]`), plus composites whose every segment satisfies the same rule. Rejected: universal
+ * (`(,)`, `(,0),[0,)`) and any open-upward segment.
  */
 export function isClosedVersionRange(range: string): boolean {
   if (!isValidVersionRange(range)) return false
