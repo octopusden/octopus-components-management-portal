@@ -126,7 +126,15 @@ class ServiceRuntimeMetricsClient(
                 val code = response.statusCode()
                 when {
                     code.is2xxSuccessful ->
-                        response.bodyToMono(ActuatorMetric::class.java).map { ProbeClassification.Ok(it) }
+                        response.bodyToMono(ActuatorMetric::class.java)
+                            .map<ProbeClassification> { ProbeClassification.Ok(it) }
+                            // A 2xx with an EMPTY body makes bodyToMono complete empty, which
+                            // would propagate through probeMetrics → Mono.zip and blank the whole
+                            // /portal/metrics response (mirrors the fetchStatus fix). Degrade
+                            // instead of vanishing.
+                            .switchIfEmpty(
+                                Mono.just(ProbeClassification.Unavailable("Service returned an empty process.uptime body")),
+                            )
                     code.isSameCodeAs(HttpStatus.UNAUTHORIZED) || code.isSameCodeAs(HttpStatus.FORBIDDEN) ->
                         response.releaseBody().thenReturn(
                             ProbeClassification.Unavailable("Service metrics require authentication"),

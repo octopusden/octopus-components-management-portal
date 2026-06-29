@@ -201,6 +201,26 @@ class ServiceRuntimeMetricsClientTest {
         assertNull(crs.status)
     }
 
+    @Test
+    fun `empty process-uptime body degrades metrics instead of blanking the result`() {
+        // Regression: a 2xx probe with an EMPTY body must not make fetch() complete
+        // empty (which would 204 the whole /portal/metrics response via Mono.zip).
+        val stub = HttpServer.create(InetSocketAddress(0), 0)
+        stub.createContext("/actuator/health") { json(it, 200, """{"status":"UP"}""") }
+        stub.createContext("/actuator/metrics/") { exchange ->
+            exchange.sendResponseHeaders(200, -1) // 2xx, no body
+            exchange.responseBody.close()
+        }
+        stub.start()
+        server = stub
+        val crs = fetch("http://localhost:${stub.address.port}")
+
+        assertFalse(crs.available)
+        assertNotNull(crs.reason)
+        assertEquals("UP", crs.status) // health still surfaced; only metrics degraded
+        assertNull(crs.jvm)
+    }
+
     /** Serves a 503 aggregate health with the given components block. */
     private fun startHealthStub(status: Int, healthBody: String): String {
         val stub = HttpServer.create(InetSocketAddress(0), 0)
