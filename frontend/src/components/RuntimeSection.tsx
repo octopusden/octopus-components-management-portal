@@ -6,48 +6,43 @@ import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { useSystemMetrics } from '@/hooks/useSystemMetrics'
 import { useCrsInfo, usePortalInfo } from '@/hooks/useInfo'
 import {
-  deriveSystemStatus,
+  deriveServiceStatus,
+  deriveSystemBanner,
   formatBytes,
   formatDateTimeShort,
   formatLoad,
   formatPercent,
   formatUptime,
+  type ServiceStatusDetail,
   type SystemStatus,
 } from '@/lib/system'
 import { cn, initials } from '@/lib/utils'
-import type { CrsRuntime, PortalRuntime, RecentLogin } from '@/lib/types'
+import type { ServiceRuntime, PortalRuntime, RecentLogin } from '@/lib/types'
 import { Button } from './ui/button'
 import { InlineError } from './ui/inline-error'
 import { EmptyState } from './ui/empty-state'
 import { SkeletonBlock } from './ui/skeleton-block'
 import { RelativeTime } from './ui/RelativeTime'
 
-// Status → token-mapped classes + copy for the summary banner. Literal strings so
-// Tailwind keeps them; colors map to the existing badge/destructive CSS vars.
-const STATUS_META: Record<
-  SystemStatus,
-  { box: string; text: string; dot: string; label: string; sub: string }
-> = {
+// Status → token-mapped classes for the summary banner. The label/sub copy is
+// dynamic (deriveSystemBanner names the real cause), so only the visual tokens
+// live here. Literal strings so Tailwind keeps them; colors map to the existing
+// badge/destructive CSS vars.
+const STATUS_META: Record<SystemStatus, { box: string; text: string; dot: string }> = {
   operational: {
     box: 'border-[color:var(--color-badge-green-fg)]/30 bg-[color:var(--color-badge-green-bg)]/40',
     text: 'text-[color:var(--color-badge-green-fg)]',
     dot: 'bg-[color:var(--color-badge-green-fg)]',
-    label: 'All systems operational',
-    sub: 'Portal metrics live · CRS health UP · polled every 10s',
   },
   degraded: {
     box: 'border-[color:var(--color-badge-yellow-fg)]/30 bg-[color:var(--color-badge-yellow-bg)]/50',
     text: 'text-[color:var(--color-badge-yellow-fg)]',
     dot: 'bg-[color:var(--color-badge-yellow-fg)]',
-    label: 'Degraded performance',
-    sub: 'Portal metrics live · CRS JVM metrics unavailable',
   },
   down: {
     box: 'border-destructive/30 bg-destructive/10',
     text: 'text-destructive',
     dot: 'bg-destructive',
-    label: 'Service disruption',
-    sub: 'CRS is down or unreachable',
   },
 }
 
@@ -227,22 +222,50 @@ function PortalCard({ runtime, version }: { runtime: PortalRuntime; version?: st
   )
 }
 
-function CrsCard({ runtime, version }: { runtime: CrsRuntime; version?: string | null }) {
+/**
+ * One downstream-service runtime card (CRS or RMS). When the service is reachable
+ * but only an integration component is degraded (employeeService / legacyReleng),
+ * an inline reason line names the real cause instead of the JVM-metrics fallback.
+ */
+function ServiceCard({
+  runtime,
+  name,
+  shortName,
+  version,
+  testId,
+}: {
+  runtime: ServiceRuntime
+  name: string
+  shortName: string
+  version?: string | null
+  testId: string
+}) {
   const jvm = runtime.jvm
+  const detail = deriveServiceStatus(runtime, shortName)
+  // A reachable-but-soft-degraded service: aggregate non-UP, JVM metrics may still
+  // be available. Surface the integration reason line in that case.
+  const integrationDegraded = detail.status === 'degraded' && runtime.status !== 'UP' && runtime.reachable === true
   return (
-    <section className="flex h-full flex-col gap-4 rounded-xl border bg-card p-5" data-testid="runtime-crs" aria-label="Registry service">
+    <section className="flex h-full flex-col gap-4 rounded-xl border bg-card p-5" data-testid={testId} aria-label={name}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <IconTile>
             <Server className="h-[17px] w-[17px]" />
           </IconTile>
           <div className="flex flex-col gap-0.5">
-            <span className="text-base font-semibold tracking-tight">Registry service</span>
-            <span className="font-mono text-xs text-muted-foreground">CRS{version ? ` · v${version}` : ''}</span>
+            <span className="text-base font-semibold tracking-tight">{name}</span>
+            <span className="font-mono text-xs text-muted-foreground">{shortName}{version ? ` · v${version}` : ''}</span>
           </div>
         </div>
         <StatusPill status={runtime.status} />
       </div>
+
+      {integrationDegraded && (
+        <div className="flex items-start gap-2 rounded-lg border border-[color:var(--color-badge-yellow-fg)]/30 bg-[color:var(--color-badge-yellow-bg)]/40 px-3 py-2">
+          <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--color-badge-yellow-fg)]" aria-hidden />
+          <span className="text-xs leading-relaxed text-[color:var(--color-badge-yellow-fg)]">{detail.sub}</span>
+        </div>
+      )}
 
       {runtime.available && jvm ? (
         <TileGrid cols={2}>
@@ -265,8 +288,8 @@ function CrsCard({ runtime, version }: { runtime: CrsRuntime; version?: string |
           <span className="text-sm font-semibold text-foreground">JVM metrics unavailable</span>
           <span className="max-w-[300px] text-xs leading-relaxed text-muted-foreground">
             {runtime.reason ??
-              'CRS rejected the relayed token, actuator metrics are role-locked, or CRS is unreachable.'}{' '}
-            Health status and version are still read from CRS.
+              `${shortName} rejected the relayed token, actuator metrics are role-locked, or ${shortName} is unreachable.`}{' '}
+            Health status and version are still read from {shortName}.
           </span>
         </div>
       )}
@@ -310,21 +333,21 @@ function RecentLoginsCard({ logins }: { logins: RecentLogin[] }) {
   )
 }
 
-function SummaryBanner({ status, portal }: { status: SystemStatus; portal: PortalRuntime }) {
-  const meta = STATUS_META[status]
+function SummaryBanner({ banner, portal }: { banner: ServiceStatusDetail; portal: PortalRuntime }) {
+  const meta = STATUS_META[banner.status]
   const jvm = portal.jvm
   return (
     <div
       className={cn('flex flex-wrap items-center gap-4 rounded-xl border p-4', meta.box)}
       data-testid="runtime-summary"
-      data-status={status}
+      data-status={banner.status}
     >
       <span className="flex h-[38px] w-[38px] items-center justify-center rounded-full bg-card/70" aria-hidden>
         <span className={cn('h-[11px] w-[11px] rounded-full ring-4 ring-current/15', meta.dot)} />
       </span>
       <div className="flex flex-col gap-0.5">
-        <span className={cn('text-base font-semibold tracking-tight', meta.text)}>{meta.label}</span>
-        <span className="text-sm text-muted-foreground">{meta.sub}</span>
+        <span className={cn('text-base font-semibold tracking-tight', meta.text)}>{banner.label}</span>
+        <span className="text-sm text-muted-foreground">{banner.sub}</span>
       </div>
       <div className="ml-auto flex items-center gap-7">
         <Readout label="Uptime" value={formatUptime(portal.uptimeMillis)} />
@@ -401,12 +424,14 @@ export function RuntimeSection() {
         </div>
       ) : (
         <>
-          <SummaryBanner status={deriveSystemStatus(data)} portal={data.portal} />
+          <SummaryBanner banner={deriveSystemBanner(data)} portal={data.portal} />
           <PortalCard runtime={data.portal} version={portalInfo?.version} />
           <div className="grid items-start gap-4 lg:grid-cols-2">
-            <CrsCard runtime={data.crs} version={crsInfo?.version} />
-            <RecentLoginsCard logins={data.portal.recentLogins} />
+            {/* RMS has no build-info endpoint wired, so its version is omitted. */}
+            <ServiceCard runtime={data.crs} name="Registry service" shortName="CRS" version={crsInfo?.version} testId="runtime-crs" />
+            <ServiceCard runtime={data.rms} name="Release management" shortName="RMS" testId="runtime-rms" />
           </div>
+          <RecentLoginsCard logins={data.portal.recentLogins} />
         </>
       )}
     </div>

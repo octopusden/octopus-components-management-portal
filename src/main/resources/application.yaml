@@ -57,6 +57,11 @@ portal:
   # env var feeds the gateway routes above; the health indicator reuses it to
   # mirror the registry's anonymous `employeeService` health component.
   registry-health-base-url: ${COMPONENTS_REGISTRY_SERVICE_URL:http://localhost:4567}
+  # Base URL of the release-management-service (RMS) this portal integrates with.
+  # Used only by the admin System tab's RMS runtime card (anonymous actuator
+  # metrics — no bearer relayed). Same env var as the validation sweep's
+  # release-management-base-url below.
+  release-management-health-base-url: ${RELEASE_MANAGEMENT_SERVICE_URL:http://localhost:4568}
   # Environment label shown as a full-width warning banner in the SPA header
   # (e.g. "TEST INSTANCE" on QA), so a test instance can't be mistaken for
   # production. Unset/blank → the field is omitted from /portal/info and no

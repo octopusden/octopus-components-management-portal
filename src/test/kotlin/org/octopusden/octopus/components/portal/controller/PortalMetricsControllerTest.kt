@@ -27,8 +27,10 @@ import java.time.Instant
 @SpringBootTest(
     properties = [
         "management.server.port=0",
-        // A reliably-closed address so the CRS WebClient fails fast → available=false.
+        // Reliably-closed addresses so both the CRS and RMS WebClients fail fast →
+        // available=false, exercising the best-effort unavailable path for each.
         "portal.registry-health-base-url=http://localhost:1",
+        "portal.release-management-health-base-url=http://localhost:1",
     ],
 )
 @ActiveProfiles("test")
@@ -101,5 +103,21 @@ class PortalMetricsControllerTest {
             .expectBody()
             .jsonPath("$.crs.available").isEqualTo(false)
             .jsonPath("$.crs.reason").exists()
+    }
+
+    // RMS metrics base URL also points at a closed port (see @SpringBootTest props),
+    // so the RMS section degrades just like CRS — proving the second client is wired
+    // and surfaced in the response alongside crs.
+    @Test
+    fun `RMS section is present and degrades gracefully when RMS is unreachable`() {
+        webTestClient
+            .mutateWith(mockUser("admin"))
+            .get()
+            .uri("/portal/metrics")
+            .exchange()
+            .expectStatus().isOk
+            .expectBody()
+            .jsonPath("$.rms.available").isEqualTo(false)
+            .jsonPath("$.rms.reason").exists()
     }
 }

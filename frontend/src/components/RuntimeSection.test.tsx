@@ -64,6 +64,8 @@ function fullMetrics(): SystemMetrics {
       available: true,
       reason: null,
       status: 'UP',
+      reachable: true,
+      downComponents: [],
       uptimeMillis: 2 * 86_400_000,
       jvm: {
         heapUsedBytes: 268_435_456,
@@ -75,6 +77,25 @@ function fullMetrics(): SystemMetrics {
         cpuProcess: 0.05,
         cpuSystem: 0.2,
         availableProcessors: 4,
+      },
+    },
+    rms: {
+      available: true,
+      reason: null,
+      status: 'UP',
+      reachable: true,
+      downComponents: [],
+      uptimeMillis: 86_400_000,
+      jvm: {
+        heapUsedBytes: 134_217_728,
+        heapMaxBytes: 268_435_456,
+        threadsLive: 20,
+        threadsPeak: 25,
+        gcCount: 4,
+        gcTimeMillis: 100,
+        cpuProcess: 0.03,
+        cpuSystem: 0.1,
+        availableProcessors: 2,
       },
     },
   }
@@ -131,18 +152,54 @@ describe('RuntimeSection', () => {
 
   it('shows degraded status when CRS is UP but JVM unavailable', () => {
     const m = fullMetrics()
-    m.crs = { available: false, status: 'UP', reason: 'CRS metrics require authentication' }
+    m.crs = { available: false, status: 'UP', reachable: true, reason: 'CRS metrics require authentication' }
     mockUseSystemMetrics.mockReturnValue(query({ data: m }))
     render(<RuntimeSection />)
     expect(screen.getByTestId('runtime-summary')).toHaveAttribute('data-status', 'degraded')
   })
 
-  it('shows down status when CRS is DOWN', () => {
+  it('shows down status when CRS core is DOWN', () => {
     const m = fullMetrics()
-    m.crs = { available: false, status: 'DOWN' }
+    m.crs = { available: false, status: 'DOWN', reachable: true, downComponents: ['db'] }
     mockUseSystemMetrics.mockReturnValue(query({ data: m }))
     render(<RuntimeSection />)
     expect(screen.getByTestId('runtime-summary')).toHaveAttribute('data-status', 'down')
+    // banner names the down core component, not a generic "down or unreachable"
+    expect(screen.getByTestId('runtime-summary').textContent).toContain('db')
+  })
+
+  it('shows down status when CRS is unreachable', () => {
+    const m = fullMetrics()
+    m.crs = { available: false, status: null, reachable: false, reason: 'CRS unreachable: ConnectException' }
+    mockUseSystemMetrics.mockReturnValue(query({ data: m }))
+    render(<RuntimeSection />)
+    const banner = screen.getByTestId('runtime-summary')
+    expect(banner).toHaveAttribute('data-status', 'down')
+    expect(banner.textContent?.toLowerCase()).toContain('unreachable')
+  })
+
+  // The headline fix: CRS reachable, aggregate DOWN, but only employeeService down →
+  // overall DEGRADED with the EE reason, NOT "CRS is down or unreachable".
+  it('shows degraded (not down) and the employee-service reason when only EE is down', () => {
+    const m = fullMetrics()
+    m.crs = {
+      available: true,
+      status: 'DOWN',
+      reachable: true,
+      downComponents: ['employeeService'],
+      employeeService: {
+        status: 'DOWN',
+        reason: 'person lookup failed (credentials / gateway route / directory backend)',
+      },
+      jvm: m.crs.jvm,
+      uptimeMillis: m.crs.uptimeMillis,
+    }
+    mockUseSystemMetrics.mockReturnValue(query({ data: m }))
+    render(<RuntimeSection />)
+    const banner = screen.getByTestId('runtime-summary')
+    expect(banner).toHaveAttribute('data-status', 'degraded')
+    expect(banner.textContent).toContain('person lookup failed')
+    expect(banner.textContent?.toLowerCase()).not.toContain('down or unreachable')
   })
 
   it('renders the Portal card with PID/JVM/since meta and full readout', () => {
@@ -176,7 +233,7 @@ describe('RuntimeSection', () => {
 
   it('shows the CRS unavailable panel with reason but keeps status + version', () => {
     const m = fullMetrics()
-    m.crs = { available: false, status: 'UP', reason: 'CRS metrics require authentication' }
+    m.crs = { available: false, status: 'UP', reachable: true, reason: 'CRS metrics require authentication' }
     mockUseSystemMetrics.mockReturnValue(query({ data: m }))
     render(<RuntimeSection />)
     const crs = screen.getByTestId('runtime-crs')
@@ -184,6 +241,32 @@ describe('RuntimeSection', () => {
     expect(crs.textContent).toContain('CRS metrics require authentication')
     expect(crs.textContent).toContain('UP') // status pill still shown
     expect(crs.textContent).toContain('v2.0.88') // version still shown
+  })
+
+  it('renders the RMS card with its own readout', () => {
+    render(<RuntimeSection />)
+    const rms = screen.getByTestId('runtime-rms')
+    expect(rms).toBeInTheDocument()
+    expect(rms.textContent).toContain('UP')
+    expect(rms.textContent).toContain('Heap')
+    expect(rms.textContent).toContain('Processors')
+  })
+
+  it('surfaces the integration-reason line on the CRS card when only EE is down', () => {
+    const m = fullMetrics()
+    m.crs = {
+      available: true,
+      status: 'DOWN',
+      reachable: true,
+      downComponents: ['employeeService'],
+      employeeService: { status: 'DOWN', reason: 'person lookup failed (gateway route)' },
+      jvm: m.crs.jvm,
+      uptimeMillis: m.crs.uptimeMillis,
+    }
+    mockUseSystemMetrics.mockReturnValue(query({ data: m }))
+    render(<RuntimeSection />)
+    const crs = screen.getByTestId('runtime-crs')
+    expect(crs.textContent).toContain('person lookup failed (gateway route)')
   })
 
   it('lists recent logins and the per-pod footer note', () => {
