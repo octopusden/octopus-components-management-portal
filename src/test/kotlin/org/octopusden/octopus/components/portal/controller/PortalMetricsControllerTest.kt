@@ -20,7 +20,7 @@ import java.time.Instant
  * mutated with a mock user (mockUser cannot inject a security context into an
  * out-of-process RANDOM_PORT server). CRS metrics point at a closed port, so the
  * CRS section exercises the best-effort unavailable path (the happy path is
- * covered by CrsRuntimeMetricsClientTest). Portal self-metrics are always present,
+ * covered by ServiceRuntimeMetricsClientTest). Portal self-metrics are always present,
  * and a pre-recorded login proves the RecentLoginsTracker snapshot reaches the
  * response.
  */

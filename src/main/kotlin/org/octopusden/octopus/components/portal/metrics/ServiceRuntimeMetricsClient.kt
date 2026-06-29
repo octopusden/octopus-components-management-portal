@@ -87,7 +87,15 @@ class ServiceRuntimeMetricsClient(
             .get()
             .uri("/actuator/health")
             .exchangeToMono { response ->
-                response.bodyToMono(HealthBody::class.java).map { Optional.of(it.toSnapshot()) }
+                response.bodyToMono(HealthBody::class.java)
+                    .map { Optional.of(it.toSnapshot()) }
+                    // A service that answers with an EMPTY body (startup, or a proxy
+                    // stripping a 503 body) makes bodyToMono complete empty. Without this
+                    // coalesce that empty signal propagates through Mono.zip and blanks the
+                    // whole /portal/metrics response (204 → undefined on the SPA). Map it to
+                    // an empty Optional so the zip still emits and the service simply
+                    // surfaces as unreachable, never taking down the other service or portal.
+                    .switchIfEmpty(Mono.just(Optional.empty<HealthSnapshot>()))
             }
             .timeout(TIMEOUT)
             .onErrorResume { Mono.just(Optional.empty()) }

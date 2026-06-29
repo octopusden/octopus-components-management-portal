@@ -189,6 +189,18 @@ class ServiceRuntimeMetricsClientTest {
         assertNull(crs.employeeService)
     }
 
+    @Test
+    fun `empty-body health response still emits a result instead of completing empty`() {
+        // Regression: a service answering with an empty body makes bodyToMono complete
+        // empty; without the switchIfEmpty coalesce that propagates through Mono.zip and
+        // blanks the whole /portal/metrics response (204 → undefined on the SPA). The
+        // fetch() helper blocks on the result, so the old behaviour would NPE here.
+        val crs = fetch(startHealthStub(200, ""))
+
+        assertFalse(crs.reachable) // no parseable snapshot → surfaced as unreachable
+        assertNull(crs.status)
+    }
+
     /** Serves a 503 aggregate health with the given components block. */
     private fun startHealthStub(status: Int, healthBody: String): String {
         val stub = HttpServer.create(InetSocketAddress(0), 0)

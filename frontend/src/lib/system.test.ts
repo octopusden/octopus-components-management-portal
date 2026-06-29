@@ -206,4 +206,38 @@ describe('deriveSystemStatus / deriveSystemBanner', () => {
     expect(banner.sub).toContain('person lookup failed')
     expect(banner.sub.toLowerCase()).not.toContain('down or unreachable')
   })
+
+  it('ties at the worst rank are driven by CRS', () => {
+    const down: ServiceRuntime = { available: false, status: 'DOWN', reachable: true, downComponents: ['db'] }
+    const banner = deriveSystemBanner(base(down, down))
+    expect(banner.status).toBe('down')
+    expect(banner.label).toContain('CRS')
+  })
+
+  it('CRS degraded + RMS down → overall down, banner driven by RMS', () => {
+    const banner = deriveSystemBanner(
+      base(
+        {
+          available: false,
+          status: 'DOWN',
+          reachable: true,
+          downComponents: ['employeeService'],
+          employeeService: { status: 'DOWN', reason: 'x' },
+        },
+        { available: false, reachable: false, reason: 'unreachable: ConnectException' },
+      ),
+    )
+    expect(banner.status).toBe('down')
+    expect(banner.label).toContain('RMS')
+  })
+
+  it('falls back to CRS-only when rms is absent (older backend)', () => {
+    const metrics = {
+      portal: {} as SystemMetrics['portal'],
+      crs: { available: true, status: 'UP', reachable: true },
+    } as SystemMetrics
+    const banner = deriveSystemBanner(metrics)
+    expect(banner.status).toBe('operational')
+    expect(banner.sub).not.toContain('RMS')
+  })
 })

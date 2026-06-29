@@ -757,7 +757,9 @@ export interface ServiceRuntime {
 export interface SystemMetrics {
   portal: PortalRuntime
   crs: ServiceRuntime
-  rms: ServiceRuntime
+  // Optional so a frontend running against an older backend (rolling deploy /
+  // local dev) that omits `rms` degrades gracefully instead of crashing.
+  rms?: ServiceRuntime
 }
 
 // ---------------------------------------------------------------------------

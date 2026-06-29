@@ -85,17 +85,20 @@ export function deriveSystemStatus(metrics: SystemMetrics): SystemStatus {
  */
 export function deriveSystemBanner(metrics: SystemMetrics): ServiceStatusDetail {
   const crs = deriveServiceStatus(metrics.crs, 'CRS')
-  const rms = deriveServiceStatus(metrics.rms, 'RMS')
-  const overall = worst(crs.status, rms.status)
+  // `rms` is optional on the wire (older backend / local dev) — fall back to CRS only.
+  const rms = metrics.rms ? deriveServiceStatus(metrics.rms, 'RMS') : null
+  const overall = rms ? worst(crs.status, rms.status) : crs.status
   if (overall === 'operational') {
     return {
       status: 'operational',
       label: 'All systems operational',
-      sub: 'Portal metrics live · CRS & RMS health UP · polled every 10s',
+      sub: rms
+        ? 'Portal metrics live · CRS & RMS health UP · polled every 10s'
+        : 'Portal metrics live · CRS health UP · polled every 10s',
     }
   }
   // Show the worst service's detail; if both tie at the worst rank, CRS first.
-  const driver = STATUS_RANK[crs.status] >= STATUS_RANK[rms.status] ? crs : rms
+  const driver = rms && STATUS_RANK[rms.status] > STATUS_RANK[crs.status] ? rms : crs
   return { status: overall, label: driver.label, sub: driver.sub }
 }
 

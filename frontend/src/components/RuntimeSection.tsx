@@ -289,7 +289,9 @@ function ServiceCard({
           <span className="max-w-[300px] text-xs leading-relaxed text-muted-foreground">
             {runtime.reason ??
               `${shortName} rejected the relayed token, actuator metrics are role-locked, or ${shortName} is unreachable.`}{' '}
-            Health status and version are still read from {shortName}.
+            {version
+              ? `Health status and version are still read from ${shortName}.`
+              : `Health status is still read from ${shortName}.`}
           </span>
         </div>
       )}
@@ -382,7 +384,7 @@ export function RuntimeSection() {
         <div className="space-y-1">
           <h2 className="text-base font-semibold tracking-tight">Runtime &amp; operations</h2>
           <p className="text-sm text-muted-foreground">
-            Portal &amp; registry service metrics · this instance
+            Portal, registry &amp; release-management metrics · this instance
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -429,7 +431,9 @@ export function RuntimeSection() {
           <div className="grid items-start gap-4 lg:grid-cols-2">
             {/* RMS has no build-info endpoint wired, so its version is omitted. */}
             <ServiceCard runtime={data.crs} name="Registry service" shortName="CRS" version={crsInfo?.version} testId="runtime-crs" />
-            <ServiceCard runtime={data.rms} name="Release management" shortName="RMS" testId="runtime-rms" />
+            {data.rms && (
+              <ServiceCard runtime={data.rms} name="Release management" shortName="RMS" testId="runtime-rms" />
+            )}
           </div>
           <RecentLoginsCard logins={data.portal.recentLogins} />
         </>
