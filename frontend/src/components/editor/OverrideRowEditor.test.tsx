@@ -691,7 +691,7 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
   })
 })
 
-describe('OverrideRowEditor — D5 closed-range enforcement', () => {
+describe('OverrideRowEditor — override range rules (ADR-018: open-upper allowed, all-versions rejected)', () => {
   beforeEach(() => {
     mockCreateMutateAsync.mockReset()
     mockUpdateMutateAsync.mockReset()

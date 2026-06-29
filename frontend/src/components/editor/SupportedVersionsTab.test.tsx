@@ -49,13 +49,31 @@ describe('SupportedVersionsTab', () => {
     expect(mockUpdate.mock.calls[0]?.[0]).toEqual({ ranges: ['[1.0,2.0)', '[2.0,)'] })
   })
 
-  it('rejects an all-versions range on add (use Set to all versions)', async () => {
+  it('rejects an all-versions range on add — live error, Add disabled, no PUT', async () => {
     mockData = { all: false, ranges: ['[1.0,2.0)'], warnings: [] }
     renderTab()
     fireEvent.change(screen.getByLabelText('New supported version range'), { target: { value: '(,)' } })
-    await userEvent.click(screen.getByRole('button', { name: /add range/i }))
-    expect(mockUpdate).not.toHaveBeenCalled()
     await waitFor(() => expect(screen.getByText(/all-versions default/i)).toBeDefined())
+    expect(screen.getByRole('button', { name: /add range/i })).toBeDisabled()
+    expect(mockUpdate).not.toHaveBeenCalled()
+  })
+
+  it('rejects a COMPOSITE all-versions range like (,),[1.0,2.0) (sentinel inside a composite)', async () => {
+    mockData = { all: false, ranges: [], warnings: [] }
+    renderTab()
+    fireEvent.change(screen.getByLabelText('New supported version range'), { target: { value: '(,),[1.0,2.0)' } })
+    await waitFor(() => expect(screen.getByText(/all-versions default/i)).toBeDefined())
+    expect(screen.getByRole('button', { name: /add range/i })).toBeDisabled()
+    expect(mockUpdate).not.toHaveBeenCalled()
+  })
+
+  it('all-versions → bounded: adding a range from all-versions PUTs {ranges:[range]}', async () => {
+    mockData = { all: true, ranges: [], warnings: [] }
+    renderTab()
+    fireEvent.change(screen.getByLabelText('New supported version range'), { target: { value: '[2.0,)' } })
+    await userEvent.click(screen.getByRole('button', { name: /add range/i }))
+    expect(mockUpdate).toHaveBeenCalledTimes(1)
+    expect(mockUpdate.mock.calls[0]?.[0]).toEqual({ ranges: ['[2.0,)'] })
   })
 
   it('PUTs the set without the removed range on delete', async () => {

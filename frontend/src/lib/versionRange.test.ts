@@ -166,6 +166,11 @@ describe('isAllowedOverrideRange (ADR-018: open-upper allowed, all-versions reje
     expect(isAllowedOverrideRange('(, )')).toBe(false) // whitespace-normalized
   })
 
+  it('rejects a composite that contains a universal (,) segment', () => {
+    expect(isAllowedOverrideRange('(,),[1.0,2.0)')).toBe(false)
+    expect(isAllowedOverrideRange('[1.0,2.0),(,)')).toBe(false)
+  })
+
   it('ALLOWS open-upper ranges (the former D5 restriction is relaxed)', () => {
     expect(isAllowedOverrideRange('[1.0,)')).toBe(true)
     expect(isAllowedOverrideRange('[2.0,)')).toBe(true)

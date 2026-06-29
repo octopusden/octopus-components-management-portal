@@ -141,7 +141,11 @@ export function useUpdateSupportedVersions(componentId: string) {
   return useMutation({
     mutationFn: (request: SupportedVersionsRequest) =>
       api.put<SupportedVersionsResponse>(`/components/${componentId}/supported-versions`, request),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // Seed the cache with the PUT response (the post-split coverage) BEFORE invalidating, so a
+      // back-to-back edit builds its next declarative replacement from fresh ranges rather than the
+      // pre-PUT cached set (which would drop the just-saved change while the refetch is in flight).
+      queryClient.setQueryData(['supported-versions', componentId], data)
       queryClient.invalidateQueries({ queryKey: ['supported-versions', componentId] })
       invalidateOverrideAndComponent(queryClient, componentId)
     },

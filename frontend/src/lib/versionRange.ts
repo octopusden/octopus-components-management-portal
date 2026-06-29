@@ -64,7 +64,11 @@ const ALL_VERSIONS_SENTINEL = '(,0),[0,)'
 export function isAllowedOverrideRange(range: string): boolean {
   if (!isValidVersionRange(range)) return false
   const compact = normalize(range)
-  return compact !== '(,)' && compact !== ALL_VERSIONS_SENTINEL
+  if (compact === ALL_VERSIONS_SENTINEL) return false
+  // Reject any universal `(,)` segment, including inside a composite like `(,),[1.0,2.0)`
+  // (which is valid syntax but still spans all versions = the base default).
+  const segments = compact.match(SEGMENT_GLOBAL) ?? []
+  return !segments.some((s) => s === '(,)')
 }
 
 // ─── Overlap detection (simple-segment best-effort) ──────────────────────────

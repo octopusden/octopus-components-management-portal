@@ -34,25 +34,30 @@ export function SupportedVersionsTab({ componentId, canEdit }: SupportedVersions
   const ranges = [...data.ranges].sort(compareVersionRanges)
   const warnings = data.warnings ?? []
 
-  function put(next: { all?: boolean; ranges?: string[] }) {
+  // Live validation of the add input so the button can pre-disable (consistent with the field-override
+  // editors) and the error shows as you type, not only after a click.
+  const trimmedNew = newRange.trim()
+  const addRangeError =
+    trimmedNew === ''
+      ? null
+      : !isValidVersionRange(trimmedNew)
+        ? 'Invalid version range syntax'
+        : !isAllowedOverrideRange(trimmedNew)
+          ? 'That is the all-versions default — use “Set to all versions”, or enter a bounded / open-upper range'
+          : null
+
+  function put(next: { all?: boolean; ranges?: string[] }, onSuccess?: () => void) {
     setError(null)
     updateMutation.mutate(next, {
+      onSuccess: () => onSuccess?.(),
       onError: (e: unknown) => setError(e instanceof Error ? e.message : 'Failed to update supported versions'),
     })
   }
 
   function handleAdd() {
-    const range = newRange.trim()
-    if (!isValidVersionRange(range)) {
-      setError('Invalid version range syntax')
-      return
-    }
-    if (!isAllowedOverrideRange(range)) {
-      setError('That is the all-versions default — use “Set to all versions”, or enter a bounded / open-upper range')
-      return
-    }
-    put({ ranges: [...ranges, range] })
-    setNewRange('')
+    if (trimmedNew === '' || addRangeError !== null) return
+    // Clear the input only after the PUT succeeds, so a server rejection leaves the value to fix.
+    put({ ranges: [...ranges, trimmedNew] }, () => setNewRange(''))
   }
 
   function handleRemove(range: string) {
@@ -123,7 +128,7 @@ export function SupportedVersionsTab({ componentId, canEdit }: SupportedVersions
             />
             <Button
               size="sm"
-              disabled={newRange.trim() === '' || updateMutation.isPending}
+              disabled={trimmedNew === '' || addRangeError !== null || updateMutation.isPending}
               onClick={handleAdd}
             >
               <Plus className="mr-1 h-3 w-3" /> Add range
@@ -139,7 +144,7 @@ export function SupportedVersionsTab({ componentId, canEdit }: SupportedVersions
               </Button>
             )}
           </div>
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          {(addRangeError ?? error) && <p className="text-xs text-destructive">{addRangeError ?? error}</p>}
         </div>
       )}
     </div>
