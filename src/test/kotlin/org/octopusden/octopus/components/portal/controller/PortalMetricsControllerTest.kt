@@ -29,8 +29,8 @@ import java.time.Instant
         "management.server.port=0",
         // Reliably-closed addresses so both the CRS and RMS WebClients fail fast →
         // available=false, exercising the best-effort unavailable path for each.
-        "portal.registry-health-base-url=http://localhost:1",
-        "portal.release-management-health-base-url=http://localhost:1",
+        "portal.registry-base-url=http://localhost:1",
+        "portal.release-management-base-url=http://localhost:1",
     ],
 )
 @ActiveProfiles("test")

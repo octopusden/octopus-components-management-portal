@@ -21,11 +21,11 @@ import org.springframework.context.annotation.Configuration
 class MetricsClientsConfig {
     @Bean
     fun crsRuntimeMetricsClient(
-        @Value("\${portal.registry-health-base-url}") registryBaseUrl: String,
+        @Value("\${portal.registry-base-url}") registryBaseUrl: String,
     ): ServiceRuntimeMetricsClient = ServiceRuntimeMetricsClient(registryBaseUrl, relayToken = true)
 
     @Bean
     fun rmsRuntimeMetricsClient(
-        @Value("\${portal.release-management-health-base-url}") releaseManagementBaseUrl: String,
+        @Value("\${portal.release-management-base-url}") releaseManagementBaseUrl: String,
     ): ServiceRuntimeMetricsClient = ServiceRuntimeMetricsClient(releaseManagementBaseUrl, relayToken = false)
 }
