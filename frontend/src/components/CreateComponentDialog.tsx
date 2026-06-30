@@ -558,6 +558,15 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
   const releaseManager = watch('releaseManager')
   const securityChampion = watch('securityChampion')
   const coordinateType = watch('coordinate.type')
+  // The "Distribution coordinate" selector covers all three families; point its
+  // hint at the description for the SELECTED type (the editor has three separate
+  // per-type fields, each with its own path).
+  const coordinatePath =
+    coordinateType === 'docker'
+      ? 'distribution.dockerImages'
+      : coordinateType === 'package'
+        ? 'distribution.packages'
+        : 'distribution.mavenArtifacts'
   const nameValue = watch('name')
   const buildSystemValue = watch('buildSystem')
   const ownershipMode = watch('ownership.mode')
@@ -1087,10 +1096,13 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
 
           <div className="space-y-1.5">
             <div className="flex items-center gap-1">
+              {/* Generic selector label (NOT a single CRS field) → kept static so a
+                  per-type field-config label override can't rename it. The hint,
+                  however, tracks the selected coordinate type. */}
               <Label htmlFor="create-coordinate-type">
-                <FieldLabelText path="distribution.mavenArtifacts" fallback="Distribution coordinate" /> <span className="text-destructive">*</span>
+                Distribution coordinate <span className="text-destructive">*</span>
               </Label>
-              <FieldInfo path="distribution.mavenArtifacts" label="Distribution coordinate" />
+              <FieldInfo path={coordinatePath} label="Distribution coordinate" />
             </div>
             <select
               id="create-coordinate-type"

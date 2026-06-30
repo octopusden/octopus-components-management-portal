@@ -780,6 +780,17 @@ describe('CreateComponentDialog — explicit+external gated block', () => {
     const values = Array.from(typeSelect.options).map((o) => o.value)
     expect(values).toEqual(['DEB', 'RPM'])
   })
+
+  it('the distribution-coordinate hint path follows the selected coordinate type', async () => {
+    await makeGated()
+    const infoPath = () =>
+      screen.getByRole('button', { name: 'Description for Distribution coordinate' }).getAttribute('data-field-path')
+    expect(infoPath()).toBe('distribution.mavenArtifacts')
+    await userEvent.selectOptions(screen.getByLabelText(/^distribution coordinate/i), 'docker')
+    expect(infoPath()).toBe('distribution.dockerImages')
+    await userEvent.selectOptions(screen.getByLabelText(/^distribution coordinate/i), 'package')
+    expect(infoPath()).toBe('distribution.packages')
+  })
 })
 
 describe('CreateComponentDialog — copy mode (sourceId)', () => {
