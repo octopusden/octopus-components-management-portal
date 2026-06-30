@@ -380,6 +380,37 @@ describe('CreateComponentDialog — component-defaults prefill (scratch)', () =>
     // external on / explicit off → the gated block stays hidden by default.
     expect(screen.queryByText(/required for explicit \+ external/i)).toBeNull()
   })
+
+  it('honors an explicit `external: false` default (?? must beat the scratch default of true)', async () => {
+    withDefaults({ distribution: { explicit: false, external: false } })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    expect((screen.getByLabelText(/external/i) as HTMLInputElement).checked).toBe(false)
+    expect((screen.getByLabelText(/explicit/i) as HTMLInputElement).checked).toBe(false)
+  })
+
+  it('does NOT submit a copyright default in a non-gated flow (field is hidden there)', async () => {
+    mockMutateAsync.mockResolvedValue({ id: 'comp-1', name: 'widget' })
+    // copyright default present, but distribution stays non-gated (external only).
+    withDefaults({ copyright: '(c) 2026 Acme', vcs: { tag: '$module-$version' } })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    // Copyright field is not rendered outside the gated block.
+    expect(screen.queryByLabelText(/copyright/i)).toBeNull()
+    await fillBaseFields()
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalled())
+    expect('copyright' in mockMutateAsync.mock.calls[0]![0]).toBe(false)
+  })
+
+  it('clears a default build system that is not among the offered options (config drift)', async () => {
+    withDefaults({ buildSystem: 'NOT_A_REAL_SYSTEM' })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await waitFor(() =>
+      expect((screen.getByLabelText(/build system/i) as HTMLSelectElement).value).toBe(''),
+    )
+  })
 })
 
 describe('CreateComponentDialog — VCS block (legacy build-system rule)', () => {
@@ -613,6 +644,31 @@ describe('CreateComponentDialog — copy mode (sourceId)', () => {
     expect((screen.getByLabelText(/component key/i) as HTMLInputElement).value).toBe('')
     expect((screen.getByLabelText(/build system/i) as HTMLSelectElement).value).toBe('GRADLE')
     expect((screen.getByPlaceholderText('AD userkey') as HTMLInputElement).value).toBe('alice')
+  })
+
+  it('ignores component-defaults in copy mode (source drives the form, not the defaults)', async () => {
+    mockUseComponentDefaults.mockReturnValue({
+      data: {
+        buildSystem: 'MAVEN',
+        componentDisplayName: 'Default Display',
+        copyright: '(c) 2026 Acme',
+        jira: { projectKey: 'DEF' },
+        distribution: { explicit: true, external: true },
+        vcs: { tag: '$module-$version' },
+      } as unknown,
+      isSuccess: true,
+      isError: false,
+      isLoading: false,
+    })
+    loaded() // source builds with GRADLE, no displayName/jira copied
+    renderCopy()
+    // Build system comes from the SOURCE (GRADLE), not the default (MAVEN).
+    await waitFor(() =>
+      expect((screen.getByLabelText(/build system/i) as HTMLSelectElement).value).toBe('GRADLE'),
+    )
+    // Unique fields are never prefilled from defaults in copy mode.
+    expect((screen.getByLabelText(/display name/i) as HTMLInputElement).value).toBe('')
+    expect((screen.getByLabelText(/jira project key/i) as HTMLInputElement).value).toBe('')
   })
 
   it('source loading disables Create; source error shows InlineError', () => {

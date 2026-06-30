@@ -266,6 +266,10 @@ function initialValues(source: ComponentDetail | null, defaults: ComponentDefaul
     // would desync the native <select> from the form value (same rule as copy
     // mode below).
     const defaultBuildSystem = blankToUndefined(defaults.buildSystem)
+    // `??` (not `||`): an explicit `false` default must override the scratch
+    // default, while an absent flag falls back to it.
+    const distributionExplicit = defaults.distribution?.explicit ?? SCRATCH_DEFAULTS.distributionExplicit
+    const distributionExternal = defaults.distribution?.external ?? SCRATCH_DEFAULTS.distributionExternal
     return {
       ...SCRATCH_DEFAULTS,
       buildSystem:
@@ -273,9 +277,15 @@ function initialValues(source: ComponentDetail | null, defaults: ComponentDefaul
           ? defaultBuildSystem
           : '',
       displayName: blankToUndefined(defaults.componentDisplayName) ?? '',
-      copyright: blankToUndefined(defaults.copyright) ?? '',
-      distributionExplicit: defaults.distribution?.explicit ?? SCRATCH_DEFAULTS.distributionExplicit,
-      distributionExternal: defaults.distribution?.external ?? SCRATCH_DEFAULTS.distributionExternal,
+      // Copyright is rendered ONLY inside the explicit+external block, so seed it
+      // only when the defaulted distribution is gated — otherwise a configured
+      // default would be submitted as an invisible, non-editable value.
+      copyright:
+        distributionExplicit && distributionExternal
+          ? (blankToUndefined(defaults.copyright) ?? '')
+          : '',
+      distributionExplicit,
+      distributionExternal,
       jiraProjectKey: blankToUndefined(defaults.jira?.projectKey) ?? '',
       vcsTag,
       vcsBranch,
@@ -438,9 +448,14 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
     defaultValues: initialValues(source, defaults),
   })
 
-  const { options: buildSystems } = useFieldOptions('buildSystem')
-  // Deprecated systems (BS2_0) are not offered for new components.
-  const offeredBuildSystems = buildSystems.filter((bs) => !DEPRECATED_BUILD_SYSTEMS.has(bs))
+  const { options: buildSystems, isLoading: buildSystemsLoading } = useFieldOptions('buildSystem')
+  // Deprecated systems (BS2_0) are not offered for new components. Memoised so
+  // the drift-guard effect below has a stable dependency (the query data ref is
+  // itself stable across renders).
+  const offeredBuildSystems = useMemo(
+    () => buildSystems.filter((bs) => !DEPRECATED_BUILD_SYSTEMS.has(bs)),
+    [buildSystems],
+  )
   const componentOwnerValue = watch('componentOwner')
   const explicit = watch('distributionExplicit')
   const external = watch('distributionExternal')
@@ -449,7 +464,22 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
   const securityChampion = watch('securityChampion')
   const coordinateType = watch('coordinate.type')
   const nameValue = watch('name')
-  const showVcs = vcsBlockApplies(watch('buildSystem'))
+  const buildSystemValue = watch('buildSystem')
+  const showVcs = vcsBlockApplies(buildSystemValue)
+
+  // A prefilled default build system (from component-defaults) that isn't among
+  // the currently offered options — config drift between component-defaults and
+  // the build-systems meta — would leave the native <select> showing a blank
+  // while the stale value lingers in the form and gets submitted. Clear it once
+  // the vocabulary loads so the required-field validation surfaces instead.
+  // Guarded on a non-empty list so a missing/failed meta endpoint never wipes a
+  // legitimately seeded value.
+  useEffect(() => {
+    if (buildSystemsLoading || offeredBuildSystems.length === 0) return
+    if (buildSystemValue && !offeredBuildSystems.includes(buildSystemValue)) {
+      setValue('buildSystem', '', { shouldValidate: false })
+    }
+  }, [buildSystemsLoading, offeredBuildSystems, buildSystemValue, setValue])
 
   // versionPrefix derived-default: in scratch mode mirror the component key until the user
   // edits the field. Copy mode prefills from the source (initialValues), so skip mirroring there.
