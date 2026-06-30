@@ -16,9 +16,10 @@ interface SupportedVersionsTabProps {
  * overrides: a version outside `supported` resolves to 404. `all = true` means every version is
  * covered (no bounded rows); otherwise coverage is the union of the listed ranges.
  *
- * The API is declarative — every edit PUTs the full desired set. Editing coverage can re-align the
- * per-attribute override breakpoints server-side (auto-split); the response surfaces V1/V5 warnings
- * (an override left outside supported).
+ * The API is declarative — every edit PUTs the full desired set, which the server stores MERGED
+ * (overlapping / contiguous ranges collapse; a set tiling all-versions becomes `all`). Coverage is
+ * decoupled from overrides — it never reshapes them; the v2/v3 range VIEWS are derived at read time.
+ * The response surfaces V1/V5 warnings (an override left entirely outside supported).
  */
 export function SupportedVersionsTab({ componentId, canEdit }: SupportedVersionsTabProps) {
   const { data, isLoading } = useSupportedVersions(componentId)

@@ -49,6 +49,18 @@ describe('SupportedVersionsTab', () => {
     expect(mockUpdate.mock.calls[0]?.[0]).toEqual({ ranges: ['[1.0,2.0)', '[2.0,)'] })
   })
 
+  it('allows an OVERLAPPING range on add (no client disjoint requirement — server merges)', async () => {
+    // ADR-018 redesign: coverage is stored merged, so overlapping/adjacent input is valid — the
+    // client must NOT reject it; the server collapses it into the canonical union.
+    mockData = { all: false, ranges: ['[1.0,2.0)'], warnings: [] }
+    renderTab()
+    fireEvent.change(screen.getByLabelText('New supported version range'), { target: { value: '[1.5,3.0)' } })
+    expect(screen.getByRole('button', { name: /add range/i })).not.toBeDisabled()
+    await userEvent.click(screen.getByRole('button', { name: /add range/i }))
+    expect(mockUpdate).toHaveBeenCalledTimes(1)
+    expect(mockUpdate.mock.calls[0]?.[0]).toEqual({ ranges: ['[1.0,2.0)', '[1.5,3.0)'] })
+  })
+
   it('rejects an all-versions range on add — live error, Add disabled, no PUT', async () => {
     mockData = { all: false, ranges: ['[1.0,2.0)'], warnings: [] }
     renderTab()

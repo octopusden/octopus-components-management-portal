@@ -124,10 +124,11 @@ export function useDeleteFieldOverride(componentId: string) {
 }
 
 // Supported versions (coverage) — ADR-018 layer 1. GET reports `{all, ranges, warnings}`; the PUT
-// declaratively replaces the supported set and returns the resulting coverage plus any V1/V5
-// warnings (an override left outside supported). Editing coverage can re-align per-attribute
-// override breakpoints server-side (auto-split), so the PUT invalidates the supported-versions
-// cache AND the parent component (Configurations / Overrides views).
+// declaratively replaces the supported set and returns the resulting MERGED coverage (overlapping /
+// contiguous ranges collapse; a set that tiles all-versions becomes `all`) plus any V1/V5 warnings
+// (an override left outside supported). Coverage is decoupled from overrides — it never reshapes
+// them — but it does change which enumerated range VIEWS resolve (the read-time partition), so the
+// PUT invalidates the supported-versions cache AND the parent component (Configurations / Overrides).
 export function useSupportedVersions(componentId: string) {
   return useQuery({
     queryKey: ['supported-versions', componentId],
@@ -142,7 +143,7 @@ export function useUpdateSupportedVersions(componentId: string) {
     mutationFn: (request: SupportedVersionsRequest) =>
       api.put<SupportedVersionsResponse>(`/components/${componentId}/supported-versions`, request),
     onSuccess: (data) => {
-      // Seed the cache with the PUT response (the post-split coverage) BEFORE invalidating, so a
+      // Seed the cache with the PUT response (the merged coverage) BEFORE invalidating, so a
       // back-to-back edit builds its next declarative replacement from fresh ranges rather than the
       // pre-PUT cached set (which would drop the just-saved change while the refetch is in flight).
       queryClient.setQueryData(['supported-versions', componentId], data)
