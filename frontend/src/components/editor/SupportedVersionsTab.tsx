@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, X, AlertTriangle, Infinity as InfinityIcon } from 'lucide-react'
+import { Plus, X, AlertTriangle, Infinity as InfinityIcon, Clock } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { useSupportedVersions, useUpdateSupportedVersions } from '../../hooks/useComponent'
@@ -148,6 +148,39 @@ export function SupportedVersionsTab({ componentId, canEdit }: SupportedVersions
           {(addRangeError ?? error) && <p className="text-xs text-destructive">{addRangeError ?? error}</p>}
         </div>
       )}
+
+      {/*
+        Version lifecycle — FUTURE TEASER only (ADR-018 deferred item). The structure/placement is
+        laid in here so the lifecycle layer (Active development / On maintenance / Archived) has a home
+        in the Supported Versions tab; it is intentionally non-populated and non-interactive until a
+        future release wires it to real per-range lifecycle state. Shown to everyone, read-only.
+      */}
+      <div
+        className="rounded-md border border-dashed border-muted-foreground/30 p-3 opacity-70"
+        aria-label="Version lifecycle (coming soon)"
+      >
+        <div className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+          <Clock className="h-4 w-4" aria-hidden="true" />
+          Version lifecycle
+          <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-normal uppercase tracking-wide">
+            Coming soon
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {['Active development', 'On maintenance', 'Archived'].map((state) => (
+            <span
+              key={state}
+              className="rounded-full border px-2 py-0.5 text-xs text-muted-foreground"
+            >
+              {state}
+            </span>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          A future release will let you mark version ranges as active, on maintenance, or archived.
+          Preview only — not yet editable.
+        </p>
+      </div>
     </div>
   )
 }

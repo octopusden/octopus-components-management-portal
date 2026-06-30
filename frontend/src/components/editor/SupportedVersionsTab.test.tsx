@@ -114,4 +114,20 @@ describe('SupportedVersionsTab', () => {
     expect(screen.queryByLabelText('New supported version range')).toBeNull()
     expect(screen.queryByRole('button', { name: /add range/i })).toBeNull()
   })
+
+  it('renders the lifecycle teaser (future, non-interactive) with the three states for everyone', () => {
+    // ADR-018 deferred item: the lifecycle layer has a structural home here, shown read-only as a
+    // "coming soon" teaser — visible regardless of edit rights, and not wired to any control.
+    mockData = { all: true, ranges: [], warnings: [] }
+    renderTab(false)
+    const teaser = screen.getByLabelText('Version lifecycle (coming soon)')
+    expect(teaser).toBeDefined()
+    expect(screen.getByText('Active development')).toBeDefined()
+    expect(screen.getByText('On maintenance')).toBeDefined()
+    expect(screen.getByText('Archived')).toBeDefined()
+    expect(screen.getByText(/coming soon/i)).toBeDefined()
+    // It is a teaser, not a control: no buttons/inputs inside it.
+    expect(teaser.querySelector('button')).toBeNull()
+    expect(teaser.querySelector('input')).toBeNull()
+  })
 })
