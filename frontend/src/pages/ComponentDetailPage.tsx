@@ -357,8 +357,14 @@ export function ComponentDetailPage() {
   const ownershipIssues = countOwnershipIssues(form.watch('artifactIds') ?? [], supportedGroups)
   // groupId-prefix (CRS rule #10) and VCS-host validity gates, mirroring the
   // ownership gate above. Both skip when their source list is empty/absent.
+  // Only count rows the request actually sends — cleanMaven drops a row unless
+  // BOTH groupPattern and artifactPattern are non-blank, so a half-filled row
+  // (bad group, no artifact yet) must not false-block an unrelated save.
   const mavenPrefixIssues = distributionSection.state.maven.filter(
-    (m) => m.groupPattern.trim() !== '' && findUnsupportedGroupId(m.groupPattern, supportedGroups) !== undefined,
+    (m) =>
+      m.groupPattern.trim() !== '' &&
+      m.artifactPattern.trim() !== '' &&
+      findUnsupportedGroupId(m.groupPattern, supportedGroups) !== undefined,
   ).length
   const vcsHostIssues = vcsSection.entries.filter(
     (e) => e.vcsPath.trim() !== '' && !isVcsHostSupported(e.vcsPath, gitBaseUrl),
