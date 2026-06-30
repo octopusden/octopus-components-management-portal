@@ -969,6 +969,16 @@ export function ComponentDetailPage() {
   // id is always defined on this route; the `?? ''` only guards the type. An
   // empty id disables the query (useFieldOverrides: enabled: !!componentId), so
   // the provider just starts from an empty baseline until the route resolves.
+  //
+  // Baseline/version coupling: the combined PATCH sends component.version (from
+  // useComponent) AND the desired-full-set built from THIS override baseline.
+  // The desired-set deletes anything omitted, so a stale override baseline paired
+  // with a fresh component.version could in theory drop a concurrently-added row.
+  // In practice these two queries move in lockstep — every component-cache touch
+  // (useUpdateComponent's setQueryData + the override mutations' invalidateOverrideAndComponent)
+  // also invalidates ['field-overrides', id], and window-focus refetches both — so
+  // a fresh version never pairs with a stale override set. (A fully snapshot-coupled
+  // baseline derived from component.configurations is a possible follow-up.)
   const { data: serverOverrides = [] } = useFieldOverrides(id ?? '')
   return (
     <OverridesDraftProvider componentId={id ?? ''} serverOverrides={serverOverrides}>

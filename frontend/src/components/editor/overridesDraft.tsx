@@ -113,6 +113,30 @@ export function OverridesDraftProvider({
     setDraft(EMPTY)
   }, [componentId])
 
+  // Reconcile pending ops when the server baseline refetches (post-save / focus):
+  // drop an update the server has caught up to (now a no-op) or whose row has
+  // vanished, and a delete for a row that is already gone. Without this the bar
+  // can read dirty after the server matches, even though the Review diff is empty.
+  useEffect(() => {
+    setDraft((d) => {
+      if (d.creates.length === 0 && Object.keys(d.updates).length === 0 && d.deletes.length === 0) return d
+      const serverById = new Map(serverOverrides.map((o) => [o.id, o]))
+      let changed = false
+      const updates: Record<string, FieldOverrideUpdateBody> = {}
+      for (const [id, u] of Object.entries(d.updates)) {
+        const server = serverById.get(id)
+        if (!server || updateIsNoop(server, u)) {
+          changed = true // row gone, or server caught up → no longer a pending change
+          continue
+        }
+        updates[id] = u
+      }
+      const deletes = d.deletes.filter((id) => serverById.has(id))
+      if (deletes.length !== d.deletes.length) changed = true
+      return changed ? { ...d, updates, deletes } : d
+    })
+  }, [serverOverrides])
+
   const queueCreate = useCallback((body: FieldOverrideCreateBody) => {
     tempCounter.current += 1
     const tempId = `${DRAFT_ID_PREFIX}${tempCounter.current}`

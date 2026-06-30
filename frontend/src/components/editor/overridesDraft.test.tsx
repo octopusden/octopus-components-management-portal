@@ -116,6 +116,47 @@ describe('OverridesDraftProvider', () => {
     expect(api.effectiveOverrides[0]).toMatchObject({ id: draftId, value: '23', versionRange: '[1.0,3.0)' })
   })
 
+  it('reconciles a pending update to clean when the server refetch catches up to the same value', () => {
+    const { rerender } = renderProvider('c1', [override({ id: 'o1', versionRange: '[1.0,2.0)', value: '17' })])
+    act(() => api.queueUpdate('o1', { versionRange: '[1.0,2.0)', value: '21' }))
+    expect(api.isDirty).toBe(true)
+    // A background refetch lands: the server now reports the same value the user queued.
+    rerender(
+      <OverridesDraftProvider componentId="c1" serverOverrides={[override({ id: 'o1', versionRange: '[1.0,2.0)', value: '21' })]}>
+        <Consumer />
+      </OverridesDraftProvider>,
+    )
+    expect(api.isDirty).toBe(false)
+    expect(api.effectiveOverrides[0]).toMatchObject({ value: '21' })
+  })
+
+  it('reconciles a pending delete to clean when the server refetch shows the row already gone', () => {
+    const { rerender } = renderProvider('c1', [override({ id: 'o1' }), override({ id: 'o2', versionRange: '[2.0,3.0)' })])
+    act(() => api.queueDelete('o1'))
+    expect(api.isDirty).toBe(true)
+    // Refetch: o1 is no longer on the server (someone else deleted it / our save landed).
+    rerender(
+      <OverridesDraftProvider componentId="c1" serverOverrides={[override({ id: 'o2', versionRange: '[2.0,3.0)' })]}>
+        <Consumer />
+      </OverridesDraftProvider>,
+    )
+    expect(api.isDirty).toBe(false)
+    expect(api.effectiveOverrides.map((o) => o.id)).toEqual(['o2'])
+  })
+
+  it('keeps a genuinely-different pending update dirty across a server refetch', () => {
+    const { rerender } = renderProvider('c1', [override({ id: 'o1', value: '17' })])
+    act(() => api.queueUpdate('o1', { versionRange: '[1.0,2.0)', value: '21' }))
+    // Refetch lands but the server value is still different from the user's edit.
+    rerender(
+      <OverridesDraftProvider componentId="c1" serverOverrides={[override({ id: 'o1', value: '18' })]}>
+        <Consumer />
+      </OverridesDraftProvider>,
+    )
+    expect(api.isDirty).toBe(true)
+    expect(api.effectiveOverrides[0]).toMatchObject({ value: '21' })
+  })
+
   it('ignores queueUpdate on a row already queued for delete (effective view stays deleted)', () => {
     renderProvider('c1', [override({ id: 'o1', value: '17' })])
     act(() => api.queueDelete('o1'))
