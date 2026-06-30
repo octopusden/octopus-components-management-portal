@@ -570,6 +570,22 @@ export interface FieldOverride {
   updatedAt: string | null
 }
 
+// Supported versions (coverage) — the decoupled-version-model layer 1 (ADR-018).
+// `all = true` ⇔ the component is defined for every version (no bounded coverage rows);
+// otherwise `supported = ∪ ranges`. `warnings` carries non-blocking advisories from a PUT.
+export interface SupportedVersionsResponse {
+  all: boolean
+  ranges: string[]
+  warnings: string[]
+}
+
+// Declarative replacement: send `all: true` (or an empty `ranges`) for all-versions coverage,
+// else the desired non-overlapping set of supported ranges.
+export interface SupportedVersionsRequest {
+  all?: boolean
+  ranges?: string[]
+}
+
 // ---------------------------------------------------------------------------
 // Portal-side runtime config and info endpoints (unchanged)
 // ---------------------------------------------------------------------------
