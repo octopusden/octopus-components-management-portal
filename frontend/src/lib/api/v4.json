@@ -1471,7 +1471,7 @@
           "lineVersionFormat" : {
             "type" : "string"
           },
-          "majorVersionFormat" : {
+          "minorVersionFormat" : {
             "type" : "string"
           },
           "projectKey" : {
@@ -1503,7 +1503,7 @@
           "lineVersionFormat" : {
             "type" : "string"
           },
-          "majorVersionFormat" : {
+          "minorVersionFormat" : {
             "type" : "string"
           },
           "projectKey" : {

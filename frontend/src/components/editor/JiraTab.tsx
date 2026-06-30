@@ -104,11 +104,11 @@ export function JiraTab({ component, section, canEdit }: JiraTabProps) {
 
         <div className="space-y-1.5">
           <div className="flex items-center gap-1">
-            <Label><FieldLabelText path="jira.majorVersionFormat" fallback="Major Version Format" /></Label>
-            <FieldInfo path="jira.majorVersionFormat" label="Major Version Format" />
+            <Label><FieldLabelText path="jira.minorVersionFormat" fallback="Minor Version Format" /></Label>
+            <FieldInfo path="jira.minorVersionFormat" label="Minor Version Format" />
           </div>
-          <Input value={state.majorVersionFormat} onChange={(e) => set('majorVersionFormat', e.target.value)} placeholder="e.g. {major}.0.0" />
-          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="jira.majorVersionFormat" />
+          <Input value={state.minorVersionFormat} onChange={(e) => set('minorVersionFormat', e.target.value)} placeholder="e.g. {major}.0.0" />
+          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="jira.minorVersionFormat" />
         </div>
 
         <div className="space-y-1.5">
@@ -131,8 +131,8 @@ export function JiraTab({ component, section, canEdit }: JiraTabProps) {
 
         <div className="space-y-1.5">
           <div className="flex items-center gap-1">
-            <Label><FieldLabelText path="jira.lineVersionFormat" fallback="Line Version Format" /></Label>
-            <FieldInfo path="jira.lineVersionFormat" label="Line Version Format" />
+            <Label><FieldLabelText path="jira.lineVersionFormat" fallback="Line Version Format / Major Version Format" /></Label>
+            <FieldInfo path="jira.lineVersionFormat" label="Line Version Format / Major Version Format" />
           </div>
           <Input value={state.lineVersionFormat} onChange={(e) => set('lineVersionFormat', e.target.value)} placeholder="e.g. {major}.{minor}.x" />
           <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="jira.lineVersionFormat" />

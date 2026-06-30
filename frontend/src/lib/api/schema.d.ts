@@ -1225,7 +1225,7 @@ export interface components {
         JiraAspectRequest: {
             buildVersionFormat?: string;
             lineVersionFormat?: string;
-            majorVersionFormat?: string;
+            minorVersionFormat?: string;
             projectKey?: string;
             releaseVersionFormat?: string;
             technical?: boolean;
@@ -1236,7 +1236,7 @@ export interface components {
             buildVersionFormat?: string;
             hotfixVersionFormat?: string;
             lineVersionFormat?: string;
-            majorVersionFormat?: string;
+            minorVersionFormat?: string;
             projectKey?: string;
             releaseVersionFormat?: string;
             technical?: boolean;

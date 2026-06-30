@@ -170,7 +170,7 @@ export interface EscrowAspect {
 export interface JiraAspect {
   projectKey?: string | null
   technical?: boolean | null
-  majorVersionFormat?: string | null
+  minorVersionFormat?: string | null
   releaseVersionFormat?: string | null
   buildVersionFormat?: string | null
   lineVersionFormat?: string | null

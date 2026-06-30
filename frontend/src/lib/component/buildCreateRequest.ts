@@ -66,7 +66,7 @@ export interface CreateFormValues {
   // (jira.componentVersionFormat.*) so a new component inherits the configured
   // formats. major/release/build/line live on the BASE jira aspect; hotfix is a
   // top-level component field (jiraHotfixVersionFormat).
-  majorVersionFormat: string
+  minorVersionFormat: string
   releaseVersionFormat: string
   buildVersionFormat: string
   lineVersionFormat: string
@@ -242,7 +242,7 @@ export function buildCreateRequest(
   // FORM-DRIVEN — copy mode prefills the form from the source, so assign the
   // trimmed value or DELETE the value inherited from copyJiraAspect. Otherwise
   // clearing a format in "Create Similar" would silently re-send the source value.
-  for (const k of ['majorVersionFormat', 'releaseVersionFormat', 'buildVersionFormat', 'lineVersionFormat'] as const) {
+  for (const k of ['minorVersionFormat', 'releaseVersionFormat', 'buildVersionFormat', 'lineVersionFormat'] as const) {
     const v = form[k].trim()
     if (v) jira[k] = v
     else delete jira[k]

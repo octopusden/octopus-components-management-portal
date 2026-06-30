@@ -48,7 +48,7 @@ const EXPECTED_KEYS = [
   'component.releasesInDefaultBranch',
   'jira.hotfixVersionFormat',
   'jira.versionPrefix',
-  'jira.majorVersionFormat',
+  'jira.minorVersionFormat',
   'jira.releaseVersionFormat',
   'jira.buildVersionFormat',
   'jira.lineVersionFormat',

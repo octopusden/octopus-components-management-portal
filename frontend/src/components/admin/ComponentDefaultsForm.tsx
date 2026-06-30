@@ -183,10 +183,10 @@ export function ComponentDefaultsForm() {
             <SwitchField label="Technical" checked={getBool(jira, 'technical')} />
             <Separator />
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <ReadField label="Major Version Format" value={jiraCvf.majorVersionFormat} mono />
+              <ReadField label="Minor Version Format" value={jiraCvf.minorVersionFormat} mono />
               <ReadField label="Release Version Format" value={jiraCvf.releaseVersionFormat} mono />
               <ReadField label="Build Version Format" value={jiraCvf.buildVersionFormat} mono />
-              <ReadField label="Line Version Format" value={jiraCvf.lineVersionFormat} mono />
+              <ReadField label="Line Version Format / Major Version Format" value={jiraCvf.lineVersionFormat} mono />
               <ReadField label="Hotfix Version Format" value={jiraCvf.hotfixVersionFormat} mono />
             </div>
           </TabsContent>

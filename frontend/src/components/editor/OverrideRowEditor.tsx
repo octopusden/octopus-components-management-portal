@@ -70,10 +70,10 @@ const SCALAR_ATTRS: ScalarAttr[] = [
   // Jira
   { path: 'jira.projectKey', label: 'Project Key', type: 'string' },
   { path: 'jira.technical', label: 'Technical', type: 'boolean' },
-  { path: 'jira.majorVersionFormat', label: 'Major Version Format', type: 'string' },
+  { path: 'jira.minorVersionFormat', label: 'Minor Version Format', type: 'string' },
   { path: 'jira.releaseVersionFormat', label: 'Release Version Format', type: 'string' },
   { path: 'jira.buildVersionFormat', label: 'Build Version Format', type: 'string' },
-  { path: 'jira.lineVersionFormat', label: 'Line Version Format', type: 'string' },
+  { path: 'jira.lineVersionFormat', label: 'Line Version Format / Major Version Format', type: 'string' },
   { path: 'jira.versionPrefix', label: 'Version Prefix', type: 'string' },
   { path: 'jira.versionFormat', label: 'Version Format', type: 'string' },
   { path: 'jira.hotfixVersionFormat', label: 'Hotfix Version Format', type: 'string' },

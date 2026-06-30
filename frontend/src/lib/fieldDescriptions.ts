@@ -57,14 +57,14 @@ export const fieldDescriptions: Record<string, string> = {
     'Template for hotfix version numbers (e.g. $major.$minor.$service.$fix). Release automation expands the placeholders when registering hotfix releases built from maintenance branches.',
   'jira.versionPrefix':
     'Prefix prepended to this component’s versions in the tracker’s Fix Version field (e.g. a short component name). Keeps versions distinguishable when multiple components share one project.',
-  'jira.majorVersionFormat':
-    'Template defining how major versions are written in the tracker (e.g. $major.$minor). Used by release automation to format Fix Version names.',
+  'jira.minorVersionFormat':
+    'Template defining how minor versions are written in the tracker (e.g. $major.$minor). Used by release automation to format Fix Version names.',
   'jira.releaseVersionFormat':
     'Template for full release version numbers (e.g. $major.$minor.$service). Release automation expands it when registering a release version in the tracker.',
   'jira.buildVersionFormat':
     'Template for build (intermediate) version numbers (e.g. $major.$minor.$service.$fix.$build). CI build numbering uses it for non-release builds.',
   'jira.lineVersionFormat':
-    'Template for a version line (e.g. $major.$minor) — identifies a maintenance line rather than a concrete release. Used where automation operates on whole lines.',
+    'Template for a version line (e.g. $major.$minor) — also known as the Major Version Format. Identifies a maintenance line rather than a concrete release. Used where automation operates on whole lines.',
   'jira.versionFormat':
     'Generic version format that combines the prefix with the base version templates and defines the canonical shape of this component’s version strings in the tracker.',
 
