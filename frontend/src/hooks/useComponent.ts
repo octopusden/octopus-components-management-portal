@@ -38,6 +38,10 @@ export function useUpdateComponent(id: string) {
     onSuccess: (data) => {
       queryClient.setQueryData(['component', id], data)
       queryClient.invalidateQueries({ queryKey: ['components'] })
+      // The combined PATCH also carries the desired field-override set (item D);
+      // refetch the override baseline so OverridesDraftProvider re-seeds from the
+      // authoritative server state after save (full-set-replace baseline freshness).
+      queryClient.invalidateQueries({ queryKey: ['field-overrides', id] })
     },
   })
 }

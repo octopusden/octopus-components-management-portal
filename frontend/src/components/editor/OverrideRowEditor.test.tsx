@@ -293,7 +293,6 @@ describe('OverrideRowEditor — create mode', () => {
   })
 
   it('calls useCreateFieldOverride with correct scalar string body on submit', async () => {
-    mockQueueCreate.mockResolvedValue({})
     renderEditor()
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
     await userEvent.selectOptions(select, 'build.javaVersion')
@@ -318,7 +317,6 @@ describe('OverrideRowEditor — create mode', () => {
   })
 
   it('calls useCreateFieldOverride with correct marker body for requiredTools (deduped)', async () => {
-    mockQueueCreate.mockResolvedValue({})
     renderEditor()
     await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
@@ -343,7 +341,6 @@ describe('OverrideRowEditor — create mode', () => {
   })
 
   it('calls useCreateFieldOverride with boolean true value for boolean attribute', async () => {
-    mockQueueCreate.mockResolvedValue({})
     renderEditor()
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
     await userEvent.selectOptions(select, 'build.deprecated')
@@ -418,7 +415,6 @@ describe('OverrideRowEditor — edit mode (scalar)', () => {
   })
 
   it('calls useUpdateFieldOverride with correct body on submit', async () => {
-    mockQueueUpdate.mockResolvedValue({})
     renderEditor({ mode: 'edit', override: makeScalarOverride() })
 
     const versionInput = screen.getByLabelText('Version Range') as HTMLInputElement
@@ -466,7 +462,6 @@ describe('OverrideRowEditor — edit mode (marker)', () => {
   })
 
   it('calls useUpdateFieldOverride with markerChildren body on submit', async () => {
-    mockQueueUpdate.mockResolvedValue({})
     renderEditor({ mode: 'edit', override: makeMarkerOverride() })
 
     await userEvent.click(screen.getByRole('button', { name: /^update$/i }))
@@ -528,7 +523,6 @@ describe('OverrideRowEditor — marker child trim + blank-row filter', () => {
     // HTML5 `required` accepts `"   "` as non-empty, so the form-submit
     // gate does NOT catch whitespace-only required fields. Without the
     // trim+filter, that row reaches CRS as `vcsPath: "   "` and 400s.
-    mockQueueCreate.mockResolvedValue({})
     renderEditor()
     await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
@@ -556,7 +550,6 @@ describe('OverrideRowEditor — marker child trim + blank-row filter', () => {
   })
 
   it('distribution.maven: whitespace-only artifactPattern row is dropped, surviving row is trimmed', async () => {
-    mockQueueCreate.mockResolvedValue({})
     renderEditor()
     await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
@@ -608,7 +601,6 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
   })
 
   it('calls useCreateFieldOverride with correct marker body for distribution.fileUrl', async () => {
-    mockQueueCreate.mockResolvedValue({})
     renderEditor()
     await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
@@ -635,7 +627,6 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
   })
 
   it('calls useCreateFieldOverride with correct marker body for distribution.docker', async () => {
-    mockQueueCreate.mockResolvedValue({})
     renderEditor()
     await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
@@ -660,7 +651,6 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
   })
 
   it('calls useCreateFieldOverride with correct marker body for distribution.packages', async () => {
-    mockQueueCreate.mockResolvedValue({})
     renderEditor()
     await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
