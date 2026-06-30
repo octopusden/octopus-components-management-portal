@@ -420,6 +420,36 @@ describe('CreateComponentDialog — component-defaults prefill (scratch)', () =>
       expect((screen.getByLabelText(/build system/i) as HTMLSelectElement).value).toBe(''),
     )
   })
+
+  it('prefills the Jira version formats from defaults and submits them (jira aspect + hotfix)', async () => {
+    mockMutateAsync.mockResolvedValue({ id: 'comp-1', name: 'widget' })
+    withDefaults({
+      vcs: { tag: '$module-$version' },
+      jira: {
+        componentVersionFormat: {
+          majorVersionFormat: '$major.$minor',
+          releaseVersionFormat: '$major.$minor.$service',
+          hotfixVersionFormat: '$major.$minor.$service-$fix',
+        },
+      },
+    })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    expect((screen.getByLabelText(/major version format/i) as HTMLInputElement).value).toBe('$major.$minor')
+    expect((screen.getByLabelText(/release version format/i) as HTMLInputElement).value).toBe('$major.$minor.$service')
+    expect((screen.getByLabelText(/hotfix version format/i) as HTMLInputElement).value).toBe('$major.$minor.$service-$fix')
+    // build/line have no default → empty.
+    expect((screen.getByLabelText(/build version format/i) as HTMLInputElement).value).toBe('')
+    await fillBaseFields()
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalled())
+    const arg = mockMutateAsync.mock.calls[0]![0]
+    expect(arg.baseConfiguration.jira).toMatchObject({
+      majorVersionFormat: '$major.$minor',
+      releaseVersionFormat: '$major.$minor.$service',
+    })
+    expect(arg.jiraHotfixVersionFormat).toBe('$major.$minor.$service-$fix')
+  })
 })
 
 describe('CreateComponentDialog — artifact ownership "Specific artifacts" (EXPLICIT)', () => {
@@ -502,6 +532,15 @@ describe('CreateComponentDialog — supported-groupId prefix validation', () => 
 describe('CreateComponentDialog — VCS host validation', () => {
   beforeEach(() => {
     mockUsePortalLinks.mockReturnValue({ data: { gitBaseUrl: 'https://bitbucket.example.com' } })
+  })
+
+  it('hints a full ssh URL with the ecosystem Bitbucket host in the placeholder', async () => {
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
+    expect((screen.getByLabelText(/^vcs url/i) as HTMLInputElement).placeholder).toBe(
+      'ssh://git@bitbucket.example.com/PROJECT/repo.git',
+    )
   })
 
   it('blocks a VCS URL on a non-ecosystem host', async () => {

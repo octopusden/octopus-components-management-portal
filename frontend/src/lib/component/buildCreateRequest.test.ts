@@ -15,6 +15,11 @@ function makeForm(overrides: Partial<CreateFormValues> = {}): CreateFormValues {
     copyright: '',
     jiraProjectKey: '',
     versionPrefix: '',
+    majorVersionFormat: '',
+    releaseVersionFormat: '',
+    buildVersionFormat: '',
+    lineVersionFormat: '',
+    hotfixVersionFormat: '',
     vcsUrl: 'ssh://git@host/proj/repo.git',
     vcsTag: '$module-$version',
     vcsBranch: 'master',
@@ -210,6 +215,27 @@ describe('buildCreateRequest — gated (explicit+external) coordinate', () => {
     expect(req.baseConfiguration?.jira).toMatchObject({ projectKey: 'PROJ', versionPrefix: 'svc-new' })
   })
 
+  it('maps the version formats: major/release/build/line → jira aspect, hotfix → component field', () => {
+    const req = buildCreateRequest(
+      makeForm({
+        majorVersionFormat: '$major.$minor',
+        releaseVersionFormat: '$major.$minor.$service',
+        buildVersionFormat: '$b',
+        lineVersionFormat: '$l',
+        hotfixVersionFormat: '$major.$minor.$service-$fix',
+      }),
+    )
+    expect(req.baseConfiguration?.jira).toMatchObject({
+      majorVersionFormat: '$major.$minor',
+      releaseVersionFormat: '$major.$minor.$service',
+      buildVersionFormat: '$b',
+      lineVersionFormat: '$l',
+    })
+    // hotfix is a top-level component field, NOT on the jira aspect.
+    expect(req.jiraHotfixVersionFormat).toBe('$major.$minor.$service-$fix')
+    expect('hotfixVersionFormat' in (req.baseConfiguration?.jira ?? {})).toBe(false)
+  })
+
   it('omits jira aspect entirely when no jira fields are set (scratch)', () => {
     const req = buildCreateRequest(makeForm({ jiraProjectKey: '', versionPrefix: '' }))
     expect('jira' in (req.baseConfiguration ?? {})).toBe(false)
@@ -280,7 +306,9 @@ describe('buildCreateRequest — copy mode (with source)', () => {
   const source = makeSource()
 
   it('copies source general fields and lists', () => {
-    const req = buildCreateRequest(makeForm({ name: 'svc-clone' }), source)
+    // hotfix format is form-driven (copy mode prefills the form from the source in
+    // initialValues), so supply it via the form here rather than relying on a copy.
+    const req = buildCreateRequest(makeForm({ name: 'svc-clone', hotfixVersionFormat: '%d.%d.%d.%d' }), source)
     expect(req).toMatchObject({
       name: 'svc-clone',
       productType: 'TYPE_A',

@@ -62,6 +62,15 @@ export interface CreateFormValues {
   // copied); versionPrefix defaults to the component key in scratch mode (mirrored in the form).
   jiraProjectKey: string
   versionPrefix: string
+  // Jira version-format patterns, prefilled from component-defaults
+  // (jira.componentVersionFormat.*) so a new component inherits the configured
+  // formats. major/release/build/line live on the BASE jira aspect; hotfix is a
+  // top-level component field (jiraHotfixVersionFormat).
+  majorVersionFormat: string
+  releaseVersionFormat: string
+  buildVersionFormat: string
+  lineVersionFormat: string
+  hotfixVersionFormat: string
   // VCS entry fields, only emitted when vcsBlockApplies(buildSystem). vcsUrl is
   // unique per component (never copied); tag/branch are reusable format
   // patterns prefilled from component-defaults (or the source BASE row in copy
@@ -197,7 +206,9 @@ export function buildCreateRequest(
     copyright: form.copyright || undefined,
     releasesInDefaultBranch: source?.releasesInDefaultBranch ?? undefined,
     labels: [...(source?.labels ?? [])],
-    jiraHotfixVersionFormat: source?.jiraHotfixVersionFormat ?? undefined,
+    // Hotfix format is a top-level component field (not on the jira aspect). The
+    // form carries it (prefilled from component-defaults / source); a blank clears.
+    jiraHotfixVersionFormat: form.hotfixVersionFormat.trim() || undefined,
     vcsExternalRegistry: source?.vcsExternalRegistry ?? undefined,
     distributionExplicit: form.distributionExplicit,
     distributionExternal: form.distributionExternal,
@@ -227,6 +238,12 @@ export function buildCreateRequest(
   const jira: JiraAspect = { ...(copyJiraAspect(baseRow?.jira) ?? {}) }
   if (form.jiraProjectKey.trim()) jira.projectKey = form.jiraProjectKey.trim()
   if (form.versionPrefix.trim()) jira.versionPrefix = form.versionPrefix.trim()
+  // BASE jira version formats (hotfix is component-level, set above). Form values
+  // win over the copied source aspect; a blank leaves the copied value in place.
+  if (form.majorVersionFormat.trim()) jira.majorVersionFormat = form.majorVersionFormat.trim()
+  if (form.releaseVersionFormat.trim()) jira.releaseVersionFormat = form.releaseVersionFormat.trim()
+  if (form.buildVersionFormat.trim()) jira.buildVersionFormat = form.buildVersionFormat.trim()
+  if (form.lineVersionFormat.trim()) jira.lineVersionFormat = form.lineVersionFormat.trim()
   if (Object.values(jira).some((v) => v != null)) baseConfiguration.jira = jira
   if (baseRow && baseRow.requiredTools.length > 0) {
     baseConfiguration.requiredTools = [...baseRow.requiredTools]

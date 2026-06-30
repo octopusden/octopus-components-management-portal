@@ -86,6 +86,12 @@ function makeCreateSchema(
     copyright: z.string(),
     jiraProjectKey: z.string().trim().min(1, 'Jira Project Key is required'),
     versionPrefix: z.string(),
+    // Optional Jira version-format patterns (prefilled from component-defaults).
+    majorVersionFormat: z.string(),
+    releaseVersionFormat: z.string(),
+    buildVersionFormat: z.string(),
+    lineVersionFormat: z.string(),
+    hotfixVersionFormat: z.string(),
     vcsUrl: z.string(),
     vcsTag: z.string(),
     vcsBranch: z.string(),
@@ -245,6 +251,11 @@ const SCRATCH_DEFAULTS: CreateFormValues = {
   copyright: '',
   jiraProjectKey: '',
   versionPrefix: '',
+  majorVersionFormat: '',
+  releaseVersionFormat: '',
+  buildVersionFormat: '',
+  lineVersionFormat: '',
+  hotfixVersionFormat: '',
   vcsUrl: '',
   vcsTag: '',
   vcsBranch: '',
@@ -265,11 +276,19 @@ interface VcsDefaults {
 // back to the hardcoded SCRATCH_DEFAULTS. Unique-per-component fields (name,
 // vcsUrl, distribution coordinate) are intentionally NOT prefilled even when a
 // pattern default exists — they must be entered fresh per component.
+interface ComponentVersionFormatDefaults {
+  majorVersionFormat?: string
+  releaseVersionFormat?: string
+  buildVersionFormat?: string
+  lineVersionFormat?: string
+  hotfixVersionFormat?: string
+}
+
 interface ComponentDefaults {
   buildSystem?: string
   componentDisplayName?: string
   copyright?: string
-  jira?: { projectKey?: string }
+  jira?: { projectKey?: string; componentVersionFormat?: ComponentVersionFormatDefaults }
   distribution?: { explicit?: boolean; external?: boolean }
   vcs?: VcsDefaults
 }
@@ -329,6 +348,7 @@ function initialValues(source: ComponentDetail | null, defaults: ComponentDefaul
       distributionExplicit,
       distributionExternal,
       jiraProjectKey: blankToUndefined(defaults.jira?.projectKey) ?? '',
+      ...versionFormatsFromDefaults(defaults),
       vcsTag,
       vcsBranch,
     }
@@ -348,11 +368,35 @@ function initialValues(source: ComponentDetail | null, defaults: ComponentDefaul
     releaseManager: [...(source.releaseManager ?? [])],
     securityChampion: [...(source.securityChampion ?? [])],
     copyright: source.copyright ?? '',
-    // jiraProjectKey is unique per component → never copied (left blank). versionPrefix is a
-    // reusable format, so it IS prefilled from the source's BASE jira config.
+    // jiraProjectKey is unique per component → never copied (left blank). versionPrefix and the
+    // version formats are reusable patterns, so they ARE prefilled from the source's BASE jira config.
     versionPrefix: selectBaseRow(source)?.jira?.versionPrefix ?? '',
+    majorVersionFormat: selectBaseRow(source)?.jira?.majorVersionFormat ?? '',
+    releaseVersionFormat: selectBaseRow(source)?.jira?.releaseVersionFormat ?? '',
+    buildVersionFormat: selectBaseRow(source)?.jira?.buildVersionFormat ?? '',
+    lineVersionFormat: selectBaseRow(source)?.jira?.lineVersionFormat ?? '',
+    hotfixVersionFormat: source.jiraHotfixVersionFormat ?? '',
     vcsTag,
     vcsBranch,
+  }
+}
+
+// Maps component-defaults jira.componentVersionFormat → the form's version-format
+// fields (blank when the default is absent). hotfix is included though it maps to
+// the top-level jiraHotfixVersionFormat at request time (see buildCreateRequest).
+function versionFormatsFromDefaults(
+  defaults: ComponentDefaults,
+): Pick<
+  CreateFormValues,
+  'majorVersionFormat' | 'releaseVersionFormat' | 'buildVersionFormat' | 'lineVersionFormat' | 'hotfixVersionFormat'
+> {
+  const cvf = defaults.jira?.componentVersionFormat ?? {}
+  return {
+    majorVersionFormat: blankToUndefined(cvf.majorVersionFormat) ?? '',
+    releaseVersionFormat: blankToUndefined(cvf.releaseVersionFormat) ?? '',
+    buildVersionFormat: blankToUndefined(cvf.buildVersionFormat) ?? '',
+    lineVersionFormat: blankToUndefined(cvf.lineVersionFormat) ?? '',
+    hotfixVersionFormat: blankToUndefined(cvf.hotfixVersionFormat) ?? '',
   }
 }
 
@@ -518,6 +562,13 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
   const buildSystemValue = watch('buildSystem')
   const ownershipMode = watch('ownership.mode')
   const showVcs = vcsBlockApplies(buildSystemValue)
+  // Full-format placeholder hinting the expected ssh:// shape AND the ecosystem
+  // Bitbucket host (the same host the VCS-host validation enforces). Falls back
+  // to a generic host when portal-links / gitBaseUrl is unavailable.
+  const vcsHost = hostOf(gitBaseUrl)
+  const vcsUrlPlaceholder = vcsHost
+    ? `ssh://git@${vcsHost}/PROJECT/repo.git`
+    : 'ssh://git@host/path/repo.git'
 
   // A prefilled default build system (from component-defaults) that isn't among
   // the currently offered options — config drift between component-defaults and
@@ -760,7 +811,7 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
             <Input
               id="create-vcsUrl"
               className="font-mono text-xs"
-              placeholder="ssh://git@host/path/repo.git"
+              placeholder={vcsUrlPlaceholder}
               aria-required
               aria-invalid={Boolean(errors.vcsUrl)}
               aria-describedby={errors.vcsUrl ? 'create-vcsUrl-error' : undefined}
@@ -869,6 +920,36 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
           />
         </div>
       </div>
+
+      {/* Jira version-format patterns. Optional; prefilled from component-defaults
+          (jira.componentVersionFormat) so a new component inherits the configured
+          formats. major/release/build/line map to the BASE jira aspect, hotfix to
+          the component-level jiraHotfixVersionFormat (see buildCreateRequest). */}
+      <fieldset className="space-y-4 rounded-md border border-border p-3">
+        <legend className="px-1 text-xs font-medium text-muted-foreground">Version formats</legend>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="create-majorVersionFormat">Major Version Format</Label>
+            <Input id="create-majorVersionFormat" className="font-mono text-xs" placeholder="$major.$minor" {...register('majorVersionFormat')} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="create-releaseVersionFormat">Release Version Format</Label>
+            <Input id="create-releaseVersionFormat" className="font-mono text-xs" placeholder="$major.$minor.$service" {...register('releaseVersionFormat')} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="create-buildVersionFormat">Build Version Format</Label>
+            <Input id="create-buildVersionFormat" className="font-mono text-xs" {...register('buildVersionFormat')} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="create-lineVersionFormat">Line Version Format</Label>
+            <Input id="create-lineVersionFormat" className="font-mono text-xs" {...register('lineVersionFormat')} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="create-hotfixVersionFormat">Hotfix Version Format</Label>
+            <Input id="create-hotfixVersionFormat" className="font-mono text-xs" placeholder="$major.$minor.$service-$fix" {...register('hotfixVersionFormat')} />
+          </div>
+        </div>
+      </fieldset>
 
       {editable('distributionExplicit') && (
         <div className="flex items-center gap-2">
