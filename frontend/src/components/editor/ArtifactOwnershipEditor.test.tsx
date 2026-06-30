@@ -5,9 +5,24 @@ import userEvent from '@testing-library/user-event'
 import { ArtifactOwnershipEditor } from './ArtifactOwnershipEditor'
 import type { OwnershipMappingValue } from '../../lib/artifactOwnership'
 
-function Harness({ initial, configRanges = ['[1.0,2.0)'] }: { initial: OwnershipMappingValue[]; configRanges?: string[] }) {
+function Harness({
+  initial,
+  configRanges = ['[1.0,2.0)'],
+  supportedGroups,
+}: {
+  initial: OwnershipMappingValue[]
+  configRanges?: string[]
+  supportedGroups?: readonly string[]
+}) {
   const [value, setValue] = useState(initial)
-  return <ArtifactOwnershipEditor value={value} onChange={setValue} configRanges={configRanges} />
+  return (
+    <ArtifactOwnershipEditor
+      value={value}
+      onChange={setValue}
+      configRanges={configRanges}
+      supportedGroups={supportedGroups}
+    />
+  )
 }
 
 const base = (over: Partial<OwnershipMappingValue> = {}): OwnershipMappingValue => ({
@@ -20,6 +35,16 @@ const base = (over: Partial<OwnershipMappingValue> = {}): OwnershipMappingValue 
 })
 
 describe('ArtifactOwnershipEditor', () => {
+  it('flags a group that lacks a supported prefix', () => {
+    render(<Harness initial={[base({ groups: 'org.bad' })]} supportedGroups={['com.acme']} />)
+    expect(screen.getByText(/must start with a supported prefix/i)).toBeInTheDocument()
+  })
+
+  it('shows no prefix error when the group is under a supported prefix', () => {
+    render(<Harness initial={[base({ groups: 'com.acme.svc' })]} supportedGroups={['com.acme']} />)
+    expect(screen.queryByText(/must start with a supported prefix/i)).not.toBeInTheDocument()
+  })
+
   it('renders a base mapping with its group and mode selected', () => {
     render(<Harness initial={[base()]} />)
     expect(screen.getByDisplayValue('com.example.foo')).toBeInTheDocument()

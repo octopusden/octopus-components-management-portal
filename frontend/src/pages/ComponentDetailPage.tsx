@@ -54,6 +54,9 @@ import { ApiError } from '../lib/api'
 import { useOptimisticConflict } from '../hooks/useOptimisticConflict'
 import type { ComponentDetail } from '../lib/types'
 import { countOwnershipIssues, fromArtifactId } from '../lib/artifactOwnership'
+import { findUnsupportedGroupId } from '../lib/groupValidation'
+import { isVcsHostSupported } from '../lib/vcsHost'
+import { useSupportedGroups } from '../hooks/useSupportedGroups'
 import { selectBaseRow } from '../lib/api/baseRow'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../lib/auth'
@@ -185,6 +188,10 @@ export function ComponentDetailPage() {
   const { data: portalLinks } = usePortalLinks()
   const jiraBaseUrl = portalLinks?.jiraBaseUrl ?? undefined
   const gitBaseUrl = portalLinks?.gitBaseUrl ?? undefined
+  // Supported groupId prefixes (CRS rule #10) feed the distribution/ownership
+  // group checks; the bitbucket host (gitBaseUrl) feeds the VCS-host check.
+  // Both fail-open when unavailable — CRS stays authoritative on save.
+  const { groups: supportedGroups } = useSupportedGroups()
 
   const form = useForm<GeneralFormValues>({
     defaultValues: {
@@ -347,7 +354,21 @@ export function ComponentDetailPage() {
   // Client-side artifact-ownership validity gate: block save while the editor shows unresolved
   // issues (invalid group, empty EXPLICIT, intra-component conflict, overlapping override ranges).
   // The server is the authoritative gate (400/409); this avoids a round-trip on a known-bad state.
-  const ownershipIssues = countOwnershipIssues(form.watch('artifactIds') ?? [])
+  const ownershipIssues = countOwnershipIssues(form.watch('artifactIds') ?? [], supportedGroups)
+  // groupId-prefix (CRS rule #10) and VCS-host validity gates, mirroring the
+  // ownership gate above. Both skip when their source list is empty/absent.
+  // Only count rows the request actually sends — cleanMaven drops a row unless
+  // BOTH groupPattern and artifactPattern are non-blank, so a half-filled row
+  // (bad group, no artifact yet) must not false-block an unrelated save.
+  const mavenPrefixIssues = distributionSection.state.maven.filter(
+    (m) =>
+      m.groupPattern.trim() !== '' &&
+      m.artifactPattern.trim() !== '' &&
+      findUnsupportedGroupId(m.groupPattern, supportedGroups) !== undefined,
+  ).length
+  const vcsHostIssues = vcsSection.entries.filter(
+    (e) => e.vcsPath.trim() !== '' && !isVcsHostSupported(e.vcsPath, gitBaseUrl),
+  ).length
 
   function discardAll() {
     // Reset the RHF form to the COMPONENT's values (not the empty form
@@ -779,13 +800,13 @@ export function ComponentDetailPage() {
 
             <TabsContent value="vcs">
               <EditSurface canEdit={canEdit} label="VCS">
-                <VcsTab section={vcsSection} canEdit={canEdit} />
+                <VcsTab section={vcsSection} canEdit={canEdit} gitBaseUrl={gitBaseUrl} />
               </EditSurface>
             </TabsContent>
 
             <TabsContent value="distribution">
               <EditSurface canEdit={canEdit} label="Distribution">
-                <DistributionTab section={distributionSection} canEdit={canEdit} />
+                <DistributionTab section={distributionSection} canEdit={canEdit} supportedGroups={supportedGroups} />
               </EditSurface>
             </TabsContent>
 
@@ -859,7 +880,11 @@ export function ComponentDetailPage() {
                     ? 'Validating component owner…'
                     : ownershipIssues > 0
                       ? `Resolve ${ownershipIssues} artifact-ownership ${ownershipIssues === 1 ? 'issue' : 'issues'} before saving`
-                      : null
+                      : mavenPrefixIssues > 0
+                        ? `Fix ${mavenPrefixIssues} distribution Group ID ${mavenPrefixIssues === 1 ? 'prefix' : 'prefixes'} before saving`
+                        : vcsHostIssues > 0
+                          ? `Fix ${vcsHostIssues} VCS ${vcsHostIssues === 1 ? 'host' : 'hosts'} before saving`
+                          : null
               }
               onDiscard={discardAll}
               onSave={handleOpenReview}

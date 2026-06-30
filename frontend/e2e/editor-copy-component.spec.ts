@@ -139,6 +139,13 @@ async function setupRoutes(page: Page, sourceOverride: Record<string, unknown> =
   await page.route('**/rest/api/4/components/meta/build-systems', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(['MAVEN', 'GRADLE']) }),
   )
+  // The create dialog pre-validates the maven Group ID against the supported
+  // groupId prefixes (CRS v2 /common/supported-groups). Mock it so the spec is
+  // self-contained and the 'org.acme' coordinate used below passes the check —
+  // otherwise the real stand's prefixes block the submit and the create never POSTs.
+  await page.route('**/rest/api/2/common/supported-groups', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(['org.acme']) }),
+  )
   // PeopleInput commits a typed/picked person only after the directory lookup
   // resolves with an exact active match (PR #79) — every typed person in this
   // spec is active, so echo the query back as an active match.
@@ -212,8 +219,8 @@ test.describe('Copy component — admin smoke', () => {
     await expect(dialog.getByText('Create Similar Component')).toBeVisible()
 
     // Display Name is NOT prefilled from the source (it is unique); Component Key starts empty.
-    await expect(dialog.getByLabel(/display name/i)).toHaveValue('')
-    await expect(dialog.getByLabel(/component key/i)).toHaveValue('')
+    await expect(dialog.getByLabel(/^display name/i)).toHaveValue('')
+    await expect(dialog.getByLabel(/^component key/i)).toHaveValue('')
 
     // GRADLE requires VCS → the block is visible. Tag/branch are reusable
     // format patterns: branch prefills from the source BASE VCS entry ('main'),
@@ -223,10 +230,10 @@ test.describe('Copy component — admin smoke', () => {
     await expect(dialog.getByLabel(/^tag/i)).toHaveValue('$module-$version')
     await expect(dialog.getByLabel(/^production branch/i)).toHaveValue('main')
 
-    await dialog.getByLabel(/component key/i).fill('svc-copy-clone')
-    await dialog.getByLabel(/display name/i).fill('Copy Clone Name')
+    await dialog.getByLabel(/^component key/i).fill('svc-copy-clone')
+    await dialog.getByLabel(/^display name/i).fill('Copy Clone Name')
     await dialog.getByLabel(/^vcs url/i).fill('ssh://git@host/proj/clone-repo.git')
-    await dialog.getByLabel(/jira project key/i).fill('CLONE')
+    await dialog.getByLabel(/^jira project key/i).fill('CLONE')
     await dialog.getByRole('button', { name: 'Create' }).click()
 
     // Navigates to the created component.
@@ -289,7 +296,7 @@ test.describe('Copy component — admin smoke', () => {
     await expect(dialog.getByText('Create Similar Component')).toBeVisible()
     // Owner prefill proves the dialog loaded the FULL detail from a summary-only row.
     // (displayName is intentionally NOT prefilled — it is unique.)
-    await expect(dialog.getByLabel(/display name/i)).toHaveValue('')
+    await expect(dialog.getByLabel(/^display name/i)).toHaveValue('')
     await expect(dialog.getByPlaceholder('AD userkey')).toHaveValue('owner-oscar')
 
     await dialog.getByRole('button', { name: 'Cancel' }).click()
@@ -314,10 +321,10 @@ test.describe('Copy component — admin smoke', () => {
     await expect(dialog.getByText('rm-alice')).toBeVisible()
     await expect(dialog.getByText('sc-carol')).toBeVisible()
 
-    await dialog.getByLabel(/component key/i).fill('svc-copy-clone')
-    await dialog.getByLabel(/display name/i).fill('Copy Clone Name')
+    await dialog.getByLabel(/^component key/i).fill('svc-copy-clone')
+    await dialog.getByLabel(/^display name/i).fill('Copy Clone Name')
     await dialog.getByLabel(/^vcs url/i).fill('ssh://git@host/proj/clone-repo.git')
-    await dialog.getByLabel(/jira project key/i).fill('CLONE')
+    await dialog.getByLabel(/^jira project key/i).fill('CLONE')
     // Fill a maven coordinate (default type).
     await dialog.getByLabel('Group ID').fill('org.acme')
     await dialog.getByLabel('Artifact ID').fill('svc')
@@ -352,17 +359,17 @@ test.describe('Create component from scratch — admin smoke', () => {
     const dialog = page.getByRole('dialog')
     await expect(dialog.getByText('Create Component')).toBeVisible()
 
-    await dialog.getByLabel(/component key/i).fill('scratch-svc')
-    await dialog.getByLabel(/display name/i).fill('Scratch Svc')
+    await dialog.getByLabel(/^component key/i).fill('scratch-svc')
+    await dialog.getByLabel(/^display name/i).fill('Scratch Svc')
     // Build System is a native <select> — selectOption is unambiguous and
     // closes cleanly (no portal overlay to block later clicks).
-    await dialog.getByLabel(/build system/i).selectOption('MAVEN')
+    await dialog.getByLabel(/^build system/i).selectOption('MAVEN')
     // MAVEN requires VCS → block appears, tag prefilled from component-defaults
     // and branch from the portal fallback; only the URL needs typing.
     await expect(dialog.getByLabel(/^tag/i)).toHaveValue('$module-$version')
     await expect(dialog.getByLabel(/^production branch/i)).toHaveValue('master')
     await dialog.getByLabel(/^vcs url/i).fill('ssh://git@host/proj/scratch-repo.git')
-    await dialog.getByLabel(/jira project key/i).fill('SCR')
+    await dialog.getByLabel(/^jira project key/i).fill('SCR')
     const ownerInput = dialog.getByPlaceholder('AD userkey')
     await ownerInput.fill('owner-oscar')
     // Click the suggestion to commit + close the popup. (Enter would submit the
@@ -376,7 +383,7 @@ test.describe('Create component from scratch — admin smoke', () => {
     await expect(dialog.getByText('Validating person...')).toHaveCount(0)
 
     // Toggle Explicit (External is on by default) → gated block appears.
-    await dialog.getByLabel(/explicit/i).check()
+    await dialog.getByLabel(/^explicit/i).check()
     await expect(dialog.getByText(/required for explicit \+ external/i)).toBeVisible()
 
     // RM / SC via the add-row autocomplete. A typed person lands as a list row
