@@ -4,11 +4,9 @@ import { EnumSelect } from '../ui/EnumSelect'
 import { FieldInfo } from '../ui/FieldInfo'
 import { FieldLabelText } from '../ui/FieldLabelText'
 import { FieldOverrideInline } from './FieldOverrideInline'
-import type { ComponentDetail } from '../../lib/types'
 import type { BuildSection } from './useBuildSection'
 
 interface BuildTabProps {
-  component: ComponentDetail
   section: BuildSection
   canEdit: boolean
 }
@@ -19,7 +17,7 @@ interface BuildTabProps {
  * BASE-row toolchain fields and reports edits up via `section.set`. The page's
  * single sticky Save bar replaces the old per-tab "Save Build" button.
  */
-export function BuildTab({ component, section, canEdit }: BuildTabProps) {
+export function BuildTab({ section, canEdit }: BuildTabProps) {
   const { state, set, buildSystemMissing, buildSystemTouched, setBuildSystemTouched, showMavenVersion, showGradleVersion } = section
   const showRequiredError = buildSystemTouched && buildSystemMissing
 
@@ -50,7 +48,7 @@ export function BuildTab({ component, section, canEdit }: BuildTabProps) {
               Build System is required
             </p>
           )}
-          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.buildSystem" />
+          <FieldOverrideInline canEdit={canEdit} overriddenAttribute="build.buildSystem" />
         </div>
 
         <div className="space-y-1.5">
@@ -63,7 +61,7 @@ export function BuildTab({ component, section, canEdit }: BuildTabProps) {
             onChange={(e) => set('buildFilePath', e.target.value)}
             placeholder="pom.xml / build.gradle"
           />
-          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.buildFilePath" />
+          <FieldOverrideInline canEdit={canEdit} overriddenAttribute="build.buildFilePath" />
         </div>
 
         <div className="space-y-1.5">
@@ -78,7 +76,7 @@ export function BuildTab({ component, section, canEdit }: BuildTabProps) {
             onValueChange={(v) => set('javaVersion', v)}
             placeholder="Select Java version"
           />
-          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.javaVersion" />
+          <FieldOverrideInline canEdit={canEdit} overriddenAttribute="build.javaVersion" />
         </div>
 
         {showMavenVersion && (
@@ -94,7 +92,7 @@ export function BuildTab({ component, section, canEdit }: BuildTabProps) {
               onValueChange={(v) => set('mavenVersion', v)}
               placeholder="Select Maven version"
             />
-            <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.mavenVersion" />
+            <FieldOverrideInline canEdit={canEdit} overriddenAttribute="build.mavenVersion" />
           </div>
         )}
 
@@ -109,7 +107,7 @@ export function BuildTab({ component, section, canEdit }: BuildTabProps) {
               onChange={(e) => set('gradleVersion', e.target.value)}
               placeholder="8.6"
             />
-            <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="build.gradleVersion" />
+            <FieldOverrideInline canEdit={canEdit} overriddenAttribute="build.gradleVersion" />
           </div>
         )}
       </div>

@@ -1,31 +1,29 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { FieldOverrides } from './FieldOverrides'
 import type { FieldOverride } from '../../lib/types'
 import type { User } from '../../lib/auth'
 
 // ---------------------------------------------------------------------------
-// Mock hooks
+// Mock hooks — item D: the table now reads the page-level override draft and
+// queues deletes (no immediate DELETE). (Mock-prefixed names so Vitest's
+// hoisted vi.mock factory may reference them.)
 // ---------------------------------------------------------------------------
 
-const mockOverrides = vi.fn<() => { data: FieldOverride[]; isLoading: boolean }>()
-const mockDeleteMutateAsync = vi.fn()
+const mockQueueDelete = vi.fn()
+let mockOverrides: FieldOverride[] = []
 
-vi.mock('../../hooks/useComponent', () => ({
-  useFieldOverrides: () => mockOverrides(),
-  useCreateFieldOverride: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
-  useUpdateFieldOverride: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
-  useDeleteFieldOverride: vi.fn(() => ({
-    mutateAsync: mockDeleteMutateAsync,
-    isPending: false,
-  })),
-}))
-
-const mockToast = vi.fn()
-vi.mock('../../hooks/use-toast', () => ({
-  useToast: () => ({ toast: mockToast }),
+vi.mock('./overridesDraft', () => ({
+  useOverridesDraft: () => ({
+    serverOverrides: mockOverrides,
+    effectiveOverrides: mockOverrides,
+    isDirty: false,
+    queueCreate: vi.fn(),
+    queueUpdate: vi.fn(),
+    queueDelete: mockQueueDelete,
+    reset: vi.fn(),
+  }),
 }))
 
 // FieldOverrides gates its edit surface on the EDIT_METADATA permission, read via
@@ -63,7 +61,6 @@ vi.mock('./OverrideRowEditor', () => ({
     return (
       <div data-testid="override-row-editor" data-mode={mode} data-attribute={override?.overriddenAttribute ?? ''}>
         <span>{mode === 'edit' ? 'Edit Override' : 'Add Override (modal)'}</span>
-        {/* Scalar radio to assert create mode */}
         {mode === 'create' && <input type="radio" name="overrideType" aria-label="Scalar" defaultChecked />}
       </div>
     )
@@ -75,12 +72,7 @@ vi.mock('./OverrideRowEditor', () => ({
 // ---------------------------------------------------------------------------
 
 function renderComponent() {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <FieldOverrides componentId="c-1" />
-    </QueryClientProvider>,
-  )
+  return render(<FieldOverrides />)
 }
 
 function makeScalarOverride(overrides: Partial<FieldOverride> = {}): FieldOverride {
@@ -117,9 +109,8 @@ function makeMarkerOverride(overrides: Partial<FieldOverride> = {}): FieldOverri
 
 describe('FieldOverrides', () => {
   beforeEach(() => {
-    mockDeleteMutateAsync.mockReset()
-    mockToast.mockReset()
-    mockOverrides.mockReturnValue({ data: [], isLoading: false })
+    mockQueueDelete.mockReset()
+    mockOverrides = []
     mockUser.mockReturnValue({ data: ADMIN_USER })
   })
 
@@ -129,7 +120,7 @@ describe('FieldOverrides', () => {
   })
 
   it('shows empty state when no overrides', () => {
-    mockOverrides.mockReturnValue({ data: [], isLoading: false })
+    mockOverrides = []
     renderComponent()
     expect(screen.getByText(/no field overrides/i)).toBeDefined()
   })
@@ -144,33 +135,25 @@ describe('FieldOverrides', () => {
   })
 
   it('shows a read-only inline summary of marker children (no need to open the editor)', () => {
-    mockOverrides.mockReturnValue({
-      data: [
-        makeMarkerOverride({
-          overriddenAttribute: 'vcs.settings',
-          markerChildren: {
-            vcsEntries: [
-              { name: 'main', vcsPath: 'org/main' },
-              { name: 'ui', vcsPath: 'org/ui' },
-            ],
-          },
-        }),
-      ],
-      isLoading: false,
-    })
+    mockOverrides = [
+      makeMarkerOverride({
+        overriddenAttribute: 'vcs.settings',
+        markerChildren: {
+          vcsEntries: [
+            { name: 'main', vcsPath: 'org/main' },
+            { name: 'ui', vcsPath: 'org/ui' },
+          ],
+        },
+      }),
+    ]
     renderComponent()
     expect(screen.getByText('main, ui')).toBeDefined()
     expect(screen.queryByText(/edit to view children/i)).toBeNull()
   })
 
   it('renders override rows in a table when overrides exist', () => {
-    mockOverrides.mockReturnValue({
-      data: [makeScalarOverride()],
-      isLoading: false,
-    })
+    mockOverrides = [makeScalarOverride()]
     renderComponent()
-    // The attribute now appears in both the timeline track label and the table
-    // cell; scope this assertion to the table row's contents.
     const table = screen.getByRole('table')
     expect(within(table).getByText('build.javaVersion')).toBeDefined()
     expect(within(table).getByText('SCALAR_OVERRIDE')).toBeDefined()
@@ -178,14 +161,9 @@ describe('FieldOverrides', () => {
   })
 
   it('Edit button on SCALAR_OVERRIDE row opens editor in edit mode with correct attribute', async () => {
-    mockOverrides.mockReturnValue({
-      data: [makeScalarOverride()],
-      isLoading: false,
-    })
+    mockOverrides = [makeScalarOverride()]
     renderComponent()
-
     await userEvent.click(screen.getByRole('button', { name: /^edit override$/i }))
-
     await waitFor(() => {
       const editor = screen.getByTestId('override-row-editor')
       expect(editor.getAttribute('data-mode')).toBe('edit')
@@ -194,16 +172,10 @@ describe('FieldOverrides', () => {
   })
 
   it('Edit button on MARKER row is ENABLED and opens editor in edit mode', async () => {
-    mockOverrides.mockReturnValue({
-      data: [makeMarkerOverride()],
-      isLoading: false,
-    })
+    mockOverrides = [makeMarkerOverride()]
     renderComponent()
-
     const editBtn = screen.getByRole('button', { name: /^edit override$/i }) as HTMLButtonElement
-    // Must NOT be disabled (Wave C-write re-enables marker edit for MARKER rows)
     expect(editBtn.disabled).toBe(false)
-
     await userEvent.click(editBtn)
     await waitFor(() => {
       const editor = screen.getByTestId('override-row-editor')
@@ -213,67 +185,38 @@ describe('FieldOverrides', () => {
   })
 
   it('Delete button triggers confirm dialog', async () => {
-    mockOverrides.mockReturnValue({
-      data: [makeScalarOverride()],
-      isLoading: false,
-    })
+    mockOverrides = [makeScalarOverride()]
     renderComponent()
-
     await userEvent.click(screen.getByRole('button', { name: /^delete override$/i }))
-
     await waitFor(() => {
       expect(screen.getByText('Delete Override')).toBeDefined()
     })
   })
 
-  it('confirming Delete calls useDeleteFieldOverride.mutateAsync with the row id and shows toast', async () => {
-    mockOverrides.mockReturnValue({
-      data: [makeScalarOverride()],
-      isLoading: false,
-    })
-    mockDeleteMutateAsync.mockResolvedValue(undefined)
+  it('confirming Delete QUEUES the delete by row id (no immediate write)', async () => {
+    mockOverrides = [makeScalarOverride()]
     renderComponent()
 
-    // Open the confirm dialog from the row trash icon
     await userEvent.click(screen.getByRole('button', { name: /^delete override$/i }))
     await waitFor(() => expect(screen.getByText('Delete Override')).toBeDefined())
-
-    // Click the destructive "Delete" button inside the confirm dialog
     await userEvent.click(screen.getByRole('button', { name: /^delete$/i }))
 
-    await waitFor(() => {
-      expect(mockDeleteMutateAsync).toHaveBeenCalledOnce()
-      expect(mockDeleteMutateAsync).toHaveBeenCalledWith('fo-scalar')
-      expect(mockToast).toHaveBeenCalledWith(
-        expect.objectContaining({ title: 'Override deleted' }),
-      )
-    })
+    expect(mockQueueDelete).toHaveBeenCalledOnce()
+    expect(mockQueueDelete).toHaveBeenCalledWith('fo-scalar')
   })
 
-  it('Delete button is enabled for MARKER rows', async () => {
-    mockOverrides.mockReturnValue({
-      data: [makeMarkerOverride()],
-      isLoading: false,
-    })
+  it('Delete button is enabled for MARKER rows', () => {
+    mockOverrides = [makeMarkerOverride()]
     renderComponent()
-
     const deleteBtn = screen.getByRole('button', { name: /^delete override$/i }) as HTMLButtonElement
     expect(deleteBtn.disabled).toBe(false)
-  })
-
-  it('shows loading skeleton when isLoading is true', () => {
-    mockOverrides.mockReturnValue({ data: [], isLoading: true })
-    const { container } = renderComponent()
-    // SkeletonBlock renders an animated div — check for absence of the table
-    expect(container.querySelector('table')).toBeNull()
   })
 })
 
 describe('FieldOverrides — EDIT_METADATA gating', () => {
   beforeEach(() => {
-    mockDeleteMutateAsync.mockReset()
-    mockToast.mockReset()
-    mockOverrides.mockReturnValue({ data: [makeScalarOverride()], isLoading: false })
+    mockQueueDelete.mockReset()
+    mockOverrides = [makeScalarOverride()]
   })
 
   it('admin (EDIT_METADATA) sees Add Override and per-row edit/delete actions', () => {
@@ -287,9 +230,7 @@ describe('FieldOverrides — EDIT_METADATA gating', () => {
   it('non-admin sees a read-only table — no Add Override, no row actions, no Actions column', () => {
     mockUser.mockReturnValue({ data: EDITOR_USER })
     renderComponent()
-    // Row data still renders (read-only audit view)...
     expect(within(screen.getByRole('table')).getByText('build.javaVersion')).toBeInTheDocument()
-    // ...but no edit surface.
     expect(screen.queryByRole('button', { name: /add override/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /edit override/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /delete override/i })).toBeNull()
@@ -304,20 +245,17 @@ describe('FieldOverrides — EDIT_METADATA gating', () => {
 
   it('shows the read-only marker child summary to non-admins (not the editor-only placeholder)', () => {
     mockUser.mockReturnValue({ data: EDITOR_USER })
-    mockOverrides.mockReturnValue({
-      data: [
-        makeMarkerOverride({
-          overriddenAttribute: 'vcs.settings',
-          markerChildren: {
-            vcsEntries: [
-              { name: 'main', vcsPath: 'org/main' },
-              { name: 'ui', vcsPath: 'org/ui' },
-            ],
-          },
-        }),
-      ],
-      isLoading: false,
-    })
+    mockOverrides = [
+      makeMarkerOverride({
+        overriddenAttribute: 'vcs.settings',
+        markerChildren: {
+          vcsEntries: [
+            { name: 'main', vcsPath: 'org/main' },
+            { name: 'ui', vcsPath: 'org/ui' },
+          ],
+        },
+      }),
+    ]
     renderComponent()
     expect(screen.getByText('main, ui')).toBeInTheDocument()
     expect(screen.queryByText(/edit to view children/i)).toBeNull()
@@ -325,15 +263,12 @@ describe('FieldOverrides — EDIT_METADATA gating', () => {
 
   it('shows the same read-only marker child summary to admins (no editor-only placeholder)', () => {
     mockUser.mockReturnValue({ data: ADMIN_USER })
-    mockOverrides.mockReturnValue({
-      data: [
-        makeMarkerOverride({
-          overriddenAttribute: 'distribution.maven',
-          markerChildren: { mavenArtifacts: [{ groupPattern: 'org.acme', artifactPattern: 'svc' }] },
-        }),
-      ],
-      isLoading: false,
-    })
+    mockOverrides = [
+      makeMarkerOverride({
+        overriddenAttribute: 'distribution.maven',
+        markerChildren: { mavenArtifacts: [{ groupPattern: 'org.acme', artifactPattern: 'svc' }] },
+      }),
+    ]
     renderComponent()
     expect(screen.getByText('org.acme:svc')).toBeInTheDocument()
     expect(screen.queryByText(/edit to view children/i)).toBeNull()

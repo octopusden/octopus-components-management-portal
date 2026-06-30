@@ -773,7 +773,7 @@ export function ComponentDetailPage() {
 
             <TabsContent value="build">
               <EditSurface canEdit={canEdit} label="Build">
-                <BuildTab component={component} section={buildSection} canEdit={canEdit} />
+                <BuildTab section={buildSection} canEdit={canEdit} />
               </EditSurface>
             </TabsContent>
 
@@ -797,7 +797,7 @@ export function ComponentDetailPage() {
 
             <TabsContent value="escrow">
               <EditSurface canEdit={canEdit} label="Escrow">
-                <EscrowTab component={component} section={escrowSection} canEdit={canEdit} />
+                <EscrowTab section={escrowSection} canEdit={canEdit} />
               </EditSurface>
             </TabsContent>
 
@@ -817,7 +817,7 @@ export function ComponentDetailPage() {
 
             <TabsContent value="overrides">
               <EditSurface canEdit={canEdit} label="Overrides">
-                <FieldOverrides componentId={component.id} />
+                <FieldOverrides />
               </EditSurface>
             </TabsContent>
 
