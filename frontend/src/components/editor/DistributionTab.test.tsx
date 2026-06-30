@@ -143,3 +143,41 @@ describe('DistributionTab field descriptions (FieldInfo)', () => {
     expect(tooltip).toHaveTextContent(fieldDescriptions['component.distributionExplicit']!)
   })
 })
+
+describe('DistributionTab — groupId supported-prefix validation', () => {
+  function mavenComponent(groupPattern: string): ComponentDetail {
+    const c = baseComponent()
+    return {
+      ...c,
+      configurations: [
+        {
+          ...c.configurations[0]!,
+          mavenArtifacts: [
+            { id: 'm1', groupPattern, artifactPattern: 'svc', extension: null, classifier: null, sortOrder: 0 },
+          ],
+        },
+      ],
+    }
+  }
+  function renderWithSupported(component: ComponentDetail, supportedGroups: string[]) {
+    function H() {
+      const section = useDistributionSection(component)
+      return (
+        <TooltipProvider>
+          <DistributionTab section={section} canEdit supportedGroups={supportedGroups} />
+        </TooltipProvider>
+      )
+    }
+    return render(<H />)
+  }
+
+  it('flags a maven Group ID without a supported prefix', () => {
+    renderWithSupported(mavenComponent('org.bad'), ['com.openwaygroup'])
+    expect(screen.getByText(/must start with a supported prefix/i)).toBeDefined()
+  })
+
+  it('shows no error when the Group ID is under a supported prefix', () => {
+    renderWithSupported(mavenComponent('com.openwaygroup.svc'), ['com.openwaygroup'])
+    expect(screen.queryByText(/must start with a supported prefix/i)).toBeNull()
+  })
+})

@@ -13,6 +13,7 @@ import { EnumSelect } from '../ui/EnumSelect'
 import { FieldInfo } from '../ui/FieldInfo'
 import { FieldLabelText } from '../ui/FieldLabelText'
 import { ArtifactOwnershipEditor } from './ArtifactOwnershipEditor'
+import { useSupportedGroups } from '../../hooks/useSupportedGroups'
 import { fromArtifactId, OWNERSHIP_ALL_VERSIONS, type OwnershipMappingValue } from '../../lib/artifactOwnership'
 import type { ComponentDetail } from '../../lib/types'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
@@ -128,6 +129,10 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
     watch,
     formState: { errors },
   } = form
+
+  // Supported groupId prefixes drive the ownership group-prefix check (CRS rule
+  // #10). Shared (cached) query — also read by the page for the Save gate.
+  const { groups: supportedGroups } = useSupportedGroups()
 
   const solution = watch('solution')
   const componentOwner = watch('componentOwner')
@@ -673,6 +678,7 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
         <ArtifactOwnershipEditor
           value={watchedArtifactIds ?? []}
           configRanges={ownershipConfigRanges}
+          supportedGroups={supportedGroups}
           disabled={!canEdit}
           onChange={(next) => setValue('artifactIds', next, { shouldDirty: true, shouldTouch: true })}
         />
