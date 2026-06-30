@@ -689,18 +689,24 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="space-y-1.5">
-        <Label htmlFor="create-name">
-          Component Key <span className="text-destructive">*</span>
-        </Label>
+        <div className="flex items-center gap-1">
+          <Label htmlFor="create-name">
+            <FieldLabelText path="component.name" fallback="Component Key" /> <span className="text-destructive">*</span>
+          </Label>
+          <FieldInfo path="component.name" label="Component Key" />
+        </div>
         <Input id="create-name" placeholder="my-component" autoFocus {...register('name')} />
         {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
       </div>
 
       {editable('displayName') && (
         <div className="space-y-1.5">
-          <Label htmlFor="create-displayName">
-            Display Name{explicit && external && <span className="text-destructive"> *</span>}
-          </Label>
+          <div className="flex items-center gap-1">
+            <Label htmlFor="create-displayName">
+              <FieldLabelText path="component.displayName" fallback="Display Name" />{explicit && external && <span className="text-destructive"> *</span>}
+            </Label>
+            <FieldInfo path="component.displayName" label="Display Name" />
+          </div>
           <Input id="create-displayName" placeholder="My Component" {...register('displayName')} />
           {errors.displayName && (
             <p className="text-xs text-destructive">{errors.displayName.message}</p>
@@ -709,9 +715,12 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
       )}
 
       <div className="space-y-1.5">
-        <Label htmlFor="create-buildSystem">
-          Build System <span className="text-destructive">*</span>
-        </Label>
+        <div className="flex items-center gap-1">
+          <Label htmlFor="create-buildSystem">
+            <FieldLabelText path="build.buildSystem" fallback="Build System" /> <span className="text-destructive">*</span>
+          </Label>
+          <FieldInfo path="build.buildSystem" label="Build System" />
+        </div>
         {/* Native <select> registered directly with RHF. A register'd form
             element reflects the form's defaultValue reliably (same as the
             displayName input) — unlike the Radix EnumSelect, whose async
@@ -744,7 +753,12 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
           multi-group and per-range rules are added post-create in the editor, so only the
           tokenless modes are offered. */}
       <div className="space-y-1.5" data-testid="create-ownership">
-        <Label htmlFor="create-ownership-groups">Artifact ownership</Label>
+        <div className="flex items-center gap-1">
+          <Label htmlFor="create-ownership-groups">
+            <FieldLabelText path="component.artifactIds" fallback="Artifact ownership" />
+          </Label>
+          <FieldInfo path="component.artifactIds" label="Artifact ownership" />
+        </div>
         <Input
           id="create-ownership-groups"
           className="font-mono"
@@ -874,9 +888,12 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
       )}
 
       <div className="space-y-1.5">
-        <Label htmlFor="create-componentOwner">
-          Component Owner <span className="text-destructive">*</span>
-        </Label>
+        <div className="flex items-center gap-1">
+          <Label htmlFor="create-componentOwner">
+            <FieldLabelText path="component.componentOwner" fallback="Component Owner" /> <span className="text-destructive">*</span>
+          </Label>
+          <FieldInfo path="component.componentOwner" label="Component Owner" />
+        </div>
         <PeopleInput
           id="create-componentOwner"
           value={componentOwnerValue}
@@ -894,9 +911,12 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label htmlFor="create-jiraProjectKey">
-            Jira Project Key <span className="text-destructive">*</span>
-          </Label>
+          <div className="flex items-center gap-1">
+            <Label htmlFor="create-jiraProjectKey">
+              <FieldLabelText path="jira.projectKey" fallback="Jira Project Key" /> <span className="text-destructive">*</span>
+            </Label>
+            <FieldInfo path="jira.projectKey" label="Jira Project Key" />
+          </div>
           <Input
             id="create-jiraProjectKey"
             placeholder="JIRA project key"
@@ -912,7 +932,12 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
           )}
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="create-versionPrefix">Version Prefix</Label>
+          <div className="flex items-center gap-1">
+            <Label htmlFor="create-versionPrefix">
+              <FieldLabelText path="jira.versionPrefix" fallback="Version Prefix" />
+            </Label>
+            <FieldInfo path="jira.versionPrefix" label="Version Prefix" />
+          </div>
           <Input
             id="create-versionPrefix"
             placeholder="e.g. the component key"
@@ -929,23 +954,38 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
         <legend className="px-1 text-xs font-medium text-muted-foreground">Version formats</legend>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label htmlFor="create-majorVersionFormat">Major Version Format</Label>
+            <div className="flex items-center gap-1">
+              <Label htmlFor="create-majorVersionFormat"><FieldLabelText path="jira.majorVersionFormat" fallback="Major Version Format" /></Label>
+              <FieldInfo path="jira.majorVersionFormat" label="Major Version Format" />
+            </div>
             <Input id="create-majorVersionFormat" className="font-mono text-xs" placeholder="$major.$minor" {...register('majorVersionFormat')} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="create-releaseVersionFormat">Release Version Format</Label>
+            <div className="flex items-center gap-1">
+              <Label htmlFor="create-releaseVersionFormat"><FieldLabelText path="jira.releaseVersionFormat" fallback="Release Version Format" /></Label>
+              <FieldInfo path="jira.releaseVersionFormat" label="Release Version Format" />
+            </div>
             <Input id="create-releaseVersionFormat" className="font-mono text-xs" placeholder="$major.$minor.$service" {...register('releaseVersionFormat')} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="create-buildVersionFormat">Build Version Format</Label>
+            <div className="flex items-center gap-1">
+              <Label htmlFor="create-buildVersionFormat"><FieldLabelText path="jira.buildVersionFormat" fallback="Build Version Format" /></Label>
+              <FieldInfo path="jira.buildVersionFormat" label="Build Version Format" />
+            </div>
             <Input id="create-buildVersionFormat" className="font-mono text-xs" {...register('buildVersionFormat')} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="create-lineVersionFormat">Line Version Format</Label>
+            <div className="flex items-center gap-1">
+              <Label htmlFor="create-lineVersionFormat"><FieldLabelText path="jira.lineVersionFormat" fallback="Line Version Format" /></Label>
+              <FieldInfo path="jira.lineVersionFormat" label="Line Version Format" />
+            </div>
             <Input id="create-lineVersionFormat" className="font-mono text-xs" {...register('lineVersionFormat')} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="create-hotfixVersionFormat">Hotfix Version Format</Label>
+            <div className="flex items-center gap-1">
+              <Label htmlFor="create-hotfixVersionFormat"><FieldLabelText path="jira.hotfixVersionFormat" fallback="Hotfix Version Format" /></Label>
+              <FieldInfo path="jira.hotfixVersionFormat" label="Hotfix Version Format" />
+            </div>
             <Input id="create-hotfixVersionFormat" className="font-mono text-xs" placeholder="$major.$minor.$service-$fix" {...register('hotfixVersionFormat')} />
           </div>
         </div>
@@ -959,7 +999,8 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
             className="h-4 w-4 rounded border-input accent-primary"
             {...register('distributionExplicit')}
           />
-          <Label htmlFor="create-distributionExplicit">Explicit</Label>
+          <Label htmlFor="create-distributionExplicit"><FieldLabelText path="component.distributionExplicit" fallback="Explicit" /></Label>
+          <FieldInfo path="component.distributionExplicit" label="Explicit" />
         </div>
       )}
 
@@ -971,7 +1012,8 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
             className="h-4 w-4 rounded border-input accent-primary"
             {...register('distributionExternal')}
           />
-          <Label htmlFor="create-distributionExternal">External</Label>
+          <Label htmlFor="create-distributionExternal"><FieldLabelText path="component.distributionExternal" fallback="External" /></Label>
+          <FieldInfo path="component.distributionExternal" label="External" />
         </div>
       )}
 
@@ -987,9 +1029,12 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
 
           {editable('releaseManager') && (
             <div className="space-y-1.5">
-              <Label htmlFor="create-releaseManager">
-                Release Managers <span className="text-destructive">*</span>
-              </Label>
+              <div className="flex items-center gap-1">
+                <Label htmlFor="create-releaseManager">
+                  <FieldLabelText path="component.releaseManager" fallback="Release Managers" /> <span className="text-destructive">*</span>
+                </Label>
+                <FieldInfo path="component.releaseManager" label="Release Managers" />
+              </div>
               <PeopleListInput
                 value={releaseManager}
                 onChange={(val) =>
@@ -1006,9 +1051,12 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
 
           {editable('securityChampion') && (
             <div className="space-y-1.5">
-              <Label htmlFor="create-securityChampion">
-                Security Champions <span className="text-destructive">*</span>
-              </Label>
+              <div className="flex items-center gap-1">
+                <Label htmlFor="create-securityChampion">
+                  <FieldLabelText path="component.securityChampion" fallback="Security Champions" /> <span className="text-destructive">*</span>
+                </Label>
+                <FieldInfo path="component.securityChampion" label="Security Champions" />
+              </div>
               <PeopleListInput
                 value={securityChampion}
                 onChange={(val) =>
@@ -1025,7 +1073,10 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
 
           {editable('copyright') && (
             <div className="space-y-1.5">
-              <Label htmlFor="create-copyright">Copyright</Label>
+              <div className="flex items-center gap-1">
+                <Label htmlFor="create-copyright"><FieldLabelText path="component.copyright" fallback="Copyright" /></Label>
+                <FieldInfo path="component.copyright" label="Copyright" />
+              </div>
               <Input id="create-copyright" placeholder="(c) 2026 Acme Inc." {...register('copyright')} />
               <p className="text-xs text-muted-foreground">Required if a copyright catalog is configured.</p>
               {errors.copyright && (
@@ -1035,9 +1086,12 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
           )}
 
           <div className="space-y-1.5">
-            <Label htmlFor="create-coordinate-type">
-              Distribution coordinate <span className="text-destructive">*</span>
-            </Label>
+            <div className="flex items-center gap-1">
+              <Label htmlFor="create-coordinate-type">
+                <FieldLabelText path="distribution.mavenArtifacts" fallback="Distribution coordinate" /> <span className="text-destructive">*</span>
+              </Label>
+              <FieldInfo path="distribution.mavenArtifacts" label="Distribution coordinate" />
+            </div>
             <select
               id="create-coordinate-type"
               className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
