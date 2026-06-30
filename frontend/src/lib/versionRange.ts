@@ -22,17 +22,17 @@ export function isValidVersionRange(range: string): boolean {
 }
 
 /**
- * Returns true when `range` is allowed as a field-override range under D5:
- * syntactically valid AND every segment has a non-empty upper bound (no
- * `,)` suffix in any segment).
+ * True when `range` is syntactically valid AND every segment has a non-empty upper bound (no
+ * `,)` suffix) — i.e. a fully closed / historical-left-unbounded range with no open-upward segment.
  *
- * Universal (`(,)`, `(,0),[0,)`) and any open-upward segment are rejected —
- * they belong to BASE, not overrides. Composite ranges are walked per
- * segment so a non-terminal open-upward segment is also rejected.
+ * NOTE (ADR-018): this is **no longer the production field-override gate** — open-upper overrides
+ * are now first-class, so the editors validate with [isAllowedOverrideRange]. This predicate is
+ * retained as a general "is this range closed-above" utility (and its test coverage of the closed
+ * vs open-upper distinction); it has no production call sites today.
  *
- * Allowed: closed (`[X,Y)`, `[X,Y]`, `(X,Y)`, `(X,Y]`) and
- * historical-left-unbounded (`(,X)`, `(,X]`), plus composites whose every
- * segment satisfies the same rule.
+ * Allowed: closed (`[X,Y)`, `[X,Y]`, `(X,Y)`, `(X,Y]`) and historical-left-unbounded (`(,X)`,
+ * `(,X]`), plus composites whose every segment satisfies the same rule. Rejected: universal
+ * (`(,)`, `(,0),[0,)`) and any open-upward segment.
  */
 export function isClosedVersionRange(range: string): boolean {
   if (!isValidVersionRange(range)) return false
@@ -43,6 +43,32 @@ export function isClosedVersionRange(range: string): boolean {
     if (seg.endsWith(',)')) return false
   }
   return true
+}
+
+const ALL_VERSIONS_SENTINEL = '(,0),[0,)'
+
+/**
+ * Returns true when `range` is allowed as a per-attribute field-override range under the decoupled
+ * version model (ADR-018). The former "D5" closed-only restriction is **relaxed**: open-upper
+ * segments (`[X,)`, "from version X onward") are now first-class overrides — the CRS server accepts
+ * them, and `resolve` applies them by containment.
+ *
+ * Still rejected: the all-versions shapes (`(,)` and the `(,0),[0,)` sentinel) — those denote the
+ * BASE default / full coverage, not a sub-range override; an override spanning all versions is
+ * indistinguishable from editing the base. Coverage itself is edited in the Supported-versions
+ * block, not here.
+ *
+ * Allowed: closed (`[X,Y)`, `[X,Y]`, `(X,Y)`, `(X,Y]`), open-upper (`[X,)`, `(X,)`),
+ * historical-left-unbounded (`(,X)`, `(,X]`), and composites whose segments satisfy the same rule.
+ */
+export function isAllowedOverrideRange(range: string): boolean {
+  if (!isValidVersionRange(range)) return false
+  const compact = normalize(range)
+  if (compact === ALL_VERSIONS_SENTINEL) return false
+  // Reject any universal `(,)` segment, including inside a composite like `(,),[1.0,2.0)`
+  // (which is valid syntax but still spans all versions = the base default).
+  const segments = compact.match(SEGMENT_GLOBAL) ?? []
+  return !segments.some((s) => s === '(,)')
 }
 
 // ─── Overlap detection (simple-segment best-effort) ──────────────────────────

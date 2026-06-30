@@ -10,7 +10,10 @@ import { Label } from './ui/label'
 import { PeopleInput } from './ui/PeopleInput'
 import { PeopleListInput } from './ui/PeopleListInput'
 import { ModeRadioGroup } from './ui/ModeRadioGroup'
+import { ArtifactTokensInput } from './ui/ArtifactTokensInput'
 import { isBadToken } from '../lib/artifactOwnership'
+import { findUnsupportedGroupId } from '../lib/groupValidation'
+import { isVcsHostSupported, hostOf } from '../lib/vcsHost'
 import { InlineError } from './ui/inline-error'
 import { SkeletonBlock } from './ui/skeleton-block'
 import {
@@ -23,6 +26,8 @@ import {
   DialogClose,
 } from './ui/dialog'
 import { useFieldOptions } from '../hooks/useFieldOptions'
+import { useSupportedGroups } from '../hooks/useSupportedGroups'
+import { usePortalLinks } from '../hooks/useInfo'
 import { useFieldConfig, useComponentDefaults } from '../hooks/useAdminConfig'
 import { visibilityFor } from '../hooks/useFieldConfig'
 import { useComponent, useCreateComponent } from '../hooks/useComponent'
@@ -57,7 +62,11 @@ const NAME_REGEX = /^[a-zA-Z0-9_\-./]+$/
 // readonly in field-config is removed from the create form, so its
 // requirement (e.g. RM/SC for explicit+external) must not fire. `editable`
 // returns true when `component.<field>` is editable.
-function makeCreateSchema(editable: (field: string) => boolean) {
+function makeCreateSchema(
+  editable: (field: string) => boolean,
+  supportedGroups: readonly string[],
+  gitBaseUrl: string | null | undefined,
+) {
   return z
   .object({
     name: z
@@ -77,6 +86,12 @@ function makeCreateSchema(editable: (field: string) => boolean) {
     copyright: z.string(),
     jiraProjectKey: z.string().trim().min(1, 'Jira Project Key is required'),
     versionPrefix: z.string(),
+    // Optional Jira version-format patterns (prefilled from component-defaults).
+    majorVersionFormat: z.string(),
+    releaseVersionFormat: z.string(),
+    buildVersionFormat: z.string(),
+    lineVersionFormat: z.string(),
+    hotfixVersionFormat: z.string(),
     vcsUrl: z.string(),
     vcsTag: z.string(),
     vcsBranch: z.string(),
@@ -92,9 +107,9 @@ function makeCreateSchema(editable: (field: string) => boolean) {
     // no ownership mapping (EXPLICIT / multi-group / per-range are added later in the editor).
     ownership: z.object({
       groups: z.string(),
-      // The dialog UI offers only ALL / ALL_EXCEPT_CLAIMED; EXPLICIT is in the type for parity with
-      // the shared ArtifactIdMode (and is never produced here — no token editor in the dialog).
       mode: z.enum(['ALL', 'ALL_EXCEPT_CLAIMED', 'EXPLICIT']),
+      // Literal artifact IDs; only meaningful (and only required) for EXPLICIT.
+      tokens: z.array(z.string()),
     }),
   })
   .superRefine((v, ctx) => {
@@ -113,6 +128,12 @@ function makeCreateSchema(editable: (field: string) => boolean) {
           code: z.ZodIssueCode.custom,
           path: ['vcsUrl'],
           message: 'VCS URL must be an ssh:// URL, e.g. ssh://git@host/path/repo.git',
+        })
+      } else if (!isVcsHostSupported(url, gitBaseUrl)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['vcsUrl'],
+          message: `VCS host must be ${hostOf(gitBaseUrl)} (the ecosystem Bitbucket)`,
         })
       }
       if (!v.vcsTag.trim()) {
@@ -138,11 +159,27 @@ function makeCreateSchema(editable: (field: string) => boolean) {
           message: `Invalid group "${bad}" — letters, digits, . _ - only`,
         })
       }
+      const unsupported = findUnsupportedGroupId(ownGroups, supportedGroups)
+      if (unsupported) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['ownership', 'groups'],
+          message: `Group "${unsupported}" must start with a supported prefix (${supportedGroups.join(', ')})`,
+        })
+      }
       if (v.ownership.mode === 'ALL_EXCEPT_CLAIMED' && tokens.length > 1) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['ownership', 'groups'],
           message: '"All unclaimed" supports a single group only',
+        })
+      }
+      // EXPLICIT ("Specific artifacts") needs at least one literal artifact ID.
+      if (v.ownership.mode === 'EXPLICIT' && v.ownership.tokens.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['ownership', 'tokens'],
+          message: 'Add at least one artifact, or switch to a catch-all mode',
         })
       }
     }
@@ -172,7 +209,18 @@ function makeCreateSchema(editable: (field: string) => boolean) {
     const missing = (field: string, msg: string) =>
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['coordinate', field], message: msg })
     if (c.type === 'maven') {
-      if (!c.groupPattern.trim()) missing('groupPattern', 'Group ID is required')
+      if (!c.groupPattern.trim()) {
+        missing('groupPattern', 'Group ID is required')
+      } else {
+        // CRS rule #10: the maven groupId must start with a supported prefix.
+        const unsupported = findUnsupportedGroupId(c.groupPattern, supportedGroups)
+        if (unsupported) {
+          missing(
+            'groupPattern',
+            `Group ID "${unsupported}" must start with a supported prefix (${supportedGroups.join(', ')})`,
+          )
+        }
+      }
       if (!c.artifactPattern.trim()) missing('artifactPattern', 'Artifact ID is required')
     } else if (c.type === 'docker') {
       if (!c.imageName.trim()) missing('imageName', 'Image name is required')
@@ -203,11 +251,16 @@ const SCRATCH_DEFAULTS: CreateFormValues = {
   copyright: '',
   jiraProjectKey: '',
   versionPrefix: '',
+  majorVersionFormat: '',
+  releaseVersionFormat: '',
+  buildVersionFormat: '',
+  lineVersionFormat: '',
+  hotfixVersionFormat: '',
   vcsUrl: '',
   vcsTag: '',
   vcsBranch: '',
   coordinate: EMPTY_COORDINATE,
-  ownership: { groups: '', mode: 'ALL' },
+  ownership: { groups: '', mode: 'ALL', tokens: [] },
 }
 
 // vcs.tag / vcs.branch read from GET /config/component-defaults (absent fields
@@ -215,6 +268,29 @@ const SCRATCH_DEFAULTS: CreateFormValues = {
 interface VcsDefaults {
   tag?: string
   branch?: string
+}
+
+// The slice of GET /config/component-defaults the create dialog prefills in
+// scratch mode. Every field is optional: component-defaults is an untyped
+// Record (admins may configure none, some, or all), so a missing field falls
+// back to the hardcoded SCRATCH_DEFAULTS. Unique-per-component fields (name,
+// vcsUrl, distribution coordinate) are intentionally NOT prefilled even when a
+// pattern default exists — they must be entered fresh per component.
+interface ComponentVersionFormatDefaults {
+  majorVersionFormat?: string
+  releaseVersionFormat?: string
+  buildVersionFormat?: string
+  lineVersionFormat?: string
+  hotfixVersionFormat?: string
+}
+
+interface ComponentDefaults {
+  buildSystem?: string
+  componentDisplayName?: string
+  copyright?: string
+  jira?: { projectKey?: string; componentVersionFormat?: ComponentVersionFormatDefaults }
+  distribution?: { explicit?: boolean; external?: boolean }
+  vcs?: VcsDefaults
 }
 
 function blankToUndefined(s: string | null | undefined): string | undefined {
@@ -230,7 +306,8 @@ function blankToUndefined(s: string | null | undefined): string | undefined {
 // reset/`values` after the source arrives — keeps the buildSystem EnumSelect in
 // step with the form from its first render and sidesteps a browser-only race
 // where a post-load reset left the field empty.
-function initialValues(source: ComponentDetail | null, vcsDefaults: VcsDefaults): CreateFormValues {
+function initialValues(source: ComponentDetail | null, defaults: ComponentDefaults): CreateFormValues {
+  const vcsDefaults = defaults.vcs ?? {}
   // Tag/branch are reusable format patterns (like versionPrefix): copy mode
   // prefers the source's BASE VCS entry, then component-defaults, then the
   // hardcoded branch fallback. vcsUrl is unique per component — never seeded.
@@ -241,7 +318,41 @@ function initialValues(source: ComponentDetail | null, vcsDefaults: VcsDefaults)
   const vcsTag = blankToUndefined(baseVcs?.tag) ?? blankToUndefined(vcsDefaults.tag) ?? ''
   const vcsBranch =
     blankToUndefined(baseVcs?.branch) ?? blankToUndefined(vcsDefaults.branch) ?? FALLBACK_VCS_BRANCH
-  if (!source) return { ...SCRATCH_DEFAULTS, vcsTag, vcsBranch }
+  if (!source) {
+    // Scratch mode applies the configured component-defaults so the form opens
+    // pre-populated (the legacy DSL applied these server-side; the v4 create
+    // form must surface them, otherwise a configured default is silently lost).
+    // Unique fields (name, vcsUrl, coordinate) stay blank. A deprecated default
+    // build system is dropped: it isn't offered in the dropdown, so seeding it
+    // would desync the native <select> from the form value (same rule as copy
+    // mode below).
+    const defaultBuildSystem = blankToUndefined(defaults.buildSystem)
+    // `??` (not `||`): an explicit `false` default must override the scratch
+    // default, while an absent flag falls back to it.
+    const distributionExplicit = defaults.distribution?.explicit ?? SCRATCH_DEFAULTS.distributionExplicit
+    const distributionExternal = defaults.distribution?.external ?? SCRATCH_DEFAULTS.distributionExternal
+    return {
+      ...SCRATCH_DEFAULTS,
+      buildSystem:
+        defaultBuildSystem && !DEPRECATED_BUILD_SYSTEMS.has(defaultBuildSystem)
+          ? defaultBuildSystem
+          : '',
+      displayName: blankToUndefined(defaults.componentDisplayName) ?? '',
+      // Copyright is rendered ONLY inside the explicit+external block, so seed it
+      // only when the defaulted distribution is gated — otherwise a configured
+      // default would be submitted as an invisible, non-editable value.
+      copyright:
+        distributionExplicit && distributionExternal
+          ? (blankToUndefined(defaults.copyright) ?? '')
+          : '',
+      distributionExplicit,
+      distributionExternal,
+      jiraProjectKey: blankToUndefined(defaults.jira?.projectKey) ?? '',
+      ...versionFormatsFromDefaults(defaults),
+      vcsTag,
+      vcsBranch,
+    }
+  }
   // Deprecated build systems are filtered out of the dropdown, so seeding one
   // would desync the native <select> (no matching option) from the form value —
   // leave it empty and let the user pick a current system.
@@ -257,11 +368,35 @@ function initialValues(source: ComponentDetail | null, vcsDefaults: VcsDefaults)
     releaseManager: [...(source.releaseManager ?? [])],
     securityChampion: [...(source.securityChampion ?? [])],
     copyright: source.copyright ?? '',
-    // jiraProjectKey is unique per component → never copied (left blank). versionPrefix is a
-    // reusable format, so it IS prefilled from the source's BASE jira config.
+    // jiraProjectKey is unique per component → never copied (left blank). versionPrefix and the
+    // version formats are reusable patterns, so they ARE prefilled from the source's BASE jira config.
     versionPrefix: selectBaseRow(source)?.jira?.versionPrefix ?? '',
+    majorVersionFormat: selectBaseRow(source)?.jira?.majorVersionFormat ?? '',
+    releaseVersionFormat: selectBaseRow(source)?.jira?.releaseVersionFormat ?? '',
+    buildVersionFormat: selectBaseRow(source)?.jira?.buildVersionFormat ?? '',
+    lineVersionFormat: selectBaseRow(source)?.jira?.lineVersionFormat ?? '',
+    hotfixVersionFormat: source.jiraHotfixVersionFormat ?? '',
     vcsTag,
     vcsBranch,
+  }
+}
+
+// Maps component-defaults jira.componentVersionFormat → the form's version-format
+// fields (blank when the default is absent). hotfix is included though it maps to
+// the top-level jiraHotfixVersionFormat at request time (see buildCreateRequest).
+function versionFormatsFromDefaults(
+  defaults: ComponentDefaults,
+): Pick<
+  CreateFormValues,
+  'majorVersionFormat' | 'releaseVersionFormat' | 'buildVersionFormat' | 'lineVersionFormat' | 'hotfixVersionFormat'
+> {
+  const cvf = defaults.jira?.componentVersionFormat ?? {}
+  return {
+    majorVersionFormat: blankToUndefined(cvf.majorVersionFormat) ?? '',
+    releaseVersionFormat: blankToUndefined(cvf.releaseVersionFormat) ?? '',
+    buildVersionFormat: blankToUndefined(cvf.buildVersionFormat) ?? '',
+    lineVersionFormat: blankToUndefined(cvf.lineVersionFormat) ?? '',
+    hotfixVersionFormat: blankToUndefined(cvf.hotfixVersionFormat) ?? '',
   }
 }
 
@@ -287,7 +422,7 @@ export function CreateComponentDialog({ open, onOpenChange, sourceId }: CreateCo
   // outage falls straight to the fallbacks (isError still mounts the form)
   // instead of holding the skeleton through the QueryClient's global retry.
   const defaults = useComponentDefaults({ enabled: open, retry: false })
-  const vcsDefaults = ((defaults.data as { vcs?: VcsDefaults } | undefined)?.vcs ?? {}) as VcsDefaults
+  const componentDefaults = (defaults.data ?? {}) as ComponentDefaults
   const ready = (!isCopy || (!!source && !error)) && (defaults.isSuccess || defaults.isError)
 
   return (
@@ -354,7 +489,7 @@ export function CreateComponentDialog({ open, onOpenChange, sourceId }: CreateCo
             key={source?.id ?? 'scratch'}
             source={source ?? null}
             isCopy={isCopy}
-            vcsDefaults={vcsDefaults}
+            defaults={componentDefaults}
             onClose={() => onOpenChange(false)}
           />
         )}
@@ -366,11 +501,11 @@ export function CreateComponentDialog({ open, onOpenChange, sourceId }: CreateCo
 interface CreateComponentFormProps {
   source: ComponentDetail | null
   isCopy: boolean
-  vcsDefaults: VcsDefaults
+  defaults: ComponentDefaults
   onClose: () => void
 }
 
-function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateComponentFormProps) {
+function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateComponentFormProps) {
   const navigate = useNavigate()
   const createMutation = useCreateComponent()
   const { toast } = useToast()
@@ -383,7 +518,16 @@ function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateCom
     (field: string) => visibilityFor(fieldConfigData, `component.${field}`) === 'editable',
     [fieldConfigData],
   )
-  const schema = useMemo(() => makeCreateSchema(editable), [editable])
+  // Supported groupId prefixes (CRS rule #10) and the ecosystem Bitbucket host
+  // feed two pre-flight validations; both fail-open when unavailable (CRS stays
+  // authoritative on submit), so neither gates the form's mount.
+  const { groups: supportedGroups } = useSupportedGroups()
+  const { data: portalLinks } = usePortalLinks()
+  const gitBaseUrl = portalLinks?.gitBaseUrl
+  const schema = useMemo(
+    () => makeCreateSchema(editable, supportedGroups, gitBaseUrl),
+    [editable, supportedGroups, gitBaseUrl],
+  )
 
   const {
     register,
@@ -396,12 +540,17 @@ function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateCom
     formState: { errors, isSubmitting },
   } = useForm<CreateFormValues>({
     resolver: zodResolver(schema),
-    defaultValues: initialValues(source, vcsDefaults),
+    defaultValues: initialValues(source, defaults),
   })
 
-  const { options: buildSystems } = useFieldOptions('buildSystem')
-  // Deprecated systems (BS2_0) are not offered for new components.
-  const offeredBuildSystems = buildSystems.filter((bs) => !DEPRECATED_BUILD_SYSTEMS.has(bs))
+  const { options: buildSystems, isLoading: buildSystemsLoading } = useFieldOptions('buildSystem')
+  // Deprecated systems (BS2_0) are not offered for new components. Memoised so
+  // the drift-guard effect below has a stable dependency (the query data ref is
+  // itself stable across renders).
+  const offeredBuildSystems = useMemo(
+    () => buildSystems.filter((bs) => !DEPRECATED_BUILD_SYSTEMS.has(bs)),
+    [buildSystems],
+  )
   const componentOwnerValue = watch('componentOwner')
   const explicit = watch('distributionExplicit')
   const external = watch('distributionExternal')
@@ -409,8 +558,40 @@ function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateCom
   const releaseManager = watch('releaseManager')
   const securityChampion = watch('securityChampion')
   const coordinateType = watch('coordinate.type')
+  // The "Distribution coordinate" selector covers all three families; point its
+  // hint at the description for the SELECTED type (the editor has three separate
+  // per-type fields, each with its own path).
+  const coordinatePath =
+    coordinateType === 'docker'
+      ? 'distribution.dockerImages'
+      : coordinateType === 'package'
+        ? 'distribution.packages'
+        : 'distribution.mavenArtifacts'
   const nameValue = watch('name')
-  const showVcs = vcsBlockApplies(watch('buildSystem'))
+  const buildSystemValue = watch('buildSystem')
+  const ownershipMode = watch('ownership.mode')
+  const showVcs = vcsBlockApplies(buildSystemValue)
+  // Full-format placeholder hinting the expected ssh:// shape AND the ecosystem
+  // Bitbucket host (the same host the VCS-host validation enforces). Falls back
+  // to a generic host when portal-links / gitBaseUrl is unavailable.
+  const vcsHost = hostOf(gitBaseUrl)
+  const vcsUrlPlaceholder = vcsHost
+    ? `ssh://git@${vcsHost}/PROJECT/repo.git`
+    : 'ssh://git@host/path/repo.git'
+
+  // A prefilled default build system (from component-defaults) that isn't among
+  // the currently offered options — config drift between component-defaults and
+  // the build-systems meta — would leave the native <select> showing a blank
+  // while the stale value lingers in the form and gets submitted. Clear it once
+  // the vocabulary loads so the required-field validation surfaces instead.
+  // Guarded on a non-empty list so a missing/failed meta endpoint never wipes a
+  // legitimately seeded value.
+  useEffect(() => {
+    if (buildSystemsLoading || offeredBuildSystems.length === 0) return
+    if (buildSystemValue && !offeredBuildSystems.includes(buildSystemValue)) {
+      setValue('buildSystem', '', { shouldValidate: false })
+    }
+  }, [buildSystemsLoading, offeredBuildSystems, buildSystemValue, setValue])
 
   // versionPrefix derived-default: in scratch mode mirror the component key until the user
   // edits the field. Copy mode prefills from the source (initialValues), so skip mirroring there.
@@ -517,18 +698,24 @@ function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateCom
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="space-y-1.5">
-        <Label htmlFor="create-name">
-          Component Key <span className="text-destructive">*</span>
-        </Label>
+        <div className="flex items-center gap-1">
+          <Label htmlFor="create-name">
+            <FieldLabelText path="component.name" fallback="Component Key" /> <span className="text-destructive">*</span>
+          </Label>
+          <FieldInfo path="component.name" label="Component Key" />
+        </div>
         <Input id="create-name" placeholder="my-component" autoFocus {...register('name')} />
         {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
       </div>
 
       {editable('displayName') && (
         <div className="space-y-1.5">
-          <Label htmlFor="create-displayName">
-            Display Name{explicit && external && <span className="text-destructive"> *</span>}
-          </Label>
+          <div className="flex items-center gap-1">
+            <Label htmlFor="create-displayName">
+              <FieldLabelText path="component.displayName" fallback="Display Name" />{explicit && external && <span className="text-destructive"> *</span>}
+            </Label>
+            <FieldInfo path="component.displayName" label="Display Name" />
+          </div>
           <Input id="create-displayName" placeholder="My Component" {...register('displayName')} />
           {errors.displayName && (
             <p className="text-xs text-destructive">{errors.displayName.message}</p>
@@ -537,9 +724,12 @@ function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateCom
       )}
 
       <div className="space-y-1.5">
-        <Label htmlFor="create-buildSystem">
-          Build System <span className="text-destructive">*</span>
-        </Label>
+        <div className="flex items-center gap-1">
+          <Label htmlFor="create-buildSystem">
+            <FieldLabelText path="build.buildSystem" fallback="Build System" /> <span className="text-destructive">*</span>
+          </Label>
+          <FieldInfo path="build.buildSystem" label="Build System" />
+        </div>
         {/* Native <select> registered directly with RHF. A register'd form
             element reflects the form's defaultValue reliably (same as the
             displayName input) — unlike the Radix EnumSelect, whose async
@@ -572,7 +762,12 @@ function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateCom
           multi-group and per-range rules are added post-create in the editor, so only the
           tokenless modes are offered. */}
       <div className="space-y-1.5" data-testid="create-ownership">
-        <Label htmlFor="create-ownership-groups">Artifact ownership</Label>
+        <div className="flex items-center gap-1">
+          <Label htmlFor="create-ownership-groups">
+            <FieldLabelText path="component.artifactIds" fallback="Artifact ownership" />
+          </Label>
+          <FieldInfo path="component.artifactIds" label="Artifact ownership" />
+        </div>
         <Input
           id="create-ownership-groups"
           className="font-mono"
@@ -589,15 +784,34 @@ function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateCom
           render={({ field }) => (
             <ModeRadioGroup
               value={field.value}
-              allowed={['ALL', 'ALL_EXCEPT_CLAIMED']}
               idPrefix="create-mode"
               onChange={field.onChange}
             />
           )}
         />
+        {ownershipMode === 'EXPLICIT' && (
+          <div className="space-y-1.5">
+            <Label htmlFor="create-ownership-tokens">
+              Artifacts <span className="text-destructive">*</span>
+            </Label>
+            <Controller
+              control={control}
+              name="ownership.tokens"
+              render={({ field }) => (
+                <ArtifactTokensInput
+                  tokens={field.value}
+                  ariaLabel="Artifact IDs"
+                  onChange={field.onChange}
+                />
+              )}
+            />
+            {errors.ownership?.tokens && (
+              <p className="text-xs text-destructive">{errors.ownership.tokens.message}</p>
+            )}
+          </div>
+        )}
         <p className="text-xs text-muted-foreground">
-          A new component starts owning its group. Specific artifacts, multi-group and per-range rules are added
-          later in the editor.
+          A new component starts owning its group. Multi-group and per-range rules are added later in the editor.
         </p>
       </div>
 
@@ -620,7 +834,7 @@ function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateCom
             <Input
               id="create-vcsUrl"
               className="font-mono text-xs"
-              placeholder="ssh://git@host/path/repo.git"
+              placeholder={vcsUrlPlaceholder}
               aria-required
               aria-invalid={Boolean(errors.vcsUrl)}
               aria-describedby={errors.vcsUrl ? 'create-vcsUrl-error' : undefined}
@@ -683,9 +897,12 @@ function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateCom
       )}
 
       <div className="space-y-1.5">
-        <Label htmlFor="create-componentOwner">
-          Component Owner <span className="text-destructive">*</span>
-        </Label>
+        <div className="flex items-center gap-1">
+          <Label htmlFor="create-componentOwner">
+            <FieldLabelText path="component.componentOwner" fallback="Component Owner" /> <span className="text-destructive">*</span>
+          </Label>
+          <FieldInfo path="component.componentOwner" label="Component Owner" />
+        </div>
         <PeopleInput
           id="create-componentOwner"
           value={componentOwnerValue}
@@ -703,9 +920,12 @@ function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateCom
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label htmlFor="create-jiraProjectKey">
-            Jira Project Key <span className="text-destructive">*</span>
-          </Label>
+          <div className="flex items-center gap-1">
+            <Label htmlFor="create-jiraProjectKey">
+              <FieldLabelText path="jira.projectKey" fallback="Jira Project Key" /> <span className="text-destructive">*</span>
+            </Label>
+            <FieldInfo path="jira.projectKey" label="Jira Project Key" />
+          </div>
           <Input
             id="create-jiraProjectKey"
             placeholder="JIRA project key"
@@ -721,7 +941,12 @@ function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateCom
           )}
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="create-versionPrefix">Version Prefix</Label>
+          <div className="flex items-center gap-1">
+            <Label htmlFor="create-versionPrefix">
+              <FieldLabelText path="jira.versionPrefix" fallback="Version Prefix" />
+            </Label>
+            <FieldInfo path="jira.versionPrefix" label="Version Prefix" />
+          </div>
           <Input
             id="create-versionPrefix"
             placeholder="e.g. the component key"
@@ -729,6 +954,51 @@ function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateCom
           />
         </div>
       </div>
+
+      {/* Jira version-format patterns. Optional; prefilled from component-defaults
+          (jira.componentVersionFormat) so a new component inherits the configured
+          formats. major/release/build/line map to the BASE jira aspect, hotfix to
+          the component-level jiraHotfixVersionFormat (see buildCreateRequest). */}
+      <fieldset className="space-y-4 rounded-md border border-border p-3">
+        <legend className="px-1 text-xs font-medium text-muted-foreground">Version formats</legend>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1">
+              <Label htmlFor="create-majorVersionFormat"><FieldLabelText path="jira.majorVersionFormat" fallback="Major Version Format" /></Label>
+              <FieldInfo path="jira.majorVersionFormat" label="Major Version Format" />
+            </div>
+            <Input id="create-majorVersionFormat" className="font-mono text-xs" placeholder="$major.$minor" {...register('majorVersionFormat')} />
+          </div>
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1">
+              <Label htmlFor="create-releaseVersionFormat"><FieldLabelText path="jira.releaseVersionFormat" fallback="Release Version Format" /></Label>
+              <FieldInfo path="jira.releaseVersionFormat" label="Release Version Format" />
+            </div>
+            <Input id="create-releaseVersionFormat" className="font-mono text-xs" placeholder="$major.$minor.$service" {...register('releaseVersionFormat')} />
+          </div>
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1">
+              <Label htmlFor="create-buildVersionFormat"><FieldLabelText path="jira.buildVersionFormat" fallback="Build Version Format" /></Label>
+              <FieldInfo path="jira.buildVersionFormat" label="Build Version Format" />
+            </div>
+            <Input id="create-buildVersionFormat" className="font-mono text-xs" {...register('buildVersionFormat')} />
+          </div>
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1">
+              <Label htmlFor="create-lineVersionFormat"><FieldLabelText path="jira.lineVersionFormat" fallback="Line Version Format" /></Label>
+              <FieldInfo path="jira.lineVersionFormat" label="Line Version Format" />
+            </div>
+            <Input id="create-lineVersionFormat" className="font-mono text-xs" {...register('lineVersionFormat')} />
+          </div>
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1">
+              <Label htmlFor="create-hotfixVersionFormat"><FieldLabelText path="jira.hotfixVersionFormat" fallback="Hotfix Version Format" /></Label>
+              <FieldInfo path="jira.hotfixVersionFormat" label="Hotfix Version Format" />
+            </div>
+            <Input id="create-hotfixVersionFormat" className="font-mono text-xs" placeholder="$major.$minor.$service-$fix" {...register('hotfixVersionFormat')} />
+          </div>
+        </div>
+      </fieldset>
 
       {editable('distributionExplicit') && (
         <div className="flex items-center gap-2">
@@ -738,7 +1008,8 @@ function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateCom
             className="h-4 w-4 rounded border-input accent-primary"
             {...register('distributionExplicit')}
           />
-          <Label htmlFor="create-distributionExplicit">Explicit</Label>
+          <Label htmlFor="create-distributionExplicit"><FieldLabelText path="component.distributionExplicit" fallback="Explicit" /></Label>
+          <FieldInfo path="component.distributionExplicit" label="Explicit" />
         </div>
       )}
 
@@ -750,7 +1021,8 @@ function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateCom
             className="h-4 w-4 rounded border-input accent-primary"
             {...register('distributionExternal')}
           />
-          <Label htmlFor="create-distributionExternal">External</Label>
+          <Label htmlFor="create-distributionExternal"><FieldLabelText path="component.distributionExternal" fallback="External" /></Label>
+          <FieldInfo path="component.distributionExternal" label="External" />
         </div>
       )}
 
@@ -766,9 +1038,12 @@ function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateCom
 
           {editable('releaseManager') && (
             <div className="space-y-1.5">
-              <Label htmlFor="create-releaseManager">
-                Release Managers <span className="text-destructive">*</span>
-              </Label>
+              <div className="flex items-center gap-1">
+                <Label htmlFor="create-releaseManager">
+                  <FieldLabelText path="component.releaseManager" fallback="Release Managers" /> <span className="text-destructive">*</span>
+                </Label>
+                <FieldInfo path="component.releaseManager" label="Release Managers" />
+              </div>
               <PeopleListInput
                 value={releaseManager}
                 onChange={(val) =>
@@ -785,9 +1060,12 @@ function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateCom
 
           {editable('securityChampion') && (
             <div className="space-y-1.5">
-              <Label htmlFor="create-securityChampion">
-                Security Champions <span className="text-destructive">*</span>
-              </Label>
+              <div className="flex items-center gap-1">
+                <Label htmlFor="create-securityChampion">
+                  <FieldLabelText path="component.securityChampion" fallback="Security Champions" /> <span className="text-destructive">*</span>
+                </Label>
+                <FieldInfo path="component.securityChampion" label="Security Champions" />
+              </div>
               <PeopleListInput
                 value={securityChampion}
                 onChange={(val) =>
@@ -804,7 +1082,10 @@ function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateCom
 
           {editable('copyright') && (
             <div className="space-y-1.5">
-              <Label htmlFor="create-copyright">Copyright</Label>
+              <div className="flex items-center gap-1">
+                <Label htmlFor="create-copyright"><FieldLabelText path="component.copyright" fallback="Copyright" /></Label>
+                <FieldInfo path="component.copyright" label="Copyright" />
+              </div>
               <Input id="create-copyright" placeholder="(c) 2026 Acme Inc." {...register('copyright')} />
               <p className="text-xs text-muted-foreground">Required if a copyright catalog is configured.</p>
               {errors.copyright && (
@@ -814,9 +1095,15 @@ function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateCom
           )}
 
           <div className="space-y-1.5">
-            <Label htmlFor="create-coordinate-type">
-              Distribution coordinate <span className="text-destructive">*</span>
-            </Label>
+            <div className="flex items-center gap-1">
+              {/* Generic selector label (NOT a single CRS field) → kept static so a
+                  per-type field-config label override can't rename it. The hint,
+                  however, tracks the selected coordinate type. */}
+              <Label htmlFor="create-coordinate-type">
+                Distribution coordinate <span className="text-destructive">*</span>
+              </Label>
+              <FieldInfo path={coordinatePath} label="Distribution coordinate" />
+            </div>
             <select
               id="create-coordinate-type"
               className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"

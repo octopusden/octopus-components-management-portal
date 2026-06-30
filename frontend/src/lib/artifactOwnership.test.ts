@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  countOwnershipIssues,
   detectIntraComponentConflicts,
   fromArtifactId,
   groupError,
@@ -61,6 +62,19 @@ describe('artifactOwnership helpers', () => {
     expect(groupError(m({ groups: 'a*' }))).toMatch(/Invalid group/)
     expect(groupError(m({ groups: 'a,b', mode: 'ALL_EXCEPT_CLAIMED' }))).toMatch(/single group/)
     expect(groupError(m({ groups: 'a,b', mode: 'ALL' }))).toBe('')
+  })
+
+  it('groupError enforces the supported prefix when a list is given (skips when empty)', () => {
+    const supported = ['com.acme']
+    expect(groupError(m({ groups: 'org.bad', mode: 'ALL' }), supported)).toMatch(/supported prefix/)
+    expect(groupError(m({ groups: 'com.acme.x', mode: 'ALL' }), supported)).toBe('')
+    // No list ⇒ prefix check skipped (fail-open).
+    expect(groupError(m({ groups: 'org.bad', mode: 'ALL' }))).toBe('')
+  })
+
+  it('countOwnershipIssues counts an unsupported-prefix group', () => {
+    expect(countOwnershipIssues([m({ groups: 'org.bad', mode: 'ALL' })], ['com.acme'])).toBe(1)
+    expect(countOwnershipIssues([m({ groups: 'com.acme.x', mode: 'ALL' })], ['com.acme'])).toBe(0)
   })
 
   it('detectIntraComponentConflicts: ANY two mappings sharing a group token in the same range conflict (CRS disjointness, mode-agnostic)', () => {

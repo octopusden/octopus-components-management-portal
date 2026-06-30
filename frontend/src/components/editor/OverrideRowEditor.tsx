@@ -26,7 +26,7 @@ import { useOverridesDraft } from './overridesDraft'
 import { useToast } from '../../hooks/use-toast'
 import { useFieldConfig } from '../../hooks/useAdminConfig'
 import { labelFor } from '../../hooks/useFieldConfig'
-import { isValidVersionRange, isClosedVersionRange, classifyRangeConflict } from '../../lib/versionRange'
+import { isValidVersionRange, isAllowedOverrideRange, classifyRangeConflict } from '../../lib/versionRange'
 import type { FieldOverride, MarkerChildrenPayload, VcsEntryRequest, MavenArtifactRequest, FileUrlArtifactRequest, DockerImageRequest, PackageRequest } from '../../lib/types'
 
 // ---------------------------------------------------------------------------
@@ -467,12 +467,13 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override }: Overri
       toast({ title: 'Unknown marker attribute', description: attribute, variant: 'destructive' })
       return
     }
-    // D5: field-override ranges must be closed (or historical-left-unbounded);
-    // universal and open-upward forms belong to BASE. Reject client-side.
-    if (!isClosedVersionRange(versionRange)) {
+    // ADR-018: field-override ranges may be bounded, open-upper (`[2.0,)`), or
+    // historical-left-unbounded; only the all-versions shapes denote the base
+    // default. Reject those client-side (the server enforces the same).
+    if (!isAllowedOverrideRange(versionRange)) {
       toast({
         title: isValidVersionRange(versionRange)
-          ? 'Open-upward range — edit the BASE field instead'
+          ? 'All-versions range is the base default — use a bounded or open-upper sub-range'
           : 'Invalid version range',
         variant: 'destructive',
       })
@@ -502,7 +503,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override }: Overri
     onOpenChange(false)
   }
 
-  const versionRangeInvalid = !isClosedVersionRange(versionRange)
+  const versionRangeInvalid = !isAllowedOverrideRange(versionRange)
   // Walk existing overrides on the same attribute for client-side conflict
   // preview. Partial overlap, strict containment, and semantic-equal duplicates
   // all block the write (overrides must be disjoint); equal gets distinct copy.
@@ -620,14 +621,14 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override }: Overri
               className="font-mono"
               required
               aria-invalid={
-                (versionRange.trim() !== '' && !isClosedVersionRange(versionRange)) ||
+                (versionRange.trim() !== '' && !isAllowedOverrideRange(versionRange)) ||
                 overlapConflict !== null
               }
             />
-            {versionRange.trim() !== '' && !isClosedVersionRange(versionRange) && (
+            {versionRange.trim() !== '' && !isAllowedOverrideRange(versionRange) && (
               <p className="text-xs text-destructive">
                 {isValidVersionRange(versionRange)
-                  ? 'Open-upward range — edit the BASE field instead'
+                  ? 'All-versions range is the base default — use a bounded or open-upper sub-range'
                   : 'Invalid version range syntax'}
               </p>
             )}
