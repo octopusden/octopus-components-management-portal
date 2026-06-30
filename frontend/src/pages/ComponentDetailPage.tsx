@@ -1007,10 +1007,11 @@ export function ComponentDetailPage() {
   // useComponent) AND the desired-full-set built from THIS override baseline.
   // The desired-set deletes anything omitted, so a stale override baseline paired
   // with a fresh component.version could in theory drop a concurrently-added row.
-  // In practice these two queries move in lockstep — every component-cache touch
-  // (useUpdateComponent's setQueryData + the override mutations' invalidateOverrideAndComponent)
-  // also invalidates ['field-overrides', id], and window-focus refetches both — so
-  // a fresh version never pairs with a stale override set. (A fully snapshot-coupled
+  // In practice these two queries move in lockstep — the combined-save
+  // useUpdateComponent invalidates ['field-overrides', id] alongside the
+  // component, useUpdateSupportedVersions does the same via
+  // invalidateOverrideAndComponent, and window-focus refetches both — so a fresh
+  // version never pairs with a stale override set. (A fully snapshot-coupled
   // baseline derived from component.configurations is a possible follow-up.)
   const { data: serverOverrides = [] } = useFieldOverrides(id ?? '')
   return (

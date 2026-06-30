@@ -582,6 +582,11 @@ export interface FieldOverrideUpsert {
   id?: string
   overriddenAttribute: string
   versionRange: string
+  // Widened to `unknown` (scalar overrides send string/number/boolean). The
+  // generated schema.d.ts types this `Record<string, never>` because CRS
+  // declares `value` as a bare `object` in the v4 OpenAPI — same as
+  // FieldOverrideCreateBody.value. Fixing the CRS schema (free-form / scalar
+  // union) is a follow-up; the hand-mirror stays correct at runtime.
   value?: unknown
   markerChildren?: MarkerChildrenPayload | null
 }

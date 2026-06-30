@@ -292,7 +292,7 @@ describe('OverrideRowEditor — create mode', () => {
     expect(screen.getByRole('button', { name: /add artifact/i })).toBeDefined()
   })
 
-  it('calls useCreateFieldOverride with correct scalar string body on submit', async () => {
+  it('queues a create with correct scalar string body on submit', async () => {
     renderEditor()
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
     await userEvent.selectOptions(select, 'build.javaVersion')
@@ -316,7 +316,7 @@ describe('OverrideRowEditor — create mode', () => {
     })
   })
 
-  it('calls useCreateFieldOverride with correct marker body for requiredTools (deduped)', async () => {
+  it('queues a create with correct marker body for requiredTools (deduped)', async () => {
     renderEditor()
     await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
@@ -340,7 +340,7 @@ describe('OverrideRowEditor — create mode', () => {
     })
   })
 
-  it('calls useCreateFieldOverride with boolean true value for boolean attribute', async () => {
+  it('queues a create with boolean true value for boolean attribute', async () => {
     renderEditor()
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
     await userEvent.selectOptions(select, 'build.deprecated')
@@ -414,7 +414,7 @@ describe('OverrideRowEditor — edit mode (scalar)', () => {
     expect(screen.queryByRole('tab', { name: /marker/i })).toBeNull()
   })
 
-  it('calls useUpdateFieldOverride with correct body on submit', async () => {
+  it('queues an update with correct body on submit', async () => {
     renderEditor({ mode: 'edit', override: makeScalarOverride() })
 
     const versionInput = screen.getByLabelText('Version Range') as HTMLInputElement
@@ -461,7 +461,7 @@ describe('OverrideRowEditor — edit mode (marker)', () => {
     expect((screen.getByDisplayValue('my-lib-*') as HTMLInputElement).value).toBe('my-lib-*')
   })
 
-  it('calls useUpdateFieldOverride with markerChildren body on submit', async () => {
+  it('queues an update with markerChildren body on submit', async () => {
     renderEditor({ mode: 'edit', override: makeMarkerOverride() })
 
     await userEvent.click(screen.getByRole('button', { name: /^update$/i }))
@@ -600,7 +600,7 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
     mockOverridesList = []
   })
 
-  it('calls useCreateFieldOverride with correct marker body for distribution.fileUrl', async () => {
+  it('queues a create with correct marker body for distribution.fileUrl', async () => {
     renderEditor()
     await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
@@ -626,7 +626,7 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
     })
   })
 
-  it('calls useCreateFieldOverride with correct marker body for distribution.docker', async () => {
+  it('queues a create with correct marker body for distribution.docker', async () => {
     renderEditor()
     await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
@@ -650,7 +650,7 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
     })
   })
 
-  it('calls useCreateFieldOverride with correct marker body for distribution.packages', async () => {
+  it('queues a create with correct marker body for distribution.packages', async () => {
     renderEditor()
     await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
