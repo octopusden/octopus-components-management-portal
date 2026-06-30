@@ -65,16 +65,16 @@ describe('artifactOwnership helpers', () => {
   })
 
   it('groupError enforces the supported prefix when a list is given (skips when empty)', () => {
-    const supported = ['com.openwaygroup']
+    const supported = ['com.acme']
     expect(groupError(m({ groups: 'org.bad', mode: 'ALL' }), supported)).toMatch(/supported prefix/)
-    expect(groupError(m({ groups: 'com.openwaygroup.x', mode: 'ALL' }), supported)).toBe('')
+    expect(groupError(m({ groups: 'com.acme.x', mode: 'ALL' }), supported)).toBe('')
     // No list ⇒ prefix check skipped (fail-open).
     expect(groupError(m({ groups: 'org.bad', mode: 'ALL' }))).toBe('')
   })
 
   it('countOwnershipIssues counts an unsupported-prefix group', () => {
-    expect(countOwnershipIssues([m({ groups: 'org.bad', mode: 'ALL' })], ['com.openwaygroup'])).toBe(1)
-    expect(countOwnershipIssues([m({ groups: 'com.openwaygroup.x', mode: 'ALL' })], ['com.openwaygroup'])).toBe(0)
+    expect(countOwnershipIssues([m({ groups: 'org.bad', mode: 'ALL' })], ['com.acme'])).toBe(1)
+    expect(countOwnershipIssues([m({ groups: 'com.acme.x', mode: 'ALL' })], ['com.acme'])).toBe(0)
   })
 
   it('detectIntraComponentConflicts: ANY two mappings sharing a group token in the same range conflict (CRS disjointness, mode-agnostic)', () => {

@@ -460,7 +460,7 @@ describe('CreateComponentDialog — artifact ownership "Specific artifacts" (EXP
 
 describe('CreateComponentDialog — supported-groupId prefix validation', () => {
   beforeEach(() => {
-    mockUseSupportedGroups.mockReturnValue({ groups: ['com.openwaygroup'], isLoading: false })
+    mockUseSupportedGroups.mockReturnValue({ groups: ['com.acme'], isLoading: false })
   })
 
   it('blocks an ownership group that lacks a supported prefix', async () => {
@@ -478,7 +478,7 @@ describe('CreateComponentDialog — supported-groupId prefix validation', () => 
     renderWithProviders(<CreateComponentButton />)
     await openScratch()
     await fillBaseFields()
-    await userEvent.type(screen.getByLabelText('Artifact ownership'), 'com.openwaygroup.x')
+    await userEvent.type(screen.getByLabelText('Artifact ownership'), 'com.acme.x')
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() => expect(mockMutateAsync).toHaveBeenCalled())
   })
@@ -501,7 +501,7 @@ describe('CreateComponentDialog — supported-groupId prefix validation', () => 
 
 describe('CreateComponentDialog — VCS host validation', () => {
   beforeEach(() => {
-    mockUsePortalLinks.mockReturnValue({ data: { gitBaseUrl: 'https://bitbucket.spb.openwaygroup.com' } })
+    mockUsePortalLinks.mockReturnValue({ data: { gitBaseUrl: 'https://bitbucket.example.com' } })
   })
 
   it('blocks a VCS URL on a non-ecosystem host', async () => {
@@ -514,7 +514,7 @@ describe('CreateComponentDialog — VCS host validation', () => {
     await commitComponentOwner()
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() =>
-      expect(screen.getByText(/vcs host must be bitbucket\.spb\.openwaygroup\.com/i)).toBeDefined(),
+      expect(screen.getByText(/vcs host must be bitbucket\.example\.com/i)).toBeDefined(),
     )
     expect(mockMutateAsync).not.toHaveBeenCalled()
   })
@@ -527,7 +527,7 @@ describe('CreateComponentDialog — VCS host validation', () => {
     await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
     await userEvent.type(
       screen.getByLabelText(/^vcs url/i),
-      'ssh://git@bitbucket.spb.openwaygroup.com:7999/proj/repo.git',
+      'ssh://git@bitbucket.example.com:7999/proj/repo.git',
     )
     await userEvent.type(screen.getByLabelText(/jira project key/i), 'WIDG')
     await commitComponentOwner()

@@ -131,8 +131,8 @@ describe('VcsTab — VCS host validation', () => {
 
   it('flags a VCS path on a non-ecosystem host', () => {
     // makeComponent's entry points at example.com.
-    renderWithGit(makeComponent(), 'https://bitbucket.spb.openwaygroup.com')
-    expect(screen.getByText(/vcs host must be bitbucket\.spb\.openwaygroup\.com/i)).toBeDefined()
+    renderWithGit(makeComponent(), 'https://bitbucket.example.com')
+    expect(screen.getByText(/vcs host must be bitbucket\.example\.com/i)).toBeDefined()
   })
 
   it('shows no error when the VCS host matches the ecosystem Bitbucket', () => {
@@ -140,12 +140,12 @@ describe('VcsTab — VCS host validation', () => {
       configurations: [
         makeBaseRow({
           vcsEntries: [
-            { id: 'v1', sortOrder: 0, name: 'main', vcsPath: 'ssh://git@bitbucket.spb.openwaygroup.com/r.git', repositoryType: 'GIT', tag: 't', branch: 'master', hotfixBranch: null },
+            { id: 'v1', sortOrder: 0, name: 'main', vcsPath: 'ssh://git@bitbucket.example.com/r.git', repositoryType: 'GIT', tag: 't', branch: 'master', hotfixBranch: null },
           ],
         }),
       ],
     })
-    renderWithGit(c, 'https://bitbucket.spb.openwaygroup.com')
+    renderWithGit(c, 'https://bitbucket.example.com')
     expect(screen.queryByText(/vcs host must be/i)).toBeNull()
   })
 })

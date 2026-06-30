@@ -36,12 +36,12 @@ const base = (over: Partial<OwnershipMappingValue> = {}): OwnershipMappingValue 
 
 describe('ArtifactOwnershipEditor', () => {
   it('flags a group that lacks a supported prefix', () => {
-    render(<Harness initial={[base({ groups: 'org.bad' })]} supportedGroups={['com.openwaygroup']} />)
+    render(<Harness initial={[base({ groups: 'org.bad' })]} supportedGroups={['com.acme']} />)
     expect(screen.getByText(/must start with a supported prefix/i)).toBeInTheDocument()
   })
 
   it('shows no prefix error when the group is under a supported prefix', () => {
-    render(<Harness initial={[base({ groups: 'com.openwaygroup.svc' })]} supportedGroups={['com.openwaygroup']} />)
+    render(<Harness initial={[base({ groups: 'com.acme.svc' })]} supportedGroups={['com.acme']} />)
     expect(screen.queryByText(/must start with a supported prefix/i)).not.toBeInTheDocument()
   })
 

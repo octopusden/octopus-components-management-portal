@@ -172,12 +172,12 @@ describe('DistributionTab — groupId supported-prefix validation', () => {
   }
 
   it('flags a maven Group ID without a supported prefix', () => {
-    renderWithSupported(mavenComponent('org.bad'), ['com.openwaygroup'])
+    renderWithSupported(mavenComponent('org.bad'), ['com.acme'])
     expect(screen.getByText(/must start with a supported prefix/i)).toBeDefined()
   })
 
   it('shows no error when the Group ID is under a supported prefix', () => {
-    renderWithSupported(mavenComponent('com.openwaygroup.svc'), ['com.openwaygroup'])
+    renderWithSupported(mavenComponent('com.acme.svc'), ['com.acme'])
     expect(screen.queryByText(/must start with a supported prefix/i)).toBeNull()
   })
 })

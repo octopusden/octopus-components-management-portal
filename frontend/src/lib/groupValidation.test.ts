@@ -13,19 +13,19 @@ describe('splitGroupIds', () => {
 
 describe('hasSupportedPrefix', () => {
   it('matches by plain startsWith (mirrors CRS)', () => {
-    expect(hasSupportedPrefix('com.openwaygroup.foo', ['com.openwaygroup'])).toBe(true)
-    expect(hasSupportedPrefix('com.openwaygroup', ['com.openwaygroup'])).toBe(true)
-    expect(hasSupportedPrefix('org.other.foo', ['com.openwaygroup'])).toBe(false)
+    expect(hasSupportedPrefix('com.acme.foo', ['com.acme'])).toBe(true)
+    expect(hasSupportedPrefix('com.acme', ['com.acme'])).toBe(true)
+    expect(hasSupportedPrefix('org.other.foo', ['com.acme'])).toBe(false)
   })
 })
 
 describe('findUnsupportedGroupId', () => {
-  const supported = ['com.openwaygroup']
+  const supported = ['com.acme']
   it('returns undefined when all tokens are supported', () => {
-    expect(findUnsupportedGroupId('com.openwaygroup.a, com.openwaygroup.b', supported)).toBeUndefined()
+    expect(findUnsupportedGroupId('com.acme.a, com.acme.b', supported)).toBeUndefined()
   })
   it('returns the first offending token', () => {
-    expect(findUnsupportedGroupId('com.openwaygroup.a, org.bad.b', supported)).toBe('org.bad.b')
+    expect(findUnsupportedGroupId('com.acme.a, org.bad.b', supported)).toBe('org.bad.b')
   })
   it('SKIPS (undefined) when the supported list is empty', () => {
     expect(findUnsupportedGroupId('literally.anything', [])).toBeUndefined()
