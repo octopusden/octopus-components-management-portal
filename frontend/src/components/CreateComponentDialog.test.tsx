@@ -31,6 +31,13 @@ vi.mock('../hooks/useFieldOptions', () => ({
   // filter it out of the dropdown. PROVIDED exercises the VCS-exempt branch.
   useFieldOptions: vi.fn(() => ({ options: ['MAVEN', 'GRADLE', 'BS2_0', 'PROVIDED'], isLoading: false })),
 }))
+// Supported-groups + portal-links feed the groupId-prefix and VCS-host checks.
+// Default empty/undefined → both checks FAIL-OPEN (skip), so pre-existing tests
+// are unaffected; the dedicated validation tests override these per case.
+const mockUseSupportedGroups = vi.fn(() => ({ groups: [] as string[], isLoading: false }))
+vi.mock('../hooks/useSupportedGroups', () => ({ useSupportedGroups: () => mockUseSupportedGroups() }))
+const mockUsePortalLinks = vi.fn(() => ({ data: undefined as unknown }))
+vi.mock('../hooks/useInfo', () => ({ usePortalLinks: () => mockUsePortalLinks() }))
 vi.mock('../hooks/useOwners', () => ({
   useOwners: vi.fn(() => ({ data: ['alice', 'inactive-user'] })),
 }))
@@ -130,6 +137,8 @@ beforeEach(() => {
   mockUseComponent.mockReset()
   mockUseFieldConfig.mockReturnValue({ data: undefined, isLoading: false, isError: false })
   mockUseComponentDefaults.mockReturnValue(COMPONENT_DEFAULTS_OK)
+  mockUseSupportedGroups.mockReturnValue({ groups: [], isLoading: false })
+  mockUsePortalLinks.mockReturnValue({ data: undefined })
   scratchDisabled()
 })
 
@@ -410,6 +419,120 @@ describe('CreateComponentDialog — component-defaults prefill (scratch)', () =>
     await waitFor(() =>
       expect((screen.getByLabelText(/build system/i) as HTMLSelectElement).value).toBe(''),
     )
+  })
+})
+
+describe('CreateComponentDialog — artifact ownership "Specific artifacts" (EXPLICIT)', () => {
+  it('reveals an artifact-tokens input when "Specific artifacts" is selected', async () => {
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    expect(screen.queryByLabelText('Artifact IDs')).toBeNull()
+    await userEvent.click(screen.getByRole('radio', { name: /specific artifacts/i }))
+    expect(screen.getByLabelText('Artifact IDs')).toBeDefined()
+  })
+
+  it('submits EXPLICIT ownership with artifact tokens', async () => {
+    mockMutateAsync.mockResolvedValue({ id: 'comp-1', name: 'widget' })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await fillBaseFields()
+    await userEvent.type(screen.getByLabelText('Artifact ownership'), 'com.example.foo')
+    await userEvent.click(screen.getByRole('radio', { name: /specific artifacts/i }))
+    await userEvent.type(screen.getByLabelText('Artifact IDs'), 'foo,bar,')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalled())
+    expect(mockMutateAsync.mock.calls[0]![0].artifactIds).toEqual([
+      { versionRange: null, groupPattern: 'com.example.foo', mode: 'EXPLICIT', artifactTokens: ['foo', 'bar'] },
+    ])
+  })
+
+  it('blocks submit when EXPLICIT is chosen with a group but no artifacts', async () => {
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await fillBaseFields()
+    await userEvent.type(screen.getByLabelText('Artifact ownership'), 'com.example.foo')
+    await userEvent.click(screen.getByRole('radio', { name: /specific artifacts/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(screen.getByText(/add at least one artifact/i)).toBeDefined())
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+})
+
+describe('CreateComponentDialog — supported-groupId prefix validation', () => {
+  beforeEach(() => {
+    mockUseSupportedGroups.mockReturnValue({ groups: ['com.openwaygroup'], isLoading: false })
+  })
+
+  it('blocks an ownership group that lacks a supported prefix', async () => {
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await fillBaseFields()
+    await userEvent.type(screen.getByLabelText('Artifact ownership'), 'org.unsupported.x')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(screen.getByText(/must start with a supported prefix/i)).toBeDefined())
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('accepts an ownership group under a supported prefix', async () => {
+    mockMutateAsync.mockResolvedValue({ id: 'comp-1', name: 'widget' })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await fillBaseFields()
+    await userEvent.type(screen.getByLabelText('Artifact ownership'), 'com.openwaygroup.x')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalled())
+  })
+
+  it('blocks a maven GAV Group ID that lacks a supported prefix (gated)', async () => {
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await fillBaseFields()
+    await userEvent.click(screen.getByLabelText(/explicit/i)) // → gated block
+    await waitFor(() => expect(screen.getByText(/required for explicit \+ external/i)).toBeDefined())
+    await userEvent.type(screen.getByLabelText('Group ID'), 'org.bad')
+    await userEvent.type(screen.getByLabelText('Artifact ID'), 'svc')
+    await userEvent.type(screen.getAllByPlaceholderText('Add person')[0]!, 'rm-bob')
+    await userEvent.type(screen.getAllByPlaceholderText('Add person')[1]!, 'sc-bob')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(screen.getByText(/group id .* must start with a supported prefix/i)).toBeDefined())
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+})
+
+describe('CreateComponentDialog — VCS host validation', () => {
+  beforeEach(() => {
+    mockUsePortalLinks.mockReturnValue({ data: { gitBaseUrl: 'https://bitbucket.spb.openwaygroup.com' } })
+  })
+
+  it('blocks a VCS URL on a non-ecosystem host', async () => {
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
+    await userEvent.type(screen.getByLabelText(/^vcs url/i), 'ssh://git@github.com/proj/repo.git')
+    await userEvent.type(screen.getByLabelText(/jira project key/i), 'WIDG')
+    await commitComponentOwner()
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() =>
+      expect(screen.getByText(/vcs host must be bitbucket\.spb\.openwaygroup\.com/i)).toBeDefined(),
+    )
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('accepts a VCS URL on the ecosystem Bitbucket host', async () => {
+    mockMutateAsync.mockResolvedValue({ id: 'comp-1', name: 'widget' })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
+    await userEvent.type(
+      screen.getByLabelText(/^vcs url/i),
+      'ssh://git@bitbucket.spb.openwaygroup.com:7999/proj/repo.git',
+    )
+    await userEvent.type(screen.getByLabelText(/jira project key/i), 'WIDG')
+    await commitComponentOwner()
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalled())
   })
 })
 

@@ -79,12 +79,14 @@ export interface CreateFormValues {
     packageType: PackageType
     packageName: string
   }
-  // #357 base artifact-ownership. The dialog offers only the tokenless modes (ALL /
-  // ALL_EXCEPT_CLAIMED); EXPLICIT, multi-group and per-range overrides are added post-create in the
-  // editor. An empty group sends no ownership mapping.
+  // #357 base artifact-ownership. The dialog offers ALL / ALL_EXCEPT_CLAIMED and
+  // EXPLICIT ("Specific artifacts"); multi-group and per-range overrides are added
+  // post-create in the editor. An empty group sends no ownership mapping. `tokens`
+  // holds the literal artifact IDs and is only meaningful for EXPLICIT.
   ownership: {
     groups: string
     mode: ArtifactIdMode
+    tokens: string[]
   }
 }
 
@@ -148,9 +150,12 @@ function coordinatePatch(
 
 // Maps the dialog's base ownership section to a single base mapping (or none).
 function buildCreateOwnership(ownership: CreateFormValues['ownership'] | undefined): ArtifactIdRequest[] {
-  const tokens = groupTokens(ownership?.groups ?? '')
-  if (tokens.length === 0) return []
-  return [{ versionRange: null, groupPattern: tokens.join(','), mode: ownership!.mode, artifactTokens: [] }]
+  const groups = groupTokens(ownership?.groups ?? '')
+  if (groups.length === 0) return []
+  // Artifact tokens are only meaningful for EXPLICIT ("Specific artifacts"); the
+  // catch-all modes always send an empty token list.
+  const artifactTokens = ownership!.mode === 'EXPLICIT' ? [...ownership!.tokens] : []
+  return [{ versionRange: null, groupPattern: groups.join(','), mode: ownership!.mode, artifactTokens }]
 }
 
 // Component-level fields whose presence on create is governed by field-config

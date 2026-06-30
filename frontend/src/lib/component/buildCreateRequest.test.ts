@@ -26,7 +26,7 @@ function makeForm(overrides: Partial<CreateFormValues> = {}): CreateFormValues {
       packageType: 'DEB',
       packageName: '',
     },
-    ownership: { groups: '', mode: 'ALL' },
+    ownership: { groups: '', mode: 'ALL', tokens: [] },
     ...overrides,
   }
 }
@@ -129,6 +129,33 @@ describe('buildCreateRequest — scratch mode (no source)', () => {
     expect('mavenArtifacts' in base).toBe(false)
     expect('dockerImages' in base).toBe(false)
     expect('packages' in base).toBe(false)
+  })
+})
+
+describe('buildCreateRequest — base artifact ownership', () => {
+  it('EXPLICIT mode forwards the artifact tokens', () => {
+    const req = buildCreateRequest(
+      makeForm({ ownership: { groups: 'org.x', mode: 'EXPLICIT', tokens: ['foo', 'bar'] } }),
+    )
+    expect(req.artifactIds).toEqual([
+      { versionRange: null, groupPattern: 'org.x', mode: 'EXPLICIT', artifactTokens: ['foo', 'bar'] },
+    ])
+  })
+
+  it('catch-all modes send an empty token list even if tokens linger in form state', () => {
+    const req = buildCreateRequest(
+      makeForm({ ownership: { groups: 'org.x', mode: 'ALL', tokens: ['stale'] } }),
+    )
+    expect(req.artifactIds).toEqual([
+      { versionRange: null, groupPattern: 'org.x', mode: 'ALL', artifactTokens: [] },
+    ])
+  })
+
+  it('no group ⇒ no ownership mapping (tokens ignored)', () => {
+    const req = buildCreateRequest(
+      makeForm({ ownership: { groups: '', mode: 'EXPLICIT', tokens: ['foo'] } }),
+    )
+    expect(req.artifactIds).toEqual([])
   })
 })
 

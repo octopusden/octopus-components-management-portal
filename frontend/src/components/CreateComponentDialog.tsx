@@ -10,7 +10,10 @@ import { Label } from './ui/label'
 import { PeopleInput } from './ui/PeopleInput'
 import { PeopleListInput } from './ui/PeopleListInput'
 import { ModeRadioGroup } from './ui/ModeRadioGroup'
+import { ArtifactTokensInput } from './ui/ArtifactTokensInput'
 import { isBadToken } from '../lib/artifactOwnership'
+import { findUnsupportedGroupId } from '../lib/groupValidation'
+import { isVcsHostSupported, hostOf } from '../lib/vcsHost'
 import { InlineError } from './ui/inline-error'
 import { SkeletonBlock } from './ui/skeleton-block'
 import {
@@ -23,6 +26,8 @@ import {
   DialogClose,
 } from './ui/dialog'
 import { useFieldOptions } from '../hooks/useFieldOptions'
+import { useSupportedGroups } from '../hooks/useSupportedGroups'
+import { usePortalLinks } from '../hooks/useInfo'
 import { useFieldConfig, useComponentDefaults } from '../hooks/useAdminConfig'
 import { visibilityFor } from '../hooks/useFieldConfig'
 import { useComponent, useCreateComponent } from '../hooks/useComponent'
@@ -57,7 +62,11 @@ const NAME_REGEX = /^[a-zA-Z0-9_\-./]+$/
 // readonly in field-config is removed from the create form, so its
 // requirement (e.g. RM/SC for explicit+external) must not fire. `editable`
 // returns true when `component.<field>` is editable.
-function makeCreateSchema(editable: (field: string) => boolean) {
+function makeCreateSchema(
+  editable: (field: string) => boolean,
+  supportedGroups: readonly string[],
+  gitBaseUrl: string | null | undefined,
+) {
   return z
   .object({
     name: z
@@ -92,9 +101,9 @@ function makeCreateSchema(editable: (field: string) => boolean) {
     // no ownership mapping (EXPLICIT / multi-group / per-range are added later in the editor).
     ownership: z.object({
       groups: z.string(),
-      // The dialog UI offers only ALL / ALL_EXCEPT_CLAIMED; EXPLICIT is in the type for parity with
-      // the shared ArtifactIdMode (and is never produced here — no token editor in the dialog).
       mode: z.enum(['ALL', 'ALL_EXCEPT_CLAIMED', 'EXPLICIT']),
+      // Literal artifact IDs; only meaningful (and only required) for EXPLICIT.
+      tokens: z.array(z.string()),
     }),
   })
   .superRefine((v, ctx) => {
@@ -113,6 +122,12 @@ function makeCreateSchema(editable: (field: string) => boolean) {
           code: z.ZodIssueCode.custom,
           path: ['vcsUrl'],
           message: 'VCS URL must be an ssh:// URL, e.g. ssh://git@host/path/repo.git',
+        })
+      } else if (!isVcsHostSupported(url, gitBaseUrl)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['vcsUrl'],
+          message: `VCS host must be ${hostOf(gitBaseUrl)} (the ecosystem Bitbucket)`,
         })
       }
       if (!v.vcsTag.trim()) {
@@ -138,11 +153,27 @@ function makeCreateSchema(editable: (field: string) => boolean) {
           message: `Invalid group "${bad}" — letters, digits, . _ - only`,
         })
       }
+      const unsupported = findUnsupportedGroupId(ownGroups, supportedGroups)
+      if (unsupported) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['ownership', 'groups'],
+          message: `Group "${unsupported}" must start with a supported prefix (${supportedGroups.join(', ')})`,
+        })
+      }
       if (v.ownership.mode === 'ALL_EXCEPT_CLAIMED' && tokens.length > 1) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['ownership', 'groups'],
           message: '"All unclaimed" supports a single group only',
+        })
+      }
+      // EXPLICIT ("Specific artifacts") needs at least one literal artifact ID.
+      if (v.ownership.mode === 'EXPLICIT' && v.ownership.tokens.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['ownership', 'tokens'],
+          message: 'Add at least one artifact, or switch to a catch-all mode',
         })
       }
     }
@@ -172,7 +203,18 @@ function makeCreateSchema(editable: (field: string) => boolean) {
     const missing = (field: string, msg: string) =>
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['coordinate', field], message: msg })
     if (c.type === 'maven') {
-      if (!c.groupPattern.trim()) missing('groupPattern', 'Group ID is required')
+      if (!c.groupPattern.trim()) {
+        missing('groupPattern', 'Group ID is required')
+      } else {
+        // CRS rule #10: the maven groupId must start with a supported prefix.
+        const unsupported = findUnsupportedGroupId(c.groupPattern, supportedGroups)
+        if (unsupported) {
+          missing(
+            'groupPattern',
+            `Group ID "${unsupported}" must start with a supported prefix (${supportedGroups.join(', ')})`,
+          )
+        }
+      }
       if (!c.artifactPattern.trim()) missing('artifactPattern', 'Artifact ID is required')
     } else if (c.type === 'docker') {
       if (!c.imageName.trim()) missing('imageName', 'Image name is required')
@@ -207,7 +249,7 @@ const SCRATCH_DEFAULTS: CreateFormValues = {
   vcsTag: '',
   vcsBranch: '',
   coordinate: EMPTY_COORDINATE,
-  ownership: { groups: '', mode: 'ALL' },
+  ownership: { groups: '', mode: 'ALL', tokens: [] },
 }
 
 // vcs.tag / vcs.branch read from GET /config/component-defaults (absent fields
@@ -432,7 +474,16 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
     (field: string) => visibilityFor(fieldConfigData, `component.${field}`) === 'editable',
     [fieldConfigData],
   )
-  const schema = useMemo(() => makeCreateSchema(editable), [editable])
+  // Supported groupId prefixes (CRS rule #10) and the ecosystem Bitbucket host
+  // feed two pre-flight validations; both fail-open when unavailable (CRS stays
+  // authoritative on submit), so neither gates the form's mount.
+  const { groups: supportedGroups } = useSupportedGroups()
+  const { data: portalLinks } = usePortalLinks()
+  const gitBaseUrl = portalLinks?.gitBaseUrl
+  const schema = useMemo(
+    () => makeCreateSchema(editable, supportedGroups, gitBaseUrl),
+    [editable, supportedGroups, gitBaseUrl],
+  )
 
   const {
     register,
@@ -465,6 +516,7 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
   const coordinateType = watch('coordinate.type')
   const nameValue = watch('name')
   const buildSystemValue = watch('buildSystem')
+  const ownershipMode = watch('ownership.mode')
   const showVcs = vcsBlockApplies(buildSystemValue)
 
   // A prefilled default build system (from component-defaults) that isn't among
@@ -658,15 +710,34 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
           render={({ field }) => (
             <ModeRadioGroup
               value={field.value}
-              allowed={['ALL', 'ALL_EXCEPT_CLAIMED']}
               idPrefix="create-mode"
               onChange={field.onChange}
             />
           )}
         />
+        {ownershipMode === 'EXPLICIT' && (
+          <div className="space-y-1.5">
+            <Label htmlFor="create-ownership-tokens">
+              Artifacts <span className="text-destructive">*</span>
+            </Label>
+            <Controller
+              control={control}
+              name="ownership.tokens"
+              render={({ field }) => (
+                <ArtifactTokensInput
+                  tokens={field.value}
+                  ariaLabel="Artifact IDs"
+                  onChange={field.onChange}
+                />
+              )}
+            />
+            {errors.ownership?.tokens && (
+              <p className="text-xs text-destructive">{errors.ownership.tokens.message}</p>
+            )}
+          </div>
+        )}
         <p className="text-xs text-muted-foreground">
-          A new component starts owning its group. Specific artifacts, multi-group and per-range rules are added
-          later in the editor.
+          A new component starts owning its group. Multi-group and per-range rules are added later in the editor.
         </p>
       </div>
 
