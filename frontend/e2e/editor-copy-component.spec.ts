@@ -139,6 +139,13 @@ async function setupRoutes(page: Page, sourceOverride: Record<string, unknown> =
   await page.route('**/rest/api/4/components/meta/build-systems', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(['MAVEN', 'GRADLE']) }),
   )
+  // The create dialog pre-validates the maven Group ID against the supported
+  // groupId prefixes (CRS v2 /common/supported-groups). Mock it so the spec is
+  // self-contained and the 'org.acme' coordinate used below passes the check —
+  // otherwise the real stand's prefixes block the submit and the create never POSTs.
+  await page.route('**/rest/api/2/common/supported-groups', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(['org.acme']) }),
+  )
   // PeopleInput commits a typed/picked person only after the directory lookup
   // resolves with an exact active match (PR #79) — every typed person in this
   // spec is active, so echo the query back as an active match.
