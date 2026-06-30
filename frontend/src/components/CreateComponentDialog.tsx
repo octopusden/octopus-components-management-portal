@@ -217,6 +217,21 @@ interface VcsDefaults {
   branch?: string
 }
 
+// The slice of GET /config/component-defaults the create dialog prefills in
+// scratch mode. Every field is optional: component-defaults is an untyped
+// Record (admins may configure none, some, or all), so a missing field falls
+// back to the hardcoded SCRATCH_DEFAULTS. Unique-per-component fields (name,
+// vcsUrl, distribution coordinate) are intentionally NOT prefilled even when a
+// pattern default exists — they must be entered fresh per component.
+interface ComponentDefaults {
+  buildSystem?: string
+  componentDisplayName?: string
+  copyright?: string
+  jira?: { projectKey?: string }
+  distribution?: { explicit?: boolean; external?: boolean }
+  vcs?: VcsDefaults
+}
+
 function blankToUndefined(s: string | null | undefined): string | undefined {
   // typeof guard: component-defaults is an untyped Record cast to VcsDefaults —
   // a malformed scalar (e.g. numeric vcs.tag) must degrade to the fallback, not
@@ -230,7 +245,8 @@ function blankToUndefined(s: string | null | undefined): string | undefined {
 // reset/`values` after the source arrives — keeps the buildSystem EnumSelect in
 // step with the form from its first render and sidesteps a browser-only race
 // where a post-load reset left the field empty.
-function initialValues(source: ComponentDetail | null, vcsDefaults: VcsDefaults): CreateFormValues {
+function initialValues(source: ComponentDetail | null, defaults: ComponentDefaults): CreateFormValues {
+  const vcsDefaults = defaults.vcs ?? {}
   // Tag/branch are reusable format patterns (like versionPrefix): copy mode
   // prefers the source's BASE VCS entry, then component-defaults, then the
   // hardcoded branch fallback. vcsUrl is unique per component — never seeded.
@@ -241,7 +257,30 @@ function initialValues(source: ComponentDetail | null, vcsDefaults: VcsDefaults)
   const vcsTag = blankToUndefined(baseVcs?.tag) ?? blankToUndefined(vcsDefaults.tag) ?? ''
   const vcsBranch =
     blankToUndefined(baseVcs?.branch) ?? blankToUndefined(vcsDefaults.branch) ?? FALLBACK_VCS_BRANCH
-  if (!source) return { ...SCRATCH_DEFAULTS, vcsTag, vcsBranch }
+  if (!source) {
+    // Scratch mode applies the configured component-defaults so the form opens
+    // pre-populated (the legacy DSL applied these server-side; the v4 create
+    // form must surface them, otherwise a configured default is silently lost).
+    // Unique fields (name, vcsUrl, coordinate) stay blank. A deprecated default
+    // build system is dropped: it isn't offered in the dropdown, so seeding it
+    // would desync the native <select> from the form value (same rule as copy
+    // mode below).
+    const defaultBuildSystem = blankToUndefined(defaults.buildSystem)
+    return {
+      ...SCRATCH_DEFAULTS,
+      buildSystem:
+        defaultBuildSystem && !DEPRECATED_BUILD_SYSTEMS.has(defaultBuildSystem)
+          ? defaultBuildSystem
+          : '',
+      displayName: blankToUndefined(defaults.componentDisplayName) ?? '',
+      copyright: blankToUndefined(defaults.copyright) ?? '',
+      distributionExplicit: defaults.distribution?.explicit ?? SCRATCH_DEFAULTS.distributionExplicit,
+      distributionExternal: defaults.distribution?.external ?? SCRATCH_DEFAULTS.distributionExternal,
+      jiraProjectKey: blankToUndefined(defaults.jira?.projectKey) ?? '',
+      vcsTag,
+      vcsBranch,
+    }
+  }
   // Deprecated build systems are filtered out of the dropdown, so seeding one
   // would desync the native <select> (no matching option) from the form value —
   // leave it empty and let the user pick a current system.
@@ -287,7 +326,7 @@ export function CreateComponentDialog({ open, onOpenChange, sourceId }: CreateCo
   // outage falls straight to the fallbacks (isError still mounts the form)
   // instead of holding the skeleton through the QueryClient's global retry.
   const defaults = useComponentDefaults({ enabled: open, retry: false })
-  const vcsDefaults = ((defaults.data as { vcs?: VcsDefaults } | undefined)?.vcs ?? {}) as VcsDefaults
+  const componentDefaults = (defaults.data ?? {}) as ComponentDefaults
   const ready = (!isCopy || (!!source && !error)) && (defaults.isSuccess || defaults.isError)
 
   return (
@@ -354,7 +393,7 @@ export function CreateComponentDialog({ open, onOpenChange, sourceId }: CreateCo
             key={source?.id ?? 'scratch'}
             source={source ?? null}
             isCopy={isCopy}
-            vcsDefaults={vcsDefaults}
+            defaults={componentDefaults}
             onClose={() => onOpenChange(false)}
           />
         )}
@@ -366,11 +405,11 @@ export function CreateComponentDialog({ open, onOpenChange, sourceId }: CreateCo
 interface CreateComponentFormProps {
   source: ComponentDetail | null
   isCopy: boolean
-  vcsDefaults: VcsDefaults
+  defaults: ComponentDefaults
   onClose: () => void
 }
 
-function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateComponentFormProps) {
+function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateComponentFormProps) {
   const navigate = useNavigate()
   const createMutation = useCreateComponent()
   const { toast } = useToast()
@@ -396,7 +435,7 @@ function CreateComponentForm({ source, isCopy, vcsDefaults, onClose }: CreateCom
     formState: { errors, isSubmitting },
   } = useForm<CreateFormValues>({
     resolver: zodResolver(schema),
-    defaultValues: initialValues(source, vcsDefaults),
+    defaultValues: initialValues(source, defaults),
   })
 
   const { options: buildSystems } = useFieldOptions('buildSystem')

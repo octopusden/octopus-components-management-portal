@@ -331,6 +331,57 @@ describe('CreateComponentDialog — scratch mode base', () => {
   })
 })
 
+describe('CreateComponentDialog — component-defaults prefill (scratch)', () => {
+  function withDefaults(data: unknown) {
+    mockUseComponentDefaults.mockReturnValue({ data, isSuccess: true, isError: false, isLoading: false })
+  }
+
+  it('prefills the build system from component-defaults', async () => {
+    withDefaults({ buildSystem: 'GRADLE', vcs: { tag: '$module-$version' } })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    expect((screen.getByLabelText(/build system/i) as HTMLSelectElement).value).toBe('GRADLE')
+  })
+
+  it('does NOT prefill a deprecated default build system (would desync the dropdown)', async () => {
+    withDefaults({ buildSystem: 'BS2_0' })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    expect((screen.getByLabelText(/build system/i) as HTMLSelectElement).value).toBe('')
+  })
+
+  it('prefills displayName, copyright, distribution flags and Jira project key from defaults', async () => {
+    withDefaults({
+      buildSystem: 'MAVEN',
+      componentDisplayName: 'Default Display',
+      copyright: '(c) 2026 Acme',
+      jira: { projectKey: 'DEF' },
+      distribution: { explicit: true, external: true },
+    })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    expect((screen.getByLabelText(/display name/i) as HTMLInputElement).value).toBe('Default Display')
+    expect((screen.getByLabelText(/jira project key/i) as HTMLInputElement).value).toBe('DEF')
+    // explicit+external default opens the gated block, where Copyright lives.
+    await waitFor(() => expect(screen.getByText(/required for explicit \+ external/i)).toBeDefined())
+    expect((screen.getByLabelText(/copyright/i) as HTMLInputElement).value).toBe('(c) 2026 Acme')
+    const explicit = screen.getByLabelText(/explicit/i) as HTMLInputElement
+    const external = screen.getByLabelText(/external/i) as HTMLInputElement
+    expect(explicit.checked).toBe(true)
+    expect(external.checked).toBe(true)
+  })
+
+  it('falls back to empty/scratch values when no defaults are configured', async () => {
+    withDefaults({})
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    expect((screen.getByLabelText(/build system/i) as HTMLSelectElement).value).toBe('')
+    expect((screen.getByLabelText(/display name/i) as HTMLInputElement).value).toBe('')
+    // external on / explicit off → the gated block stays hidden by default.
+    expect(screen.queryByText(/required for explicit \+ external/i)).toBeNull()
+  })
+})
+
 describe('CreateComponentDialog — VCS block (legacy build-system rule)', () => {
   async function open() {
     renderWithProviders(<CreateComponentButton />)
