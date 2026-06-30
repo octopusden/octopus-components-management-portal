@@ -4,7 +4,7 @@
  * (react-refresh fast-refresh hygiene), and so the combined-save serializer can
  * be unit-tested without rendering.
  */
-import type { FieldOverride, MarkerChildrenPayload } from '../../lib/types'
+import type { FieldOverride, MarkerChildrenPayload, FieldOverrideUpsert } from '../../lib/types'
 import type { DiffEntry } from '../../lib/editor/combineRequest'
 import { deepEqual, formatDiffValue } from '../../lib/editor/diffUtil'
 import { formatVersionRange } from '../../lib/versionRange'
@@ -16,20 +16,6 @@ export const DRAFT_ID_PREFIX = 'draft-'
  *  serializer strips these so a create is sent without an `id`. */
 export function isDraftId(id: string): boolean {
   return id.startsWith(DRAFT_ID_PREFIX)
-}
-
-/**
- * One entry of the desired-full-set the combined PATCH sends in
- * `ComponentUpdateRequest.fieldOverrides`. Absent `id` = create; present `id` =
- * upsert by id; any server override NOT in the list = delete (server applies
- * the whole set in the same transaction as the rest of the component update).
- */
-export interface FieldOverrideUpsert {
-  id?: string
-  overriddenAttribute: string
-  versionRange: string
-  value?: unknown
-  markerChildren?: MarkerChildrenPayload | null
 }
 
 /** Serialise one effective override to an upsert. Draft (temp) ids are dropped

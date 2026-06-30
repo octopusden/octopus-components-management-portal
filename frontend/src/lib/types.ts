@@ -443,6 +443,11 @@ export interface ComponentUpdateRequest {
   securityGroups?: SecurityGroupRequest[] | null
   teamcityProjects?: TeamcityProjectRequest[] | null
   baseConfiguration?: BaseConfigurationRequest | null
+  // Item D: field overrides ride the component PATCH as a desired-FULL-SET.
+  // omit / null = don't touch overrides; a provided list is the complete set of
+  // V4-editable overrides (upsert by id, create id-less entries, delete any
+  // existing editable override not in the list), applied in the same transaction.
+  fieldOverrides?: FieldOverrideUpsert[] | null
   // Change metadata recorded on the audit row (not on the component); not part
   // of the component's patchable state. Both optional; the Jira key, when
   // non-blank, must match a Jira key (see lib/editor/jiraKey). Send a trimmed
@@ -568,6 +573,17 @@ export interface FieldOverride {
   markerChildren?: MarkerChildrenPayload | null
   createdAt: string | null
   updatedAt: string | null
+}
+
+// One entry of the desired-FULL-SET sent in ComponentUpdateRequest.fieldOverrides
+// (item D). Mirrors CRS FieldOverrideUpsertRequest: omit `id` to create, provide
+// it to upsert; value (scalar) XOR markerChildren (marker) carry the row's state.
+export interface FieldOverrideUpsert {
+  id?: string
+  overriddenAttribute: string
+  versionRange: string
+  value?: unknown
+  markerChildren?: MarkerChildrenPayload | null
 }
 
 // Supported versions (coverage) — the decoupled-version-model layer 1 (ADR-018).
