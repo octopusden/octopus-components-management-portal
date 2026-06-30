@@ -238,12 +238,15 @@ export function buildCreateRequest(
   const jira: JiraAspect = { ...(copyJiraAspect(baseRow?.jira) ?? {}) }
   if (form.jiraProjectKey.trim()) jira.projectKey = form.jiraProjectKey.trim()
   if (form.versionPrefix.trim()) jira.versionPrefix = form.versionPrefix.trim()
-  // BASE jira version formats (hotfix is component-level, set above). Form values
-  // win over the copied source aspect; a blank leaves the copied value in place.
-  if (form.majorVersionFormat.trim()) jira.majorVersionFormat = form.majorVersionFormat.trim()
-  if (form.releaseVersionFormat.trim()) jira.releaseVersionFormat = form.releaseVersionFormat.trim()
-  if (form.buildVersionFormat.trim()) jira.buildVersionFormat = form.buildVersionFormat.trim()
-  if (form.lineVersionFormat.trim()) jira.lineVersionFormat = form.lineVersionFormat.trim()
+  // BASE jira version formats (hotfix is component-level, set above) are fully
+  // FORM-DRIVEN — copy mode prefills the form from the source, so assign the
+  // trimmed value or DELETE the value inherited from copyJiraAspect. Otherwise
+  // clearing a format in "Create Similar" would silently re-send the source value.
+  for (const k of ['majorVersionFormat', 'releaseVersionFormat', 'buildVersionFormat', 'lineVersionFormat'] as const) {
+    const v = form[k].trim()
+    if (v) jira[k] = v
+    else delete jira[k]
+  }
   if (Object.values(jira).some((v) => v != null)) baseConfiguration.jira = jira
   if (baseRow && baseRow.requiredTools.length > 0) {
     baseConfiguration.requiredTools = [...baseRow.requiredTools]

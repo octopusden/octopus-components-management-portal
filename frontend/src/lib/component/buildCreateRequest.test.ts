@@ -355,7 +355,7 @@ describe('buildCreateRequest — copy mode (with source)', () => {
     expect(req.baseConfiguration?.build).toEqual({ buildSystem: 'MAVEN', gradleVersion: '8.5' })
   })
 
-  it('copies escrow / jira(without projectKey) / requiredTools from the source BASE row', () => {
+  it('copies escrow / requiredTools from source; jira version formats are FORM-driven (copy mode prefills the form)', () => {
     const src = makeSource({
       configurations: [
         makeBaseRow({
@@ -366,10 +366,22 @@ describe('buildCreateRequest — copy mode (with source)', () => {
         }),
       ],
     })
-    const req = buildCreateRequest(makeForm({ name: 'svc-clone' }), src)
+    // The dialog prefills majorVersionFormat from the source into the form; supply it here.
+    const req = buildCreateRequest(makeForm({ name: 'svc-clone', majorVersionFormat: '%d.%d' }), src)
     expect(req.baseConfiguration?.escrow).toEqual({ reusable: true })
     expect(req.baseConfiguration?.jira).toEqual({ majorVersionFormat: '%d.%d' })
     expect(req.baseConfiguration?.requiredTools).toEqual(['tool-a'])
+  })
+
+  it('copy mode: clearing a BASE jira version format drops it (not re-sent from the source)', () => {
+    const src = makeSource({
+      configurations: [
+        makeBaseRow({ build: { buildSystem: 'GRADLE' }, jira: { projectKey: 'ALPHA', majorVersionFormat: '%d.%d' } }),
+      ],
+    })
+    // User cleared the prefilled Major Version Format → form blank → must NOT re-send the source value.
+    const req = buildCreateRequest(makeForm({ name: 'svc-clone', majorVersionFormat: '' }), src)
+    expect(req.baseConfiguration?.jira == null || !('majorVersionFormat' in req.baseConfiguration.jira)).toBe(true)
   })
 
   it('coordinate is NEVER taken from source distribution artifacts', () => {
