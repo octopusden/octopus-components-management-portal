@@ -77,6 +77,23 @@ export function isAllowedOverrideRange(range: string): boolean {
   return !segments.some((s) => s === '(,)')
 }
 
+/**
+ * True when `range` is a single dot-numeric segment whose bounds describe an
+ * EMPTY interval — the lower bound is greater than the upper (an inverted range
+ * like `[1.7.3076,1.7.3010]`), or the bounds are equal with an exclusive edge
+ * (`[x,x)`, `(x,x]`, `(x,x)`) so no version can fall inside. `[x,x]` is the only
+ * non-empty equal-bound case. Composites, open bounds, and unparseable/qualifier
+ * bounds return `false` — we can't decide those client-side and defer to CRS.
+ */
+export function isEmptyVersionRange(range: string): boolean {
+  const seg = parseSimpleSegment(range)
+  if (!seg || seg.lo === null || seg.hi === null) return false
+  const cmp = compareVersionArrays(seg.lo, seg.hi)
+  if (cmp > 0) return true
+  if (cmp === 0) return !(seg.loIncl && seg.hiIncl)
+  return false
+}
+
 // ─── Overlap detection (simple-segment best-effort) ──────────────────────────
 //
 // Maven version-range intersection is non-trivial for arbitrary inputs

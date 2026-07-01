@@ -26,7 +26,7 @@ import { useOverridesDraft } from './overridesDraft'
 import { useToast } from '../../hooks/use-toast'
 import { useFieldConfig } from '../../hooks/useAdminConfig'
 import { labelFor } from '../../hooks/useFieldConfig'
-import { isValidVersionRange, isAllowedOverrideRange, classifyRangeConflict } from '../../lib/versionRange'
+import { isValidVersionRange, isAllowedOverrideRange, isEmptyVersionRange, classifyRangeConflict } from '../../lib/versionRange'
 import type { FieldOverride, MarkerChildrenPayload, VcsEntryRequest, MavenArtifactRequest, FileUrlArtifactRequest, DockerImageRequest, PackageRequest } from '../../lib/types'
 
 // ---------------------------------------------------------------------------
@@ -475,14 +475,10 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
     }
     // ADR-018: field-override ranges may be bounded, open-upper (`[2.0,)`), or
     // historical-left-unbounded; only the all-versions shapes denote the base
-    // default. Reject those client-side (the server enforces the same).
-    if (!isAllowedOverrideRange(versionRange)) {
-      toast({
-        title: isValidVersionRange(versionRange)
-          ? 'All-versions range is the base default — use a bounded or open-upper sub-range'
-          : 'Invalid version range',
-        variant: 'destructive',
-      })
+    // default, and an inverted/empty interval (`[3076,3010]`) is rejected before
+    // the round-trip. Server enforces the same as the backstop.
+    if (rangeError !== null) {
+      toast({ title: rangeError, variant: 'destructive' })
       return
     }
     // R3 client-side preview: prevent submission of a range that overlaps or
@@ -509,7 +505,19 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
     onOpenChange(false)
   }
 
-  const versionRangeInvalid = !isAllowedOverrideRange(versionRange)
+  // Single source of truth for the range field's validity + message: bad syntax,
+  // then all-versions (= base default), then an inverted/empty interval. Empty
+  // input reads as invalid (blocks submit / disables the button) but the inline
+  // message is suppressed until the user types (see the render guard).
+  const rangeError: string | null =
+    !isValidVersionRange(versionRange)
+      ? 'Invalid version range syntax'
+      : !isAllowedOverrideRange(versionRange)
+        ? 'All-versions range is the base default — use a bounded or open-upper sub-range'
+        : isEmptyVersionRange(versionRange)
+          ? 'Empty range — the lower bound must be below the upper bound'
+          : null
+  const versionRangeInvalid = rangeError !== null
   // Walk existing overrides on the same attribute for client-side conflict
   // preview. Partial overlap, strict containment, and semantic-equal duplicates
   // all block the write (overrides must be disjoint); equal gets distinct copy.
@@ -627,16 +635,12 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
               className="font-mono"
               required
               aria-invalid={
-                (versionRange.trim() !== '' && !isAllowedOverrideRange(versionRange)) ||
+                (versionRange.trim() !== '' && rangeError !== null) ||
                 overlapConflict !== null
               }
             />
-            {versionRange.trim() !== '' && !isAllowedOverrideRange(versionRange) && (
-              <p className="text-xs text-destructive">
-                {isValidVersionRange(versionRange)
-                  ? 'All-versions range is the base default — use a bounded or open-upper sub-range'
-                  : 'Invalid version range syntax'}
-              </p>
+            {versionRange.trim() !== '' && rangeError !== null && (
+              <p className="text-xs text-destructive">{rangeError}</p>
             )}
             {!versionRangeInvalid && conflictMessage !== null && (
               <p className="text-xs text-destructive">

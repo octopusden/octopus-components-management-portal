@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatVersionRange, isValidVersionRange, isClosedVersionRange, isAllowedOverrideRange, rangesOverlap, classifyRangeConflict, compareVersionRanges, highestLowerBoundVersion } from './versionRange'
+import { formatVersionRange, isValidVersionRange, isClosedVersionRange, isAllowedOverrideRange, isEmptyVersionRange, rangesOverlap, classifyRangeConflict, compareVersionRanges, highestLowerBoundVersion } from './versionRange'
 
 describe('formatVersionRange', () => {
   it('formats (,) as "All versions"', () => {
@@ -438,5 +438,33 @@ describe('compareVersionRanges', () => {
   it('produces a correct numeric ordering when used as Array.sort comparator', () => {
     const sorted = ['[10.0,)', '[2.0,3.0)', '(,1.0)', '[1.0,2.0)'].sort(compareVersionRanges)
     expect(sorted).toEqual(['(,1.0)', '[1.0,2.0)', '[2.0,3.0)', '[10.0,)'])
+  })
+})
+
+describe('isEmptyVersionRange', () => {
+  it('flags an inverted range (lower > upper), incl. dot-numeric segments', () => {
+    expect(isEmptyVersionRange('[1.7.3076,1.7.3010]')).toBe(true)
+    expect(isEmptyVersionRange('[5,2)')).toBe(true)
+    expect(isEmptyVersionRange('(2.10,2.9]')).toBe(true)
+  })
+
+  it('flags equal bounds with an exclusive edge (empty), allows [x,x]', () => {
+    expect(isEmptyVersionRange('[1.0,1.0)')).toBe(true)
+    expect(isEmptyVersionRange('(1.0,1.0]')).toBe(true)
+    expect(isEmptyVersionRange('(1.0,1.0)')).toBe(true)
+    expect(isEmptyVersionRange('[1.0,1.0]')).toBe(false)
+  })
+
+  it('does not flag proper ranges', () => {
+    expect(isEmptyVersionRange('[1.7.3076,1.7.3209]')).toBe(false)
+    expect(isEmptyVersionRange('[1,2)')).toBe(false)
+    expect(isEmptyVersionRange('[2.0,)')).toBe(false)
+    expect(isEmptyVersionRange('(,2.0]')).toBe(false)
+  })
+
+  it('defers (false) on composites / unparseable / qualifier bounds', () => {
+    expect(isEmptyVersionRange('(,0),[0,)')).toBe(false)
+    expect(isEmptyVersionRange('[1.0-RC,2.0]')).toBe(false)
+    expect(isEmptyVersionRange('garbage')).toBe(false)
   })
 })
