@@ -197,3 +197,56 @@ describe('ComponentDetailPage — field overrides in the combined save (item D)'
     expect(screen.getByRole('button', { name: 'Delete override' })).toBeDefined()
   })
 })
+
+// Issue #146 (P3): the same combined-save flow, driven from the REAL Distribution
+// tab. A per-range distribution override delete is NOT reflected in base section
+// state, so this is the highest-risk regression: prove it arms the bar, shows in
+// Review, rides the one PATCH, and is restored by Discard.
+const seededDockerOverride: FieldOverride = {
+  id: 'fo-dk', overriddenAttribute: 'distribution.docker', versionRange: '[1.0,2.0)',
+  rowType: 'MARKER', value: null,
+  markerChildren: { dockerImages: [{ imageName: 'acme/app', flavor: null }] },
+  createdAt: null, updatedAt: null,
+}
+
+describe('ComponentDetailPage — per-range distribution variant in the combined save (#146)', () => {
+  beforeEach(() => mockOverrides.mockReturnValue([seededDockerOverride]))
+
+  async function deleteDockerVariant() {
+    await openTab(/Distribution/)
+    click(await screen.findByRole('button', { name: /delete per-range variant/i }))
+  }
+
+  it('deleting a per-range docker variant from the Distribution tab arms the SaveBar', async () => {
+    renderPage()
+    expect(screen.getByText('All changes saved')).toBeDefined()
+    await deleteDockerVariant()
+    await waitFor(() => expect(screen.getByText('Unsaved changes')).toBeDefined())
+  })
+
+  it('sends ONE PATCH with the desired override set (empty after the delete); Review shows the removal', async () => {
+    const mutateAsync = vi.fn(() => Promise.resolve())
+    renderPage(mutateAsync)
+    await deleteDockerVariant()
+
+    click(screen.getByRole('button', { name: /save changes/i }))
+    expect(await screen.findByText(/\(removed\)/)).toBeDefined()
+    click(await screen.findByRole('button', { name: /^confirm$/i }))
+
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce())
+    const body = (mutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
+    expect(body.version).toBe(9)
+    expect(body.fieldOverrides).toEqual([])
+  })
+
+  it('Discard restores the deleted per-range variant (row + delete button return, bar clean)', async () => {
+    renderPage()
+    await deleteDockerVariant()
+    await waitFor(() => expect(screen.getByText('Unsaved changes')).toBeDefined())
+
+    click(screen.getByRole('button', { name: /discard/i }))
+
+    await waitFor(() => expect(screen.getByText('All changes saved')).toBeDefined())
+    expect(await screen.findByRole('button', { name: /delete per-range variant/i })).toBeDefined()
+  })
+})
