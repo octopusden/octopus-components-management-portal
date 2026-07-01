@@ -17,6 +17,7 @@ vi.mock('./overridesDraft', () => ({
   useOverridesDraft: () => ({
     serverOverrides: mockOverrides,
     effectiveOverrides: mockOverrides,
+    isLoading: false,
     isDirty: false,
     queueCreate: mockQueueCreate,
     queueUpdate: mockQueueUpdate,

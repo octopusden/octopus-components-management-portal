@@ -42,8 +42,18 @@ describe('OverridesDraftProvider', () => {
     const server = [override()]
     renderProvider('c1', server)
     expect(api.isDirty).toBe(false)
+    expect(api.isLoading).toBe(false)
     expect(api.effectiveOverrides).toHaveLength(1)
     expect(api.effectiveOverrides[0]).toMatchObject({ id: 'o1', value: '17' })
+  })
+
+  it('exposes the server loading state (serverLoading prop → isLoading)', () => {
+    render(
+      <OverridesDraftProvider componentId="c1" serverOverrides={[]} serverLoading>
+        <Consumer />
+      </OverridesDraftProvider>,
+    )
+    expect(api.isLoading).toBe(true)
   })
 
   it('queueCreate appends a draft row (draft id, inferred rowType) and goes dirty', () => {

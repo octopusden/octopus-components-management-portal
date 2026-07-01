@@ -13,11 +13,13 @@ import type { User } from '../../lib/auth'
 
 const mockQueueDelete = vi.fn()
 let mockOverrides: FieldOverride[] = []
+let mockLoading = false
 
 vi.mock('./overridesDraft', () => ({
   useOverridesDraft: () => ({
     serverOverrides: mockOverrides,
     effectiveOverrides: mockOverrides,
+    isLoading: mockLoading,
     isDirty: false,
     queueCreate: vi.fn(),
     queueUpdate: vi.fn(),
@@ -111,12 +113,21 @@ describe('FieldOverrides', () => {
   beforeEach(() => {
     mockQueueDelete.mockReset()
     mockOverrides = []
+    mockLoading = false
     mockUser.mockReturnValue({ data: ADMIN_USER })
   })
 
   it('renders Add Override button when loaded', () => {
     renderComponent()
     expect(screen.getByRole('button', { name: /add override/i })).toBeDefined()
+  })
+
+  it('shows a loading skeleton (not the empty state) while the override baseline loads', () => {
+    mockLoading = true
+    const { container } = renderComponent()
+    // No "No field overrides defined" flash and no table while loading.
+    expect(screen.queryByText(/no field overrides/i)).toBeNull()
+    expect(container.querySelector('table')).toBeNull()
   })
 
   it('shows empty state when no overrides', () => {

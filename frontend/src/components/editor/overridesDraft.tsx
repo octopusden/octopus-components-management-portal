@@ -39,6 +39,10 @@ interface OverridesDraftValue {
   /** Server list with pending creates/updates/deletes applied — what every
    *  override surface renders, and the desired-full-set the save sends. */
   effectiveOverrides: FieldOverride[]
+  /** True until the server override baseline has loaded for the first time.
+   *  Surfaces use it to avoid flashing "no overrides" while the fetch is in
+   *  flight (the `= []` default seeds an empty baseline until then). */
+  isLoading: boolean
   isDirty: boolean
   /** Queue a new override; returns the draft id so the caller can re-edit it. */
   queueCreate: (body: FieldOverrideCreateBody) => string
@@ -92,10 +96,14 @@ function updateIsNoop(server: FieldOverride, u: FieldOverrideUpdateBody): boolea
 export function OverridesDraftProvider({
   componentId,
   serverOverrides,
+  serverLoading = false,
   children,
 }: {
   componentId: string
   serverOverrides: FieldOverride[]
+  /** The override query's loading state — surfaced as `isLoading` so consumers
+   *  don't render "no overrides" while the first fetch is in flight. */
+  serverLoading?: boolean
   children: ReactNode
 }) {
   const [draft, setDraft] = useState<DraftState>(EMPTY)
@@ -211,13 +219,14 @@ export function OverridesDraftProvider({
     () => ({
       serverOverrides,
       effectiveOverrides,
+      isLoading: serverLoading,
       isDirty,
       queueCreate,
       queueUpdate,
       queueDelete,
       reset,
     }),
-    [serverOverrides, effectiveOverrides, isDirty, queueCreate, queueUpdate, queueDelete, reset],
+    [serverOverrides, effectiveOverrides, serverLoading, isDirty, queueCreate, queueUpdate, queueDelete, reset],
   )
 
   return <OverridesDraftContext.Provider value={value}>{children}</OverridesDraftContext.Provider>

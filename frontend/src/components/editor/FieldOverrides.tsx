@@ -18,6 +18,7 @@ import {
   TableRow,
 } from '../ui/table'
 import { EmptyState } from '../ui/empty-state'
+import { SkeletonBlock } from '../ui/skeleton-block'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../../lib/auth'
 import type { FieldOverride } from '../../lib/types'
@@ -57,7 +58,7 @@ function markerSummary(override: FieldOverride): string {
 export function FieldOverrides() {
   // Item D: reads the page-level draft (so queued/unsaved edits show here too)
   // and queues deletes for the combined Save instead of an immediate DELETE.
-  const { effectiveOverrides: overrides, queueDelete } = useOverridesDraft()
+  const { effectiveOverrides: overrides, queueDelete, isLoading } = useOverridesDraft()
   // This raw edit surface (add / edit / delete, incl. marker editing) is an
   // admin-tier escape hatch — regular users edit scalars inline on the
   // parameter tabs. Non-admins get a read-only audit view. Gated on EDIT_METADATA
@@ -97,6 +98,19 @@ export function FieldOverrides() {
   function handleDelete(overrideId: string) {
     queueDelete(overrideId)
     setDeleteConfirm(null)
+  }
+
+  // While the override baseline is still loading, show a skeleton rather than
+  // the "No field overrides defined" empty state — an empty baseline seeds the
+  // draft until the first fetch resolves.
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <SkeletonBlock key={i} height="h-9" />
+        ))}
+      </div>
+    )
   }
 
   return (

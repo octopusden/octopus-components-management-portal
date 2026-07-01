@@ -35,7 +35,7 @@ export function FieldOverrideInline({ overriddenAttribute, canEdit }: FieldOverr
   // Edits queue into the page-level draft (combined Save) instead of firing an
   // immediate POST/PATCH/DELETE. `effectiveOverrides` already reflects pending
   // ops, so the conflict/overlap checks below see queued creates+edits too.
-  const { effectiveOverrides, queueCreate, queueUpdate, queueDelete } = useOverridesDraft()
+  const { effectiveOverrides, queueCreate, queueUpdate, queueDelete, isLoading } = useOverridesDraft()
 
   // Ordered by numeric lower bound (compareVersionRanges) so `[2.0,)` lists
   // before `[10.0,)` rather than lexically. filter() returns a fresh array,
@@ -65,6 +65,11 @@ export function FieldOverrideInline({ overriddenAttribute, canEdit }: FieldOverr
       setEditingId(null)
     }
   }, [canEdit])
+
+  // While the override baseline is loading, render nothing rather than flashing
+  // "Add override" / an empty state for a field that may actually have an
+  // override once the fetch resolves. (Guard after all hooks — rules of hooks.)
+  if (isLoading) return null
 
   // Inline error for the add form. Three states:
   //   - empty             → "required" (shown only after the user has typed
