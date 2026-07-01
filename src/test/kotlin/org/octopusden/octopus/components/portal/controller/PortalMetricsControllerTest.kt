@@ -20,15 +20,17 @@ import java.time.Instant
  * mutated with a mock user (mockUser cannot inject a security context into an
  * out-of-process RANDOM_PORT server). CRS metrics point at a closed port, so the
  * CRS section exercises the best-effort unavailable path (the happy path is
- * covered by CrsRuntimeMetricsClientTest). Portal self-metrics are always present,
+ * covered by ServiceRuntimeMetricsClientTest). Portal self-metrics are always present,
  * and a pre-recorded login proves the RecentLoginsTracker snapshot reaches the
  * response.
  */
 @SpringBootTest(
     properties = [
         "management.server.port=0",
-        // A reliably-closed address so the CRS WebClient fails fast → available=false.
-        "portal.registry-health-base-url=http://localhost:1",
+        // Reliably-closed addresses so both the CRS and RMS WebClients fail fast →
+        // available=false, exercising the best-effort unavailable path for each.
+        "portal.registry-base-url=http://localhost:1",
+        "portal.release-management-base-url=http://localhost:1",
     ],
 )
 @ActiveProfiles("test")
@@ -101,5 +103,21 @@ class PortalMetricsControllerTest {
             .expectBody()
             .jsonPath("$.crs.available").isEqualTo(false)
             .jsonPath("$.crs.reason").exists()
+    }
+
+    // RMS metrics base URL also points at a closed port (see @SpringBootTest props),
+    // so the RMS section degrades just like CRS — proving the second client is wired
+    // and surfaced in the response alongside crs.
+    @Test
+    fun `RMS section is present and degrades gracefully when RMS is unreachable`() {
+        webTestClient
+            .mutateWith(mockUser("admin"))
+            .get()
+            .uri("/portal/metrics")
+            .exchange()
+            .expectStatus().isOk
+            .expectBody()
+            .jsonPath("$.rms.available").isEqualTo(false)
+            .jsonPath("$.rms.reason").exists()
     }
 }

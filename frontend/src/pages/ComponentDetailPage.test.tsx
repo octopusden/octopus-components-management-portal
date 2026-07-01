@@ -16,6 +16,8 @@ vi.mock('../hooks/useComponent', () => ({
   useComponent: vi.fn(),
   useUpdateComponent: vi.fn(),
   useDeleteComponent: vi.fn(),
+  // item D: the page wrapper seeds OverridesDraftProvider from this.
+  useFieldOverrides: vi.fn(() => ({ data: [] })),
 }))
 vi.mock('../hooks/use-toast', () => ({
   useToast: () => ({ toast: vi.fn() }),
@@ -31,6 +33,9 @@ vi.mock('../hooks/useInfo', () => ({
   // so these page tests render without a banner.
   usePortalInfo: vi.fn(() => ({ data: undefined })),
 }))
+// Supported groupId prefixes feed the distribution/ownership prefix Save-gate.
+// Default empty ⇒ fail-open (gate off), so existing tests are unaffected.
+vi.mock('../hooks/useSupportedGroups', () => ({ useSupportedGroups: vi.fn() }))
 // Field-config hook — mocked so individual tests can pin TC fields to
 // 'hidden' / 'editable'. Default (set in beforeEach) returns editable for
 // every field path so existing tests behave unchanged.
@@ -112,6 +117,7 @@ import { ApiError } from '../lib/api'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useComponent, useUpdateComponent, useDeleteComponent } from '../hooks/useComponent'
 import { usePortalLinks } from '../hooks/useInfo'
+import { useSupportedGroups } from '../hooks/useSupportedGroups'
 import { useFieldConfigEntry } from '../hooks/useFieldConfig'
 import { GeneralTab } from '../components/editor/GeneralTab'
 import { CANNOT_EDIT_TITLE } from '../components/editor/editPermission'
@@ -121,6 +127,7 @@ import { copyToClipboard } from '../lib/clipboard'
 import type { ComponentValidation } from '@/lib/types'
 
 const mockedUsePortalLinks = vi.mocked(usePortalLinks)
+const mockedUseSupportedGroups = vi.mocked(useSupportedGroups)
 const mockedUseFieldConfigEntry = vi.mocked(useFieldConfigEntry)
 const mockedUseValidationProblems = vi.mocked(useValidationProblems)
 const mockedCopyToClipboard = vi.mocked(copyToClipboard)
@@ -295,6 +302,7 @@ beforeEach(() => {
     isError: false,
     error: null,
   } as unknown as ReturnType<typeof usePortalLinks>)
+  mockedUseSupportedGroups.mockReturnValue({ groups: [], isLoading: false })
   // Default: every field-config entry resolves as 'editable'. Individual
   // tests override per-field by re-mocking this implementation.
   mockedUseFieldConfigEntry.mockImplementation(() => ({
@@ -550,6 +558,7 @@ describe('ComponentDetailPage — sidebar nav order', () => {
       'Escrow',
       'Distribution',
       'Misc',
+      'Supported Versions',
       'Configurations',
       'As Code',
       'Overrides',
@@ -1493,5 +1502,65 @@ describe('ComponentDetailPage — Validation Problems tab (admin gate + lookup b
     )
     // No stale Validation-Problems content lingering.
     expect(screen.queryByText('v1')).toBeNull()
+  })
+})
+
+describe('ComponentDetailPage — groupId/VCS-host Save gate', () => {
+  const SAVE = { name: 'Save changes' } as const
+  const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+  const editable = { ...baseComponent, canEdit: true }
+
+  function withMaven(groupPattern: string, artifactPattern: string): ComponentDetail {
+    return {
+      ...editable,
+      configurations: [
+        {
+          ...baseComponent.configurations[0]!,
+          mavenArtifacts: [
+            { id: 'm1', groupPattern, artifactPattern, extension: null, classifier: null, sortOrder: 0 },
+          ],
+        },
+      ],
+    }
+  }
+
+  it('blocks Save when a maven Group ID lacks a supported prefix', () => {
+    mockedUseSupportedGroups.mockReturnValue({ groups: ['com.acme'], isLoading: false })
+    renderPage(withMaven('org.bad', 'svc'), user)
+    const save = screen.getByRole('button', SAVE)
+    expect(save).toBeDisabled()
+    expect(save.parentElement).toHaveAttribute('title', 'Fix 1 distribution Group ID prefix before saving')
+  })
+
+  it('does NOT block on a half-filled maven row the request would drop (blank artifact)', () => {
+    mockedUseSupportedGroups.mockReturnValue({ groups: ['com.acme'], isLoading: false })
+    renderPage(withMaven('org.bad', ''), user)
+    const save = screen.getByRole('button', SAVE)
+    // Row is dropped by cleanMaven ⇒ not counted ⇒ the title falls back to the
+    // dirty-gate reason, NOT the prefix reason.
+    expect(save.parentElement).not.toHaveAttribute('title', 'Fix 1 distribution Group ID prefix before saving')
+    expect(save.parentElement).toHaveAttribute('title', 'No changes to save')
+  })
+
+  it('blocks Save when a VCS entry host is not the ecosystem Bitbucket', () => {
+    mockedUsePortalLinks.mockReturnValue({
+      data: { jiraBaseUrl: null, gitBaseUrl: 'https://bitbucket.example.com', tcBaseUrl: null, dmsBaseUrl: null },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof usePortalLinks>)
+    const comp: ComponentDetail = {
+      ...editable,
+      configurations: [
+        {
+          ...baseComponent.configurations[0]!,
+          vcsEntries: [{ id: 'e-1', name: 'main', vcsPath: 'ssh://git@github.com/r.git', sortOrder: 0 }],
+        },
+      ],
+    }
+    renderPage(comp, user)
+    const save = screen.getByRole('button', SAVE)
+    expect(save).toBeDisabled()
+    expect(save.parentElement).toHaveAttribute('title', 'Fix 1 VCS host before saving')
   })
 })

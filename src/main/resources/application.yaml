@@ -53,10 +53,13 @@ auth-server:
 # with different external tool URLs. Unset vars produce empty strings, which
 # the controller collapses to null in the JSON response.
 portal:
-  # Base URL of the components-registry instance this portal proxies. The same
-  # env var feeds the gateway routes above; the health indicator reuses it to
-  # mirror the registry's anonymous `employeeService` health component.
-  registry-health-base-url: ${COMPONENTS_REGISTRY_SERVICE_URL:http://localhost:4567}
+  # Single source of truth for each downstream service's base URL, shared by the
+  # admin System-tab health panels AND the validation sweep below (which inherits
+  # these). Config-server sets them per env (e.g. the in-cluster CRS/RMS URLs on
+  # QA); the env vars are the local/docker fallback. The same CRS env var also
+  # feeds the gateway routes above.
+  registry-base-url: ${COMPONENTS_REGISTRY_SERVICE_URL:http://localhost:4567}
+  release-management-base-url: ${RELEASE_MANAGEMENT_SERVICE_URL:http://localhost:4568}
   # Environment label shown as a full-width warning banner in the SPA header
   # (e.g. "TEST INSTANCE" on QA), so a test instance can't be mistaken for
   # production. Unset/blank → the field is omitted from /portal/info and no
@@ -82,8 +85,10 @@ portal:
   # but downgrades the detailed-versions POST to a GET on the redirect, which CRS
   # rejects as HTTP 405. Use https base URLs so the POST is preserved (200).
   validation:
-    registry-base-url: ${COMPONENTS_REGISTRY_SERVICE_URL:http://localhost:4567}
-    release-management-base-url: ${RELEASE_MANAGEMENT_SERVICE_URL:http://localhost:4568}
+    # Inherit the shared per-service base URLs above (override here only if the
+    # sweep must target a different endpoint than the health panels).
+    registry-base-url: ${portal.registry-base-url}
+    release-management-base-url: ${portal.release-management-base-url}
     refresh-interval-ms: ${PORTAL_VALIDATION_REFRESH_INTERVAL_MS:14400000}
     # Failure-backoff cadence: after a FAILED whole-sweep (timeout/unreachable) the next
     # sweep is scheduled after this short interval instead of refresh-interval-ms, so a

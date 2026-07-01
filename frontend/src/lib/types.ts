@@ -443,6 +443,11 @@ export interface ComponentUpdateRequest {
   securityGroups?: SecurityGroupRequest[] | null
   teamcityProjects?: TeamcityProjectRequest[] | null
   baseConfiguration?: BaseConfigurationRequest | null
+  // Item D: field overrides ride the component PATCH as a desired-FULL-SET.
+  // omit / null = don't touch overrides; a provided list is the complete set of
+  // V4-editable overrides (upsert by id, create id-less entries, delete any
+  // existing editable override not in the list), applied in the same transaction.
+  fieldOverrides?: FieldOverrideUpsert[] | null
   // Change metadata recorded on the audit row (not on the component); not part
   // of the component's patchable state. Both optional; the Jira key, when
   // non-blank, must match a Jira key (see lib/editor/jiraKey). Send a trimmed
@@ -568,6 +573,38 @@ export interface FieldOverride {
   markerChildren?: MarkerChildrenPayload | null
   createdAt: string | null
   updatedAt: string | null
+}
+
+// One entry of the desired-FULL-SET sent in ComponentUpdateRequest.fieldOverrides
+// (item D). Mirrors CRS FieldOverrideUpsertRequest: omit `id` to create, provide
+// it to upsert; value (scalar) XOR markerChildren (marker) carry the row's state.
+export interface FieldOverrideUpsert {
+  id?: string
+  overriddenAttribute: string
+  versionRange: string
+  // Widened to `unknown` (scalar overrides send string/number/boolean). The
+  // generated schema.d.ts types this `Record<string, never>` because CRS
+  // declares `value` as a bare `object` in the v4 OpenAPI — same as
+  // FieldOverrideCreateBody.value. Fixing the CRS schema (free-form / scalar
+  // union) is a follow-up; the hand-mirror stays correct at runtime.
+  value?: unknown
+  markerChildren?: MarkerChildrenPayload | null
+}
+
+// Supported versions (coverage) — the decoupled-version-model layer 1 (ADR-018).
+// `all = true` ⇔ the component is defined for every version (no bounded coverage rows);
+// otherwise `supported = ∪ ranges`. `warnings` carries non-blocking advisories from a PUT.
+export interface SupportedVersionsResponse {
+  all: boolean
+  ranges: string[]
+  warnings: string[]
+}
+
+// Declarative replacement: send `all: true` (or an empty `ranges`) for all-versions coverage,
+// else the desired non-overlapping set of supported ranges.
+export interface SupportedVersionsRequest {
+  all?: boolean
+  ranges?: string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -700,8 +737,8 @@ export interface PortalJvm {
   availableProcessors: number
 }
 
-/** Best-effort subset of CRS JVM metrics — every field optional (any can degrade). */
-export interface CrsJvm {
+/** Best-effort subset of a service's JVM metrics — every field optional (any can degrade). */
+export interface ServiceJvm {
   heapUsedBytes?: number | null
   heapCommittedBytes?: number | null
   heapMaxBytes?: number | null
@@ -713,6 +750,12 @@ export interface CrsJvm {
   cpuProcess?: number | null
   cpuSystem?: number | null
   availableProcessors?: number | null
+}
+
+/** A single actuator health component: its status and (best-effort) reason detail. */
+export interface ServiceComponentHealth {
+  status?: string | null
+  reason?: string | null
 }
 
 /** One interactive login captured by the portal (per-pod, in-memory). */
@@ -730,17 +773,30 @@ export interface PortalRuntime {
   recentLogins: RecentLogin[]
 }
 
-export interface CrsRuntime {
+/**
+ * Best-effort runtime readout for a downstream service (CRS or RMS) on the admin
+ * System tab. `reachable` distinguishes "answered the health probe but a component
+ * is degraded" from "unreachable"; `downComponents` names the DOWN aggregate
+ * components; `employeeService` mirrors the CRS person-validation component so the
+ * banner can name the real cause (absent for services without it, e.g. RMS).
+ */
+export interface ServiceRuntime {
   available: boolean
   reason?: string | null
   status?: string | null
   uptimeMillis?: number | null
-  jvm?: CrsJvm | null
+  jvm?: ServiceJvm | null
+  reachable?: boolean
+  downComponents?: string[]
+  employeeService?: ServiceComponentHealth | null
 }
 
 export interface SystemMetrics {
   portal: PortalRuntime
-  crs: CrsRuntime
+  crs: ServiceRuntime
+  // Optional so a frontend running against an older backend (rolling deploy /
+  // local dev) that omits `rms` degrades gracefully instead of crashing.
+  rms?: ServiceRuntime
 }
 
 // ---------------------------------------------------------------------------

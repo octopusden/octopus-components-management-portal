@@ -4,8 +4,8 @@ import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Switch } from '../ui/switch'
 import { Badge } from '../ui/badge'
-import { useFieldOverrides, useCreateFieldOverride, useUpdateFieldOverride, useDeleteFieldOverride } from '../../hooks/useComponent'
-import { formatVersionRange, isValidVersionRange, isClosedVersionRange, classifyRangeConflict, compareVersionRanges } from '../../lib/versionRange'
+import { useOverridesDraft } from './overridesDraft'
+import { formatVersionRange, isValidVersionRange, isAllowedOverrideRange, classifyRangeConflict, compareVersionRanges } from '../../lib/versionRange'
 import type { FieldOverride } from '../../lib/types'
 
 // Scalar override paths whose column type is boolean (from CRS
@@ -23,7 +23,6 @@ const BOOLEAN_OVERRIDE_PATHS = new Set([
 ])
 
 interface FieldOverrideInlineProps {
-  componentId: string
   overriddenAttribute: string
   // When false, the inline editor is read-only: the existing overrides still render
   // (badges + values + overlap warnings) but "Add override" and the per-row edit /
@@ -32,24 +31,25 @@ interface FieldOverrideInlineProps {
   canEdit: boolean
 }
 
-export function FieldOverrideInline({ componentId, overriddenAttribute, canEdit }: FieldOverrideInlineProps) {
-  const { data: allOverrides = [] } = useFieldOverrides(componentId)
-  const createMutation = useCreateFieldOverride(componentId)
-  const updateMutation = useUpdateFieldOverride(componentId)
-  const deleteMutation = useDeleteFieldOverride(componentId)
+export function FieldOverrideInline({ overriddenAttribute, canEdit }: FieldOverrideInlineProps) {
+  // Edits queue into the page-level draft (combined Save) instead of firing an
+  // immediate POST/PATCH/DELETE. `effectiveOverrides` already reflects pending
+  // ops, so the conflict/overlap checks below see queued creates+edits too.
+  const { effectiveOverrides, queueCreate, queueUpdate, queueDelete, isLoading } = useOverridesDraft()
 
   // Ordered by numeric lower bound (compareVersionRanges) so `[2.0,)` lists
   // before `[10.0,)` rather than lexically. filter() returns a fresh array,
   // so the in-place sort is side-effect-free.
-  const overrides = allOverrides
+  const overrides = effectiveOverrides
     .filter((o) => o.overriddenAttribute === overriddenAttribute)
     .sort((a, b) => compareVersionRanges(a.versionRange, b.versionRange))
   const isBoolean = BOOLEAN_OVERRIDE_PATHS.has(overriddenAttribute)
 
   const [adding, setAdding] = useState(false)
-  // D5: field-override ranges must be closed; no universal default. User
-  // enters an explicit closed range like `[1.0,2.0)` or historical-left-
-  // unbounded `(,1.0)`. Open-upward / universal forms belong to BASE.
+  // ADR-018: field-override ranges may be bounded (`[1.0,2.0)`), open-upper
+  // (`[2.0,)`, "from 2.0 onward"), or historical-left-unbounded (`(,1.0)`).
+  // Only the all-versions shapes (`(,)`, `(,0),[0,)`) are rejected — that is the
+  // base default; coverage is edited in the Supported-versions block.
   const [newRange, setNewRange] = useState('')
   const [newValue, setNewValue] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -66,6 +66,11 @@ export function FieldOverrideInline({ componentId, overriddenAttribute, canEdit 
     }
   }, [canEdit])
 
+  // While the override baseline is loading, render nothing rather than flashing
+  // "Add override" / an empty state for a field that may actually have an
+  // override once the fetch resolves. (Guard after all hooks — rules of hooks.)
+  if (isLoading) return null
+
   // Inline error for the add form. Three states:
   //   - empty             → "required" (shown only after the user has typed
   //                          something into the value input — i.e. once
@@ -73,7 +78,7 @@ export function FieldOverrideInline({ componentId, overriddenAttribute, canEdit 
   //                          add form doesn't nag with an error before the
   //                          user has interacted).
   //   - syntactically broken → invalid-syntax error
-  //   - open-upward      → "edit BASE instead" error
+  //   - all-versions     → "that is the base default" error
   // Button is disabled in all three cases regardless of the value-typed gate.
   // Walk siblings on the same attribute for a write-blocking conflict. Partial
   // overlap, strict containment, and semantic-equal duplicates all block submit
@@ -82,7 +87,7 @@ export function FieldOverrideInline({ componentId, overriddenAttribute, canEdit 
   // same disjoint-only rule server-side, so this preview and the server agree.
   type Conflict = { range: string; kind: 'partial' | 'contains' | 'equal' }
   function findConflict(range: string, excludeId: string | null): Conflict | null {
-    if (!isClosedVersionRange(range)) return null
+    if (!isAllowedOverrideRange(range)) return null
     for (const o of overrides) {
       if (o.id === excludeId) continue
       const kind = classifyRangeConflict(range, o.versionRange)
@@ -128,8 +133,8 @@ export function FieldOverrideInline({ componentId, overriddenAttribute, canEdit 
       return valueTouched ? 'Version range is required' : null
     }
     if (!isValidVersionRange(range)) return 'Invalid version range syntax'
-    if (!isClosedVersionRange(range)) {
-      return 'Open-upward range — edit the BASE field above instead'
+    if (!isAllowedOverrideRange(range)) {
+      return 'All-versions range — that is the base default; use a bounded or open-upper sub-range (e.g. [2.0,))'
     }
     if (conflict !== null) {
       return conflict.kind === 'equal'
@@ -143,8 +148,8 @@ export function FieldOverrideInline({ componentId, overriddenAttribute, canEdit 
   // Disabled state — separate from the visible error so the empty-untouched
   // case still blocks submit (no false visual nag for an unmodified blank
   // form).
-  const newRangeBlocks = !isClosedVersionRange(newRange) || newConflict !== null
-  const editRangeBlocks = !isClosedVersionRange(editRange) || editConflict !== null
+  const newRangeBlocks = !isAllowedOverrideRange(newRange) || newConflict !== null
+  const editRangeBlocks = !isAllowedOverrideRange(editRange) || editConflict !== null
 
   function handleAdd() {
     if (!canEdit || newRangeBlocks) return
@@ -158,16 +163,10 @@ export function FieldOverrideInline({ componentId, overriddenAttribute, canEdit 
       if (!newValue.trim()) return
       wireValue = newValue
     }
-    createMutation.mutate(
-      { overriddenAttribute, versionRange: newRange, value: wireValue },
-      {
-        onSuccess: () => {
-          setAdding(false)
-          setNewRange('')
-          setNewValue('')
-        },
-      },
-    )
+    queueCreate({ overriddenAttribute, versionRange: newRange, value: wireValue })
+    setAdding(false)
+    setNewRange('')
+    setNewValue('')
   }
 
   function startEdit(override: FieldOverride) {
@@ -185,15 +184,13 @@ export function FieldOverrideInline({ componentId, overriddenAttribute, canEdit 
   function handleUpdate() {
     if (!canEdit || !editingId || editRangeBlocks) return
     const wireValue: unknown = isBoolean ? editValue === 'true' : editValue
-    updateMutation.mutate(
-      { overrideId: editingId, versionRange: editRange, value: wireValue },
-      { onSuccess: () => setEditingId(null) },
-    )
+    queueUpdate(editingId, { versionRange: editRange, value: wireValue })
+    setEditingId(null)
   }
 
   function handleDelete(id: string) {
     if (!canEdit) return
-    deleteMutation.mutate(id)
+    queueDelete(id)
   }
 
   if (overrides.length === 0 && !adding) {
@@ -240,7 +237,7 @@ export function FieldOverrideInline({ componentId, overriddenAttribute, canEdit 
                     aria-label={`Override value for ${overriddenAttribute}`}
                   />
                 )}
-                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleUpdate} disabled={updateMutation.isPending || editRangeBlocks} aria-label="Save override edit">
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleUpdate} disabled={editRangeBlocks} aria-label="Save override edit">
                   <Check className="h-3 w-3" />
                 </Button>
                 <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditingId(null)} aria-label="Cancel override edit">
@@ -311,7 +308,7 @@ export function FieldOverrideInline({ componentId, overriddenAttribute, canEdit 
                 aria-label={`New override value for ${overriddenAttribute}`}
               />
             )}
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleAdd} disabled={createMutation.isPending || newRangeBlocks} aria-label="Confirm new override">
+            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleAdd} disabled={newRangeBlocks} aria-label="Confirm new override">
               <Check className="h-3 w-3" />
             </Button>
             <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setAdding(false)} aria-label="Cancel new override">

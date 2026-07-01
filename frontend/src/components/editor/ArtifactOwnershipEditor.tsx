@@ -21,10 +21,12 @@ interface ArtifactOwnershipEditorProps {
   onChange: (next: OwnershipMappingValue[]) => void
   /** The component's existing configuration ranges (override mapping ranges must equal one). */
   configRanges: string[]
+  /** Supported groupId prefixes (CRS rule #10); empty ⇒ the prefix check is skipped. */
+  supportedGroups?: readonly string[]
   disabled?: boolean
 }
 
-export function ArtifactOwnershipEditor({ value, onChange, configRanges, disabled }: ArtifactOwnershipEditorProps) {
+export function ArtifactOwnershipEditor({ value, onChange, configRanges, supportedGroups = [], disabled }: ArtifactOwnershipEditorProps) {
   const conflictById = detectIntraComponentConflicts(value)
   const overlap = hasOverlappingOverrides(value)
   const baseMappings = value.filter((m) => m.base)
@@ -78,6 +80,7 @@ export function ArtifactOwnershipEditor({ value, onChange, configRanges, disable
             mapping={m}
             allMappings={value}
             conflict={conflictById[m.id]}
+            supportedGroups={supportedGroups}
             disabled={disabled}
             onPatch={(next) => patch(m.id, next)}
             onRemove={() => remove(m.id)}
@@ -103,6 +106,7 @@ export function ArtifactOwnershipEditor({ value, onChange, configRanges, disable
             allMappings={value}
             conflict={conflictById[m.id]}
             configRanges={configRanges}
+            supportedGroups={supportedGroups}
             disabled={disabled}
             onPatch={(next) => patch(m.id, next)}
             onRemove={() => remove(m.id)}
@@ -132,14 +136,15 @@ interface MappingCardProps {
   allMappings: OwnershipMappingValue[]
   conflict?: string
   configRanges?: string[]
+  supportedGroups?: readonly string[]
   disabled?: boolean
   onPatch: (next: Partial<OwnershipMappingValue>) => void
   onRemove: () => void
 }
 
-function MappingCard({ mapping, allMappings, conflict, configRanges, disabled, onPatch, onRemove }: MappingCardProps) {
+function MappingCard({ mapping, allMappings, conflict, configRanges, supportedGroups = [], disabled, onPatch, onRemove }: MappingCardProps) {
   const [legacyOpen, setLegacyOpen] = useState(false)
-  const gErr = groupError(mapping)
+  const gErr = groupError(mapping, supportedGroups)
   const explicitEmpty = isExplicitEmpty(mapping)
 
   return (

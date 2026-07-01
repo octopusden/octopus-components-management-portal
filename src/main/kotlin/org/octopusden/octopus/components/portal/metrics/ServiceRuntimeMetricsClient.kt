@@ -1,9 +1,7 @@
 package org.octopusden.octopus.components.portal.metrics
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
-import org.springframework.stereotype.Component
 import org.springframework.web.reactive.function.client.WebClient
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
@@ -11,66 +9,93 @@ import java.time.Duration
 import java.util.Optional
 
 /**
- * Best-effort reader of CRS's actuator runtime metrics for the admin System tab.
+ * Best-effort reader of a downstream service's actuator runtime metrics for the
+ * admin System tab — used for both CRS and RMS (release-management-service).
  * Mirrors EmployeeServiceIntegrationHealthIndicator: a plain WebClient over the
- * same portal.registry-health-base-url, short timeouts, and every failure
- * downgraded rather than propagated — the portal's own metrics never depend on
- * CRS answering.
+ * service's base URL, short timeouts, and every failure downgraded rather than
+ * propagated — the portal's own metrics never depend on the service answering.
  *
- * The actuator health path is anonymous on CRS (proven by the employee health
- * mirror), so it is queried credential-free. The actuator metrics paths are
- * authenticated() on CRS (any valid JWT, no special role), so the caller's
- * bearer token is relayed to them; without a token (or if CRS rejects it) the
- * metrics surface as available=false with a reason while the health status is
- * still shown. Micrometer process.uptime and jvm.gc.pause TOTAL_TIME are in
- * SECONDS, so both are multiplied by 1000 to milliseconds.
+ * The actuator health path is anonymous, so it is always queried credential-free.
+ * Metrics-endpoint auth differs per service and is controlled by [relayToken]:
+ *  - CRS actuator metrics are authenticated() (any valid JWT, no special role), so
+ *    the caller's bearer token is relayed (relayToken=true); without a token (or if
+ *    CRS rejects it) metrics surface as available=false with a reason while the
+ *    health status is still shown.
+ *  - RMS actuator metrics are anonymous (relayToken=false), so no bearer is ever
+ *    attached and metrics resolve without a token.
+ *
+ * Micrometer process.uptime and jvm.gc.pause TOTAL_TIME are in SECONDS, so both
+ * are multiplied by 1000 to milliseconds. Wiring of the two instances (CRS + RMS)
+ * lives in [org.octopusden.octopus.components.portal.metrics.MetricsClientsConfig].
  */
-@Component
-class CrsRuntimeMetricsClient(
-    @Value("\${portal.registry-health-base-url}") registryBaseUrl: String,
+class ServiceRuntimeMetricsClient(
+    baseUrl: String,
+    private val relayToken: Boolean,
 ) {
-    private val webClient = WebClient.builder().baseUrl(registryBaseUrl).build()
+    private val webClient = WebClient.builder().baseUrl(baseUrl).build()
 
     /**
-     * @param bearerToken the caller's OAuth2 access token, relayed to CRS so its
-     *   authenticated() actuator metrics endpoints answer (CRS gates them on any
-     *   valid JWT, no special role). Null → credential-free: health still resolves
-     *   but metrics come back as require-authentication.
+     * @param bearerToken the caller's OAuth2 access token, relayed to the service's
+     *   authenticated() actuator metrics endpoints ONLY when [relayToken] is true.
+     *   Ignored entirely when relayToken=false (anonymous metrics, e.g. RMS). Null
+     *   (or relayToken=false) → credential-free: health still resolves; for a
+     *   token-gated service metrics then come back as require-authentication.
      */
-    fun fetch(bearerToken: String? = null): Mono<CrsRuntime> =
+    fun fetch(bearerToken: String? = null): Mono<ServiceRuntime> =
         Mono.zip(fetchStatus(), probeMetrics(bearerToken)).map { tuple ->
-            val status = tuple.t1.orElse(null)
+            val snapshot = tuple.t1.orElse(null)
+            val reachable = snapshot != null
+            val status = snapshot?.status
+            val downComponents = snapshot?.downComponents ?: emptyList()
+            val employeeService = snapshot?.employeeService
             when (val probe = tuple.t2) {
                 is MetricsProbe.Available ->
-                    CrsRuntime(
+                    ServiceRuntime(
                         available = true,
                         reason = null,
                         status = status,
                         uptimeMillis = probe.uptimeMillis,
                         jvm = probe.jvm,
+                        reachable = reachable,
+                        downComponents = downComponents,
+                        employeeService = employeeService,
                     )
                 is MetricsProbe.Unavailable ->
-                    CrsRuntime(
+                    ServiceRuntime(
                         available = false,
                         reason = probe.reason,
                         status = status,
                         uptimeMillis = null,
                         jvm = null,
+                        reachable = reachable,
+                        downComponents = downComponents,
+                        employeeService = employeeService,
                     )
             }
         }
 
     /**
-     * CRS health status string (e.g. UP/DOWN); empty when unreachable/unparseable.
-     * Credential-free on purpose — CRS health is anonymous, so the token is not
-     * relayed here (only the authenticated() metrics endpoints get it).
+     * CRS aggregate health snapshot (status + down components + the employeeService
+     * mirror); empty Optional when unreachable/unparseable. The presence of the
+     * Optional is what `reachable` keys off — an aggregate DOWN with a body is still
+     * "reachable", only a no-response is "unreachable". Credential-free on purpose —
+     * CRS health is anonymous, so the token is not relayed here (only the
+     * authenticated() metrics endpoints get it).
      */
-    private fun fetchStatus(): Mono<Optional<String>> =
+    private fun fetchStatus(): Mono<Optional<HealthSnapshot>> =
         webClient
             .get()
             .uri("/actuator/health")
             .exchangeToMono { response ->
-                response.bodyToMono(HealthBody::class.java).map { Optional.ofNullable(it.status) }
+                response.bodyToMono(HealthBody::class.java)
+                    .map { Optional.of(it.toSnapshot()) }
+                    // A service that answers with an EMPTY body (startup, or a proxy
+                    // stripping a 503 body) makes bodyToMono complete empty. Without this
+                    // coalesce that empty signal propagates through Mono.zip and blanks the
+                    // whole /portal/metrics response (204 → undefined on the SPA). Map it to
+                    // an empty Optional so the zip still emits and the service simply
+                    // surfaces as unreachable, never taking down the other service or portal.
+                    .switchIfEmpty(Mono.just(Optional.empty<HealthSnapshot>()))
             }
             .timeout(TIMEOUT)
             .onErrorResume { Mono.just(Optional.empty()) }
@@ -96,29 +121,35 @@ class CrsRuntimeMetricsClient(
         webClient
             .get()
             .uri("/actuator/metrics/process.uptime")
-            .headers { headers -> bearerToken?.let(headers::setBearerAuth) }
+            .headers { headers -> if (relayToken) bearerToken?.let(headers::setBearerAuth) }
             .exchangeToMono { response ->
                 val code = response.statusCode()
                 when {
                     code.is2xxSuccessful ->
-                        response.bodyToMono(ActuatorMetric::class.java).map { ProbeClassification.Ok(it) }
+                        response.bodyToMono(ActuatorMetric::class.java)
+                            .map<ProbeClassification> { ProbeClassification.Ok(it) }
+                            // A 2xx with an EMPTY body makes bodyToMono complete empty, which
+                            // would propagate through probeMetrics → Mono.zip and blank the whole
+                            // /portal/metrics response (mirrors the fetchStatus fix). Degrade
+                            // instead of vanishing.
+                            .switchIfEmpty(Mono.just(ProbeClassification.Unavailable(EMPTY_UPTIME_REASON)))
                     code.isSameCodeAs(HttpStatus.UNAUTHORIZED) || code.isSameCodeAs(HttpStatus.FORBIDDEN) ->
                         response.releaseBody().thenReturn(
-                            ProbeClassification.Unavailable("CRS metrics require authentication"),
+                            ProbeClassification.Unavailable("Service metrics require authentication"),
                         )
                     code.isSameCodeAs(HttpStatus.NOT_FOUND) ->
                         response.releaseBody().thenReturn(
-                            ProbeClassification.Unavailable("CRS exposes no process.uptime metric"),
+                            ProbeClassification.Unavailable("Service exposes no process.uptime metric"),
                         )
                     else ->
                         response.releaseBody().thenReturn(
-                            ProbeClassification.Unavailable("CRS metrics returned HTTP ${code.value()}"),
+                            ProbeClassification.Unavailable("Service metrics returned HTTP ${code.value()}"),
                         )
                 }
             }
             .timeout(TIMEOUT)
             .onErrorResume { e ->
-                Mono.just(ProbeClassification.Unavailable("CRS unreachable: ${e.javaClass.simpleName}"))
+                Mono.just(ProbeClassification.Unavailable("Service unreachable: ${e.javaClass.simpleName}"))
             }
 
     private fun fetchAvailable(uptime: ActuatorMetric, bearerToken: String?): Mono<MetricsProbe> {
@@ -130,8 +161,8 @@ class CrsRuntimeMetricsClient(
             .map { values -> MetricsProbe.Available(uptimeMillis, buildJvm(values)) }
     }
 
-    private fun buildJvm(values: Map<String, Double>): CrsJvm =
-        CrsJvm(
+    private fun buildJvm(values: Map<String, Double>): ServiceJvm =
+        ServiceJvm(
             heapUsedBytes = values["heapUsed"]?.toLong(),
             heapCommittedBytes = values["heapCommitted"]?.toLong(),
             heapMaxBytes = values["heapMax"]?.toLong()?.takeIf { it >= 0 },
@@ -150,7 +181,7 @@ class CrsRuntimeMetricsClient(
         webClient
             .get()
             .uri("/actuator/metrics/$path")
-            .headers { headers -> bearerToken?.let(headers::setBearerAuth) }
+            .headers { headers -> if (relayToken) bearerToken?.let(headers::setBearerAuth) }
             .exchangeToMono { response ->
                 if (response.statusCode().is2xxSuccessful) {
                     response.bodyToMono(ActuatorMetric::class.java).mapNotNull { it.value(statistic) }
@@ -162,7 +193,7 @@ class CrsRuntimeMetricsClient(
             .onErrorResume { Mono.empty() }
 
     private sealed interface MetricsProbe {
-        data class Available(val uptimeMillis: Long?, val jvm: CrsJvm) : MetricsProbe
+        data class Available(val uptimeMillis: Long?, val jvm: ServiceJvm) : MetricsProbe
 
         data class Unavailable(val reason: String) : MetricsProbe
     }
@@ -176,8 +207,40 @@ class CrsRuntimeMetricsClient(
 
     private data class MetricSpec(val key: String, val path: String, val statistic: String)
 
+    // `components`/`details` are nullable (not defaulted-non-null): an absent JSON key
+    // makes the Jackson Kotlin module pass null to the constructor rather than apply
+    // the default, which would otherwise fail deserialization of a bodied-but-
+    // componentless health response like {"status":"UP"}.
     @JsonIgnoreProperties(ignoreUnknown = true)
-    data class HealthBody(val status: String? = null)
+    data class HealthBody(
+        val status: String? = null,
+        val components: Map<String, ComponentBody>? = null,
+    ) {
+        /** Aggregate status + the DOWN components and the employeeService mirror. */
+        fun toSnapshot(): HealthSnapshot {
+            val comps = components.orEmpty()
+            val down = comps.filterValues { it.status in DOWN_STATUSES }.keys.toList()
+            val employee = comps["employeeService"]?.let {
+                ServiceComponentHealth(status = it.status, reason = it.reason())
+            }
+            return HealthSnapshot(status, down, employee)
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    data class ComponentBody(
+        val status: String? = null,
+        val details: Map<String, Any?>? = null,
+    ) {
+        fun reason(): String? = details?.get("reason") as? String
+    }
+
+    /** Parsed health: aggregate status, DOWN component names, employeeService mirror. */
+    data class HealthSnapshot(
+        val status: String?,
+        val downComponents: List<String>,
+        val employeeService: ServiceComponentHealth?,
+    )
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     data class ActuatorMetric(
@@ -193,6 +256,11 @@ class CrsRuntimeMetricsClient(
     private companion object {
         private val TIMEOUT = Duration.ofSeconds(3)
         private const val MILLIS_PER_SECOND = 1000.0
+        private const val EMPTY_UPTIME_REASON = "Service returned an empty process.uptime body"
+
+        // Actuator statuses that fail the aggregate. UNKNOWN (e.g. discoveryComposite)
+        // does not, mirroring Spring Boot's default StatusAggregator ordering.
+        private val DOWN_STATUSES = setOf("DOWN", "OUT_OF_SERVICE")
 
         // Heap memory is summed across heap pools via the area:heap tag (best-effort —
         // a CRS that ignores the tag selector just yields a different/absent value).

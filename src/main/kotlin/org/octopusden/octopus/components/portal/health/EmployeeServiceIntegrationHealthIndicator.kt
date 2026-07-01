@@ -35,7 +35,7 @@ import java.time.Duration
  */
 @Component("employeeServiceIntegration")
 class EmployeeServiceIntegrationHealthIndicator(
-    @Value("\${portal.registry-health-base-url}") registryBaseUrl: String,
+    @Value("\${portal.registry-base-url}") registryBaseUrl: String,
 ) : ReactiveHealthIndicator {
     // Built directly (not from a Boot-managed WebClient.Builder bean): this
     // Boot 4 gateway app does not ship the webclient autoconfiguration module,

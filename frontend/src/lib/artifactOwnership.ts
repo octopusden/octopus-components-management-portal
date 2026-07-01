@@ -3,6 +3,7 @@
 // of mappings, each = comma group-list + ownership mode (+ literal tokens for
 // EXPLICIT) at a version range (base = all versions; override REPLACES base).
 import type { ArtifactId, ArtifactIdMode, ArtifactIdRequest } from './types'
+import { findUnsupportedGroupId } from './groupValidation'
 import { formatVersionRange } from './versionRange'
 
 export const OWNERSHIP_ALL_VERSIONS = '(,0),[0,)'
@@ -116,13 +117,25 @@ function explicitSiblings(
   return out
 }
 
-/** Per-mapping validation message ('' when valid). */
-export function groupError(mapping: OwnershipMappingValue): string {
+/**
+ * Per-mapping validation message ('' when valid). When `supportedGroups` is
+ * non-empty, also enforces the CRS supported-prefix rule (#10) — every group
+ * token must start with one of the prefixes; an empty list skips the check
+ * (fail-open, CRS stays authoritative).
+ */
+export function groupError(
+  mapping: OwnershipMappingValue,
+  supportedGroups: readonly string[] = [],
+): string {
   const tokens = groupTokens(mapping.groups)
   if (tokens.length === 0) return 'Group ID is required.'
   const bad = tokens.find(isBadToken)
   if (bad !== undefined) {
     return `Invalid group "${bad}". Use letters, digits, . _ - only — no wildcards or regex.`
+  }
+  const unsupported = findUnsupportedGroupId(mapping.groups, supportedGroups)
+  if (unsupported !== undefined) {
+    return `Group "${unsupported}" must start with a supported prefix (${supportedGroups.join(', ')}).`
   }
   if (mapping.mode === 'ALL_EXCEPT_CLAIMED' && tokens.length > 1) {
     return '"All unclaimed" supports a single group only — split into one mapping per group.'
@@ -202,10 +215,13 @@ export function hasOverlappingOverrides(mappings: OwnershipMappingValue[]): bool
 }
 
 /** Total count of unresolved issues (drives the Save gate). */
-export function countOwnershipIssues(mappings: OwnershipMappingValue[]): number {
+export function countOwnershipIssues(
+  mappings: OwnershipMappingValue[],
+  supportedGroups: readonly string[] = [],
+): number {
   let n = 0
   for (const m of mappings) {
-    if (groupError(m)) n++
+    if (groupError(m, supportedGroups)) n++
     if (isExplicitEmpty(m)) n++
   }
   n += Object.keys(detectIntraComponentConflicts(mappings)).length

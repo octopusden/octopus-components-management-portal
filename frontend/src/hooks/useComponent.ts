@@ -6,6 +6,8 @@ import type {
   ComponentUpdateRequest,
   FieldOverride,
   MarkerChildrenPayload,
+  SupportedVersionsRequest,
+  SupportedVersionsResponse,
 } from '../lib/types'
 
 // Request body types now live alongside the response types in
@@ -38,6 +40,10 @@ export function useUpdateComponent(id: string) {
     onSuccess: (data) => {
       queryClient.setQueryData(['component', id], data)
       queryClient.invalidateQueries({ queryKey: ['components'] })
+      // The combined PATCH also carries the desired field-override set (item D);
+      // refetch the override baseline so OverridesDraftProvider re-seeds from the
+      // authoritative server state after save (full-set-replace baseline freshness).
+      queryClient.invalidateQueries({ queryKey: ['field-overrides', id] })
     },
   })
 }
@@ -76,13 +82,17 @@ export interface FieldOverrideUpdateBody {
   markerChildren?: MarkerChildrenPayload | null
 }
 
-// Override CUD mutations invalidate BOTH caches:
-//   - ['field-overrides', id]  → FieldOverrides table
-//   - ['component', id]        → ConfigurationsTab (reads configurations[]
-//                                  off the parent component fetch); without
-//                                  this invalidation, edits show in the
-//                                  Overrides tab but the Configurations
-//                                  view stays stale until a full refetch.
+// Item D: field overrides are no longer written one-at-a-time. The editor
+// queues create/update/delete into the page-level OverridesDraft and persists
+// them as a desired-FULL-SET on the component PATCH (`ComponentUpdateRequest.
+// fieldOverrides`). The create/update/delete REST hooks were removed; the
+// FieldOverrideCreate/UpdateBody types above still describe the per-row payload
+// the draft accumulates, and useUpdateComponent invalidates ['field-overrides',
+// id] so the draft re-seeds from the authoritative baseline after a save.
+
+// Invalidate the override + parent-component caches together. Still used by the
+// supported-versions PUT: coverage changes which override range-views resolve,
+// and the parent fetch carries configurations[].
 function invalidateOverrideAndComponent(
   queryClient: ReturnType<typeof useQueryClient>,
   componentId: string,
@@ -91,32 +101,32 @@ function invalidateOverrideAndComponent(
   queryClient.invalidateQueries({ queryKey: ['component', componentId] })
 }
 
-export function useCreateFieldOverride(componentId: string) {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (request: FieldOverrideCreateBody) =>
-      api.post<FieldOverride>(`/components/${componentId}/field-overrides`, request),
-    onSuccess: () => invalidateOverrideAndComponent(queryClient, componentId),
+// Supported versions (coverage) — ADR-018 layer 1. GET reports `{all, ranges, warnings}`; the PUT
+// declaratively replaces the supported set and returns the resulting MERGED coverage (overlapping /
+// contiguous ranges collapse; a set that tiles all-versions becomes `all`) plus any V1/V5 warnings
+// (an override left outside supported). Coverage is decoupled from overrides — it never reshapes
+// them — but it does change which enumerated range VIEWS resolve (the read-time partition), so the
+// PUT invalidates the supported-versions cache AND the parent component (Configurations / Overrides).
+export function useSupportedVersions(componentId: string) {
+  return useQuery({
+    queryKey: ['supported-versions', componentId],
+    queryFn: () => api.get<SupportedVersionsResponse>(`/components/${componentId}/supported-versions`),
+    enabled: !!componentId,
   })
 }
 
-export function useUpdateFieldOverride(componentId: string) {
+export function useUpdateSupportedVersions(componentId: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ overrideId, ...request }: { overrideId: string } & FieldOverrideUpdateBody) =>
-      api.patch<FieldOverride>(
-        `/components/${componentId}/field-overrides/${overrideId}`,
-        request,
-      ),
-    onSuccess: () => invalidateOverrideAndComponent(queryClient, componentId),
-  })
-}
-
-export function useDeleteFieldOverride(componentId: string) {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (overrideId: string) =>
-      api.delete(`/components/${componentId}/field-overrides/${overrideId}`),
-    onSuccess: () => invalidateOverrideAndComponent(queryClient, componentId),
+    mutationFn: (request: SupportedVersionsRequest) =>
+      api.put<SupportedVersionsResponse>(`/components/${componentId}/supported-versions`, request),
+    onSuccess: (data) => {
+      // Seed the cache with the PUT response (the merged coverage) BEFORE invalidating, so a
+      // back-to-back edit builds its next declarative replacement from fresh ranges rather than the
+      // pre-PUT cached set (which would drop the just-saved change while the refetch is in flight).
+      queryClient.setQueryData(['supported-versions', componentId], data)
+      queryClient.invalidateQueries({ queryKey: ['supported-versions', componentId] })
+      invalidateOverrideAndComponent(queryClient, componentId)
+    },
   })
 }
