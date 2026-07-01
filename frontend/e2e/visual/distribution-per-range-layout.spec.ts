@@ -14,8 +14,8 @@ const ID = '11111111-1111-1111-1111-111111111111'
 // Long docker summaries — generic tokens only. Six images per variant → a
 // summary far wider than the row, so a non-truncating layout overflows.
 const LONG_DOCKER = Array.from({ length: 6 }, (_, i) => ({
-  imageName: `com.example.distribution.appserver/appserver-service-module-${i}`,
-  flavor: 'production',
+  imageName: `com.example.distribution.sample/example-service-module-${i}`,
+  flavor: 'release',
 }))
 
 const RANGES = [
@@ -75,7 +75,7 @@ test.describe('Distribution tab — per-range variant row layout (issue #146)', 
       await expectNoHorizontalOverflow(row)
       // The Edit control must not sit on top of the (truncated) summary text.
       await expectNoOverlap(
-        row.getByTitle(/appserver/),
+        row.getByTitle(/example-service/),
         row.getByRole('button', { name: /edit per-range variant/i }),
       )
     }
