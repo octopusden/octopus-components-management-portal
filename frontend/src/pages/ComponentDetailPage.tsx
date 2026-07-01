@@ -42,6 +42,8 @@ import { completenessPercent } from '../lib/component/completeness'
 import { CANNOT_EDIT_TITLE } from '../components/editor/editPermission'
 import { WhoCanEditPanel } from '../components/editor/WhoCanEditPanel'
 import { FieldOverrides } from '../components/editor/FieldOverrides'
+import { OverridesDraftProvider } from '../components/editor/overridesDraft'
+import { useOverridesSection } from '../components/editor/useOverridesSection'
 import { ConfigurationsTab } from '../components/editor/ConfigurationsTab'
 import { SupportedVersionsTab } from '../components/editor/SupportedVersionsTab'
 import { AsCodeTab } from '../components/editor/AsCodeTab'
@@ -49,7 +51,7 @@ import { ComponentHistoryTab } from '../components/editor/ComponentHistoryTab'
 import { EditorSidebarNav, type EditorNavSection } from '../components/editor/EditorSidebarNav'
 import { ValidationProblemsList } from '../components/ValidationProblemsList'
 import { CreateComponentDialog } from '../components/CreateComponentDialog'
-import { useComponent, useUpdateComponent, useDeleteComponent } from '../hooks/useComponent'
+import { useComponent, useUpdateComponent, useDeleteComponent, useFieldOverrides } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
 import { ApiError } from '../lib/api'
 import { useOptimisticConflict } from '../hooks/useOptimisticConflict'
@@ -128,7 +130,13 @@ function sectionForField(field: string): string | null {
   return null
 }
 
-export function ComponentDetailPage() {
+/**
+ * The editor body. Rendered INSIDE OverridesDraftProvider (see
+ * ComponentDetailPage below) so it — and every override surface — share one
+ * draft instance; this is also where the section slices (incl. the override
+ * slice) are assembled into the ONE combined save.
+ */
+function ComponentDetailEditor() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { toast } = useToast()
@@ -259,6 +267,9 @@ export function ComponentDetailPage() {
   const escrowSection = useEscrowSection(shell, {
     productType: productTypeFc.visibility ?? 'editable',
   })
+  // Field-overrides slice — draft lives in OverridesDraftProvider (wraps this
+  // component), so this just projects it into a SectionSlice like the others.
+  const overridesSection = useOverridesSection()
 
   // ── General/Misc slice (RHF touched-not-dirty gate, preserved verbatim) ──
   function buildPatchRequest() {
@@ -348,6 +359,7 @@ export function ComponentDetailPage() {
     distributionSection.slice,
     jiraSection.slice,
     escrowSection.slice,
+    overridesSection.slice,
   ]
   const dirty = anyDirty(slices)
   const diff = collectDiff(slices)
@@ -384,6 +396,7 @@ export function ComponentDetailPage() {
     distributionSection.reset()
     jiraSection.reset()
     escrowSection.reset()
+    overridesSection.reset()
     form.clearErrors()
   }
 
@@ -428,6 +441,13 @@ export function ComponentDetailPage() {
         form.reset(mapComponentToForm(saved))
         form.clearErrors()
       }
+      // Clear the override draft after a successful save. The combined PATCH
+      // persisted the desired set; useUpdateComponent invalidates
+      // ['field-overrides', id], so OverridesDraftProvider re-seeds from the
+      // refetched (authoritative) baseline and the section reads clean.
+      // (For ~one tick — until that refetch settles — effectiveOverrides shows
+      // the pre-save rows again; benign, the Overrides tab isn't in view here.)
+      overridesSection.reset()
       setReviewOpen(false)
       toast({ title: 'Component saved', description: 'Changes have been saved successfully.' })
     } catch (err) {
@@ -796,7 +816,7 @@ export function ComponentDetailPage() {
 
             <TabsContent value="build">
               <EditSurface canEdit={canEdit} label="Build">
-                <BuildTab component={component} section={buildSection} canEdit={canEdit} />
+                <BuildTab section={buildSection} canEdit={canEdit} />
               </EditSurface>
             </TabsContent>
 
@@ -820,7 +840,7 @@ export function ComponentDetailPage() {
 
             <TabsContent value="escrow">
               <EditSurface canEdit={canEdit} label="Escrow">
-                <EscrowTab component={component} section={escrowSection} canEdit={canEdit} />
+                <EscrowTab section={escrowSection} canEdit={canEdit} />
               </EditSurface>
             </TabsContent>
 
@@ -846,7 +866,7 @@ export function ComponentDetailPage() {
 
             <TabsContent value="overrides">
               <EditSurface canEdit={canEdit} label="Overrides">
-                <FieldOverrides componentId={component.id} />
+                <FieldOverrides />
               </EditSurface>
             </TabsContent>
 
@@ -968,4 +988,35 @@ const EMPTY_COMPONENT: ComponentDetail = {
   securityGroups: [],
   teamcityProjects: [],
   configurations: [],
+}
+
+/**
+ * Route entry. Provides the page-level field-override draft (seeded from the
+ * server overrides) so the editor body and every override surface share ONE
+ * draft instance, then renders the editor. The provider sits here — above the
+ * component that assembles the combined-save slices — so useOverridesSection()
+ * and the surfaces all resolve the same context.
+ */
+export function ComponentDetailPage() {
+  const { id } = useParams<{ id: string }>()
+  // id is always defined on this route; the `?? ''` only guards the type. An
+  // empty id disables the query (useFieldOverrides: enabled: !!componentId), so
+  // the provider just starts from an empty baseline until the route resolves.
+  //
+  // Baseline/version coupling: the combined PATCH sends component.version (from
+  // useComponent) AND the desired-full-set built from THIS override baseline.
+  // The desired-set deletes anything omitted, so a stale override baseline paired
+  // with a fresh component.version could in theory drop a concurrently-added row.
+  // In practice these two queries move in lockstep — the combined-save
+  // useUpdateComponent invalidates ['field-overrides', id] alongside the
+  // component, useUpdateSupportedVersions does the same via
+  // invalidateOverrideAndComponent, and window-focus refetches both — so a fresh
+  // version never pairs with a stale override set. (A fully snapshot-coupled
+  // baseline derived from component.configurations is a possible follow-up.)
+  const { data: serverOverrides = [], isLoading: overridesLoading } = useFieldOverrides(id ?? '')
+  return (
+    <OverridesDraftProvider componentId={id ?? ''} serverOverrides={serverOverrides} serverLoading={overridesLoading}>
+      <ComponentDetailEditor />
+    </OverridesDraftProvider>
+  )
 }

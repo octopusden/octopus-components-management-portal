@@ -22,11 +22,7 @@ import {
   SelectValue,
 } from '../ui/select'
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs'
-import {
-  useCreateFieldOverride,
-  useUpdateFieldOverride,
-  useFieldOverrides,
-} from '../../hooks/useComponent'
+import { useOverridesDraft } from './overridesDraft'
 import { useToast } from '../../hooks/use-toast'
 import { useFieldConfig } from '../../hooks/useAdminConfig'
 import { labelFor } from '../../hooks/useFieldConfig'
@@ -120,7 +116,6 @@ interface PackageState { packageType: string; packageName: string }
 export interface OverrideRowEditorProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  componentId: string
   mode: 'create' | 'edit'
   /** Required in edit mode; undefined in create mode */
   override?: FieldOverride
@@ -130,10 +125,12 @@ export interface OverrideRowEditorProps {
 // Component
 // ---------------------------------------------------------------------------
 
-export function OverrideRowEditor({ open, onOpenChange, componentId, mode, override }: OverrideRowEditorProps) {
-  const createMutation = useCreateFieldOverride(componentId)
-  const updateMutation = useUpdateFieldOverride(componentId)
-  const { data: allOverrides = [] } = useFieldOverrides(componentId)
+export function OverrideRowEditor({ open, onOpenChange, mode, override }: OverrideRowEditorProps) {
+  // Item D: the modal queues the create/update into the page-level draft (the
+  // real write is the editor's one combined Save), so it closes immediately on
+  // submit. Conflict detection reads the effective (draft-applied) set so a
+  // queued-but-unsaved sibling still blocks an overlapping range.
+  const { effectiveOverrides, queueCreate, queueUpdate } = useOverridesDraft()
   const { toast } = useToast()
 
   // Single field-config read resolves display labels for the whole attribute
@@ -452,7 +449,7 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
   // Submit
   // ---------------------------------------------------------------------------
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!attribute) {
       toast({ title: 'Please select an attribute', variant: 'destructive' })
@@ -492,53 +489,20 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
       })
       return
     }
-    try {
-      if (mode === 'edit' && override) {
-        if (overrideType === 'scalar') {
-          await updateMutation.mutateAsync({
-            overrideId: override.id,
-            versionRange,
-            value: buildScalarValue(),
-            markerChildren: null,
-          })
-        } else {
-          await updateMutation.mutateAsync({
-            overrideId: override.id,
-            versionRange,
-            value: null,
-            markerChildren: buildMarkerChildren(),
-          })
-        }
-        toast({ title: 'Override updated' })
+    if (mode === 'edit' && override) {
+      if (overrideType === 'scalar') {
+        queueUpdate(override.id, { versionRange, value: buildScalarValue(), markerChildren: null })
       } else {
-        if (overrideType === 'scalar') {
-          await createMutation.mutateAsync({
-            overriddenAttribute: attribute,
-            versionRange,
-            value: buildScalarValue(),
-            markerChildren: null,
-          })
-        } else {
-          await createMutation.mutateAsync({
-            overriddenAttribute: attribute,
-            versionRange,
-            value: null,
-            markerChildren: buildMarkerChildren(),
-          })
-        }
-        toast({ title: 'Override created' })
+        queueUpdate(override.id, { versionRange, value: null, markerChildren: buildMarkerChildren() })
       }
-      onOpenChange(false)
-    } catch (err) {
-      toast({
-        title: 'Error',
-        description: err instanceof Error ? err.message : String(err),
-        variant: 'destructive',
-      })
+    } else if (overrideType === 'scalar') {
+      queueCreate({ overriddenAttribute: attribute, versionRange, value: buildScalarValue(), markerChildren: null })
+    } else {
+      queueCreate({ overriddenAttribute: attribute, versionRange, value: null, markerChildren: buildMarkerChildren() })
     }
+    onOpenChange(false)
   }
 
-  const isPending = createMutation.isPending || updateMutation.isPending
   const versionRangeInvalid = !isAllowedOverrideRange(versionRange)
   // Walk existing overrides on the same attribute for client-side conflict
   // preview. Partial overlap, strict containment, and semantic-equal duplicates
@@ -549,7 +513,7 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
   // this preview and the server agree.
   const overlapConflict: { range: string; kind: 'partial' | 'contains' | 'equal' } | null = (() => {
     if (versionRangeInvalid) return null
-    for (const o of allOverrides) {
+    for (const o of effectiveOverrides) {
       if (o.overriddenAttribute !== attribute) continue
       if (mode === 'edit' && override && o.id === override.id) continue
       const kind = classifyRangeConflict(versionRange, o.versionRange)
@@ -920,8 +884,8 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
             <DialogClose asChild>
               <Button type="button" variant="outline">Cancel</Button>
             </DialogClose>
-            <Button type="submit" disabled={isPending || versionRangeBlocks}>
-              {isPending ? 'Saving...' : mode === 'edit' ? 'Update' : 'Create'}
+            <Button type="submit" disabled={versionRangeBlocks}>
+              {mode === 'edit' ? 'Update' : 'Create'}
             </Button>
           </DialogFooter>
         </form>
