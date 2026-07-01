@@ -22,6 +22,7 @@ import { SkeletonBlock } from '../ui/skeleton-block'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../../lib/auth'
 import type { FieldOverride } from '../../lib/types'
+import { formatVersionRange } from '../../lib/versionRange'
 import { OverrideRowEditor } from './OverrideRowEditor'
 import { OverridesTimeline } from './OverridesTimeline'
 import { useOverridesDraft } from './overridesDraft'
@@ -157,7 +158,7 @@ export function FieldOverrides() {
                         {override.rowType}
                       </Badge>
                     </TableCell>
-                    <TableCell className="font-mono text-xs">{override.versionRange}</TableCell>
+                    <TableCell className="font-mono text-xs">{formatVersionRange(override.versionRange)}</TableCell>
                     <TableCell
                       className="font-mono text-xs max-w-[200px] truncate"
                       title={isMarker ? markerSummary(override) : undefined}

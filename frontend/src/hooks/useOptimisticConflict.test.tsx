@@ -94,6 +94,7 @@ describe('useOptimisticConflict', () => {
       ),
     )
     expect(out).not.toBeNull()
+    expect(out!.kind).toBe('value')
     expect(out!.title).toBe('Uniqueness violation')
     expect(out!.description).toBe(serverMsg)
     expect(out!.description).not.toMatch(/another user/i)
@@ -115,6 +116,7 @@ describe('useOptimisticConflict', () => {
       ),
     )
     await waitFor(() => expect(refetchSpy).toHaveBeenCalledOnce())
+    expect(out!.kind).toBe('optimistic')
     expect(out!.title).toBe('Save conflict')
     expect(out!.description).toMatch(/another user/i)
   })
@@ -133,6 +135,7 @@ describe('useOptimisticConflict', () => {
       ),
     )
     expect(out).not.toBeNull()
+    expect(out!.kind).toBe('value')
     expect(out!.title).toBe('Save failed')
     expect(out!.description).toBe('Data integrity violation: duplicate or invalid data')
     expect(refetchSpy).not.toHaveBeenCalled()

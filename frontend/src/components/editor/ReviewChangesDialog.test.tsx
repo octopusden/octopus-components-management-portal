@@ -70,4 +70,25 @@ describe('ReviewChangesDialog', () => {
     expect(screen.getByRole('button', { name: /saving/i })).toBeDisabled()
     expect(screen.getByRole('button', { name: /cancel/i })).toBeDisabled()
   })
+
+  it('renders an itemized entry as removed/added lines', () => {
+    setup({
+      diff: [
+        {
+          label: 'Artifact IDs',
+          oldValue: '2 mappings',
+          newValue: '2 mappings',
+          oldItems: ['[1.4,1.5) · Specific · com.example.foo · widget-a'],
+          newItems: ['[1.4,1.5) · Specific · com.example.foo · widget-b'],
+        },
+      ],
+    })
+    expect(screen.getByText('− [1.4,1.5) · Specific · com.example.foo · widget-a')).toBeInTheDocument()
+    expect(screen.getByText('+ [1.4,1.5) · Specific · com.example.foo · widget-b')).toBeInTheDocument()
+  })
+
+  it('renders a persistent error banner when errorBanner is set', () => {
+    setup({ errorBanner: 'Overlaps with existing override [1.4,1.5)' })
+    expect(screen.getByRole('alert')).toHaveTextContent('Overlaps with existing override [1.4,1.5)')
+  })
 })

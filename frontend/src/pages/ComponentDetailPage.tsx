@@ -144,6 +144,9 @@ function ComponentDetailEditor() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [copyDialogOpen, setCopyDialogOpen] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
+  // Persistent save-time conflict message shown in the Review dialog (value 409s
+  // like an overlapping/duplicate range) — survives the auto-dismissing toast.
+  const [reviewError, setReviewError] = useState<string | null>(null)
   // Controlled tab so a server 400 on a field that lives on a non-active tab can
   // auto-switch to the owning tab (otherwise the inline error renders on a hidden tab).
   const [activeTab, setActiveTab] = useState('general')
@@ -404,6 +407,8 @@ function ComponentDetailEditor() {
     if (!component) return
     if (!canEdit || !dirty) return
     form.clearErrors()
+    // Clear any prior conflict banner so a retry starts clean.
+    setReviewError(null)
 
     // System is REQUIRED server-side — surface the inline error instead of a
     // silent omit-then-walk-away.
@@ -451,15 +456,20 @@ function ComponentDetailEditor() {
       setReviewOpen(false)
       toast({ title: 'Component saved', description: 'Changes have been saved successfully.' })
     } catch (err) {
-      // Optimistic-locking / uniqueness 409 — one page-level path. Close the
-      // review dialog first: a UNIQUENESS_VIOLATION can't be fixed by clicking
-      // Confirm again (re-clicking would just re-hit the same 409), and an
-      // OPTIMISTIC_LOCK refetch re-seeds the clean sections, so the open diff's
-      // "from" values would be stale.
+      // 409 — split by kind. A `value` conflict (uniqueness / overlapping range)
+      // is fixable in place, so keep the Review dialog open with a persistent
+      // banner (plus a sticky toast) instead of closing and losing the diff. An
+      // `optimistic` (stale-version) conflict has already refetched the latest
+      // snapshot, so the open diff's "from" values are stale — close it and tell
+      // the user to re-apply.
       const conflict = await handleConflict(err)
       if (conflict) {
-        setReviewOpen(false)
-        toast({ ...conflict, variant: 'destructive' })
+        toast({ title: conflict.title, description: conflict.description, variant: 'destructive' })
+        if (conflict.kind === 'value') {
+          setReviewError(conflict.description)
+        } else {
+          setReviewOpen(false)
+        }
         return
       }
       if (err instanceof ApiError && err.status === 400) {
@@ -518,6 +528,7 @@ function ComponentDetailEditor() {
       buildSection.setBuildSystemTouched(true)
       return
     }
+    setReviewError(null)
     setReviewOpen(true)
   }
 
@@ -923,10 +934,14 @@ function ComponentDetailEditor() {
 
       <ReviewChangesDialog
         open={reviewOpen}
-        onOpenChange={setReviewOpen}
+        onOpenChange={(open) => {
+          setReviewOpen(open)
+          if (!open) setReviewError(null)
+        }}
         diff={diff}
         onConfirm={runCombinedSave}
         isSaving={updateMutation.isPending}
+        errorBanner={reviewError}
       />
 
       <CreateComponentDialog

@@ -88,6 +88,21 @@ describe('generalSlice — artifactIds ownership (request shape)', () => {
     const slice = generalSlice(owned, patch({ artifactIds: changed }), false)
     expect(slice.isDirty).toBe(true)
   })
+
+  it('produces a readable itemized diff (removed/added lines, no ::-keys)', () => {
+    const changed = sameRequest.map((m, i) => (i === 1 ? { ...m, artifactTokens: ['svc-b'] } : m))
+    const diff = generalDiff(owned, patch({ artifactIds: changed }))
+    const row = diff.find((d) => d.label === 'Artifact IDs')
+    expect(row).toBeDefined()
+    // Only the changed mapping appears; the unchanged base mapping is omitted.
+    expect(row!.oldItems).toEqual(['[1,2) · Specific · com.example.bar · svc-a'])
+    expect(row!.newItems).toEqual(['[1,2) · Specific · com.example.bar · svc-b'])
+    expect(row!.oldValue).toBe('2 mappings')
+    expect(row!.newValue).toBe('2 mappings')
+    // No cryptic canonical keys or [object Object] leak into the diff.
+    expect(JSON.stringify(row)).not.toContain('::')
+    expect(JSON.stringify(row)).not.toContain('[object Object]')
+  })
 })
 
 describe('generalDiff', () => {

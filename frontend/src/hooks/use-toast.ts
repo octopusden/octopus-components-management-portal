@@ -144,11 +144,19 @@ function toast({ ...props }: Toast) {
     })
   const dismiss = () => dispatch({ type: 'DISMISS_TOAST', toastId: id })
 
+  // Error toasts must not vanish on a timer — a conflict/uniqueness message the
+  // user needs to act on shouldn't auto-dismiss before it's read. Radix treats
+  // duration={Infinity} as "no auto-close"; manual close (✕ / swipe) still runs
+  // onOpenChange → DISMISS_TOAST → addToRemoveQueue, so nothing lingers. Callers
+  // can override by passing an explicit duration.
+  const duration = props.duration ?? (props.variant === 'destructive' ? Infinity : undefined)
+
   dispatch({
     type: 'ADD_TOAST',
     toast: {
       ...props,
       id,
+      duration,
       open: true,
       onOpenChange: (open) => {
         if (!open) dismiss()

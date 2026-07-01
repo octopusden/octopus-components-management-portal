@@ -26,6 +26,13 @@ interface ReviewChangesDialogProps {
   diff: DiffEntry[]
   onConfirm: (meta: ConfirmMeta) => void
   isSaving: boolean
+  /**
+   * A persistent save-time conflict message (e.g. an overlapping/duplicate
+   * version range the server rejected with 409). Rendered as a destructive
+   * banner that stays put — unlike the auto-dismissing toast — so the user can
+   * read it, fix the value, and retry without losing the diff.
+   */
+  errorBanner?: string | null
 }
 
 /**
@@ -40,7 +47,7 @@ interface ReviewChangesDialogProps {
  * non-blank) and a free-text comment — recorded on the audit row by CRS. Both
  * are optional; blank values are omitted from the request.
  */
-export function ReviewChangesDialog({ open, onOpenChange, diff, onConfirm, isSaving }: ReviewChangesDialogProps) {
+export function ReviewChangesDialog({ open, onOpenChange, diff, onConfirm, isSaving, errorBanner }: ReviewChangesDialogProps) {
   const [jiraTaskKey, setJiraTaskKey] = useState('')
   const [changeComment, setChangeComment] = useState('')
 
@@ -74,16 +81,46 @@ export function ReviewChangesDialog({ open, onOpenChange, diff, onConfirm, isSav
           </DialogDescription>
         </DialogHeader>
 
+        {errorBanner && (
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            <span aria-hidden="true">▲</span>
+            <span>{errorBanner}</span>
+          </div>
+        )}
+
         <div className="max-h-[40vh] overflow-auto rounded-md border">
           <ul className="divide-y text-sm">
             {diff.map((entry, i) => (
               <li key={`${entry.label}-${i}`} className="px-3 py-2">
                 <div className="font-medium text-foreground">{entry.label}</div>
-                <div className="mt-0.5 flex flex-wrap items-center gap-1.5 font-mono text-xs">
-                  <span className="text-destructive line-through">{entry.oldValue}</span>
-                  <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground" />
-                  <span className="text-[color:var(--color-badge-green-fg)]">{entry.newValue}</span>
-                </div>
+                {entry.oldItems || entry.newItems ? (
+                  <div className="mt-1 flex flex-col gap-0.5 font-mono text-xs">
+                    {(entry.oldItems ?? []).map((line, j) => (
+                      <span key={`o-${j}`} className="text-destructive line-through">
+                        − {line}
+                      </span>
+                    ))}
+                    {(entry.newItems ?? []).map((line, j) => (
+                      <span key={`n-${j}`} className="text-[color:var(--color-badge-green-fg)]">
+                        + {line}
+                      </span>
+                    ))}
+                    {(entry.oldItems ?? []).length === 0 && (entry.newItems ?? []).length === 0 && (
+                      <span className="text-muted-foreground">
+                        {entry.oldValue} → {entry.newValue}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5 font-mono text-xs">
+                    <span className="text-destructive line-through">{entry.oldValue}</span>
+                    <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+                    <span className="text-[color:var(--color-badge-green-fg)]">{entry.newValue}</span>
+                  </div>
+                )}
                 {entry.clearedScalarNoop && (
                   <p className="mt-0.5 text-xs text-muted-foreground">(clearing not supported)</p>
                 )}
