@@ -119,13 +119,17 @@ export interface OverrideRowEditorProps {
   mode: 'create' | 'edit'
   /** Required in edit mode; undefined in create mode */
   override?: FieldOverride
+  /** Create-mode only: pre-lock the attribute to this path (used by the
+   *  Distribution tab to open the editor pinned to e.g. `distribution.docker`).
+   *  Suppresses the scalar/marker type picker and the attribute selector. */
+  presetAttribute?: string
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function OverrideRowEditor({ open, onOpenChange, mode, override }: OverrideRowEditorProps) {
+export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAttribute }: OverrideRowEditorProps) {
   // Item D: the modal queues the create/update into the page-level draft (the
   // real write is the editor's one combined Save), so it closes immediately on
   // submit. Conflict detection reads the effective (draft-applied) set so a
@@ -144,6 +148,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override }: Overri
       if (MARKER_BY_PATH.has(override.overriddenAttribute)) return 'marker'
       return 'scalar'
     }
+    if (presetAttribute) return MARKER_BY_PATH.has(presetAttribute) ? 'marker' : 'scalar'
     return 'scalar'
   })()
 
@@ -168,7 +173,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override }: Overri
     )
   }, [mode, override])
 
-  const initialAttribute = mode === 'edit' && override ? override.overriddenAttribute : ''
+  const initialAttribute = mode === 'edit' && override ? override.overriddenAttribute : (presetAttribute ?? '')
   const initialVersionRange = mode === 'edit' && override ? override.versionRange : ''
 
   // ---------------------------------------------------------------------------
@@ -261,10 +266,11 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override }: Overri
         if (MARKER_BY_PATH.has(override.overriddenAttribute)) return 'marker'
         return 'scalar'
       }
+      if (presetAttribute) return MARKER_BY_PATH.has(presetAttribute) ? 'marker' : 'scalar'
       return 'scalar'
     })()
     setOverrideType(t)
-    setAttribute(mode === 'edit' && override ? override.overriddenAttribute : '')
+    setAttribute(mode === 'edit' && override ? override.overriddenAttribute : (presetAttribute ?? ''))
     setVersionRange(mode === 'edit' && override ? override.versionRange : '')
 
     if (mode === 'edit' && override) {
@@ -307,7 +313,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override }: Overri
     // useCallback that complicates the closure. The dependencies below are
     // the ones that matter for re-running the prefill.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, override, mode])
+  }, [open, override, mode, presetAttribute])
 
   // ---------------------------------------------------------------------------
   // Attribute type lookup
@@ -548,7 +554,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override }: Overri
                  `attribute` because scalar and marker catalogues are
                  disjoint — a stale value from the other catalogue would
                  trip the "Unknown attribute" guard at submit. */}
-          {mode === 'create' && (
+          {mode === 'create' && !presetAttribute && (
             <div className="space-y-1.5">
               <Label>Override Type</Label>
               <Tabs
@@ -566,7 +572,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override }: Overri
           {/* ── Attribute selector ── */}
           <div className="space-y-1.5">
             <Label htmlFor="attribute">Attribute</Label>
-            {mode === 'edit' ? (
+            {mode === 'edit' || presetAttribute ? (
               <p className="text-sm font-mono text-muted-foreground px-3 py-2 rounded-md border bg-muted">
                 {attribute}
               </p>

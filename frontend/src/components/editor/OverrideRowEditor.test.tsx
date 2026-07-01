@@ -869,3 +869,43 @@ describe('OverrideRowEditor — overlap detection (pre-save)', () => {
     })
   })
 })
+
+// ---------------------------------------------------------------------------
+// Tests: presetAttribute (distribution per-range entry from the Distribution tab)
+// ---------------------------------------------------------------------------
+
+describe('OverrideRowEditor — presetAttribute (create, locked marker path)', () => {
+  beforeEach(() => {
+    mockQueueCreate.mockReset()
+    mockQueueUpdate.mockReset()
+    mockToast.mockReset()
+    mockOverridesList = []
+  })
+
+  it('locks the attribute to the preset: no type tabs, no attribute select, path shown read-only', () => {
+    renderEditor({ mode: 'create', presetAttribute: 'distribution.docker' })
+    // The scalar/marker type picker is suppressed — the preset implies marker.
+    expect(screen.queryByRole('tab', { name: /scalar/i })).toBeNull()
+    // No editable attribute picker.
+    expect(screen.queryByTestId('attr-select')).toBeNull()
+    // Path shown read-only, and the docker child editor is rendered (its Add Image button).
+    expect(screen.getByText('distribution.docker')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /add image/i })).toBeInTheDocument()
+  })
+
+  it('queues a create carrying the preset attribute + marker children', async () => {
+    const user = userEvent.setup()
+    renderEditor({ mode: 'create', presetAttribute: 'distribution.docker' })
+    await user.click(screen.getByRole('button', { name: /add image/i }))
+    fireEvent.change(screen.getByPlaceholderText('my-org/my-image'), { target: { value: 'acme/app' } })
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1,2)' } })
+    await user.click(screen.getByRole('button', { name: /^create$/i }))
+    expect(mockQueueCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        overriddenAttribute: 'distribution.docker',
+        versionRange: '[1,2)',
+        markerChildren: { dockerImages: [{ imageName: 'acme/app', flavor: null }] },
+      }),
+    )
+  })
+})
