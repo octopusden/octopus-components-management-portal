@@ -46,9 +46,13 @@ export function DistributionPerRange({ overrides, canEdit, onAdd, onEdit, onDele
         const summary = summarize(o)
         return (
           <div key={o.id} className="flex items-center justify-between gap-2 rounded border px-2 py-1">
-            <div className="min-w-0">
-              <span className="font-mono text-xs">{formatVersionRange(o.versionRange)}</span>
-              {summary && <span className="ml-2 truncate text-xs text-muted-foreground">{summary}</span>}
+            <div className="flex min-w-0 flex-1 items-baseline gap-2">
+              <span className="shrink-0 font-mono text-xs">{formatVersionRange(o.versionRange)}</span>
+              {summary && (
+                <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={summary}>
+                  {summary}
+                </span>
+              )}
             </div>
             <div className="flex shrink-0 items-center gap-1">
               <Button
