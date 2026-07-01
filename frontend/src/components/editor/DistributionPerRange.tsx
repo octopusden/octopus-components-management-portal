@@ -45,7 +45,7 @@ export function DistributionPerRange({ overrides, canEdit, onAdd, onEdit, onDele
       {overrides.map((o) => {
         const summary = summarize(o)
         return (
-          <div key={o.id} className="flex items-center justify-between gap-2 rounded border px-2 py-1">
+          <div key={o.id} data-testid="dist-per-range-row" className="flex items-center justify-between gap-2 rounded border px-2 py-1">
             <div className="flex min-w-0 flex-1 items-baseline gap-2">
               <span className="shrink-0 font-mono text-xs">{formatVersionRange(o.versionRange)}</span>
               {summary && (
