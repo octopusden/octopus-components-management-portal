@@ -15,6 +15,11 @@ function makeForm(overrides: Partial<CreateFormValues> = {}): CreateFormValues {
     copyright: '',
     jiraProjectKey: '',
     versionPrefix: '',
+    majorVersionFormat: '',
+    releaseVersionFormat: '',
+    buildVersionFormat: '',
+    lineVersionFormat: '',
+    hotfixVersionFormat: '',
     vcsUrl: 'ssh://git@host/proj/repo.git',
     vcsTag: '$module-$version',
     vcsBranch: 'master',
@@ -26,6 +31,7 @@ function makeForm(overrides: Partial<CreateFormValues> = {}): CreateFormValues {
       packageType: 'DEB',
       packageName: '',
     },
+    ownership: { groups: '', mode: 'ALL', tokens: [] },
     ...overrides,
   }
 }
@@ -77,7 +83,7 @@ function makeSource(overrides: Partial<ComponentDetail> = {}): ComponentDetail {
     distributionExternal: false,
     group: { groupKey: 'org.example.legacy', isFake: false, role: 'MEMBER' },
     docs: [{ id: 'd-1', docComponentKey: 'docs-a', majorVersion: '1.x', sortOrder: 0 }],
-    artifactIds: [{ id: 'a-1', groupPattern: 'org.x', artifactPattern: 'alpha-*' }],
+    artifactIds: [{ id: 'a-1', groupPattern: 'org.x', mode: 'ALL', artifactTokens: [] }],
     securityGroups: [{ id: 'sg-1', groupType: 'LAS', groupName: 'las-alpha' }],
     teamcityProjects: [{ id: 'tc-1', projectId: 'AlphaProject', projectUrl: 'https://tc/x', sortOrder: 0 }],
     configurations: [makeBaseRow({ build: { buildSystem: 'GRADLE', gradleVersion: '8.5' } })],
@@ -131,6 +137,33 @@ describe('buildCreateRequest — scratch mode (no source)', () => {
   })
 })
 
+describe('buildCreateRequest — base artifact ownership', () => {
+  it('EXPLICIT mode forwards the artifact tokens', () => {
+    const req = buildCreateRequest(
+      makeForm({ ownership: { groups: 'org.x', mode: 'EXPLICIT', tokens: ['foo', 'bar'] } }),
+    )
+    expect(req.artifactIds).toEqual([
+      { versionRange: null, groupPattern: 'org.x', mode: 'EXPLICIT', artifactTokens: ['foo', 'bar'] },
+    ])
+  })
+
+  it('catch-all modes send an empty token list even if tokens linger in form state', () => {
+    const req = buildCreateRequest(
+      makeForm({ ownership: { groups: 'org.x', mode: 'ALL', tokens: ['stale'] } }),
+    )
+    expect(req.artifactIds).toEqual([
+      { versionRange: null, groupPattern: 'org.x', mode: 'ALL', artifactTokens: [] },
+    ])
+  })
+
+  it('no group ⇒ no ownership mapping (tokens ignored)', () => {
+    const req = buildCreateRequest(
+      makeForm({ ownership: { groups: '', mode: 'EXPLICIT', tokens: ['foo'] } }),
+    )
+    expect(req.artifactIds).toEqual([])
+  })
+})
+
 describe('buildCreateRequest — gated (explicit+external) coordinate', () => {
   const gated = (coordinate: Partial<CreateFormValues['coordinate']>) =>
     makeForm({
@@ -180,6 +213,27 @@ describe('buildCreateRequest — gated (explicit+external) coordinate', () => {
   it('emits form jiraProjectKey + versionPrefix onto baseConfiguration.jira', () => {
     const req = buildCreateRequest(makeForm({ jiraProjectKey: 'PROJ', versionPrefix: 'svc-new' }))
     expect(req.baseConfiguration?.jira).toMatchObject({ projectKey: 'PROJ', versionPrefix: 'svc-new' })
+  })
+
+  it('maps the version formats: major/release/build/line → jira aspect, hotfix → component field', () => {
+    const req = buildCreateRequest(
+      makeForm({
+        majorVersionFormat: '$major.$minor',
+        releaseVersionFormat: '$major.$minor.$service',
+        buildVersionFormat: '$b',
+        lineVersionFormat: '$l',
+        hotfixVersionFormat: '$major.$minor.$service-$fix',
+      }),
+    )
+    expect(req.baseConfiguration?.jira).toMatchObject({
+      majorVersionFormat: '$major.$minor',
+      releaseVersionFormat: '$major.$minor.$service',
+      buildVersionFormat: '$b',
+      lineVersionFormat: '$l',
+    })
+    // hotfix is a top-level component field, NOT on the jira aspect.
+    expect(req.jiraHotfixVersionFormat).toBe('$major.$minor.$service-$fix')
+    expect('hotfixVersionFormat' in (req.baseConfiguration?.jira ?? {})).toBe(false)
   })
 
   it('omits jira aspect entirely when no jira fields are set (scratch)', () => {
@@ -252,7 +306,9 @@ describe('buildCreateRequest — copy mode (with source)', () => {
   const source = makeSource()
 
   it('copies source general fields and lists', () => {
-    const req = buildCreateRequest(makeForm({ name: 'svc-clone' }), source)
+    // hotfix format is form-driven (copy mode prefills the form from the source in
+    // initialValues), so supply it via the form here rather than relying on a copy.
+    const req = buildCreateRequest(makeForm({ name: 'svc-clone', hotfixVersionFormat: '%d.%d.%d.%d' }), source)
     expect(req).toMatchObject({
       name: 'svc-clone',
       productType: 'TYPE_A',
@@ -299,7 +355,7 @@ describe('buildCreateRequest — copy mode (with source)', () => {
     expect(req.baseConfiguration?.build).toEqual({ buildSystem: 'MAVEN', gradleVersion: '8.5' })
   })
 
-  it('copies escrow / jira(without projectKey) / requiredTools from the source BASE row', () => {
+  it('copies escrow / requiredTools from source; jira version formats are FORM-driven (copy mode prefills the form)', () => {
     const src = makeSource({
       configurations: [
         makeBaseRow({
@@ -310,10 +366,22 @@ describe('buildCreateRequest — copy mode (with source)', () => {
         }),
       ],
     })
-    const req = buildCreateRequest(makeForm({ name: 'svc-clone' }), src)
+    // The dialog prefills majorVersionFormat from the source into the form; supply it here.
+    const req = buildCreateRequest(makeForm({ name: 'svc-clone', majorVersionFormat: '%d.%d' }), src)
     expect(req.baseConfiguration?.escrow).toEqual({ reusable: true })
     expect(req.baseConfiguration?.jira).toEqual({ majorVersionFormat: '%d.%d' })
     expect(req.baseConfiguration?.requiredTools).toEqual(['tool-a'])
+  })
+
+  it('copy mode: clearing a BASE jira version format drops it (not re-sent from the source)', () => {
+    const src = makeSource({
+      configurations: [
+        makeBaseRow({ build: { buildSystem: 'GRADLE' }, jira: { projectKey: 'ALPHA', majorVersionFormat: '%d.%d' } }),
+      ],
+    })
+    // User cleared the prefilled Major Version Format → form blank → must NOT re-send the source value.
+    const req = buildCreateRequest(makeForm({ name: 'svc-clone', majorVersionFormat: '' }), src)
+    expect(req.baseConfiguration?.jira == null || !('majorVersionFormat' in req.baseConfiguration.jira)).toBe(true)
   })
 
   it('coordinate is NEVER taken from source distribution artifacts', () => {

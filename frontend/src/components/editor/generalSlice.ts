@@ -1,6 +1,27 @@
-import type { ComponentDetail, ComponentUpdateRequest } from '../../lib/types'
+import type { ArtifactId, ArtifactIdRequest, ComponentDetail, ComponentUpdateRequest } from '../../lib/types'
 import type { SectionSlice, DiffEntry } from '../../lib/editor/combineRequest'
 import { formatDiffValue } from '../../lib/editor/diffUtil'
+import { groupTokens, humanizeOwnership, OWNERSHIP_ALL_VERSIONS } from '../../lib/artifactOwnership'
+
+/** Canonical, order-stable string for one ownership mapping — used for change detection. */
+function ownershipKey(
+  groupPattern: string,
+  mode: string | undefined,
+  tokens: string[] | undefined,
+  range: string | null | undefined,
+): string {
+  return `${groupTokens(groupPattern).join(',')}::${mode ?? ''}::${[...(tokens ?? [])].sort().join(',')}::${range ?? ''}`
+}
+const normRange = (r: string | null | undefined) => (r == null || r === OWNERSHIP_ALL_VERSIONS ? null : r)
+// Current value: the SERVER response shape (ArtifactId). Normalise the all-versions sentinel to ''
+// so a base mapping the server stores as `(,0),[0,)` matches the request's null/base range.
+const responseOwnershipKey = (a: ArtifactId) =>
+  ownershipKey(a.groupPattern, a.mode, a.artifactTokens, normRange(a.versionRange))
+// Next value: the PATCH/REQUEST shape (ArtifactIdRequest = groupPattern + mode + artifactTokens +
+// versionRange) — NOT the form's OwnershipMappingValue. `nextValueFor` receives the buildUpdateRequest
+// body; reading form-shape fields here yielded `undefined` tokens → `[...undefined]` crash on load.
+const requestOwnershipKey = (a: ArtifactIdRequest) =>
+  ownershipKey(a.groupPattern, a.mode, a.artifactTokens, normRange(a.versionRange))
 
 /**
  * Turn the General/Misc `buildUpdateRequest` output into a SectionSlice for the
@@ -52,14 +73,14 @@ function priorValueFor(component: ComponentDetail, key: string): unknown {
     case 'securityChampion': return component.securityChampion ?? []
     case 'labels': return component.labels ?? []
     case 'docs': return (component.docs ?? []).map((d) => d.docComponentKey)
-    case 'artifactIds': return (component.artifactIds ?? []).map((a) => `${a.groupPattern}:${a.artifactPattern}`)
+    case 'artifactIds': return (component.artifactIds ?? []).map(responseOwnershipKey)
     default: return undefined
   }
 }
 
 function nextValueFor(key: string, value: unknown): unknown {
   if (key === 'docs') return (value as { docComponentKey: string }[] | null)?.map((d) => d.docComponentKey) ?? []
-  if (key === 'artifactIds') return (value as { groupPattern: string; artifactPattern: string }[] | null)?.map((a) => `${a.groupPattern}:${a.artifactPattern}`) ?? []
+  if (key === 'artifactIds') return (value as ArtifactIdRequest[] | null)?.map(requestOwnershipKey) ?? []
   return value
 }
 
@@ -80,10 +101,32 @@ export function generalDiff(component: ComponentDetail, patch: ComponentUpdateRe
     if (!label) continue // unknown / not user-facing
     const next = nextValueFor(key, value)
     const prior = priorValueFor(component, key)
-    // Skip always-emitted-but-unchanged fields (buildUpdateRequest sends
-    // componentOwner / clientCode / copyright whenever present, not dirty-gated).
-    // Only a genuine value change is a "change" for the dirty bar + diff.
+    // Defensive value-equality backstop: only a genuine value change is a "change"
+    // for the dirty bar + diff. buildUpdateRequest already omits unchanged scalars
+    // (incl. the interacted-gated componentOwner / clientCode / copyright value-compare),
+    // so this rarely fires now — kept so an always-emitted field can never produce a
+    // phantom-dirty row.
     if (normForCompare(next) === normForCompare(prior)) continue
+    // Artifact ownership is a list of objects — the canonical `::`-keys used for
+    // change detection are unreadable in the dialog. Emit a humanized itemized
+    // diff (removed/added mapping lines) instead, with a count summary fallback.
+    if (key === 'artifactIds') {
+      const priorMaps = component.artifactIds ?? []
+      const nextMaps = (value as ArtifactIdRequest[] | null) ?? []
+      const priorLines = priorMaps.map(humanizeOwnership)
+      const nextLines = nextMaps.map(humanizeOwnership)
+      const priorSet = new Set(priorLines)
+      const nextSet = new Set(nextLines)
+      diff.push({
+        label,
+        oldValue: countSummary(priorMaps.length),
+        newValue: countSummary(nextMaps.length),
+        oldItems: priorLines.filter((l) => !nextSet.has(l)),
+        newItems: nextLines.filter((l) => !priorSet.has(l)),
+        clearedScalarNoop: false,
+      })
+      continue
+    }
     diff.push({
       label,
       oldValue: formatDiffValue(prior),
@@ -95,6 +138,10 @@ export function generalDiff(component: ComponentDetail, patch: ComponentUpdateRe
     })
   }
   return diff
+}
+
+function countSummary(n: number): string {
+  return n === 0 ? '—' : `${n} mapping${n === 1 ? '' : 's'}`
 }
 
 /**

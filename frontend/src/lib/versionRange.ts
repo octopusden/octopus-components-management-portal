@@ -1,5 +1,11 @@
+// The two-segment "all versions" base sentinel CRS stores for a base row /
+// base ownership mapping (`(,0),[0,)`). Whitespace and trailing-zero variants
+// (`(, 0), [0, )`, `(,0.0),[0.0,)`) mean the same thing and also read as base.
+const BASE_SENTINEL_RE = /^\(,0(?:\.0+)*\),\[0(?:\.0+)*,\)$/
+
 export function formatVersionRange(range: string): string {
-  if (range === '(,)') return 'All versions'
+  const compact = range.replace(/\s+/g, '')
+  if (compact === '(,)' || BASE_SENTINEL_RE.test(compact)) return 'All versions'
   return range
 }
 
@@ -22,17 +28,17 @@ export function isValidVersionRange(range: string): boolean {
 }
 
 /**
- * Returns true when `range` is allowed as a field-override range under D5:
- * syntactically valid AND every segment has a non-empty upper bound (no
- * `,)` suffix in any segment).
+ * True when `range` is syntactically valid AND every segment has a non-empty upper bound (no
+ * `,)` suffix) — i.e. a fully closed / historical-left-unbounded range with no open-upward segment.
  *
- * Universal (`(,)`, `(,0),[0,)`) and any open-upward segment are rejected —
- * they belong to BASE, not overrides. Composite ranges are walked per
- * segment so a non-terminal open-upward segment is also rejected.
+ * NOTE (ADR-018): this is **no longer the production field-override gate** — open-upper overrides
+ * are now first-class, so the editors validate with [isAllowedOverrideRange]. This predicate is
+ * retained as a general "is this range closed-above" utility (and its test coverage of the closed
+ * vs open-upper distinction); it has no production call sites today.
  *
- * Allowed: closed (`[X,Y)`, `[X,Y]`, `(X,Y)`, `(X,Y]`) and
- * historical-left-unbounded (`(,X)`, `(,X]`), plus composites whose every
- * segment satisfies the same rule.
+ * Allowed: closed (`[X,Y)`, `[X,Y]`, `(X,Y)`, `(X,Y]`) and historical-left-unbounded (`(,X)`,
+ * `(,X]`), plus composites whose every segment satisfies the same rule. Rejected: universal
+ * (`(,)`, `(,0),[0,)`) and any open-upward segment.
  */
 export function isClosedVersionRange(range: string): boolean {
   if (!isValidVersionRange(range)) return false
@@ -43,6 +49,32 @@ export function isClosedVersionRange(range: string): boolean {
     if (seg.endsWith(',)')) return false
   }
   return true
+}
+
+const ALL_VERSIONS_SENTINEL = '(,0),[0,)'
+
+/**
+ * Returns true when `range` is allowed as a per-attribute field-override range under the decoupled
+ * version model (ADR-018). The former "D5" closed-only restriction is **relaxed**: open-upper
+ * segments (`[X,)`, "from version X onward") are now first-class overrides — the CRS server accepts
+ * them, and `resolve` applies them by containment.
+ *
+ * Still rejected: the all-versions shapes (`(,)` and the `(,0),[0,)` sentinel) — those denote the
+ * BASE default / full coverage, not a sub-range override; an override spanning all versions is
+ * indistinguishable from editing the base. Coverage itself is edited in the Supported-versions
+ * block, not here.
+ *
+ * Allowed: closed (`[X,Y)`, `[X,Y]`, `(X,Y)`, `(X,Y]`), open-upper (`[X,)`, `(X,)`),
+ * historical-left-unbounded (`(,X)`, `(,X]`), and composites whose segments satisfy the same rule.
+ */
+export function isAllowedOverrideRange(range: string): boolean {
+  if (!isValidVersionRange(range)) return false
+  const compact = normalize(range)
+  if (compact === ALL_VERSIONS_SENTINEL) return false
+  // Reject any universal `(,)` segment, including inside a composite like `(,),[1.0,2.0)`
+  // (which is valid syntax but still spans all versions = the base default).
+  const segments = compact.match(SEGMENT_GLOBAL) ?? []
+  return !segments.some((s) => s === '(,)')
 }
 
 // ─── Overlap detection (simple-segment best-effort) ──────────────────────────
@@ -88,7 +120,7 @@ function parseDotNumeric(s: string): number[] | null {
   return trimmed.split('.').map((p) => Number.parseInt(p, 10))
 }
 
-function parseSimpleSegment(range: string): SimpleRange | null {
+export function parseSimpleSegment(range: string): SimpleRange | null {
   const compact = normalize(range)
   if (compact === '') return null
   // Reject composites — must be a single segment.
@@ -239,4 +271,34 @@ export function compareVersionRanges(a: string, b: string): number {
   const loCmp = compareLowerEdge(ra, rb)
   if (loCmp !== 0) return loCmp
   return compareUpperEdge(ra, rb)
+}
+
+/**
+ * The numeric-highest lower bound across a set of ranges, as a dot-string
+ * (e.g. `1.5.1400`), or `null` when none has a usable lower bound. Used to seed
+ * a sensible default version (the "current"/latest configured version) for the
+ * As-Code resolve box and similar.
+ *
+ * Entries are IGNORED when they have no lower bound to offer: `null`/`undefined`
+ * /blank, the universal `(,)` and the base sentinel `(,0),[0,)` (both composites
+ * or unbounded → `parseSimpleSegment` yields no `lo`), left-unbounded `(,X)`,
+ * and anything `parseSimpleSegment` can't parse (composites, qualifiers).
+ * Ordering is numeric (dot-segment aware), so `[1.10,)` ranks above `[1.2,)`.
+ */
+export function highestLowerBoundVersion(ranges: Array<string | null | undefined>): string | null {
+  let best: number[] | null = null
+  for (const r of ranges) {
+    if (!r) continue
+    const seg = parseSimpleSegment(r)
+    if (!seg || seg.lo === null) continue
+    // The lower bound must be INSIDE the range to be a safe default: an exclusive
+    // lower bound (`(1.5,2.0]`) excludes 1.5 itself, so suggesting it would resolve
+    // to a version outside every range (404). Only inclusive `[` lower bounds count.
+    if (!seg.loIncl) continue
+    // An all-zero lower bound (`[0,)`, `[0.0,)`) means "from the start" — a
+    // degenerate base-like range, not a real version to suggest. Skip it.
+    if (seg.lo.every((v) => v === 0)) continue
+    if (best === null || compareVersionArrays(seg.lo, best) > 0) best = seg.lo
+  }
+  return best === null ? null : best.join('.')
 }

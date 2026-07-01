@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { GeneralTab, type GeneralFormValues } from './GeneralTab'
+import { fromArtifactId, OWNERSHIP_ALL_VERSIONS } from '../../lib/artifactOwnership'
 import { TooltipProvider } from '../ui/tooltip'
 import { fieldDescriptions } from '../../lib/fieldDescriptions'
 import { lookupEmployee } from '../../hooks/useEmployees'
@@ -126,10 +127,7 @@ function Harness({ component, formRef, onOwnerValidatingChange, canEdit }: { com
         docComponentKey: d.docComponentKey,
         majorVersion: d.majorVersion ?? '',
       })),
-      artifactIds: (component.artifactIds ?? []).map((a) => ({
-        groupPattern: a.groupPattern,
-        artifactPattern: a.artifactPattern,
-      })),
+      artifactIds: (component.artifactIds ?? []).map(fromArtifactId),
     },
   })
   if (formRef) formRef.current = form
@@ -624,6 +622,109 @@ describe('GeneralTab — FieldOverrideInline gating (schema-v2 contract)', () =>
 })
 
 // ---------------------------------------------------------------------------
+// Regression: componentOwner is written via setValue (PeopleInput is not a
+// register()ed input). Without {shouldDirty, shouldTouch} on its onChange, a
+// real edit/clear never marks the form interacted, so buildUpdateRequest's
+// interacted-gate omits componentOwner and the clear is silently dropped (and
+// the SaveBar never arms). This pins that the owner onChange marks the field.
+// ---------------------------------------------------------------------------
+
+describe('GeneralTab — componentOwner edit marks the form interacted', () => {
+  it('clearing the owner via PeopleInput marks componentOwner dirty/touched', async () => {
+    setAllEditable()
+    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    renderWithProviders(<Harness component={baseComponent({ componentOwner: 'alice' })} formRef={formRef} />)
+
+    await userEvent.clear(screen.getByLabelText(/component owner/i, { selector: 'input' }))
+
+    await waitFor(() => {
+      expect(formRef.current?.getValues('componentOwner')).toBe('')
+      const state = formRef.current!.getFieldState('componentOwner', formRef.current!.formState)
+      expect(state.isDirty || state.isTouched).toBe(true)
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Regression: GeneralTab's mount-effect re-hydrates the page-owned form from the
+// server component. Radix unmounts the inactive tab, so switching away from
+// General and back re-mounts GeneralTab → the effect re-runs → it would stomp an
+// in-progress edit with the server value and falsely clear the save bar. The
+// effect must NOT re-hydrate once the form has unsaved edits (dirty OR touched);
+// a genuine component-id change is handled by the page-level reset instead.
+// ---------------------------------------------------------------------------
+
+describe('GeneralTab — re-hydration guard (tab-switch / refetch must not clobber edits)', () => {
+  function RemountHarness({
+    component,
+    formRef,
+  }: {
+    component: ComponentDetail
+    formRef: React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+  }) {
+    const [mounted, setMounted] = React.useState(true)
+    // Mirror the page: BLANK defaults, the form lives ABOVE GeneralTab so it
+    // survives GeneralTab's unmount (Radix tab switch).
+    const form = useForm<GeneralFormValues>({
+      defaultValues: {
+        name: '', displayName: '', componentOwner: '', productType: '', system: '',
+        clientCode: '', solution: false, archived: false, parentComponentName: '',
+        canBeParent: false, releaseManager: [], securityChampion: [], copyright: '',
+        labels: [], docs: [], artifactIds: [],
+      },
+    })
+    formRef.current = form
+    return (
+      <>
+        <button data-testid="toggle-mount" onClick={() => setMounted((m) => !m)}>toggle</button>
+        {mounted && <GeneralTab component={component} form={form} />}
+      </>
+    )
+  }
+
+  it('preserves an in-progress Display Name edit across a tab-switch unmount/remount', async () => {
+    setAllEditable()
+    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    renderWithProviders(<RemountHarness component={baseComponent({ displayName: 'Old Name' })} formRef={formRef} />)
+
+    const input = () => screen.getByLabelText(/display name/i, { selector: 'input' })
+    await userEvent.clear(input())
+    await userEvent.type(input(), 'Edited Name')
+    expect(formRef.current!.getValues('displayName')).toBe('Edited Name')
+
+    // Simulate the Radix tab switch: GeneralTab unmounts then re-mounts under the
+    // same (page-owned) form that still holds the edit.
+    fireEvent.click(screen.getByTestId('toggle-mount')) // unmount General
+    fireEvent.click(screen.getByTestId('toggle-mount')) // remount General
+    await waitFor(() => expect(input()).toBeDefined())
+
+    // Without the guard, GeneralTab's mount-effect re-hydrates from component →
+    // 'Old Name', silently discarding the edit.
+    expect(formRef.current!.getValues('displayName')).toBe('Edited Name')
+  })
+
+  it('preserves a clear-to-default toggle (Solution true→false) across a tab-switch remount', async () => {
+    // Edge the dirty-only guard would miss: toggling Solution from the server value
+    // true back to false equals the RHF default, so dirtyFields is empty — only the
+    // shouldTouch flag on the Switch's onChange marks the field interacted. Without
+    // it, the remount re-hydrate would silently flip Solution back to true.
+    setAllEditable()
+    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    renderWithProviders(<RemountHarness component={baseComponent({ solution: true })} formRef={formRef} />)
+
+    await waitFor(() => expect(formRef.current!.getValues('solution')).toBe(true))
+    fireEvent.click(screen.getByRole('switch', { name: /solution/i })) // true → false (== default)
+    expect(formRef.current!.getValues('solution')).toBe(false)
+
+    fireEvent.click(screen.getByTestId('toggle-mount')) // unmount General
+    fireEvent.click(screen.getByTestId('toggle-mount')) // remount General
+    await waitFor(() => expect(screen.getByRole('switch', { name: /solution/i })).toBeDefined())
+
+    expect(formRef.current!.getValues('solution')).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // task #14: system → single-select EnumSelect; labels stays chips.
 // ---------------------------------------------------------------------------
 
@@ -807,5 +908,64 @@ describe('GeneralTab — owner validating propagation', () => {
 
     await waitFor(() => expect(onOwnerValidatingChange).toHaveBeenCalledWith(true))
     await waitFor(() => expect(onOwnerValidatingChange).toHaveBeenLastCalledWith(false))
+  })
+})
+
+// Guards that the ownership editor DISPLAYS persisted values (groupId, mode, artifact tokens) —
+// not merely that fromArtifactId maps them. This is the regression net for the v4
+// ArtifactIdResponse → editor binding: a field-shape drift (e.g. a CRS build that omits
+// `mode`/`artifactTokens`, or an empty `component_artifact_mappings` table) would otherwise
+// render blank/absent fields while every existing test stayed green. (#357)
+describe('GeneralTab artifact-ownership rendering (#357)', () => {
+  function withOwnership(): ComponentDetail {
+    return baseComponent({
+      artifactIds: [
+        {
+          id: 'ai-1',
+          versionRange: OWNERSHIP_ALL_VERSIONS,
+          groupPattern: 'com.example.alpha',
+          mode: 'ALL_EXCEPT_CLAIMED',
+          artifactTokens: [],
+          legacyArtifactIdPattern: '(?!(?:claimed-model)$)[\\w-\\.]+',
+        },
+        {
+          id: 'ai-2',
+          versionRange: OWNERSHIP_ALL_VERSIONS,
+          groupPattern: 'com.example.tools',
+          mode: 'EXPLICIT',
+          artifactTokens: ['claimed-model', 'claimed-api'],
+        },
+      ],
+    })
+  }
+
+  it('renders the persisted groupId for every mapping', () => {
+    renderWithProviders(<Harness component={withOwnership()} />)
+    const groups = (screen.getAllByLabelText('Group ID') as HTMLInputElement[]).map((i) => i.value)
+    expect(groups).toHaveLength(2)
+    expect(groups).toEqual(expect.arrayContaining(['com.example.alpha', 'com.example.tools']))
+  })
+
+  it('reflects the persisted mode per mapping (ALL_EXCEPT_CLAIMED + EXPLICIT)', () => {
+    renderWithProviders(<Harness component={withOwnership()} />)
+    const checkedLabels = screen.getAllByRole('radio', { checked: true }).map((r) => r.textContent ?? '')
+    expect(checkedLabels.length).toBe(2)
+    expect(checkedLabels.some((t) => t.includes('All unclaimed artifacts'))).toBe(true)
+    expect(checkedLabels.some((t) => t.includes('Specific artifacts'))).toBe(true)
+  })
+
+  it('renders persisted EXPLICIT artifact tokens as chips', () => {
+    renderWithProviders(<Harness component={withOwnership()} />)
+    expect(screen.getByLabelText('Remove claimed-model')).toBeTruthy()
+    expect(screen.getByLabelText('Remove claimed-api')).toBeTruthy()
+  })
+
+  it('empty artifactIds (e.g. an un-migrated component_artifact_mappings table) renders the section with NO mapping rows', () => {
+    // Reproduces the QA symptom: the v4 detail returns artifactIds: [] (the new table was
+    // never populated for the component), so the editor shows its header + add button but no
+    // Group ID / Artifact fields. A data/migration state — distinct from a binding bug above.
+    renderWithProviders(<Harness component={baseComponent({ artifactIds: [] })} />)
+    expect(screen.queryByLabelText('Group ID')).toBeNull()
+    expect(screen.getByRole('button', { name: /Add artifact coordinates/i })).toBeTruthy()
   })
 })

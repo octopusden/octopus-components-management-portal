@@ -12,6 +12,9 @@ import { ChipsInput } from '../ui/ChipsInput'
 import { EnumSelect } from '../ui/EnumSelect'
 import { FieldInfo } from '../ui/FieldInfo'
 import { FieldLabelText } from '../ui/FieldLabelText'
+import { ArtifactOwnershipEditor } from './ArtifactOwnershipEditor'
+import { useSupportedGroups } from '../../hooks/useSupportedGroups'
+import { fromArtifactId, OWNERSHIP_ALL_VERSIONS, type OwnershipMappingValue } from '../../lib/artifactOwnership'
 import type { ComponentDetail } from '../../lib/types'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../../lib/auth'
@@ -95,7 +98,8 @@ export interface GeneralFormValues {
   // (releasesInDefaultBranch moved to the Jira tab; teamcityProjects are now
   // read-only header links, no longer edited here.)
   docs: { docComponentKey: string; majorVersion: string }[]
-  artifactIds: { groupPattern: string; artifactPattern: string }[]
+  // #357 ownership editor: a LIST of mappings (base + per-range overrides), each with a mode.
+  artifactIds: OwnershipMappingValue[]
 }
 
 interface GeneralTabProps {
@@ -126,6 +130,10 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
     formState: { errors },
   } = form
 
+  // Supported groupId prefixes drive the ownership group-prefix check (CRS rule
+  // #10). Shared (cached) query — also read by the page for the Save gate.
+  const { groups: supportedGroups } = useSupportedGroups()
+
   const solution = watch('solution')
   const componentOwner = watch('componentOwner')
   // parentComponentName / canBeParent moved to the Misc tab (MiscTab.tsx).
@@ -154,7 +162,14 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
   // schema-v2 list editors. useFieldArray provides stable `id` keys so row
   // re-renders don't blow away focus on text inputs.
   const docsFieldArray = useFieldArray({ control, name: 'docs' })
-  const artifactIdsFieldArray = useFieldArray({ control, name: 'artifactIds' })
+  // Ownership is edited as a whole list by ArtifactOwnershipEditor (not a simple field-array of
+  // inputs), so it is watched + replaced wholesale via setValue.
+  const watchedArtifactIds = watch('artifactIds')
+  // Override mappings must reference an existing configuration range (CRS invariant); offer the
+  // component's distinct non-base ranges.
+  const ownershipConfigRanges = Array.from(
+    new Set((component.configurations ?? []).map((c) => c.versionRange).filter((r) => r && r !== OWNERSHIP_ALL_VERSIONS)),
+  )
 
   // Doc-link rows use a controlled ComponentSelect (filtered to label=doc), so
   // watch the array to feed each row's current value.
@@ -182,11 +197,31 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
   const { entry: labelsEntry } = useFieldConfigEntry('component.labels')
 
   useEffect(() => {
-    // Form mirrors server state unconditionally — hidden fields just stay
-    // unrendered. Visibility filtering happens at save time in
-    // ComponentDetailPage.handleSave (hidden → undefined in payload), so
-    // populating the form here cannot leak server data: there's no input
-    // to show it and no save path that emits it.
+    // Re-hydration guard. This effect re-runs on every (re)mount and whenever the
+    // `component` reference changes (a ['component',id] refetch). Radix unmounts the
+    // inactive tab, so switching away from General and back re-mounts GeneralTab and
+    // would re-run this — and the form is page-owned, so it survives the unmount. An
+    // unconditional re-hydrate there silently stomps in-progress edits with server
+    // values and falsely clears the save bar. So skip once the form has unsaved edits
+    // (dirty for register()ed inputs, touched for the setValue/chips fields). A genuine
+    // component-id change is re-hydrated by the page-level reset (ComponentDetailPage
+    // hydratedIdRef effect), not here.
+    //
+    // Use dirtyFields KEYS, NOT formState.isDirty: subscribing `isDirty` flips RHF's
+    // dirty tracking from a collapsed boolean to a per-element array for the whole
+    // form, which breaks the page's `dirtyFields.<arrayField> === true` save gates
+    // (labels / releaseManager / securityChampion never read as dirty → Save never
+    // arms). dirtyFields/touchedFields are already subscribed by the page, so reading
+    // their keys here adds no new subscription. (SYS-039 multi-list regression.)
+    if (
+      Object.keys(form.formState.dirtyFields).length > 0 ||
+      Object.keys(form.formState.touchedFields).length > 0
+    )
+      return
+    // Form mirrors server state — hidden fields just stay unrendered. Visibility
+    // filtering happens at save time in ComponentDetailPage.handleSave (hidden →
+    // undefined in payload), so populating the form here cannot leak server data:
+    // there's no input to show it and no save path that emits it.
     setValue('name', component.name)
     setValue('displayName', component.displayName ?? '')
     setValue('componentOwner', component.componentOwner ?? '')
@@ -223,13 +258,11 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
         majorVersion: d.majorVersion ?? '',
       })),
     )
-    setValue(
-      'artifactIds',
-      (component.artifactIds ?? []).map((a) => ({
-        groupPattern: a.groupPattern,
-        artifactPattern: a.artifactPattern,
-      })),
-    )
+    setValue('artifactIds', (component.artifactIds ?? []).map(fromArtifactId))
+    // dirtyFields / touchedFields are read as a point-in-time guard, NOT as triggers —
+    // adding them to deps would re-run hydration whenever dirtiness changes (i.e. on
+    // every edit) and re-stomp the form. Re-hydrate only on a new `component`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [component, setValue])
 
   return (
@@ -303,7 +336,11 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
               // dirtyFields.solution gate actually fires. Without this the
               // boolean is set on the form but never marked dirty, and the
               // save handler omits the field every time.
-              onCheckedChange={(checked) => setValue('solution', checked, { shouldDirty: true })}
+              // shouldTouch:true so the hydration re-guard (GeneralTab effect) does not
+              // clobber a clear-to-default toggle (true→false == RHF default) across a
+              // tab switch: such a toggle leaves dirtyFields empty (value==default), so
+              // `touched` is the only signal that the user interacted with the field.
+              onCheckedChange={(checked) => setValue('solution', checked, { shouldDirty: true, shouldTouch: true })}
             />
             <Label htmlFor="solution" className="cursor-pointer"><FieldLabelText path="component.solution" fallback="Solution" /></Label>
             <FieldInfo path="component.solution" label="Solution" />
@@ -340,8 +377,12 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
                 ) : (
                   <PeopleInput
                     id="componentOwner"
+                    // shouldDirty/shouldTouch are required: componentOwner is written via setValue
+                    // (PeopleInput is not a native register()ed input), so without these flags an
+                    // edit/clear never marks the form interacted and buildUpdateRequest's
+                    // interacted-gate omits it — the clear would be silently dropped.
+                    onChange={(val) => setValue('componentOwner', val, { shouldDirty: true, shouldTouch: true })}
                     value={componentOwner}
-                    onChange={(val) => setValue('componentOwner', val)}
                     lookupFn={lookupEmployee}
                     status={employeeStatuses[componentOwner]}
                     onValidatingChange={onOwnerValidatingChange}
@@ -630,45 +671,17 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
           <h3 className="text-sm font-medium text-muted-foreground"><FieldLabelText path="component.artifactIds" fallback="Artifact IDs" /></h3>
           <FieldInfo path="component.artifactIds" label="Artifact IDs" />
         </div>
-        <div className="space-y-2">
-          {artifactIdsFieldArray.fields.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No artifact IDs configured.</p>
-          ) : (
-            artifactIdsFieldArray.fields.map((field, index) => (
-              <div key={field.id} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
-                <Input
-                  placeholder="org.example.alpha"
-                  aria-label={`Artifact ID group pattern (row ${index + 1})`}
-                  {...register(`artifactIds.${index}.groupPattern` as const)}
-                />
-                <Input
-                  placeholder="my-component-*"
-                  aria-label={`Artifact ID artifact pattern (row ${index + 1})`}
-                  {...register(`artifactIds.${index}.artifactPattern` as const)}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-9 w-9 text-destructive"
-                  onClick={() => artifactIdsFieldArray.remove(index)}
-                  aria-label="Remove artifact ID"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            ))
-          )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => artifactIdsFieldArray.append({ groupPattern: '', artifactPattern: '' })}
-          >
-            <Plus className="h-4 w-4" />
-            Add artifact ID
-          </Button>
-        </div>
+        <p className="mb-3 text-[13px] text-muted-foreground">
+          Artifact coordinates — the groupId and artifactId of artifacts produced at the build and published in
+          Artifactory. A component may own several, each with its own rule.
+        </p>
+        <ArtifactOwnershipEditor
+          value={watchedArtifactIds ?? []}
+          configRanges={ownershipConfigRanges}
+          supportedGroups={supportedGroups}
+          disabled={!canEdit}
+          onChange={(next) => setValue('artifactIds', next, { shouldDirty: true, shouldTouch: true })}
+        />
       </section>
 
       {/* Who can edit — highlighted read-only footer (owner + RMs + SCs from the

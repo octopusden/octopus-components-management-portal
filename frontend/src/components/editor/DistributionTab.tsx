@@ -6,15 +6,18 @@ import { Button } from '../ui/button'
 import { FieldInfo } from '../ui/FieldInfo'
 import { FieldLabelText } from '../ui/FieldLabelText'
 import { Separator } from '../ui/separator'
+import { findUnsupportedGroupId } from '../../lib/groupValidation'
 import type { DistributionSection } from './useDistributionSection'
 
 interface DistributionTabProps {
   section: DistributionSection
   canEdit: boolean
+  /** Supported groupId prefixes (CRS rule #10); empty ⇒ the prefix check is skipped. */
+  supportedGroups?: readonly string[]
 }
 
 /** Distribution tab — presentational. State + slice live in `useDistributionSection`. */
-export function DistributionTab({ section, canEdit }: DistributionTabProps) {
+export function DistributionTab({ section, canEdit, supportedGroups = [] }: DistributionTabProps) {
   const {
     state,
     setExplicit,
@@ -72,6 +75,16 @@ export function DistributionTab({ section, canEdit }: DistributionTabProps) {
                   <FieldInfo path="distribution.maven.groupPattern" label="Group Pattern" />
                 </div>
                 <Input required value={row.groupPattern} onChange={(e) => updateMaven(i, 'groupPattern', e.target.value)} placeholder="org.example.alpha" className="font-mono text-xs" />
+                {(() => {
+                  const bad = row.groupPattern.trim()
+                    ? findUnsupportedGroupId(row.groupPattern, supportedGroups)
+                    : undefined
+                  return bad ? (
+                    <p className="text-xs text-destructive">
+                      Group ID "{bad}" must start with a supported prefix ({supportedGroups.join(', ')})
+                    </p>
+                  ) : null
+                })()}
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-1">

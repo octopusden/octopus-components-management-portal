@@ -33,24 +33,33 @@ import { useJiraSection } from '../components/editor/useJiraSection'
 import { useEscrowSection } from '../components/editor/useEscrowSection'
 import { generalSlice } from '../components/editor/generalSlice'
 import { combineRequest, collectDiff, anyDirty } from '../lib/editor/combineRequest'
+import { isFieldDirty } from '../lib/editor/dirtyField'
 import { SaveBar } from '../components/editor/SaveBar'
 import { ReviewChangesDialog } from '../components/editor/ReviewChangesDialog'
+import type { ConfirmMeta } from '../components/editor/ReviewChangesDialog'
 import { UnsavedChangesGuard } from '../components/editor/UnsavedChangesGuard'
 import { completenessPercent } from '../lib/component/completeness'
 import { CANNOT_EDIT_TITLE } from '../components/editor/editPermission'
 import { WhoCanEditPanel } from '../components/editor/WhoCanEditPanel'
 import { FieldOverrides } from '../components/editor/FieldOverrides'
+import { OverridesDraftProvider } from '../components/editor/overridesDraft'
+import { useOverridesSection } from '../components/editor/useOverridesSection'
 import { ConfigurationsTab } from '../components/editor/ConfigurationsTab'
+import { SupportedVersionsTab } from '../components/editor/SupportedVersionsTab'
 import { AsCodeTab } from '../components/editor/AsCodeTab'
 import { ComponentHistoryTab } from '../components/editor/ComponentHistoryTab'
 import { EditorSidebarNav, type EditorNavSection } from '../components/editor/EditorSidebarNav'
 import { ValidationProblemsList } from '../components/ValidationProblemsList'
 import { CreateComponentDialog } from '../components/CreateComponentDialog'
-import { useComponent, useUpdateComponent, useDeleteComponent } from '../hooks/useComponent'
+import { useComponent, useUpdateComponent, useDeleteComponent, useFieldOverrides } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
 import { ApiError } from '../lib/api'
 import { useOptimisticConflict } from '../hooks/useOptimisticConflict'
 import type { ComponentDetail } from '../lib/types'
+import { countOwnershipIssues, fromArtifactId } from '../lib/artifactOwnership'
+import { findUnsupportedGroupId } from '../lib/groupValidation'
+import { isVcsHostSupported } from '../lib/vcsHost'
+import { useSupportedGroups } from '../hooks/useSupportedGroups'
 import { selectBaseRow } from '../lib/api/baseRow'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../lib/auth'
@@ -104,7 +113,7 @@ function mapComponentToForm(component: ComponentDetail): GeneralFormValues {
     copyright: component.copyright ?? '',
     labels: component.labels ?? [],
     docs: (component.docs ?? []).map((d) => ({ docComponentKey: d.docComponentKey, majorVersion: d.majorVersion ?? '' })),
-    artifactIds: (component.artifactIds ?? []).map((a) => ({ groupPattern: a.groupPattern, artifactPattern: a.artifactPattern })),
+    artifactIds: (component.artifactIds ?? []).map(fromArtifactId),
   }
 }
 
@@ -121,7 +130,13 @@ function sectionForField(field: string): string | null {
   return null
 }
 
-export function ComponentDetailPage() {
+/**
+ * The editor body. Rendered INSIDE OverridesDraftProvider (see
+ * ComponentDetailPage below) so it — and every override surface — share one
+ * draft instance; this is also where the section slices (incl. the override
+ * slice) are assembled into the ONE combined save.
+ */
+function ComponentDetailEditor() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { toast } = useToast()
@@ -129,6 +144,9 @@ export function ComponentDetailPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [copyDialogOpen, setCopyDialogOpen] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
+  // Persistent save-time conflict message shown in the Review dialog (value 409s
+  // like an overlapping/duplicate range) — survives the auto-dismissing toast.
+  const [reviewError, setReviewError] = useState<string | null>(null)
   // Controlled tab so a server 400 on a field that lives on a non-active tab can
   // auto-switch to the owning tab (otherwise the inline error renders on a hidden tab).
   const [activeTab, setActiveTab] = useState('general')
@@ -182,6 +200,10 @@ export function ComponentDetailPage() {
   const { data: portalLinks } = usePortalLinks()
   const jiraBaseUrl = portalLinks?.jiraBaseUrl ?? undefined
   const gitBaseUrl = portalLinks?.gitBaseUrl ?? undefined
+  // Supported groupId prefixes (CRS rule #10) feed the distribution/ownership
+  // group checks; the bitbucket host (gitBaseUrl) feeds the VCS-host check.
+  // Both fail-open when unavailable — CRS stays authoritative on save.
+  const { groups: supportedGroups } = useSupportedGroups()
 
   const form = useForm<GeneralFormValues>({
     defaultValues: {
@@ -248,6 +270,9 @@ export function ComponentDetailPage() {
   const escrowSection = useEscrowSection(shell, {
     productType: productTypeFc.visibility ?? 'editable',
   })
+  // Field-overrides slice — draft lives in OverridesDraftProvider (wraps this
+  // component), so this just projects it into a SectionSlice like the others.
+  const overridesSection = useOverridesSection()
 
   // ── General/Misc slice (RHF touched-not-dirty gate, preserved verbatim) ──
   function buildPatchRequest() {
@@ -272,26 +297,43 @@ export function ComponentDetailPage() {
         displayName:
           form.formState.dirtyFields.displayName === true ||
           form.formState.touchedFields.displayName === true,
+        // componentOwner / clientCode / copyright: pass "interacted" (dirty OR touched) like
+        // displayName so buildUpdateRequest's value-compare catches a clear back to '' (RHF's
+        // clear-to-default blind-spot) while a pristine/pre-hydration form omits the field.
+        componentOwner:
+          form.formState.dirtyFields.componentOwner === true ||
+          form.formState.touchedFields.componentOwner === true,
+        clientCode:
+          form.formState.dirtyFields.clientCode === true ||
+          form.formState.touchedFields.clientCode === true,
+        copyright:
+          form.formState.dirtyFields.copyright === true ||
+          form.formState.touchedFields.copyright === true,
+        // Array fields: isFieldDirty handles RHF's collapsed-boolean OR per-element-array
+        // dirtyFields shape (the shape flips to array once any component subscribes
+        // formState.isDirty — see dirtyField.ts). The second branch keeps the clear-all
+        // case (touched + had-prior + now-empty) that buildUpdateRequest's value-compare
+        // cannot see, because an emptied array equals the blank form default.
         labels:
-          (form.formState.dirtyFields.labels as unknown) === true ||
+          isFieldDirty(form.formState.dirtyFields.labels) ||
           (labelsFc.visibility !== 'hidden' &&
             (form.formState.touchedFields.labels as unknown) === true &&
             ((component.labels?.length ?? 0) > 0) &&
             ((form.getValues('labels')?.length ?? 0) === 0)),
         releaseManager:
-          (form.formState.dirtyFields.releaseManager as unknown) === true ||
+          isFieldDirty(form.formState.dirtyFields.releaseManager) ||
           (releaseManagerFc.visibility !== 'hidden' &&
             (form.formState.touchedFields.releaseManager as unknown) === true &&
             ((component.releaseManager?.length ?? 0) > 0) &&
             ((form.getValues('releaseManager')?.length ?? 0) === 0)),
         securityChampion:
-          (form.formState.dirtyFields.securityChampion as unknown) === true ||
+          isFieldDirty(form.formState.dirtyFields.securityChampion) ||
           (securityChampionFc.visibility !== 'hidden' &&
             (form.formState.touchedFields.securityChampion as unknown) === true &&
             ((component.securityChampion?.length ?? 0) > 0) &&
             ((form.getValues('securityChampion')?.length ?? 0) === 0)),
-        docs: !!form.formState.dirtyFields.docs,
-        artifactIds: !!form.formState.dirtyFields.artifactIds,
+        docs: isFieldDirty(form.formState.dirtyFields.docs),
+        artifactIds: isFieldDirty(form.formState.dirtyFields.artifactIds),
       },
     })
   }
@@ -320,9 +362,29 @@ export function ComponentDetailPage() {
     distributionSection.slice,
     jiraSection.slice,
     escrowSection.slice,
+    overridesSection.slice,
   ]
   const dirty = anyDirty(slices)
   const diff = collectDiff(slices)
+
+  // Client-side artifact-ownership validity gate: block save while the editor shows unresolved
+  // issues (invalid group, empty EXPLICIT, intra-component conflict, overlapping override ranges).
+  // The server is the authoritative gate (400/409); this avoids a round-trip on a known-bad state.
+  const ownershipIssues = countOwnershipIssues(form.watch('artifactIds') ?? [], supportedGroups)
+  // groupId-prefix (CRS rule #10) and VCS-host validity gates, mirroring the
+  // ownership gate above. Both skip when their source list is empty/absent.
+  // Only count rows the request actually sends — cleanMaven drops a row unless
+  // BOTH groupPattern and artifactPattern are non-blank, so a half-filled row
+  // (bad group, no artifact yet) must not false-block an unrelated save.
+  const mavenPrefixIssues = distributionSection.state.maven.filter(
+    (m) =>
+      m.groupPattern.trim() !== '' &&
+      m.artifactPattern.trim() !== '' &&
+      findUnsupportedGroupId(m.groupPattern, supportedGroups) !== undefined,
+  ).length
+  const vcsHostIssues = vcsSection.entries.filter(
+    (e) => e.vcsPath.trim() !== '' && !isVcsHostSupported(e.vcsPath, gitBaseUrl),
+  ).length
 
   function discardAll() {
     // Reset the RHF form to the COMPONENT's values (not the empty form
@@ -337,13 +399,16 @@ export function ComponentDetailPage() {
     distributionSection.reset()
     jiraSection.reset()
     escrowSection.reset()
+    overridesSection.reset()
     form.clearErrors()
   }
 
-  async function runCombinedSave() {
+  async function runCombinedSave(meta: ConfirmMeta = {}) {
     if (!component) return
     if (!canEdit || !dirty) return
     form.clearErrors()
+    // Clear any prior conflict banner so a retry starts clean.
+    setReviewError(null)
 
     // System is REQUIRED server-side — surface the inline error instead of a
     // silent omit-then-walk-away.
@@ -360,22 +425,51 @@ export function ComponentDetailPage() {
       return
     }
 
-    const request = combineRequest(component.version, slices)
+    // Change metadata (Jira task key + comment) is recorded on the audit row, not
+    // the component — merge it onto the combined PATCH. Values arrive already
+    // normalized (undefined when blank), so JSON.stringify omits them.
+    const request = {
+      ...combineRequest(component.version, slices),
+      jiraTaskKey: meta.jiraTaskKey,
+      changeComment: meta.changeComment,
+    }
 
     try {
-      await updateMutation.mutateAsync(request)
+      const saved = await updateMutation.mutateAsync(request)
+      // Re-baseline the General/Misc form to the SAVED (server-normalized) component.
+      // The GeneralTab re-hydration guard skips while the form is dirty/touched, so without
+      // an explicit reset here the form would stay dirty for the rest of the session and a
+      // later same-id refetch would never reflect a value CRS normalized on write. The
+      // section hooks re-seed themselves via their snapshot deep-equal; only the RHF form
+      // needs the nudge. (`if (saved)` keeps tests whose mutateAsync resolves undefined inert.)
+      if (saved) {
+        form.reset(mapComponentToForm(saved))
+        form.clearErrors()
+      }
+      // Clear the override draft after a successful save. The combined PATCH
+      // persisted the desired set; useUpdateComponent invalidates
+      // ['field-overrides', id], so OverridesDraftProvider re-seeds from the
+      // refetched (authoritative) baseline and the section reads clean.
+      // (For ~one tick — until that refetch settles — effectiveOverrides shows
+      // the pre-save rows again; benign, the Overrides tab isn't in view here.)
+      overridesSection.reset()
       setReviewOpen(false)
       toast({ title: 'Component saved', description: 'Changes have been saved successfully.' })
     } catch (err) {
-      // Optimistic-locking / uniqueness 409 — one page-level path. Close the
-      // review dialog first: a UNIQUENESS_VIOLATION can't be fixed by clicking
-      // Confirm again (re-clicking would just re-hit the same 409), and an
-      // OPTIMISTIC_LOCK refetch re-seeds the clean sections, so the open diff's
-      // "from" values would be stale.
+      // 409 — split by kind. A `value` conflict (uniqueness / overlapping range)
+      // is fixable in place, so keep the Review dialog open with a persistent
+      // banner (plus a sticky toast) instead of closing and losing the diff. An
+      // `optimistic` (stale-version) conflict has already refetched the latest
+      // snapshot, so the open diff's "from" values are stale — close it and tell
+      // the user to re-apply.
       const conflict = await handleConflict(err)
       if (conflict) {
-        setReviewOpen(false)
-        toast({ ...conflict, variant: 'destructive' })
+        toast({ title: conflict.title, description: conflict.description, variant: 'destructive' })
+        if (conflict.kind === 'value') {
+          setReviewError(conflict.description)
+        } else {
+          setReviewOpen(false)
+        }
         return
       }
       if (err instanceof ApiError && err.status === 400) {
@@ -434,6 +528,7 @@ export function ComponentDetailPage() {
       buildSection.setBuildSystemTouched(true)
       return
     }
+    setReviewError(null)
     setReviewOpen(true)
   }
 
@@ -691,6 +786,7 @@ export function ComponentDetailPage() {
                 label: 'Metadata',
                 items: [
                   { value: 'misc', label: 'Misc' },
+                  { value: 'supported-versions', label: 'Supported Versions' },
                   { value: 'configurations', label: 'Configurations', count: configCount },
                 ],
               },
@@ -731,19 +827,19 @@ export function ComponentDetailPage() {
 
             <TabsContent value="build">
               <EditSurface canEdit={canEdit} label="Build">
-                <BuildTab component={component} section={buildSection} canEdit={canEdit} />
+                <BuildTab section={buildSection} canEdit={canEdit} />
               </EditSurface>
             </TabsContent>
 
             <TabsContent value="vcs">
               <EditSurface canEdit={canEdit} label="VCS">
-                <VcsTab section={vcsSection} canEdit={canEdit} />
+                <VcsTab section={vcsSection} canEdit={canEdit} gitBaseUrl={gitBaseUrl} />
               </EditSurface>
             </TabsContent>
 
             <TabsContent value="distribution">
               <EditSurface canEdit={canEdit} label="Distribution">
-                <DistributionTab section={distributionSection} canEdit={canEdit} />
+                <DistributionTab section={distributionSection} canEdit={canEdit} supportedGroups={supportedGroups} />
               </EditSurface>
             </TabsContent>
 
@@ -755,13 +851,19 @@ export function ComponentDetailPage() {
 
             <TabsContent value="escrow">
               <EditSurface canEdit={canEdit} label="Escrow">
-                <EscrowTab component={component} section={escrowSection} canEdit={canEdit} />
+                <EscrowTab section={escrowSection} canEdit={canEdit} />
               </EditSurface>
             </TabsContent>
 
             <TabsContent value="misc">
               <EditSurface canEdit={canEdit} label="Misc">
                 <MiscTab key={component.id} component={component} form={form} />
+              </EditSurface>
+            </TabsContent>
+
+            <TabsContent value="supported-versions">
+              <EditSurface canEdit={canEdit} label="Supported Versions">
+                <SupportedVersionsTab componentId={component.id} canEdit={canEdit} />
               </EditSurface>
             </TabsContent>
 
@@ -775,7 +877,7 @@ export function ComponentDetailPage() {
 
             <TabsContent value="overrides">
               <EditSurface canEdit={canEdit} label="Overrides">
-                <FieldOverrides componentId={component.id} />
+                <FieldOverrides />
               </EditSurface>
             </TabsContent>
 
@@ -815,7 +917,13 @@ export function ComponentDetailPage() {
                   ? 'Loading field configuration…'
                   : ownerValidating
                     ? 'Validating component owner…'
-                    : null
+                    : ownershipIssues > 0
+                      ? `Resolve ${ownershipIssues} artifact-ownership ${ownershipIssues === 1 ? 'issue' : 'issues'} before saving`
+                      : mavenPrefixIssues > 0
+                        ? `Fix ${mavenPrefixIssues} distribution Group ID ${mavenPrefixIssues === 1 ? 'prefix' : 'prefixes'} before saving`
+                        : vcsHostIssues > 0
+                          ? `Fix ${vcsHostIssues} VCS ${vcsHostIssues === 1 ? 'host' : 'hosts'} before saving`
+                          : null
               }
               onDiscard={discardAll}
               onSave={handleOpenReview}
@@ -826,10 +934,14 @@ export function ComponentDetailPage() {
 
       <ReviewChangesDialog
         open={reviewOpen}
-        onOpenChange={setReviewOpen}
+        onOpenChange={(open) => {
+          setReviewOpen(open)
+          if (!open) setReviewError(null)
+        }}
         diff={diff}
         onConfirm={runCombinedSave}
         isSaving={updateMutation.isPending}
+        errorBanner={reviewError}
       />
 
       <CreateComponentDialog
@@ -891,4 +1003,35 @@ const EMPTY_COMPONENT: ComponentDetail = {
   securityGroups: [],
   teamcityProjects: [],
   configurations: [],
+}
+
+/**
+ * Route entry. Provides the page-level field-override draft (seeded from the
+ * server overrides) so the editor body and every override surface share ONE
+ * draft instance, then renders the editor. The provider sits here — above the
+ * component that assembles the combined-save slices — so useOverridesSection()
+ * and the surfaces all resolve the same context.
+ */
+export function ComponentDetailPage() {
+  const { id } = useParams<{ id: string }>()
+  // id is always defined on this route; the `?? ''` only guards the type. An
+  // empty id disables the query (useFieldOverrides: enabled: !!componentId), so
+  // the provider just starts from an empty baseline until the route resolves.
+  //
+  // Baseline/version coupling: the combined PATCH sends component.version (from
+  // useComponent) AND the desired-full-set built from THIS override baseline.
+  // The desired-set deletes anything omitted, so a stale override baseline paired
+  // with a fresh component.version could in theory drop a concurrently-added row.
+  // In practice these two queries move in lockstep — the combined-save
+  // useUpdateComponent invalidates ['field-overrides', id] alongside the
+  // component, useUpdateSupportedVersions does the same via
+  // invalidateOverrideAndComponent, and window-focus refetches both — so a fresh
+  // version never pairs with a stale override set. (A fully snapshot-coupled
+  // baseline derived from component.configurations is a possible follow-up.)
+  const { data: serverOverrides = [], isLoading: overridesLoading } = useFieldOverrides(id ?? '')
+  return (
+    <OverridesDraftProvider componentId={id ?? ''} serverOverrides={serverOverrides} serverLoading={overridesLoading}>
+      <ComponentDetailEditor />
+    </OverridesDraftProvider>
+  )
 }

@@ -16,6 +16,8 @@ vi.mock('../hooks/useComponent', () => ({
   useComponent: vi.fn(),
   useUpdateComponent: vi.fn(),
   useDeleteComponent: vi.fn(),
+  // item D: the page wrapper seeds OverridesDraftProvider from this.
+  useFieldOverrides: vi.fn(() => ({ data: [] })),
 }))
 vi.mock('../hooks/use-toast', () => ({
   useToast: () => ({ toast: vi.fn() }),
@@ -31,6 +33,9 @@ vi.mock('../hooks/useInfo', () => ({
   // so these page tests render without a banner.
   usePortalInfo: vi.fn(() => ({ data: undefined })),
 }))
+// Supported groupId prefixes feed the distribution/ownership prefix Save-gate.
+// Default empty ⇒ fail-open (gate off), so existing tests are unaffected.
+vi.mock('../hooks/useSupportedGroups', () => ({ useSupportedGroups: vi.fn() }))
 // Field-config hook — mocked so individual tests can pin TC fields to
 // 'hidden' / 'editable'. Default (set in beforeEach) returns editable for
 // every field path so existing tests behave unchanged.
@@ -112,6 +117,7 @@ import { ApiError } from '../lib/api'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useComponent, useUpdateComponent, useDeleteComponent } from '../hooks/useComponent'
 import { usePortalLinks } from '../hooks/useInfo'
+import { useSupportedGroups } from '../hooks/useSupportedGroups'
 import { useFieldConfigEntry } from '../hooks/useFieldConfig'
 import { GeneralTab } from '../components/editor/GeneralTab'
 import { CANNOT_EDIT_TITLE } from '../components/editor/editPermission'
@@ -121,6 +127,7 @@ import { copyToClipboard } from '../lib/clipboard'
 import type { ComponentValidation } from '@/lib/types'
 
 const mockedUsePortalLinks = vi.mocked(usePortalLinks)
+const mockedUseSupportedGroups = vi.mocked(useSupportedGroups)
 const mockedUseFieldConfigEntry = vi.mocked(useFieldConfigEntry)
 const mockedUseValidationProblems = vi.mocked(useValidationProblems)
 const mockedCopyToClipboard = vi.mocked(copyToClipboard)
@@ -295,6 +302,7 @@ beforeEach(() => {
     isError: false,
     error: null,
   } as unknown as ReturnType<typeof usePortalLinks>)
+  mockedUseSupportedGroups.mockReturnValue({ groups: [], isLoading: false })
   // Default: every field-config entry resolves as 'editable'. Individual
   // tests override per-field by re-mocking this implementation.
   mockedUseFieldConfigEntry.mockImplementation(() => ({
@@ -550,6 +558,7 @@ describe('ComponentDetailPage — sidebar nav order', () => {
       'Escrow',
       'Distribution',
       'Misc',
+      'Supported Versions',
       'Configurations',
       'As Code',
       'Overrides',
@@ -839,6 +848,118 @@ describe('ComponentDetailPage — Save dirty-gate', () => {
     expect(payload['displayName']).toBe('New Name')
     // Single combined PATCH carries exactly one version (the page snapshot).
     expect(payload['version']).toBe(baseComponent.version)
+  })
+
+  it('clearing componentOwner flows through to the PATCH as "" (server clears to null)', async () => {
+    // Regression: clearing componentOwner used to collapse to undefined → omitted from the
+    // PATCH → JSON-merge-patch "don't touch" → the clear silently never persisted while the
+    // user saw a success toast. The page now passes componentOwner as interacted (dirty OR
+    // touched) so buildUpdateRequest emits '' (server stores null).
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('system', component.system ?? '')
+        form.setValue('componentOwner', component.componentOwner ?? '')
+      }, [component, form])
+      return React.createElement(
+        'button',
+        {
+          'data-testid': 'clear-owner',
+          onClick: () => form.setValue('componentOwner', '', { shouldDirty: true, shouldTouch: true }),
+        },
+        'clear',
+      )
+    })
+    const updateMutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage(baseComponent, user, { updateMutation: { mutateAsync: updateMutateAsync } })
+
+    fireEvent.click(screen.getByTestId('clear-owner'))
+    await waitFor(() => {
+      const btn = screen.getByRole('button', { name: /save changes/i }) as HTMLButtonElement
+      expect(btn.disabled).toBe(false)
+    })
+
+    await clickSaveAndConfirm()
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
+    const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
+    expect(payload['componentOwner']).toBe('')
+  })
+
+  it('re-baselines the General form to the saved (server-normalized) component after save', async () => {
+    // The GeneralTab re-hydration guard skips while the form is dirty/touched, so the page
+    // must form.reset() to the SAVED component after a successful save — otherwise the form
+    // stays dirty for the session and never reflects a value CRS normalized on write. The
+    // mock hydrates ONCE (deps []), isolating the page-level post-save reset.
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('system', component.system ?? '')
+        form.setValue('componentOwner', component.componentOwner ?? '')
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [])
+      return React.createElement('div', {}, [
+        React.createElement('span', { key: 'v', 'data-testid': 'owner-value' }, form.watch('componentOwner')),
+        React.createElement(
+          'button',
+          {
+            key: 'e',
+            'data-testid': 'edit-owner',
+            onClick: () => form.setValue('componentOwner', 'bob', { shouldDirty: true, shouldTouch: true }),
+          },
+          'edit',
+        ),
+      ])
+    })
+    // CRS normalizes the owner on write → the saved value differs from what the user typed.
+    const saved = { ...baseComponent, componentOwner: 'BOB' }
+    // The real mutateAsync resolves the saved ComponentDetail; the test harness option type
+    // is the void-returning idle shape, so type the mock as void (runtime resolves `saved`).
+    const updateMutateAsync = vi.fn((): Promise<void> => Promise.resolve(saved as unknown as void))
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage(baseComponent, user, { updateMutation: { mutateAsync: updateMutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit-owner'))
+    await waitFor(() => expect(screen.getByTestId('owner-value').textContent).toBe('bob'))
+
+    await clickSaveAndConfirm()
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
+
+    // Without the post-save reset the form keeps 'bob'; with it, it re-baselines to 'BOB'.
+    await waitFor(() => expect(screen.getByTestId('owner-value').textContent).toBe('BOB'))
+  })
+
+  it('carries the entered Jira key + comment from the Review dialog on the combined PATCH', async () => {
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('system', component.system ?? '')
+        form.setValue('displayName', component.displayName ?? '')
+      }, [component, form])
+      return React.createElement(
+        'button',
+        {
+          'data-testid': 'edit-display-name',
+          onClick: () => form.setValue('displayName', 'New Name', { shouldDirty: true }),
+        },
+        'edit',
+      )
+    })
+    const updateMutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage(baseComponent, user, { updateMutation: { mutateAsync: updateMutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit-display-name'))
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: /save changes/i }) as HTMLButtonElement).disabled).toBe(false),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    fireEvent.change(await screen.findByLabelText(/jira task key/i), { target: { value: 'ABC-123' } })
+    fireEvent.change(screen.getByLabelText(/comment/i), { target: { value: 'tidy up' } })
+    fireEvent.click(screen.getByRole('button', { name: /^confirm$/i }))
+
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
+    const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
+    expect(payload['jiraTaskKey']).toBe('ABC-123')
+    expect(payload['changeComment']).toBe('tidy up')
   })
 
   it('renders (Save button present) even when the API omits docs/artifactIds', () => {
@@ -1150,6 +1271,66 @@ describe('ComponentDetailPage — cross-tab 400 + displayName clear', () => {
   })
 })
 
+describe('ComponentDetailPage — 409 conflict handling in the Review dialog', () => {
+  function stubDirtyGeneralTab() {
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('system', component.system ?? '')
+        form.setValue('displayName', component.displayName ?? '')
+      }, [component, form])
+      return React.createElement(
+        'button',
+        { 'data-testid': 'edit', onClick: () => form.setValue('displayName', 'X', { shouldDirty: true }) },
+        'edit',
+      )
+    })
+  }
+
+  it('a value conflict (UNIQUENESS_VIOLATION) keeps the dialog open and shows a persistent banner', async () => {
+    stubDirtyGeneralTab()
+    const serverMsg = 'Overlaps with existing override [1.4,1.5)'
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(
+        new ApiError(409, serverMsg, JSON.stringify({ errorMessage: serverMsg, errorCode: 'UNIQUENESS_VIOLATION' })),
+      ),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    // Banner appears and the dialog stays open (Confirm still present) so the
+    // user can fix the range and retry without losing the diff.
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(serverMsg))
+    const confirm = screen.getByRole('button', { name: /^confirm$/i })
+    expect(confirm).toBeInTheDocument()
+    // Confirm is re-enabled so the user can fix the range and retry in place.
+    expect(confirm).not.toBeDisabled()
+  })
+
+  it('an optimistic-lock conflict closes the dialog (stale diff) instead of showing a banner', async () => {
+    stubDirtyGeneralTab()
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(
+        new ApiError(
+          409,
+          'stale',
+          JSON.stringify({ errorMessage: 'expected version 3 but found 5', errorCode: 'OPTIMISTIC_LOCK' }),
+        ),
+      ),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^confirm$/i })).toBeNull())
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+})
+
 describe('ComponentDetailPage — Validation Problems tab (admin gate + lookup by name)', () => {
   // A problem-bearing validation keyed by the COMPONENT NAME (`my-component`),
   // NOT the id (`comp-1`). The detail tab must look it up by name — the same
@@ -1321,5 +1502,65 @@ describe('ComponentDetailPage — Validation Problems tab (admin gate + lookup b
     )
     // No stale Validation-Problems content lingering.
     expect(screen.queryByText('v1')).toBeNull()
+  })
+})
+
+describe('ComponentDetailPage — groupId/VCS-host Save gate', () => {
+  const SAVE = { name: 'Save changes' } as const
+  const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+  const editable = { ...baseComponent, canEdit: true }
+
+  function withMaven(groupPattern: string, artifactPattern: string): ComponentDetail {
+    return {
+      ...editable,
+      configurations: [
+        {
+          ...baseComponent.configurations[0]!,
+          mavenArtifacts: [
+            { id: 'm1', groupPattern, artifactPattern, extension: null, classifier: null, sortOrder: 0 },
+          ],
+        },
+      ],
+    }
+  }
+
+  it('blocks Save when a maven Group ID lacks a supported prefix', () => {
+    mockedUseSupportedGroups.mockReturnValue({ groups: ['com.acme'], isLoading: false })
+    renderPage(withMaven('org.bad', 'svc'), user)
+    const save = screen.getByRole('button', SAVE)
+    expect(save).toBeDisabled()
+    expect(save.parentElement).toHaveAttribute('title', 'Fix 1 distribution Group ID prefix before saving')
+  })
+
+  it('does NOT block on a half-filled maven row the request would drop (blank artifact)', () => {
+    mockedUseSupportedGroups.mockReturnValue({ groups: ['com.acme'], isLoading: false })
+    renderPage(withMaven('org.bad', ''), user)
+    const save = screen.getByRole('button', SAVE)
+    // Row is dropped by cleanMaven ⇒ not counted ⇒ the title falls back to the
+    // dirty-gate reason, NOT the prefix reason.
+    expect(save.parentElement).not.toHaveAttribute('title', 'Fix 1 distribution Group ID prefix before saving')
+    expect(save.parentElement).toHaveAttribute('title', 'No changes to save')
+  })
+
+  it('blocks Save when a VCS entry host is not the ecosystem Bitbucket', () => {
+    mockedUsePortalLinks.mockReturnValue({
+      data: { jiraBaseUrl: null, gitBaseUrl: 'https://bitbucket.example.com', tcBaseUrl: null, dmsBaseUrl: null },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof usePortalLinks>)
+    const comp: ComponentDetail = {
+      ...editable,
+      configurations: [
+        {
+          ...baseComponent.configurations[0]!,
+          vcsEntries: [{ id: 'e-1', name: 'main', vcsPath: 'ssh://git@github.com/r.git', sortOrder: 0 }],
+        },
+      ],
+    }
+    renderPage(comp, user)
+    const save = screen.getByRole('button', SAVE)
+    expect(save).toBeDisabled()
+    expect(save.parentElement).toHaveAttribute('title', 'Fix 1 VCS host before saving')
   })
 })

@@ -5,16 +5,20 @@ import { Button } from '../ui/button'
 import { FieldInfo } from '../ui/FieldInfo'
 import { FieldLabelText } from '../ui/FieldLabelText'
 import { Separator } from '../ui/separator'
+import { isVcsHostSupported, hostOf } from '../../lib/vcsHost'
 import type { VcsSection } from './useVcsSection'
 
 interface VcsTabProps {
   section: VcsSection
   canEdit: boolean
+  /** Ecosystem Bitbucket base URL (${bitbucket.host}); absent ⇒ host check skipped. */
+  gitBaseUrl?: string | null
 }
 
 /** VCS tab — presentational. State + slice live in `useVcsSection` (page-owned). */
-export function VcsTab({ section, canEdit }: VcsTabProps) {
+export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
   const { externalRegistry, setExternalRegistry, entries, updateEntry, addEntry, removeEntry } = section
+  const allowedHost = hostOf(gitBaseUrl)
 
   return (
     <div className="space-y-6">
@@ -68,6 +72,9 @@ export function VcsTab({ section, canEdit }: VcsTabProps) {
                   <FieldInfo path="vcs.vcsPath" label="VCS Path" />
                 </div>
                 <Input value={entry.vcsPath} onChange={(e) => updateEntry(index, 'vcsPath', e.target.value)} placeholder="ssh://git@..." className="font-mono text-xs" />
+                {entry.vcsPath.trim() && allowedHost && !isVcsHostSupported(entry.vcsPath, gitBaseUrl) && (
+                  <p className="text-xs text-destructive">VCS host must be {allowedHost} (the ecosystem Bitbucket)</p>
+                )}
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-1">

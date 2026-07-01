@@ -31,6 +31,13 @@ vi.mock('../hooks/useFieldOptions', () => ({
   // filter it out of the dropdown. PROVIDED exercises the VCS-exempt branch.
   useFieldOptions: vi.fn(() => ({ options: ['MAVEN', 'GRADLE', 'BS2_0', 'PROVIDED'], isLoading: false })),
 }))
+// Supported-groups + portal-links feed the groupId-prefix and VCS-host checks.
+// Default empty/undefined → both checks FAIL-OPEN (skip), so pre-existing tests
+// are unaffected; the dedicated validation tests override these per case.
+const mockUseSupportedGroups = vi.fn(() => ({ groups: [] as string[], isLoading: false }))
+vi.mock('../hooks/useSupportedGroups', () => ({ useSupportedGroups: () => mockUseSupportedGroups() }))
+const mockUsePortalLinks = vi.fn(() => ({ data: undefined as unknown }))
+vi.mock('../hooks/useInfo', () => ({ usePortalLinks: () => mockUsePortalLinks() }))
 vi.mock('../hooks/useOwners', () => ({
   useOwners: vi.fn(() => ({ data: ['alice', 'inactive-user'] })),
 }))
@@ -130,6 +137,8 @@ beforeEach(() => {
   mockUseComponent.mockReset()
   mockUseFieldConfig.mockReturnValue({ data: undefined, isLoading: false, isError: false })
   mockUseComponentDefaults.mockReturnValue(COMPONENT_DEFAULTS_OK)
+  mockUseSupportedGroups.mockReturnValue({ groups: [], isLoading: false })
+  mockUsePortalLinks.mockReturnValue({ data: undefined })
   scratchDisabled()
 })
 
@@ -152,22 +161,41 @@ async function fillBaseFields(owner = 'alice') {
   await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
   // displayName is optional for a non-explicit+external component (required only under the EE
   // gate); fill it here for completeness so the created payload carries a value.
-  await userEvent.type(screen.getByLabelText(/display name/i), 'Widget')
-  await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
+  await userEvent.type(screen.getByLabelText(/^display name/i), 'Widget')
+  await userEvent.selectOptions(screen.getByLabelText(/^build system/i), 'MAVEN')
   // MAVEN requires VCS → the block is visible; Jira Project Key is required.
   // ^-anchored queries avoid matching FieldInfo's "Description for …" buttons.
   await userEvent.type(screen.getByLabelText(/^vcs url/i), 'ssh://git@host/proj/repo.git')
-  await userEvent.type(screen.getByLabelText(/jira project key/i), 'WIDG')
+  await userEvent.type(screen.getByLabelText(/^jira project key/i), 'WIDG')
   await commitComponentOwner(owner)
 }
 
 describe('CreateComponentDialog — scratch mode base', () => {
+  it('renders field hint (info) buttons for the core fields, mirroring the editor', async () => {
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    // FieldInfo renders a "Description for <label>" trigger from the shared
+    // field-description registry — the same hints the editor shows.
+    for (const label of [
+      'Component Key',
+      'Build System',
+      'Component Owner',
+      'Jira Project Key',
+      'Version Prefix',
+      'Major Version Format',
+      'Hotfix Version Format',
+      'Artifact ownership',
+    ]) {
+      expect(screen.getByRole('button', { name: `Description for ${label}` })).toBeDefined()
+    }
+  })
+
   it('opens and renders base fields without the gated block', async () => {
     renderWithProviders(<CreateComponentButton />)
     await openScratch()
     expect(screen.getByText('Create Component')).toBeDefined()
     expect(screen.getByPlaceholderText('my-component')).toBeDefined()
-    expect(screen.getByLabelText(/build system/i)).toBeDefined()
+    expect(screen.getByLabelText(/^build system/i)).toBeDefined()
     // Gated block hidden by default (external on, explicit off).
     expect(screen.queryByText(/required for explicit \+ external/i)).toBeNull()
   })
@@ -213,7 +241,7 @@ describe('CreateComponentDialog — scratch mode base', () => {
     renderWithProviders(<CreateComponentButton />)
     await openScratch()
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
-    await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
+    await userEvent.selectOptions(screen.getByLabelText(/^build system/i), 'MAVEN')
     const input = screen.getByPlaceholderText('AD userkey')
     await userEvent.type(input, 'alice')
     fireEvent.blur(input)
@@ -234,7 +262,7 @@ describe('CreateComponentDialog — scratch mode base', () => {
     renderWithProviders(<CreateComponentButton />)
     await openScratch()
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
-    await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
+    await userEvent.selectOptions(screen.getByLabelText(/^build system/i), 'MAVEN')
     const input = screen.getByPlaceholderText('AD userkey')
     await userEvent.type(input, 'asdfd')
     fireEvent.blur(input)
@@ -254,7 +282,7 @@ describe('CreateComponentDialog — scratch mode base', () => {
     renderWithProviders(<CreateComponentButton />)
     await openScratch()
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
-    await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
+    await userEvent.selectOptions(screen.getByLabelText(/^build system/i), 'MAVEN')
     await commitComponentOwner('alice')
 
     const input = screen.getByPlaceholderText('AD userkey')
@@ -291,6 +319,279 @@ describe('CreateComponentDialog — scratch mode base', () => {
     })
     expect(mockNavigate).toHaveBeenCalledWith('/components/comp-1')
   })
+
+  it('includes the change metadata (jiraTaskKey + comment) in the create payload', async () => {
+    mockMutateAsync.mockResolvedValue({ id: 'comp-1', name: 'widget' })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await fillBaseFields()
+    await userEvent.type(screen.getByLabelText(/jira task key/i), 'ABC-123')
+    await userEvent.type(screen.getByLabelText(/^comment/i), 'initial setup')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalled())
+    expect(mockMutateAsync.mock.calls[0]![0]).toMatchObject({
+      jiraTaskKey: 'ABC-123',
+      changeComment: 'initial setup',
+    })
+  })
+
+  it('disables Create on a malformed Jira task key', async () => {
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await userEvent.type(screen.getByLabelText(/jira task key/i), 'not a key')
+    expect(screen.getByText(/jira task key like ABC-123/i)).toBeDefined()
+    expect((screen.getByRole('button', { name: /^create$/i }) as HTMLButtonElement).disabled).toBe(true)
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('does not POST a malformed Jira key on an implicit (Enter) form submit', async () => {
+    // The Jira key lives outside RHF, so the disabled button is not the only
+    // path: an implicit submit (Enter in a field) reaches handleSubmit. The
+    // onSubmit guard must still block the POST even with otherwise-valid fields.
+    mockMutateAsync.mockResolvedValue({ id: 'comp-1', name: 'widget' })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await fillBaseFields()
+    await userEvent.type(screen.getByLabelText(/jira task key/i), 'not a key')
+    fireEvent.submit(screen.getByPlaceholderText('my-component').closest('form')!)
+    await waitFor(() => expect(screen.getByText(/jira task key like ABC-123/i)).toBeDefined())
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+})
+
+describe('CreateComponentDialog — component-defaults prefill (scratch)', () => {
+  function withDefaults(data: unknown) {
+    mockUseComponentDefaults.mockReturnValue({ data, isSuccess: true, isError: false, isLoading: false })
+  }
+
+  it('prefills the build system from component-defaults', async () => {
+    withDefaults({ buildSystem: 'GRADLE', vcs: { tag: '$module-$version' } })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    expect((screen.getByLabelText(/^build system/i) as HTMLSelectElement).value).toBe('GRADLE')
+  })
+
+  it('does NOT prefill a deprecated default build system (would desync the dropdown)', async () => {
+    withDefaults({ buildSystem: 'BS2_0' })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    expect((screen.getByLabelText(/^build system/i) as HTMLSelectElement).value).toBe('')
+  })
+
+  it('prefills displayName, copyright, distribution flags and Jira project key from defaults', async () => {
+    withDefaults({
+      buildSystem: 'MAVEN',
+      componentDisplayName: 'Default Display',
+      copyright: '(c) 2026 Acme',
+      jira: { projectKey: 'DEF' },
+      distribution: { explicit: true, external: true },
+    })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    expect((screen.getByLabelText(/^display name/i) as HTMLInputElement).value).toBe('Default Display')
+    expect((screen.getByLabelText(/^jira project key/i) as HTMLInputElement).value).toBe('DEF')
+    // explicit+external default opens the gated block, where Copyright lives.
+    await waitFor(() => expect(screen.getByText(/required for explicit \+ external/i)).toBeDefined())
+    expect((screen.getByLabelText(/^copyright/i) as HTMLInputElement).value).toBe('(c) 2026 Acme')
+    const explicit = screen.getByLabelText(/^explicit/i) as HTMLInputElement
+    const external = screen.getByLabelText(/^external/i) as HTMLInputElement
+    expect(explicit.checked).toBe(true)
+    expect(external.checked).toBe(true)
+  })
+
+  it('falls back to empty/scratch values when no defaults are configured', async () => {
+    withDefaults({})
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    expect((screen.getByLabelText(/^build system/i) as HTMLSelectElement).value).toBe('')
+    expect((screen.getByLabelText(/^display name/i) as HTMLInputElement).value).toBe('')
+    // external on / explicit off → the gated block stays hidden by default.
+    expect(screen.queryByText(/required for explicit \+ external/i)).toBeNull()
+  })
+
+  it('honors an explicit `external: false` default (?? must beat the scratch default of true)', async () => {
+    withDefaults({ distribution: { explicit: false, external: false } })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    expect((screen.getByLabelText(/^external/i) as HTMLInputElement).checked).toBe(false)
+    expect((screen.getByLabelText(/^explicit/i) as HTMLInputElement).checked).toBe(false)
+  })
+
+  it('does NOT submit a copyright default in a non-gated flow (field is hidden there)', async () => {
+    mockMutateAsync.mockResolvedValue({ id: 'comp-1', name: 'widget' })
+    // copyright default present, but distribution stays non-gated (external only).
+    withDefaults({ copyright: '(c) 2026 Acme', vcs: { tag: '$module-$version' } })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    // Copyright field is not rendered outside the gated block.
+    expect(screen.queryByLabelText(/copyright/i)).toBeNull()
+    await fillBaseFields()
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalled())
+    expect('copyright' in mockMutateAsync.mock.calls[0]![0]).toBe(false)
+  })
+
+  it('clears a default build system that is not among the offered options (config drift)', async () => {
+    withDefaults({ buildSystem: 'NOT_A_REAL_SYSTEM' })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await waitFor(() =>
+      expect((screen.getByLabelText(/^build system/i) as HTMLSelectElement).value).toBe(''),
+    )
+  })
+
+  it('prefills the Jira version formats from defaults and submits them (jira aspect + hotfix)', async () => {
+    mockMutateAsync.mockResolvedValue({ id: 'comp-1', name: 'widget' })
+    withDefaults({
+      vcs: { tag: '$module-$version' },
+      jira: {
+        componentVersionFormat: {
+          majorVersionFormat: '$major.$minor',
+          releaseVersionFormat: '$major.$minor.$service',
+          hotfixVersionFormat: '$major.$minor.$service-$fix',
+        },
+      },
+    })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    expect((screen.getByLabelText(/^major version format/i) as HTMLInputElement).value).toBe('$major.$minor')
+    expect((screen.getByLabelText(/^release version format/i) as HTMLInputElement).value).toBe('$major.$minor.$service')
+    expect((screen.getByLabelText(/^hotfix version format/i) as HTMLInputElement).value).toBe('$major.$minor.$service-$fix')
+    // build/line have no default → empty.
+    expect((screen.getByLabelText(/^build version format/i) as HTMLInputElement).value).toBe('')
+    await fillBaseFields()
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalled())
+    const arg = mockMutateAsync.mock.calls[0]![0]
+    expect(arg.baseConfiguration.jira).toMatchObject({
+      majorVersionFormat: '$major.$minor',
+      releaseVersionFormat: '$major.$minor.$service',
+    })
+    expect(arg.jiraHotfixVersionFormat).toBe('$major.$minor.$service-$fix')
+  })
+})
+
+describe('CreateComponentDialog — artifact ownership "Specific artifacts" (EXPLICIT)', () => {
+  it('reveals an artifact-tokens input when "Specific artifacts" is selected', async () => {
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    expect(screen.queryByLabelText('Artifact IDs')).toBeNull()
+    await userEvent.click(screen.getByRole('radio', { name: /specific artifacts/i }))
+    expect(screen.getByLabelText('Artifact IDs')).toBeDefined()
+  })
+
+  it('submits EXPLICIT ownership with artifact tokens', async () => {
+    mockMutateAsync.mockResolvedValue({ id: 'comp-1', name: 'widget' })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await fillBaseFields()
+    await userEvent.type(screen.getByLabelText('Artifact ownership'), 'com.example.foo')
+    await userEvent.click(screen.getByRole('radio', { name: /specific artifacts/i }))
+    await userEvent.type(screen.getByLabelText('Artifact IDs'), 'foo,bar,')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalled())
+    expect(mockMutateAsync.mock.calls[0]![0].artifactIds).toEqual([
+      { versionRange: null, groupPattern: 'com.example.foo', mode: 'EXPLICIT', artifactTokens: ['foo', 'bar'] },
+    ])
+  })
+
+  it('blocks submit when EXPLICIT is chosen with a group but no artifacts', async () => {
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await fillBaseFields()
+    await userEvent.type(screen.getByLabelText('Artifact ownership'), 'com.example.foo')
+    await userEvent.click(screen.getByRole('radio', { name: /specific artifacts/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(screen.getByText(/add at least one artifact/i)).toBeDefined())
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+})
+
+describe('CreateComponentDialog — supported-groupId prefix validation', () => {
+  beforeEach(() => {
+    mockUseSupportedGroups.mockReturnValue({ groups: ['com.acme'], isLoading: false })
+  })
+
+  it('blocks an ownership group that lacks a supported prefix', async () => {
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await fillBaseFields()
+    await userEvent.type(screen.getByLabelText('Artifact ownership'), 'org.unsupported.x')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(screen.getByText(/must start with a supported prefix/i)).toBeDefined())
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('accepts an ownership group under a supported prefix', async () => {
+    mockMutateAsync.mockResolvedValue({ id: 'comp-1', name: 'widget' })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await fillBaseFields()
+    await userEvent.type(screen.getByLabelText('Artifact ownership'), 'com.acme.x')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalled())
+  })
+
+  it('blocks a maven GAV Group ID that lacks a supported prefix (gated)', async () => {
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await fillBaseFields()
+    await userEvent.click(screen.getByLabelText(/^explicit/i)) // → gated block
+    await waitFor(() => expect(screen.getByText(/required for explicit \+ external/i)).toBeDefined())
+    await userEvent.type(screen.getByLabelText('Group ID'), 'org.bad')
+    await userEvent.type(screen.getByLabelText('Artifact ID'), 'svc')
+    await userEvent.type(screen.getAllByPlaceholderText('Add person')[0]!, 'rm-bob')
+    await userEvent.type(screen.getAllByPlaceholderText('Add person')[1]!, 'sc-bob')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(screen.getByText(/group id .* must start with a supported prefix/i)).toBeDefined())
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+})
+
+describe('CreateComponentDialog — VCS host validation', () => {
+  beforeEach(() => {
+    mockUsePortalLinks.mockReturnValue({ data: { gitBaseUrl: 'https://bitbucket.example.com' } })
+  })
+
+  it('hints a full ssh URL with the ecosystem Bitbucket host in the placeholder', async () => {
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await userEvent.selectOptions(screen.getByLabelText(/^build system/i), 'MAVEN')
+    expect((screen.getByLabelText(/^vcs url/i) as HTMLInputElement).placeholder).toBe(
+      'ssh://git@bitbucket.example.com/PROJECT/repo.git',
+    )
+  })
+
+  it('blocks a VCS URL on a non-ecosystem host', async () => {
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await userEvent.selectOptions(screen.getByLabelText(/^build system/i), 'MAVEN')
+    await userEvent.type(screen.getByLabelText(/^vcs url/i), 'ssh://git@github.com/proj/repo.git')
+    await userEvent.type(screen.getByLabelText(/^jira project key/i), 'WIDG')
+    await commitComponentOwner()
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() =>
+      expect(screen.getByText(/vcs host must be bitbucket\.example\.com/i)).toBeDefined(),
+    )
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('accepts a VCS URL on the ecosystem Bitbucket host', async () => {
+    mockMutateAsync.mockResolvedValue({ id: 'comp-1', name: 'widget' })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await userEvent.selectOptions(screen.getByLabelText(/^build system/i), 'MAVEN')
+    await userEvent.type(
+      screen.getByLabelText(/^vcs url/i),
+      'ssh://git@bitbucket.example.com:7999/proj/repo.git',
+    )
+    await userEvent.type(screen.getByLabelText(/^jira project key/i), 'WIDG')
+    await commitComponentOwner()
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalled())
+  })
 })
 
 describe('CreateComponentDialog — VCS block (legacy build-system rule)', () => {
@@ -306,7 +607,7 @@ describe('CreateComponentDialog — VCS block (legacy build-system rule)', () =>
 
   it('shows the VCS block for MAVEN with tag prefilled from component-defaults and branch fallback "master"', async () => {
     await open()
-    await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
+    await userEvent.selectOptions(screen.getByLabelText(/^build system/i), 'MAVEN')
     expect((screen.getByLabelText(/^vcs url/i) as HTMLInputElement).value).toBe('')
     expect((screen.getByLabelText(/^tag/i) as HTMLInputElement).value).toBe('$module-$version')
     // component-defaults carries no vcs.branch → portal fallback.
@@ -315,13 +616,13 @@ describe('CreateComponentDialog — VCS block (legacy build-system rule)', () =>
 
   it('hides the VCS block for the exempt build system PROVIDED', async () => {
     await open()
-    await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'PROVIDED')
+    await userEvent.selectOptions(screen.getByLabelText(/^build system/i), 'PROVIDED')
     expect(screen.queryByLabelText(/^vcs url/i)).toBeNull()
   })
 
   it('does not offer deprecated BS2_0 in the build-system dropdown', async () => {
     await open()
-    const select = screen.getByLabelText(/build system/i) as HTMLSelectElement
+    const select = screen.getByLabelText(/^build system/i) as HTMLSelectElement
     const values = Array.from(select.options).map((o) => o.value)
     expect(values).not.toContain('BS2_0')
     expect(values).toContain('MAVEN')
@@ -330,8 +631,8 @@ describe('CreateComponentDialog — VCS block (legacy build-system rule)', () =>
   it('blocks submit with an inline error when VCS URL is empty for a VCS-requiring build system', async () => {
     await open()
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
-    await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
-    await userEvent.type(screen.getByLabelText(/jira project key/i), 'WIDG')
+    await userEvent.selectOptions(screen.getByLabelText(/^build system/i), 'MAVEN')
+    await userEvent.type(screen.getByLabelText(/^jira project key/i), 'WIDG')
     await commitComponentOwner()
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() => expect(screen.getByText(/vcs url is required/i)).toBeDefined())
@@ -341,9 +642,9 @@ describe('CreateComponentDialog — VCS block (legacy build-system rule)', () =>
   it('rejects a non-ssh URL with a format error', async () => {
     await open()
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
-    await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
+    await userEvent.selectOptions(screen.getByLabelText(/^build system/i), 'MAVEN')
     await userEvent.type(screen.getByLabelText(/^vcs url/i), 'https://host/proj/repo.git')
-    await userEvent.type(screen.getByLabelText(/jira project key/i), 'WIDG')
+    await userEvent.type(screen.getByLabelText(/^jira project key/i), 'WIDG')
     await commitComponentOwner()
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() => expect(screen.getByText(/must be an ssh:\/\/ url/i)).toBeDefined())
@@ -353,11 +654,11 @@ describe('CreateComponentDialog — VCS block (legacy build-system rule)', () =>
   it('blocks submit when a prefilled tag/branch is cleared', async () => {
     await open()
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
-    await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
+    await userEvent.selectOptions(screen.getByLabelText(/^build system/i), 'MAVEN')
     await userEvent.type(screen.getByLabelText(/^vcs url/i), 'ssh://git@host/proj/repo.git')
     await userEvent.clear(screen.getByLabelText(/^tag/i))
     await userEvent.clear(screen.getByLabelText(/^production branch/i))
-    await userEvent.type(screen.getByLabelText(/jira project key/i), 'WIDG')
+    await userEvent.type(screen.getByLabelText(/^jira project key/i), 'WIDG')
     await commitComponentOwner()
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() => expect(screen.getByText(/tag is required/i)).toBeDefined())
@@ -368,7 +669,7 @@ describe('CreateComponentDialog — VCS block (legacy build-system rule)', () =>
   it('blocks submit with an inline error when Jira Project Key is empty', async () => {
     await open()
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
-    await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
+    await userEvent.selectOptions(screen.getByLabelText(/^build system/i), 'MAVEN')
     await userEvent.type(screen.getByLabelText(/^vcs url/i), 'ssh://git@host/proj/repo.git')
     await commitComponentOwner()
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
@@ -384,7 +685,7 @@ describe('CreateComponentDialog — VCS block (legacy build-system rule)', () =>
       isLoading: false,
     })
     await open()
-    await userEvent.selectOptions(screen.getByLabelText(/build system/i), 'MAVEN')
+    await userEvent.selectOptions(screen.getByLabelText(/^build system/i), 'MAVEN')
     expect((screen.getByLabelText(/^tag/i) as HTMLInputElement).value).toBe('')
     expect((screen.getByLabelText(/^production branch/i) as HTMLInputElement).value).toBe('master')
   })
@@ -413,7 +714,7 @@ describe('CreateComponentDialog — field-config visibility gating', () => {
     renderWithProviders(<CreateComponentButton />)
     await openScratch()
     await fillBaseFields()
-    await userEvent.click(screen.getByLabelText(/explicit/i)) // → explicit+external gated block
+    await userEvent.click(screen.getByLabelText(/^explicit/i)) // → explicit+external gated block
     await waitFor(() => expect(screen.getByText(/required for explicit \+ external/i)).toBeDefined())
     // Copyright gone; the other gated fields remain.
     expect(screen.queryByLabelText(/copyright/i)).toBeNull()
@@ -428,7 +729,7 @@ describe('CreateComponentDialog — explicit+external gated block', () => {
     await openScratch()
     await fillBaseFields()
     // external already on; toggle explicit on → gated.
-    await userEvent.click(screen.getByLabelText(/explicit/i))
+    await userEvent.click(screen.getByLabelText(/^explicit/i))
     await waitFor(() => expect(screen.getByText(/required for explicit \+ external/i)).toBeDefined())
   }
 
@@ -479,6 +780,17 @@ describe('CreateComponentDialog — explicit+external gated block', () => {
     const values = Array.from(typeSelect.options).map((o) => o.value)
     expect(values).toEqual(['DEB', 'RPM'])
   })
+
+  it('the distribution-coordinate hint path follows the selected coordinate type', async () => {
+    await makeGated()
+    const infoPath = () =>
+      screen.getByRole('button', { name: 'Description for Distribution coordinate' }).getAttribute('data-field-path')
+    expect(infoPath()).toBe('distribution.mavenArtifacts')
+    await userEvent.selectOptions(screen.getByLabelText(/^distribution coordinate/i), 'docker')
+    expect(infoPath()).toBe('distribution.dockerImages')
+    await userEvent.selectOptions(screen.getByLabelText(/^distribution coordinate/i), 'package')
+    expect(infoPath()).toBe('distribution.packages')
+  })
 })
 
 describe('CreateComponentDialog — copy mode (sourceId)', () => {
@@ -490,7 +802,7 @@ describe('CreateComponentDialog — copy mode (sourceId)', () => {
   // is never copied, so every submitting test must supply both.
   async function fillCopyRequired() {
     await userEvent.type(screen.getByLabelText(/^vcs url/i), 'ssh://git@host/clone/repo.git')
-    await userEvent.type(screen.getByLabelText(/jira project key/i), 'CLONE')
+    await userEvent.type(screen.getByLabelText(/^jira project key/i), 'CLONE')
   }
 
   function renderCopy(onOpenChange = vi.fn()) {
@@ -519,11 +831,36 @@ describe('CreateComponentDialog — copy mode (sourceId)', () => {
     renderCopy()
     // displayName is UNIQUE, so copy mode must NOT prefill it — the user supplies a fresh one.
     await waitFor(() =>
-      expect((screen.getByLabelText(/display name/i) as HTMLInputElement).value).toBe(''),
+      expect((screen.getByLabelText(/^display name/i) as HTMLInputElement).value).toBe(''),
     )
-    expect((screen.getByLabelText(/component key/i) as HTMLInputElement).value).toBe('')
-    expect((screen.getByLabelText(/build system/i) as HTMLSelectElement).value).toBe('GRADLE')
+    expect((screen.getByLabelText(/^component key/i) as HTMLInputElement).value).toBe('')
+    expect((screen.getByLabelText(/^build system/i) as HTMLSelectElement).value).toBe('GRADLE')
     expect((screen.getByPlaceholderText('AD userkey') as HTMLInputElement).value).toBe('alice')
+  })
+
+  it('ignores component-defaults in copy mode (source drives the form, not the defaults)', async () => {
+    mockUseComponentDefaults.mockReturnValue({
+      data: {
+        buildSystem: 'MAVEN',
+        componentDisplayName: 'Default Display',
+        copyright: '(c) 2026 Acme',
+        jira: { projectKey: 'DEF' },
+        distribution: { explicit: true, external: true },
+        vcs: { tag: '$module-$version' },
+      } as unknown,
+      isSuccess: true,
+      isError: false,
+      isLoading: false,
+    })
+    loaded() // source builds with GRADLE, no displayName/jira copied
+    renderCopy()
+    // Build system comes from the SOURCE (GRADLE), not the default (MAVEN).
+    await waitFor(() =>
+      expect((screen.getByLabelText(/^build system/i) as HTMLSelectElement).value).toBe('GRADLE'),
+    )
+    // Unique fields are never prefilled from defaults in copy mode.
+    expect((screen.getByLabelText(/^display name/i) as HTMLInputElement).value).toBe('')
+    expect((screen.getByLabelText(/^jira project key/i) as HTMLInputElement).value).toBe('')
   })
 
   it('source loading disables Create; source error shows InlineError', () => {
@@ -546,8 +883,8 @@ describe('CreateComponentDialog — copy mode (sourceId)', () => {
   it('keeps typed key + edited display name across a background source refetch', async () => {
     loaded()
     const { onOpenChange, view } = renderCopy()
-    await userEvent.type(screen.getByLabelText(/component key/i), 'svc-beta')
-    const dn = screen.getByLabelText(/display name/i)
+    await userEvent.type(screen.getByLabelText(/^component key/i), 'svc-beta')
+    const dn = screen.getByLabelText(/^display name/i)
     await userEvent.clear(dn)
     await userEvent.type(dn, 'Edited Name')
     // fresh source object identity (refetch)
@@ -561,15 +898,15 @@ describe('CreateComponentDialog — copy mode (sourceId)', () => {
         </TooltipProvider>
       </QueryClientProvider>,
     )
-    expect((screen.getByLabelText(/component key/i) as HTMLInputElement).value).toBe('svc-beta')
-    expect((screen.getByLabelText(/display name/i) as HTMLInputElement).value).toBe('Edited Name')
+    expect((screen.getByLabelText(/^component key/i) as HTMLInputElement).value).toBe('svc-beta')
+    expect((screen.getByLabelText(/^display name/i) as HTMLInputElement).value).toBe('Edited Name')
   })
 
   it('explicit+external source with empty RM/SC blocks submit (the original 400 case)', async () => {
     loaded(makeSource({ distributionExplicit: true, distributionExternal: true, releaseManager: [], securityChampion: [] }))
     renderCopy()
     await waitFor(() => expect(screen.getByText(/required for explicit \+ external/i)).toBeDefined())
-    await userEvent.type(screen.getByLabelText(/component key/i), 'svc-clone')
+    await userEvent.type(screen.getByLabelText(/^component key/i), 'svc-clone')
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() => expect(screen.getByText(/at least one release manager/i)).toBeDefined())
     expect(mockMutateAsync).not.toHaveBeenCalled()
@@ -595,8 +932,8 @@ describe('CreateComponentDialog — copy mode (sourceId)', () => {
       }),
     )
     renderCopy()
-    await userEvent.type(screen.getByLabelText(/component key/i), 'svc-clone')
-    await userEvent.type(screen.getByLabelText(/display name/i), 'Svc Clone')
+    await userEvent.type(screen.getByLabelText(/^component key/i), 'svc-clone')
+    await userEvent.type(screen.getByLabelText(/^display name/i), 'Svc Clone')
     await userEvent.type(screen.getByLabelText('Group ID'), 'org.acme')
     await userEvent.type(screen.getByLabelText('Artifact ID'), 'svc')
     await fillCopyRequired()
@@ -609,8 +946,8 @@ describe('CreateComponentDialog — copy mode (sourceId)', () => {
     mockMutateAsync.mockRejectedValue(new ApiError(409, 'conflict'))
     loaded()
     renderCopy()
-    await userEvent.type(screen.getByLabelText(/component key/i), 'svc-alpha')
-    await userEvent.type(screen.getByLabelText(/display name/i), 'Svc Alpha')
+    await userEvent.type(screen.getByLabelText(/^component key/i), 'svc-alpha')
+    await userEvent.type(screen.getByLabelText(/^display name/i), 'Svc Alpha')
     await fillCopyRequired()
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() =>
@@ -632,8 +969,8 @@ describe('CreateComponentDialog — copy mode (sourceId)', () => {
     )
     loaded()
     renderCopy()
-    await userEvent.type(screen.getByLabelText(/component key/i), 'svc-alpha')
-    await userEvent.type(screen.getByLabelText(/display name/i), 'Svc Alpha')
+    await userEvent.type(screen.getByLabelText(/^component key/i), 'svc-alpha')
+    await userEvent.type(screen.getByLabelText(/^display name/i), 'Svc Alpha')
     await fillCopyRequired()
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() =>
@@ -645,8 +982,8 @@ describe('CreateComponentDialog — copy mode (sourceId)', () => {
     mockMutateAsync.mockResolvedValue({ id: 'comp-9', name: 'svc-clone' })
     loaded()
     const { onOpenChange } = renderCopy()
-    await userEvent.type(screen.getByLabelText(/component key/i), 'svc-clone')
-    await userEvent.type(screen.getByLabelText(/display name/i), 'Svc Clone')
+    await userEvent.type(screen.getByLabelText(/^component key/i), 'svc-clone')
+    await userEvent.type(screen.getByLabelText(/^display name/i), 'Svc Clone')
     await fillCopyRequired()
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/components/comp-9'))
@@ -731,7 +1068,7 @@ describe('CreateComponentDialog — copy mode (sourceId)', () => {
     )
     renderCopy()
     await waitFor(() =>
-      expect((screen.getByLabelText(/build system/i) as HTMLSelectElement).value).toBe(''),
+      expect((screen.getByLabelText(/^build system/i) as HTMLSelectElement).value).toBe(''),
     )
   })
 })

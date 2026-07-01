@@ -13,6 +13,7 @@ import {
 import { toast } from '@/hooks/use-toast'
 import { formatMigrationError } from '@/lib/migrationErrors'
 import { Button } from '@/components/ui/button'
+import { RelativeTime } from '@/components/ui/RelativeTime'
 import { StatusBanner } from '@/components/ui/status-banner'
 import {
   Dialog,
@@ -117,6 +118,7 @@ export function TeamCityResyncPanel() {
       <div className="flex items-center gap-3">
         <Button
           type="button"
+          variant={adminMode ? 'destructive' : 'default'}
           onClick={() => setConfirmOpen(true)}
           disabled={buttonDisabled}
           aria-busy={isRunning || startResync.isPending}
@@ -130,12 +132,17 @@ export function TeamCityResyncPanel() {
         </Button>
         {!adminMode && (
           <span className="text-xs text-muted-foreground">
-            Enable Admin mode in the footer to run resync.
+            Arm Admin mode above to run resync.
           </span>
         )}
         {adminMode && (componentsRunning || historyRunning) && !isRunning && (
           <span className="text-xs text-muted-foreground">
             {componentsRunning ? 'Components migration' : 'History migration'} is running — wait for it to finish.
+          </span>
+        )}
+        {jobData?.finishedAt && !isRunning && (
+          <span className="ml-auto text-xs text-muted-foreground">
+            Last run <RelativeTime ts={jobData.finishedAt} />
           </span>
         )}
       </div>
@@ -223,7 +230,7 @@ export function TeamCityResyncPanel() {
             <Button type="button" variant="outline" onClick={() => setConfirmOpen(false)}>
               Cancel
             </Button>
-            <Button type="button" onClick={runResync}>
+            <Button type="button" variant="destructive" onClick={runResync}>
               Confirm
             </Button>
           </DialogFooter>

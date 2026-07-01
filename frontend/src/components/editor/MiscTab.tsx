@@ -76,7 +76,7 @@ export function MiscTab({ component, form }: MiscTabProps) {
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setValue('parentComponentName', '', { shouldDirty: true })}
+                  onClick={() => setValue('parentComponentName', '', { shouldDirty: true, shouldTouch: true })}
                 >
                   Clear
                 </Button>
@@ -86,7 +86,9 @@ export function MiscTab({ component, form }: MiscTabProps) {
                 id="parentComponentName"
                 value={parentComponentName ?? ''}
                 excludeName={component.name}
-                onChange={(val) => setValue('parentComponentName', val, { shouldDirty: true })}
+                // shouldTouch:true so the GeneralTab hydration re-guard preserves a parent
+                // edit/clear (clear-to-'' == RHF default leaves dirtyFields empty) on tab switch.
+                onChange={(val) => setValue('parentComponentName', val, { shouldDirty: true, shouldTouch: true })}
                 placeholder={
                   canBeParent
                     ? 'A can-be-parent component cannot have a parent'

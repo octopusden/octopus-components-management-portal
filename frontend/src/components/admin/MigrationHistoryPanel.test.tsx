@@ -196,7 +196,7 @@ describe('MigrationHistoryPanel — admin gate', () => {
   it('disables Run history migration until adminMode is enabled', () => {
     renderPanel()
     expect(screen.getByRole('button', { name: /run history migration/i })).toBeDisabled()
-    expect(screen.getByText(/Enable Admin mode/i)).toBeDefined()
+    expect(screen.getByText(/Arm Admin mode above/i)).toBeDefined()
 
     act(() => useAdminMode.setState({ enabled: true }))
     expect(screen.getByRole('button', { name: /run history migration/i })).not.toBeDisabled()

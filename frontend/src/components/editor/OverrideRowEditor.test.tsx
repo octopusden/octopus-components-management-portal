@@ -1,32 +1,35 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { OverrideRowEditor } from './OverrideRowEditor'
 import type { FieldOverride } from '../../lib/types'
 
 // ---------------------------------------------------------------------------
-// Mock hooks
+// Mock hooks — item D: the modal queues the create/update into the page-level
+// override draft instead of an immediate POST/PATCH, and reads the effective
+// (draft-applied) set for overlap detection. (Mock-prefixed names so Vitest's
+// hoisted vi.mock factory may reference them.)
 // ---------------------------------------------------------------------------
 
-const mockCreateMutateAsync = vi.fn()
-const mockUpdateMutateAsync = vi.fn()
+const mockQueueCreate = vi.fn()
+const mockQueueUpdate = vi.fn()
 
 // Mutable list of existing field-overrides for overlap-detection tests.
-// Tests that need preset overrides assign to this array; useFieldOverrides
-// mock reads it lazily.
+// Tests that need preset overrides assign to this array; the draft mock reads
+// it lazily as the effective set.
 let mockOverridesList: FieldOverride[] = []
 
-vi.mock('../../hooks/useComponent', () => ({
-  useCreateFieldOverride: vi.fn(() => ({
-    mutateAsync: mockCreateMutateAsync,
-    isPending: false,
-  })),
-  useUpdateFieldOverride: vi.fn(() => ({
-    mutateAsync: mockUpdateMutateAsync,
-    isPending: false,
-  })),
-  useFieldOverrides: vi.fn(() => ({ data: mockOverridesList })),
+vi.mock('./overridesDraft', () => ({
+  useOverridesDraft: () => ({
+    serverOverrides: mockOverridesList,
+    effectiveOverrides: mockOverridesList,
+    isLoading: false,
+    isDirty: false,
+    queueCreate: mockQueueCreate,
+    queueUpdate: mockQueueUpdate,
+    queueDelete: vi.fn(),
+    reset: vi.fn(),
+  }),
 }))
 
 const mockToast = vi.fn()
@@ -104,16 +107,10 @@ function renderEditor(props: Partial<Parameters<typeof OverrideRowEditor>[0]> = 
   const defaults = {
     open: true,
     onOpenChange: vi.fn(),
-    componentId: 'c-1',
     mode: 'create' as const,
     ...props,
   }
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <OverrideRowEditor {...defaults} />
-    </QueryClientProvider>,
-  )
+  return render(<OverrideRowEditor {...defaults} />)
 }
 
 function makeScalarOverride(overrides: Partial<FieldOverride> = {}): FieldOverride {
@@ -154,8 +151,8 @@ function makeMarkerOverride(overrides: Partial<FieldOverride> = {}): FieldOverri
 
 describe('OverrideRowEditor — create mode', () => {
   beforeEach(() => {
-    mockCreateMutateAsync.mockReset()
-    mockUpdateMutateAsync.mockReset()
+    mockQueueCreate.mockReset()
+    mockQueueUpdate.mockReset()
     mockToast.mockReset()
     mockOverridesList = []
   })
@@ -296,8 +293,7 @@ describe('OverrideRowEditor — create mode', () => {
     expect(screen.getByRole('button', { name: /add artifact/i })).toBeDefined()
   })
 
-  it('calls useCreateFieldOverride with correct scalar string body on submit', async () => {
-    mockCreateMutateAsync.mockResolvedValue({})
+  it('queues a create with correct scalar string body on submit', async () => {
     renderEditor()
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
     await userEvent.selectOptions(select, 'build.javaVersion')
@@ -311,8 +307,8 @@ describe('OverrideRowEditor — create mode', () => {
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
     await waitFor(() => {
-      expect(mockCreateMutateAsync).toHaveBeenCalledOnce()
-      const body = mockCreateMutateAsync.mock.calls[0]![0]
+      expect(mockQueueCreate).toHaveBeenCalledOnce()
+      const body = mockQueueCreate.mock.calls[0]![0]
       expect(body.overriddenAttribute).toBe('build.javaVersion')
       expect(body.versionRange).toBe('[11,12)')
       expect(body.value).toBe('11')
@@ -321,8 +317,7 @@ describe('OverrideRowEditor — create mode', () => {
     })
   })
 
-  it('calls useCreateFieldOverride with correct marker body for requiredTools (deduped)', async () => {
-    mockCreateMutateAsync.mockResolvedValue({})
+  it('queues a create with correct marker body for requiredTools (deduped)', async () => {
     renderEditor()
     await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
@@ -335,8 +330,8 @@ describe('OverrideRowEditor — create mode', () => {
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
     await waitFor(() => {
-      expect(mockCreateMutateAsync).toHaveBeenCalledOnce()
-      const body = mockCreateMutateAsync.mock.calls[0]![0]
+      expect(mockQueueCreate).toHaveBeenCalledOnce()
+      const body = mockQueueCreate.mock.calls[0]![0]
       expect(body.overriddenAttribute).toBe('build.requiredTools')
       // Tagged-union invariant: value null for marker
       expect(body.value).toBeNull()
@@ -346,8 +341,7 @@ describe('OverrideRowEditor — create mode', () => {
     })
   })
 
-  it('calls useCreateFieldOverride with boolean true value for boolean attribute', async () => {
-    mockCreateMutateAsync.mockResolvedValue({})
+  it('queues a create with boolean true value for boolean attribute', async () => {
     renderEditor()
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
     await userEvent.selectOptions(select, 'build.deprecated')
@@ -360,8 +354,8 @@ describe('OverrideRowEditor — create mode', () => {
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
     await waitFor(() => {
-      expect(mockCreateMutateAsync).toHaveBeenCalledOnce()
-      const body = mockCreateMutateAsync.mock.calls[0]![0]
+      expect(mockQueueCreate).toHaveBeenCalledOnce()
+      const body = mockQueueCreate.mock.calls[0]![0]
       expect(body.overriddenAttribute).toBe('build.deprecated')
       expect(body.value).toBe(true)
       expect(body.markerChildren).toBeNull()
@@ -375,8 +369,8 @@ describe('OverrideRowEditor — create mode', () => {
 
 describe('OverrideRowEditor — edit mode (scalar)', () => {
   beforeEach(() => {
-    mockCreateMutateAsync.mockReset()
-    mockUpdateMutateAsync.mockReset()
+    mockQueueCreate.mockReset()
+    mockQueueUpdate.mockReset()
     mockToast.mockReset()
     mockOverridesList = []
   })
@@ -421,8 +415,7 @@ describe('OverrideRowEditor — edit mode (scalar)', () => {
     expect(screen.queryByRole('tab', { name: /marker/i })).toBeNull()
   })
 
-  it('calls useUpdateFieldOverride with correct body on submit', async () => {
-    mockUpdateMutateAsync.mockResolvedValue({})
+  it('queues an update with correct body on submit', async () => {
     renderEditor({ mode: 'edit', override: makeScalarOverride() })
 
     const versionInput = screen.getByLabelText('Version Range') as HTMLInputElement
@@ -435,9 +428,9 @@ describe('OverrideRowEditor — edit mode (scalar)', () => {
     await userEvent.click(screen.getByRole('button', { name: /^update$/i }))
 
     await waitFor(() => {
-      expect(mockUpdateMutateAsync).toHaveBeenCalledOnce()
-      const body = mockUpdateMutateAsync.mock.calls[0]![0]
-      expect(body.overrideId).toBe('fo-1')
+      expect(mockQueueUpdate).toHaveBeenCalledOnce()
+      expect(mockQueueUpdate.mock.calls[0]![0]).toBe('fo-1')
+      const body = mockQueueUpdate.mock.calls[0]![1]
       expect(body.versionRange).toBe('[17,18)')
       expect(body.value).toBe('17')
       expect(body.markerChildren).toBeNull()
@@ -451,8 +444,8 @@ describe('OverrideRowEditor — edit mode (scalar)', () => {
 
 describe('OverrideRowEditor — edit mode (marker)', () => {
   beforeEach(() => {
-    mockCreateMutateAsync.mockReset()
-    mockUpdateMutateAsync.mockReset()
+    mockQueueCreate.mockReset()
+    mockQueueUpdate.mockReset()
     mockToast.mockReset()
     mockOverridesList = []
   })
@@ -469,16 +462,15 @@ describe('OverrideRowEditor — edit mode (marker)', () => {
     expect((screen.getByDisplayValue('my-lib-*') as HTMLInputElement).value).toBe('my-lib-*')
   })
 
-  it('calls useUpdateFieldOverride with markerChildren body on submit', async () => {
-    mockUpdateMutateAsync.mockResolvedValue({})
+  it('queues an update with markerChildren body on submit', async () => {
     renderEditor({ mode: 'edit', override: makeMarkerOverride() })
 
     await userEvent.click(screen.getByRole('button', { name: /^update$/i }))
 
     await waitFor(() => {
-      expect(mockUpdateMutateAsync).toHaveBeenCalledOnce()
-      const body = mockUpdateMutateAsync.mock.calls[0]![0]
-      expect(body.overrideId).toBe('fo-2')
+      expect(mockQueueUpdate).toHaveBeenCalledOnce()
+      expect(mockQueueUpdate.mock.calls[0]![0]).toBe('fo-2')
+      const body = mockQueueUpdate.mock.calls[0]![1]
       expect(body.value).toBeNull()
       expect(body.markerChildren).not.toBeNull()
       expect(body.markerChildren.mavenArtifacts).toHaveLength(1)
@@ -522,8 +514,8 @@ describe('OverrideRowEditor — all six markers accessible', () => {
 
 describe('OverrideRowEditor — marker child trim + blank-row filter', () => {
   beforeEach(() => {
-    mockCreateMutateAsync.mockReset()
-    mockUpdateMutateAsync.mockReset()
+    mockQueueCreate.mockReset()
+    mockQueueUpdate.mockReset()
     mockToast.mockReset()
     mockOverridesList = []
   })
@@ -532,7 +524,6 @@ describe('OverrideRowEditor — marker child trim + blank-row filter', () => {
     // HTML5 `required` accepts `"   "` as non-empty, so the form-submit
     // gate does NOT catch whitespace-only required fields. Without the
     // trim+filter, that row reaches CRS as `vcsPath: "   "` and 400s.
-    mockCreateMutateAsync.mockResolvedValue({})
     renderEditor()
     await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
@@ -552,15 +543,14 @@ describe('OverrideRowEditor — marker child trim + blank-row filter', () => {
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
     await waitFor(() => {
-      expect(mockCreateMutateAsync).toHaveBeenCalledOnce()
-      const body = mockCreateMutateAsync.mock.calls[0]![0]
+      expect(mockQueueCreate).toHaveBeenCalledOnce()
+      const body = mockQueueCreate.mock.calls[0]![0]
       expect(body.markerChildren.vcsEntries).toHaveLength(1)
       expect(body.markerChildren.vcsEntries[0].vcsPath).toBe('ssh://git@host/repo')
     })
   })
 
   it('distribution.maven: whitespace-only artifactPattern row is dropped, surviving row is trimmed', async () => {
-    mockCreateMutateAsync.mockResolvedValue({})
     renderEditor()
     await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
@@ -585,8 +575,8 @@ describe('OverrideRowEditor — marker child trim + blank-row filter', () => {
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
     await waitFor(() => {
-      expect(mockCreateMutateAsync).toHaveBeenCalledOnce()
-      const body = mockCreateMutateAsync.mock.calls[0]![0]
+      expect(mockQueueCreate).toHaveBeenCalledOnce()
+      const body = mockQueueCreate.mock.calls[0]![0]
       expect(body.markerChildren.mavenArtifacts).toHaveLength(1)
       expect(body.markerChildren.mavenArtifacts[0].groupPattern).toBe('org.example.alpha')
       expect(body.markerChildren.mavenArtifacts[0].artifactPattern).toBe('my-lib-*')
@@ -605,14 +595,13 @@ describe('OverrideRowEditor — marker child trim + blank-row filter', () => {
 
 describe('OverrideRowEditor — full submit body for fileUrl/docker/packages markers', () => {
   beforeEach(() => {
-    mockCreateMutateAsync.mockReset()
-    mockUpdateMutateAsync.mockReset()
+    mockQueueCreate.mockReset()
+    mockQueueUpdate.mockReset()
     mockToast.mockReset()
     mockOverridesList = []
   })
 
-  it('calls useCreateFieldOverride with correct marker body for distribution.fileUrl', async () => {
-    mockCreateMutateAsync.mockResolvedValue({})
+  it('queues a create with correct marker body for distribution.fileUrl', async () => {
     renderEditor()
     await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
@@ -628,8 +617,8 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
     await waitFor(() => {
-      expect(mockCreateMutateAsync).toHaveBeenCalledOnce()
-      const body = mockCreateMutateAsync.mock.calls[0]![0]
+      expect(mockQueueCreate).toHaveBeenCalledOnce()
+      const body = mockQueueCreate.mock.calls[0]![0]
       expect(body.overriddenAttribute).toBe('distribution.fileUrl')
       expect(body.value).toBeNull()
       expect(body.markerChildren.fileUrlArtifacts).toEqual([
@@ -638,8 +627,7 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
     })
   })
 
-  it('calls useCreateFieldOverride with correct marker body for distribution.docker', async () => {
-    mockCreateMutateAsync.mockResolvedValue({})
+  it('queues a create with correct marker body for distribution.docker', async () => {
     renderEditor()
     await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
@@ -653,8 +641,8 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
     await waitFor(() => {
-      expect(mockCreateMutateAsync).toHaveBeenCalledOnce()
-      const body = mockCreateMutateAsync.mock.calls[0]![0]
+      expect(mockQueueCreate).toHaveBeenCalledOnce()
+      const body = mockQueueCreate.mock.calls[0]![0]
       expect(body.overriddenAttribute).toBe('distribution.docker')
       expect(body.value).toBeNull()
       expect(body.markerChildren.dockerImages).toEqual([
@@ -663,8 +651,7 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
     })
   })
 
-  it('calls useCreateFieldOverride with correct marker body for distribution.packages', async () => {
-    mockCreateMutateAsync.mockResolvedValue({})
+  it('queues a create with correct marker body for distribution.packages', async () => {
     renderEditor()
     await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
@@ -680,8 +667,8 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
     await waitFor(() => {
-      expect(mockCreateMutateAsync).toHaveBeenCalledOnce()
-      const body = mockCreateMutateAsync.mock.calls[0]![0]
+      expect(mockQueueCreate).toHaveBeenCalledOnce()
+      const body = mockQueueCreate.mock.calls[0]![0]
       expect(body.overriddenAttribute).toBe('distribution.packages')
       expect(body.value).toBeNull()
       expect(body.markerChildren.packages).toEqual([
@@ -693,8 +680,8 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
 
 describe('OverrideRowEditor — D5 closed-range enforcement', () => {
   beforeEach(() => {
-    mockCreateMutateAsync.mockReset()
-    mockUpdateMutateAsync.mockReset()
+    mockQueueCreate.mockReset()
+    mockQueueUpdate.mockReset()
     mockToast.mockReset()
     mockOverridesList = []
   })
@@ -707,10 +694,10 @@ describe('OverrideRowEditor — D5 closed-range enforcement', () => {
     await userEvent.type(valueInput, '11')
     // Range left empty — submit should be blocked
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
-    expect(mockCreateMutateAsync).not.toHaveBeenCalled()
+    expect(mockQueueCreate).not.toHaveBeenCalled()
   })
 
-  it('does not call createMutation when version range is open-upward [X,)', async () => {
+  it('queues a create for an open-upper range [2.0,) (ADR-018: from-X-onward overrides are first-class)', async () => {
     renderEditor()
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
     await userEvent.selectOptions(select, 'build.javaVersion')
@@ -718,14 +705,21 @@ describe('OverrideRowEditor — D5 closed-range enforcement', () => {
     const valueInput = screen.getByPlaceholderText('Value for Java Version')
     await userEvent.type(valueInput, '17')
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
-    expect(mockCreateMutateAsync).not.toHaveBeenCalled()
+    expect(mockQueueCreate).toHaveBeenCalledTimes(1)
+    expect(mockQueueCreate.mock.calls[0]?.[0]).toMatchObject({ versionRange: '[2.0,)' })
   })
 
-  it('renders inline error when range is open-upward', async () => {
+  it('does not queue a create for an all-versions range (,) and renders a base-default error', async () => {
     renderEditor()
-    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[2.0,)' } })
+    const select = screen.getByTestId('attr-select') as HTMLSelectElement
+    await userEvent.selectOptions(select, 'build.javaVersion')
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '(,)' } })
+    const valueInput = screen.getByPlaceholderText('Value for Java Version')
+    await userEvent.type(valueInput, '17')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    expect(mockQueueCreate).not.toHaveBeenCalled()
     await waitFor(() => {
-      expect(screen.getByText(/edit the base field instead/i)).toBeDefined()
+      expect(screen.getByText(/base default/i)).toBeDefined()
     })
   })
 
@@ -740,8 +734,8 @@ describe('OverrideRowEditor — D5 closed-range enforcement', () => {
 
 describe('OverrideRowEditor — overlap detection (pre-save)', () => {
   beforeEach(() => {
-    mockCreateMutateAsync.mockReset()
-    mockUpdateMutateAsync.mockReset()
+    mockQueueCreate.mockReset()
+    mockQueueUpdate.mockReset()
     mockToast.mockReset()
     mockOverridesList = []
   })
@@ -788,7 +782,7 @@ describe('OverrideRowEditor — overlap detection (pre-save)', () => {
     const valueInput = screen.getByPlaceholderText('Value for Java Version')
     await userEvent.type(valueInput, '11')
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
-    expect(mockCreateMutateAsync).not.toHaveBeenCalled()
+    expect(mockQueueCreate).not.toHaveBeenCalled()
   })
 
   it('ignores existing overrides on a different attribute', async () => {

@@ -115,3 +115,37 @@ describe('VcsTab field descriptions (FieldInfo)', () => {
     expect(tooltip).toHaveTextContent(fieldDescriptions['vcs.vcsPath']!)
   })
 })
+
+describe('VcsTab — VCS host validation', () => {
+  function renderWithGit(component: ComponentDetail, gitBaseUrl: string) {
+    function H() {
+      const section = useVcsSection(component)
+      return (
+        <TooltipProvider>
+          <VcsTab section={section} canEdit gitBaseUrl={gitBaseUrl} />
+        </TooltipProvider>
+      )
+    }
+    return render(<H />)
+  }
+
+  it('flags a VCS path on a non-ecosystem host', () => {
+    // makeComponent's entry points at example.com.
+    renderWithGit(makeComponent(), 'https://bitbucket.example.com')
+    expect(screen.getByText(/vcs host must be bitbucket\.example\.com/i)).toBeDefined()
+  })
+
+  it('shows no error when the VCS host matches the ecosystem Bitbucket', () => {
+    const c = makeComponent({
+      configurations: [
+        makeBaseRow({
+          vcsEntries: [
+            { id: 'v1', sortOrder: 0, name: 'main', vcsPath: 'ssh://git@bitbucket.example.com/r.git', repositoryType: 'GIT', tag: 't', branch: 'master', hotfixBranch: null },
+          ],
+        }),
+      ],
+    })
+    renderWithGit(c, 'https://bitbucket.example.com')
+    expect(screen.queryByText(/vcs host must be/i)).toBeNull()
+  })
+})

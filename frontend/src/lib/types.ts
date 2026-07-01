@@ -246,10 +246,22 @@ export interface DocLink {
   sortOrder: number
 }
 
+/**
+ * Artifact-ID ownership mode (#357). EXPLICIT = owns exactly the listed literal
+ * tokens; ALL_EXCEPT_CLAIMED = catch-all that yields to other components' EXPLICIT
+ * claims (single-group); ALL = owns every artifact under the group(s).
+ */
+export type ArtifactIdMode = 'EXPLICIT' | 'ALL_EXCEPT_CLAIMED' | 'ALL'
+
 export interface ArtifactId {
   id: string
+  /** `null`/ALL_VERSIONS for the base mapping; otherwise a per-range override. */
+  versionRange?: string | null
   groupPattern: string
-  artifactPattern: string
+  mode: ArtifactIdMode
+  artifactTokens: string[]
+  /** Server-computed legacy v1–v3 `artifactIdPattern` (read-only, for preview). */
+  legacyArtifactIdPattern?: string | null
 }
 
 export interface SecurityGroup {
@@ -312,8 +324,12 @@ export interface DocLinkRequest {
 }
 
 export interface ArtifactIdRequest {
+  /** Omit/`null` for the base mapping; else an existing configuration range. */
+  versionRange?: string | null
   groupPattern: string
-  artifactPattern: string
+  /** Omit to let the server default (ALL when tokenless, else EXPLICIT). */
+  mode?: ArtifactIdMode
+  artifactTokens: string[]
 }
 
 export interface SecurityGroupRequest {
@@ -375,6 +391,11 @@ export interface ComponentCreateRequest {
   securityGroups?: SecurityGroupRequest[]
   teamcityProjects?: TeamcityProjectRequest[]
   baseConfiguration?: BaseConfigurationRequest | null
+  // Change metadata recorded on the audit row (not on the component). Both
+  // optional; the Jira key, when non-blank, must match a Jira key (see
+  // lib/editor/jiraKey). Send a trimmed value or omit — never an empty string.
+  jiraTaskKey?: string | null
+  changeComment?: string | null
 }
 
 // JSON Merge Patch semantics: null scalar = "don't touch"; present collection
@@ -422,6 +443,17 @@ export interface ComponentUpdateRequest {
   securityGroups?: SecurityGroupRequest[] | null
   teamcityProjects?: TeamcityProjectRequest[] | null
   baseConfiguration?: BaseConfigurationRequest | null
+  // Item D: field overrides ride the component PATCH as a desired-FULL-SET.
+  // omit / null = don't touch overrides; a provided list is the complete set of
+  // V4-editable overrides (upsert by id, create id-less entries, delete any
+  // existing editable override not in the list), applied in the same transaction.
+  fieldOverrides?: FieldOverrideUpsert[] | null
+  // Change metadata recorded on the audit row (not on the component); not part
+  // of the component's patchable state. Both optional; the Jira key, when
+  // non-blank, must match a Jira key (see lib/editor/jiraKey). Send a trimmed
+  // value or omit — never an empty string.
+  jiraTaskKey?: string | null
+  changeComment?: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -506,6 +538,10 @@ export interface AuditLogEntry {
   newValue: Record<string, unknown> | null
   changeDiff: Record<string, unknown> | null
   correlationId: string | null
+  // Change metadata captured at save time (CRS AuditLogResponse). Optional so
+  // the portal tolerates older rows / a CRS deployed before this field landed.
+  jiraTaskKey?: string | null
+  changeComment?: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -537,6 +573,38 @@ export interface FieldOverride {
   markerChildren?: MarkerChildrenPayload | null
   createdAt: string | null
   updatedAt: string | null
+}
+
+// One entry of the desired-FULL-SET sent in ComponentUpdateRequest.fieldOverrides
+// (item D). Mirrors CRS FieldOverrideUpsertRequest: omit `id` to create, provide
+// it to upsert; value (scalar) XOR markerChildren (marker) carry the row's state.
+export interface FieldOverrideUpsert {
+  id?: string
+  overriddenAttribute: string
+  versionRange: string
+  // Widened to `unknown` (scalar overrides send string/number/boolean). The
+  // generated schema.d.ts types this `Record<string, never>` because CRS
+  // declares `value` as a bare `object` in the v4 OpenAPI — same as
+  // FieldOverrideCreateBody.value. Fixing the CRS schema (free-form / scalar
+  // union) is a follow-up; the hand-mirror stays correct at runtime.
+  value?: unknown
+  markerChildren?: MarkerChildrenPayload | null
+}
+
+// Supported versions (coverage) — the decoupled-version-model layer 1 (ADR-018).
+// `all = true` ⇔ the component is defined for every version (no bounded coverage rows);
+// otherwise `supported = ∪ ranges`. `warnings` carries non-blocking advisories from a PUT.
+export interface SupportedVersionsResponse {
+  all: boolean
+  ranges: string[]
+  warnings: string[]
+}
+
+// Declarative replacement: send `all: true` (or an empty `ranges`) for all-versions coverage,
+// else the desired non-overlapping set of supported ranges.
+export interface SupportedVersionsRequest {
+  all?: boolean
+  ranges?: string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -637,6 +705,98 @@ export interface HealthStatistics {
   componentsByOwner: Record<string, number>
   componentsByReleaseManager: Record<string, number>
   componentsBySecurityChampion: Record<string, number>
+}
+
+// ---------------------------------------------------------------------------
+// System / runtime metrics — admin System tab on the Admin Settings page.
+// Served by the portal BFF `GET /portal/metrics` (not CRS). Portal fields are
+// always present; CRS fields are best-effort and omitted (Jackson NON_NULL)
+// when unavailable, hence the optional markers.
+// ---------------------------------------------------------------------------
+
+/** Full JVM/system readout for the portal itself. */
+export interface PortalJvm {
+  heapUsedBytes: number
+  heapCommittedBytes: number
+  // null/omitted when the JVM reports no configured max (-1) → render an em-dash.
+  heapMaxBytes?: number | null
+  nonHeapUsedBytes: number
+  nonHeapCommittedBytes: number
+  threadsLive: number
+  threadsPeak: number
+  threadsDaemon: number
+  classesLoaded: number
+  classesTotalLoaded: number
+  classesUnloaded: number
+  gcCount: number
+  gcTimeMillis: number
+  // omitted when the CPU/load reading is unavailable.
+  cpuProcess?: number | null
+  cpuSystem?: number | null
+  systemLoadAverage?: number | null
+  availableProcessors: number
+}
+
+/** Best-effort subset of a service's JVM metrics — every field optional (any can degrade). */
+export interface ServiceJvm {
+  heapUsedBytes?: number | null
+  heapCommittedBytes?: number | null
+  heapMaxBytes?: number | null
+  threadsLive?: number | null
+  threadsPeak?: number | null
+  threadsDaemon?: number | null
+  gcCount?: number | null
+  gcTimeMillis?: number | null
+  cpuProcess?: number | null
+  cpuSystem?: number | null
+  availableProcessors?: number | null
+}
+
+/** A single actuator health component: its status and (best-effort) reason detail. */
+export interface ServiceComponentHealth {
+  status?: string | null
+  reason?: string | null
+}
+
+/** One interactive login captured by the portal (per-pod, in-memory). */
+export interface RecentLogin {
+  username: string
+  loginAt: string
+}
+
+export interface PortalRuntime {
+  uptimeMillis: number
+  startedAt: string
+  processId: number
+  javaVersion: string
+  jvm: PortalJvm
+  recentLogins: RecentLogin[]
+}
+
+/**
+ * Best-effort runtime readout for a downstream service (CRS or RMS) on the admin
+ * System tab. `reachable` distinguishes "answered the health probe but a component
+ * is degraded" from "unreachable"; `downComponents` names the DOWN aggregate
+ * components; `employeeService` mirrors the CRS person-validation component so the
+ * banner can name the real cause (absent for services without it, e.g. RMS).
+ */
+export interface ServiceRuntime {
+  available: boolean
+  reason?: string | null
+  status?: string | null
+  uptimeMillis?: number | null
+  jvm?: ServiceJvm | null
+  reachable?: boolean
+  downComponents?: string[]
+  employeeService?: ServiceComponentHealth | null
+}
+
+export interface SystemMetrics {
+  portal: PortalRuntime
+  crs: ServiceRuntime
+  // Optional so a frontend running against an older backend (rolling deploy /
+  // local dev) that omits `rms` degrades gracefully instead of crashing.
+  rms?: ServiceRuntime
 }
 
 // ---------------------------------------------------------------------------

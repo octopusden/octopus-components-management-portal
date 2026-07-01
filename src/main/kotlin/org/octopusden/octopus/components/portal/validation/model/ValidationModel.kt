@@ -1,5 +1,6 @@
 package org.octopusden.octopus.components.portal.validation.model
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import java.time.Instant
 
 /**
@@ -55,4 +56,10 @@ data class ValidationReport(
     val lastAttemptAt: Instant?,
     val refreshError: String? = null,
     val components: List<ComponentValidation>,
+    // Internal scheduling signal, NOT part of the API payload (@get:JsonIgnore): true when
+    // the last refresh was a migration SKIP. Folded into the report so refreshError and the
+    // skip flag are updated in ONE atomic assignment — nextDelayMillis() then reads a single
+    // immutable snapshot and can never observe an inconsistent in-between (the two separate
+    // @Volatile writes it replaced could be read mid-update).
+    @get:JsonIgnore val lastRunWasSkip: Boolean = false,
 )

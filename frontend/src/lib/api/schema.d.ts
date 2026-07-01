@@ -692,6 +692,22 @@ export interface paths {
         patch: operations["updateFieldOverride"];
         trace?: never;
     };
+    "/rest/api/4/components/{id}/supported-versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getSupportedVersions"];
+        put: operations["setSupportedVersions"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rest/api/4/config/component-defaults": {
         parameters: {
             query?: never;
@@ -777,17 +793,23 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         ArtifactIdRequest: {
-            artifactPattern: string;
+            artifactTokens: string[];
             groupPattern: string;
+            mode?: string;
+            versionRange?: string;
         };
         ArtifactIdResponse: {
-            artifactPattern: string;
+            artifactTokens: string[];
             groupPattern: string;
             /** Format: uuid */
             id: string;
+            legacyArtifactIdPattern?: string;
+            mode: string;
+            versionRange?: string;
         };
         AuditLogResponse: {
             action: string;
+            changeComment?: string;
             changeDiff?: {
                 [key: string]: Record<string, never>;
             };
@@ -800,6 +822,7 @@ export interface components {
             entityType: string;
             /** Format: int64 */
             id: number;
+            jiraTaskKey?: string;
             newValue?: {
                 [key: string]: Record<string, never>;
             };
@@ -898,6 +921,8 @@ export interface components {
             artifactIds?: components["schemas"]["ArtifactIdRequest"][];
             baseConfiguration: components["schemas"]["BaseConfigurationRequest"];
             canBeParent?: boolean;
+            /** @description Optional free-text comment describing the change; recorded on the audit row. */
+            changeComment?: string;
             clientCode?: string;
             componentOwner?: string;
             copyright?: string;
@@ -908,6 +933,8 @@ export interface components {
             group?: components["schemas"]["ComponentGroupRequest"];
             jiraDisplayName?: string;
             jiraHotfixVersionFormat?: string;
+            /** @description Optional Jira task key motivating the change (e.g. ABC-123); recorded on the audit row. */
+            jiraTaskKey?: string;
             labels?: string[];
             name: string;
             parentComponentName?: string;
@@ -999,6 +1026,8 @@ export interface components {
             artifactIds?: components["schemas"]["ArtifactIdRequest"][];
             baseConfiguration?: components["schemas"]["BaseConfigurationRequest"];
             canBeParent?: boolean;
+            /** @description Optional free-text comment describing the change; recorded on the audit row. */
+            changeComment?: string;
             clearGroup?: boolean;
             clearParent?: boolean;
             clientCode?: string;
@@ -1008,9 +1037,12 @@ export interface components {
             distributionExplicit?: boolean;
             distributionExternal?: boolean;
             docs?: components["schemas"]["DocLinkRequest"][];
+            fieldOverrides?: components["schemas"]["FieldOverrideUpsertRequest"][];
             group?: components["schemas"]["ComponentGroupRequest"];
             jiraDisplayName?: string;
             jiraHotfixVersionFormat?: string;
+            /** @description Optional Jira task key motivating the change (e.g. ABC-123); recorded on the audit row. */
+            jiraTaskKey?: string;
             labels?: string[];
             name?: string;
             parentComponentName?: string;
@@ -1108,6 +1140,14 @@ export interface components {
             markerChildren?: components["schemas"]["MarkerChildrenPayload"];
             value?: Record<string, never>;
             versionRange?: string;
+        };
+        FieldOverrideUpsertRequest: {
+            /** Format: uuid */
+            id?: string;
+            markerChildren?: components["schemas"]["MarkerChildrenPayload"];
+            overriddenAttribute: string;
+            value?: Record<string, never>;
+            versionRange: string;
         };
         FileUrlArtifactRequest: {
             artifactId?: string;
@@ -1363,6 +1403,15 @@ export interface components {
             empty?: boolean;
             sorted?: boolean;
             unsorted?: boolean;
+        };
+        SupportedVersionsRequest: {
+            all?: boolean;
+            ranges?: string[];
+        };
+        SupportedVersionsResponse: {
+            all: boolean;
+            ranges: string[];
+            warnings: string[];
         };
         TeamcityProjectRequest: {
             projectId: string;
@@ -2979,6 +3028,8 @@ export interface operations {
                 from?: string;
                 to?: string;
                 includeMigrated?: boolean;
+                jiraTaskKey?: string;
+                changeComment?: string;
                 pageable: components["schemas"]["Pageable"];
             };
             header?: never;
@@ -5471,6 +5522,180 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["FieldOverrideResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Early */
+            425: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getSupportedVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SupportedVersionsResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Early */
+            425: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    setSupportedVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportedVersionsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SupportedVersionsResponse"];
                 };
             };
             /** @description Bad Request */

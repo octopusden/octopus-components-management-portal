@@ -1,5 +1,7 @@
 package org.octopusden.octopus.components.portal.configuration
 
+import org.octopusden.octopus.components.portal.security.RecentLoginsTracker
+import org.octopusden.octopus.components.portal.security.RecordLoginSuccessHandler
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.security.config.Customizer
@@ -12,9 +14,12 @@ import org.springframework.security.web.server.DelegatingServerAuthenticationEnt
 import org.springframework.security.web.server.DelegatingServerAuthenticationEntryPoint.DelegateEntry
 import org.springframework.security.web.server.SecurityWebFilterChain
 import org.springframework.security.web.server.ServerAuthenticationEntryPoint
+import org.springframework.security.web.server.authentication.DelegatingServerAuthenticationSuccessHandler
 import org.springframework.security.web.server.authentication.RedirectServerAuthenticationEntryPoint
 import org.springframework.security.web.server.authentication.RedirectServerAuthenticationFailureHandler
+import org.springframework.security.web.server.authentication.RedirectServerAuthenticationSuccessHandler
 import org.springframework.security.web.server.authentication.logout.ServerLogoutSuccessHandler
+import org.springframework.security.web.server.savedrequest.WebSessionServerRequestCache
 import org.springframework.security.web.server.csrf.CookieServerCsrfTokenRepository
 import org.springframework.security.web.server.csrf.CsrfToken
 import org.springframework.security.web.server.csrf.ServerCsrfTokenRequestAttributeHandler
@@ -61,10 +66,15 @@ import reactor.core.publisher.Mono
 open class SecurityConfig(
     private val clientRegistrationRepository: ReactiveClientRegistrationRepository,
     private val apiJson401Writer: ApiJson401Writer,
+    private val recentLoginsTracker: RecentLoginsTracker,
 ) {
     @Bean
     open fun securityFilterChain(http: ServerHttpSecurity): SecurityWebFilterChain {
-        val apiMatcher: ServerWebExchangeMatcher = pathMatchers("/rest/**", "/auth/**", "/portal/validation/**")
+        // /portal/metrics is an XHR the SPA polls; on a mid-poll session expiry it must
+        // get the JSON 401 envelope (like /rest, /auth, /portal/validation) rather than
+        // an OIDC 302 that CORS-fails the fetch. It stays authenticated() (not permitAll).
+        val apiMatcher: ServerWebExchangeMatcher =
+            pathMatchers("/rest/**", "/auth/**", "/portal/validation/**", "/portal/metrics/**")
         val apiEntryPoint =
             ServerAuthenticationEntryPoint { exchange, _ ->
                 apiJson401Writer.write(exchange, ApiJson401Reason.UNAUTHENTICATED)
@@ -118,6 +128,25 @@ open class SecurityConfig(
                 // on an error page. Acceptable for now — that class of failure is a
                 // deploy-config bug, loud in server logs either way.
                 login.authenticationFailureHandler(RedirectServerAuthenticationFailureHandler("/"))
+                // Record the login for the admin "Recent logins" card. The single
+                // authenticationSuccessHandler(...) setter REPLACES the framework default
+                // (a RedirectServerAuthenticationSuccessHandler backed by a request cache
+                // that restores the originally-requested deep link after the OIDC round
+                // trip), so we must rebuild that behaviour, not just redirect to "/".
+                // DelegatingServerAuthenticationSuccessHandler runs handlers in order:
+                // record first (side-effect inside the Mono<Void> chain so it actually
+                // runs), then the default redirect. authentication.name is preferred_username
+                // (the configured user-name-attribute). WebSessionServerRequestCache is the
+                // framework default; set explicitly so the saved-request redirect is
+                // self-documenting and can't silently regress.
+                login.authenticationSuccessHandler(
+                    DelegatingServerAuthenticationSuccessHandler(
+                        RecordLoginSuccessHandler(recentLoginsTracker),
+                        RedirectServerAuthenticationSuccessHandler().apply {
+                            setRequestCache(WebSessionServerRequestCache())
+                        },
+                    ),
+                )
             }
             // Override the entry point AFTER oauth2Login registers its default so the
             // delegating one wins: it keeps browser OIDC redirect for navigations but

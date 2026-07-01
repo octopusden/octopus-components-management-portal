@@ -1,6 +1,7 @@
-import type { ComponentDetail, ComponentUpdateRequest } from '../types'
+import type { ArtifactIdRequest, ComponentDetail, ComponentUpdateRequest } from '../types'
 import type { GeneralFormValues } from '../../components/editor/GeneralTab'
 import type { FieldVisibility } from '../../hooks/useFieldConfig'
+import { groupTokens, toArtifactIdRequest } from '../artifactOwnership'
 
 // System is single-value per component. CRS PR #301 collapsed
 // `Component.systems Set<String>` → `Component.system String?`; the
@@ -29,6 +30,13 @@ export interface FieldVisibilities {
 // Subset of RHF `formState.dirtyFields` that drives clear/omit/REPLACE
 // decisions for fields where the form default (false / '' / []) overlaps
 // with a legitimate server value.
+//
+// NOTE: every flag here is a PRE-NORMALIZED plain boolean. The caller
+// (ComponentDetailPage.buildPatchRequest) collapses RHF's raw dirtyFields —
+// which are a per-element array for array fields once anything subscribes
+// formState.isDirty (see lib/editor/dirtyField.ts: isFieldDirty) — into these
+// booleans. That is why the `!== true` gates below are correct and must NOT be
+// changed to isFieldDirty: the array shape never reaches this layer.
 export interface DirtyFlags {
   solution?: boolean
   system?: boolean
@@ -37,6 +45,15 @@ export interface DirtyFlags {
   // clear back to the form default '' is caught (RHF clear-to-default blind-spot) while a
   // pristine/pre-hydration form omits it.
   displayName?: boolean
+  // componentOwner / clientCode / copyright are nullable top-level scalars with the SAME
+  // clear-to-default blind-spot as displayName: the old `values.X || undefined` collapsed a
+  // user's clear to `undefined` → omitted → JSON-merge-patch "don't touch" → the clear silently
+  // never persisted (and the SaveBar never went dirty). The page now passes these as "interacted"
+  // (dirty OR touched) so buildUpdateRequest value-compares against the persisted value and emits
+  // '' to clear (server stores null), exactly like displayName.
+  componentOwner?: boolean
+  clientCode?: boolean
+  copyright?: boolean
   // ui-swift-sloth §4: labels is now a multi-select array, and like systems
   // it needs a dirty-gate to block the form-default `[]` from clobbering
   // server data pre-hydration.
@@ -148,8 +165,17 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
       const prior = component.displayName ?? ''
       return next === prior ? undefined : next
     })(),
-    componentOwner:
-      visibilities.componentOwner === 'hidden' ? undefined : (values.componentOwner || undefined),
+    // componentOwner / clientCode / copyright: nullable top-level scalars. Mirror displayName —
+    // interacted-gated (dirty OR touched, passed by the page) value-compare against the persisted
+    // value: a real change is sent (a clear as "" — the server stores null), an unchanged value or
+    // a pre-hydration form is omitted. The old `values.X || undefined` silently dropped clears
+    // (`'' || undefined` → undefined → JSON-merge-patch "don't touch").
+    componentOwner: ((): string | undefined => {
+      if (visibilities.componentOwner === 'hidden' || dirtyFields.componentOwner !== true) return undefined
+      const next = (values.componentOwner ?? '').trim()
+      const prior = component.componentOwner ?? ''
+      return next === prior ? undefined : next
+    })(),
     // productType is owned by EscrowTab — never sent from the General save.
     // Two guards on `system`:
     //   - Pre-hydration: form mounts with `system: ''` BEFORE GeneralTab's
@@ -164,8 +190,12 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
       visibilities.system === 'hidden' || dirtyFields.system !== true || systemTrimmed === ''
         ? undefined
         : systemTrimmed,
-    clientCode:
-      visibilities.clientCode === 'hidden' ? undefined : (values.clientCode || undefined),
+    clientCode: ((): string | undefined => {
+      if (visibilities.clientCode === 'hidden' || dirtyFields.clientCode !== true) return undefined
+      const next = (values.clientCode ?? '').trim()
+      const prior = component.clientCode ?? ''
+      return next === prior ? undefined : next
+    })(),
     solution: solutionChanged ? values.solution : undefined,
     archived: archivedChanged ? values.archived : undefined,
     parentComponentName,
@@ -186,7 +216,12 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
       visibilities.securityChampion === 'hidden' || dirtyFields.securityChampion !== true
         ? undefined
         : securityChampionArray,
-    copyright: visibilities.copyright === 'hidden' ? undefined : (values.copyright || undefined),
+    copyright: ((): string | undefined => {
+      if (visibilities.copyright === 'hidden' || dirtyFields.copyright !== true) return undefined
+      const next = (values.copyright ?? '').trim()
+      const prior = component.copyright ?? ''
+      return next === prior ? undefined : next
+    })(),
     // labels semantics diverge from system (PR #44 P2 fix):
     //   - Pre-hydration guard mirrors system: !dirty → omit, so the
     //     form-default `[]` doesn't wipe server data before GeneralTab's
@@ -235,17 +270,21 @@ function buildArtifactIdsPatch(
   component: ComponentDetail,
   values: GeneralFormValues,
   dirtyFields: DirtyFlags,
-): { artifactIds?: { groupPattern: string; artifactPattern: string }[] } {
+): { artifactIds?: ArtifactIdRequest[] } {
+  // PATCH `artifactIds` is a FULL replacement of the component's ownership set, so it must be sent
+  // ONLY when the user actually edited ownership. Dirty-gate it exactly like labels/RM/SC: without
+  // this gate an unrelated General save (e.g. Display Name) re-sends a full ownership replacement that
+  // Review Changes shows as "unchanged" — a silent clobber risk. The editor's onChange sets
+  // shouldDirty, so a real edit flips the flag; pre-hydration / untouched stays !dirty → omit.
+  const dirty = !!dirtyFields.artifactIds
+  if (!dirty) return {}
+  // Drop mappings with no group token (incomplete rows); the server applies the remaining invariants.
   const cleaned = (values.artifactIds ?? [])
-    .map((a) => ({
-      groupPattern: (a.groupPattern ?? '').trim(),
-      artifactPattern: (a.artifactPattern ?? '').trim(),
-    }))
-    .filter((a) => a.groupPattern !== '' && a.artifactPattern !== '')
+    .filter((m) => groupTokens(m.groups).length > 0)
+    .map(toArtifactIdRequest)
   // `?? []` is defensive — see buildDocsPatch (older CRS omits artifactIds).
   const hadPrior = (component.artifactIds ?? []).length > 0
-  const dirty = !!dirtyFields.artifactIds
   if (cleaned.length > 0) return { artifactIds: cleaned }
-  if (dirty && hadPrior) return { artifactIds: [] }
+  if (hadPrior) return { artifactIds: [] }
   return {}
 }

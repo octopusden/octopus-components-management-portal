@@ -182,6 +182,104 @@ describe('buildUpdateRequest — displayName (nullable + value-compare)', () => 
   })
 })
 
+// Regression for the clear-to-empty silent-drop bug: componentOwner / clientCode /
+// copyright are nullable top-level scalars that were emitted as `values.X || undefined`,
+// so clearing them to '' collapsed to `undefined` → omitted from the PATCH → JSON merge
+// patch "don't touch" → the clear silently never persisted (and the SaveBar never even
+// went dirty). They must mirror displayName: interacted-gated value-compare, emit '' to
+// clear (server stores null), omit when unchanged or pre-hydration.
+const CLEARABLE_SCALARS = [
+  {
+    name: 'componentOwner',
+    comp: (v: string | null): Partial<ComponentDetail> => ({ componentOwner: v }),
+    vals: (v: string): Partial<GeneralFormValues> => ({ componentOwner: v }),
+    dirty: { componentOwner: true } as DirtyFlags,
+    hidden: (): FieldVisibilities => ({ ...EDITABLE, componentOwner: 'hidden' }),
+    read: (r: ReturnType<typeof buildUpdateRequest>) => r.componentOwner,
+  },
+  {
+    name: 'clientCode',
+    comp: (v: string | null): Partial<ComponentDetail> => ({ clientCode: v }),
+    vals: (v: string): Partial<GeneralFormValues> => ({ clientCode: v }),
+    dirty: { clientCode: true } as DirtyFlags,
+    hidden: (): FieldVisibilities => ({ ...EDITABLE, clientCode: 'hidden' }),
+    read: (r: ReturnType<typeof buildUpdateRequest>) => r.clientCode,
+  },
+  {
+    name: 'copyright',
+    comp: (v: string | null): Partial<ComponentDetail> => ({ copyright: v }),
+    vals: (v: string): Partial<GeneralFormValues> => ({ copyright: v }),
+    dirty: { copyright: true } as DirtyFlags,
+    hidden: (): FieldVisibilities => ({ ...EDITABLE, copyright: 'hidden' }),
+    read: (r: ReturnType<typeof buildUpdateRequest>) => r.copyright,
+  },
+] as const
+
+describe.each(CLEARABLE_SCALARS)(
+  'buildUpdateRequest — clearable nullable scalar: $name',
+  ({ comp, vals, dirty, hidden, read }) => {
+    it('clear (interacted, blank, server had a value) → emits "" (server clears to null)', () => {
+      const req = buildUpdateRequest({
+        component: makeComponent(comp('old-value')),
+        values: makeValues(vals('')),
+        visibilities: EDITABLE,
+        dirtyFields: dirty,
+      })
+      expect(read(req)).toBe('')
+    })
+
+    it('unchanged (interacted but equal to persisted) → omitted', () => {
+      const req = buildUpdateRequest({
+        component: makeComponent(comp('same')),
+        values: makeValues(vals('same')),
+        visibilities: EDITABLE,
+        dirtyFields: dirty,
+      })
+      expect(read(req)).toBeUndefined()
+    })
+
+    it('edit (interacted, new distinct value) → emits the trimmed value', () => {
+      const req = buildUpdateRequest({
+        component: makeComponent(comp('old')),
+        values: makeValues(vals('  New Value  ')),
+        visibilities: EDITABLE,
+        dirtyFields: dirty,
+      })
+      expect(read(req)).toBe('New Value')
+    })
+
+    it('set on a component whose value was null → emits the value', () => {
+      const req = buildUpdateRequest({
+        component: makeComponent(comp(null)),
+        values: makeValues(vals('First Value')),
+        visibilities: EDITABLE,
+        dirtyFields: dirty,
+      })
+      expect(read(req)).toBe('First Value')
+    })
+
+    it('not interacted (dirty/touched false) → omitted regardless of value (pre-hydration safety)', () => {
+      const req = buildUpdateRequest({
+        component: makeComponent(comp('old')),
+        values: makeValues(vals('')),
+        visibilities: EDITABLE,
+        dirtyFields: {},
+      })
+      expect(read(req)).toBeUndefined()
+    })
+
+    it('hidden field-config + interacted → omitted (hidden never written)', () => {
+      const req = buildUpdateRequest({
+        component: makeComponent(comp('old')),
+        values: makeValues(vals('changed')),
+        visibilities: hidden(),
+        dirtyFields: dirty,
+      })
+      expect(read(req)).toBeUndefined()
+    })
+  },
+)
+
 describe('buildUpdateRequest — dirtyFields gating (pre-hydration safety)', () => {
   it('solution form-default false on server-null component is omitted when not dirty', () => {
     const req = buildUpdateRequest({
@@ -259,7 +357,7 @@ describe('buildUpdateRequest — dirtyFields gating (pre-hydration safety)', () 
     const req = buildUpdateRequest({
       component: makeComponent({
         docs: [{ id: 'd-1', docComponentKey: 'docs-a', majorVersion: '1.x', sortOrder: 0 }],
-        artifactIds: [{ id: 'a-1', groupPattern: 'org.x', artifactPattern: 'my-*' }],
+        artifactIds: [{ id: 'a-1', groupPattern: 'org.x', mode: 'ALL', artifactTokens: [] }],
       }),
       values: makeValues({ docs: [], artifactIds: [] }),
       visibilities: EDITABLE,
@@ -273,7 +371,7 @@ describe('buildUpdateRequest — dirtyFields gating (pre-hydration safety)', () 
     const req = buildUpdateRequest({
       component: makeComponent({
         docs: [{ id: 'd-1', docComponentKey: 'docs-a', majorVersion: '1.x', sortOrder: 0 }],
-        artifactIds: [{ id: 'a-1', groupPattern: 'org.x', artifactPattern: 'my-*' }],
+        artifactIds: [{ id: 'a-1', groupPattern: 'org.x', mode: 'ALL', artifactTokens: [] }],
       }),
       values: makeValues({ docs: [], artifactIds: [] }),
       visibilities: EDITABLE,
@@ -384,20 +482,40 @@ describe('buildUpdateRequest — list cleanup', () => {
     ])
   })
 
-  it('artifactIds rows with either pattern blank are dropped (both required)', () => {
+  it('artifactIds mappings with no group token are dropped; the rest map to ownership requests', () => {
     const req = buildUpdateRequest({
       component: makeComponent(),
       values: makeValues({
         artifactIds: [
-          { groupPattern: 'org.x', artifactPattern: '' },
-          { groupPattern: '', artifactPattern: 'my-*' },
-          { groupPattern: '  org.y  ', artifactPattern: '  svc-*  ' },
+          { id: 'm1', base: true, range: null, groups: '  org.y  ', mode: 'EXPLICIT', tokens: ['svc-a'] },
+          { id: 'm2', base: true, range: null, groups: '', mode: 'ALL', tokens: [] },
+          { id: 'm3', base: false, range: '[1.0,2.0)', groups: 'org.z', mode: 'ALL', tokens: [] },
         ],
       }),
       visibilities: EDITABLE,
       dirtyFields: { artifactIds: true },
     })
-    expect(req.artifactIds).toEqual([{ groupPattern: 'org.y', artifactPattern: 'svc-*' }])
+    expect(req.artifactIds).toEqual([
+      { versionRange: null, groupPattern: 'org.y', mode: 'EXPLICIT', artifactTokens: ['svc-a'] },
+      { versionRange: '[1.0,2.0)', groupPattern: 'org.z', mode: 'ALL', artifactTokens: [] },
+    ])
+  })
+
+  it('ownership NOT dirty → artifactIds omitted even when mappings are present (unrelated General save must not full-replace ownership)', () => {
+    const req = buildUpdateRequest({
+      component: makeComponent({
+        artifactIds: [{ id: 'a-1', groupPattern: 'org.y', mode: 'EXPLICIT', artifactTokens: ['svc-a'] }],
+      }),
+      // The editor hydrated mappings into the form, but the user only changed Display Name —
+      // dirtyFields.artifactIds is false, so the full-replacement patch must be omitted.
+      values: makeValues({
+        displayName: 'Renamed',
+        artifactIds: [{ id: 'm1', base: true, range: null, groups: 'org.y', mode: 'EXPLICIT', tokens: ['svc-a'] }],
+      }),
+      visibilities: EDITABLE,
+      dirtyFields: { displayName: true },
+    })
+    expect(req.artifactIds).toBeUndefined()
   })
 })
 

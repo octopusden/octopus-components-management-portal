@@ -84,6 +84,11 @@ vi.mock('@/hooks/useAdminConfig', () => ({
   useComponentDefaults: vi.fn(),
   useReloadConfig: vi.fn(() => idleMutation),
 }))
+// RuntimeSection (System tab) has its own data hooks + test coverage; stub it so
+// the tab-visibility tests don't pull in a live metrics query.
+vi.mock('../components/RuntimeSection', () => ({
+  RuntimeSection: () => React.createElement('div', { 'data-testid': 'runtime-section-stub' }),
+}))
 
 const mockUseCurrentUser = vi.mocked(useCurrentUser)
 const mockUseMigrationStatus = vi.mocked(useMigrationStatus)
@@ -194,6 +199,64 @@ describe('AdminSettingsPage tabs', () => {
     // disabled in this test because adminMode defaults to false; we only
     // need to know that the panel rendered.
     expect(screen.getByRole('button', { name: /run migration/i })).toBeDefined()
+  })
+
+  it('arming via the AdminModeArmBar enables ALL three destructive Run buttons', async () => {
+    renderPage()
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('tab', { name: /Migration/i }))
+
+    const runMigration = screen.getByRole('button', { name: /run migration/i })
+    const runHistory = screen.getByRole('button', { name: /run history migration/i })
+    const resync = screen.getByRole('button', { name: /resync tc project ids/i })
+
+    // Disarmed → all disabled.
+    expect(runMigration).toBeDisabled()
+    expect(runHistory).toBeDisabled()
+    expect(resync).toBeDisabled()
+
+    // Arm via the inline bar (shared useAdminMode store) → all enabled. Catches a
+    // regression where a consumer desyncs from the shared toggle.
+    await user.click(screen.getByTestId('admin-arm-bar').querySelector('[role="switch"]')!)
+    expect(runMigration).not.toBeDisabled()
+    expect(runHistory).not.toBeDisabled()
+    expect(resync).not.toBeDisabled()
+  })
+})
+
+describe('AdminSettingsPage — System tab visibility', () => {
+  const viewerUser: User = {
+    username: 'bob',
+    roles: [{ name: 'ROLE_VIEWER', permissions: ['ACCESS_COMPONENTS'] }],
+    groups: [],
+  }
+
+  it('hides the System tab when admin mode is OFF, even for an IMPORT_DATA user', () => {
+    useAdminMode.setState({ enabled: false }) // adminUser has IMPORT_DATA (default)
+    renderPage()
+    expect(screen.queryByRole('tab', { name: /^System$/i })).toBeNull()
+  })
+
+  it('hides the System tab for a non-IMPORT_DATA user, even when admin mode is ON', () => {
+    mockUseCurrentUser.mockReturnValue({
+      data: viewerUser,
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useCurrentUser>)
+    useAdminMode.setState({ enabled: true })
+    renderPage()
+    expect(screen.queryByRole('tab', { name: /^System$/i })).toBeNull()
+  })
+
+  it('shows the System tab and mounts RuntimeSection when adminMode && IMPORT_DATA', async () => {
+    useAdminMode.setState({ enabled: true })
+    renderPage()
+    const tab = screen.getByRole('tab', { name: /^System$/i })
+    expect(tab).toBeDefined()
+    await userEvent.setup().click(tab)
+    expect(screen.getByTestId('runtime-section-stub')).toBeDefined()
   })
 })
 
