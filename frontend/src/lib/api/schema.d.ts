@@ -856,15 +856,22 @@ export interface components {
             total: number;
         };
         BuildAspectRequest: {
+            /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. */
             buildFilePath?: string;
             buildSystem?: string;
+            /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. */
             buildTasks?: string;
             deprecated?: boolean;
+            /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. */
             gradleVersion?: string;
+            /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. */
             javaVersion?: string;
+            /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. */
             mavenVersion?: string;
+            /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. */
             projectVersion?: string;
             requiredProject?: boolean;
+            /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. */
             systemProperties?: string;
         };
         BuildAspectResponse: {
@@ -946,6 +953,7 @@ export interface components {
             solution?: boolean;
             system?: string;
             teamcityProjects?: components["schemas"]["TeamcityProjectRequest"][];
+            /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. */
             vcsExternalRegistry?: string;
         };
         ComponentDetailResponse: {
@@ -1054,6 +1062,7 @@ export interface components {
             solution?: boolean;
             system?: string;
             teamcityProjects?: components["schemas"]["TeamcityProjectRequest"][];
+            /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. */
             vcsExternalRegistry?: string;
             /** Format: int64 */
             version: number;
@@ -1095,13 +1104,19 @@ export interface components {
             errorMessage: string;
         };
         EscrowAspectRequest: {
+            /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. */
             additionalSources?: string;
+            /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. */
             buildTask?: string;
+            /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. */
             diskSpace?: string;
             generation?: string;
+            /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. */
             gradleExcludeConfigurations?: string;
+            /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. */
             gradleIncludeConfigurations?: string;
             gradleIncludeTestConfigurations?: boolean;
+            /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. */
             providedDependencies?: string;
             reusable?: boolean;
         };
@@ -1119,6 +1134,7 @@ export interface components {
         FieldOverrideCreateRequest: {
             markerChildren?: components["schemas"]["MarkerChildrenPayload"];
             overriddenAttribute: string;
+            /** @description For a string-typed scalar attribute a blank value ("" or whitespace) is rejected (400): an override row stores its value verbatim and has no clear semantics — use DELETE /field-overrides/{id} to remove it. */
             value?: Record<string, never>;
             versionRange: string;
         };
@@ -1138,6 +1154,7 @@ export interface components {
         };
         FieldOverrideUpdateRequest: {
             markerChildren?: components["schemas"]["MarkerChildrenPayload"];
+            /** @description For a string-typed scalar attribute a blank value ("" or whitespace) is rejected (400): an override row stores its value verbatim and has no clear semantics — use DELETE /field-overrides/{id} to remove it. */
             value?: Record<string, never>;
             versionRange?: string;
         };
@@ -1146,6 +1163,7 @@ export interface components {
             id?: string;
             markerChildren?: components["schemas"]["MarkerChildrenPayload"];
             overriddenAttribute: string;
+            /** @description For a string-typed scalar attribute a blank value ("" or whitespace) is rejected (400): an override row stores its value verbatim and has no clear semantics — use DELETE /field-overrides/{id} to remove it. */
             value?: Record<string, never>;
             versionRange: string;
         };
@@ -1232,13 +1250,20 @@ export interface components {
             version: string;
         };
         JiraAspectRequest: {
+            /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. When cleared, the build version format falls back to the release version format. */
             buildVersionFormat?: string;
+            /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. When cleared, the line version format falls back to the minor version format. */
             lineVersionFormat?: string;
+            /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. */
             minorVersionFormat?: string;
+            /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. Clearing it removes the component's Jira association (no Jira version coordinates are computed) and drops its (projectKey, versionPrefix) uniqueness claim. */
             projectKey?: string;
+            /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. */
             releaseVersionFormat?: string;
             technical?: boolean;
+            /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. */
             versionFormat?: string;
+            /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. */
             versionPrefix?: string;
         };
         JiraAspectResponse: {
