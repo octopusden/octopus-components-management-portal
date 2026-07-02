@@ -126,13 +126,13 @@ describe('EscrowTab — slice (combined save)', () => {
     expect(captured.section!.slice.request.baseConfiguration?.escrow).toBeDefined()
   })
 
-  it('propagates additionalSources edits; blank → null', async () => {
+  it("propagates additionalSources edits; blank → '' (CRS-A ''-clear)", async () => {
     renderTab(baseComponent())
     const input = screen.getByPlaceholderText('Additional source paths')
     fireEvent.change(input, { target: { value: 'src/extra' } })
     expect(captured.section!.slice.request.baseConfiguration?.escrow?.additionalSources).toBe('src/extra')
     fireEvent.change(input, { target: { value: '' } })
-    expect(captured.section!.slice.request.baseConfiguration?.escrow?.additionalSources).toBeNull()
+    expect(captured.section!.slice.request.baseConfiguration?.escrow?.additionalSources).toBe('')
   })
 
   it('sends migrated scalars inside baseConfiguration.build and omits Build-tab-owned ones', () => {

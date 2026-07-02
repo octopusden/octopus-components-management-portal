@@ -59,16 +59,18 @@ export function useJiraSection(component: ComponentDetail, visibilities: JiraVis
   const diff: DiffEntry[] = []
   const push = (d: DiffEntry | null) => { if (d) diff.push(d) }
   if (isDirty) {
-    push(scalarDiff('Jira · Project Key', prior.projectKey, state.projectKey, { aspectScalar: true }))
+    // P-1 ""-clear migration: jira aspect string scalars clear via '' (CRS-A), so
+    // their clears now persist and are NOT flagged as no-ops (no aspectScalar opt).
+    push(scalarDiff('Jira · Project Key', prior.projectKey, state.projectKey))
     push(boolDiff('Jira · Technical', prior.technical, state.technical))
     // jiraHotfixVersionFormat is a top-level component scalar (clears persist).
     push(scalarDiff('Jira · Hotfix Version Format', prior.hotfixVersionFormat, state.hotfixVersionFormat))
-    push(scalarDiff('Jira · Version Prefix', prior.versionPrefix, state.versionPrefix, { aspectScalar: true }))
-    push(scalarDiff('Jira · Minor Version Format', prior.minorVersionFormat, state.minorVersionFormat, { aspectScalar: true }))
-    push(scalarDiff('Jira · Release Version Format', prior.releaseVersionFormat, state.releaseVersionFormat, { aspectScalar: true }))
-    push(scalarDiff('Jira · Build Version Format', prior.buildVersionFormat, state.buildVersionFormat, { aspectScalar: true }))
-    push(scalarDiff('Jira · Line Version Format', prior.lineVersionFormat, state.lineVersionFormat, { aspectScalar: true }))
-    push(scalarDiff('Jira · Version Format', prior.versionFormat, state.versionFormat, { aspectScalar: true }))
+    push(scalarDiff('Jira · Version Prefix', prior.versionPrefix, state.versionPrefix))
+    push(scalarDiff('Jira · Minor Version Format', prior.minorVersionFormat, state.minorVersionFormat))
+    push(scalarDiff('Jira · Release Version Format', prior.releaseVersionFormat, state.releaseVersionFormat))
+    push(scalarDiff('Jira · Build Version Format', prior.buildVersionFormat, state.buildVersionFormat))
+    push(scalarDiff('Jira · Line Version Format', prior.lineVersionFormat, state.lineVersionFormat))
+    push(scalarDiff('Jira · Version Format', prior.versionFormat, state.versionFormat))
     if (visibilities.releasesInDefaultBranch !== 'hidden')
       push(boolDiff('Jira · Releases in default branch', prior.releasesInDefaultBranch, state.releasesInDefaultBranch))
     // jiraDisplayName is hidden-by-default and shown only when divergent; surface a row when changed.
@@ -92,15 +94,18 @@ export function useJiraSection(component: ComponentDetail, visibilities: JiraVis
         : {}),
       jiraHotfixVersionFormat: state.hotfixVersionFormat || null,
       baseConfiguration: {
+        // ""-clear (CRS-A): aspect string scalars send '' to clear (null = no-op).
+        // Empty state == server null (seeded from detail), so unconditionally
+        // sending '' for an untouched-empty field is a safe no-op (plan §P-1).
         jira: {
-          projectKey: state.projectKey || null,
+          projectKey: state.projectKey || '',
           technical: state.technical,
-          minorVersionFormat: state.minorVersionFormat || null,
-          releaseVersionFormat: state.releaseVersionFormat || null,
-          buildVersionFormat: state.buildVersionFormat || null,
-          lineVersionFormat: state.lineVersionFormat || null,
-          versionPrefix: state.versionPrefix || null,
-          versionFormat: state.versionFormat || null,
+          minorVersionFormat: state.minorVersionFormat || '',
+          releaseVersionFormat: state.releaseVersionFormat || '',
+          buildVersionFormat: state.buildVersionFormat || '',
+          lineVersionFormat: state.lineVersionFormat || '',
+          versionPrefix: state.versionPrefix || '',
+          versionFormat: state.versionFormat || '',
         },
       },
     },

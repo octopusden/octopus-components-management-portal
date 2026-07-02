@@ -89,12 +89,12 @@ describe('BuildTab — slice (combined save)', () => {
     expect(build?.gradleVersion).toBe('8.6')
   })
 
-  it('clearing a string field surfaces null in the slice', async () => {
+  it("clearing a string field surfaces '' in the slice (CRS-A ''-clear)", async () => {
     renderTab(makeComponent({
       configurations: [makeBaseRow({ build: { buildSystem: 'GRADLE', gradleVersion: '8.6' } })],
     }))
     await userEvent.clear(screen.getByPlaceholderText('8.6'))
-    expect(captured.section!.slice.request.baseConfiguration?.build?.gradleVersion).toBeNull()
+    expect(captured.section!.slice.request.baseConfiguration?.build?.gradleVersion).toBe('')
   })
 
   it('omits the Escrow-migrated fields from the slice build payload', () => {

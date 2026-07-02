@@ -130,6 +130,16 @@ describe('FieldOverrideInline — edit & delete queue', () => {
     expect(mockQueueUpdate.mock.calls[0]?.[1]).toMatchObject({ versionRange: '[1.0,2.0)', value: 'new' })
   })
 
+  it('does not queue an update when the edited value is blanked (CRS 400s blank override values)', async () => {
+    mockOverrides = [ov({ id: 'o1', versionRange: '[1.0,2.0)', value: 'old' })]
+    renderInline()
+    await userEvent.click(screen.getByRole('button', { name: 'Edit override [1.0,2.0)' }))
+    const valueInput = screen.getByLabelText(/override value for jira.releaseVersionFormat/i)
+    fireEvent.change(valueInput, { target: { value: '   ' } }) // whitespace only
+    fireEvent.click(screen.getByRole('button', { name: 'Save override edit' }))
+    expect(mockQueueUpdate).not.toHaveBeenCalled()
+  })
+
   it('queues a delete with the row id on delete click', async () => {
     mockOverrides = [ov({ id: 'o1', versionRange: '[1.0,2.0)' })]
     renderInline()
