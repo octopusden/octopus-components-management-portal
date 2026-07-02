@@ -262,7 +262,7 @@ function CoverageTimeline({ overrides, overlap }: { overrides: OwnershipMappingV
     <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3.5">
       <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Coverage</span>
       <div className="flex flex-wrap gap-1.5">
-        <span className="rounded bg-background px-2 py-0.5 font-mono text-[11px] text-muted-foreground">base (,)</span>
+        <span className="rounded bg-background px-2 py-0.5 font-mono text-[11px] text-muted-foreground">base · All versions</span>
         {overrides.map((m) => (
           <span
             key={m.id}

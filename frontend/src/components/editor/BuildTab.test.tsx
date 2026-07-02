@@ -69,7 +69,7 @@ function Harness({ component, canEdit = true }: { component: ComponentDetail; ca
   captured.section = section
   return (
     <TooltipProvider>
-      <BuildTab component={component} section={section} canEdit={canEdit} />
+      <BuildTab section={section} canEdit={canEdit} />
     </TooltipProvider>
   )
 }

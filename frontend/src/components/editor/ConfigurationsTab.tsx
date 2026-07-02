@@ -8,7 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from '../ui/table'
-import { compareVersionRanges, rangesOverlap } from '../../lib/versionRange'
+import { compareVersionRanges, rangesOverlap, formatVersionRange } from '../../lib/versionRange'
 import type { ComponentDetail, ComponentConfiguration } from '../../lib/types'
 
 interface ConfigurationsTabProps {
@@ -175,7 +175,7 @@ export function ConfigurationsTab({ component }: ConfigurationsTabProps) {
                   {row.rowType}
                 </Badge>
               </TableCell>
-              <TableCell className="font-mono text-xs">{row.versionRange}</TableCell>
+              <TableCell className="font-mono text-xs">{formatVersionRange(row.versionRange)}</TableCell>
               <TableCell className="font-mono text-xs">
                 {row.overriddenAttribute ?? '—'}
               </TableCell>

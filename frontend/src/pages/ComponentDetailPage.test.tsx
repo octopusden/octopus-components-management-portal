@@ -16,6 +16,8 @@ vi.mock('../hooks/useComponent', () => ({
   useComponent: vi.fn(),
   useUpdateComponent: vi.fn(),
   useDeleteComponent: vi.fn(),
+  // item D: the page wrapper seeds OverridesDraftProvider from this.
+  useFieldOverrides: vi.fn(() => ({ data: [] })),
 }))
 vi.mock('../hooks/use-toast', () => ({
   useToast: () => ({ toast: vi.fn() }),
@@ -1266,6 +1268,66 @@ describe('ComponentDetailPage — cross-tab 400 + displayName clear', () => {
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce())
     const payload = (mutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
     expect(payload['displayName']).toBe('')
+  })
+})
+
+describe('ComponentDetailPage — 409 conflict handling in the Review dialog', () => {
+  function stubDirtyGeneralTab() {
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('system', component.system ?? '')
+        form.setValue('displayName', component.displayName ?? '')
+      }, [component, form])
+      return React.createElement(
+        'button',
+        { 'data-testid': 'edit', onClick: () => form.setValue('displayName', 'X', { shouldDirty: true }) },
+        'edit',
+      )
+    })
+  }
+
+  it('a value conflict (UNIQUENESS_VIOLATION) keeps the dialog open and shows a persistent banner', async () => {
+    stubDirtyGeneralTab()
+    const serverMsg = 'Overlaps with existing override [1.4,1.5)'
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(
+        new ApiError(409, serverMsg, JSON.stringify({ errorMessage: serverMsg, errorCode: 'UNIQUENESS_VIOLATION' })),
+      ),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    // Banner appears and the dialog stays open (Confirm still present) so the
+    // user can fix the range and retry without losing the diff.
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(serverMsg))
+    const confirm = screen.getByRole('button', { name: /^confirm$/i })
+    expect(confirm).toBeInTheDocument()
+    // Confirm is re-enabled so the user can fix the range and retry in place.
+    expect(confirm).not.toBeDisabled()
+  })
+
+  it('an optimistic-lock conflict closes the dialog (stale diff) instead of showing a banner', async () => {
+    stubDirtyGeneralTab()
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(
+        new ApiError(
+          409,
+          'stale',
+          JSON.stringify({ errorMessage: 'expected version 3 but found 5', errorCode: 'OPTIMISTIC_LOCK' }),
+        ),
+      ),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^confirm$/i })).toBeNull())
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 })
 

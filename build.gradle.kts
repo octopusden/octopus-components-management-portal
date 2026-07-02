@@ -281,6 +281,24 @@ val e2eTest = tasks.register<Test>("e2eTest") {
     if (!dockerRegistryMirror.isNullOrBlank()) {
         environment("DOCKER_REGISTRY", dockerRegistryMirror)
     }
+
+    // Route Testcontainers' OWN built-in images (the `alpine` helper, Ryuk) through the
+    // registry/mirror instead of anonymous Docker Hub — those internal pulls are NOT registry-
+    // qualified by the e2e driver, so they hit Docker Hub directly and trip the unauthenticated
+    // 429 rate limit on shared runners. Testcontainers reads TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX
+    // and applies it ONLY to images without an explicit registry host, so the e2e's own
+    // already-qualified images (CRS / Keycloak / Postgres / Temurin) are untouched (no double-prefix).
+    //
+    // Input parameter (precedence): env TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX → -Pdocker.hub.prefix →
+    // falls back to the docker.registry mirror above. A trailing '/' is appended when missing.
+    val hubImagePrefix = (
+        System.getenv("TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX")
+            ?: (project.findProperty("docker.hub.prefix") as String?)
+            ?: dockerRegistryMirror
+        )?.takeIf { it.isNotBlank() }?.let { if (it.endsWith("/")) it else "$it/" }
+    if (hubImagePrefix != null) {
+        environment("TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX", hubImagePrefix)
+    }
 }
 
 tasks.jacocoTestReport {

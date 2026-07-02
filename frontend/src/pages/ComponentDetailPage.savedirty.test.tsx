@@ -105,7 +105,11 @@ async function openTab(name: RegExp) {
 describe('ComponentDetailPage — save clears dirty (Acceptance #3, real cache path)', () => {
   it('returns the bar to "All changes saved" after a successful PATCH re-seeds the snapshot', async () => {
     // GET seeds the editor; PATCH echoes back the saved component (java 21, v10).
-    apiMock.get.mockResolvedValue(baseComponent)
+    // The page wrapper also GETs /field-overrides to seed OverridesDraftProvider —
+    // that path must resolve to an array, not the component object (item D).
+    apiMock.get.mockImplementation((path: string) =>
+      Promise.resolve(path.endsWith('/field-overrides') ? [] : baseComponent),
+    )
     const saved: ComponentDetail = {
       ...baseComponent, version: 10,
       configurations: [

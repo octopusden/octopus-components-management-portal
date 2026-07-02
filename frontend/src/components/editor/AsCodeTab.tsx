@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Copy } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -11,6 +11,7 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { useToast } from '../../hooks/use-toast'
 import { copyToClipboard } from '../../lib/clipboard'
 import { ApiError } from '../../lib/api'
+import { highestLowerBoundVersion } from '../../lib/versionRange'
 import type { ComponentDetail } from '../../lib/types'
 
 interface AsCodeTabProps {
@@ -26,7 +27,26 @@ interface AsCodeTabProps {
 export function AsCodeTab({ component }: AsCodeTabProps) {
   const { toast } = useToast()
   const [mode, setMode] = useState<AsCodeMode>('full')
-  const [versionInput, setVersionInput] = useState('')
+  // Seed the resolve box with the highest configured version (the "current"
+  // version) so Resolved works out of the box and a version-outside-the-ranges
+  // miss is the exception, not the default. Derived from the component's
+  // configuration + ownership ranges; null when none has a usable lower bound.
+  const defaultVersion = useMemo(
+    () =>
+      highestLowerBoundVersion([
+        ...(component.configurations ?? []).map((c) => c.versionRange),
+        ...(component.artifactIds ?? []).map((a) => a.versionRange),
+      ]),
+    [component.configurations, component.artifactIds],
+  )
+  const [versionInput, setVersionInput] = useState(() => defaultVersion ?? '')
+  // Re-seed when navigating to a different component without remounting (the
+  // data router can reuse this instance across :id changes). Keyed on id only,
+  // so a same-component refetch never clobbers what the user is typing.
+  useEffect(() => {
+    setVersionInput(defaultVersion ?? '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [component.id])
   const debouncedVersion = useDebouncedValue(versionInput, 350)
 
   const query = useComponentAsCode(component.id, { mode, version: debouncedVersion })
@@ -78,6 +98,8 @@ export function AsCodeTab({ component }: AsCodeTabProps) {
         errorMessage={apiError?.message ?? 'Failed to load the code view.'}
         version={trimmedVersion}
         code={code}
+        defaultVersion={defaultVersion}
+        onUseDefault={() => defaultVersion && setVersionInput(defaultVersion)}
       />
     </div>
   )
@@ -92,6 +114,8 @@ interface AsCodeBodyProps {
   errorMessage: string
   version: string
   code: string
+  defaultVersion: string | null
+  onUseDefault: () => void
 }
 
 function AsCodeBody({
@@ -103,6 +127,8 @@ function AsCodeBody({
   errorMessage,
   version,
   code,
+  defaultVersion,
+  onUseDefault,
 }: AsCodeBodyProps) {
   if (mode === 'resolved' && !hasVersion) {
     return <p className="text-sm text-muted-foreground">Enter a version to resolve the component.</p>
@@ -111,11 +137,31 @@ function AsCodeBody({
     return <SkeletonBlock height="h-64" width="w-full" />
   }
   if (isError) {
+    // A 404 in resolved mode means the version falls outside every configured
+    // range — not a failure. Explain it and offer the latest configured version
+    // (when known) instead of a bare error.
     if (mode === 'resolved' && notFound) {
+      // Only suggest the default when it's a *different*, resolvable version — if
+      // the user already typed the default and it still 404s, don't point back at it.
+      const canSuggest = defaultVersion !== null && defaultVersion !== version
       return (
-        <p className="text-sm text-muted-foreground">
-          No configuration resolves for version <span className="font-mono">{version}</span>.
-        </p>
+        <div className="space-y-2 text-sm text-muted-foreground">
+          <p>
+            Version <span className="font-mono">{version}</span> falls outside every configured range
+            {canSuggest ? (
+              <>
+                {' '}— the latest configured version is <span className="font-mono">{defaultVersion}</span>.
+              </>
+            ) : (
+              '.'
+            )}
+          </p>
+          {canSuggest && (
+            <Button variant="outline" size="sm" onClick={onUseDefault}>
+              Resolve {defaultVersion}
+            </Button>
+          )}
+        </div>
       )
     }
     return <InlineError message={errorMessage} />

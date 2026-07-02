@@ -17,22 +17,15 @@ import {
   TableHeader,
   TableRow,
 } from '../ui/table'
-import {
-  useFieldOverrides,
-  useDeleteFieldOverride,
-} from '../../hooks/useComponent'
 import { EmptyState } from '../ui/empty-state'
 import { SkeletonBlock } from '../ui/skeleton-block'
-import { useToast } from '../../hooks/use-toast'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../../lib/auth'
 import type { FieldOverride } from '../../lib/types'
+import { formatVersionRange } from '../../lib/versionRange'
 import { OverrideRowEditor } from './OverrideRowEditor'
 import { OverridesTimeline } from './OverridesTimeline'
-
-interface FieldOverridesProps {
-  componentId: string
-}
+import { useOverridesDraft } from './overridesDraft'
 
 /**
  * Neutral, read-only one-line summary of a marker override's children. The API
@@ -63,10 +56,10 @@ function markerSummary(override: FieldOverride): string {
   }
 }
 
-export function FieldOverrides({ componentId }: FieldOverridesProps) {
-  const { data: overrides, isLoading } = useFieldOverrides(componentId)
-  const deleteMutation = useDeleteFieldOverride(componentId)
-  const { toast } = useToast()
+export function FieldOverrides() {
+  // Item D: reads the page-level draft (so queued/unsaved edits show here too)
+  // and queues deletes for the combined Save instead of an immediate DELETE.
+  const { effectiveOverrides: overrides, queueDelete, isLoading } = useOverridesDraft()
   // This raw edit surface (add / edit / delete, incl. marker editing) is an
   // admin-tier escape hatch — regular users edit scalars inline on the
   // parameter tabs. Non-admins get a read-only audit view. Gated on EDIT_METADATA
@@ -103,20 +96,14 @@ export function FieldOverrides({ componentId }: FieldOverridesProps) {
     setEditorOpen(true)
   }
 
-  async function handleDelete(overrideId: string) {
-    try {
-      await deleteMutation.mutateAsync(overrideId)
-      toast({ title: 'Override deleted' })
-      setDeleteConfirm(null)
-    } catch (err) {
-      toast({
-        title: 'Error',
-        description: err instanceof Error ? err.message : String(err),
-        variant: 'destructive',
-      })
-    }
+  function handleDelete(overrideId: string) {
+    queueDelete(overrideId)
+    setDeleteConfirm(null)
   }
 
+  // While the override baseline is still loading, show a skeleton rather than
+  // the "No field overrides defined" empty state — an empty baseline seeds the
+  // draft until the first fetch resolves.
   if (isLoading) {
     return (
       <div className="space-y-2">
@@ -139,7 +126,7 @@ export function FieldOverrides({ componentId }: FieldOverridesProps) {
         )}
       </div>
 
-      {!overrides || overrides.length === 0 ? (
+      {overrides.length === 0 ? (
         <div className="rounded-md border border-dashed">
           <EmptyState message="No field overrides defined." className="py-8" />
         </div>
@@ -171,7 +158,7 @@ export function FieldOverrides({ componentId }: FieldOverridesProps) {
                         {override.rowType}
                       </Badge>
                     </TableCell>
-                    <TableCell className="font-mono text-xs">{override.versionRange}</TableCell>
+                    <TableCell className="font-mono text-xs">{formatVersionRange(override.versionRange)}</TableCell>
                     <TableCell
                       className="font-mono text-xs max-w-[200px] truncate"
                       title={isMarker ? markerSummary(override) : undefined}
@@ -222,7 +209,6 @@ export function FieldOverrides({ componentId }: FieldOverridesProps) {
           <OverrideRowEditor
             open={editorOpen}
             onOpenChange={setEditorOpen}
-            componentId={componentId}
             mode={editorMode}
             override={editingOverride}
           />
@@ -246,7 +232,6 @@ export function FieldOverrides({ componentId }: FieldOverridesProps) {
                 <Button
                   variant="destructive"
                   onClick={() => deleteConfirm && handleDelete(deleteConfirm)}
-                  disabled={deleteMutation.isPending}
                 >
                   Delete
                 </Button>

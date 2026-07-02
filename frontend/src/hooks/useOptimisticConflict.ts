@@ -23,19 +23,36 @@ import type { ComponentDetail } from '../lib/types'
 //    sees the post-conflict server snapshot (invalidate only marks stale and
 //    resolves once an observer re-subscribes, which would leave getQueryData
 //    reading the old cache).
+/**
+ * A classified 409. `kind` drives how the caller surfaces it:
+ *  - `'value'`     — the submitted value conflicts (uniqueness / other non-lock
+ *                    code). Reloading won't help; keep the editor/dialog open so
+ *                    the user can fix the value (e.g. narrow an overlapping range).
+ *  - `'optimistic'`— stale `version`; the hook has already refetched the latest
+ *                    snapshot, so the caller should close the (now-stale) diff and
+ *                    tell the user to re-apply.
+ */
+export interface ClassifiedConflict {
+  kind: 'value' | 'optimistic'
+  title: string
+  description: string
+}
+
 export function useOptimisticConflict(componentId: string | undefined) {
   const queryClient = useQueryClient()
-  return async (err: unknown): Promise<{ title: string; description: string } | null> => {
+  return async (err: unknown): Promise<ClassifiedConflict | null> => {
     if (!(err instanceof ApiError) || err.status !== 409) return null
     const { errorCode, errorMessage } = classifyConflictBody(err.rawBody)
     if (errorCode === 'UNIQUENESS_VIOLATION') {
       return {
+        kind: 'value',
         title: 'Uniqueness violation',
         description: errorMessage ?? err.message,
       }
     }
     if (errorCode !== null && errorCode !== 'OPTIMISTIC_LOCK') {
       return {
+        kind: 'value',
         title: 'Save failed',
         description: errorMessage ?? err.message,
       }
@@ -43,6 +60,6 @@ export function useOptimisticConflict(componentId: string | undefined) {
     const key = ['component', componentId ?? '']
     await queryClient.refetchQueries({ queryKey: key, type: 'active' })
     const latest = queryClient.getQueryData<ComponentDetail>(key)
-    return describeOptimisticConflict(latest)
+    return { kind: 'optimistic', ...describeOptimisticConflict(latest) }
   }
 }

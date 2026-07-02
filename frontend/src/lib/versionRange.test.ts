@@ -1,15 +1,61 @@
 import { describe, it, expect } from 'vitest'
-import { formatVersionRange, isValidVersionRange, isClosedVersionRange, isAllowedOverrideRange, rangesOverlap, classifyRangeConflict, compareVersionRanges } from './versionRange'
+import { formatVersionRange, isValidVersionRange, isClosedVersionRange, isAllowedOverrideRange, isEmptyVersionRange, rangesOverlap, classifyRangeConflict, compareVersionRanges, highestLowerBoundVersion } from './versionRange'
 
 describe('formatVersionRange', () => {
   it('formats (,) as "All versions"', () => {
     expect(formatVersionRange('(,)')).toBe('All versions')
   })
 
+  it('formats the two-segment base sentinel (,0),[0,) as "All versions"', () => {
+    expect(formatVersionRange('(,0),[0,)')).toBe('All versions')
+  })
+
+  it('tolerates whitespace and trailing zeros in the base sentinel', () => {
+    expect(formatVersionRange('(, 0), [0, )')).toBe('All versions')
+    expect(formatVersionRange('(,0.0),[0.0,)')).toBe('All versions')
+    expect(formatVersionRange('(,0.0.0),[0.0.0,)')).toBe('All versions')
+  })
+
   it('returns other ranges unchanged', () => {
     expect(formatVersionRange('[1.0,2.0)')).toBe('[1.0,2.0)')
     expect(formatVersionRange('(1.0,)')).toBe('(1.0,)')
     expect(formatVersionRange('[1.0.0,1.0.0]')).toBe('[1.0.0,1.0.0]')
+  })
+})
+
+describe('highestLowerBoundVersion', () => {
+  it('returns the numeric-highest lower bound as a dot-string', () => {
+    expect(highestLowerBoundVersion(['[1.5.0,1.5.1400)', '[1.5.1400,)'])).toBe('1.5.1400')
+  })
+
+  it('orders multi-digit segments numerically, not lexically', () => {
+    expect(highestLowerBoundVersion(['[1.2,)', '[1.10,)'])).toBe('1.10')
+  })
+
+  it('considers the lower bound of closed ranges too', () => {
+    expect(highestLowerBoundVersion(['[1.2,1.3)', '[1.4,1.5)', '[1.3,1.4)'])).toBe('1.4')
+  })
+
+  it('ignores entries with no usable lower bound', () => {
+    expect(highestLowerBoundVersion(['(,0),[0,)', '(,)', '(,2.0)'])).toBeNull()
+    expect(highestLowerBoundVersion([null, undefined, ''])).toBeNull()
+    expect(highestLowerBoundVersion([])).toBeNull()
+  })
+
+  it('ignores a degenerate all-zero lower bound', () => {
+    expect(highestLowerBoundVersion(['[0,)'])).toBeNull()
+    expect(highestLowerBoundVersion(['[0.0,)'])).toBeNull()
+  })
+
+  it('ignores exclusive lower bounds (the bound itself is outside the range)', () => {
+    expect(highestLowerBoundVersion(['(1.5,2.0]'])).toBeNull()
+    expect(highestLowerBoundVersion(['(1.5,2.0)'])).toBeNull()
+    // An inclusive range still wins over a higher exclusive one.
+    expect(highestLowerBoundVersion(['(9.0,10.0]', '[1.4,1.5)'])).toBe('1.4')
+  })
+
+  it('mixes valid ranges with ignorable ones', () => {
+    expect(highestLowerBoundVersion([null, '(,0),[0,)', '[1.4,1.5)', '(,1.0)'])).toBe('1.4')
   })
 })
 
@@ -392,5 +438,33 @@ describe('compareVersionRanges', () => {
   it('produces a correct numeric ordering when used as Array.sort comparator', () => {
     const sorted = ['[10.0,)', '[2.0,3.0)', '(,1.0)', '[1.0,2.0)'].sort(compareVersionRanges)
     expect(sorted).toEqual(['(,1.0)', '[1.0,2.0)', '[2.0,3.0)', '[10.0,)'])
+  })
+})
+
+describe('isEmptyVersionRange', () => {
+  it('flags an inverted range (lower > upper), incl. dot-numeric segments', () => {
+    expect(isEmptyVersionRange('[1.7.3076,1.7.3010]')).toBe(true)
+    expect(isEmptyVersionRange('[5,2)')).toBe(true)
+    expect(isEmptyVersionRange('(2.10,2.9]')).toBe(true)
+  })
+
+  it('flags equal bounds with an exclusive edge (empty), allows [x,x]', () => {
+    expect(isEmptyVersionRange('[1.0,1.0)')).toBe(true)
+    expect(isEmptyVersionRange('(1.0,1.0]')).toBe(true)
+    expect(isEmptyVersionRange('(1.0,1.0)')).toBe(true)
+    expect(isEmptyVersionRange('[1.0,1.0]')).toBe(false)
+  })
+
+  it('does not flag proper ranges', () => {
+    expect(isEmptyVersionRange('[1.7.3076,1.7.3209]')).toBe(false)
+    expect(isEmptyVersionRange('[1,2)')).toBe(false)
+    expect(isEmptyVersionRange('[2.0,)')).toBe(false)
+    expect(isEmptyVersionRange('(,2.0]')).toBe(false)
+  })
+
+  it('defers (false) on composites / unparseable / qualifier bounds', () => {
+    expect(isEmptyVersionRange('(,0),[0,)')).toBe(false)
+    expect(isEmptyVersionRange('[1.0-RC,2.0]')).toBe(false)
+    expect(isEmptyVersionRange('garbage')).toBe(false)
   })
 })

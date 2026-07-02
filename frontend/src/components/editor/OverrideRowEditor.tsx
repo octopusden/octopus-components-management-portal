@@ -22,15 +22,11 @@ import {
   SelectValue,
 } from '../ui/select'
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs'
-import {
-  useCreateFieldOverride,
-  useUpdateFieldOverride,
-  useFieldOverrides,
-} from '../../hooks/useComponent'
+import { useOverridesDraft } from './overridesDraft'
 import { useToast } from '../../hooks/use-toast'
 import { useFieldConfig } from '../../hooks/useAdminConfig'
 import { labelFor } from '../../hooks/useFieldConfig'
-import { isValidVersionRange, isAllowedOverrideRange, classifyRangeConflict } from '../../lib/versionRange'
+import { isValidVersionRange, isAllowedOverrideRange, isEmptyVersionRange, classifyRangeConflict } from '../../lib/versionRange'
 import type { FieldOverride, MarkerChildrenPayload, VcsEntryRequest, MavenArtifactRequest, FileUrlArtifactRequest, DockerImageRequest, PackageRequest } from '../../lib/types'
 
 // ---------------------------------------------------------------------------
@@ -120,20 +116,25 @@ interface PackageState { packageType: string; packageName: string }
 export interface OverrideRowEditorProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  componentId: string
   mode: 'create' | 'edit'
   /** Required in edit mode; undefined in create mode */
   override?: FieldOverride
+  /** Create-mode only: pre-lock the attribute to this path (used by the
+   *  Distribution tab to open the editor pinned to e.g. `distribution.docker`).
+   *  Suppresses the scalar/marker type picker and the attribute selector. */
+  presetAttribute?: string
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function OverrideRowEditor({ open, onOpenChange, componentId, mode, override }: OverrideRowEditorProps) {
-  const createMutation = useCreateFieldOverride(componentId)
-  const updateMutation = useUpdateFieldOverride(componentId)
-  const { data: allOverrides = [] } = useFieldOverrides(componentId)
+export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAttribute }: OverrideRowEditorProps) {
+  // Item D: the modal queues the create/update into the page-level draft (the
+  // real write is the editor's one combined Save), so it closes immediately on
+  // submit. Conflict detection reads the effective (draft-applied) set so a
+  // queued-but-unsaved sibling still blocks an overlapping range.
+  const { effectiveOverrides, queueCreate, queueUpdate } = useOverridesDraft()
   const { toast } = useToast()
 
   // Single field-config read resolves display labels for the whole attribute
@@ -147,6 +148,7 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
       if (MARKER_BY_PATH.has(override.overriddenAttribute)) return 'marker'
       return 'scalar'
     }
+    if (presetAttribute) return MARKER_BY_PATH.has(presetAttribute) ? 'marker' : 'scalar'
     return 'scalar'
   })()
 
@@ -171,7 +173,7 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
     )
   }, [mode, override])
 
-  const initialAttribute = mode === 'edit' && override ? override.overriddenAttribute : ''
+  const initialAttribute = mode === 'edit' && override ? override.overriddenAttribute : (presetAttribute ?? '')
   const initialVersionRange = mode === 'edit' && override ? override.versionRange : ''
 
   // ---------------------------------------------------------------------------
@@ -264,10 +266,11 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
         if (MARKER_BY_PATH.has(override.overriddenAttribute)) return 'marker'
         return 'scalar'
       }
+      if (presetAttribute) return MARKER_BY_PATH.has(presetAttribute) ? 'marker' : 'scalar'
       return 'scalar'
     })()
     setOverrideType(t)
-    setAttribute(mode === 'edit' && override ? override.overriddenAttribute : '')
+    setAttribute(mode === 'edit' && override ? override.overriddenAttribute : (presetAttribute ?? ''))
     setVersionRange(mode === 'edit' && override ? override.versionRange : '')
 
     if (mode === 'edit' && override) {
@@ -310,7 +313,7 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
     // useCallback that complicates the closure. The dependencies below are
     // the ones that matter for re-running the prefill.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, override, mode])
+  }, [open, override, mode, presetAttribute])
 
   // ---------------------------------------------------------------------------
   // Attribute type lookup
@@ -452,7 +455,7 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
   // Submit
   // ---------------------------------------------------------------------------
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!attribute) {
       toast({ title: 'Please select an attribute', variant: 'destructive' })
@@ -472,14 +475,10 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
     }
     // ADR-018: field-override ranges may be bounded, open-upper (`[2.0,)`), or
     // historical-left-unbounded; only the all-versions shapes denote the base
-    // default. Reject those client-side (the server enforces the same).
-    if (!isAllowedOverrideRange(versionRange)) {
-      toast({
-        title: isValidVersionRange(versionRange)
-          ? 'All-versions range is the base default — use a bounded or open-upper sub-range'
-          : 'Invalid version range',
-        variant: 'destructive',
-      })
+    // default, and an inverted/empty interval (`[3076,3010]`) is rejected before
+    // the round-trip. Server enforces the same as the backstop.
+    if (rangeError !== null) {
+      toast({ title: rangeError, variant: 'destructive' })
       return
     }
     // R3 client-side preview: prevent submission of a range that overlaps or
@@ -492,54 +491,33 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
       })
       return
     }
-    try {
-      if (mode === 'edit' && override) {
-        if (overrideType === 'scalar') {
-          await updateMutation.mutateAsync({
-            overrideId: override.id,
-            versionRange,
-            value: buildScalarValue(),
-            markerChildren: null,
-          })
-        } else {
-          await updateMutation.mutateAsync({
-            overrideId: override.id,
-            versionRange,
-            value: null,
-            markerChildren: buildMarkerChildren(),
-          })
-        }
-        toast({ title: 'Override updated' })
+    if (mode === 'edit' && override) {
+      if (overrideType === 'scalar') {
+        queueUpdate(override.id, { versionRange, value: buildScalarValue(), markerChildren: null })
       } else {
-        if (overrideType === 'scalar') {
-          await createMutation.mutateAsync({
-            overriddenAttribute: attribute,
-            versionRange,
-            value: buildScalarValue(),
-            markerChildren: null,
-          })
-        } else {
-          await createMutation.mutateAsync({
-            overriddenAttribute: attribute,
-            versionRange,
-            value: null,
-            markerChildren: buildMarkerChildren(),
-          })
-        }
-        toast({ title: 'Override created' })
+        queueUpdate(override.id, { versionRange, value: null, markerChildren: buildMarkerChildren() })
       }
-      onOpenChange(false)
-    } catch (err) {
-      toast({
-        title: 'Error',
-        description: err instanceof Error ? err.message : String(err),
-        variant: 'destructive',
-      })
+    } else if (overrideType === 'scalar') {
+      queueCreate({ overriddenAttribute: attribute, versionRange, value: buildScalarValue(), markerChildren: null })
+    } else {
+      queueCreate({ overriddenAttribute: attribute, versionRange, value: null, markerChildren: buildMarkerChildren() })
     }
+    onOpenChange(false)
   }
 
-  const isPending = createMutation.isPending || updateMutation.isPending
-  const versionRangeInvalid = !isAllowedOverrideRange(versionRange)
+  // Single source of truth for the range field's validity + message: bad syntax,
+  // then all-versions (= base default), then an inverted/empty interval. Empty
+  // input reads as invalid (blocks submit / disables the button) but the inline
+  // message is suppressed until the user types (see the render guard).
+  const rangeError: string | null =
+    !isValidVersionRange(versionRange)
+      ? 'Invalid version range syntax'
+      : !isAllowedOverrideRange(versionRange)
+        ? 'All-versions range is the base default — use a bounded or open-upper sub-range'
+        : isEmptyVersionRange(versionRange)
+          ? 'Empty range — the lower bound must be below the upper bound'
+          : null
+  const versionRangeInvalid = rangeError !== null
   // Walk existing overrides on the same attribute for client-side conflict
   // preview. Partial overlap, strict containment, and semantic-equal duplicates
   // all block the write (overrides must be disjoint); equal gets distinct copy.
@@ -549,7 +527,7 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
   // this preview and the server agree.
   const overlapConflict: { range: string; kind: 'partial' | 'contains' | 'equal' } | null = (() => {
     if (versionRangeInvalid) return null
-    for (const o of allOverrides) {
+    for (const o of effectiveOverrides) {
       if (o.overriddenAttribute !== attribute) continue
       if (mode === 'edit' && override && o.id === override.id) continue
       const kind = classifyRangeConflict(versionRange, o.versionRange)
@@ -584,7 +562,7 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
                  `attribute` because scalar and marker catalogues are
                  disjoint — a stale value from the other catalogue would
                  trip the "Unknown attribute" guard at submit. */}
-          {mode === 'create' && (
+          {mode === 'create' && !presetAttribute && (
             <div className="space-y-1.5">
               <Label>Override Type</Label>
               <Tabs
@@ -602,7 +580,7 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
           {/* ── Attribute selector ── */}
           <div className="space-y-1.5">
             <Label htmlFor="attribute">Attribute</Label>
-            {mode === 'edit' ? (
+            {mode === 'edit' || presetAttribute ? (
               <p className="text-sm font-mono text-muted-foreground px-3 py-2 rounded-md border bg-muted">
                 {attribute}
               </p>
@@ -657,16 +635,12 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
               className="font-mono"
               required
               aria-invalid={
-                (versionRange.trim() !== '' && !isAllowedOverrideRange(versionRange)) ||
+                (versionRange.trim() !== '' && rangeError !== null) ||
                 overlapConflict !== null
               }
             />
-            {versionRange.trim() !== '' && !isAllowedOverrideRange(versionRange) && (
-              <p className="text-xs text-destructive">
-                {isValidVersionRange(versionRange)
-                  ? 'All-versions range is the base default — use a bounded or open-upper sub-range'
-                  : 'Invalid version range syntax'}
-              </p>
+            {versionRange.trim() !== '' && rangeError !== null && (
+              <p className="text-xs text-destructive">{rangeError}</p>
             )}
             {!versionRangeInvalid && conflictMessage !== null && (
               <p className="text-xs text-destructive">
@@ -920,8 +894,8 @@ export function OverrideRowEditor({ open, onOpenChange, componentId, mode, overr
             <DialogClose asChild>
               <Button type="button" variant="outline">Cancel</Button>
             </DialogClose>
-            <Button type="submit" disabled={isPending || versionRangeBlocks}>
-              {isPending ? 'Saving...' : mode === 'edit' ? 'Update' : 'Create'}
+            <Button type="submit" disabled={versionRangeBlocks}>
+              {mode === 'edit' ? 'Update' : 'Create'}
             </Button>
           </DialogFooter>
         </form>

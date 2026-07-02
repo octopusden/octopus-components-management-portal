@@ -1,5 +1,11 @@
+// The two-segment "all versions" base sentinel CRS stores for a base row /
+// base ownership mapping (`(,0),[0,)`). Whitespace and trailing-zero variants
+// (`(, 0), [0, )`, `(,0.0),[0.0,)`) mean the same thing and also read as base.
+const BASE_SENTINEL_RE = /^\(,0(?:\.0+)*\),\[0(?:\.0+)*,\)$/
+
 export function formatVersionRange(range: string): string {
-  if (range === '(,)') return 'All versions'
+  const compact = range.replace(/\s+/g, '')
+  if (compact === '(,)' || BASE_SENTINEL_RE.test(compact)) return 'All versions'
   return range
 }
 
@@ -71,6 +77,23 @@ export function isAllowedOverrideRange(range: string): boolean {
   return !segments.some((s) => s === '(,)')
 }
 
+/**
+ * True when `range` is a single dot-numeric segment whose bounds describe an
+ * EMPTY interval — the lower bound is greater than the upper (an inverted range
+ * like `[1.7.3076,1.7.3010]`), or the bounds are equal with an exclusive edge
+ * (`[x,x)`, `(x,x]`, `(x,x)`) so no version can fall inside. `[x,x]` is the only
+ * non-empty equal-bound case. Composites, open bounds, and unparseable/qualifier
+ * bounds return `false` — we can't decide those client-side and defer to CRS.
+ */
+export function isEmptyVersionRange(range: string): boolean {
+  const seg = parseSimpleSegment(range)
+  if (!seg || seg.lo === null || seg.hi === null) return false
+  const cmp = compareVersionArrays(seg.lo, seg.hi)
+  if (cmp > 0) return true
+  if (cmp === 0) return !(seg.loIncl && seg.hiIncl)
+  return false
+}
+
 // ─── Overlap detection (simple-segment best-effort) ──────────────────────────
 //
 // Maven version-range intersection is non-trivial for arbitrary inputs
@@ -114,7 +137,7 @@ function parseDotNumeric(s: string): number[] | null {
   return trimmed.split('.').map((p) => Number.parseInt(p, 10))
 }
 
-function parseSimpleSegment(range: string): SimpleRange | null {
+export function parseSimpleSegment(range: string): SimpleRange | null {
   const compact = normalize(range)
   if (compact === '') return null
   // Reject composites — must be a single segment.
@@ -265,4 +288,34 @@ export function compareVersionRanges(a: string, b: string): number {
   const loCmp = compareLowerEdge(ra, rb)
   if (loCmp !== 0) return loCmp
   return compareUpperEdge(ra, rb)
+}
+
+/**
+ * The numeric-highest lower bound across a set of ranges, as a dot-string
+ * (e.g. `1.5.1400`), or `null` when none has a usable lower bound. Used to seed
+ * a sensible default version (the "current"/latest configured version) for the
+ * As-Code resolve box and similar.
+ *
+ * Entries are IGNORED when they have no lower bound to offer: `null`/`undefined`
+ * /blank, the universal `(,)` and the base sentinel `(,0),[0,)` (both composites
+ * or unbounded → `parseSimpleSegment` yields no `lo`), left-unbounded `(,X)`,
+ * and anything `parseSimpleSegment` can't parse (composites, qualifiers).
+ * Ordering is numeric (dot-segment aware), so `[1.10,)` ranks above `[1.2,)`.
+ */
+export function highestLowerBoundVersion(ranges: Array<string | null | undefined>): string | null {
+  let best: number[] | null = null
+  for (const r of ranges) {
+    if (!r) continue
+    const seg = parseSimpleSegment(r)
+    if (!seg || seg.lo === null) continue
+    // The lower bound must be INSIDE the range to be a safe default: an exclusive
+    // lower bound (`(1.5,2.0]`) excludes 1.5 itself, so suggesting it would resolve
+    // to a version outside every range (404). Only inclusive `[` lower bounds count.
+    if (!seg.loIncl) continue
+    // An all-zero lower bound (`[0,)`, `[0.0,)`) means "from the start" — a
+    // degenerate base-like range, not a real version to suggest. Skip it.
+    if (seg.lo.every((v) => v === 0)) continue
+    if (best === null || compareVersionArrays(seg.lo, best) > 0) best = seg.lo
+  }
+  return best === null ? null : best.join('.')
 }

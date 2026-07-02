@@ -1,13 +1,19 @@
+import { useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { Label } from '../ui/label'
 import { Input } from '../ui/input'
 import { Switch } from '../ui/switch'
 import { Button } from '../ui/button'
+import { Badge } from '../ui/badge'
 import { FieldInfo } from '../ui/FieldInfo'
 import { FieldLabelText } from '../ui/FieldLabelText'
 import { Separator } from '../ui/separator'
 import { findUnsupportedGroupId } from '../../lib/groupValidation'
 import type { DistributionSection } from './useDistributionSection'
+import { useDistributionOverrides, type DistributionMarkerPath } from './useDistributionOverrides'
+import { DistributionPerRange } from './DistributionPerRange'
+import { OverrideRowEditor } from './OverrideRowEditor'
+import type { FieldOverride } from '../../lib/types'
 
 interface DistributionTabProps {
   section: DistributionSection
@@ -16,7 +22,9 @@ interface DistributionTabProps {
   supportedGroups?: readonly string[]
 }
 
-/** Distribution tab — presentational. State + slice live in `useDistributionSection`. */
+/** Distribution tab — presentational. Base state + slice live in
+ *  `useDistributionSection`; per-range marker variants live in the shared
+ *  override draft via `useDistributionOverrides` (issue #146). */
 export function DistributionTab({ section, canEdit, supportedGroups = [] }: DistributionTabProps) {
   const {
     state,
@@ -29,6 +37,28 @@ export function DistributionTab({ section, canEdit, supportedGroups = [] }: Dist
     addSecurityGroup, updateSecurityGroup, removeSecurityGroup,
   } = section
   const { maven, fileUrl, docker, packages, securityGroups, explicit, external } = state
+
+  // Per-range distribution overrides (the four marker paths). All add/edit/delete
+  // queue into the same page-level draft the combined Save flushes.
+  const distOverrides = useDistributionOverrides()
+  const [editor, setEditor] = useState<{ path: DistributionMarkerPath; override?: FieldOverride } | null>(null)
+  const openCreate = (path: DistributionMarkerPath) => setEditor({ path })
+  const openEdit = (o: FieldOverride) => setEditor({ path: o.overriddenAttribute as DistributionMarkerPath, override: o })
+
+  const rangeCountBadge = (path: DistributionMarkerPath) =>
+    distOverrides.byPath[path].length > 0 ? (
+      <Badge variant="secondary" className="ml-1 text-[10px]">{distOverrides.byPath[path].length} per-range</Badge>
+    ) : null
+
+  const perRangeBlock = (path: DistributionMarkerPath) => (
+    <DistributionPerRange
+      overrides={distOverrides.byPath[path]}
+      canEdit={canEdit}
+      onAdd={() => openCreate(path)}
+      onEdit={openEdit}
+      onDelete={distOverrides.queueDelete}
+    />
+  )
 
   return (
     <div className="space-y-6">
@@ -53,6 +83,7 @@ export function DistributionTab({ section, canEdit, supportedGroups = [] }: Dist
           <div className="flex items-center gap-1">
             <h3 className="text-sm font-semibold"><FieldLabelText path="distribution.mavenArtifacts" fallback="Maven Artifacts" /></h3>
             <FieldInfo path="distribution.mavenArtifacts" label="Maven Artifacts" />
+            {rangeCountBadge('distribution.maven')}
           </div>
           <Button variant="ghost" size="sm" onClick={addMaven} disabled={!canEdit}>
             <Plus className="h-4 w-4" />
@@ -114,6 +145,8 @@ export function DistributionTab({ section, canEdit, supportedGroups = [] }: Dist
         {maven.length === 0 && (
           <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">No Maven artifacts.</div>
         )}
+
+        {perRangeBlock('distribution.maven')}
       </div>
 
       <Separator />
@@ -124,6 +157,7 @@ export function DistributionTab({ section, canEdit, supportedGroups = [] }: Dist
           <div className="flex items-center gap-1">
             <h3 className="text-sm font-semibold"><FieldLabelText path="distribution.fileUrlArtifacts" fallback="File URL Artifacts" /></h3>
             <FieldInfo path="distribution.fileUrlArtifacts" label="File URL Artifacts" />
+            {rangeCountBadge('distribution.fileUrl')}
           </div>
           <Button variant="ghost" size="sm" onClick={addFileUrl} disabled={!canEdit}>
             <Plus className="h-4 w-4" />
@@ -168,6 +202,8 @@ export function DistributionTab({ section, canEdit, supportedGroups = [] }: Dist
         {fileUrl.length === 0 && (
           <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">No file URL artifacts.</div>
         )}
+
+        {perRangeBlock('distribution.fileUrl')}
       </div>
 
       <Separator />
@@ -178,6 +214,7 @@ export function DistributionTab({ section, canEdit, supportedGroups = [] }: Dist
           <div className="flex items-center gap-1">
             <h3 className="text-sm font-semibold"><FieldLabelText path="distribution.dockerImages" fallback="Docker Images" /></h3>
             <FieldInfo path="distribution.dockerImages" label="Docker Images" />
+            {rangeCountBadge('distribution.docker')}
           </div>
           <Button variant="ghost" size="sm" onClick={addDocker} disabled={!canEdit}>
             <Plus className="h-4 w-4" />
@@ -215,6 +252,8 @@ export function DistributionTab({ section, canEdit, supportedGroups = [] }: Dist
         {docker.length === 0 && (
           <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">No Docker images.</div>
         )}
+
+        {perRangeBlock('distribution.docker')}
       </div>
 
       <Separator />
@@ -225,6 +264,7 @@ export function DistributionTab({ section, canEdit, supportedGroups = [] }: Dist
           <div className="flex items-center gap-1">
             <h3 className="text-sm font-semibold"><FieldLabelText path="distribution.packages" fallback="Packages" /></h3>
             <FieldInfo path="distribution.packages" label="Packages" />
+            {rangeCountBadge('distribution.packages')}
           </div>
           <Button variant="ghost" size="sm" onClick={addPackage} disabled={!canEdit}>
             <Plus className="h-4 w-4" />
@@ -262,6 +302,8 @@ export function DistributionTab({ section, canEdit, supportedGroups = [] }: Dist
         {packages.length === 0 && (
           <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">No packages.</div>
         )}
+
+        {perRangeBlock('distribution.packages')}
       </div>
 
       <Separator />
@@ -310,6 +352,14 @@ export function DistributionTab({ section, canEdit, supportedGroups = [] }: Dist
           <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">No security groups.</div>
         )}
       </div>
+
+      <OverrideRowEditor
+        open={editor !== null}
+        mode={editor?.override ? 'edit' : 'create'}
+        presetAttribute={editor && !editor.override ? editor.path : undefined}
+        override={editor?.override}
+        onOpenChange={(o) => { if (!o) setEditor(null) }}
+      />
     </div>
   )
 }

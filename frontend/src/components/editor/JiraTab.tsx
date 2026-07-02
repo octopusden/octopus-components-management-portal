@@ -36,7 +36,7 @@ export function JiraTab({ component, section, canEdit }: JiraTabProps) {
             <FieldInfo path="jira.projectKey" label="Project Key" />
           </div>
           <Input value={state.projectKey} onChange={(e) => set('projectKey', e.target.value)} placeholder="JIRA project key" />
-          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="jira.projectKey" />
+          <FieldOverrideInline canEdit={canEdit} overriddenAttribute="jira.projectKey" />
         </div>
 
         {showJiraDisplayName && (
@@ -65,7 +65,7 @@ export function JiraTab({ component, section, canEdit }: JiraTabProps) {
           <Label htmlFor="jira-technical" className="cursor-pointer"><FieldLabelText path="jira.technical" fallback="Technical" /></Label>
           <FieldInfo path="jira.technical" label="Technical" />
         </div>
-        <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="jira.technical" />
+        <FieldOverrideInline canEdit={canEdit} overriddenAttribute="jira.technical" />
       </div>
 
       {releasesInDefaultBranchEntry.visibility !== 'hidden' && (
@@ -90,7 +90,7 @@ export function JiraTab({ component, section, canEdit }: JiraTabProps) {
             <FieldInfo path="jira.hotfixVersionFormat" label="Hotfix Version Format" />
           </div>
           <Input value={state.hotfixVersionFormat} onChange={(e) => set('hotfixVersionFormat', e.target.value)} placeholder="e.g. {major}.{minor}.{patch}.{hotfix}" />
-          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="jira.hotfixVersionFormat" />
+          <FieldOverrideInline canEdit={canEdit} overriddenAttribute="jira.hotfixVersionFormat" />
         </div>
 
         <div className="space-y-1.5">
@@ -99,7 +99,7 @@ export function JiraTab({ component, section, canEdit }: JiraTabProps) {
             <FieldInfo path="jira.versionPrefix" label="Version Prefix" />
           </div>
           <Input value={state.versionPrefix} onChange={(e) => set('versionPrefix', e.target.value)} placeholder="e.g. v" />
-          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="jira.versionPrefix" />
+          <FieldOverrideInline canEdit={canEdit} overriddenAttribute="jira.versionPrefix" />
         </div>
 
         <div className="space-y-1.5">
@@ -108,7 +108,7 @@ export function JiraTab({ component, section, canEdit }: JiraTabProps) {
             <FieldInfo path="jira.minorVersionFormat" label="Minor Version Format" />
           </div>
           <Input value={state.minorVersionFormat} onChange={(e) => set('minorVersionFormat', e.target.value)} placeholder="e.g. {major}.0.0" />
-          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="jira.minorVersionFormat" />
+          <FieldOverrideInline canEdit={canEdit} overriddenAttribute="jira.minorVersionFormat" />
         </div>
 
         <div className="space-y-1.5">
@@ -117,7 +117,7 @@ export function JiraTab({ component, section, canEdit }: JiraTabProps) {
             <FieldInfo path="jira.releaseVersionFormat" label="Release Version Format" />
           </div>
           <Input value={state.releaseVersionFormat} onChange={(e) => set('releaseVersionFormat', e.target.value)} placeholder="e.g. {major}.{minor}.0" />
-          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="jira.releaseVersionFormat" />
+          <FieldOverrideInline canEdit={canEdit} overriddenAttribute="jira.releaseVersionFormat" />
         </div>
 
         <div className="space-y-1.5">
@@ -126,7 +126,7 @@ export function JiraTab({ component, section, canEdit }: JiraTabProps) {
             <FieldInfo path="jira.buildVersionFormat" label="Build Version Format" />
           </div>
           <Input value={state.buildVersionFormat} onChange={(e) => set('buildVersionFormat', e.target.value)} placeholder="e.g. {major}.{minor}.{patch}" />
-          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="jira.buildVersionFormat" />
+          <FieldOverrideInline canEdit={canEdit} overriddenAttribute="jira.buildVersionFormat" />
         </div>
 
         <div className="space-y-1.5">
@@ -135,7 +135,7 @@ export function JiraTab({ component, section, canEdit }: JiraTabProps) {
             <FieldInfo path="jira.lineVersionFormat" label="Line Version Format / Major Version Format" />
           </div>
           <Input value={state.lineVersionFormat} onChange={(e) => set('lineVersionFormat', e.target.value)} placeholder="e.g. {major}.{minor}.x" />
-          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="jira.lineVersionFormat" />
+          <FieldOverrideInline canEdit={canEdit} overriddenAttribute="jira.lineVersionFormat" />
         </div>
 
         <div className="space-y-1.5 sm:col-span-2">
@@ -144,7 +144,7 @@ export function JiraTab({ component, section, canEdit }: JiraTabProps) {
             <FieldInfo path="jira.versionFormat" label="Version Format" />
           </div>
           <Input value={state.versionFormat} onChange={(e) => set('versionFormat', e.target.value)} placeholder="Generic version format" />
-          <FieldOverrideInline canEdit={canEdit} componentId={component.id} overriddenAttribute="jira.versionFormat" />
+          <FieldOverrideInline canEdit={canEdit} overriddenAttribute="jira.versionFormat" />
         </div>
       </div>
     </div>

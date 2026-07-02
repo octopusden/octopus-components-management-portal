@@ -1,12 +1,52 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, act } from '@testing-library/react'
+import { render, screen, fireEvent, act, within } from '@testing-library/react'
 import { DistributionTab } from './DistributionTab'
 import { useDistributionSection } from './useDistributionSection'
 import { TooltipProvider } from '../ui/tooltip'
 import { fieldDescriptions } from '../../lib/fieldDescriptions'
-import type { ComponentDetail, ComponentConfiguration } from '../../lib/types'
+import type { ComponentDetail, ComponentConfiguration, FieldOverride } from '../../lib/types'
 
 vi.mock('./FieldOverrideInline', () => ({ FieldOverrideInline: () => null }))
+
+// Per-range distribution overrides ride the shared page-level draft. Mock it so
+// tests can seed effective overrides and spy on queued deletes without a provider.
+let mockEffective: FieldOverride[] = []
+const mockQueueDelete = vi.fn()
+vi.mock('./overridesDraft', () => ({
+  useOverridesDraft: () => ({
+    serverOverrides: mockEffective,
+    effectiveOverrides: mockEffective,
+    isLoading: false,
+    isDirty: false,
+    queueCreate: vi.fn(),
+    queueUpdate: vi.fn(),
+    queueDelete: mockQueueDelete,
+    reset: vi.fn(),
+  }),
+}))
+
+// Stub the modal — its internals are covered by OverrideRowEditor.test.tsx.
+// Capture the props DistributionTab opens it with so we can assert the wiring.
+let lastEditorProps: { open: boolean; mode: string; presetAttribute?: string; override?: FieldOverride } | null = null
+vi.mock('./OverrideRowEditor', () => ({
+  OverrideRowEditor: (props: { open: boolean; mode: string; presetAttribute?: string; override?: FieldOverride }) => {
+    lastEditorProps = props
+    return props.open ? <div data-testid="override-row-editor" /> : null
+  },
+}))
+
+function dockerOverride(range: string, id = `fo-${range}`): FieldOverride {
+  return {
+    id,
+    overriddenAttribute: 'distribution.docker',
+    versionRange: range,
+    rowType: 'MARKER',
+    value: null,
+    markerChildren: { dockerImages: [{ imageName: 'acme/app', flavor: null }] },
+    createdAt: null,
+    updatedAt: null,
+  }
+}
 
 vi.mock('../../hooks/useFieldConfig', () => ({
   useFieldConfigOptions: () => ({ options: [], isLoading: false }),
@@ -31,7 +71,12 @@ function baseComponent(overrides: Partial<ComponentDetail> = {}): ComponentDetai
   }
 }
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  mockEffective = []
+  mockQueueDelete.mockReset()
+  lastEditorProps = null
+})
 
 const captured: { section?: ReturnType<typeof useDistributionSection> } = {}
 function Harness({ component, canEdit = true }: { component: ComponentDetail; canEdit?: boolean }) {
@@ -179,5 +224,47 @@ describe('DistributionTab — groupId supported-prefix validation', () => {
   it('shows no error when the Group ID is under a supported prefix', () => {
     renderWithSupported(mavenComponent('com.acme.svc'), ['com.acme'])
     expect(screen.queryByText(/must start with a supported prefix/i)).toBeNull()
+  })
+})
+
+describe('DistributionTab — per-range variants (issue #146)', () => {
+  function dockerSection() {
+    return within(screen.getByTestId('docker-images-section'))
+  }
+
+  it('shows a per-range count and variant row for an existing docker override', () => {
+    mockEffective = [dockerOverride('[1,2)')]
+    renderTab(baseComponent())
+    expect(dockerSection().getByText(/Per-range variants \(1\)/)).toBeDefined()
+    expect(dockerSection().getByText('[1,2)')).toBeDefined()
+  })
+
+  it('opens the editor in create mode locked to the path on "Add per-range variant"', () => {
+    renderTab(baseComponent())
+    fireEvent.click(dockerSection().getByRole('button', { name: /add per-range variant/i }))
+    expect(lastEditorProps).toMatchObject({ open: true, mode: 'create', presetAttribute: 'distribution.docker' })
+  })
+
+  it('opens the editor in edit mode with the override on "Edit"', () => {
+    mockEffective = [dockerOverride('[1,2)', 'fo-x')]
+    renderTab(baseComponent())
+    fireEvent.click(dockerSection().getByRole('button', { name: /edit per-range variant/i }))
+    expect(lastEditorProps).toMatchObject({ open: true, mode: 'edit' })
+    expect(lastEditorProps!.override?.id).toBe('fo-x')
+  })
+
+  it('queues a delete of the override id on "Delete"', () => {
+    mockEffective = [dockerOverride('[1,2)', 'fo-x')]
+    renderTab(baseComponent())
+    fireEvent.click(dockerSection().getByRole('button', { name: /delete per-range variant/i }))
+    expect(mockQueueDelete).toHaveBeenCalledWith('fo-x')
+  })
+
+  it('disables per-range add/edit/delete when canEdit is false', () => {
+    mockEffective = [dockerOverride('[1,2)', 'fo-x')]
+    renderTab(baseComponent(), false)
+    expect(dockerSection().getByRole('button', { name: /add per-range variant/i })).toBeDisabled()
+    expect(dockerSection().getByRole('button', { name: /edit per-range variant/i })).toBeDisabled()
+    expect(dockerSection().getByRole('button', { name: /delete per-range variant/i })).toBeDisabled()
   })
 })

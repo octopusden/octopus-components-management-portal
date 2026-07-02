@@ -1037,6 +1037,7 @@ export interface components {
             distributionExplicit?: boolean;
             distributionExternal?: boolean;
             docs?: components["schemas"]["DocLinkRequest"][];
+            fieldOverrides?: components["schemas"]["FieldOverrideUpsertRequest"][];
             group?: components["schemas"]["ComponentGroupRequest"];
             jiraDisplayName?: string;
             jiraHotfixVersionFormat?: string;
@@ -1139,6 +1140,14 @@ export interface components {
             markerChildren?: components["schemas"]["MarkerChildrenPayload"];
             value?: Record<string, never>;
             versionRange?: string;
+        };
+        FieldOverrideUpsertRequest: {
+            /** Format: uuid */
+            id?: string;
+            markerChildren?: components["schemas"]["MarkerChildrenPayload"];
+            overriddenAttribute: string;
+            value?: Record<string, never>;
+            versionRange: string;
         };
         FileUrlArtifactRequest: {
             artifactId?: string;
