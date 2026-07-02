@@ -69,7 +69,7 @@ const sourceDetail = {
       isSyntheticBase: false,
       build: { buildSystem: 'GRADLE', gradleVersion: '8.5' },
       escrow: null,
-      jira: { projectKey: 'SRC', majorVersionFormat: '%d.%d' },
+      jira: { projectKey: 'SRC', minorVersionFormat: '%d.%d' },
       vcsEntries: [{ id: 'v-1', vcsPath: 'proj/src-repo', branch: 'main', sortOrder: 0 }],
       mavenArtifacts: [
         { id: 'm-1', groupPattern: 'org.x', artifactPattern: 'src', sortOrder: 0 },
@@ -266,7 +266,7 @@ test.describe('Copy component — admin smoke', () => {
       baseConfiguration: {
         build: { buildSystem: 'GRADLE', gradleVersion: '8.5' },
         // source jira.projectKey stripped; the form's key wins. Version formats kept.
-        jira: { majorVersionFormat: '%d.%d', projectKey: 'CLONE' },
+        jira: { minorVersionFormat: '%d.%d', projectKey: 'CLONE' },
         requiredTools: ['tool-a'],
         // The VCS entry is form-driven: URL typed fresh, branch from the
         // source entry, tag from component-defaults. The source vcsPath

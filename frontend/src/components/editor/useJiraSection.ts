@@ -10,7 +10,7 @@ interface JiraState {
   displayName: string
   technical: boolean
   hotfixVersionFormat: string
-  majorVersionFormat: string
+  minorVersionFormat: string
   releaseVersionFormat: string
   buildVersionFormat: string
   lineVersionFormat: string
@@ -26,7 +26,7 @@ function snapshotFrom(component: ComponentDetail): JiraState {
     displayName: component.jiraDisplayName ?? '',
     technical: j?.technical ?? false,
     hotfixVersionFormat: component.jiraHotfixVersionFormat ?? '',
-    majorVersionFormat: j?.majorVersionFormat ?? '',
+    minorVersionFormat: j?.minorVersionFormat ?? '',
     releaseVersionFormat: j?.releaseVersionFormat ?? '',
     buildVersionFormat: j?.buildVersionFormat ?? '',
     lineVersionFormat: j?.lineVersionFormat ?? '',
@@ -64,7 +64,7 @@ export function useJiraSection(component: ComponentDetail, visibilities: JiraVis
     // jiraHotfixVersionFormat is a top-level component scalar (clears persist).
     push(scalarDiff('Jira · Hotfix Version Format', prior.hotfixVersionFormat, state.hotfixVersionFormat))
     push(scalarDiff('Jira · Version Prefix', prior.versionPrefix, state.versionPrefix, { aspectScalar: true }))
-    push(scalarDiff('Jira · Major Version Format', prior.majorVersionFormat, state.majorVersionFormat, { aspectScalar: true }))
+    push(scalarDiff('Jira · Minor Version Format', prior.minorVersionFormat, state.minorVersionFormat, { aspectScalar: true }))
     push(scalarDiff('Jira · Release Version Format', prior.releaseVersionFormat, state.releaseVersionFormat, { aspectScalar: true }))
     push(scalarDiff('Jira · Build Version Format', prior.buildVersionFormat, state.buildVersionFormat, { aspectScalar: true }))
     push(scalarDiff('Jira · Line Version Format', prior.lineVersionFormat, state.lineVersionFormat, { aspectScalar: true }))
@@ -95,7 +95,7 @@ export function useJiraSection(component: ComponentDetail, visibilities: JiraVis
         jira: {
           projectKey: state.projectKey || null,
           technical: state.technical,
-          majorVersionFormat: state.majorVersionFormat || null,
+          minorVersionFormat: state.minorVersionFormat || null,
           releaseVersionFormat: state.releaseVersionFormat || null,
           buildVersionFormat: state.buildVersionFormat || null,
           lineVersionFormat: state.lineVersionFormat || null,

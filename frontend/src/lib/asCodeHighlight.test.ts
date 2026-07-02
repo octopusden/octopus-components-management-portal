@@ -35,6 +35,9 @@ describe('tokenizeLine', () => {
   })
 
   it('keeps a single-quoted $-placeholder string intact', () => {
+    // `majorVersionFormat` here is intentional: it is the Groovy DSL key emitted
+    // by the CRS as-code renderer (unchanged by the v4 minorVersionFormat rename),
+    // not the v4 field name — this only exercises the tokenizer.
     const t = tokenizeLine("    majorVersionFormat = '$major.$minor'")
     expect(find(t, "'$major.$minor'")?.type).toBe('string')
   })

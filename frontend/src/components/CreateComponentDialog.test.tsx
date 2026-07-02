@@ -182,7 +182,7 @@ describe('CreateComponentDialog — scratch mode base', () => {
       'Component Owner',
       'Jira Project Key',
       'Version Prefix',
-      'Major Version Format',
+      'Minor Version Format',
       'Hotfix Version Format',
       'Artifact ownership',
     ]) {
@@ -446,7 +446,7 @@ describe('CreateComponentDialog — component-defaults prefill (scratch)', () =>
       vcs: { tag: '$module-$version' },
       jira: {
         componentVersionFormat: {
-          majorVersionFormat: '$major.$minor',
+          minorVersionFormat: '$major.$minor',
           releaseVersionFormat: '$major.$minor.$service',
           hotfixVersionFormat: '$major.$minor.$service-$fix',
         },
@@ -454,7 +454,7 @@ describe('CreateComponentDialog — component-defaults prefill (scratch)', () =>
     })
     renderWithProviders(<CreateComponentButton />)
     await openScratch()
-    expect((screen.getByLabelText(/^major version format/i) as HTMLInputElement).value).toBe('$major.$minor')
+    expect((screen.getByLabelText(/^minor version format/i) as HTMLInputElement).value).toBe('$major.$minor')
     expect((screen.getByLabelText(/^release version format/i) as HTMLInputElement).value).toBe('$major.$minor.$service')
     expect((screen.getByLabelText(/^hotfix version format/i) as HTMLInputElement).value).toBe('$major.$minor.$service-$fix')
     // build/line have no default → empty.
@@ -464,7 +464,7 @@ describe('CreateComponentDialog — component-defaults prefill (scratch)', () =>
     await waitFor(() => expect(mockMutateAsync).toHaveBeenCalled())
     const arg = mockMutateAsync.mock.calls[0]![0]
     expect(arg.baseConfiguration.jira).toMatchObject({
-      majorVersionFormat: '$major.$minor',
+      minorVersionFormat: '$major.$minor',
       releaseVersionFormat: '$major.$minor.$service',
     })
     expect(arg.jiraHotfixVersionFormat).toBe('$major.$minor.$service-$fix')

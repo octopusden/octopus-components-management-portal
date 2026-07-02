@@ -15,7 +15,7 @@ function makeForm(overrides: Partial<CreateFormValues> = {}): CreateFormValues {
     copyright: '',
     jiraProjectKey: '',
     versionPrefix: '',
-    majorVersionFormat: '',
+    minorVersionFormat: '',
     releaseVersionFormat: '',
     buildVersionFormat: '',
     lineVersionFormat: '',
@@ -215,10 +215,10 @@ describe('buildCreateRequest — gated (explicit+external) coordinate', () => {
     expect(req.baseConfiguration?.jira).toMatchObject({ projectKey: 'PROJ', versionPrefix: 'svc-new' })
   })
 
-  it('maps the version formats: major/release/build/line → jira aspect, hotfix → component field', () => {
+  it('maps the version formats: minor/release/build/line → jira aspect, hotfix → component field', () => {
     const req = buildCreateRequest(
       makeForm({
-        majorVersionFormat: '$major.$minor',
+        minorVersionFormat: '$major.$minor',
         releaseVersionFormat: '$major.$minor.$service',
         buildVersionFormat: '$b',
         lineVersionFormat: '$l',
@@ -226,7 +226,7 @@ describe('buildCreateRequest — gated (explicit+external) coordinate', () => {
       }),
     )
     expect(req.baseConfiguration?.jira).toMatchObject({
-      majorVersionFormat: '$major.$minor',
+      minorVersionFormat: '$major.$minor',
       releaseVersionFormat: '$major.$minor.$service',
       buildVersionFormat: '$b',
       lineVersionFormat: '$l',
@@ -361,27 +361,27 @@ describe('buildCreateRequest — copy mode (with source)', () => {
         makeBaseRow({
           build: { buildSystem: 'GRADLE' },
           escrow: { reusable: true },
-          jira: { projectKey: 'ALPHA', majorVersionFormat: '%d.%d' },
+          jira: { projectKey: 'ALPHA', minorVersionFormat: '%d.%d' },
           requiredTools: ['tool-a'],
         }),
       ],
     })
-    // The dialog prefills majorVersionFormat from the source into the form; supply it here.
-    const req = buildCreateRequest(makeForm({ name: 'svc-clone', majorVersionFormat: '%d.%d' }), src)
+    // The dialog prefills minorVersionFormat from the source into the form; supply it here.
+    const req = buildCreateRequest(makeForm({ name: 'svc-clone', minorVersionFormat: '%d.%d' }), src)
     expect(req.baseConfiguration?.escrow).toEqual({ reusable: true })
-    expect(req.baseConfiguration?.jira).toEqual({ majorVersionFormat: '%d.%d' })
+    expect(req.baseConfiguration?.jira).toEqual({ minorVersionFormat: '%d.%d' })
     expect(req.baseConfiguration?.requiredTools).toEqual(['tool-a'])
   })
 
   it('copy mode: clearing a BASE jira version format drops it (not re-sent from the source)', () => {
     const src = makeSource({
       configurations: [
-        makeBaseRow({ build: { buildSystem: 'GRADLE' }, jira: { projectKey: 'ALPHA', majorVersionFormat: '%d.%d' } }),
+        makeBaseRow({ build: { buildSystem: 'GRADLE' }, jira: { projectKey: 'ALPHA', minorVersionFormat: '%d.%d' } }),
       ],
     })
-    // User cleared the prefilled Major Version Format → form blank → must NOT re-send the source value.
-    const req = buildCreateRequest(makeForm({ name: 'svc-clone', majorVersionFormat: '' }), src)
-    expect(req.baseConfiguration?.jira == null || !('majorVersionFormat' in req.baseConfiguration.jira)).toBe(true)
+    // User cleared the prefilled Minor Version Format → form blank → must NOT re-send the source value.
+    const req = buildCreateRequest(makeForm({ name: 'svc-clone', minorVersionFormat: '' }), src)
+    expect(req.baseConfiguration?.jira == null || !('minorVersionFormat' in req.baseConfiguration.jira)).toBe(true)
   })
 
   it('coordinate is NEVER taken from source distribution artifacts', () => {

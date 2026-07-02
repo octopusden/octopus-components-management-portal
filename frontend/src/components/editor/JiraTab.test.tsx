@@ -54,7 +54,7 @@ function renderTab(component: ComponentDetail, canEdit = true) {
 
 describe('JiraTab — inline override coverage', () => {
   const overridablePaths = [
-    'jira.projectKey', 'jira.technical', 'jira.majorVersionFormat', 'jira.releaseVersionFormat',
+    'jira.projectKey', 'jira.technical', 'jira.minorVersionFormat', 'jira.releaseVersionFormat',
     'jira.buildVersionFormat', 'jira.lineVersionFormat', 'jira.versionPrefix', 'jira.versionFormat',
     'jira.hotfixVersionFormat',
   ]
@@ -104,7 +104,7 @@ describe('JiraTab — slice', () => {
 describe('JiraTab field descriptions (FieldInfo)', () => {
   const EXPECTED_PATHS = [
     'jira.projectKey', 'jira.displayName', 'jira.technical', 'component.releasesInDefaultBranch',
-    'jira.hotfixVersionFormat', 'jira.versionPrefix', 'jira.majorVersionFormat', 'jira.releaseVersionFormat',
+    'jira.hotfixVersionFormat', 'jira.versionPrefix', 'jira.minorVersionFormat', 'jira.releaseVersionFormat',
     'jira.buildVersionFormat', 'jira.lineVersionFormat', 'jira.versionFormat',
   ]
 

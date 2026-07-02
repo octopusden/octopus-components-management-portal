@@ -87,7 +87,7 @@ function makeCreateSchema(
     jiraProjectKey: z.string().trim().min(1, 'Jira Project Key is required'),
     versionPrefix: z.string(),
     // Optional Jira version-format patterns (prefilled from component-defaults).
-    majorVersionFormat: z.string(),
+    minorVersionFormat: z.string(),
     releaseVersionFormat: z.string(),
     buildVersionFormat: z.string(),
     lineVersionFormat: z.string(),
@@ -251,7 +251,7 @@ const SCRATCH_DEFAULTS: CreateFormValues = {
   copyright: '',
   jiraProjectKey: '',
   versionPrefix: '',
-  majorVersionFormat: '',
+  minorVersionFormat: '',
   releaseVersionFormat: '',
   buildVersionFormat: '',
   lineVersionFormat: '',
@@ -277,7 +277,7 @@ interface VcsDefaults {
 // vcsUrl, distribution coordinate) are intentionally NOT prefilled even when a
 // pattern default exists — they must be entered fresh per component.
 interface ComponentVersionFormatDefaults {
-  majorVersionFormat?: string
+  minorVersionFormat?: string
   releaseVersionFormat?: string
   buildVersionFormat?: string
   lineVersionFormat?: string
@@ -371,7 +371,7 @@ function initialValues(source: ComponentDetail | null, defaults: ComponentDefaul
     // jiraProjectKey is unique per component → never copied (left blank). versionPrefix and the
     // version formats are reusable patterns, so they ARE prefilled from the source's BASE jira config.
     versionPrefix: selectBaseRow(source)?.jira?.versionPrefix ?? '',
-    majorVersionFormat: selectBaseRow(source)?.jira?.majorVersionFormat ?? '',
+    minorVersionFormat: selectBaseRow(source)?.jira?.minorVersionFormat ?? '',
     releaseVersionFormat: selectBaseRow(source)?.jira?.releaseVersionFormat ?? '',
     buildVersionFormat: selectBaseRow(source)?.jira?.buildVersionFormat ?? '',
     lineVersionFormat: selectBaseRow(source)?.jira?.lineVersionFormat ?? '',
@@ -388,11 +388,11 @@ function versionFormatsFromDefaults(
   defaults: ComponentDefaults,
 ): Pick<
   CreateFormValues,
-  'majorVersionFormat' | 'releaseVersionFormat' | 'buildVersionFormat' | 'lineVersionFormat' | 'hotfixVersionFormat'
+  'minorVersionFormat' | 'releaseVersionFormat' | 'buildVersionFormat' | 'lineVersionFormat' | 'hotfixVersionFormat'
 > {
   const cvf = defaults.jira?.componentVersionFormat ?? {}
   return {
-    majorVersionFormat: blankToUndefined(cvf.majorVersionFormat) ?? '',
+    minorVersionFormat: blankToUndefined(cvf.minorVersionFormat) ?? '',
     releaseVersionFormat: blankToUndefined(cvf.releaseVersionFormat) ?? '',
     buildVersionFormat: blankToUndefined(cvf.buildVersionFormat) ?? '',
     lineVersionFormat: blankToUndefined(cvf.lineVersionFormat) ?? '',
@@ -964,10 +964,10 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <div className="flex items-center gap-1">
-              <Label htmlFor="create-majorVersionFormat"><FieldLabelText path="jira.majorVersionFormat" fallback="Major Version Format" /></Label>
-              <FieldInfo path="jira.majorVersionFormat" label="Major Version Format" />
+              <Label htmlFor="create-minorVersionFormat"><FieldLabelText path="jira.minorVersionFormat" fallback="Minor Version Format" /></Label>
+              <FieldInfo path="jira.minorVersionFormat" label="Minor Version Format" />
             </div>
-            <Input id="create-majorVersionFormat" className="font-mono text-xs" placeholder="$major.$minor" {...register('majorVersionFormat')} />
+            <Input id="create-minorVersionFormat" className="font-mono text-xs" placeholder="$major.$minor" {...register('minorVersionFormat')} />
           </div>
           <div className="space-y-1.5">
             <div className="flex items-center gap-1">
@@ -985,8 +985,8 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
           </div>
           <div className="space-y-1.5">
             <div className="flex items-center gap-1">
-              <Label htmlFor="create-lineVersionFormat"><FieldLabelText path="jira.lineVersionFormat" fallback="Line Version Format" /></Label>
-              <FieldInfo path="jira.lineVersionFormat" label="Line Version Format" />
+              <Label htmlFor="create-lineVersionFormat"><FieldLabelText path="jira.lineVersionFormat" fallback="Line Version Format / Major Version Format" /></Label>
+              <FieldInfo path="jira.lineVersionFormat" label="Line Version Format / Major Version Format" />
             </div>
             <Input id="create-lineVersionFormat" className="font-mono text-xs" {...register('lineVersionFormat')} />
           </div>

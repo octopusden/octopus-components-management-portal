@@ -60,7 +60,7 @@ const KEY_TO_SCHEMA = {
   'jira.technical': ['JiraAspectResponse', 'technical'],
   'jira.hotfixVersionFormat': ['JiraAspectResponse', 'hotfixVersionFormat'],
   'jira.versionPrefix': ['JiraAspectResponse', 'versionPrefix'],
-  'jira.majorVersionFormat': ['JiraAspectResponse', 'majorVersionFormat'],
+  'jira.minorVersionFormat': ['JiraAspectResponse', 'minorVersionFormat'],
   'jira.releaseVersionFormat': ['JiraAspectResponse', 'releaseVersionFormat'],
   'jira.buildVersionFormat': ['JiraAspectResponse', 'buildVersionFormat'],
   'jira.lineVersionFormat': ['JiraAspectResponse', 'lineVersionFormat'],
