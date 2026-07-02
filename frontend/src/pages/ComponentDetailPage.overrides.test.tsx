@@ -28,6 +28,7 @@ vi.mock('../hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }))
 vi.mock('../components/AppFooter', () => ({ AppFooter: () => <footer>footer</footer> }))
 vi.mock('../hooks/useInfo', () => ({
   usePortalLinks: () => ({ data: undefined }),
+  usePortalConfig: () => ({ data: undefined }),
   useCrsInfo: vi.fn(),
   usePortalInfo: () => ({ data: undefined }),
 }))

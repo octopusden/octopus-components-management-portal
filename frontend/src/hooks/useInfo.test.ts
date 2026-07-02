@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
-import { useCrsInfo, usePortalLinks, usePortalInfo } from './useInfo'
+import { useCrsInfo, usePortalLinks, usePortalInfo, usePortalConfig } from './useInfo'
 import portalLinksContract from '../test-fixtures/portal-links.contract.json'
 import portalLinksEmptyContract from '../test-fixtures/portal-links.empty.contract.json'
 import portalInfoContract from '../test-fixtures/portal-info.contract.json'
@@ -327,5 +327,49 @@ describe('usePortalLinks', () => {
     expect(result.current.data?.gitBaseUrl).toBeUndefined()
     expect(result.current.data?.tcBaseUrl).toBeUndefined()
     expect(result.current.data?.dmsBaseUrl).toBeUndefined()
+  })
+})
+
+describe('usePortalConfig', () => {
+  it('GETs ${BASE_URL}portal/config and parses solutionKeyPatterns', async () => {
+    const fixture = { solutionKeyPatterns: ['-solution', 'dmp-bundle'] }
+    const mockFetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(fixture), { status: 200 }))
+    vi.stubGlobal('fetch', mockFetch)
+
+    const { result } = renderHook(() => usePortalConfig(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(mockFetch.mock.calls[0]![0]).toBe(`${import.meta.env.BASE_URL}portal/config`)
+    expect(result.current.data?.solutionKeyPatterns).toEqual(['-solution', 'dmp-bundle'])
+  })
+
+  it('honors deployment sub-path BASE_URL', async () => {
+    vi.stubEnv('BASE_URL', '/components-management-portal/')
+    vi.resetModules()
+    const { usePortalConfig: freshHook } = await import('./useInfo')
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ solutionKeyPatterns: [] }), { status: 200 }))
+    vi.stubGlobal('fetch', mockFetch)
+
+    const { result } = renderHook(() => freshHook(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(mockFetch.mock.calls[0]![0]).toBe('/components-management-portal/portal/config')
+  })
+
+  // Parity with usePortalLinks: /portal/config goes through the same plain fetch
+  // (NOT the api wrapper), so a session-expired 401 stays in isError and never
+  // drives an OIDC redirect from this call — the SPA just treats patterns as
+  // absent (no Solution toggle) and the page's authenticated api calls handle
+  // the real redirect.
+  it('401 stays in isError without redirecting to OIDC (patterns treated as absent)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('nope', { status: 401 })))
+
+    const { result } = renderHook(() => usePortalConfig(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.isError).toBe(true))
+
+    expect(assignSpy).not.toHaveBeenCalled()
+    expect(result.current.data).toBeUndefined()
   })
 })

@@ -1,6 +1,7 @@
 package org.octopusden.octopus.components.portal.controller
 
 import com.fasterxml.jackson.annotation.JsonInclude
+import org.octopusden.octopus.components.portal.configuration.PortalComponentProperties
 import org.octopusden.octopus.components.portal.configuration.PortalLinksProperties
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.info.BuildProperties
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController
 class PortalInfoController(
     private val buildProperties: BuildProperties,
     private val linksProperties: PortalLinksProperties,
+    private val componentProperties: PortalComponentProperties,
     // Binds from PORTAL_ENVIRONMENT_LABEL via application.yaml. A single scalar,
     // so @Value instead of a dedicated @ConfigurationProperties class — same
     // pattern as registry-base-url in EmployeeServiceIntegrationHealthIndicator.
@@ -39,6 +41,18 @@ class PortalInfoController(
         dmsBaseUrl = linksProperties.dmsBaseUrl?.takeIf(String::isNotBlank),
     )
 
+    // Component-editor config for the SPA. Currently only the solution-key
+    // patterns that gate the General-tab Solution toggle. Authenticated (falls
+    // through to anyExchange().authenticated() like /links) — only consumed on
+    // the authenticated component-detail page. Always returns the key so the SPA
+    // can treat an empty list as "no component offers the toggle".
+    @GetMapping("/config")
+    fun config(): ConfigResponse = ConfigResponse(
+        solutionKeyPatterns = componentProperties.solutionKeyPatterns
+            .map(String::trim)
+            .filter(String::isNotBlank),
+    )
+
     // NON_NULL so a prod portal (no PORTAL_ENVIRONMENT_LABEL) keeps the exact
     // pre-existing `{name, version}` body; only labelled environments gain the key.
     @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -58,5 +72,9 @@ class PortalInfoController(
         val gitBaseUrl: String?,
         val tcBaseUrl: String?,
         val dmsBaseUrl: String?,
+    )
+
+    data class ConfigResponse(
+        val solutionKeyPatterns: List<String>,
     )
 }

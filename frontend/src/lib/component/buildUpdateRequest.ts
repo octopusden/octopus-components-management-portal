@@ -25,6 +25,13 @@ export interface FieldVisibilities {
   copyright: FieldVisibility
   canBeParent: FieldVisibility
   labels: FieldVisibility
+  // `solution` is field-config-gated too (SolutionTab). A hidden/readonly
+  // solution must never reach the wire — CRS does not filter by FC, so a
+  // stray value would silently overwrite the server flag (defense-in-depth
+  // behind the UI's disabled switch). Optional so pre-existing callers that
+  // don't set it default to 'editable' (the switch can only become dirty when
+  // it is actually rendered editable).
+  solution?: FieldVisibility
 }
 
 // Subset of RHF `formState.dirtyFields` that drives clear/omit/REPLACE
@@ -117,7 +124,13 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
     ),
   )
 
-  const solutionChanged = dirtyFields.solution === true
+  // Omit when hidden OR readonly — a readonly switch can't legitimately be
+  // dirtied through the UI, but gate here too so a stray dirty flag never
+  // overwrites the server flag.
+  const solutionChanged =
+    dirtyFields.solution === true &&
+    visibilities.solution !== 'hidden' &&
+    visibilities.solution !== 'readonly'
   // `archived` is value-compared rather than dirtyFields-gated: the field
   // is a boolean with no `null` server-side ambiguity, so a value compare
   // is unambiguous and avoids depending on RHF's dirty tracking for a

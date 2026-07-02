@@ -57,7 +57,7 @@ export function ArtifactOwnershipEditor({ value, onChange, configRanges, support
   const conflictCount = Object.keys(conflictById).length
 
   return (
-    <div className="flex flex-col gap-4" data-testid="ownership-editor">
+    <div className="flex flex-col gap-3" data-testid="ownership-editor">
       {(conflictCount > 0 || overlap) && (
         <div className="flex items-start gap-2.5 rounded-lg border border-destructive/30 bg-destructive/5 p-3" role="alert">
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
@@ -148,7 +148,7 @@ function MappingCard({ mapping, allMappings, conflict, configRanges, supportedGr
   const explicitEmpty = isExplicitEmpty(mapping)
 
   return (
-    <div className={cn('flex flex-col gap-3.5 rounded-lg border p-3.5', conflict ? 'border-destructive/40' : 'border-input')}>
+    <div className={cn('flex flex-col gap-2.5 rounded-lg border p-3', conflict ? 'border-destructive/40' : 'border-input')}>
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-muted-foreground">
           {mapping.base ? 'Artifact coordinates' : `Override · ${mapping.range ?? ''}`}
@@ -167,50 +167,54 @@ function MappingCard({ mapping, allMappings, conflict, configRanges, supportedGr
         )}
       </div>
 
-      {!mapping.base && (
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className="font-medium">Version range</span>
-          <select
-            className="h-9 w-[220px] rounded-md border border-input bg-background px-3 font-mono text-sm"
-            aria-label="Override version range"
-            value={mapping.range ?? ''}
+      {/* Group ID + Owns share a row on wider screens to keep the card compact;
+          the version-range select (overrides only) sits inline with them. */}
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+        {!mapping.base && (
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium">Version range</span>
+            <select
+              className="h-9 w-full rounded-md border border-input bg-background px-3 font-mono text-sm"
+              aria-label="Override version range"
+              value={mapping.range ?? ''}
+              disabled={disabled}
+              onChange={(e) => onPatch({ range: e.target.value })}
+            >
+              {(configRanges ?? []).map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Group ID</span>
+          <Input
+            className={cn('font-mono', gErr && 'border-destructive')}
+            placeholder="com.example.foo"
+            aria-label="Group ID"
+            value={mapping.groups}
             disabled={disabled}
-            onChange={(e) => onPatch({ range: e.target.value })}
-          >
-            {(configRanges ?? []).map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </select>
+            onChange={(e) => onPatch({ groups: e.target.value })}
+          />
+          {gErr && <span className="text-xs text-destructive">{gErr}</span>}
         </label>
-      )}
 
-      <label className="flex flex-col gap-1.5 text-sm">
-        <span className="font-medium">Group ID</span>
-        <Input
-          className={cn('font-mono', gErr && 'border-destructive')}
-          placeholder="com.example.foo"
-          aria-label="Group ID"
-          value={mapping.groups}
-          disabled={disabled}
-          onChange={(e) => onPatch({ groups: e.target.value })}
-        />
-        {gErr && <span className="text-xs text-destructive">{gErr}</span>}
-      </label>
-
-      <div className="flex flex-col gap-1.5 text-sm">
-        <span className="font-medium">Owns</span>
-        <ModeRadioGroup
-          value={mapping.mode}
-          disabled={disabled}
-          idPrefix={`mode-${mapping.id}`}
-          onChange={(mode) => onPatch({ mode })}
-        />
+        <div className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Owns</span>
+          <ModeRadioGroup
+            value={mapping.mode}
+            disabled={disabled}
+            idPrefix={`mode-${mapping.id}`}
+            onChange={(mode) => onPatch({ mode })}
+          />
+        </div>
       </div>
 
       {mapping.mode === 'EXPLICIT' && (
-        <div className="flex flex-col gap-1.5 text-sm">
+        <div className="flex flex-col gap-1 text-sm">
           <span className="font-medium">Artifacts</span>
           <ArtifactTokensInput
             tokens={mapping.tokens}

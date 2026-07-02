@@ -74,6 +74,14 @@ portal:
     git-base-url: ${PORTAL_LINKS_GIT_BASE_URL:}
     tc-base-url: ${PORTAL_LINKS_TC_BASE_URL:}
     dms-base-url: ${PORTAL_LINKS_DMS_BASE_URL:}
+  # Component-editor knobs read by the SPA via /portal/config.
+  component:
+    # Substrings that mark a component key as a "solution candidate": only those
+    # components expose the Solution toggle on the General tab (every other
+    # component keeps the flag server-owned, shown read-only as a badge/banner).
+    # Comma-separated; per-env override in service-config. Blank → no toggle
+    # anywhere.
+    solution-key-patterns: ${PORTAL_SOLUTION_KEY_PATTERNS:-solution,dmp-bundle}
   # Generic "Validation Problems" facility: a scheduled in-memory sweep that
   # reconciles release-management's RELEASE builds against the components-registry
   # resolver. registry-base-url reuses the same CRS env var as the gateway routes;

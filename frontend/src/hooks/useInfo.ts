@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import type { CrsInfo, PortalInfo, PortalLinks } from '../lib/types'
+import type { CrsInfo, PortalConfig, PortalInfo, PortalLinks } from '../lib/types'
 import { safeHttpUrl } from '../lib/utils'
 
 // /portal/info and /rest/api/4/info are anonymous build-info endpoints used by
@@ -72,5 +72,22 @@ export function usePortalLinks() {
     queryKey: ['links', 'portal'],
     queryFn: async () => sanitizeLinks(await fetchInfo<PortalLinks>(`${import.meta.env.BASE_URL}portal/links`)),
     ...QUERY_OPTIONS,
+  })
+}
+
+// /portal/config carries the solution-key patterns. It goes through the same
+// plain `fetch` as /portal/links (NOT the `api` wrapper): /portal/config is not
+// on the API 401-matcher in SecurityConfig, so an expired session yields a
+// browser 302 rather than a clean 401 — the `api` wrapper's OIDC-redirect
+// contract would not hold. On any failure the query just errors and the SPA
+// treats patterns as absent (no Solution toggle); the page's authenticated
+// /components fetch drives the real session-expiry redirect. Cached long —
+// patterns change only via a service-config reload.
+export function usePortalConfig() {
+  return useQuery<PortalConfig>({
+    queryKey: ['config', 'portal'],
+    queryFn: () => fetchInfo<PortalConfig>(`${import.meta.env.BASE_URL}portal/config`),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
   })
 }
