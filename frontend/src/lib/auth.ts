@@ -32,6 +32,10 @@ export const PERMISSIONS = {
   // ADMIN_DATA to match CRS PR #322; the old token no longer maps to any role, so
   // the raw-overrides gate was silently false for everyone until this fix.
   EDIT_METADATA: 'EDIT_METADATA',
+  // "Admin" for per-field editability: field-config `editable: adminOnly` fields
+  // (Technical, External Registry) are editable only by holders of this permission
+  // (CRS maps it in octopus-security.roles). See isFieldEditableFor / useFieldEditable.
+  EDIT_ANY_COMPONENT: 'EDIT_ANY_COMPONENT',
 } as const
 
 // Must match Spring Security's registration id on the portal gateway:

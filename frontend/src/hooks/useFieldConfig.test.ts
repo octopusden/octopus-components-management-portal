@@ -6,11 +6,15 @@ import {
   useFieldConfigOptions,
   useFieldConfigEntry,
   useFieldLabel,
+  useFieldEditable,
+  isFieldEditableFor,
   labelFor,
   searchabilityFor,
   DEFAULT_SEARCHABILITY,
 } from './useFieldConfig'
 import { useFieldConfig } from './useAdminConfig'
+import { useCurrentUser } from './useCurrentUser'
+import { PERMISSIONS, type User } from '../lib/auth'
 
 vi.mock('./useAdminConfig', () => ({
   useFieldConfig: vi.fn(),
@@ -19,7 +23,20 @@ vi.mock('./useAdminConfig', () => ({
   useUpdateComponentDefaults: vi.fn(),
   useMigrateDefaults: vi.fn(),
 }))
+vi.mock('./useCurrentUser', () => ({ useCurrentUser: vi.fn() }))
 const mockUseFieldConfig = vi.mocked(useFieldConfig)
+const mockUseCurrentUser = vi.mocked(useCurrentUser)
+
+const adminUser: User = {
+  username: 'admin',
+  groups: [],
+  roles: [{ name: 'ADMIN', permissions: [PERMISSIONS.EDIT_ANY_COMPONENT] }],
+}
+const regularUser: User = {
+  username: 'bob',
+  groups: [],
+  roles: [{ name: 'USER', permissions: [PERMISSIONS.ACCESS_COMPONENTS] }],
+}
 
 function makeWrapper() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -320,6 +337,105 @@ describe('useFieldConfigEntry', () => {
     )
     expect(result.current.isError).toBe(false)
     expect(result.current.entry.defaultValue).toBe('com.example')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// isFieldEditableFor — pure effective-editability resolver (entry + user)
+// ---------------------------------------------------------------------------
+
+describe('isFieldEditableFor', () => {
+  const data = {
+    jira: {
+      technical: { editable: 'adminOnly' },
+      projectKey: {}, // no editable axis → treated as 'all'
+      lineVersionFormat: { editable: 'all' },
+      versionFormat: { editable: 'none' },
+      displayName: { visibility: 'readonly' },
+      buildVersionFormat: { visibility: 'hidden' },
+    },
+  }
+
+  it('adminOnly requires the EDIT_ANY_COMPONENT permission', () => {
+    expect(isFieldEditableFor(data, 'jira.technical', adminUser)).toBe(true)
+    expect(isFieldEditableFor(data, 'jira.technical', regularUser)).toBe(false)
+  })
+
+  it('adminOnly fails closed when the user is unavailable (null/undefined)', () => {
+    expect(isFieldEditableFor(data, 'jira.technical', null)).toBe(false)
+    expect(isFieldEditableFor(data, 'jira.technical', undefined)).toBe(false)
+  })
+
+  it('editable:none is never editable, even for an admin', () => {
+    expect(isFieldEditableFor(data, 'jira.versionFormat', adminUser)).toBe(false)
+  })
+
+  it('readonly / hidden visibility is not editable', () => {
+    expect(isFieldEditableFor(data, 'jira.displayName', adminUser)).toBe(false)
+    expect(isFieldEditableFor(data, 'jira.buildVersionFormat', adminUser)).toBe(false)
+  })
+
+  it('absent or all editable is user-independent (editable for anyone, incl. null)', () => {
+    expect(isFieldEditableFor(data, 'jira.projectKey', regularUser)).toBe(true)
+    expect(isFieldEditableFor(data, 'jira.projectKey', null)).toBe(true)
+    expect(isFieldEditableFor(data, 'jira.lineVersionFormat', regularUser)).toBe(true)
+  })
+
+  it('an unconfigured path defaults to editable', () => {
+    expect(isFieldEditableFor(data, 'jira.nope', regularUser)).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// useFieldEditable — composes the entry + current user; fails closed on load
+// ---------------------------------------------------------------------------
+
+describe('useFieldEditable', () => {
+  it('fails closed while the current user is still loading', () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: { jira: { projectKey: {} } },
+      isLoading: false,
+    } as unknown as ReturnType<typeof useFieldConfig>)
+    mockUseCurrentUser.mockReturnValue({ data: undefined, isLoading: true } as unknown as ReturnType<typeof useCurrentUser>)
+    const { result } = renderHook(() => useFieldEditable('jira.projectKey'), { wrapper: makeWrapper() })
+    expect(result.current).toBe(false)
+  })
+
+  it('fails closed while the field-config is still loading', () => {
+    mockUseFieldConfig.mockReturnValue({ data: undefined, isLoading: true } as unknown as ReturnType<typeof useFieldConfig>)
+    mockUseCurrentUser.mockReturnValue({ data: regularUser, isLoading: false } as unknown as ReturnType<typeof useCurrentUser>)
+    const { result } = renderHook(() => useFieldEditable('jira.projectKey'), { wrapper: makeWrapper() })
+    expect(result.current).toBe(false)
+  })
+
+  it('resolves an adminOnly field from the current user permissions', () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: { jira: { technical: { editable: 'adminOnly' } } },
+      isLoading: false,
+    } as unknown as ReturnType<typeof useFieldConfig>)
+    mockUseCurrentUser.mockReturnValue({ data: adminUser, isLoading: false } as unknown as ReturnType<typeof useCurrentUser>)
+    const { result } = renderHook(() => useFieldEditable('jira.technical'), { wrapper: makeWrapper() })
+    expect(result.current).toBe(true)
+  })
+
+  it('denies an adminOnly field to a regular user', () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: { jira: { technical: { editable: 'adminOnly' } } },
+      isLoading: false,
+    } as unknown as ReturnType<typeof useFieldConfig>)
+    mockUseCurrentUser.mockReturnValue({ data: regularUser, isLoading: false } as unknown as ReturnType<typeof useCurrentUser>)
+    const { result } = renderHook(() => useFieldEditable('jira.technical'), { wrapper: makeWrapper() })
+    expect(result.current).toBe(false)
+  })
+
+  it('allows an ordinary (all) field for a logged-in regular user', () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: { jira: { projectKey: {} } },
+      isLoading: false,
+    } as unknown as ReturnType<typeof useFieldConfig>)
+    mockUseCurrentUser.mockReturnValue({ data: regularUser, isLoading: false } as unknown as ReturnType<typeof useCurrentUser>)
+    const { result } = renderHook(() => useFieldEditable('jira.projectKey'), { wrapper: makeWrapper() })
+    expect(result.current).toBe(true)
   })
 })
 
