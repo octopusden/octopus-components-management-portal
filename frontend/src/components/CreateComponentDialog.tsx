@@ -943,9 +943,9 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
         <div className="space-y-1.5">
           <div className="flex items-center gap-1">
             <Label htmlFor="create-versionPrefix">
-              <FieldLabelText path="jira.versionPrefix" fallback="Version Prefix" />
+              <FieldLabelText path="jira.versionPrefix" fallback="Jira Version Prefix" />
             </Label>
-            <FieldInfo path="jira.versionPrefix" label="Version Prefix" />
+            <FieldInfo path="jira.versionPrefix" label="Jira Version Prefix" />
           </div>
           <Input
             id="create-versionPrefix"

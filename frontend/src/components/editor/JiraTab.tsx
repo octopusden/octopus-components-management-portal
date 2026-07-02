@@ -95,8 +95,8 @@ export function JiraTab({ component, section, canEdit }: JiraTabProps) {
 
         <div className="space-y-1.5">
           <div className="flex items-center gap-1">
-            <Label><FieldLabelText path="jira.versionPrefix" fallback="Version Prefix" /></Label>
-            <FieldInfo path="jira.versionPrefix" label="Version Prefix" />
+            <Label><FieldLabelText path="jira.versionPrefix" fallback="Jira Version Prefix" /></Label>
+            <FieldInfo path="jira.versionPrefix" label="Jira Version Prefix" />
           </div>
           <Input value={state.versionPrefix} onChange={(e) => set('versionPrefix', e.target.value)} placeholder="e.g. v" />
           <FieldOverrideInline canEdit={canEdit} overriddenAttribute="jira.versionPrefix" />
@@ -140,8 +140,8 @@ export function JiraTab({ component, section, canEdit }: JiraTabProps) {
 
         <div className="space-y-1.5 sm:col-span-2">
           <div className="flex items-center gap-1">
-            <Label><FieldLabelText path="jira.versionFormat" fallback="Version Format" /></Label>
-            <FieldInfo path="jira.versionFormat" label="Version Format" />
+            <Label><FieldLabelText path="jira.versionFormat" fallback="Full Version Format in Jira" /></Label>
+            <FieldInfo path="jira.versionFormat" label="Full Version Format in Jira" />
           </div>
           <Input value={state.versionFormat} onChange={(e) => set('versionFormat', e.target.value)} placeholder="Generic version format" />
           <FieldOverrideInline canEdit={canEdit} overriddenAttribute="jira.versionFormat" />

@@ -181,7 +181,7 @@ describe('CreateComponentDialog — scratch mode base', () => {
       'Build System',
       'Component Owner',
       'Jira Project Key',
-      'Version Prefix',
+      'Jira Version Prefix',
       'Minor Version Format',
       'Hotfix Version Format',
       'Artifact ownership',
