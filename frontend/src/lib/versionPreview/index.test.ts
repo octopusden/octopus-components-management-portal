@@ -171,6 +171,17 @@ describe('computeLadder — variations', () => {
     expect(get({ ...base, sample: '1.2' }, 'release')!.value).toBe('pgw-1.2.0')
   })
 
+  it('Line does NOT fall back to the minor format when its own template is blank', () => {
+    // Line is the leading field; no reverse line←minor fallback (would mislead).
+    const line = get({ ...base, lineVersionFormat: '', minorVersionFormat: '$major' }, 'line')!
+    expect(line.value).toBe('')
+  })
+
+  it('a value containing $ replacement specials is inserted verbatim in the wrap', () => {
+    // A pathological prefix must not be interpreted as a replacement pattern.
+    expect(get({ ...base, versionPrefix: '$&x' }, 'release')!.value).toBe('$&x-1.2.3')
+  })
+
   it('technical switches the Release destination caption', () => {
     expect(get({ ...base, technical: true }, 'release')!.dest).toMatch(/subcomponent fix version/i)
   })

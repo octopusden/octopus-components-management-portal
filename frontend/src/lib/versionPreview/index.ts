@@ -59,7 +59,9 @@ const DEFAULT_VERSION_FORMAT = '$versionPrefix-$baseVersionFormat'
 export function wrapJira(base: string, prefix: string, versionFormat: string): string {
   if (!prefix.trim()) return base
   const template = versionFormat.trim() ? versionFormat : DEFAULT_VERSION_FORMAT
-  return template.replace(/\$versionPrefix/g, prefix).replace(/\$baseVersionFormat/g, base)
+  // Function replacers so a prefix/base containing $&, $$, $1, … is inserted
+  // verbatim rather than interpreted as a replacement pattern.
+  return template.replace(/\$versionPrefix/g, () => prefix).replace(/\$baseVersionFormat/g, () => base)
 }
 
 export interface LadderState {
@@ -115,8 +117,11 @@ export function computeLadder(state: LadderState): LadderRow[] {
 
   const minorSeparate = isSeparate(state.minorVersionFormat, state.lineVersionFormat)
   const minorTemplate = minorSeparate ? state.minorVersionFormat : state.lineVersionFormat
-  // Line falls back to the minor format when unset (releng-lib direction).
-  const lineTemplate = state.lineVersionFormat.trim() ? state.lineVersionFormat : state.minorVersionFormat
+  // Line is the leading field (Minor derives from it — brief §5 / prep §R6). No
+  // reverse line←minor fallback here: it would show a misleading untagged value
+  // for the field the redesign presents as authoritative. Editor seeding writes
+  // the effective leading value into Line, so it is populated at read time.
+  const lineTemplate = state.lineVersionFormat
   const buildSeparate = isSeparate(state.buildVersionFormat, state.releaseVersionFormat)
   const buildTemplate = buildSeparate ? state.buildVersionFormat : state.releaseVersionFormat
 

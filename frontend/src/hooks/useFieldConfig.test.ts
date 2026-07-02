@@ -428,6 +428,17 @@ describe('useFieldEditable', () => {
     expect(result.current).toBe(false)
   })
 
+  it('fails closed when the field-config query errored (entry degrades to editable default)', () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+    } as unknown as ReturnType<typeof useFieldConfig>)
+    mockUseCurrentUser.mockReturnValue({ data: regularUser, isLoading: false } as unknown as ReturnType<typeof useCurrentUser>)
+    const { result } = renderHook(() => useFieldEditable('jira.technical'), { wrapper: makeWrapper() })
+    expect(result.current).toBe(false)
+  })
+
   it('allows an ordinary (all) field for a logged-in regular user', () => {
     mockUseFieldConfig.mockReturnValue({
       data: { jira: { projectKey: {} } },

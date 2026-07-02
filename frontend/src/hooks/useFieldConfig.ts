@@ -185,9 +185,12 @@ export function isFieldEditableFor(
  * should never flash editable before we can confirm the user may edit it.
  */
 export function useFieldEditable(fieldPath: string): boolean {
-  const { entry, isLoading: fcLoading } = useFieldConfigEntry(fieldPath)
+  const { entry, isLoading: fcLoading, isError: fcError } = useFieldConfigEntry(fieldPath)
   const { data: user, isLoading: userLoading } = useCurrentUser()
-  if (fcLoading || userLoading) return false
+  // Fail closed while loading AND on a field-config error: on error the entry
+  // degrades to the editable default, which would silently open adminOnly/none
+  // fields — the opposite of the intended gate.
+  if (fcLoading || userLoading || fcError) return false
   return isEntryEditableFor(entry, user)
 }
 
