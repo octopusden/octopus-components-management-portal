@@ -225,6 +225,15 @@ describe('useJiraSection', () => {
     expect(result.current.slice.request.baseConfiguration?.jira?.projectKey).toBe('NEW')
   })
 
+  // Guards the renamed v4 version-format field on the write path: editing it must
+  // land in the PATCH body as baseConfiguration.jira.minorVersionFormat (not the
+  // old majorVersionFormat) so the combined Save round-trips the rename.
+  it('edited minor version format lands in baseConfiguration.jira.minorVersionFormat', () => {
+    const { result } = renderHook(() => useJiraSection(makeComponent({}, { jira: { minorVersionFormat: 'old' } }), vis))
+    act(() => result.current.set('minorVersionFormat', '$major.$minor'))
+    expect(result.current.slice.request.baseConfiguration?.jira?.minorVersionFormat).toBe('$major.$minor')
+  })
+
   it('does NOT send releasesInDefaultBranch when field is hidden', () => {
     const { result } = renderHook(() =>
       useJiraSection(makeComponent({ releasesInDefaultBranch: false }), { releasesInDefaultBranch: 'hidden' }),
