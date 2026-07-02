@@ -220,33 +220,40 @@
       "BuildAspectRequest" : {
         "properties" : {
           "buildFilePath" : {
+            "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null.",
             "type" : "string"
           },
           "buildSystem" : {
             "type" : "string"
           },
           "buildTasks" : {
+            "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null.",
             "type" : "string"
           },
           "deprecated" : {
             "type" : "boolean"
           },
           "gradleVersion" : {
+            "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null.",
             "type" : "string"
           },
           "javaVersion" : {
+            "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null.",
             "type" : "string"
           },
           "mavenVersion" : {
+            "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null.",
             "type" : "string"
           },
           "projectVersion" : {
+            "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null.",
             "type" : "string"
           },
           "requiredProject" : {
             "type" : "boolean"
           },
           "systemProperties" : {
+            "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null.",
             "type" : "string"
           }
         },
@@ -530,6 +537,10 @@
             },
             "type" : "array"
           },
+          "skipCommitCheck" : {
+            "description" : "When true, commit checks are skipped at release/RC issue-assignment (issues bind to RCs by builds only). Dedicated flag replacing the legacy externalRegistry=\"NOT_AVAILABLE\" sentinel; legacy v1–v3 clients still see externalRegistry=\"NOT_AVAILABLE\" when this is true. Must be false when the effective BASE build system is WHISKEY (rejected 422 otherwise).",
+            "type" : "boolean"
+          },
           "solution" : {
             "type" : "boolean"
           },
@@ -543,6 +554,7 @@
             "type" : "array"
           },
           "vcsExternalRegistry" : {
+            "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null.",
             "type" : "string"
           }
         },
@@ -653,6 +665,9 @@
             },
             "type" : "array"
           },
+          "skipCommitCheck" : {
+            "type" : "boolean"
+          },
           "solution" : {
             "type" : "boolean"
           },
@@ -689,6 +704,7 @@
           "releaseManager",
           "securityChampion",
           "securityGroups",
+          "skipCommitCheck",
           "teamcityProjects",
           "version"
         ],
@@ -939,6 +955,10 @@
             },
             "type" : "array"
           },
+          "skipCommitCheck" : {
+            "description" : "When true, commit checks are skipped at release/RC issue-assignment (issues bind to RCs by builds only). Dedicated flag replacing the legacy externalRegistry=\"NOT_AVAILABLE\" sentinel; legacy v1–v3 clients still see externalRegistry=\"NOT_AVAILABLE\" when this is true. Must be false when the effective BASE build system is WHISKEY (rejected 422 otherwise).",
+            "type" : "boolean"
+          },
           "solution" : {
             "type" : "boolean"
           },
@@ -952,6 +972,7 @@
             "type" : "array"
           },
           "vcsExternalRegistry" : {
+            "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null.",
             "type" : "string"
           },
           "version" : {
@@ -1088,27 +1109,33 @@
       "EscrowAspectRequest" : {
         "properties" : {
           "additionalSources" : {
+            "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null.",
             "type" : "string"
           },
           "buildTask" : {
+            "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null.",
             "type" : "string"
           },
           "diskSpace" : {
+            "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null.",
             "type" : "string"
           },
           "generation" : {
             "type" : "string"
           },
           "gradleExcludeConfigurations" : {
+            "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null.",
             "type" : "string"
           },
           "gradleIncludeConfigurations" : {
+            "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null.",
             "type" : "string"
           },
           "gradleIncludeTestConfigurations" : {
             "type" : "boolean"
           },
           "providedDependencies" : {
+            "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null.",
             "type" : "string"
           },
           "reusable" : {
@@ -1158,6 +1185,7 @@
             "type" : "string"
           },
           "value" : {
+            "description" : "For a string-typed scalar attribute a blank value (\"\" or whitespace) is rejected (400): an override row stores its value verbatim and has no clear semantics — use DELETE /field-overrides/{id} to remove it.",
             "type" : "object"
           },
           "versionRange" : {
@@ -1220,6 +1248,7 @@
             "$ref" : "#/components/schemas/MarkerChildrenPayload"
           },
           "value" : {
+            "description" : "For a string-typed scalar attribute a blank value (\"\" or whitespace) is rejected (400): an override row stores its value verbatim and has no clear semantics — use DELETE /field-overrides/{id} to remove it.",
             "type" : "object"
           },
           "versionRange" : {
@@ -1241,6 +1270,7 @@
             "type" : "string"
           },
           "value" : {
+            "description" : "For a string-typed scalar attribute a blank value (\"\" or whitespace) is rejected (400): an override row stores its value verbatim and has no clear semantics — use DELETE /field-overrides/{id} to remove it.",
             "type" : "object"
           },
           "versionRange" : {
@@ -1497,27 +1527,34 @@
       "JiraAspectRequest" : {
         "properties" : {
           "buildVersionFormat" : {
+            "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null. When cleared, the build version format falls back to the release version format.",
             "type" : "string"
           },
           "lineVersionFormat" : {
+            "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null. When cleared, the line version format falls back to the minor version format.",
             "type" : "string"
           },
           "minorVersionFormat" : {
+            "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null.",
             "type" : "string"
           },
           "projectKey" : {
+            "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null. Clearing it removes the component's Jira association (no Jira version coordinates are computed) and drops its (projectKey, versionPrefix) uniqueness claim.",
             "type" : "string"
           },
           "releaseVersionFormat" : {
+            "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null.",
             "type" : "string"
           },
           "technical" : {
             "type" : "boolean"
           },
           "versionFormat" : {
+            "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null.",
             "type" : "string"
           },
           "versionPrefix" : {
+            "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null.",
             "type" : "string"
           }
         },
