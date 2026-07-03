@@ -84,7 +84,7 @@ function FormatField({
           {sub && <span className="ml-1 font-normal text-muted-foreground">{sub}</span>}
         </Label>
         <FieldInfo path={path} label={fallback} />
-        {state.adminOnly && <AdminOnlyPill title="Only administrators can change this." />}
+        {state.adminOnly && state.disabled && <AdminOnlyPill title="Only administrators can change this." />}
       </div>
       <Input
         aria-label={fallback}
@@ -144,7 +144,7 @@ function MirrorField({
           <FieldLabelText path={path} fallback={fallback} />
         </Label>
         <FieldInfo path={path} label={fallback} />
-        {state.adminOnly && <AdminOnlyPill title="Only administrators can change this." />}
+        {state.adminOnly && state.disabled && <AdminOnlyPill title="Only administrators can change this." />}
       </div>
 
       {!separate ? (
@@ -265,7 +265,7 @@ export function JiraTab({ component, section, canEdit, conflictError }: JiraTabP
                   <span className="ml-0.5 text-destructive" aria-hidden="true">*</span>
                 </Label>
                 <FieldInfo path="jira.projectKey" label="Project Key" />
-                {projectKeyFs.adminOnly && <AdminOnlyPill title="Only administrators can change this." />}
+                {projectKeyFs.adminOnly && projectKeyFs.disabled && <AdminOnlyPill title="Only administrators can change this." />}
               </div>
               <Input
                 id="jira-projectKey"
@@ -456,7 +456,7 @@ export function JiraTab({ component, section, canEdit, conflictError }: JiraTabP
                 <FieldLabelText path="jira.technical" fallback="Technical" />
               </Label>
               <FieldInfo path="jira.technical" label="Technical" />
-              {technicalFs.adminOnly && <AdminOnlyPill title="Only administrators can change this." />}
+              {technicalFs.adminOnly && technicalFs.disabled && <AdminOnlyPill title="Only administrators can change this." />}
             </div>
             {state.technical && (
               <StatusBanner variant="info" className="ml-14 max-w-2xl">

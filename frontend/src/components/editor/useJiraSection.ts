@@ -74,6 +74,30 @@ function effectiveBuild(s: JiraState): string {
   return s.buildSeparate ? s.buildVersionFormat : ''
 }
 
+/**
+ * Dirty is computed from the EFFECTIVE (materialized/cleared) projection, not
+ * the raw state, so a UI-only flip like "Set separate minor format" without
+ * editing the value (which materializes to the same wire value) does NOT read
+ * as dirty (mirrors the VCS/Distribution `normalize` contract in
+ * useSectionSnapshot — dirty ⇔ payload differs ⇔ diff non-empty).
+ */
+function normalizeJira(s: JiraState) {
+  return {
+    projectKey: s.projectKey,
+    displayName: s.displayName,
+    technical: s.technical,
+    hotfixVersionFormat: s.hotfixVersionFormat,
+    versionPrefix: s.versionPrefix,
+    versionFormat: s.versionFormat,
+    releaseVersionFormat: s.releaseVersionFormat,
+    lineVersionFormat: s.lineVersionFormat,
+    minorVersionFormat: effectiveMinor(s),
+    buildVersionFormat: effectiveBuild(s),
+    releasesInDefaultBranch: s.releasesInDefaultBranch,
+    skipCommitCheck: s.skipCommitCheck,
+  }
+}
+
 export interface JiraVisibilities {
   releasesInDefaultBranch: FieldVisibility
 }
@@ -102,7 +126,7 @@ export interface JiraSection {
 
 export function useJiraSection(component: ComponentDetail, options: JiraSectionOptions): JiraSection {
   const { releasesInDefaultBranch: releasesVisibility, isFieldEditable = () => true } = options
-  const { state, setState, snapshotRef, isDirty, reseed } = useSectionSnapshot(component, snapshotFrom)
+  const { state, setState, snapshotRef, isDirty, reseed } = useSectionSnapshot(component, snapshotFrom, normalizeJira)
 
   const set = <K extends keyof JiraState>(field: K, value: JiraState[K]) =>
     setState((p) => ({ ...p, [field]: value }))
@@ -156,6 +180,12 @@ export function useJiraSection(component: ComponentDetail, options: JiraSectionO
   // '' for an untouched-empty field is a safe no-op (plan §P-1). Mirrored Minor
   // materializes the Line value into BOTH fields; mirrored Build clears (server
   // fallback). Non-editable fields are then dropped from the PATCH.
+  // A MIRRORED derived field is not edited directly — the user changes it via
+  // the leading field — so gate its materialized write by the LEADING field's
+  // editability (Minor→Line, Build→Release). When SEPARATE, it is edited on its
+  // own and gated by its own path.
+  const minorGatePath = state.minorSeparate ? 'jira.minorVersionFormat' : 'jira.lineVersionFormat'
+  const buildGatePath = state.buildSeparate ? 'jira.buildVersionFormat' : 'jira.releaseVersionFormat'
   const jiraPayload = omitNonEditable(
     {
       projectKey: state.projectKey || '',
@@ -173,9 +203,9 @@ export function useJiraSection(component: ComponentDetail, options: JiraSectionO
       versionPrefix: 'jira.versionPrefix',
       versionFormat: 'jira.versionFormat',
       releaseVersionFormat: 'jira.releaseVersionFormat',
-      buildVersionFormat: 'jira.buildVersionFormat',
+      buildVersionFormat: buildGatePath,
       lineVersionFormat: 'jira.lineVersionFormat',
-      minorVersionFormat: 'jira.minorVersionFormat',
+      minorVersionFormat: minorGatePath,
     },
     isFieldEditable,
   )

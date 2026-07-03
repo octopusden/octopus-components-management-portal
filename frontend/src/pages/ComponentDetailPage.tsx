@@ -477,15 +477,19 @@ function ComponentDetailEditor() {
         toast({ title: conflict.title, description: conflict.description, variant: 'destructive' })
         if (conflict.kind === 'value') {
           // Attribute a value-409 to the Jira (projectKey, versionPrefix) pair
-          // when this save changed either — the pair is edited on the Jira tab,
-          // not in the Review dialog, so surface it inline there and close the
-          // diff. Any other value conflict (overlapping range, distribution GAV)
-          // stays a persistent Review-dialog banner (fixable in place).
+          // ONLY when this save changed either AND the server message is about
+          // that pair — the pair is edited on the Jira tab, not the Review
+          // dialog, so surface it inline there and close the diff. A guard on the
+          // message keeps an unrelated uniqueness conflict in a combined save
+          // (e.g. a distribution GAV) from being misrouted to the Jira banner.
+          // Every other value conflict stays a persistent Review-dialog banner
+          // (fixable in place).
           const jServer = selectBaseRow(component)?.jira
           const jiraPairChanged =
             (jiraSection.state.projectKey || '') !== (jServer?.projectKey ?? '') ||
             (jiraSection.state.versionPrefix || '') !== (jServer?.versionPrefix ?? '')
-          if (jiraPairChanged) {
+          const looksLikeJiraConflict = /jira|project\s*key/i.test(conflict.description)
+          if (jiraPairChanged && looksLikeJiraConflict) {
             setJiraConflict(conflict.description)
             setActiveTab('jira')
             setReviewOpen(false)

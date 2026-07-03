@@ -201,11 +201,12 @@ describe('JiraTab — Technical (admin-gated)', () => {
     expect(screen.getByText('admin only')).toBeDefined()
   })
 
-  it('admin: switch enabled', () => {
+  it('admin: switch enabled and no lock pill', () => {
     fcEntries['jira.technical'] = { visibility: 'editable', editable: 'adminOnly' }
     editableMap['jira.technical'] = true
     renderTab({ component: makeComponent() })
     expect(screen.getByRole('switch', { name: /technical/i })).not.toBeDisabled()
+    expect(screen.queryByText('admin only')).toBeNull()
   })
 
   it('shows the SubComponent Fix Version/s info banner when Technical is ON', () => {

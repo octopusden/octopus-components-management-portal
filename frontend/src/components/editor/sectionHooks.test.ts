@@ -270,6 +270,13 @@ describe('useJiraSection', () => {
     expect(jira?.minorVersionFormat).toBe('M2')
   })
 
+  it('promoting Minor to separate WITHOUT editing is not dirty (same wire value)', () => {
+    const { result } = renderHook(() => useJiraSection(makeComponent({}, { jira: { lineVersionFormat: 'L' } }), vis))
+    act(() => result.current.setMinorSeparate(true))
+    expect(result.current.slice.isDirty).toBe(false)
+    expect(result.current.slice.diff).toEqual([])
+  })
+
   it('removing separate Minor resumes materialization (minor = line)', () => {
     const { result } = renderHook(() =>
       useJiraSection(makeComponent({}, { jira: { lineVersionFormat: 'L', minorVersionFormat: 'M' } }), vis),
@@ -327,6 +334,30 @@ describe('useJiraSection', () => {
     const jira = result.current.slice.request.baseConfiguration?.jira
     expect('technical' in (jira ?? {})).toBe(false) // gated out
     expect(jira?.projectKey).toBe('P2') // editable field kept
+  })
+
+  // A MIRRORED derived field is gated by its LEADING field's editability (the
+  // user edits it via Line/Release) — so a materialized Minor is kept when Line
+  // is editable even if the minor path itself is not.
+  it('keeps a materialized Minor when Line is editable but the minor path is not', () => {
+    const isFieldEditable = (p: string) => p !== 'jira.minorVersionFormat'
+    const { result } = renderHook(() =>
+      useJiraSection(makeComponent({}, { jira: { lineVersionFormat: 'L' } }), { ...vis, isFieldEditable }),
+    )
+    act(() => result.current.set('lineVersionFormat', 'L2'))
+    const jira = result.current.slice.request.baseConfiguration?.jira
+    expect(jira?.lineVersionFormat).toBe('L2')
+    expect(jira?.minorVersionFormat).toBe('L2') // materialized, not dropped
+  })
+
+  it('omits a SEPARATE Minor gated by its own non-editable path', () => {
+    const isFieldEditable = (p: string) => p !== 'jira.minorVersionFormat'
+    const { result } = renderHook(() =>
+      useJiraSection(makeComponent({}, { jira: { lineVersionFormat: 'L', minorVersionFormat: 'M' } }), { ...vis, isFieldEditable }),
+    )
+    act(() => result.current.set('minorVersionFormat', 'M2'))
+    const jira = result.current.slice.request.baseConfiguration?.jira
+    expect('minorVersionFormat' in (jira ?? {})).toBe(false)
   })
 
   it('does NOT send releasesInDefaultBranch when field is hidden', () => {
