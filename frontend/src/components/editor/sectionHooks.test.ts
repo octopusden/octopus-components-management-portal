@@ -9,6 +9,13 @@ import type { ComponentDetail, ComponentConfiguration } from '../../lib/types'
 vi.mock('../../hooks/useAdminConfig', () => ({
   useFieldConfig: () => ({ data: undefined, isLoading: false, isError: false }),
 }))
+// useVcsSection reads the current user for External Registry editability; with
+// no field-config editable axis it stays editable regardless of the user.
+vi.mock('../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ data: undefined }) }))
+
+// External Registry is Whiskey-only (P-3): tests asserting it lands in the slice
+// build a WHISKEY base row so the field participates in the payload.
+const WHISKEY_ROW: Partial<ComponentConfiguration> = { build: { buildSystem: 'WHISKEY' } }
 
 function baseRow(over: Partial<ComponentConfiguration> = {}): ComponentConfiguration {
   return {
@@ -33,7 +40,7 @@ beforeEach(() => vi.clearAllMocks())
 
 describe('useVcsSection', () => {
   it('clean initially; dirty after editing external registry; slice carries it', () => {
-    const { result } = renderHook(() => useVcsSection(makeComponent({ vcsExternalRegistry: 'reg' })))
+    const { result } = renderHook(() => useVcsSection(makeComponent({ vcsExternalRegistry: 'reg' }, WHISKEY_ROW)))
     expect(result.current.slice.isDirty).toBe(false)
     act(() => result.current.setExternalRegistry('reg2'))
     expect(result.current.slice.isDirty).toBe(true)
@@ -43,7 +50,7 @@ describe('useVcsSection', () => {
   // P-1 ""-clear migration: vcsExternalRegistry now clears via '' (CRS-A), not
   // null — the old null-clear was a silent no-op (prep §1.6).
   it("clears the external registry via '' (not null)", () => {
-    const { result } = renderHook(() => useVcsSection(makeComponent({ vcsExternalRegistry: 'reg' })))
+    const { result } = renderHook(() => useVcsSection(makeComponent({ vcsExternalRegistry: 'reg' }, WHISKEY_ROW)))
     act(() => result.current.setExternalRegistry(''))
     expect(result.current.slice.isDirty).toBe(true)
     expect(result.current.slice.request.vcsExternalRegistry).toBe('')
@@ -77,7 +84,7 @@ describe('useVcsSection', () => {
   })
 
   it('(c) a real edit alongside a leftover blank row clears dirty after save (no stuck-dirty)', () => {
-    const c1 = makeComponent({ vcsExternalRegistry: 'reg' })
+    const c1 = makeComponent({ vcsExternalRegistry: 'reg' }, WHISKEY_ROW)
     const { result, rerender } = renderHook(({ c }) => useVcsSection(c), { initialProps: { c: c1 } })
     // Real change + a junk blank row that the payload will drop.
     act(() => result.current.setExternalRegistry('reg2'))
@@ -86,7 +93,7 @@ describe('useVcsSection', () => {
     expect(result.current.slice.request.vcsExternalRegistry).toBe('reg2')
     // The save lands: server now reports reg2 (the cleaned payload). The leftover
     // blank row must NOT keep the section stuck dirty.
-    rerender({ c: makeComponent({ vcsExternalRegistry: 'reg2', version: 2 }) })
+    rerender({ c: makeComponent({ vcsExternalRegistry: 'reg2', version: 2 }, WHISKEY_ROW) })
     expect(result.current.slice.isDirty).toBe(false)
   })
 
