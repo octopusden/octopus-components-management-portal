@@ -62,15 +62,23 @@ export interface CreateFormValues {
   // copied); versionPrefix defaults to the component key in scratch mode (mirrored in the form).
   jiraProjectKey: string
   versionPrefix: string
-  // Jira version-format patterns, prefilled from component-defaults
-  // (jira.componentVersionFormat.*) so a new component inherits the configured
-  // formats. major/release/build/line live on the BASE jira aspect; hotfix is a
-  // top-level component field (jiraHotfixVersionFormat).
+  // Jira version-format patterns (BASE jira aspect), prefilled from
+  // component-defaults (jira.componentVersionFormat.*) so a new component
+  // inherits the configured formats. Line leads its pair (Minor derives from it)
+  // and Release leads its pair (Build derives from it). Hotfix Version Format is
+  // NOT in the create form — hotfixes are always disabled at creation (no hotfix
+  // branch yet, Q8/R9), so a new component never sets a hotfix format.
   minorVersionFormat: string
   releaseVersionFormat: string
   buildVersionFormat: string
   lineVersionFormat: string
-  hotfixVersionFormat: string
+  // Mirror flags for the leading/derived pairs (editor JiraTab parity). When a
+  // derived field is MIRRORED (flag false), it follows its leading field:
+  //   - Minor mirrors Line → materialized into BOTH stored fields at create;
+  //   - Build mirrors Release → OMITTED (CRS falls back to Release server-side).
+  // SEPARATE (flag true) → the derived field keeps its own value.
+  minorSeparate: boolean
+  buildSeparate: boolean
   // VCS entry fields, only emitted when vcsBlockApplies(buildSystem). vcsUrl is
   // unique per component (never copied); tag/branch are reusable format
   // patterns prefilled from component-defaults (or the source BASE row in copy
@@ -125,8 +133,14 @@ export interface CreateFormValues {
 // not turn into `jira: {}` on the new component.
 function copyJiraAspect(jira: JiraAspect | null | undefined): JiraAspect | undefined {
   if (!jira) return undefined
+  // Strip fields the create form has NO control for so "Create Similar" can't
+  // silently carry them from the source (Codex #154 P1):
+  //  - projectKey: always component-unique, never copied.
+  //  - technical: adminOnly in baseline → a non-admin copy of a technical
+  //    component would POST technical and hit the CRS create-rule 403.
+  //  - versionFormat: not a create-form field (Q5) → don't leak the source's.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { projectKey, ...rest } = jira
+  const { projectKey, technical, versionFormat, ...rest } = jira
   const hasValue = Object.values(rest).some((v) => v != null)
   return hasValue ? rest : undefined
 }
@@ -177,7 +191,7 @@ const VISIBILITY_GATED_CREATE_FIELDS = [
   'displayName', 'copyright', 'releaseManager', 'securityChampion',
   'distributionExplicit', 'distributionExternal', 'system', 'clientCode',
   'solution', 'productType', 'parentComponentName', 'releasesInDefaultBranch',
-  'jiraHotfixVersionFormat', 'vcsExternalRegistry',
+  'vcsExternalRegistry',
 ] as const
 
 export function buildCreateRequest(
@@ -206,9 +220,10 @@ export function buildCreateRequest(
     copyright: form.copyright || undefined,
     releasesInDefaultBranch: source?.releasesInDefaultBranch ?? undefined,
     labels: [...(source?.labels ?? [])],
-    // Hotfix format is a top-level component field (not on the jira aspect). The
-    // form carries it (prefilled from component-defaults / source); a blank clears.
-    jiraHotfixVersionFormat: form.hotfixVersionFormat.trim() || undefined,
+    // jiraHotfixVersionFormat is intentionally never set on create: the create
+    // form has no Hotfix Version Format field (hotfixes are always disabled at
+    // creation — no hotfix branch yet), so it is left to the server default and
+    // configured later in the editor once a hotfix branch exists.
     vcsExternalRegistry: source?.vcsExternalRegistry ?? undefined,
     distributionExplicit: form.distributionExplicit,
     distributionExternal: form.distributionExternal,
@@ -238,15 +253,30 @@ export function buildCreateRequest(
   const jira: JiraAspect = { ...(copyJiraAspect(baseRow?.jira) ?? {}) }
   if (form.jiraProjectKey.trim()) jira.projectKey = form.jiraProjectKey.trim()
   if (form.versionPrefix.trim()) jira.versionPrefix = form.versionPrefix.trim()
-  // BASE jira version formats (hotfix is component-level, set above) are fully
-  // FORM-DRIVEN — copy mode prefills the form from the source, so assign the
-  // trimmed value or DELETE the value inherited from copyJiraAspect. Otherwise
-  // clearing a format in "Create Similar" would silently re-send the source value.
-  for (const k of ['minorVersionFormat', 'releaseVersionFormat', 'buildVersionFormat', 'lineVersionFormat'] as const) {
-    const v = form[k].trim()
+  // BASE jira version formats are fully FORM-DRIVEN — copy mode prefills the form
+  // from the source, so assign the trimmed value or DELETE the value inherited
+  // from copyJiraAspect. Otherwise clearing a format in "Create Similar" would
+  // silently re-send the source value. Leading/derived materialization (prep §R6):
+  //   - Minor MIRRORED → write the Line value into BOTH lineVersionFormat and
+  //     minorVersionFormat (CRS/releng-lib's fallback direction is the reverse,
+  //     line ?? minor, so the copy must be materialized, not derived);
+  //   - Build MIRRORED → OMIT buildVersionFormat entirely (CRS falls back to
+  //     Release server-side — the honest fallback, no materialization needed).
+  const line = form.lineVersionFormat.trim()
+  const minor = (form.minorSeparate ? form.minorVersionFormat : form.lineVersionFormat).trim()
+  const release = form.releaseVersionFormat.trim()
+  const build = form.buildSeparate ? form.buildVersionFormat.trim() : ''
+  const assignOrDelete = (
+    k: 'lineVersionFormat' | 'minorVersionFormat' | 'releaseVersionFormat' | 'buildVersionFormat',
+    v: string,
+  ) => {
     if (v) jira[k] = v
     else delete jira[k]
   }
+  assignOrDelete('lineVersionFormat', line)
+  assignOrDelete('minorVersionFormat', minor)
+  assignOrDelete('releaseVersionFormat', release)
+  assignOrDelete('buildVersionFormat', build)
   if (Object.values(jira).some((v) => v != null)) baseConfiguration.jira = jira
   if (baseRow && baseRow.requiredTools.length > 0) {
     baseConfiguration.requiredTools = [...baseRow.requiredTools]

@@ -61,6 +61,16 @@ vi.mock('../hooks/useAdminConfig', () => ({
   useFieldConfig: () => mockUseFieldConfig(),
   useComponentDefaults: () => mockUseComponentDefaults(),
 }))
+// Current user drives per-user editability (field-config `editable: adminOnly`).
+// Default: no user → normal fields stay editable (isFieldEditableFor returns true
+// for non-adminOnly fields regardless of user), so pre-gating tests are unaffected.
+const mockUseCurrentUser = vi.fn(() => ({ data: undefined as unknown }))
+vi.mock('../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUseCurrentUser() }))
+function setUser(permissions: string[] = []) {
+  mockUseCurrentUser.mockReturnValue({
+    data: { username: 'u', groups: [], roles: [{ name: 'r', permissions }] },
+  })
+}
 
 function renderWithProviders(ui: React.ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -139,6 +149,7 @@ beforeEach(() => {
   mockUseComponentDefaults.mockReturnValue(COMPONENT_DEFAULTS_OK)
   mockUseSupportedGroups.mockReturnValue({ groups: [], isLoading: false })
   mockUsePortalLinks.mockReturnValue({ data: undefined })
+  mockUseCurrentUser.mockReturnValue({ data: undefined })
   scratchDisabled()
 })
 
@@ -182,12 +193,16 @@ describe('CreateComponentDialog — scratch mode base', () => {
       'Component Owner',
       'Jira Project Key',
       'Jira Version Prefix',
+      'Line Version Format',
       'Minor Version Format',
-      'Hotfix Version Format',
+      'Release Version Format',
+      'Build Version Format',
       'Artifact ownership',
     ]) {
       expect(screen.getByRole('button', { name: `Description for ${label}` })).toBeDefined()
     }
+    // Hotfix Version Format is removed from the create form (hotfixes disabled at creation).
+    expect(screen.queryByRole('button', { name: 'Description for Hotfix Version Format' })).toBeNull()
   })
 
   it('opens and renders base fields without the gated block', async () => {
@@ -440,34 +455,121 @@ describe('CreateComponentDialog — component-defaults prefill (scratch)', () =>
     )
   })
 
-  it('prefills the Jira version formats from defaults and submits them (jira aspect + hotfix)', async () => {
+  it('prefills the Jira version-format pairs from defaults and submits them (Line separate, Build mirrored)', async () => {
     mockMutateAsync.mockResolvedValue({ id: 'comp-1', name: 'widget' })
     withDefaults({
       vcs: { tag: '$module-$version' },
       jira: {
         componentVersionFormat: {
-          minorVersionFormat: '$major.$minor',
+          lineVersionFormat: '$major',
+          minorVersionFormat: '$major.$minor', // differs from Line → seeded separate
           releaseVersionFormat: '$major.$minor.$service',
-          hotfixVersionFormat: '$major.$minor.$service-$fix',
+          // no build default → Build mirrors Release
         },
       },
     })
     renderWithProviders(<CreateComponentButton />)
     await openScratch()
-    expect((screen.getByLabelText(/^minor version format/i) as HTMLInputElement).value).toBe('$major.$minor')
+    expect((screen.getByLabelText(/^line version format/i) as HTMLInputElement).value).toBe('$major')
+    // Minor differs from Line → rendered as a separate editable input.
+    expect((screen.getByLabelText(/^minor version format$/i) as HTMLInputElement).value).toBe('$major.$minor')
     expect((screen.getByLabelText(/^release version format/i) as HTMLInputElement).value).toBe('$major.$minor.$service')
-    expect((screen.getByLabelText(/^hotfix version format/i) as HTMLInputElement).value).toBe('$major.$minor.$service-$fix')
-    // build/line have no default → empty.
-    expect((screen.getByLabelText(/^build version format/i) as HTMLInputElement).value).toBe('')
+    // Build has no default → mirrored (read-only, "same as release" + Set-separate button).
+    expect(screen.getByRole('button', { name: /set separate build format/i })).toBeDefined()
+    expect((screen.getByLabelText(/^build version format \(mirrored\)/i) as HTMLInputElement).value).toBe(
+      '$major.$minor.$service',
+    )
     await fillBaseFields()
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() => expect(mockMutateAsync).toHaveBeenCalled())
     const arg = mockMutateAsync.mock.calls[0]![0]
     expect(arg.baseConfiguration.jira).toMatchObject({
+      lineVersionFormat: '$major',
       minorVersionFormat: '$major.$minor',
       releaseVersionFormat: '$major.$minor.$service',
     })
-    expect(arg.jiraHotfixVersionFormat).toBe('$major.$minor.$service-$fix')
+    // Build mirrored → omitted (CRS falls back to Release); no hotfix on create.
+    expect('buildVersionFormat' in arg.baseConfiguration.jira).toBe(false)
+    expect('jiraHotfixVersionFormat' in arg).toBe(false)
+  })
+
+  it('materializes a mirrored Minor into BOTH stored fields at create (Line drives Minor)', async () => {
+    mockMutateAsync.mockResolvedValue({ id: 'comp-1', name: 'widget' })
+    withDefaults({
+      vcs: { tag: '$module-$version' },
+      jira: { componentVersionFormat: { lineVersionFormat: '$major' } }, // no minor → mirrored
+    })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    // Minor mirrors Line (read-only "from Line" + Set-separate button).
+    expect(screen.getByRole('button', { name: /set separate minor format/i })).toBeDefined()
+    expect((screen.getByLabelText(/^minor version format \(mirrored\)/i) as HTMLInputElement).value).toBe('$major')
+    await fillBaseFields()
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalled())
+    const jira = mockMutateAsync.mock.calls[0]![0].baseConfiguration.jira
+    expect(jira.lineVersionFormat).toBe('$major')
+    expect(jira.minorVersionFormat).toBe('$major')
+  })
+
+  it('seeds Build mirrored when the default build equals the default release', async () => {
+    withDefaults({
+      vcs: { tag: '$module-$version' },
+      jira: {
+        componentVersionFormat: {
+          releaseVersionFormat: '$major.$minor.$service',
+          buildVersionFormat: '$major.$minor.$service', // == release → mirrored
+        },
+      },
+    })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    expect(screen.getByRole('button', { name: /set separate build format/i })).toBeDefined()
+    // No editable Build input while mirrored.
+    expect(screen.queryByLabelText(/^build version format$/i)).toBeNull()
+  })
+
+  it('the create form has no Hotfix Version Format field', async () => {
+    withDefaults({ vcs: { tag: '$module-$version' } })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    expect(screen.queryByLabelText(/hotfix version format/i)).toBeNull()
+  })
+})
+
+describe('CreateComponentDialog — Set/Remove separate version-format toggles', () => {
+  it('revealing a separate Build format submits it as buildVersionFormat', async () => {
+    mockMutateAsync.mockResolvedValue({ id: 'comp-1', name: 'widget' })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await userEvent.type(screen.getByLabelText(/^release version format/i), '$major.$minor.$service')
+    await userEvent.click(screen.getByRole('button', { name: /set separate build format/i }))
+    const buildInput = screen.getByLabelText(/^build version format$/i)
+    await userEvent.clear(buildInput)
+    await userEvent.type(buildInput, '$major.$minor.$service.$fix')
+    await fillBaseFields()
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalled())
+    expect(mockMutateAsync.mock.calls[0]![0].baseConfiguration.jira.buildVersionFormat).toBe(
+      '$major.$minor.$service.$fix',
+    )
+  })
+
+  it('collapsing a separate Minor back to mirror materializes the Line value', async () => {
+    mockMutateAsync.mockResolvedValue({ id: 'comp-1', name: 'widget' })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await userEvent.type(screen.getByLabelText(/^line version format/i), '$major')
+    // Open a separate Minor, type a distinct value, then remove it → mirrors Line again.
+    await userEvent.click(screen.getByRole('button', { name: /set separate minor format/i }))
+    await userEvent.type(screen.getByLabelText(/^minor version format$/i), '$major.$minor')
+    await userEvent.click(screen.getByRole('button', { name: /remove separate format/i }))
+    await fillBaseFields()
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalled())
+    const jira = mockMutateAsync.mock.calls[0]![0].baseConfiguration.jira
+    expect(jira.lineVersionFormat).toBe('$major')
+    expect(jira.minorVersionFormat).toBe('$major')
   })
 })
 
@@ -720,6 +822,49 @@ describe('CreateComponentDialog — field-config visibility gating', () => {
     expect(screen.queryByLabelText(/copyright/i)).toBeNull()
     expect(screen.getByText(/release managers/i)).toBeDefined()
     expect(screen.getByText(/security champions/i)).toBeDefined()
+  })
+
+  // Effective-editability axis (editable: adminOnly) — orthogonal to visibility.
+  it('removes an adminOnly field (displayName) for a non-admin user', async () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: { component: { displayName: { editable: 'adminOnly' } } },
+      isLoading: false,
+      isError: false,
+    })
+    setUser([]) // no EDIT_ANY_COMPONENT
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    expect(screen.queryByLabelText(/display name/i)).toBeNull()
+  })
+
+  it('fails closed while field-config is still loading (adminOnly field hidden even for an admin)', async () => {
+    // Codex #154 P1: before the editable axis is known, gated fields must be
+    // treated non-editable — an admin should NOT see displayName until config resolves.
+    mockUseFieldConfig.mockReturnValue({ data: undefined, isLoading: true, isError: false })
+    setUser(['EDIT_ANY_COMPONENT'])
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    expect(screen.queryByLabelText(/display name/i)).toBeNull()
+  })
+
+  it('fails closed when field-config errored (gated field stays hidden)', async () => {
+    mockUseFieldConfig.mockReturnValue({ data: undefined, isLoading: false, isError: true })
+    setUser(['EDIT_ANY_COMPONENT'])
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    expect(screen.queryByLabelText(/display name/i)).toBeNull()
+  })
+
+  it('keeps an adminOnly field (displayName) for an admin user (EDIT_ANY_COMPONENT)', async () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: { component: { displayName: { editable: 'adminOnly' } } },
+      isLoading: false,
+      isError: false,
+    })
+    setUser(['EDIT_ANY_COMPONENT'])
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    expect(screen.getByLabelText(/^display name/i)).toBeDefined()
   })
 })
 
@@ -1056,6 +1201,44 @@ describe('CreateComponentDialog — copy mode (sourceId)', () => {
       expect((screen.getByLabelText(/^tag/i) as HTMLInputElement).value).toBe('$module-$version'),
     )
     expect((screen.getByLabelText(/^production branch/i) as HTMLInputElement).value).toBe('master')
+  })
+
+  it('copy-mode: does not copy an adminOnly source value (vcsExternalRegistry) for a non-admin', async () => {
+    // External Registry is adminOnly; a non-admin copy must strip the source value
+    // (else the CRS create-rule rejects the non-null field).
+    mockUseFieldConfig.mockReturnValue({
+      data: { component: { vcsExternalRegistry: { editable: 'adminOnly' } } },
+      isLoading: false,
+      isError: false,
+    })
+    setUser([]) // non-admin
+    mockMutateAsync.mockResolvedValue({ id: 'comp-9', name: 'svc-clone' })
+    loaded(makeSource({ vcsExternalRegistry: 'registry-x' }))
+    renderCopy()
+    await userEvent.type(screen.getByLabelText(/^component key/i), 'svc-clone')
+    await userEvent.type(screen.getByLabelText(/^display name/i), 'Svc Clone')
+    await fillCopyRequired()
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalled())
+    expect('vcsExternalRegistry' in mockMutateAsync.mock.calls[0]![0]).toBe(false)
+  })
+
+  it('copy-mode: DOES copy the adminOnly source value for an admin', async () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: { component: { vcsExternalRegistry: { editable: 'adminOnly' } } },
+      isLoading: false,
+      isError: false,
+    })
+    setUser(['EDIT_ANY_COMPONENT'])
+    mockMutateAsync.mockResolvedValue({ id: 'comp-9', name: 'svc-clone' })
+    loaded(makeSource({ vcsExternalRegistry: 'registry-x' }))
+    renderCopy()
+    await userEvent.type(screen.getByLabelText(/^component key/i), 'svc-clone')
+    await userEvent.type(screen.getByLabelText(/^display name/i), 'Svc Clone')
+    await fillCopyRequired()
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalled())
+    expect(mockMutateAsync.mock.calls[0]![0].vcsExternalRegistry).toBe('registry-x')
   })
 
   it('does not seed deprecated BS2_0 from the source — build system starts empty', async () => {
