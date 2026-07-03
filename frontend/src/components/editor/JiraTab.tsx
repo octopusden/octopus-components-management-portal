@@ -1,3 +1,4 @@
+import { useState, type FocusEvent } from 'react'
 import { LockKeyhole } from 'lucide-react'
 import { Label } from '../ui/label'
 import { Input } from '../ui/input'
@@ -11,6 +12,8 @@ import { FieldOverrideInline } from './FieldOverrideInline'
 import { useOverridesDraft } from './overridesDraft'
 import type { ComponentDetail } from '../../lib/types'
 import { isHotfixEnabled } from '../../lib/versionPreview'
+import { JiraVersionPreview } from './JiraVersionPreview'
+import { cn } from '../../lib/utils'
 import { useFieldConfigEntry, useFieldEditable } from '../../hooks/useFieldConfig'
 import type { JiraSection } from './useJiraSection'
 
@@ -50,6 +53,39 @@ function useJiraFieldState(path: string): FieldState {
   }
 }
 
+/**
+ * Shared hover/focus link between a format field and its ladder-preview row(s).
+ * The current hovered field-path is lifted to JiraTab so field inputs and preview
+ * rows can cross-highlight; mouse AND focus drive it so it stays keyboard-usable.
+ */
+interface HoverLink {
+  hoveredField: string | null
+  onHoverField: (field: string | null) => void
+}
+
+// Ring shown while the field is the shared hovered/focused one (activates only on
+// data-highlighted=true, so it is inert when no hover link is wired).
+const HOVER_RING =
+  'rounded-md transition-shadow data-[highlighted=true]:ring-2 data-[highlighted=true]:ring-primary/60 data-[highlighted=true]:ring-offset-2 data-[highlighted=true]:ring-offset-background'
+
+/** Spread onto a format-field container to wire highlight + hover/focus reporting. */
+function hoverProps(path: string, hover?: HoverLink) {
+  if (!hover) return {}
+  return {
+    'data-highlighted': hover.hoveredField === path ? 'true' : undefined,
+    onMouseEnter: () => hover.onHoverField(path),
+    onMouseLeave: () => hover.onHoverField(null),
+    // Focus-within semantics: report on focus, and clear only when focus actually
+    // LEAVES the container. A field block has several focusable descendants (input,
+    // "Set/Remove separate" buttons, "+ Add override"); tabbing between them bubbles
+    // blur, so a naive onBlur→null would flicker the highlight (Copilot #153).
+    onFocus: () => hover.onHoverField(path),
+    onBlur: (e: FocusEvent<HTMLElement>) => {
+      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) hover.onHoverField(null)
+    },
+  }
+}
+
 /** Small "admin only" lock pill shown beside an admin-gated control for non-admins. */
 function AdminOnlyPill({ title }: { title?: string }) {
   return (
@@ -70,6 +106,7 @@ function FormatField({
   placeholder,
   state,
   canEdit,
+  hover,
 }: {
   path: string
   fallback: string
@@ -79,10 +116,11 @@ function FormatField({
   placeholder?: string
   state: FieldState
   canEdit: boolean
+  hover?: HoverLink
 }) {
   if (state.hidden) return null
   return (
-    <div className="space-y-1.5" data-field={path}>
+    <div className={cn('space-y-1.5', HOVER_RING)} data-field={path} {...hoverProps(path, hover)}>
       <div className="flex items-center gap-1">
         <Label>
           <FieldLabelText path={path} fallback={fallback} />
@@ -125,6 +163,7 @@ function MirrorField({
   placeholder,
   state,
   canEdit,
+  hover,
 }: {
   path: string
   fallback: string
@@ -140,10 +179,11 @@ function MirrorField({
   placeholder?: string
   state: FieldState
   canEdit: boolean
+  hover?: HoverLink
 }) {
   if (state.hidden) return null
   return (
-    <div className="space-y-1.5" data-field={path}>
+    <div className={cn('space-y-1.5', HOVER_RING)} data-field={path} {...hoverProps(path, hover)}>
       <div className="flex items-center gap-1">
         <Label>
           <FieldLabelText path={path} fallback={fallback} />
@@ -248,6 +288,11 @@ export function JiraTab({ component, section, canEdit, conflictError, effectiveB
 
   const hotfixEnabled = isHotfixEnabled(component)
 
+  // Shared hovered format-field path, lifted here so the format fields (below)
+  // and the ladder-preview rows cross-highlight in both directions (P-2b).
+  const [hoveredField, setHoveredField] = useState<string | null>(null)
+  const hover: HoverLink = { hoveredField, onHoverField: setHoveredField }
+
   // Per-range overrides on a mirror field block collapse and force the expanded
   // view (task B: never collapse if overrides exist).
   const minorHasOverrides = effectiveOverrides.some((o) => o.overriddenAttribute === 'jira.minorVersionFormat')
@@ -341,6 +386,7 @@ export function JiraTab({ component, section, canEdit, conflictError, effectiveB
               placeholder="e.g. v"
               state={versionPrefixFs}
               canEdit={canEdit}
+              hover={hover}
             />
             <FormatField
               path="jira.versionFormat"
@@ -350,6 +396,7 @@ export function JiraTab({ component, section, canEdit, conflictError, effectiveB
               placeholder="$versionPrefix-$baseVersionFormat"
               state={versionFormatFs}
               canEdit={canEdit}
+              hover={hover}
             />
 
             {/* Line (leading) + Minor (mirror) */}
@@ -362,6 +409,7 @@ export function JiraTab({ component, section, canEdit, conflictError, effectiveB
               placeholder="e.g. {major}.{minor}.x"
               state={lineFs}
               canEdit={canEdit}
+              hover={hover}
             />
             <MirrorField
               path="jira.minorVersionFormat"
@@ -378,6 +426,7 @@ export function JiraTab({ component, section, canEdit, conflictError, effectiveB
               placeholder="e.g. {major}.0.0"
               state={minorFs}
               canEdit={canEdit}
+              hover={hover}
             />
 
             {/* Release (leading) + Build (mirror) */}
@@ -389,6 +438,7 @@ export function JiraTab({ component, section, canEdit, conflictError, effectiveB
               placeholder="e.g. {major}.{minor}.0"
               state={releaseFs}
               canEdit={canEdit}
+              hover={hover}
             />
             <MirrorField
               path="jira.buildVersionFormat"
@@ -405,6 +455,7 @@ export function JiraTab({ component, section, canEdit, conflictError, effectiveB
               placeholder="e.g. {major}.{minor}.{patch}"
               state={buildFs}
               canEdit={canEdit}
+              hover={hover}
             />
 
             {/* Hotfix — only when hotfixes are enabled (task D) */}
@@ -418,17 +469,30 @@ export function JiraTab({ component, section, canEdit, conflictError, effectiveB
                   placeholder="e.g. {major}.{minor}.{patch}.{hotfix}"
                   state={hotfixState}
                   canEdit={canEdit}
+                  hover={hover}
                 />
               </div>
             )}
           </div>
 
-          {/* P-2b mounts the version-ladder preview here. */}
-          <aside
-            data-testid="version-preview-slot"
-            className="w-full lg:w-[360px] lg:flex-none"
-            aria-hidden="true"
-          />
+          {/* P-2b version-ladder preview — cross-highlights with the fields above. */}
+          <aside data-testid="version-preview-slot" className="w-full lg:w-[360px] lg:flex-none">
+            <JiraVersionPreview
+              versionPrefix={state.versionPrefix}
+              versionFormat={state.versionFormat}
+              lineVersionFormat={state.lineVersionFormat}
+              minorVersionFormat={state.minorVersionFormat}
+              minorSeparate={state.minorSeparate}
+              releaseVersionFormat={state.releaseVersionFormat}
+              buildVersionFormat={state.buildVersionFormat}
+              buildSeparate={state.buildSeparate}
+              hotfixVersionFormat={state.hotfixVersionFormat}
+              technical={state.technical}
+              hotfixEnabled={hotfixEnabled}
+              hoveredField={hoveredField}
+              onHoverField={setHoveredField}
+            />
+          </aside>
         </div>
       </section>
 
