@@ -253,7 +253,6 @@ test.describe('Copy component — admin smoke', () => {
       releasesInDefaultBranch: true,
       distributionExplicit: true,
       distributionExternal: false,
-      jiraHotfixVersionFormat: '%d.%d.%d.%d',
       archived: false,
       releaseManager: ['rm-alice'],
       securityChampion: ['sc-carol'],
@@ -281,6 +280,11 @@ test.describe('Copy component — admin smoke', () => {
       expect(key in baseConfiguration, `${key} must not be copied`).toBe(false)
     }
     expect('jiraDisplayName' in body, 'jiraDisplayName must not be copied').toBe(false)
+    // Hotfix format is never carried on create (P-4/Q8): hotfixes are always
+    // disabled at creation (no hotfix branch yet), so the create form has no
+    // Hotfix Version Format control and never sends it — even from a source
+    // component that defines one.
+    expect('jiraHotfixVersionFormat' in body, 'jiraHotfixVersionFormat must not be copied on create').toBe(false)
     expect('group' in body, 'group is migration-owned').toBe(false)
   })
 
