@@ -3,7 +3,7 @@ import { render, screen, fireEvent, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { JiraVersionPreview, type JiraVersionPreviewProps } from './JiraVersionPreview'
 
-/** Brief §4 example defaults (1.2.3 / pgw / hotfix 1.2.3-187), mirrored pairs. */
+/** Brief §4 example defaults (1.2.3 / pgw / hotfix 1.2.3-87), mirrored pairs. */
 function baseProps(overrides: Partial<JiraVersionPreviewProps> = {}): JiraVersionPreviewProps {
   return {
     versionPrefix: 'pgw',
@@ -36,15 +36,16 @@ function row(id: string): HTMLElement {
 }
 
 describe('JiraVersionPreview — brief §4 ladder example', () => {
-  it('renders each row with the expected value (1.2.3 / pgw / hotfix 1.2.3-187)', () => {
+  it('renders each row with the expected value (1.2.3 / pgw / hotfix 1.2.3-87)', () => {
     renderPreview()
     expect(rowValue('release')).toBe('pgw-1.2.3')
     expect(rowValue('rc')).toBe('pgw-1.2.3_RC')
     expect(rowValue('minor')).toBe('pgw-1.2')
     expect(rowValue('line')).toBe('1.2')
     expect(rowValue('build')).toBe('1.2.3')
-    expect(rowValue('hotfix-build')).toBe('1.2.3-187')
-    expect(rowValue('hotfix-jira')).toBe('pgw-1.2.3-187')
+    // Hotfix sample is derived from the hotfix format's arity ($…-$fix → 1.2.3-87).
+    expect(rowValue('hotfix-build')).toBe('1.2.3-87')
+    expect(rowValue('hotfix-jira')).toBe('pgw-1.2.3-87')
   })
 
   it('renders the rows in ladder order', () => {
@@ -84,7 +85,8 @@ describe('JiraVersionPreview — captions & tags', () => {
     expect(within(row('minor')).getByText('in Jira')).toBeInTheDocument()
     expect(rowValue('minor')).toBe('pgw-1')
     expect(within(row('build')).getByText('no prefix')).toBeInTheDocument()
-    expect(rowValue('build')).toBe('1.2.3.0')
+    // Sample arity follows the deepest (separate build) format → $fix filled (…87).
+    expect(rowValue('build')).toBe('1.2.3.87')
   })
 
   it('Line renders bare with a "no prefix" tag', () => {
@@ -111,8 +113,8 @@ describe('JiraVersionPreview — hotfix dual rows', () => {
 
   it('computes hotfix rows from the separate hotfix sample (different arity)', () => {
     renderPreview()
-    expect(screen.getByLabelText('hotfix version')).toHaveValue('1.2.3-187')
-    expect(rowValue('hotfix-build')).toBe('1.2.3-187')
+    expect(screen.getByLabelText('hotfix version')).toHaveValue('1.2.3-87')
+    expect(rowValue('hotfix-build')).toBe('1.2.3-87')
   })
 })
 
