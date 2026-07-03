@@ -40,6 +40,15 @@ describe('useVcsSection', () => {
     expect(result.current.slice.request.vcsExternalRegistry).toBe('reg2')
   })
 
+  // P-1 ""-clear migration: vcsExternalRegistry now clears via '' (CRS-A), not
+  // null — the old null-clear was a silent no-op (prep §1.6).
+  it("clears the external registry via '' (not null)", () => {
+    const { result } = renderHook(() => useVcsSection(makeComponent({ vcsExternalRegistry: 'reg' })))
+    act(() => result.current.setExternalRegistry(''))
+    expect(result.current.slice.isDirty).toBe(true)
+    expect(result.current.slice.request.vcsExternalRegistry).toBe('')
+  })
+
   it('drops blank-vcsPath entries from the slice payload', () => {
     const { result } = renderHook(() => useVcsSection(makeComponent()))
     act(() => result.current.addEntry())
@@ -269,6 +278,32 @@ describe('useJiraSection', () => {
     rerender({ c: makeComponent({ id: 'comp-1', version: 2 }, { jira: { projectKey: 'NEW' } }) })
     expect(result.current.slice.isDirty).toBe(false)
   })
+
+  // P-1 ""-clear migration: jira aspect string scalars clear via '' (CRS-A), and
+  // the diff row is no longer flagged as a no-op.
+  it("clears a jira aspect scalar via '' and does NOT flag it as a no-op", () => {
+    const { result } = renderHook(() =>
+      useJiraSection(makeComponent({}, { jira: { releaseVersionFormat: '$major.$minor.$service' } }), vis),
+    )
+    act(() => result.current.set('releaseVersionFormat', ''))
+    expect(result.current.slice.request.baseConfiguration?.jira?.releaseVersionFormat).toBe('')
+    const row = result.current.slice.diff.find((d) => /release version format/i.test(d.label))
+    expect(row).toBeDefined()
+    expect(row?.clearedScalarNoop).toBeFalsy()
+  })
+
+  it("clears the jira project key via ''", () => {
+    const { result } = renderHook(() => useJiraSection(makeComponent({}, { jira: { projectKey: 'OLD' } }), vis))
+    act(() => result.current.set('projectKey', ''))
+    expect(result.current.slice.request.baseConfiguration?.jira?.projectKey).toBe('')
+  })
+
+  // Top-level component scalars keep their existing null-clear contract.
+  it('keeps the top-level hotfix version format on the null-clear contract', () => {
+    const { result } = renderHook(() => useJiraSection(makeComponent({ jiraHotfixVersionFormat: 'X' }), vis))
+    act(() => result.current.set('hotfixVersionFormat', ''))
+    expect(result.current.slice.request.jiraHotfixVersionFormat).toBeNull()
+  })
 })
 
 describe('useEscrowSection', () => {
@@ -322,5 +357,23 @@ describe('useEscrowSection', () => {
     expect(result.current.slice.isDirty).toBe(true)
     rerender({ c: makeComponent({ id: 'comp-1', version: 2 }, { escrow: { generation: 'G2' } }) })
     expect(result.current.slice.isDirty).toBe(false)
+  })
+
+  // P-1 ""-clear migration: escrow aspect string scalars clear via '' (CRS-A).
+  it("clears an escrow aspect scalar via '' and does NOT flag it as a no-op", () => {
+    const { result } = renderHook(() => useEscrowSection(makeComponent({}, { escrow: { diskSpace: '10GB' } }), vis))
+    act(() => result.current.set('diskSpace', ''))
+    expect(result.current.slice.request.baseConfiguration?.escrow?.diskSpace).toBe('')
+    const row = result.current.slice.diff.find((d) => /disk space/i.test(d.label))
+    expect(row?.clearedScalarNoop).toBeFalsy()
+  })
+
+  // generation is a validated enum — blank 400s, so it keeps the null-clear no-op.
+  it('keeps escrow generation clear as a null no-op (enum exception)', () => {
+    const { result } = renderHook(() => useEscrowSection(makeComponent({}, { escrow: { generation: 'AUTO' } }), vis))
+    act(() => result.current.set('generation', ''))
+    expect(result.current.slice.request.baseConfiguration?.escrow?.generation).toBeNull()
+    const row = result.current.slice.diff.find((d) => /generation/i.test(d.label))
+    expect(row?.clearedScalarNoop).toBe(true)
   })
 })

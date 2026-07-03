@@ -108,7 +108,8 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
   const diff: DiffEntry[] = []
   const push = (d: DiffEntry | null) => { if (d) diff.push(d) }
   if (isDirty) {
-    // vcsExternalRegistry is a top-level component scalar (not an aspect), so a clear persists.
+    // vcsExternalRegistry clears via '' (CRS-A ""-clear); the prior null-clear was
+    // a silent no-op (prep §1.6). Not flagged as a no-op — the clear now persists.
     push(scalarDiff('VCS · External Registry', prior.externalRegistry, state.externalRegistry))
     // Field-level entry diff (P1-2): the request persists name/branch/tag/
     // hotfixBranch/repositoryType, so editing ANY of them must surface a row —
@@ -149,7 +150,9 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
     isDirty,
     diff,
     request: {
-      vcsExternalRegistry: state.externalRegistry || null,
+      // ""-clear (CRS-A): send '' to clear (null = no-op). Empty state == server
+      // null (seeded from detail), so an untouched-empty send of '' is a no-op.
+      vcsExternalRegistry: state.externalRegistry || '',
       baseConfiguration: {
         vcsEntries: cleanedEntries.map((e) => ({
           name: e.name || null,

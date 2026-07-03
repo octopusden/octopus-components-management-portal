@@ -275,13 +275,17 @@ describe('ComponentDetailPage — combined PATCH (Phase 3b)', () => {
     expect(screen.getByText(/Build System is required/i)).toBeDefined()
   })
 
-  it('Review dialog flags a cleared build scalar as a no-op', async () => {
+  // P-1 ""-clear migration: a cleared build STRING scalar now persists via ''
+  // (CRS-A) and is no longer annotated "(clearing not supported)". The no-op flag
+  // survives only for the enum exceptions (buildSystem / escrow generation),
+  // covered at the hook + ReviewChangesDialog level.
+  it('Review dialog does NOT flag a cleared build string scalar as a no-op (CRS-A ""-clear)', async () => {
     renderPage(baseComponent)
     await openTab(/^Build/)
     fireEvent.change(screen.getByTestId('enum-build-javaVersion'), { target: { value: '' } })
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
     const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByText('(clearing not supported)')).toBeDefined()
+    expect(within(dialog).queryByText('(clearing not supported)')).toBeNull()
   })
 
   it('Discard reverts a Build edit and clears the dirty bar', async () => {

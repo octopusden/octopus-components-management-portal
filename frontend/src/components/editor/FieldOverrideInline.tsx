@@ -183,7 +183,15 @@ export function FieldOverrideInline({ overriddenAttribute, canEdit }: FieldOverr
 
   function handleUpdate() {
     if (!canEdit || !editingId || editRangeBlocks) return
-    const wireValue: unknown = isBoolean ? editValue === 'true' : editValue
+    // Blank-guard the string path (mirrors handleAdd): CRS now 400s a blank
+    // override value, so a cleared edit must not queue an update.
+    let wireValue: unknown
+    if (isBoolean) {
+      wireValue = editValue === 'true'
+    } else {
+      if (!editValue.trim()) return
+      wireValue = editValue
+    }
     queueUpdate(editingId, { versionRange: editRange, value: wireValue })
     setEditingId(null)
   }

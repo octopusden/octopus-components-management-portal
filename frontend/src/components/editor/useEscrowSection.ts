@@ -84,18 +84,21 @@ export function useEscrowSection(component: ComponentDetail, visibilities: Escro
     if (visibilities.productType !== 'hidden')
       // productType is a top-level component scalar; CRS only sends it when present
       // (a clear is omitted, never null) so a "clear" never persists either — flag it.
+      // Not in the ""-clear migration (it's not an aspect scalar / vcsExternalRegistry).
       push(scalarDiff('Escrow · Product Type', prior.productType, state.productType, { aspectScalar: true }))
+    // generation is a validated enum — blank 400s, so it keeps the null-clear no-op
+    // flag. All other escrow/build string scalars below clear via '' (CRS-A) — not flagged.
     push(scalarDiff('Escrow · Generation', prior.generation, state.generation, { aspectScalar: true }))
-    push(scalarDiff('Escrow · Disk Space', prior.diskSpace, state.diskSpace, { aspectScalar: true }))
+    push(scalarDiff('Escrow · Disk Space', prior.diskSpace, state.diskSpace))
     push(boolDiff('Escrow · Reusable', prior.reusable, state.reusable))
-    push(scalarDiff('Escrow · Provided Dependencies', prior.providedDependencies, state.providedDependencies, { aspectScalar: true }))
-    push(scalarDiff('Escrow · Additional Sources', prior.additionalSources, state.additionalSources, { aspectScalar: true }))
-    push(scalarDiff('Escrow · Gradle Include Configurations', prior.gradleIncludeConfigurations, state.gradleIncludeConfigurations, { aspectScalar: true }))
-    push(scalarDiff('Escrow · Gradle Exclude Configurations', prior.gradleExcludeConfigurations, state.gradleExcludeConfigurations, { aspectScalar: true }))
+    push(scalarDiff('Escrow · Provided Dependencies', prior.providedDependencies, state.providedDependencies))
+    push(scalarDiff('Escrow · Additional Sources', prior.additionalSources, state.additionalSources))
+    push(scalarDiff('Escrow · Gradle Include Configurations', prior.gradleIncludeConfigurations, state.gradleIncludeConfigurations))
+    push(scalarDiff('Escrow · Gradle Exclude Configurations', prior.gradleExcludeConfigurations, state.gradleExcludeConfigurations))
     push(boolDiff('Escrow · Gradle Include Test Configurations', prior.gradleIncludeTestConfigurations, state.gradleIncludeTestConfigurations))
-    push(scalarDiff('Build · Build Tasks', prior.buildTasks, state.buildTasks, { aspectScalar: true }))
-    push(scalarDiff('Build · System Properties', prior.systemProperties, state.systemProperties, { aspectScalar: true }))
-    push(scalarDiff('Build · Project Version', prior.projectVersion, state.projectVersion, { aspectScalar: true }))
+    push(scalarDiff('Build · Build Tasks', prior.buildTasks, state.buildTasks))
+    push(scalarDiff('Build · System Properties', prior.systemProperties, state.systemProperties))
+    push(scalarDiff('Build · Project Version', prior.projectVersion, state.projectVersion))
     push(boolDiff('Build · Deprecated', prior.deprecated, state.deprecated))
     push(boolDiff('Build · Required Project', prior.requiredProject, state.requiredProject))
     push(listDiff('Build · Required Tools', parseTools(prior.requiredToolsInput), parsedRequiredTools))
@@ -108,27 +111,31 @@ export function useEscrowSection(component: ComponentDetail, visibilities: Escro
       // productType: hidden → omit; editable/readonly → send only when a value is present.
       ...(visibilities.productType !== 'hidden' && state.productType ? { productType: state.productType } : {}),
       baseConfiguration: {
+        // ""-clear (CRS-A): escrow string scalars send '' to clear (null = no-op).
+        // generation (enum) keeps null-clear (blank 400s). Empty state == server
+        // null (seeded), so sending '' for an untouched-empty field is a no-op.
         escrow: {
-          providedDependencies: state.providedDependencies || null,
+          providedDependencies: state.providedDependencies || '',
           reusable: state.reusable,
           generation: state.generation || null,
-          diskSpace: state.diskSpace || null,
-          additionalSources: state.additionalSources || null,
-          gradleIncludeConfigurations: state.gradleIncludeConfigurations || null,
-          gradleExcludeConfigurations: state.gradleExcludeConfigurations || null,
+          diskSpace: state.diskSpace || '',
+          additionalSources: state.additionalSources || '',
+          gradleIncludeConfigurations: state.gradleIncludeConfigurations || '',
+          gradleExcludeConfigurations: state.gradleExcludeConfigurations || '',
           gradleIncludeTestConfigurations: state.gradleIncludeTestConfigurations,
         },
         // Migrated build knobs — only the fields this section renders are sent
         // (CRS PATCH applies per-field, so omitted scalars stay untouched and the
-        // Build section remains the sole writer of buildSystem/versions).
+        // Build section remains the sole writer of buildSystem/versions). String
+        // scalars clear via '' (CRS-A).
         ...(baseRowPresent
           ? {
               build: {
-                buildTasks: state.buildTasks || null,
-                systemProperties: state.systemProperties || null,
+                buildTasks: state.buildTasks || '',
+                systemProperties: state.systemProperties || '',
                 deprecated: state.deprecated,
                 requiredProject: state.requiredProject,
-                projectVersion: state.projectVersion || null,
+                projectVersion: state.projectVersion || '',
               },
             }
           : {}),
