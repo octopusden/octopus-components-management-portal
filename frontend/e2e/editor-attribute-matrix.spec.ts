@@ -20,9 +20,9 @@ import { test, expect, type Page } from '@playwright/test'
 // bar+dialog flow (see saveViaReviewBar). Tabs covered:
 //   General → Display Name, Build → Build File Path, VCS → Entry branch,
 //   Jira → Project Key, Distribution → Docker image, Escrow → Disk Space.
-// No tab is omitted. VCS is exercised via an existing BASE entry with a stable
-// fixture path, so the test edits the reusable branch pattern without creating
-// a new repository coordinate. Same idea for Escrow (Disk Space).
+// No tab is omitted. VCS is exercised by ADDING an entry via the UI (the v4
+// create API does not seed baseConfiguration.vcsEntries) and setting its branch,
+// driving the same VCS PATCH plumbing. Escrow edits the Disk Space scalar.
 //
 // Negative case: component B flips its maven artifact extension to EXACTLY
 // duplicate component A's GAV → CRS 409 UNIQUENESS_VIOLATION → the toast must
