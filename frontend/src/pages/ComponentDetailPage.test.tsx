@@ -34,6 +34,11 @@ vi.mock('../hooks/useInfo', () => ({
   // so these page tests render without a banner.
   usePortalInfo: vi.fn(() => ({ data: undefined })),
 }))
+// The always-rendered header labels editor calls useLabelsDictionary; mock it to
+// a stable empty dictionary so the page test never hits the real fetch/api path.
+vi.mock('../hooks/useLabelsDictionary', () => ({
+  useLabelsDictionary: () => ({ data: [], isLoading: false }),
+}))
 // Supported groupId prefixes feed the distribution/ownership prefix Save-gate.
 // Default empty ⇒ fail-open (gate off), so existing tests are unaffected.
 vi.mock('../hooks/useSupportedGroups', () => ({ useSupportedGroups: vi.fn() }))

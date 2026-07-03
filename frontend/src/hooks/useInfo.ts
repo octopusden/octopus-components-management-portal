@@ -20,7 +20,9 @@ import { safeHttpUrl } from '../lib/utils'
 async function fetchInfo<T>(url: string): Promise<T> {
   const response = await fetch(url, { credentials: 'include' })
   if (!response.ok) {
-    throw new Error(`info fetch failed: ${response.status}`)
+    // Include the URL so a failure names the endpoint (this helper is shared by
+    // /portal/info, /portal/links and /portal/config).
+    throw new Error(`fetch failed for ${url}: ${response.status}`)
   }
   return response.json() as Promise<T>
 }

@@ -30,6 +30,11 @@ vi.mock('../hooks/useInfo', () => ({
   useCrsInfo: vi.fn(),
   usePortalInfo: () => ({ data: undefined }),
 }))
+// The always-rendered header labels editor calls useLabelsDictionary; mock it so
+// the page test never depends on the broad apiMock.get shape for the dictionary.
+vi.mock('../hooks/useLabelsDictionary', () => ({
+  useLabelsDictionary: () => ({ data: [], isLoading: false }),
+}))
 vi.mock('../hooks/useFieldConfig', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../hooks/useFieldConfig')>()
   return {

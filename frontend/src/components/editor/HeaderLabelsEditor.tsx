@@ -48,8 +48,8 @@ export function HeaderLabelsEditor({
       {value.length === 0 && !editable && (
         <span className="text-xs text-muted-foreground">—</span>
       )}
-      {value.map((label) => (
-        <Badge key={label} variant="secondary">
+      {value.map((label, i) => (
+        <Badge key={`${label}-${i}`} variant="secondary">
           {label}
         </Badge>
       ))}
