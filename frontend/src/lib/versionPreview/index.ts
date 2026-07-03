@@ -157,7 +157,7 @@ export function computeLadder(state: LadderState): LadderRow[] {
     },
     {
       id: 'line',
-      label: 'Line Version',
+      label: 'Major (Line) Version',
       value: expandFormat(lineTemplate, parts),
       dest: 'CRN report',
       approx: approx(lineTemplate),

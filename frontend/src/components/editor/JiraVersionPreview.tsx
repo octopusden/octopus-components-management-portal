@@ -223,7 +223,7 @@ function mapDetailedToRows(d: DetailedComponentVersion, hotfixEnabled: boolean):
     mk('release', 'Release Version', d.releaseVersion.jiraVersion),
     mk('rc', 'RC Version', d.rcVersion.jiraVersion),
     mk('minor', 'Minor Version', d.minorVersion.jiraVersion),
-    mk('line', 'Line Version', d.lineVersion.version),
+    mk('line', 'Major (Line) Version', d.lineVersion.version),
     mk('build', 'Build Version', d.buildVersion.version),
   ]
   if (hotfixEnabled && d.hotfixVersion) {
