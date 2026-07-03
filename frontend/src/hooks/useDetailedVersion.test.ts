@@ -53,4 +53,14 @@ describe('useDetailedVersion', () => {
     renderHook(() => useDetailedVersion('acme', '   ', true), { wrapper: makeWrapper() })
     expect(mockApi.get).not.toHaveBeenCalled()
   })
+
+  it('trims padded inputs so the gate, key and URL all agree', async () => {
+    mockApi.get.mockResolvedValue(detailed)
+    const { result } = renderHook(() => useDetailedVersion('  acme  ', '  03.62.30.19-4  ', true), {
+      wrapper: makeWrapper(),
+    })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const url = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    expect(url).toBe('rest/api/2/components/acme/versions/03.62.30.19-4/detailed-version')
+  })
 })

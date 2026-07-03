@@ -15,13 +15,18 @@ import type { DetailedComponentVersion } from '../lib/types'
  * as a fall-back-to-notice instead of hanging the panel.
  */
 export function useDetailedVersion(component: string, version: string, enabled: boolean) {
+  // Normalise once so the gate, the query key and the request URL all agree — a
+  // padded version (`"03.62.30.19-4 "`) must not fetch/cache a different string
+  // than the one `enabled` accepted (Copilot #156).
+  const c = component.trim()
+  const v = version.trim()
   return useQuery<DetailedComponentVersion>({
-    queryKey: ['detailed-version', component, version],
+    queryKey: ['detailed-version', c, v],
     queryFn: () =>
       apiAbsolute.get<DetailedComponentVersion>(
-        `rest/api/2/components/${encodeURIComponent(component)}/versions/${encodeURIComponent(version)}/detailed-version`,
+        `rest/api/2/components/${encodeURIComponent(c)}/versions/${encodeURIComponent(v)}/detailed-version`,
       ),
-    enabled: enabled && component.length > 0 && version.trim().length > 0,
+    enabled: enabled && c.length > 0 && v.length > 0,
     retry: false,
     staleTime: 5 * 60_000,
   })
