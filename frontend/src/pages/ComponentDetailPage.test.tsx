@@ -596,13 +596,15 @@ describe('ComponentDetailPage — sidebar nav order', () => {
     expect(screen.getAllByText('Distribution').length).toBeGreaterThanOrEqual(2)
   })
 
-  it('no Solution tab for a non-candidate key; a candidate key + matching pattern adds one', () => {
+  it('no Solution tab for a non-candidate key (no matching pattern)', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
     // Default config (no patterns) → no Solution tab even though the flag exists.
     renderPage(baseComponent, user)
     expect(screen.queryByRole('tab', { name: /^Solution/ })).toBeNull()
+  })
 
-    // Candidate key + a matching pattern → the Solution topic appears.
+  it('a candidate key + matching pattern adds the Solution topic', () => {
+    const user = makeUser(['ACCESS_COMPONENTS'])
     mockedUsePortalConfig.mockReturnValue({
       data: { solutionKeyPatterns: ['-solution'] },
     } as unknown as ReturnType<typeof usePortalConfig>)
