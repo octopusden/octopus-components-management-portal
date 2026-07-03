@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type FocusEvent } from 'react'
 import { LockKeyhole } from 'lucide-react'
 import { Label } from '../ui/label'
 import { Input } from '../ui/input'
@@ -75,8 +75,14 @@ function hoverProps(path: string, hover?: HoverLink) {
     'data-highlighted': hover.hoveredField === path ? 'true' : undefined,
     onMouseEnter: () => hover.onHoverField(path),
     onMouseLeave: () => hover.onHoverField(null),
+    // Focus-within semantics: report on focus, and clear only when focus actually
+    // LEAVES the container. A field block has several focusable descendants (input,
+    // "Set/Remove separate" buttons, "+ Add override"); tabbing between them bubbles
+    // blur, so a naive onBlur→null would flicker the highlight (Copilot #153).
     onFocus: () => hover.onHoverField(path),
-    onBlur: () => hover.onHoverField(null),
+    onBlur: (e: FocusEvent<HTMLElement>) => {
+      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) hover.onHoverField(null)
+    },
   }
 }
 

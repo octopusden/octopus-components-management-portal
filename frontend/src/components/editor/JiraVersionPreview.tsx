@@ -252,9 +252,10 @@ function LadderRowView({
       data-highlighted={highlighted ? 'true' : undefined}
       // Row→field linking works for keyboard users too, not just mouse: the row is
       // focusable and focus/blur mirror mouseenter/leave (Codex #153 P2 a11y).
+      // No role="button": focusing already performs the (only) effect — highlighting
+      // the source field — so there is no separate activation to announce (Copilot #153).
       tabIndex={0}
-      role="button"
-      aria-label={`Highlight the ${row.label} source field`}
+      aria-label={`${row.label} — focus to highlight its source field`}
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
       onFocus={onEnter}
