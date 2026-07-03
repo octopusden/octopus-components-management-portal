@@ -770,7 +770,13 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
   const [changeComment, setChangeComment] = useState('')
   const jiraError = validateJiraKey(jiraTaskKey)
 
-  const submitDisabled = isSubmitting || createMutation.isPending || ownerValidating || !!jiraError
+  // Block submit until field-config / current-user resolve: `editable()` fails
+  // closed while they load, and it drives buildCreateRequest's payload strip — an
+  // early submit in that window would silently drop user-entered gated fields
+  // (e.g. distributionExplicit/External). Waiting avoids both that data loss and
+  // the adminOnly copy-leak (Copilot #154 + Codex #154 P1).
+  const submitDisabled =
+    isSubmitting || createMutation.isPending || ownerValidating || !!jiraError || fcLoading || userLoading
 
   async function onSubmit(values: CreateFormValues) {
     // The Jira key lives outside RHF, so zod validation can't gate it. The
