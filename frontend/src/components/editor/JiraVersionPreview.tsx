@@ -412,7 +412,9 @@ function LadderRowView({
 function JiraVersionPreviewServer(props: JiraVersionPreviewProps) {
   const { componentName = '', technical, hotfixEnabled, minorSeparate, buildSeparate, hoveredField, onHoverField } = props
 
-  const [version, setVersion] = useState('1.2.3')
+  // Whiskey-shaped seed (5 segments incl. build) so the server has enough to
+  // render every format on first paint; the user can edit it.
+  const [version, setVersion] = useState('03.62.30.19-4')
   const debounced = useDebouncedValue(version, 350)
   const query = useDetailedVersion(componentName, debounced, true)
 
