@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { Badge } from '../ui/badge'
-import { computeLadder, expandFormat, type LadderState, type LadderRow, type VersionParts } from '../../lib/versionPreview'
+import { computeLadder, expandFormat, parseVersion, type LadderState, type LadderRow, type VersionParts } from '../../lib/versionPreview'
 
 /**
  * Version-ladder preview panel (design brief §4, P-0 prototype). Reads the
@@ -63,13 +62,25 @@ function templateDepth(template: string): number {
  * the given format templates — so the preview never shows a fake trailing `0` for
  * a segment the format actually uses. The deepest template supplies the display
  * separators (`1.2.3-87` vs `1.2.3.87`); ties prefer the first (leading) template.
+ *
+ * The rendered sample must round-trip through positional `parseVersion` (the same
+ * decode the ladder rows use), else a template that skips a leading position
+ * (e.g. `$service.$fix`) would show a sample the rows then recompute differently.
+ * When it doesn't round-trip, fall back to a positional canonical join that fills
+ * every used position.
  */
 function deriveSample(templates: string[]): string {
   const candidates = templates.filter((t) => t.trim())
   if (candidates.length === 0) return '1.2.3'
   // reduce with no seed → returns a `string` (throws on empty, which we guarded).
   const deepest = candidates.reduce((best, t) => (templateDepth(t) > templateDepth(best) ? t : best))
-  return expandFormat(deepest, CANONICAL_PARTS) || '1.2.3'
+  const depth = templateDepth(deepest)
+  if (depth === 0) return '1.2.3'
+  const rendered = expandFormat(deepest, CANONICAL_PARTS)
+  const parsed = parseVersion(rendered)
+  const roundTrips =
+    rendered.trim() !== '' && PART_ORDER.slice(0, depth).every((k) => parsed[k] === CANONICAL_PARTS[k])
+  return roundTrips ? rendered : PART_ORDER.slice(0, depth).map((k) => CANONICAL_PARTS[k]).join('.')
 }
 
 interface MirrorFlags {
@@ -135,7 +146,7 @@ interface RowChrome {
 }
 
 /** Presentation copy per row (P-0 prototype §preview); mirror tags depend on state. */
-function rowChrome(id: string, technical: boolean, { minorMirrored, buildMirrored }: MirrorFlags): RowChrome {
+function rowChrome(id: string, technical: boolean, { buildMirrored }: MirrorFlags): RowChrome {
   switch (id) {
     case 'release':
       return { tag: 'in Jira', jira: true, accent: true, dest: technical ? 'SubComponent Fix Version/s' : 'Jira "Fix Version/s"' }
@@ -148,13 +159,15 @@ function rowChrome(id: string, technical: boolean, { minorMirrored, buildMirrore
           : 'Jira, until the release replaces it in Fix Version/s',
       }
     case 'minor':
-      return { tag: minorMirrored ? '= line format' : 'in Jira', jira: !minorMirrored, dest: 'used for planning in Jira' }
+      // Minor is a Jira-facing planning version → always tagged "in Jira" (the
+      // Line-mirror relationship is still shown by the field pill + hover link).
+      return { tag: 'in Jira', jira: true, dest: 'used for planning in Jira' }
     case 'line':
       return { tag: 'no prefix', dest: 'CRN report — all versions belonging to this line are included by default' }
     case 'build':
-      return { tag: buildMirrored ? '= release format' : 'no prefix', dest: 'CI builds' }
+      return { tag: buildMirrored ? '= release format' : 'no prefix', dest: 'TeamCity builds / Artifactory' }
     case 'hotfix-build':
-      return { tag: 'hotfix build, no prefix', dest: 'hotfix build' }
+      return { tag: 'hotfix build, no prefix', dest: 'hotfix builds in TeamCity / Artifactory' }
     case 'hotfix-jira':
     default:
       return {
@@ -232,7 +245,7 @@ export function JiraVersionPreview(props: JiraVersionPreviewProps) {
   )
 
   const sampleInputClass =
-    'w-28 rounded-md border bg-background px-2 py-1 font-mono text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring'
+    'w-36 rounded-md border bg-background px-2 py-1 font-mono text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
   return (
     <div
@@ -276,8 +289,8 @@ export function JiraVersionPreview(props: JiraVersionPreviewProps) {
       )}
 
       <p className="mt-3 border-t border-dashed pt-3 text-[11px] leading-relaxed text-muted-foreground">
-        <span className="font-mono">$fix</span> and <span className="font-mono">$build</span> are computed by
-        the server at release time — rows marked ≈ are approximate.
+        <span className="font-mono">$fix</span> and <span className="font-mono">$build</span> are filled by the
+        server at build/release time.
       </p>
     </div>
   )
@@ -327,11 +340,6 @@ function LadderRowView({
         >
           {chrome.tag}
         </span>
-        {row.approx && (
-          <Badge variant="warning" className="px-2 py-0 text-[10px] font-semibold">
-            ≈ approx
-          </Badge>
-        )}
       </div>
       <div data-testid="ladder-value" className="font-mono text-base font-semibold tracking-tight">
         {row.value}

@@ -64,14 +64,14 @@ describe('JiraVersionPreview — brief §4 ladder example', () => {
 
   it('shows the dashed server-computed footer note', () => {
     renderPreview()
-    expect(screen.getByText(/computed by the server at release time/i)).toBeInTheDocument()
+    expect(screen.getByText(/filled by the\s+server at build\/release time/i)).toBeInTheDocument()
   })
 })
 
 describe('JiraVersionPreview — captions & tags', () => {
-  it('mirrored Minor/Build show the "= line format" / "= release format" tags', () => {
+  it('Minor is always tagged "in Jira"; mirrored Build keeps the "= release format" tag', () => {
     renderPreview()
-    expect(within(row('minor')).getByText('= line format')).toBeInTheDocument()
+    expect(within(row('minor')).getByText('in Jira')).toBeInTheDocument()
     expect(within(row('build')).getByText('= release format')).toBeInTheDocument()
   })
 
@@ -102,6 +102,17 @@ describe('JiraVersionPreview — captions & tags', () => {
   })
 })
 
+describe('JiraVersionPreview — default sample arity', () => {
+  it('fills every used position for a non-$major-leading build format (no zeroed rows)', () => {
+    // $service.$fix skips the leading positions; the derived sample must still
+    // fill them so the shown sample and the recomputed row agree (P1 regression).
+    renderPreview({ buildSeparate: true, buildVersionFormat: '$service.$fix' })
+    expect(screen.getByLabelText('version')).toHaveValue('1.2.3.87')
+    // Build renders $service.$fix from that sample → 3.87, not the pre-fix 0.0.
+    expect(rowValue('build')).toBe('3.87')
+  })
+})
+
 describe('JiraVersionPreview — hotfix dual rows', () => {
   it('shows both hotfix rows only when hotfixes are enabled', () => {
     renderPreview({ hotfixEnabled: false })
@@ -115,23 +126,6 @@ describe('JiraVersionPreview — hotfix dual rows', () => {
     renderPreview()
     expect(screen.getByLabelText('hotfix version')).toHaveValue('1.2.3-87')
     expect(rowValue('hotfix-build')).toBe('1.2.3-87')
-  })
-})
-
-describe('JiraVersionPreview — approx badges', () => {
-  it('marks rows whose template references $fix/$build as approximate', () => {
-    renderPreview()
-    // Hotfix template references $fix → approx.
-    expect(within(row('hotfix-build')).getByText(/approx/i)).toBeInTheDocument()
-    expect(within(row('hotfix-jira')).getByText(/approx/i)).toBeInTheDocument()
-    // Release/Line/Minor use only $major/$minor/$service → not approx.
-    expect(within(row('release')).queryByText(/approx/i)).toBeNull()
-    expect(within(row('line')).queryByText(/approx/i)).toBeNull()
-  })
-
-  it('adds the approx badge to Build when its separate template references $fix', () => {
-    renderPreview({ buildSeparate: true, buildVersionFormat: '$major.$minor.$service.$fix' })
-    expect(within(row('build')).getByText(/approx/i)).toBeInTheDocument()
   })
 })
 
