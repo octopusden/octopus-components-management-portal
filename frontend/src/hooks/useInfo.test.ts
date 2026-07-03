@@ -371,5 +371,23 @@ describe('usePortalConfig', () => {
 
     expect(assignSpy).not.toHaveBeenCalled()
     expect(result.current.data).toBeUndefined()
+    expect(result.current.error?.message).toContain('portal/config')
+    expect(result.current.error?.message).toContain('401')
+  })
+
+  it('does not refetch within the same QueryClient session (staleTime Infinity)', async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ solutionKeyPatterns: ['-solution'] }), { status: 200 }))
+    vi.stubGlobal('fetch', mockFetch)
+    const sharedClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+
+    const first = renderHook(() => usePortalConfig(), { wrapper: makeWrapper(sharedClient) })
+    await waitFor(() => expect(first.result.current.isSuccess).toBe(true))
+
+    const second = renderHook(() => usePortalConfig(), { wrapper: makeWrapper(sharedClient) })
+    await waitFor(() => expect(second.result.current.isSuccess).toBe(true))
+
+    expect(mockFetch).toHaveBeenCalledTimes(1)
   })
 })

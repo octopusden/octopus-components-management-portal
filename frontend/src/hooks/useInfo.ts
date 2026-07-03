@@ -28,11 +28,12 @@ async function fetchInfo<T>(url: string): Promise<T> {
 }
 
 const QUERY_OPTIONS = {
-  // Build info doesn't change for the lifetime of the page — caching forever
-  // saves a round-trip when AppFooter and any debug surface both consume it.
+  // These portal/runtime metadata endpoints are stable for the lifetime of the
+  // loaded SPA; cache them as fresh so multiple consumers do not pile up
+  // duplicate reads.
   staleTime: Infinity,
-  // No retry on the public footer query — a 5xx here should fail closed and
-  // let AppFooter render its degraded "no version" string rather than blocking.
+  // No retry: these endpoints are auxiliary, and a 5xx should fail closed
+  // instead of blocking the surface that requested the metadata.
   retry: false,
 }
 
@@ -89,7 +90,6 @@ export function usePortalConfig() {
   return useQuery<PortalConfig>({
     queryKey: ['config', 'portal'],
     queryFn: () => fetchInfo<PortalConfig>(`${import.meta.env.BASE_URL}portal/config`),
-    staleTime: 5 * 60 * 1000,
-    retry: false,
+    ...QUERY_OPTIONS,
   })
 }

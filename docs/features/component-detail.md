@@ -84,15 +84,15 @@ autocomplete (`frontend/src/components/ui/ComponentSelect.tsx`) drives the paren
 
 If any of these fields is always sent, a non-admin's plain edit (only `displayName` or owner) would 403 because the server's PATCH SpEL guards `(#request.archived == null or canArchiveComponent(...))` etc.
 
-### Schema-v2 General-tab editors (PR #38 Wave B)
+### Schema-v2 child collections (PR #38 Wave B)
 
-With CRS schema v2 (`component_configurations` as the wide row), three child-collection editors live on the General tab next to the scalar fields:
+With CRS schema v2 (`component_configurations` as the wide row), component child collections are edited from the page-level form:
 
-- **TeamCity projects** — `projectId` rows backed by the `component_teamcity_projects` child table. Sort order is preserved (server sorts by `sort_order`); the editor re-emits the full list on each save.
+- **TeamCity projects** — `projectId` rows backed by the `component_teamcity_projects` child table. Sort order is preserved (server sorts by `sort_order`); the header exposes them as read-only quick links.
 - **Doc links** — `{ docComponentKey: string, majorVersion?: string | null }` rows backed by `component_doc_links`. Identifies the documentation source by component key and (optionally) the major version it documents (e.g. `3.x`); the editor maps a blank input to `null` on save. **Moved to the dedicated Documentation topic** ([`DocumentationTab`](../../frontend/src/components/editor/DocumentationTab.tsx)); it still shares the page form and saves in the same PATCH.
-- **Artifact IDs** — `{ groupPattern: string, artifactPattern: string }` rows backed by `component_artifact_ids`. Order preserved; primary use is fuzzy-match by build artifact identifier in downstream Feign consumers.
+- **Artifact IDs** — `{ groupPattern: string, artifactPattern: string }` rows backed by `component_artifact_ids`. Order preserved; primary use is fuzzy-match by build artifact identifier in downstream Feign consumers. Edited from General via [`ArtifactOwnershipEditor`](../../frontend/src/components/editor/ArtifactOwnershipEditor.tsx).
 
-Each editor is a `useFieldArray` row list with inline add and per-row delete. They share the page-level `react-hook-form` state; the General tab Save button mutates them together with the scalar fields in one PATCH.
+The editable collections share the page-level `react-hook-form` state; the page Save bar sends them together with scalar General fields in one PATCH.
 
 ### Release Managers / Security Champions (SYS-039 — multi-value)
 

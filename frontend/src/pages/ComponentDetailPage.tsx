@@ -711,7 +711,7 @@ function ComponentDetailEditor() {
               )}
               {component.solution && (
                 <Badge variant="info">
-                  <Boxes className="mr-1 h-3 w-3" />
+                  <Boxes className="mr-1 h-3 w-3" aria-hidden />
                   Solution
                 </Badge>
               )}

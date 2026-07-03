@@ -67,7 +67,7 @@ export function HeaderLabelsEditor({
               aria-label="Edit labels"
               aria-invalid={Boolean(error)}
             >
-              <Tag className="h-3 w-3" />
+              <Tag className="h-3 w-3" aria-hidden />
               Edit labels
             </Button>
           </PopoverTrigger>
