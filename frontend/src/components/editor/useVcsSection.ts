@@ -3,6 +3,25 @@ import { selectBaseRow } from '../../lib/api/baseRow'
 import type { SectionSlice, DiffEntry } from '../../lib/editor/combineRequest'
 import { scalarDiff } from '../../lib/editor/diffUtil'
 import { useSectionSnapshot } from './useSectionSnapshot'
+import { useFieldEditable } from '../../hooks/useFieldConfig'
+import { omitNonEditable } from '../../lib/editor/payloadGating'
+
+/**
+ * External Registry (R10) is a Whiskey-only field: it is shown only when the
+ * effective BASE build system is WHISKEY. Read from the persisted base row's
+ * build aspect — an unsaved build-system edit on another tab does not toggle
+ * this (cross-tab live coupling is out of scope for P-3).
+ */
+const WHISKEY = 'WHISKEY'
+
+/**
+ * The field-config keys for External Registry are SPLIT (see isFieldEditableFor
+ * doc): the write-enforcement / editability axis lives on the CRS write-side key
+ * `component.vcsExternalRegistry`, while label/description/options live on the
+ * editor DISPLAY path `vcs.externalRegistry`. Editability + payload-gating use
+ * the write-side key; the dropdown reads options from the display path.
+ */
+const EXTERNAL_REGISTRY_EDITABLE_KEY = 'component.vcsExternalRegistry'
 
 export interface VcsEntryState {
   id?: string | null
@@ -72,6 +91,12 @@ function normalizeVcs(s: VcsState): unknown {
 export interface VcsSection {
   externalRegistry: string
   setExternalRegistry: (v: string) => void
+  /** Whiskey-only visibility (R10): render the External Registry field only when
+   *  the effective BASE build system is WHISKEY. */
+  showExternalRegistry: boolean
+  /** Effective editability of External Registry for the current user (adminOnly
+   *  → EDIT_ANY_COMPONENT). Drives the disabled dropdown + "admin only" pill. */
+  externalRegistryEditable: boolean
   entries: VcsEntryState[]
   updateEntry: (index: number, field: keyof VcsEntryState, value: string) => void
   addEntry: () => void
@@ -86,6 +111,12 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
     snapshotFrom,
     normalizeVcs,
   )
+
+  // useFieldEditable fails CLOSED while field-config / current-user load (and on
+  // a field-config error): the dropdown must never flash editable — nor leak the
+  // field into the PATCH — before we can confirm the user may edit it.
+  const externalRegistryEditable = useFieldEditable(EXTERNAL_REGISTRY_EDITABLE_KEY)
+  const showExternalRegistry = selectBaseRow(component)?.build?.buildSystem === WHISKEY
 
   const setExternalRegistry = (v: string) => setState((p) => ({ ...p, externalRegistry: v }))
   const updateEntry = (index: number, field: keyof VcsEntryState, value: string) =>
@@ -146,25 +177,50 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
     }
   }
 
-  const slice: SectionSlice = {
-    isDirty,
-    diff,
-    request: {
-      // ""-clear (CRS-A): send '' to clear (null = no-op). Empty state == server
-      // null (seeded from detail), so an untouched-empty send of '' is a no-op.
-      vcsExternalRegistry: state.externalRegistry || '',
-      baseConfiguration: {
-        vcsEntries: cleanedEntries.map((e) => ({
-          name: e.name || null,
-          vcsPath: e.vcsPath,
-          branch: e.branch || null,
-          tag: e.tag || null,
-          hotfixBranch: e.hotfixBranch || null,
-          repositoryType: e.repositoryType || null,
-        })),
-      },
+  const request = {
+    // ""-clear (CRS-A): send '' to clear (null = no-op). Empty state == server
+    // null (seeded from detail), so an untouched-empty send of '' is a no-op.
+    // Only included when the field is visible (Whiskey) — a hidden field never
+    // participates in the PATCH (mirrors BuildTab's hidden tool-version fields).
+    ...(showExternalRegistry ? { vcsExternalRegistry: state.externalRegistry || '' } : {}),
+    baseConfiguration: {
+      vcsEntries: cleanedEntries.map((e) => ({
+        name: e.name || null,
+        vcsPath: e.vcsPath,
+        branch: e.branch || null,
+        tag: e.tag || null,
+        hotfixBranch: e.hotfixBranch || null,
+        repositoryType: e.repositoryType || null,
+      })),
     },
   }
 
-  return { externalRegistry: state.externalRegistry, setExternalRegistry, entries: state.entries, updateEntry, addEntry, removeEntry, slice, reset }
+  // Payload-gating (P-1): drop vcsExternalRegistry from the PATCH when the
+  // current user may not edit it (adminOnly without EDIT_ANY_COMPONENT). Keyed
+  // by the write-side path; baseConfiguration has no mapped path so it is kept.
+  const slice: SectionSlice = {
+    isDirty,
+    diff,
+    request: omitNonEditable(
+      request,
+      { vcsExternalRegistry: EXTERNAL_REGISTRY_EDITABLE_KEY },
+      // Same fail-closed answer as the rendered control — never omit vs. render
+      // out of step. Only vcsExternalRegistry is mapped, so this is the only
+      // path the predicate is asked about.
+      (path) => (path === EXTERNAL_REGISTRY_EDITABLE_KEY ? externalRegistryEditable : true),
+    ),
+  }
+
+  return {
+    externalRegistry: state.externalRegistry,
+    setExternalRegistry,
+    showExternalRegistry,
+    externalRegistryEditable,
+    entries: state.entries,
+    updateEntry,
+    addEntry,
+    removeEntry,
+    slice,
+    reset,
+  }
 }

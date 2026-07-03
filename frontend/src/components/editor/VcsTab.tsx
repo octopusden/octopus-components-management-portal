@@ -1,11 +1,14 @@
-import { Plus, Trash2 } from 'lucide-react'
+import { Lock, Plus, Trash2 } from 'lucide-react'
 import { Label } from '../ui/label'
 import { Input } from '../ui/input'
 import { Button } from '../ui/button'
+import { Badge } from '../ui/badge'
+import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip'
 import { FieldInfo } from '../ui/FieldInfo'
 import { FieldLabelText } from '../ui/FieldLabelText'
 import { Separator } from '../ui/separator'
 import { isVcsHostSupported, hostOf } from '../../lib/vcsHost'
+import { ExternalRegistrySelect } from './ExternalRegistrySelect'
 import type { VcsSection } from './useVcsSection'
 
 interface VcsTabProps {
@@ -17,24 +20,51 @@ interface VcsTabProps {
 
 /** VCS tab — presentational. State + slice live in `useVcsSection` (page-owned). */
 export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
-  const { externalRegistry, setExternalRegistry, entries, updateEntry, addEntry, removeEntry } = section
+  const {
+    externalRegistry,
+    setExternalRegistry,
+    showExternalRegistry,
+    externalRegistryEditable,
+    entries,
+    updateEntry,
+    addEntry,
+    removeEntry,
+  } = section
   const allowedHost = hostOf(gitBaseUrl)
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-1">
-            <Label><FieldLabelText path="vcs.externalRegistry" fallback="External Registry" /></Label>
-            <FieldInfo path="vcs.externalRegistry" label="External Registry" />
+      {/* External Registry — Whiskey-only (R10), admin-only editable. Hidden
+          entirely for non-Whiskey components. */}
+      {showExternalRegistry && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1">
+              <Label htmlFor="vcs-externalRegistry"><FieldLabelText path="vcs.externalRegistry" fallback="External Registry" /></Label>
+              <FieldInfo path="vcs.externalRegistry" label="External Registry" />
+              {!externalRegistryEditable && (
+                <Tooltip>
+                  <TooltipTrigger className="cursor-help rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                    <Badge variant="secondary" className="gap-1 font-normal">
+                      <Lock className="h-3 w-3" aria-hidden="true" />
+                      admin only
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs whitespace-normal leading-snug">
+                    Only administrators (Edit Any Component) can change the External Registry.
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+            <ExternalRegistrySelect
+              id="vcs-externalRegistry"
+              value={externalRegistry}
+              onValueChange={setExternalRegistry}
+              disabled={!canEdit || !externalRegistryEditable}
+            />
           </div>
-          <Input
-            value={externalRegistry}
-            onChange={(e) => setExternalRegistry(e.target.value)}
-            placeholder="External registry URL"
-          />
         </div>
-      </div>
+      )}
 
       <Separator />
 
