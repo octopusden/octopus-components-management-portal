@@ -234,13 +234,196 @@ describe('useJiraSection', () => {
     expect(result.current.slice.request.baseConfiguration?.jira?.projectKey).toBe('NEW')
   })
 
-  // Guards the renamed v4 version-format field on the write path: editing it must
-  // land in the PATCH body as baseConfiguration.jira.minorVersionFormat (not the
-  // old majorVersionFormat) so the combined Save round-trips the rename.
-  it('edited minor version format lands in baseConfiguration.jira.minorVersionFormat', () => {
-    const { result } = renderHook(() => useJiraSection(makeComponent({}, { jira: { minorVersionFormat: 'old' } }), vis))
-    act(() => result.current.set('minorVersionFormat', '$major.$minor'))
-    expect(result.current.slice.request.baseConfiguration?.jira?.minorVersionFormat).toBe('$major.$minor')
+  // ── Line/Minor pair — UI-materialization (Q9 / prep §R6) ─────────────────
+  // Mirrored Minor: the leading Line value is written into BOTH line and minor
+  // (CRS/releng-lib fallback is the reverse, so the copy must be materialized).
+  it('mirrored Minor materializes the leading Line value into BOTH line and minor', () => {
+    // Legacy shape: line null, minor set → mirrored, leading = stored minor.
+    const { result } = renderHook(() =>
+      useJiraSection(makeComponent({}, { jira: { lineVersionFormat: '', minorVersionFormat: '$major.$minor' } }), vis),
+    )
+    act(() => result.current.set('lineVersionFormat', '$major.$minor.x'))
+    const jira = result.current.slice.request.baseConfiguration?.jira
+    expect(jira?.lineVersionFormat).toBe('$major.$minor.x')
+    expect(jira?.minorVersionFormat).toBe('$major.$minor.x') // materialized copy
+  })
+
+  it('separate Minor sends line and minor independently', () => {
+    const { result } = renderHook(() =>
+      useJiraSection(makeComponent({}, { jira: { lineVersionFormat: 'L', minorVersionFormat: 'M' } }), vis),
+    )
+    expect(result.current.state.minorSeparate).toBe(true) // both set + differ → separate
+    act(() => result.current.set('minorVersionFormat', 'M2'))
+    const jira = result.current.slice.request.baseConfiguration?.jira
+    expect(jira?.lineVersionFormat).toBe('L')
+    expect(jira?.minorVersionFormat).toBe('M2')
+  })
+
+  it('promoting Minor to separate seeds from Line, then edits independently', () => {
+    const { result } = renderHook(() => useJiraSection(makeComponent({}, { jira: { lineVersionFormat: 'L' } }), vis))
+    expect(result.current.state.minorSeparate).toBe(false) // minor null → mirrored
+    act(() => result.current.setMinorSeparate(true))
+    expect(result.current.state.minorVersionFormat).toBe('L') // seeded from Line
+    act(() => result.current.set('minorVersionFormat', 'M2'))
+    const jira = result.current.slice.request.baseConfiguration?.jira
+    expect(jira?.lineVersionFormat).toBe('L')
+    expect(jira?.minorVersionFormat).toBe('M2')
+  })
+
+  it('promoting Minor to separate WITHOUT editing is not dirty (same wire value)', () => {
+    const { result } = renderHook(() => useJiraSection(makeComponent({}, { jira: { lineVersionFormat: 'L' } }), vis))
+    act(() => result.current.setMinorSeparate(true))
+    expect(result.current.slice.isDirty).toBe(false)
+    expect(result.current.slice.diff).toEqual([])
+  })
+
+  it('removing separate Minor resumes materialization (minor = line)', () => {
+    const { result } = renderHook(() =>
+      useJiraSection(makeComponent({}, { jira: { lineVersionFormat: 'L', minorVersionFormat: 'M' } }), vis),
+    )
+    act(() => result.current.setMinorSeparate(false))
+    const jira = result.current.slice.request.baseConfiguration?.jira
+    expect(jira?.lineVersionFormat).toBe('L')
+    expect(jira?.minorVersionFormat).toBe('L') // re-materialized from Line
+  })
+
+  // ── Release/Build pair — mirrored clears (server fallback), separate = value ─
+  it('mirrored Build sends buildVersionFormat "" (CRS falls back to Release)', () => {
+    const { result } = renderHook(() =>
+      useJiraSection(makeComponent({}, { jira: { releaseVersionFormat: 'R' } }), vis),
+    )
+    act(() => result.current.set('releaseVersionFormat', 'R2'))
+    const jira = result.current.slice.request.baseConfiguration?.jira
+    expect(jira?.releaseVersionFormat).toBe('R2')
+    expect(jira?.buildVersionFormat).toBe('')
+  })
+
+  it('separate Build sends its own value', () => {
+    const { result } = renderHook(() =>
+      useJiraSection(makeComponent({}, { jira: { releaseVersionFormat: 'R', buildVersionFormat: 'B' } }), vis),
+    )
+    expect(result.current.state.buildSeparate).toBe(true)
+    act(() => result.current.set('buildVersionFormat', 'B2'))
+    expect(result.current.slice.request.baseConfiguration?.jira?.buildVersionFormat).toBe('B2')
+  })
+
+  it('Remove separate Build clears via "" (CRS-A ""-clear)', () => {
+    const { result } = renderHook(() =>
+      useJiraSection(makeComponent({}, { jira: { releaseVersionFormat: 'R', buildVersionFormat: 'B' } }), vis),
+    )
+    act(() => result.current.setBuildSeparate(false))
+    expect(result.current.slice.isDirty).toBe(true)
+    expect(result.current.slice.request.baseConfiguration?.jira?.buildVersionFormat).toBe('')
+  })
+
+  // ── skipCommitCheck (top-level boolean) — send only when toggled ──────────
+  it('sends skipCommitCheck only when toggled from the server value', () => {
+    const { result } = renderHook(() => useJiraSection(makeComponent({ skipCommitCheck: false }), vis))
+    expect('skipCommitCheck' in result.current.slice.request).toBe(false)
+    act(() => result.current.set('skipCommitCheck', true))
+    expect(result.current.slice.request.skipCommitCheck).toBe(true)
+  })
+
+  // Codex #151 P1: the Whiskey rule keys on the EFFECTIVE (draft) build system.
+  // With effectiveBuildSystem WHISKEY (a cross-tab Build switch), toggling skip on
+  // must NOT reach the PATCH (server 422s on WHISKEY + skip=true).
+  it('never sends skipCommitCheck when the effective build system is WHISKEY (cross-tab)', () => {
+    const { result } = renderHook(() =>
+      useJiraSection(makeComponent({ skipCommitCheck: false }), { ...vis, effectiveBuildSystem: 'WHISKEY' }),
+    )
+    act(() => result.current.set('skipCommitCheck', true))
+    expect('skipCommitCheck' in result.current.slice.request).toBe(false)
+    // ...and the flag is neutralized (effective false), so it is neither dirty nor
+    // shown as a diff row from skip alone.
+    expect(result.current.slice.diff.some((d) => /skip commit check/i.test(d.label))).toBe(false)
+  })
+
+  // ── Payload-gating (P-1 omitNonEditable) ─────────────────────────────────
+  it('omits a non-editable jira field from the PATCH slice', () => {
+    const isFieldEditable = (p: string) => p !== 'jira.technical'
+    const { result } = renderHook(() =>
+      useJiraSection(makeComponent({}, { jira: { projectKey: 'P' } }), { ...vis, isFieldEditable }),
+    )
+    act(() => result.current.set('projectKey', 'P2'))
+    const jira = result.current.slice.request.baseConfiguration?.jira
+    expect('technical' in (jira ?? {})).toBe(false) // gated out
+    expect(jira?.projectKey).toBe('P2') // editable field kept
+  })
+
+  // A MIRRORED derived field is gated by its LEADING field's editability (the
+  // user edits it via Line/Release) — so a materialized Minor is kept when Line
+  // is editable even if the minor path itself is not.
+  it('keeps a materialized Minor when Line is editable but the minor path is not', () => {
+    const isFieldEditable = (p: string) => p !== 'jira.minorVersionFormat'
+    const { result } = renderHook(() =>
+      useJiraSection(makeComponent({}, { jira: { lineVersionFormat: 'L' } }), { ...vis, isFieldEditable }),
+    )
+    act(() => result.current.set('lineVersionFormat', 'L2'))
+    const jira = result.current.slice.request.baseConfiguration?.jira
+    expect(jira?.lineVersionFormat).toBe('L2')
+    expect(jira?.minorVersionFormat).toBe('L2') // materialized, not dropped
+  })
+
+  it('omits a SEPARATE Minor gated by its own non-editable path', () => {
+    const isFieldEditable = (p: string) => p !== 'jira.minorVersionFormat'
+    const { result } = renderHook(() =>
+      useJiraSection(makeComponent({}, { jira: { lineVersionFormat: 'L', minorVersionFormat: 'M' } }), { ...vis, isFieldEditable }),
+    )
+    act(() => result.current.set('minorVersionFormat', 'M2'))
+    const jira = result.current.slice.request.baseConfiguration?.jira
+    expect('minorVersionFormat' in (jira ?? {})).toBe(false)
+  })
+
+  // Symmetric Build-gating matrix (Codex test-gap a): a MIRRORED Build is gated by
+  // Release editability; a SEPARATE Build by its own path.
+  it('keeps a materialized Build when Release is editable but the build path is not', () => {
+    const isFieldEditable = (p: string) => p !== 'jira.buildVersionFormat'
+    const { result } = renderHook(() =>
+      useJiraSection(makeComponent({}, { jira: { releaseVersionFormat: 'R' } }), { ...vis, isFieldEditable }),
+    )
+    act(() => result.current.set('releaseVersionFormat', 'R2'))
+    const jira = result.current.slice.request.baseConfiguration?.jira
+    expect(jira?.releaseVersionFormat).toBe('R2')
+    expect('buildVersionFormat' in (jira ?? {})).toBe(true) // mirrored → gated by Release (editable)
+    expect(jira?.buildVersionFormat).toBe('') // mirrored clear
+  })
+
+  it('omits a SEPARATE Build gated by its own non-editable path', () => {
+    const isFieldEditable = (p: string) => p !== 'jira.buildVersionFormat'
+    const { result } = renderHook(() =>
+      useJiraSection(makeComponent({}, { jira: { releaseVersionFormat: 'R', buildVersionFormat: 'B' } }), { ...vis, isFieldEditable }),
+    )
+    act(() => result.current.set('buildVersionFormat', 'B2'))
+    const jira = result.current.slice.request.baseConfiguration?.jira
+    expect('buildVersionFormat' in (jira ?? {})).toBe(false)
+  })
+
+  // Codex #151 P2: top-level jiraHotfixVersionFormat is gated OUTSIDE
+  // omitNonEditable — a non-editable hotfix must NOT ride an unrelated Jira edit.
+  it('omits jiraHotfixVersionFormat when its write-key is non-editable, even on an unrelated edit', () => {
+    const isFieldEditable = (p: string) => p !== 'component.jiraHotfixVersionFormat'
+    const { result } = renderHook(() =>
+      useJiraSection(makeComponent({ jiraHotfixVersionFormat: 'HF' }, { jira: { projectKey: 'P' } }), { ...vis, isFieldEditable }),
+    )
+    act(() => result.current.set('projectKey', 'P2'))
+    expect('jiraHotfixVersionFormat' in result.current.slice.request).toBe(false)
+  })
+
+  it('omits jiraHotfixVersionFormat when the display path is non-editable', () => {
+    const isFieldEditable = (p: string) => p !== 'jira.hotfixVersionFormat'
+    const { result } = renderHook(() =>
+      useJiraSection(makeComponent({ jiraHotfixVersionFormat: 'HF' }, { jira: { projectKey: 'P' } }), { ...vis, isFieldEditable }),
+    )
+    act(() => result.current.set('projectKey', 'P2'))
+    expect('jiraHotfixVersionFormat' in result.current.slice.request).toBe(false)
+  })
+
+  it('sends jiraHotfixVersionFormat when both hotfix paths are editable', () => {
+    const { result } = renderHook(() =>
+      useJiraSection(makeComponent({ jiraHotfixVersionFormat: 'HF' }, { jira: { projectKey: 'P' } }), vis),
+    )
+    act(() => result.current.set('projectKey', 'P2'))
+    expect(result.current.slice.request.jiraHotfixVersionFormat).toBe('HF')
   })
 
   it('does NOT send releasesInDefaultBranch when field is hidden', () => {

@@ -332,6 +332,45 @@ describe('ComponentDetailPage — combined PATCH (Phase 3b)', () => {
     expect(screen.getByText('Unsaved changes')).toBeDefined()
   })
 
+  // P-2a: a UNIQUENESS_VIOLATION 409 whose save changed the Jira (projectKey,
+  // versionPrefix) pair AND whose message is about that pair surfaces inline
+  // under Project Key on the Jira tab (not a Review-dialog banner). Real JiraTab
+  // so jiraSection.state drives the jiraPairChanged classification.
+  it('routes a jira-pair uniqueness 409 to an inline Project Key error', async () => {
+    const message = "uniqueness violation: jira project 'NEWKEY' with version prefix '' is already used by another-component"
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(new ApiError(409, 'conflict', JSON.stringify({ errorCode: 'UNIQUENESS_VIOLATION', errorMessage: message }))),
+    )
+    renderPage(baseComponent, mutateAsync)
+    await openTab(/^Jira/)
+    const projectKey = screen.getByPlaceholderText('JIRA project key')
+    fireEvent.change(projectKey, { target: { value: 'NEWKEY' } })
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /^confirm$/i }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await waitFor(() => expect(screen.getByRole('tab', { name: /^Jira/ })).toHaveAttribute('aria-current', 'page'))
+    expect(screen.getByText(message)).toBeDefined()
+    expect(projectKey).toHaveAttribute('aria-invalid', 'true')
+  })
+
+  // Codex #151 test-gap (b): a value-409 whose message is NOT about the jira pair
+  // (e.g. a distribution GAV clash) must stay in the Review dialog even when the
+  // save also changed the jira pair — no misroute to the inline Project Key error.
+  it('keeps a non-jira uniqueness 409 in the Review dialog even if the jira pair changed', async () => {
+    const message = 'uniqueness violation: distribution GAV org.acme:lib:zip is already used by another-component'
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(new ApiError(409, 'conflict', JSON.stringify({ errorCode: 'UNIQUENESS_VIOLATION', errorMessage: message }))),
+    )
+    renderPage(baseComponent, mutateAsync)
+    await openTab(/^Jira/)
+    fireEvent.change(screen.getByPlaceholderText('JIRA project key'), { target: { value: 'NEWKEY' } })
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /^confirm$/i }))
+    // Dialog STAYS open with the banner; no inline Project Key error.
+    await waitFor(() => expect(within(screen.getByRole('dialog')).getByText(message)).toBeDefined())
+    expect(screen.getByPlaceholderText('JIRA project key')).not.toHaveAttribute('aria-invalid', 'true')
+  })
+
   it('a 400 on a section field switches to that section and closes the dialog', async () => {
     const mutateAsync = vi.fn(() =>
       Promise.reject(new ApiError(400, 'bad', JSON.stringify({ errorMessage: 'jiraProjectKey: invalid' }))),
