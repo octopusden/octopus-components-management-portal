@@ -18,12 +18,11 @@ import { test, expect, type Page } from '@playwright/test'
 // ("Confirm") → a SINGLE combined PATCH → ONE 'Component saved' toast. Every
 // matrix row therefore edits its field on its tab, then saves through that one
 // bar+dialog flow (see saveViaReviewBar). Tabs covered:
-//   General → Display Name, Build → Build File Path, VCS → External Registry,
+//   General → Display Name, Build → Build File Path, VCS → Entry branch,
 //   Jira → Project Key, Distribution → Docker image, Escrow → Disk Space.
-// No tab is omitted. VCS is exercised via the per-component External Registry
-// scalar rather than a VCS entry row (an entry needs a plausible vcsPath and
-// drags in host/path semantics — the scalar exercises the same PATCH + version
-// plumbing without that brittleness). Same idea for Escrow (Disk Space).
+// No tab is omitted. VCS is exercised via an existing BASE entry with a stable
+// fixture path, so the test edits the reusable branch pattern without creating
+// a new repository coordinate. Same idea for Escrow (Disk Space).
 //
 // Negative case: component B flips its maven artifact extension to EXACTLY
 // duplicate component A's GAV → CRS 409 UNIQUENESS_VIOLATION → the toast must
@@ -109,6 +108,8 @@ test.describe.serial('Editor attribute matrix — every tab saves without a fals
       baseConfiguration: {
         // MAVEN so the Build tab renders its full toolchain block.
         build: { buildSystem: 'MAVEN' },
+        // No VCS entry is seeded here: the v4 create API does not persist
+        // baseConfiguration.vcsEntries, so the VCS matrix row adds one via the UI.
         mavenArtifacts: [{ groupPattern: GAV_GROUP, artifactPattern: GAV_ARTIFACT, extension }],
       },
     })
@@ -217,6 +218,14 @@ test.describe.serial('Editor attribute matrix — every tab saves without a fals
       title: 'VCS — Entry branch',
       tab: /vcs/i,
       edit: async (page) => {
+        // The v4 create API does not seed a VCS entry, so the tab opens empty
+        // ("No VCS entries"). Add one via the UI, then set its branch — this
+        // drives the same VCS PATCH plumbing as editing an existing entry.
+        // Keep the path local/Bitbucket-style (not ssh://) so the portal's
+        // optional ecosystem-host check does not depend on stand links.
+        await page.getByRole('button', { name: /add entry/i }).click()
+        await page.getByPlaceholder('Entry name').first().fill('main')
+        await page.getByPlaceholder('ssh://git@...').first().fill(`E2E/attr-${SUFFIX}`)
         await page.getByPlaceholder('Branch pattern').first().fill(`release/${SUFFIX}`)
       },
       assertPersisted: async (page) => {
