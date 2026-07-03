@@ -272,9 +272,14 @@ function ComponentDetailEditor() {
   const buildSection = useBuildSection(shell)
   const vcsSection = useVcsSection(shell)
   const distributionSection = useDistributionSection(shell)
+  // EFFECTIVE (outgoing) BASE build system = the Build section's DRAFT value, so
+  // the Jira Skip Commit Check Whiskey rule reacts to an unsaved Build-tab switch
+  // in the same combined save (Codex #151 P1), not just the persisted component.
+  const effectiveBuildSystem = buildSection.state.buildSystem
   const jiraSection = useJiraSection(shell, {
     releasesInDefaultBranch: releasesInDefaultBranchFc.visibility ?? 'editable',
     isFieldEditable: isJiraFieldEditable,
+    effectiveBuildSystem,
   })
   const escrowSection = useEscrowSection(shell, {
     productType: productTypeFc.visibility ?? 'editable',
@@ -874,7 +879,7 @@ function ComponentDetailEditor() {
 
             <TabsContent value="jira">
               <EditSurface canEdit={canEdit} label="Jira">
-                <JiraTab component={component} section={jiraSection} canEdit={canEdit} conflictError={jiraConflict} />
+                <JiraTab component={component} section={jiraSection} canEdit={canEdit} conflictError={jiraConflict} effectiveBuildSystem={effectiveBuildSystem} />
               </EditSurface>
             </TabsContent>
 

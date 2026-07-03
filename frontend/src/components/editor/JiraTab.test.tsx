@@ -6,6 +6,7 @@ import { useJiraSection } from './useJiraSection'
 import { OverridesDraftProvider } from './overridesDraft'
 import { TooltipProvider } from '../ui/tooltip'
 import { fieldDescriptions } from '../../lib/fieldDescriptions'
+import { selectBaseRow } from '../../lib/api/baseRow'
 import type { ComponentDetail, ComponentConfiguration, FieldOverride } from '../../lib/types'
 
 // FieldOverrideInline → a testid stub so "+ Add override" affordance presence is
@@ -68,18 +69,28 @@ function Harness({
   canEdit = true,
   conflictError = null,
   serverOverrides = [],
+  // Effective (outgoing) BASE build system — defaults to the persisted component's
+  // BASE so single-tab tests work; override to simulate a cross-tab Build switch.
+  effectiveBuildSystem = selectBaseRow(component)?.build?.buildSystem ?? '',
 }: {
   component: ComponentDetail
   canEdit?: boolean
   conflictError?: string | null
   serverOverrides?: FieldOverride[]
+  effectiveBuildSystem?: string
 }) {
-  const section = useJiraSection(component, { releasesInDefaultBranch: 'editable' })
+  const section = useJiraSection(component, { releasesInDefaultBranch: 'editable', effectiveBuildSystem })
   captured.section = section
   return (
     <TooltipProvider>
       <OverridesDraftProvider componentId={component.id} serverOverrides={serverOverrides}>
-        <JiraTab component={component} section={section} canEdit={canEdit} conflictError={conflictError} />
+        <JiraTab
+          component={component}
+          section={section}
+          canEdit={canEdit}
+          conflictError={conflictError}
+          effectiveBuildSystem={effectiveBuildSystem}
+        />
       </OverridesDraftProvider>
     </TooltipProvider>
   )
@@ -190,6 +201,15 @@ describe('JiraTab — Hotfix visibility (task D)', () => {
     renderTab({ component: makeComponent({ jiraHotfixVersionFormat: '$major.$minor.$service-$fix' }) })
     expect(screen.queryByLabelText('Hotfix Version Format')).toBeNull()
   })
+
+  // Codex #151 P2: hotfix editability is gated on the server write-key
+  // `component.jiraHotfixVersionFormat` too, not just the display path — so the
+  // input disables when the write-key is non-editable.
+  it('disables the Hotfix input when the write-key component.jiraHotfixVersionFormat is non-editable', () => {
+    editableMap['component.jiraHotfixVersionFormat'] = false
+    renderTab({ component: withHotfix({ jira: { lineVersionFormat: 'L' } }) })
+    expect(screen.getByLabelText('Hotfix Version Format')).toBeDisabled()
+  })
 })
 
 describe('JiraTab — Technical (admin-gated)', () => {
@@ -224,6 +244,15 @@ describe('JiraTab — Skip Commit Check (new toggle)', () => {
 
   it('is disabled with a hint for Whiskey components', () => {
     renderTab({ component: makeComponent({ configurations: [makeBaseRow({ build: { buildSystem: 'WHISKEY' } })] }) })
+    expect(screen.getByRole('switch', { name: /skip commit check/i })).toBeDisabled()
+    expect(screen.getByText(/not applicable for whiskey/i)).toBeDefined()
+  })
+
+  // Codex #151 P1: the Whiskey rule must react to the EFFECTIVE (draft) build
+  // system, not the persisted component — a Build-tab switch to WHISKEY in the
+  // same combined save disables the toggle even though the component is non-Whiskey.
+  it('is disabled when the effective (draft) build system is Whiskey (cross-tab)', () => {
+    renderTab({ component: makeComponent(), effectiveBuildSystem: 'WHISKEY' })
     expect(screen.getByRole('switch', { name: /skip commit check/i })).toBeDisabled()
     expect(screen.getByText(/not applicable for whiskey/i)).toBeDefined()
   })

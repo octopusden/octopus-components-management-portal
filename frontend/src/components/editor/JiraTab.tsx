@@ -10,7 +10,6 @@ import { FieldLabelText } from '../ui/FieldLabelText'
 import { FieldOverrideInline } from './FieldOverrideInline'
 import { useOverridesDraft } from './overridesDraft'
 import type { ComponentDetail } from '../../lib/types'
-import { selectBaseRow } from '../../lib/api/baseRow'
 import { isHotfixEnabled } from '../../lib/versionPreview'
 import { useFieldConfigEntry, useFieldEditable } from '../../hooks/useFieldConfig'
 import type { JiraSection } from './useJiraSection'
@@ -25,6 +24,12 @@ interface JiraTabProps {
    * under Project Key. Cleared by the page at the start of the next save.
    */
   conflictError?: string | null
+  /**
+   * EFFECTIVE (outgoing) BASE build system — the Build section's DRAFT value from
+   * the page, NOT the persisted component — so the Skip Commit Check Whiskey rule
+   * reacts to an unsaved Build-tab switch in the same combined save (Codex #151 P1).
+   */
+  effectiveBuildSystem: string
 }
 
 /** Field-config-derived state of a single jira field for the current user. */
@@ -205,7 +210,7 @@ function MirrorField({
 }
 
 /** Jira tab — presentational. State + slice live in `useJiraSection` (page-owned). */
-export function JiraTab({ component, section, canEdit, conflictError }: JiraTabProps) {
+export function JiraTab({ component, section, canEdit, conflictError, effectiveBuildSystem }: JiraTabProps) {
   const { state, set, setMinorSeparate, setBuildSeparate } = section
   const { effectiveOverrides } = useOverridesDraft()
 
@@ -219,6 +224,11 @@ export function JiraTab({ component, section, canEdit, conflictError }: JiraTabP
   const buildFs = useJiraFieldState('jira.buildVersionFormat')
   const hotfixFs = useJiraFieldState('jira.hotfixVersionFormat')
   const technicalFs = useJiraFieldState('jira.technical')
+  // Hotfix is a top-level scalar CRS enforces on `component.jiraHotfixVersionFormat`
+  // while the tab renders under `jira.hotfixVersionFormat`; disable the input when
+  // EITHER path is non-editable so the UI matches the hook's send-gate.
+  const hotfixWriteEditable = useFieldEditable('component.jiraHotfixVersionFormat')
+  const hotfixState: FieldState = { ...hotfixFs, disabled: hotfixFs.disabled || !hotfixWriteEditable }
 
   const { entry: releasesEntry } = useFieldConfigEntry('component.releasesInDefaultBranch')
   const releasesReadonly = releasesEntry.visibility === 'readonly'
@@ -232,9 +242,9 @@ export function JiraTab({ component, section, canEdit, conflictError }: JiraTabP
     (component.jiraDisplayName ?? '') !== '' &&
     component.jiraDisplayName !== component.displayName
 
-  // Effective BASE build system drives the Whiskey rule for Skip Commit Check.
-  const baseBuildSystem = selectBaseRow(component)?.build?.buildSystem ?? ''
-  const isWhiskey = baseBuildSystem === 'WHISKEY'
+  // Effective (outgoing) BASE build system drives the Whiskey rule for Skip
+  // Commit Check — from the page's Build draft, so a cross-tab switch reacts live.
+  const isWhiskey = effectiveBuildSystem === 'WHISKEY'
 
   const hotfixEnabled = isHotfixEnabled(component)
 
@@ -398,7 +408,7 @@ export function JiraTab({ component, section, canEdit, conflictError }: JiraTabP
             />
 
             {/* Hotfix — only when hotfixes are enabled (task D) */}
-            {hotfixEnabled && !hotfixFs.hidden && (
+            {hotfixEnabled && !hotfixState.hidden && (
               <div className="sm:col-span-2">
                 <FormatField
                   path="jira.hotfixVersionFormat"
@@ -406,7 +416,7 @@ export function JiraTab({ component, section, canEdit, conflictError }: JiraTabP
                   value={state.hotfixVersionFormat}
                   onChange={(v) => set('hotfixVersionFormat', v)}
                   placeholder="e.g. {major}.{minor}.{patch}.{hotfix}"
-                  state={hotfixFs}
+                  state={hotfixState}
                   canEdit={canEdit}
                 />
               </div>

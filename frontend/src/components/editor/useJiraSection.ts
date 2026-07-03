@@ -81,7 +81,7 @@ function effectiveBuild(s: JiraState): string {
  * as dirty (mirrors the VCS/Distribution `normalize` contract in
  * useSectionSnapshot — dirty ⇔ payload differs ⇔ diff non-empty).
  */
-function normalizeJira(s: JiraState) {
+function normalizeJira(s: JiraState, isWhiskey: boolean) {
   return {
     projectKey: s.projectKey,
     displayName: s.displayName,
@@ -94,7 +94,10 @@ function normalizeJira(s: JiraState) {
     minorVersionFormat: effectiveMinor(s),
     buildVersionFormat: effectiveBuild(s),
     releasesInDefaultBranch: s.releasesInDefaultBranch,
-    skipCommitCheck: s.skipCommitCheck,
+    // Skip Commit Check is forced false for WHISKEY (server rule) — normalize to
+    // the EFFECTIVE value so a stale true (e.g. toggled on, then Build switched to
+    // WHISKEY on another tab) is neither dirty nor shown, matching the send-gate.
+    skipCommitCheck: s.skipCommitCheck && !isWhiskey,
   }
 }
 
@@ -110,6 +113,14 @@ export interface JiraSectionOptions extends JiraVisibilities {
    * Defaults to always-editable for hook-level tests.
    */
   isFieldEditable?: (fieldPath: string) => boolean
+  /**
+   * EFFECTIVE (outgoing) BASE build system — the Build section's DRAFT value, not
+   * the persisted component — so the Whiskey rule for Skip Commit Check reacts to
+   * an unsaved Build-tab change in the same combined save (Codex #151 P1). When
+   * WHISKEY, skipCommitCheck is forced false and never sent (server 422s
+   * otherwise). Defaults to the persisted BASE build system for hook-level tests.
+   */
+  effectiveBuildSystem?: string
 }
 
 export interface JiraSection {
@@ -125,8 +136,17 @@ export interface JiraSection {
 }
 
 export function useJiraSection(component: ComponentDetail, options: JiraSectionOptions): JiraSection {
-  const { releasesInDefaultBranch: releasesVisibility, isFieldEditable = () => true } = options
-  const { state, setState, snapshotRef, isDirty, reseed } = useSectionSnapshot(component, snapshotFrom, normalizeJira)
+  const {
+    releasesInDefaultBranch: releasesVisibility,
+    isFieldEditable = () => true,
+    effectiveBuildSystem = selectBaseRow(component)?.build?.buildSystem ?? '',
+  } = options
+  const isWhiskey = effectiveBuildSystem === 'WHISKEY'
+  const { state, setState, snapshotRef, isDirty, reseed } = useSectionSnapshot(
+    component,
+    snapshotFrom,
+    (s) => normalizeJira(s, isWhiskey),
+  )
 
   const set = <K extends keyof JiraState>(field: K, value: JiraState[K]) =>
     setState((p) => ({ ...p, [field]: value }))
@@ -169,7 +189,8 @@ export function useJiraSection(component: ComponentDetail, options: JiraSectionO
     push(scalarDiff('Jira · Version Format', prior.versionFormat, state.versionFormat))
     if (releasesVisibility !== 'hidden')
       push(boolDiff('Jira · Releases in default branch', prior.releasesInDefaultBranch, state.releasesInDefaultBranch))
-    push(boolDiff('Jira · Skip Commit Check', prior.skipCommitCheck, state.skipCommitCheck))
+    // Effective skip (forced false for WHISKEY) so the diff matches the send-gate.
+    push(boolDiff('Jira · Skip Commit Check', prior.skipCommitCheck && !isWhiskey, state.skipCommitCheck && !isWhiskey))
     // jiraDisplayName is hidden-by-default and shown only when divergent; surface a row when changed.
     if ((prior.displayName || null) !== (state.displayName || null))
       push(scalarDiff('Jira · Display Name', prior.displayName, state.displayName))
@@ -220,17 +241,29 @@ export function useJiraSection(component: ComponentDetail, options: JiraSectionO
       state.releasesInDefaultBranch !== (component.releasesInDefaultBranch ?? false)
         ? { releasesInDefaultBranch: state.releasesInDefaultBranch }
         : {}),
-      // skipCommitCheck (top-level boolean): send only when toggled from the
-      // server value (null/absent = no-op). Editable by any editor (canEdit) —
-      // not field-config gated; the Whiskey rule disables the toggle in the UI.
-      ...(state.skipCommitCheck !== (component.skipCommitCheck ?? false)
+      // skipCommitCheck (top-level boolean): editable by any editor (canEdit),
+      // not field-config gated. Send only when toggled from the server value AND
+      // the effective BASE build system is NOT WHISKEY — for WHISKEY the flag is
+      // forced false and must never be sent (server 422s on WHISKEY + skip=true,
+      // Codex #151 P1); the toggle is also disabled in the UI.
+      ...(!isWhiskey && state.skipCommitCheck !== (component.skipCommitCheck ?? false)
         ? { skipCommitCheck: state.skipCommitCheck }
         : {}),
       // Send jiraDisplayName only when it actually changed from the server value.
       ...((state.displayName || null) !== (component.jiraDisplayName ?? null)
         ? { jiraDisplayName: state.displayName || null }
         : {}),
-      jiraHotfixVersionFormat: state.hotfixVersionFormat || null,
+      // jiraHotfixVersionFormat is a top-level component scalar gated OUTSIDE
+      // omitNonEditable — gate its send by effective editability so editing an
+      // unrelated Jira field can't drag a non-editable hotfix format into the
+      // PATCH (Codex #151 P2). CRS enforces on the write-side key
+      // `component.jiraHotfixVersionFormat` (ComponentManagementServiceImpl),
+      // while the tab renders under `jira.hotfixVersionFormat` — gate on BOTH so
+      // client omission matches the server regardless of which path an
+      // installation authors the `editable` axis on (same split as externalRegistry).
+      ...(isFieldEditable('jira.hotfixVersionFormat') && isFieldEditable('component.jiraHotfixVersionFormat')
+        ? { jiraHotfixVersionFormat: state.hotfixVersionFormat || null }
+        : {}),
       baseConfiguration: {
         jira: jiraPayload,
       },

@@ -324,6 +324,20 @@ describe('useJiraSection', () => {
     expect(result.current.slice.request.skipCommitCheck).toBe(true)
   })
 
+  // Codex #151 P1: the Whiskey rule keys on the EFFECTIVE (draft) build system.
+  // With effectiveBuildSystem WHISKEY (a cross-tab Build switch), toggling skip on
+  // must NOT reach the PATCH (server 422s on WHISKEY + skip=true).
+  it('never sends skipCommitCheck when the effective build system is WHISKEY (cross-tab)', () => {
+    const { result } = renderHook(() =>
+      useJiraSection(makeComponent({ skipCommitCheck: false }), { ...vis, effectiveBuildSystem: 'WHISKEY' }),
+    )
+    act(() => result.current.set('skipCommitCheck', true))
+    expect('skipCommitCheck' in result.current.slice.request).toBe(false)
+    // ...and the flag is neutralized (effective false), so it is neither dirty nor
+    // shown as a diff row from skip alone.
+    expect(result.current.slice.diff.some((d) => /skip commit check/i.test(d.label))).toBe(false)
+  })
+
   // ── Payload-gating (P-1 omitNonEditable) ─────────────────────────────────
   it('omits a non-editable jira field from the PATCH slice', () => {
     const isFieldEditable = (p: string) => p !== 'jira.technical'
@@ -358,6 +372,58 @@ describe('useJiraSection', () => {
     act(() => result.current.set('minorVersionFormat', 'M2'))
     const jira = result.current.slice.request.baseConfiguration?.jira
     expect('minorVersionFormat' in (jira ?? {})).toBe(false)
+  })
+
+  // Symmetric Build-gating matrix (Codex test-gap a): a MIRRORED Build is gated by
+  // Release editability; a SEPARATE Build by its own path.
+  it('keeps a materialized Build when Release is editable but the build path is not', () => {
+    const isFieldEditable = (p: string) => p !== 'jira.buildVersionFormat'
+    const { result } = renderHook(() =>
+      useJiraSection(makeComponent({}, { jira: { releaseVersionFormat: 'R' } }), { ...vis, isFieldEditable }),
+    )
+    act(() => result.current.set('releaseVersionFormat', 'R2'))
+    const jira = result.current.slice.request.baseConfiguration?.jira
+    expect(jira?.releaseVersionFormat).toBe('R2')
+    expect('buildVersionFormat' in (jira ?? {})).toBe(true) // mirrored → gated by Release (editable)
+    expect(jira?.buildVersionFormat).toBe('') // mirrored clear
+  })
+
+  it('omits a SEPARATE Build gated by its own non-editable path', () => {
+    const isFieldEditable = (p: string) => p !== 'jira.buildVersionFormat'
+    const { result } = renderHook(() =>
+      useJiraSection(makeComponent({}, { jira: { releaseVersionFormat: 'R', buildVersionFormat: 'B' } }), { ...vis, isFieldEditable }),
+    )
+    act(() => result.current.set('buildVersionFormat', 'B2'))
+    const jira = result.current.slice.request.baseConfiguration?.jira
+    expect('buildVersionFormat' in (jira ?? {})).toBe(false)
+  })
+
+  // Codex #151 P2: top-level jiraHotfixVersionFormat is gated OUTSIDE
+  // omitNonEditable — a non-editable hotfix must NOT ride an unrelated Jira edit.
+  it('omits jiraHotfixVersionFormat when its write-key is non-editable, even on an unrelated edit', () => {
+    const isFieldEditable = (p: string) => p !== 'component.jiraHotfixVersionFormat'
+    const { result } = renderHook(() =>
+      useJiraSection(makeComponent({ jiraHotfixVersionFormat: 'HF' }, { jira: { projectKey: 'P' } }), { ...vis, isFieldEditable }),
+    )
+    act(() => result.current.set('projectKey', 'P2'))
+    expect('jiraHotfixVersionFormat' in result.current.slice.request).toBe(false)
+  })
+
+  it('omits jiraHotfixVersionFormat when the display path is non-editable', () => {
+    const isFieldEditable = (p: string) => p !== 'jira.hotfixVersionFormat'
+    const { result } = renderHook(() =>
+      useJiraSection(makeComponent({ jiraHotfixVersionFormat: 'HF' }, { jira: { projectKey: 'P' } }), { ...vis, isFieldEditable }),
+    )
+    act(() => result.current.set('projectKey', 'P2'))
+    expect('jiraHotfixVersionFormat' in result.current.slice.request).toBe(false)
+  })
+
+  it('sends jiraHotfixVersionFormat when both hotfix paths are editable', () => {
+    const { result } = renderHook(() =>
+      useJiraSection(makeComponent({ jiraHotfixVersionFormat: 'HF' }, { jira: { projectKey: 'P' } }), vis),
+    )
+    act(() => result.current.set('projectKey', 'P2'))
+    expect(result.current.slice.request.jiraHotfixVersionFormat).toBe('HF')
   })
 
   it('does NOT send releasesInDefaultBranch when field is hidden', () => {
