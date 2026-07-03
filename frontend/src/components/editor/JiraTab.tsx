@@ -561,9 +561,6 @@ export function JiraTab({ component, section, canEdit, conflictError, effectiveB
             <Label htmlFor="jira-skipCommitCheck" className="cursor-pointer">
               <FieldLabelText path="jira.skipCommitCheck" fallback="Skip Commit Check at Issue Assignment at Release" />
             </Label>
-            <Badge variant="info" className="font-normal">
-              new
-            </Badge>
             <FieldInfo path="jira.skipCommitCheck" label="Skip Commit Check at Issue Assignment at Release" />
           </div>
           {isWhiskey && (

@@ -279,9 +279,8 @@ describe('JiraTab — Technical (admin-gated)', () => {
 })
 
 describe('JiraTab — Skip Commit Check (new toggle)', () => {
-  it('renders a "new" pill and is editable by default (non-Whiskey)', () => {
+  it('is editable by default (non-Whiskey)', () => {
     renderTab({ component: makeComponent() })
-    expect(screen.getByText('new')).toBeDefined()
     expect(screen.getByRole('switch', { name: /skip commit check/i })).not.toBeDisabled()
   })
 
