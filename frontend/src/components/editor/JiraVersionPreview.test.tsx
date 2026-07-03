@@ -1,7 +1,17 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { JiraVersionPreview, type JiraVersionPreviewProps } from './JiraVersionPreview'
+import { useDetailedVersion } from '../../hooks/useDetailedVersion'
+import type { DetailedComponentVersion } from '../../lib/types'
+
+// The Whiskey path fetches via useDetailedVersion; stub it so the render tests
+// don't need a QueryClient. The client (non-Whiskey) path never calls it.
+vi.mock('../../hooks/useDetailedVersion', () => ({ useDetailedVersion: vi.fn() }))
+const mockDetailed = vi.mocked(useDetailedVersion)
+beforeEach(() => {
+  mockDetailed.mockReturnValue({ data: undefined, isLoading: false, isError: false } as ReturnType<typeof useDetailedVersion>)
+})
 
 /** Brief §4 example defaults (1.2.3 / pgw / hotfix 1.2.3-87), mirrored pairs. */
 function baseProps(overrides: Partial<JiraVersionPreviewProps> = {}): JiraVersionPreviewProps {
@@ -274,5 +284,55 @@ describe('JiraVersionPreview — keyboard row → field linking (a11y)', () => {
     renderPreview({ onHoverField })
     fireEvent.focus(row('minor'))
     expect(onHoverField).toHaveBeenLastCalledWith('jira.lineVersionFormat')
+  })
+})
+
+describe('JiraVersionPreview — Whiskey (server-rendered)', () => {
+  const detailed: DetailedComponentVersion = {
+    component: 'acme',
+    minorVersion: { type: 'MINOR', version: '03.62', jiraVersion: 'pgw-03.62' },
+    lineVersion: { type: 'LINE', version: '03.62', jiraVersion: '03.62' },
+    buildVersion: { type: 'BUILD', version: '03.62.30.19-9', jiraVersion: 'pgw-03.62.30.19-9' },
+    rcVersion: { type: 'RC', version: '03.62.30.19', jiraVersion: 'pgw-03.62.30.19_RC' },
+    releaseVersion: { type: 'RELEASE', version: '03.62.30.19', jiraVersion: 'pgw-03.62.30.19' },
+    hotfixVersion: { type: 'HOTFIX', version: '03.62.30.19-9', jiraVersion: 'pgw-03.62.30.19-9' },
+  }
+
+  function ok(data: DetailedComponentVersion) {
+    mockDetailed.mockReturnValue({ data, isLoading: false, isError: false } as ReturnType<typeof useDetailedVersion>)
+  }
+
+  it('renders server-truth rows (bare for CI, jiraVersion for Jira-facing)', () => {
+    ok(detailed)
+    renderPreview({ whiskey: true, componentName: 'acme' })
+    expect(rowValue('release')).toBe('pgw-03.62.30.19')
+    expect(rowValue('rc')).toBe('pgw-03.62.30.19_RC')
+    expect(rowValue('minor')).toBe('pgw-03.62')
+    expect(rowValue('line')).toBe('03.62')
+    expect(rowValue('build')).toBe('03.62.30.19-9')
+    expect(rowValue('hotfix-build')).toBe('03.62.30.19-9')
+    expect(rowValue('hotfix-jira')).toBe('pgw-03.62.30.19-9')
+  })
+
+  it('shows the saved-configuration caption and a single version input (no hotfix input)', () => {
+    ok(detailed)
+    renderPreview({ whiskey: true, componentName: 'acme' })
+    expect(screen.getByText(/rendered from the saved configuration/i)).toBeInTheDocument()
+    expect(screen.getByLabelText('version')).toBeInTheDocument()
+    expect(screen.queryByLabelText('hotfix version')).toBeNull()
+  })
+
+  it('omits the hotfix rows when hotfixes are disabled even if the server returns one', () => {
+    ok(detailed)
+    renderPreview({ whiskey: true, componentName: 'acme', hotfixEnabled: false })
+    expect(screen.queryByTestId('ladder-row-hotfix-build')).toBeNull()
+    expect(screen.queryByTestId('ladder-row-hotfix-jira')).toBeNull()
+  })
+
+  it('falls back to a notice when the server returns nothing (unparseable version / error)', () => {
+    mockDetailed.mockReturnValue({ data: undefined, isLoading: false, isError: true } as ReturnType<typeof useDetailedVersion>)
+    renderPreview({ whiskey: true, componentName: 'acme' })
+    expect(screen.getByTestId('version-preview-empty')).toBeInTheDocument()
+    expect(screen.queryByTestId('ladder-row-release')).toBeNull()
   })
 })

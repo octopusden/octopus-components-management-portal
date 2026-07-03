@@ -1007,3 +1007,24 @@ export interface TeamCityResyncJobResponse {
   errorMessage: string | null
   result: TeamCityResyncResult | null
 }
+
+// ── CRS legacy version rendering (rest/api/2/.../detailed-version) ───────────
+// One rendered version in its bare (CI/build) and Jira-facing (prefixed) forms.
+export interface ComponentRegistryVersion {
+  type: string
+  version: string
+  jiraVersion: string
+}
+
+// The full version ladder for a component + input version, rendered server-side
+// by the real versioning library — the only correct source for build systems
+// (e.g. Whiskey) whose scheme the client can't reproduce.
+export interface DetailedComponentVersion {
+  component: string
+  minorVersion: ComponentRegistryVersion
+  lineVersion: ComponentRegistryVersion
+  buildVersion: ComponentRegistryVersion
+  rcVersion: ComponentRegistryVersion
+  releaseVersion: ComponentRegistryVersion
+  hotfixVersion?: ComponentRegistryVersion | null
+}

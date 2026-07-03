@@ -1,5 +1,8 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { computeLadder, expandFormat, parseVersion, type LadderState, type LadderRow, type VersionParts } from '../../lib/versionPreview'
+import { useDebouncedValue } from '../../hooks/useDebouncedValue'
+import { useDetailedVersion } from '../../hooks/useDetailedVersion'
+import type { DetailedComponentVersion } from '../../lib/types'
 
 /**
  * Version-ladder preview panel (design brief §4, P-0 prototype). Reads the
@@ -30,6 +33,14 @@ export interface JiraVersionPreviewProps {
   hoveredField: string | null
   /** Report the field a hovered/left row links back to (null on leave). */
   onHoverField: (field: string | null) => void
+  /**
+   * WHISKEY build system: the client can't reproduce its versions (zero-padding,
+   * library computation, custom variables), so render server-truth from CRS
+   * instead of the client ladder. Reflects the SAVED configuration.
+   */
+  whiskey?: boolean
+  /** Component key (legacy name) used to query the server-rendered ladder. */
+  componentName?: string
 }
 
 // Field-config paths — shared hover vocabulary with JiraTab's format fields and
@@ -180,7 +191,59 @@ function rowChrome(id: string, technical: boolean, { buildMirrored }: MirrorFlag
   }
 }
 
+const SAMPLE_INPUT_CLASS =
+  'w-36 rounded-md border bg-background px-2 py-1 font-mono text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring'
+
+/** The bordered, sticky preview card + its "Version Preview" heading. */
+function PreviewShell({ children }: { children: ReactNode }) {
+  return (
+    <div
+      data-testid="jira-version-preview"
+      className="rounded-xl border bg-muted/40 p-4 lg:sticky lg:top-6"
+    >
+      <div className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+        Version Preview
+      </div>
+      {children}
+    </div>
+  )
+}
+
+/** Map a server DetailedComponentVersion to the panel's ladder rows (bare vs Jira form). */
+function mapDetailedToRows(d: DetailedComponentVersion, hotfixEnabled: boolean): LadderRow[] {
+  const mk = (id: string, label: string, value: string): LadderRow => ({
+    id,
+    label,
+    value,
+    dest: '',
+    approx: false,
+    fieldId: '',
+  })
+  const rows = [
+    mk('release', 'Release Version', d.releaseVersion.jiraVersion),
+    mk('rc', 'RC Version', d.rcVersion.jiraVersion),
+    mk('minor', 'Minor Version', d.minorVersion.jiraVersion),
+    mk('line', 'Line Version', d.lineVersion.version),
+    mk('build', 'Build Version', d.buildVersion.version),
+  ]
+  if (hotfixEnabled && d.hotfixVersion) {
+    rows.push(
+      mk('hotfix-build', 'Hotfix Version', d.hotfixVersion.version),
+      mk('hotfix-jira', 'Hotfix Version', d.hotfixVersion.jiraVersion),
+    )
+  }
+  return rows
+}
+
+/**
+ * Whiskey renders server-truth (its version scheme can't be reproduced
+ * client-side); every other build system uses the reactive client ladder.
+ */
 export function JiraVersionPreview(props: JiraVersionPreviewProps) {
+  return props.whiskey ? <JiraVersionPreviewServer {...props} /> : <JiraVersionPreviewClient {...props} />
+}
+
+function JiraVersionPreviewClient(props: JiraVersionPreviewProps) {
   const {
     versionPrefix,
     versionFormat,
@@ -244,18 +307,8 @@ export function JiraVersionPreview(props: JiraVersionPreviewProps) {
     />
   )
 
-  const sampleInputClass =
-    'w-36 rounded-md border bg-background px-2 py-1 font-mono text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring'
-
   return (
-    <div
-      data-testid="jira-version-preview"
-      className="rounded-xl border bg-muted/40 p-4 lg:sticky lg:top-6"
-    >
-      <div className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-        Version Preview
-      </div>
-
+    <PreviewShell>
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
         <label className="flex items-center gap-2">
           version
@@ -263,7 +316,7 @@ export function JiraVersionPreview(props: JiraVersionPreviewProps) {
             aria-label="version"
             value={sample}
             onChange={(e) => setSampleOverride(e.target.value)}
-            className={sampleInputClass}
+            className={SAMPLE_INPUT_CLASS}
           />
         </label>
       </div>
@@ -281,7 +334,7 @@ export function JiraVersionPreview(props: JiraVersionPreviewProps) {
               aria-label="hotfix version"
               value={hotfixSample}
               onChange={(e) => setHotfixOverride(e.target.value)}
-              className={sampleInputClass}
+              className={SAMPLE_INPUT_CLASS}
             />
           </label>
           <div>{hotfixRows.map(renderRow)}</div>
@@ -292,7 +345,7 @@ export function JiraVersionPreview(props: JiraVersionPreviewProps) {
         <span className="font-mono">$fix</span> and <span className="font-mono">$build</span> are filled by the
         server at build/release time.
       </p>
-    </div>
+    </PreviewShell>
   )
 }
 
@@ -346,5 +399,77 @@ function LadderRowView({
       </div>
       <div className="text-xs text-muted-foreground">→ {chrome.dest}</div>
     </div>
+  )
+}
+
+/**
+ * Whiskey preview: fetch the server-rendered ladder for the component + an
+ * editable input version (debounced) and render it with the same rows/chrome/
+ * hover linking as the client panel. Values are authoritative (no approx), but
+ * reflect the SAVED configuration — a caption says so; a missing/unparseable
+ * version or a fetch error falls back to a notice.
+ */
+function JiraVersionPreviewServer(props: JiraVersionPreviewProps) {
+  const { componentName = '', technical, hotfixEnabled, minorSeparate, buildSeparate, hoveredField, onHoverField } = props
+
+  const [version, setVersion] = useState('1.2.3')
+  const debounced = useDebouncedValue(version, 350)
+  const query = useDetailedVersion(componentName, debounced, true)
+
+  const flags: MirrorFlags = { minorMirrored: !minorSeparate, buildMirrored: !buildSeparate }
+  const highlightedRows = new Set(fieldToRows(hoveredField, flags))
+
+  const rows = query.data ? mapDetailedToRows(query.data, hotfixEnabled) : []
+  const mainRows = rows.filter((r) => !r.id.startsWith('hotfix'))
+  const hotfixRows = rows.filter((r) => r.id.startsWith('hotfix'))
+
+  const renderRow = (r: LadderRow) => (
+    <LadderRowView
+      key={r.id}
+      row={r}
+      chrome={rowChrome(r.id, technical, flags)}
+      highlighted={highlightedRows.has(r.id)}
+      onEnter={() => onHoverField(rowToField(r.id, flags))}
+      onLeave={() => onHoverField(null)}
+    />
+  )
+
+  return (
+    <PreviewShell>
+      <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+        <label className="flex items-center gap-2">
+          version
+          <input
+            aria-label="version"
+            value={version}
+            onChange={(e) => setVersion(e.target.value)}
+            className={SAMPLE_INPUT_CLASS}
+          />
+        </label>
+      </div>
+      <p className="mb-3 text-[11px] leading-relaxed text-muted-foreground">
+        Rendered from the saved configuration by the versioning library.
+      </p>
+
+      {query.isLoading && (
+        <p data-testid="version-preview-loading" className="py-6 text-center text-sm text-muted-foreground">
+          Rendering…
+        </p>
+      )}
+
+      {!query.isLoading && rows.length === 0 && (
+        <p data-testid="version-preview-empty" className="rounded-md bg-muted px-3 py-4 text-xs leading-relaxed text-muted-foreground">
+          No preview for this version — Whiskey versions are computed by its versioning library. Enter a
+          version this component’s scheme can parse.
+        </p>
+      )}
+
+      {rows.length > 0 && (
+        <>
+          <div>{mainRows.map(renderRow)}</div>
+          {hotfixRows.length > 0 && <div className="mt-3 border-t border-dashed pt-3">{hotfixRows.map(renderRow)}</div>}
+        </>
+      )}
+    </PreviewShell>
   )
 }
