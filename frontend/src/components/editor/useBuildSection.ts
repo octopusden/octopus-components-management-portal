@@ -86,11 +86,14 @@ export function useBuildSection(component: ComponentDetail): BuildSection {
   const diff: DiffEntry[] = []
   const push = (d: DiffEntry | null) => { if (d) diff.push(d) }
   if (isDirty) {
+    // buildSystem is a validated enum — blank 400s server-side, so it stays on the
+    // null-clear (no-op) contract and keeps the "clearing not supported" flag. The
+    // other build string scalars clear via '' (CRS-A) — not flagged.
     push(scalarDiff(label('build.buildSystem', 'Build System'), prior.buildSystem, state.buildSystem, { aspectScalar: true }))
-    push(scalarDiff(label('build.buildFilePath', 'Build File Path'), prior.buildFilePath, state.buildFilePath, { aspectScalar: true }))
-    push(scalarDiff(label('build.javaVersion', 'Java Version'), prior.javaVersion, state.javaVersion, { aspectScalar: true }))
-    if (showMavenVersion) push(scalarDiff(label('build.mavenVersion', 'Maven Version'), prior.mavenVersion, state.mavenVersion, { aspectScalar: true }))
-    if (showGradleVersion) push(scalarDiff(label('build.gradleVersion', 'Gradle Version'), prior.gradleVersion, state.gradleVersion, { aspectScalar: true }))
+    push(scalarDiff(label('build.buildFilePath', 'Build File Path'), prior.buildFilePath, state.buildFilePath))
+    push(scalarDiff(label('build.javaVersion', 'Java Version'), prior.javaVersion, state.javaVersion))
+    if (showMavenVersion) push(scalarDiff(label('build.mavenVersion', 'Maven Version'), prior.mavenVersion, state.mavenVersion))
+    if (showGradleVersion) push(scalarDiff(label('build.gradleVersion', 'Gradle Version'), prior.gradleVersion, state.gradleVersion))
   }
 
   const slice: SectionSlice = {
@@ -99,12 +102,15 @@ export function useBuildSection(component: ComponentDetail): BuildSection {
     request: {
       baseConfiguration: {
         build: {
+          // buildSystem (enum) keeps null-clear (blank 400s); the other string
+          // scalars clear via '' (CRS-A). Empty state == server null (seeded), so
+          // unconditionally sending '' for an untouched-empty field is a no-op.
           buildSystem: state.buildSystem || null,
-          buildFilePath: state.buildFilePath || null,
-          javaVersion: state.javaVersion || null,
-          // Hidden tool versions are omitted (not nulled) — same contract as legacy BuildTab.
-          ...(showMavenVersion ? { mavenVersion: state.mavenVersion || null } : {}),
-          ...(showGradleVersion ? { gradleVersion: state.gradleVersion || null } : {}),
+          buildFilePath: state.buildFilePath || '',
+          javaVersion: state.javaVersion || '',
+          // Hidden tool versions are omitted (not cleared) — same contract as legacy BuildTab.
+          ...(showMavenVersion ? { mavenVersion: state.mavenVersion || '' } : {}),
+          ...(showGradleVersion ? { gradleVersion: state.gradleVersion || '' } : {}),
         },
       },
     },

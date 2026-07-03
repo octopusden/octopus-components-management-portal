@@ -32,9 +32,14 @@ const COMPONENT = `e2e-mvf-${SUFFIX}`
 // the read path; EDITED (unique per run) proves the write round-trip.
 const SEEDED = '$major.$minor'
 const EDITED = `$major.$minor.${SUFFIX}`
-// JiraTab's Minor Version Format <Input> is not linked to its label by htmlFor,
-// so target it by its placeholder (same approach as the attribute-matrix spec).
-const MVF_PLACEHOLDER = 'e.g. {major}.0.0'
+// P-2a: Minor Version Format now MIRRORS Line by default (read-only), and the
+// LEADING "Line Version Format" field materializes its value into BOTH line and
+// minor on save (Q9 UI-materialization). The component is created with only
+// jira.minorVersionFormat set (no line) → on load the leading Line field shows
+// the stored minor value, and editing it round-trips minorVersionFormat. Target
+// the Line field by its stable data-field-input attribute (labels/placeholders
+// are field-config-relabelable).
+const LINE_FIELD = '[data-field-input="jira.lineVersionFormat"]'
 
 // The BFF double-submits CSRF: state-changing /rest calls must echo the
 // XSRF-TOKEN cookie in X-XSRF-TOKEN. The cookie is set on the first response,
@@ -96,20 +101,23 @@ test.describe.serial('Jira minor version format rides the combined Save (admin, 
     await page.goto(`/components/${id}`, { waitUntil: 'networkidle' })
     await page.getByRole('tab', { name: /jira/i }).click()
 
-    // Read path: the seeded value round-tripped from CRS into the editor.
-    const input = page.getByPlaceholder(MVF_PLACEHOLDER)
-    await expect(input).toHaveValue(SEEDED)
+    // Read path: the seeded minor value round-tripped from CRS and surfaces as
+    // the leading Line value (Minor mirrors Line when both are equal / line null).
+    const line = page.locator(LINE_FIELD)
+    await expect(line).toHaveValue(SEEDED)
 
-    // Write path: change it, save through the ONE bar+dialog, confirm the toast.
-    await input.fill(EDITED)
+    // Write path: edit the leading Line; on save it materializes into BOTH line
+    // and minor. Save through the ONE bar+dialog, confirm the toast.
+    await line.fill(EDITED)
     await expect(page.getByText('Unsaved changes')).toBeVisible()
     await saveViaReviewBar(page)
     await expect(page.getByText('Component saved').first()).toBeVisible({ timeout: 10_000 })
 
-    // Persisted through real CRS: reload → the Jira tab shows the edited value.
+    // Persisted through real CRS: reload → the Jira tab shows the edited value
+    // (line == minor → still mirrored, leading shows EDITED).
     await page.reload({ waitUntil: 'networkidle' })
     await page.getByRole('tab', { name: /jira/i }).click()
-    await expect(page.getByPlaceholder(MVF_PLACEHOLDER)).toHaveValue(EDITED)
+    await expect(page.locator(LINE_FIELD)).toHaveValue(EDITED)
   })
 
   test.afterAll(async ({ playwright }) => {

@@ -207,13 +207,20 @@ test.describe.serial('Editor attribute matrix — every tab saves without a fals
       },
     },
     {
-      title: 'VCS — External Registry',
+      // P-3: External Registry became a Whiskey-only, admin-only DROPDOWN fed by
+      // installation-specific field-config options (no free-text placeholder any
+      // more), so it can no longer be exercised on an arbitrary fixture. VCS-tab
+      // coverage moves to the always-present per-entry Branch field; dedicated
+      // External Registry coverage (Whiskey component + admin user + configured
+      // options, plus the Skip-Commit-Check ↔ NOT_AVAILABLE bridge) is deferred
+      // to P-5's new real-CRS specs.
+      title: 'VCS — Entry branch',
       tab: /vcs/i,
       edit: async (page) => {
-        await page.getByPlaceholder('External registry URL').fill(`e2e-registry-${SUFFIX}`)
+        await page.getByPlaceholder('Branch pattern').first().fill(`release/${SUFFIX}`)
       },
       assertPersisted: async (page) => {
-        await expect(page.getByPlaceholder('External registry URL')).toHaveValue(`e2e-registry-${SUFFIX}`)
+        await expect(page.getByPlaceholder('Branch pattern').first()).toHaveValue(`release/${SUFFIX}`)
       },
     },
     {

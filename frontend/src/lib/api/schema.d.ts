@@ -950,6 +950,8 @@ export interface components {
             releasesInDefaultBranch?: boolean;
             securityChampion?: string[];
             securityGroups?: components["schemas"]["SecurityGroupRequest"][];
+            /** @description When true, commit checks are skipped at release/RC issue-assignment (issues bind to RCs by builds only). Dedicated flag replacing the legacy externalRegistry="NOT_AVAILABLE" sentinel; legacy v1–v3 clients still see externalRegistry="NOT_AVAILABLE" when this is true. Must be false when the effective BASE build system is WHISKEY (rejected 422 otherwise). */
+            skipCommitCheck?: boolean;
             solution?: boolean;
             system?: string;
             teamcityProjects?: components["schemas"]["TeamcityProjectRequest"][];
@@ -984,6 +986,7 @@ export interface components {
             releasesInDefaultBranch?: boolean;
             securityChampion: string[];
             securityGroups: components["schemas"]["SecurityGroupResponse"][];
+            skipCommitCheck: boolean;
             solution?: boolean;
             system?: string;
             teamcityProjects: components["schemas"]["TeamcityProjectResponse"][];
@@ -1059,6 +1062,8 @@ export interface components {
             releasesInDefaultBranch?: boolean;
             securityChampion?: string[];
             securityGroups?: components["schemas"]["SecurityGroupRequest"][];
+            /** @description When true, commit checks are skipped at release/RC issue-assignment (issues bind to RCs by builds only). Dedicated flag replacing the legacy externalRegistry="NOT_AVAILABLE" sentinel; legacy v1–v3 clients still see externalRegistry="NOT_AVAILABLE" when this is true. Must be false when the effective BASE build system is WHISKEY (rejected 422 otherwise). */
+            skipCommitCheck?: boolean;
             solution?: boolean;
             system?: string;
             teamcityProjects?: components["schemas"]["TeamcityProjectRequest"][];

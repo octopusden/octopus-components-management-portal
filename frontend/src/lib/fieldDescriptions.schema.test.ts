@@ -65,6 +65,9 @@ const KEY_TO_SCHEMA = {
   'jira.buildVersionFormat': ['JiraAspectResponse', 'buildVersionFormat'],
   'jira.lineVersionFormat': ['JiraAspectResponse', 'lineVersionFormat'],
   'jira.versionFormat': ['JiraAspectResponse', 'versionFormat'],
+  // Skip Commit Check lives in the Jira UI section but backs a per-component
+  // scalar (CRS-C), not a JiraAspect field.
+  'jira.skipCommitCheck': ['ComponentDetailResponse', 'skipCommitCheck'],
 
   // ── build.* → BuildAspectResponse — except requiredTools (marker collection on the config row) ──
   'build.buildSystem': ['BuildAspectResponse', 'buildSystem'],

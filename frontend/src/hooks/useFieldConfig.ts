@@ -1,6 +1,16 @@
 import { useFieldConfig } from './useAdminConfig'
+import { useCurrentUser } from './useCurrentUser'
+import { hasPermission, PERMISSIONS, type User } from '../lib/auth'
 
 export type FieldVisibility = 'editable' | 'readonly' | 'hidden'
+
+/**
+ * Effective-editability axis (CRS field-config, separate from `visibility`):
+ *   - `all` (or absent): editable by any component editor;
+ *   - `adminOnly`: editable only by holders of EDIT_ANY_COMPONENT;
+ *   - `none`: never editable (a synonym of `visibility: readonly`).
+ */
+export type FieldEditability = 'all' | 'adminOnly' | 'none'
 
 /** Where a field appears in the list-page search (item 10). */
 export type Searchable = 'Main' | 'Extended' | 'None'
@@ -10,6 +20,13 @@ export interface FieldConfigEntry {
   options?: string[]
   /** Form-level behavior on the component detail/create/edit page. */
   visibility?: FieldVisibility
+  /**
+   * Effective-editability axis, orthogonal to `visibility`. `adminOnly` gates
+   * write access on EDIT_ANY_COMPONENT; `none` ≈ readonly. Absent → `all`.
+   * The read endpoint / cache blob is user-agnostic — the portal computes the
+   * per-user answer from this entry + the current user (see isFieldEditableFor).
+   */
+  editable?: FieldEditability
   /**
    * Whether the field is exposed in the /components list-page filter bar.
    * `undefined` defaults to `true`; only `false` opts a field out.
@@ -129,6 +146,52 @@ export function useFieldConfigEntry(fieldPath: string): {
   }
 
   return { entry: resolveFieldEntry(data, fieldPath), isLoading: false, isError: isError ?? false }
+}
+
+/**
+ * Effective editability of an already-resolved entry for a given user. Pure.
+ * Non-editable axes (`none`, readonly, hidden) win regardless of the user;
+ * `adminOnly` requires EDIT_ANY_COMPONENT (fails closed when the user is
+ * null/undefined — `hasPermission` returns false); absent/`all` is
+ * user-independent and always editable.
+ */
+function isEntryEditableFor(entry: FieldConfigEntry, user: User | null | undefined): boolean {
+  if (entry.editable === 'none') return false
+  if (entry.visibility === 'readonly' || entry.visibility === 'hidden') return false
+  if (entry.editable === 'adminOnly') return hasPermission(user, PERMISSIONS.EDIT_ANY_COMPONENT)
+  return true
+}
+
+/**
+ * Pure effective-editability resolver: f(field-config blob, path, user). The
+ * resolver resolves whatever `fieldPath` the caller passes — note the External
+ * Registry key quirk: its write-enforcement key is `component.vcsExternalRegistry`
+ * while its editor display path is `vcs.externalRegistry`; callers pass the path
+ * they render against and the field-config must carry the `editable` axis on that
+ * same path. Composable in non-hook contexts (create dialog schema/payload).
+ */
+export function isFieldEditableFor(
+  data: unknown,
+  fieldPath: string,
+  user: User | null | undefined,
+): boolean {
+  return isEntryEditableFor(resolveFieldEntry(data, fieldPath), user)
+}
+
+/**
+ * Hook form of isFieldEditableFor for a single field: composes the field-config
+ * entry with the current user. Fails closed (returns false) while either the
+ * field-config or the current-user query is still loading — an editor control
+ * should never flash editable before we can confirm the user may edit it.
+ */
+export function useFieldEditable(fieldPath: string): boolean {
+  const { entry, isLoading: fcLoading, isError: fcError } = useFieldConfigEntry(fieldPath)
+  const { data: user, isLoading: userLoading } = useCurrentUser()
+  // Fail closed while loading AND on a field-config error: on error the entry
+  // degrades to the editable default, which would silently open adminOnly/none
+  // fields — the opposite of the intended gate.
+  if (fcLoading || userLoading || fcError) return false
+  return isEntryEditableFor(entry, user)
 }
 
 /** Convenience hook for a single field's display label (see labelFor). */

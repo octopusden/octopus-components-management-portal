@@ -46,27 +46,29 @@ export const fieldDescriptions: Record<string, string> = {
 
   // ── JiraTab — jira.* + component.releasesInDefaultBranch ─────────────────
   'jira.projectKey':
-    'Key of the issue-tracker project that tracks this component’s releases. Component versions are registered as Fix Versions in this project and release tickets are created there. Can be overridden per version range.',
+    'The Jira project where RM 2.0 tracks this component’s versions and issues; auto-assigned versions land in the issue’s Fix Version/s field. An UNRELEASED version matching the component’s minor (planning) version format must exist in this project — otherwise issues cannot be reopened.',
   'jira.displayName':
     'Human-readable name of the component inside the issue-tracker project. Display-only; useful when several components share one tracker project.',
   'jira.technical':
-    'Marks the tracker mapping as technical-only. Technical components are filtered out of customer-facing release notes by the release automation.',
+    'Versions of a technical component are tracked in the Jira field “SubComponent Fix Version/s” and excluded from customer-facing release notes. When a technical component is later included in a main component, the main component’s version is also written to the issue’s Fix Version/s.',
   'component.releasesInDefaultBranch':
     'When enabled, releases are cut directly from the repository’s default branch instead of dedicated release branches. Release automation uses this flag to choose the branching and tagging strategy.',
   'jira.hotfixVersionFormat':
-    'Template for hotfix version numbers (e.g. $major.$minor.$service.$fix). Release automation expands the placeholders when registering hotfix releases built from maintenance branches.',
+    'Two usages: the hotfix build version (no prefix) and the hotfix Fix Version in Jira (wrapped like a release version). Available when a VCS root defines a hotfix branch.',
   'jira.versionPrefix':
-    'Prefix prepended to this component’s versions in the tracker’s Fix Version field (e.g. a short component name). Keeps versions distinguishable when multiple components share one project.',
+    'Distinguishes components sharing one Jira project. Applied to Jira-facing versions via the Full Version Format (e.g. planning version 1.2 → pgw-1.2). Issues are auto-assigned to a release when their Fix Version/s contains the matching prefixed version.',
   'jira.minorVersionFormat':
-    'Template defining how minor versions are written in the tracker (e.g. $major.$minor). Used by release automation to format Fix Version names.',
+    'The planning (minor) version tracked in Jira. A previous RC is carried into the next release only when minor versions match; for components with commit checks disabled, issues are assigned by this version in Fix Version/s.',
   'jira.releaseVersionFormat':
-    'Template for full release version numbers (e.g. $major.$minor.$service). Release automation expands it when registering a release version in the tracker.',
+    'The released version — the Jira Fix Version template. During RC the value carries the “_RC” suffix; at release, the “_RC” value in Fix Version/s is replaced with the release version (the RC value is preserved in “RC Version/s”).',
   'jira.buildVersionFormat':
-    'Template for build (intermediate) version numbers (e.g. $major.$minor.$service.$fix.$build). CI build numbering uses it for non-release builds.',
+    'Version stamped on CI builds. Mirrors the release format unless set separately. No prefix is applied.',
   'jira.lineVersionFormat':
-    'Template for a version line (e.g. $major.$minor) — also known as the Major Version Format. Identifies a maintenance line rather than a concrete release. Used where automation operates on whole lines.',
+    'The release line (“real major”), e.g. 1.2 from 1.2.3-101. The CRN report by default covers all versions of the current line, from the line start up to the reported release. Minor is derived from this unless set separately. No prefix is applied.',
   'jira.versionFormat':
-    'Generic version format that combines the prefix with the base version templates and defines the canonical shape of this component’s version strings in the tracker.',
+    'Wrapper template composing the prefix with a base version for everything registered in Jira — canonically $versionPrefix-$baseVersionFormat (the separator is part of the template and per-component).',
+  'jira.skipCommitCheck':
+    'Disables commit-based issue-to-version assignment: commits are not checked at RC/Release registration. Primary use case: several components sharing one repository — commit-based assignment cannot tell which component a commit belongs to and would attach every component’s version to the issue. Also applies when the component has no repository at all, or its repository does not hold the main code. Instead an issue is assigned when it is resolved as Done and its Fix Version/s contains the matching minor (planning) version. Replaces the legacy externalRegistry = NOT_AVAILABLE DSL setting — users never type the sentinel in the new UI.',
 
   // ── BuildTab — build.* ────────────────────────────────────────────────────
   'build.buildSystem':

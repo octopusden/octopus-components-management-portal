@@ -49,10 +49,23 @@ describe('useBuildSection', () => {
     expect(row).toMatchObject({ oldValue: '17', newValue: '21' })
   })
 
-  it('flags a build scalar clear as a CRS no-op in the diff', () => {
+  // P-1 ""-clear migration: aspect string scalars now clear via '' (CRS-A) and
+  // are no longer flagged as a no-op.
+  it("clears a build scalar via '' and does NOT flag it as a no-op", () => {
     const { result } = renderHook(() => useBuildSection(makeComponent()))
     act(() => result.current.set('javaVersion', ''))
+    expect(result.current.slice.request.baseConfiguration?.build?.javaVersion).toBe('')
     const row = result.current.slice.diff.find((d) => d.label.includes('Java Version'))
+    expect(row?.clearedScalarNoop).toBeFalsy()
+  })
+
+  // buildSystem is a validated enum — blank 400s server-side, so it stays on the
+  // null-clear (no-op) contract and keeps the "clearing not supported" flag.
+  it('keeps buildSystem clear as a null no-op (enum exception)', () => {
+    const { result } = renderHook(() => useBuildSection(makeComponent()))
+    act(() => result.current.set('buildSystem', ''))
+    expect(result.current.slice.request.baseConfiguration?.build?.buildSystem).toBeNull()
+    const row = result.current.slice.diff.find((d) => d.label.includes('Build System'))
     expect(row?.clearedScalarNoop).toBe(true)
   })
 

@@ -51,6 +51,15 @@ vi.mock('../hooks/useFieldConfig', () => ({
   // Real DocumentationTab / SolutionTab render FieldLabelText (useFieldLabel)
   // when a 400 routes to them or the Solution topic is active — return the fallback.
   useFieldLabel: (_path: string, fallback: string) => fallback,
+  // The page composes this into the Jira slice's payload-gating predicate (P-2a).
+  isFieldEditableFor: () => true,
+  // useVcsSection resolves External Registry editability through this hook;
+  // default to editable (these tests don't exercise the admin gate).
+  useFieldEditable: () => true,
+}))
+// The page reads the raw field-config blob for that predicate; stub it away.
+vi.mock('../hooks/useAdminConfig', () => ({
+  useFieldConfig: () => ({ data: undefined, isLoading: false, isError: false }),
 }))
 // Editor tabs — stub so only the header/action-area is tested here.
 // GeneralTab also exports GENERAL_TAB_FIELDS, which ComponentDetailPage imports

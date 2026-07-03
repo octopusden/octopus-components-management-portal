@@ -84,6 +84,9 @@ export interface ComponentDetail {
   jiraDisplayName?: string | null
   jiraHotfixVersionFormat?: string | null
   vcsExternalRegistry?: string | null
+  // Dedicated boolean replacing the legacy externalRegistry="NOT_AVAILABLE"
+  // sentinel (CRS-C). PATCH: null/absent = no-op; must be false for WHISKEY.
+  skipCommitCheck?: boolean | null
   distributionExplicit?: boolean | null
   distributionExternal?: boolean | null
   // schema-v2 per-component child rows. The five list fields are required
@@ -383,6 +386,9 @@ export interface ComponentCreateRequest {
   jiraDisplayName?: string | null
   jiraHotfixVersionFormat?: string | null
   vcsExternalRegistry?: string | null
+  // Dedicated boolean replacing the legacy externalRegistry="NOT_AVAILABLE"
+  // sentinel (CRS-C). PATCH: null/absent = no-op; must be false for WHISKEY.
+  skipCommitCheck?: boolean | null
   distributionExplicit?: boolean | null
   distributionExternal?: boolean | null
   group?: ComponentGroupRequest | null
@@ -430,6 +436,9 @@ export interface ComponentUpdateRequest {
   jiraDisplayName?: string | null
   jiraHotfixVersionFormat?: string | null
   vcsExternalRegistry?: string | null
+  // Dedicated boolean replacing the legacy externalRegistry="NOT_AVAILABLE"
+  // sentinel (CRS-C). PATCH: null/absent = no-op; must be false for WHISKEY.
+  skipCommitCheck?: boolean | null
   distributionExplicit?: boolean | null
   distributionExternal?: boolean | null
   // R1: `group` and `clearGroup` are accepted-and-IGNORED by the API (a group is
