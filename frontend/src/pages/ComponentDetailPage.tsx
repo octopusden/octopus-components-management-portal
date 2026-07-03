@@ -64,7 +64,8 @@ import { selectBaseRow } from '../lib/api/baseRow'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../lib/auth'
 import { useAdminMode } from '../lib/adminModeStore'
-import { useFieldConfigEntry } from '../hooks/useFieldConfig'
+import { useFieldConfigEntry, isFieldEditableFor } from '../hooks/useFieldConfig'
+import { useFieldConfig } from '../hooks/useAdminConfig'
 import { parseServerFieldErrors } from '../lib/serverErrors'
 import { usePortalLinks } from '../hooks/useInfo'
 import { safeHttpUrl } from '../lib/utils'
@@ -147,6 +148,9 @@ function ComponentDetailEditor() {
   // Persistent save-time conflict message shown in the Review dialog (value 409s
   // like an overlapping/duplicate range) — survives the auto-dismissing toast.
   const [reviewError, setReviewError] = useState<string | null>(null)
+  // Inline (projectKey, versionPrefix) uniqueness-conflict shown under the Jira
+  // Project Key field after a value-409 on a save that changed the jira pair.
+  const [jiraConflict, setJiraConflict] = useState<string | null>(null)
   // Controlled tab so a server 400 on a field that lives on a non-active tab can
   // auto-switch to the owning tab (otherwise the inline error renders on a hidden tab).
   const [activeTab, setActiveTab] = useState('general')
@@ -194,6 +198,10 @@ function ComponentDetailEditor() {
   // Section send-gating visibilities (Jira / Escrow).
   const { entry: releasesInDefaultBranchFc } = useFieldConfigEntry('component.releasesInDefaultBranch')
   const { entry: productTypeFc } = useFieldConfigEntry('component.productType')
+  // Raw field-config blob → per-user effective editability for the jira slice's
+  // payload-gating (P-1 omitNonEditable). User-agnostic blob + current user.
+  const { data: fieldConfigData } = useFieldConfig()
+  const isJiraFieldEditable = (fieldPath: string) => isFieldEditableFor(fieldConfigData, fieldPath, user)
   const fieldConfigLoading =
     displayNameFcLoading || componentOwnerFcLoading || systemFcLoading || clientCodeFcLoading
 
@@ -266,6 +274,7 @@ function ComponentDetailEditor() {
   const distributionSection = useDistributionSection(shell)
   const jiraSection = useJiraSection(shell, {
     releasesInDefaultBranch: releasesInDefaultBranchFc.visibility ?? 'editable',
+    isFieldEditable: isJiraFieldEditable,
   })
   const escrowSection = useEscrowSection(shell, {
     productType: productTypeFc.visibility ?? 'editable',
@@ -407,8 +416,9 @@ function ComponentDetailEditor() {
     if (!component) return
     if (!canEdit || !dirty) return
     form.clearErrors()
-    // Clear any prior conflict banner so a retry starts clean.
+    // Clear any prior conflict banner / inline jira conflict so a retry starts clean.
     setReviewError(null)
+    setJiraConflict(null)
 
     // System is REQUIRED server-side — surface the inline error instead of a
     // silent omit-then-walk-away.
@@ -466,7 +476,22 @@ function ComponentDetailEditor() {
       if (conflict) {
         toast({ title: conflict.title, description: conflict.description, variant: 'destructive' })
         if (conflict.kind === 'value') {
-          setReviewError(conflict.description)
+          // Attribute a value-409 to the Jira (projectKey, versionPrefix) pair
+          // when this save changed either — the pair is edited on the Jira tab,
+          // not in the Review dialog, so surface it inline there and close the
+          // diff. Any other value conflict (overlapping range, distribution GAV)
+          // stays a persistent Review-dialog banner (fixable in place).
+          const jServer = selectBaseRow(component)?.jira
+          const jiraPairChanged =
+            (jiraSection.state.projectKey || '') !== (jServer?.projectKey ?? '') ||
+            (jiraSection.state.versionPrefix || '') !== (jServer?.versionPrefix ?? '')
+          if (jiraPairChanged) {
+            setJiraConflict(conflict.description)
+            setActiveTab('jira')
+            setReviewOpen(false)
+          } else {
+            setReviewError(conflict.description)
+          }
         } else {
           setReviewOpen(false)
         }
@@ -845,7 +870,7 @@ function ComponentDetailEditor() {
 
             <TabsContent value="jira">
               <EditSurface canEdit={canEdit} label="Jira">
-                <JiraTab component={component} section={jiraSection} canEdit={canEdit} />
+                <JiraTab component={component} section={jiraSection} canEdit={canEdit} conflictError={jiraConflict} />
               </EditSurface>
             </TabsContent>
 

@@ -42,6 +42,12 @@ vi.mock('../hooks/useSupportedGroups', () => ({ useSupportedGroups: vi.fn() }))
 vi.mock('../hooks/useFieldConfig', () => ({
   useFieldConfigEntry: vi.fn(),
   useFieldConfigOptions: () => ({ options: [], isLoading: false }),
+  // The page composes this into the Jira slice's payload-gating predicate (P-2a).
+  isFieldEditableFor: () => true,
+}))
+// The page reads the raw field-config blob for that predicate; stub it away.
+vi.mock('../hooks/useAdminConfig', () => ({
+  useFieldConfig: () => ({ data: undefined, isLoading: false, isError: false }),
 }))
 // Editor tabs — stub so only the header/action-area is tested here.
 // GeneralTab also exports GENERAL_TAB_FIELDS, which ComponentDetailPage imports
