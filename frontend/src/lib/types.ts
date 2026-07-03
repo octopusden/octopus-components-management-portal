@@ -641,6 +641,14 @@ export interface PortalInfo {
   environmentLabel?: string | null
 }
 
+// /portal/config — component-editor knobs. `solutionKeyPatterns` are substrings
+// that mark a component key as a solution candidate: only those components show
+// the dedicated Solution topic/tab with its toggle. The backend always emits the key
+// (empty array = no component offers the toggle), but tolerate absence anyway.
+export interface PortalConfig {
+  solutionKeyPatterns?: string[]
+}
+
 export interface CrsInfo {
   name: string
   version: string

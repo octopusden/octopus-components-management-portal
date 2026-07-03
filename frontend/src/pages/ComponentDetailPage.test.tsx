@@ -28,10 +28,16 @@ vi.mock('../components/AppFooter', () => ({
 }))
 vi.mock('../hooks/useInfo', () => ({
   usePortalLinks: vi.fn(),
+  usePortalConfig: vi.fn(() => ({ data: undefined })),
   useCrsInfo: vi.fn(),
   // Layout consumes usePortalInfo for the environment banner; return "no data"
   // so these page tests render without a banner.
   usePortalInfo: vi.fn(() => ({ data: undefined })),
+}))
+// The always-rendered header labels editor calls useLabelsDictionary; mock it to
+// a stable empty dictionary so the page test never hits the real fetch/api path.
+vi.mock('../hooks/useLabelsDictionary', () => ({
+  useLabelsDictionary: () => ({ data: [], isLoading: false }),
 }))
 // Supported groupId prefixes feed the distribution/ownership prefix Save-gate.
 // Default empty ⇒ fail-open (gate off), so existing tests are unaffected.
@@ -42,6 +48,9 @@ vi.mock('../hooks/useSupportedGroups', () => ({ useSupportedGroups: vi.fn() }))
 vi.mock('../hooks/useFieldConfig', () => ({
   useFieldConfigEntry: vi.fn(),
   useFieldConfigOptions: () => ({ options: [], isLoading: false }),
+  // Real DocumentationTab / SolutionTab render FieldLabelText (useFieldLabel)
+  // when a 400 routes to them or the Solution topic is active — return the fallback.
+  useFieldLabel: (_path: string, fallback: string) => fallback,
   // The page composes this into the Jira slice's payload-gating predicate (P-2a).
   isFieldEditableFor: () => true,
   // useVcsSection resolves External Registry editability through this hook;
@@ -125,10 +134,11 @@ vi.mock('../components/CreateComponentDialog', () => ({
 import { ApiError } from '../lib/api'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useComponent, useUpdateComponent, useDeleteComponent } from '../hooks/useComponent'
-import { usePortalLinks } from '../hooks/useInfo'
+import { usePortalLinks, usePortalConfig } from '../hooks/useInfo'
 import { useSupportedGroups } from '../hooks/useSupportedGroups'
 import { useFieldConfigEntry } from '../hooks/useFieldConfig'
 import { GeneralTab } from '../components/editor/GeneralTab'
+import { TooltipProvider } from '../components/ui/tooltip'
 import { CANNOT_EDIT_TITLE } from '../components/editor/editPermission'
 import { useAdminMode } from '../lib/adminModeStore'
 import { useValidationProblems } from '../hooks/useValidationProblems'
@@ -136,6 +146,7 @@ import { copyToClipboard } from '../lib/clipboard'
 import type { ComponentValidation } from '@/lib/types'
 
 const mockedUsePortalLinks = vi.mocked(usePortalLinks)
+const mockedUsePortalConfig = vi.mocked(usePortalConfig)
 const mockedUseSupportedGroups = vi.mocked(useSupportedGroups)
 const mockedUseFieldConfigEntry = vi.mocked(useFieldConfigEntry)
 const mockedUseValidationProblems = vi.mocked(useValidationProblems)
@@ -290,7 +301,13 @@ function renderPage(component: ComponentDetail, user: User | null, opts: RenderP
     { initialEntries: ['/components/comp-1'] },
   )
   return render(
-    React.createElement(QueryClientProvider, { client }, <RouterProvider router={router} />),
+    React.createElement(
+      QueryClientProvider,
+      { client },
+      <TooltipProvider>
+        <RouterProvider router={router} />
+      </TooltipProvider>,
+    ),
   )
 }
 
@@ -312,6 +329,8 @@ beforeEach(() => {
     error: null,
   } as unknown as ReturnType<typeof usePortalLinks>)
   mockedUseSupportedGroups.mockReturnValue({ groups: [], isLoading: false })
+  // Default: no solution-key patterns → no Solution tab. Positive test overrides.
+  mockedUsePortalConfig.mockReturnValue({ data: undefined } as unknown as ReturnType<typeof usePortalConfig>)
   // Default: every field-config entry resolves as 'editable'. Individual
   // tests override per-field by re-mocking this implementation.
   mockedUseFieldConfigEntry.mockImplementation(() => ({
@@ -565,6 +584,7 @@ describe('ComponentDetailPage — sidebar nav order', () => {
       'VCS',
       'Jira',
       'Escrow',
+      'Documentation',
       'Distribution',
       'Misc',
       'Supported Versions',
@@ -583,6 +603,54 @@ describe('ComponentDetailPage — sidebar nav order', () => {
     }
     // "Distribution" is both a group heading and the lone item under it.
     expect(screen.getAllByText('Distribution').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('no Solution tab for a non-candidate key (no matching pattern)', () => {
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    // Default config (no patterns) → no Solution tab even though the flag exists.
+    renderPage(baseComponent, user)
+    expect(screen.queryByRole('tab', { name: /^Solution/ })).toBeNull()
+  })
+
+  it('a candidate key + matching pattern adds the Solution topic', () => {
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    mockedUsePortalConfig.mockReturnValue({
+      data: { solutionKeyPatterns: ['-solution'] },
+    } as unknown as ReturnType<typeof usePortalConfig>)
+    renderPage({ ...baseComponent, name: 'payment-solution' }, user)
+    expect(screen.getAllByRole('tab', { name: /^Solution/ }).length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('renaming the key to a candidate in-session reveals the Solution topic (live form value, not just the server key)', async () => {
+    // A user with RENAME_COMPONENTS can change the key inline. The Solution
+    // topic must react to the live form value so the flag can be set in the
+    // same edit session — not only after a save + refetch of the server key.
+    mockedUsePortalConfig.mockReturnValue({
+      data: { solutionKeyPatterns: ['-solution'] },
+    } as unknown as ReturnType<typeof usePortalConfig>)
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('name', component.name)
+      }, [component, form])
+      return React.createElement(
+        'button',
+        {
+          'data-testid': 'do-rename',
+          type: 'button',
+          onClick: () => form.setValue('name', 'payment-solution', { shouldDirty: true }),
+        },
+        'rename',
+      )
+    })
+    const user = makeUser(['ACCESS_COMPONENTS', 'RENAME_COMPONENTS'])
+    renderPage({ ...baseComponent, name: 'payment-service' }, user)
+    // Server key is not a candidate yet → no Solution topic.
+    expect(screen.queryByRole('tab', { name: /^Solution/ })).toBeNull()
+
+    fireEvent.click(screen.getByTestId('do-rename'))
+    await waitFor(() => {
+      expect(screen.getAllByRole('tab', { name: /^Solution/ }).length).toBeGreaterThanOrEqual(1)
+    })
   })
 
   it('shows per-section counts inside the sidebar items (VCS entries, Distribution items)', () => {
@@ -1175,6 +1243,40 @@ describe('ComponentDetailPage — labels clear-all sends [] (PR #44 follow-up: c
     // Disabled Save fires no handler, so no need to await: assert directly.
     expect(updateMutateAsync).not.toHaveBeenCalled()
   })
+
+  it('a server 400 on `labels` surfaces inline in the header editor (not just a toast)', async () => {
+    // Labels are edited in the always-visible header. Because `labels` is not a
+    // GeneralTab field, the 400 handler must special-case it to form.setError so
+    // HeaderLabelsEditor renders the message inline — otherwise the only surface
+    // is a toast for a field the user is looking straight at.
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('labels', component.labels ?? [])
+        form.setValue('labels', ['x'], { shouldDirty: true, shouldTouch: true })
+        form.setValue('system', component.system ?? '')
+        form.setValue('displayName', component.displayName ?? '')
+      }, [component, form])
+      return React.createElement('div', { 'data-testid': 'general-tab' })
+    })
+    const updateMutateAsync = vi.fn(() =>
+      Promise.reject(
+        new ApiError(
+          400,
+          'Bad Request',
+          JSON.stringify({ errorMessage: 'Validation failed: labels: too many labels' }),
+        ),
+      ),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    const seeded: ComponentDetail = { ...baseComponent, labels: [] }
+    renderPage(seeded, user, { updateMutation: { mutateAsync: updateMutateAsync } })
+
+    await clickSaveAndConfirm()
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
+    // Inline error is readable in the header without opening the popover.
+    const err = await screen.findByText('too many labels')
+    expect(err.id).toBe('header-labels-error')
+  })
 })
 
 describe('ComponentDetailPage — confirmation dialog text', () => {
@@ -1244,6 +1346,31 @@ describe('ComponentDetailPage — cross-tab 400 + displayName clear', () => {
     await clickSaveAndConfirm()
 
     await waitFor(() => expect(screen.getByTestId('misc-tab')).toBeDefined())
+  })
+
+  it('auto-switches to the Documentation tab when a 400 maps to a docs field', async () => {
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('system', component.system ?? '')
+        form.setValue('displayName', component.displayName ?? '')
+      }, [component, form])
+      return React.createElement(
+        'button',
+        { 'data-testid': 'edit', onClick: () => form.setValue('displayName', 'X', { shouldDirty: true }) },
+        'edit',
+      )
+    })
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(new ApiError(400, 'bad', JSON.stringify({ errorMessage: 'docs: invalid doc link' }))),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    // sectionForField('docs') → 'documentation'; the real DocumentationTab renders.
+    await waitFor(() => expect(screen.getByText(/no documentation links configured/i)).toBeDefined())
   })
 
   it('clearing displayName PATCHes it as "" (nullable — server clears to null, or 400s for explicit+external)', async () => {

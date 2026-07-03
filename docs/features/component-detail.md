@@ -2,7 +2,9 @@
 
 > Target users: `ACCESS_COMPONENTS` for read; per-tab gates for writes (see "Auth gating" below).
 
-The detail page at `/components/<UUID>` is the editor surface. It renders [`pages/ComponentDetailPage.tsx`](../../frontend/src/pages/ComponentDetailPage.tsx) and decomposes into tabs (General, **Misc**, Build, VCS, Distribution, Jira, Escrow, **Supported Versions**, Configurations, As Code, Overrides, History). The page-level form lives once and the General + Misc tabs share its state via `react-hook-form`. The `Tabs` are controlled so a server 400 on a field that lives on a non-active tab auto-switches to the owning tab.
+The detail page at `/components/<UUID>` is the editor surface. It renders [`pages/ComponentDetailPage.tsx`](../../frontend/src/pages/ComponentDetailPage.tsx) and decomposes into tabs (General, **Solution** (conditional), **Misc**, Build, VCS, **Documentation**, Distribution, Jira, Escrow, **Supported Versions**, Configurations, As Code, Overrides, History). The page-level form lives once and General / Solution / Documentation / Misc all share its state via `react-hook-form`. The `Tabs` are controlled so a server 400 on a field that lives on a non-active tab auto-switches to the owning tab (`sectionForField`, incl. `docs → documentation`).
+
+**Labels** are edited in the page **header** (badges + a popover [`HeaderLabelsEditor`](../../frontend/src/components/editor/HeaderLabelsEditor.tsx)), not on General. A component with `solution = true` is flagged in the header (a prominent badge + an info `StatusBanner`).
 
 ## URL stability
 
@@ -12,7 +14,9 @@ The detail page at `/components/<UUID>` is the editor surface. It renders [`page
 
 | Tab | Source | Notes |
 |---|---|---|
-| **General** | `GeneralTab` | Identity + ownership: name, **Display Name (nullable + unique; required for explicit+external)**, owner, system, clientCode, archive flag, plus a read-only **"who can edit"** list (owner + release managers + security champions, from `GET /{id}/editors`; admins also edit). Detailed below. |
+| **General** | `GeneralTab` | Identity + ownership + metadata: name, **Display Name (nullable + unique; required for explicit+external)**, owner, release managers, security champions, system, clientCode, copyright, artifact IDs, plus a read-only **"who can edit"** list (owner + release managers + security champions, from `GET /{id}/editors`; admins also edit). **Solution toggle, Doc links, and Labels no longer live here** (see Solution / Documentation topics and the header labels editor). Detailed below. |
+| **Solution** | `SolutionTab` | Conditional topic (Overview group) — rendered **only** when the component key matches a service-config solution pattern (`isSolutionCandidate`, `/portal/config`) **and** `component.solution` field-config isn't `hidden`. A single `solution` toggle; `readonly` field-config disables it, and `buildUpdateRequest` omits `solution` when hidden/readonly (defense-in-depth). Shares the page form. |
+| **Documentation** | `DocumentationTab` | Doc-links editor moved off General (Build & Release group). `{ docComponentKey, majorVersion? }` rows backed by `component_doc_links`; a CRS `docs` 400 auto-switches here. Shares the page form. |
 | **Misc** | `MiscTab` | Parent Component, Can-be-parent, and the read-only Group Key / synthetic-group display — moved off General. Shares the page form; the header Save covers it. `MISC_TAB_FIELDS` lets the 400 handler auto-switch here when a parent/canBeParent error returns. |
 | **Build / VCS / Distribution / Jira / Escrow** | `BuildTab` etc. | Per-tab Save buttons; each tab handles its own mutation slice via the page-level `updateMutation`. Build's **Java / Maven Version** are dropdowns sourced from `GET /meta/{java,maven}-versions` (CRS `application.yml`, per-install overridable). Jira's **Display Name** is shown only when it diverges from the component display name. Mostly out of scope for this doc. |
 | **Supported Versions** | `SupportedVersionsTab` | Coverage editor — the decoupled-version-model layer 1 (CRS [ADR-018](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/018-decoupled-version-model.md)), independent of per-attribute overrides. Reads `GET /{id}/supported-versions` → `{all, ranges, warnings}`; `all` ⇒ every version is defined, else `supported = ∪ ranges` (a version outside resolves to 404). Add-range / remove / "Set to all versions" each **declaratively PUT the full desired set** (instant save, no page-level Save bar) and the server returns the **merged** coverage (overlapping/contiguous ranges collapse; a set tiling all-versions becomes `all`) + non-blocking V1/V5 `warnings` (an override left outside supported). `useUpdateSupportedVersions` seeds the cache with the PUT response before invalidating, so back-to-back edits don't replace from stale data. Detailed below. |
@@ -80,15 +84,15 @@ autocomplete (`frontend/src/components/ui/ComponentSelect.tsx`) drives the paren
 
 If any of these fields is always sent, a non-admin's plain edit (only `displayName` or owner) would 403 because the server's PATCH SpEL guards `(#request.archived == null or canArchiveComponent(...))` etc.
 
-### Schema-v2 General-tab editors (PR #38 Wave B)
+### Schema-v2 child collections (PR #38 Wave B)
 
-With CRS schema v2 (`component_configurations` as the wide row), three child-collection editors live on the General tab next to the scalar fields:
+With CRS schema v2 (`component_configurations` as the wide row), component child collections are edited from the page-level form:
 
-- **TeamCity projects** — `projectId` rows backed by the `component_teamcity_projects` child table. Sort order is preserved (server sorts by `sort_order`); the editor re-emits the full list on each save.
-- **Doc links** — `{ docComponentKey: string, majorVersion?: string | null }` rows backed by `component_doc_links`. Identifies the documentation source by component key and (optionally) the major version it documents (e.g. `3.x`); the editor maps a blank input to `null` on save.
-- **Artifact IDs** — `{ groupPattern: string, artifactPattern: string }` rows backed by `component_artifact_ids`. Order preserved; primary use is fuzzy-match by build artifact identifier in downstream Feign consumers.
+- **TeamCity projects** — `projectId` rows backed by the `component_teamcity_projects` child table. Sort order is preserved (server sorts by `sort_order`); the header exposes them as read-only quick links.
+- **Doc links** — `{ docComponentKey: string, majorVersion?: string | null }` rows backed by `component_doc_links`. Identifies the documentation source by component key and (optionally) the major version it documents (e.g. `3.x`); the editor maps a blank input to `null` on save. **Moved to the dedicated Documentation topic** ([`DocumentationTab`](../../frontend/src/components/editor/DocumentationTab.tsx)); it still shares the page form and saves in the same PATCH.
+- **Artifact IDs** — `{ groupPattern: string, artifactPattern: string }` rows backed by `component_artifact_ids`. Order preserved; primary use is fuzzy-match by build artifact identifier in downstream Feign consumers. Edited from General via [`ArtifactOwnershipEditor`](../../frontend/src/components/editor/ArtifactOwnershipEditor.tsx).
 
-Each editor is a `useFieldArray` row list with inline add and per-row delete. They share the page-level `react-hook-form` state; the General tab Save button mutates them together with the scalar fields in one PATCH.
+The editable collections share the page-level `react-hook-form` state; the page Save bar sends them together with scalar General fields in one PATCH.
 
 ### Release Managers / Security Champions (SYS-039 — multi-value)
 

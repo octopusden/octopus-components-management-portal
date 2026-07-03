@@ -1,14 +1,9 @@
 import { useEffect } from 'react'
-import { UseFormReturn, useFieldArray } from 'react-hook-form'
-import { Plus, Trash2 } from 'lucide-react'
-import { Button } from '../ui/button'
+import { UseFormReturn } from 'react-hook-form'
 import { Label } from '../ui/label'
 import { Input } from '../ui/input'
-import { Switch } from '../ui/switch'
 import { EmployeeStatusBadge, PeopleInput } from '../ui/PeopleInput'
 import { PeopleListInput } from '../ui/PeopleListInput'
-import { ComponentSelect } from '../ui/ComponentSelect'
-import { ChipsInput } from '../ui/ChipsInput'
 import { EnumSelect } from '../ui/EnumSelect'
 import { FieldInfo } from '../ui/FieldInfo'
 import { FieldLabelText } from '../ui/FieldLabelText'
@@ -26,7 +21,6 @@ import { useFieldConfigEntry } from '../../hooks/useFieldConfig'
 // filter bar deliberately keeps the in-use endpoint via useFieldOptions
 // (filter UX wants to offer values that exist).
 import { useSystemsDictionary } from '../../hooks/useSystemsDictionary'
-import { useLabelsDictionary } from '../../hooks/useLabelsDictionary'
 import { lookupEmployee, useEmployeeStatuses } from '../../hooks/useEmployees'
 import { WhoCanEditPanel } from './WhoCanEditPanel'
 
@@ -43,6 +37,10 @@ import { WhoCanEditPanel } from './WhoCanEditPanel'
  *   - solution / archived: boolean Switches with no inline error display; let
  *     CRS business-rule violations like "cannot archive while children exist"
  *     surface as a toast. (releasesInDefaultBranch moved to the Jira tab.)
+ *   - labels: the editor moved to the component header (badges + popover);
+ *     GeneralTab renders no labels input. A labels 400 is mapped by the page's
+ *     error handler to form.setError('labels') and surfaced inline in the
+ *     always-visible header editor (see ComponentDetailPage + HeaderLabelsEditor).
  */
 export const GENERAL_TAB_FIELDS = [
   'name',
@@ -54,7 +52,6 @@ export const GENERAL_TAB_FIELDS = [
   'releaseManager',
   'securityChampion',
   'copyright',
-  'labels',
 ] as const
 
 export interface GeneralFormValues {
@@ -123,7 +120,6 @@ interface GeneralTabProps {
 
 export function GeneralTab({ component, form, isNew = false, canEdit = true, onOwnerValidatingChange }: GeneralTabProps) {
   const {
-    control,
     register,
     setValue,
     watch,
@@ -134,34 +130,29 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
   // #10). Shared (cached) query — also read by the page for the Save gate.
   const { groups: supportedGroups } = useSupportedGroups()
 
-  const solution = watch('solution')
   const componentOwner = watch('componentOwner')
   // parentComponentName / canBeParent moved to the Misc tab (MiscTab.tsx).
-  // SYS-039 watchers — PeopleListInput (multi-value) / Switch are controlled,
-  // not register'd. releaseManager / securityChampion are ordered string[].
+  // SYS-039 watchers — PeopleListInput (multi-value) is controlled, not
+  // register'd. releaseManager / securityChampion are ordered string[].
   const releaseManager = watch('releaseManager')
   const securityChampion = watch('securityChampion')
-  // Task #14: `system` is a scalar string (single-select EnumSelect).
-  // `labels` stays an array (chips UX). Both watched so the controlled
-  // primitives receive the current value.
+  // Task #14: `system` is a scalar string (single-select EnumSelect), watched
+  // so the controlled primitive receives the current value. (Labels moved to
+  // the header editor; Doc Links → Documentation tab; Solution → Solution tab —
+  // all see ComponentDetailPage.)
   const systemValue = watch('system')
-  const labelsValue = watch('labels')
 
-  // Labels dictionary powers the chips UX. Task #14: systems dictionary
-  // is needed too for the EnumSelect single-select — see note next to
+  // Systems dictionary powers the EnumSelect single-select — see note next to
   // its render block for why we override EnumSelect's internal hook.
-  // 404/501 → [] (handled by the hooks).
-  const labelsDict = useLabelsDictionary()
+  // 404/501 → [] (handled by the hook).
   const systemsDict = useSystemsDictionary()
+
   const { data: employeeStatuses = {} } = useEmployeeStatuses([
     component.componentOwner ?? '',
     ...(component.releaseManager ?? []),
     ...(component.securityChampion ?? []),
   ])
 
-  // schema-v2 list editors. useFieldArray provides stable `id` keys so row
-  // re-renders don't blow away focus on text inputs.
-  const docsFieldArray = useFieldArray({ control, name: 'docs' })
   // Ownership is edited as a whole list by ArtifactOwnershipEditor (not a simple field-array of
   // inputs), so it is watched + replaced wholesale via setValue.
   const watchedArtifactIds = watch('artifactIds')
@@ -170,10 +161,6 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
   const ownershipConfigRanges = Array.from(
     new Set((component.configurations ?? []).map((c) => c.versionRange).filter((r) => r && r !== OWNERSHIP_ALL_VERSIONS)),
   )
-
-  // Doc-link rows use a controlled ComponentSelect (filtered to label=doc), so
-  // watch the array to feed each row's current value.
-  const watchedDocs = watch('docs')
 
   // RENAME_COMPONENTS gates the Name input on the edit surface. The same
   // permission is enforced server-side in ComponentControllerV4's PATCH SpEL
@@ -194,7 +181,6 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
   const { entry: releaseManagerEntry } = useFieldConfigEntry('component.releaseManager')
   const { entry: securityChampionEntry } = useFieldConfigEntry('component.securityChampion')
   const { entry: copyrightEntry } = useFieldConfigEntry('component.copyright')
-  const { entry: labelsEntry } = useFieldConfigEntry('component.labels')
 
   useEffect(() => {
     // Re-hydration guard. This effect re-runs on every (re)mount and whenever the
@@ -243,14 +229,16 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
     setValue('releaseManager', component.releaseManager ?? [])
     setValue('securityChampion', component.securityChampion ?? [])
     setValue('copyright', component.copyright ?? '')
-    // Hydration MUST NOT set `shouldTouch:true` — the touched flag is the
-    // signal ComponentDetailPage.handleSave uses to distinguish a real
-    // user clear-all from the pre-hydration race (PR #44 follow-up).
-    // Only the ChipsInput onChange below sets shouldTouch, when the user
-    // actually interacts with the field.
+    // labels/docs/solution are hydrated HERE (General is the always-mounted
+    // default tab) even though their EDITORS now live elsewhere — labels in the
+    // header, docs in the Documentation tab, solution in the Solution tab. Those
+    // surfaces read/write this same page-owned form. Hydration MUST NOT set
+    // `shouldTouch:true` — the touched flag is the signal
+    // ComponentDetailPage.handleSave uses to distinguish a real user clear-all
+    // from the pre-hydration race (PR #44 follow-up); only the header
+    // ChipsInput's onChange sets shouldTouch, on real interaction.
     setValue('labels', component.labels ?? [])
-    // schema-v2 lists. setValue replaces the array wholesale; useFieldArray
-    // picks up the new keys on the next render.
+    // schema-v2 lists. setValue replaces the array wholesale.
     setValue(
       'docs',
       (component.docs ?? []).map((d) => ({
@@ -325,27 +313,9 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
           )}
 
           {/* Parent Component, Can-be-parent, and Group Key / Synthetic-group moved to the
-              Misc tab (MiscTab.tsx) to keep General focused on identity/ownership/metadata. */}
-
-          {/* Solution toggle */}
-          <div className="sm:col-span-2 flex items-center gap-3">
-            <Switch
-              id="solution"
-              checked={solution}
-              // shouldDirty:true so the page-level handleSave's
-              // dirtyFields.solution gate actually fires. Without this the
-              // boolean is set on the form but never marked dirty, and the
-              // save handler omits the field every time.
-              // shouldTouch:true so the hydration re-guard (GeneralTab effect) does not
-              // clobber a clear-to-default toggle (true→false == RHF default) across a
-              // tab switch: such a toggle leaves dirtyFields empty (value==default), so
-              // `touched` is the only signal that the user interacted with the field.
-              onCheckedChange={(checked) => setValue('solution', checked, { shouldDirty: true, shouldTouch: true })}
-            />
-            <Label htmlFor="solution" className="cursor-pointer"><FieldLabelText path="component.solution" fallback="Solution" /></Label>
-            <FieldInfo path="component.solution" label="Solution" />
-          </div>
-
+              Misc tab (MiscTab.tsx) to keep General focused on identity/ownership/metadata.
+              Solution toggle moved to the dedicated Solution tab (conditional on the key
+              pattern); Labels moved to the component header. */}
         </div>
       </section>
 
@@ -480,8 +450,7 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
       {/* ── Metadata ──────────────────────────────────────────────────────── */}
       {(systemEntry.visibility !== 'hidden' ||
         clientCodeEntry.visibility !== 'hidden' ||
-        copyrightEntry.visibility !== 'hidden' ||
-        labelsEntry.visibility !== 'hidden') && (
+        copyrightEntry.visibility !== 'hidden') && (
         <section data-testid="section-metadata">
           <h3 className="text-sm font-medium text-muted-foreground mb-3">Metadata</h3>
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
@@ -560,112 +529,11 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
               </div>
             )}
 
-            {/* Labels — chips/tags UX (task #9). Each value renders as a
-                shadcn Badge with an inline × close button; an inline
-                "Add label" picker offers the dictionary minus already-
-                added values. No free-text path — picks are restricted to
-                useLabelsDictionary(). Wire contract unchanged:
-                buildUpdateRequest still emits `labels: []` on dirty+
-                explicit-clear, omits on pre-hydration. */}
-            {labelsEntry.visibility !== 'hidden' && (
-              <div className="space-y-1.5 sm:col-span-2">
-                <div className="flex items-center gap-1">
-                  <Label htmlFor="component-labels"><FieldLabelText path="component.labels" fallback="Labels" /></Label>
-                  <FieldInfo path="component.labels" label="Labels" />
-                </div>
-                <ChipsInput
-                  id="component-labels"
-                  value={labelsValue ?? []}
-                  onChange={(next) =>
-                    // shouldTouch:true marks the field as user-interacted
-                    // even when shouldDirty's value-equality check fails
-                    // (e.g. user removes the last chip and the new value
-                    // [] equals the form default []). ComponentDetailPage
-                    // reads `touchedFields.labels` to distinguish a real
-                    // clear-all from the pre-hydration race where the
-                    // form-default [] and a non-empty component.labels
-                    // would otherwise look identical to the value-compare.
-                    setValue('labels', next, { shouldDirty: true, shouldTouch: true })
-                  }
-                  options={labelsDict.data ?? []}
-                  isLoading={labelsDict.isLoading}
-                  placeholder="Add label"
-                  disabled={labelsEntry.visibility === 'readonly'}
-                  ariaInvalid={Boolean(errors.labels)}
-                  ariaDescribedBy={errors.labels ? 'component-labels-error' : undefined}
-                />
-                {errors.labels && (
-                  <p id="component-labels-error" className="text-xs text-destructive">
-                    {errors.labels.message}
-                  </p>
-                )}
-              </div>
-            )}
           </div>
         </section>
       )}
 
-      {/* ── References (Doc Links + Artifact IDs) ─────────────────────────────
-          Both are per-component child lists introduced by schema-v2. No
-          field-config gates today; full visibility for all editors. */}
-      <section data-testid="section-references">
-        <div className="flex items-center gap-1 mb-3">
-          <h3 className="text-sm font-medium text-muted-foreground"><FieldLabelText path="component.docs" fallback="Doc Links" /></h3>
-          <FieldInfo path="component.docs" label="Doc Links" />
-        </div>
-        <div className="space-y-2">
-          {docsFieldArray.fields.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No documentation links configured.</p>
-          ) : (
-            docsFieldArray.fields.map((field, index) => (
-              <div key={field.id} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
-                {/* Doc target restricted to components carrying the `doc` label.
-                    `strict` enforces the restriction: only a suggestion click
-                    (drawn from the doc-filtered list) commits — a free-typed
-                    non-doc key reverts on blur instead of being saved. Without
-                    it the `filter` only narrowed the suggestions while any typed
-                    key still committed. */}
-                <ComponentSelect
-                  id={`docs-${index}-key`}
-                  ariaLabel={`Doc link component key (row ${index + 1})`}
-                  value={watchedDocs?.[index]?.docComponentKey ?? ''}
-                  onChange={(val) =>
-                    setValue(`docs.${index}.docComponentKey` as const, val, { shouldDirty: true })
-                  }
-                  filter={{ labels: ['doc'] }}
-                  strict
-                  placeholder="docs-component-key"
-                />
-                <Input
-                  placeholder="majorVersion (e.g. 3.x)"
-                  aria-label={`Doc link major version (row ${index + 1})`}
-                  {...register(`docs.${index}.majorVersion` as const)}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-9 w-9 text-destructive"
-                  onClick={() => docsFieldArray.remove(index)}
-                  aria-label="Remove doc link"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            ))
-          )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => docsFieldArray.append({ docComponentKey: '', majorVersion: '' })}
-          >
-            <Plus className="h-4 w-4" />
-            Add doc link
-          </Button>
-        </div>
-      </section>
-
+      {/* Doc Links moved to the dedicated Documentation tab (DocumentationTab). */}
       <section data-testid="section-artifact-ids">
         <div className="flex items-center gap-1 mb-3">
           <h3 className="text-sm font-medium text-muted-foreground"><FieldLabelText path="component.artifactIds" fallback="Artifact IDs" /></h3>

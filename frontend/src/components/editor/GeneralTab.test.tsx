@@ -488,44 +488,15 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
     expect(input.value).toBe('(c) 2026 Acme Inc.')
   })
 
-  it('labels editable → chips UX renders one badge per stored label (task #9)', () => {
-    setAllEditable()
-    const component = baseComponent({ labels: ['backend', 'internal'] })
-    renderWithProviders(<Harness component={component} />)
-
-    // The chips primitive renders each value as a Badge plus an aria-
-    // labelled remove button. Two labels stored → two remove buttons.
-    expect(screen.getByRole('button', { name: /^remove backend$/i })).toBeDefined()
-    expect(screen.getByRole('button', { name: /^remove internal$/i })).toBeDefined()
-  })
-
-  it('labels readonly → × buttons + add control disabled (task #9 integration)', () => {
-    // Parity with the System readonly test: when field-config marks labels
-    // readonly, both the per-chip × buttons and the add control must be
-    // disabled. The integration path matters — ChipsInput's `disabled`
-    // unit test covers the prop, but the GeneralTab gate that wires
-    // `labelsEntry.visibility === 'readonly'` to that prop is what we're
-    // pinning here.
-    mockUseFieldConfigEntry.mockImplementation((path: string) => {
-      if (path === 'component.labels') return makeEntry('readonly')
-      return makeEntry('editable')
-    })
-    const component = baseComponent({ labels: ['backend'] })
-    renderWithProviders(<Harness component={component} />)
-
-    const removeBackend = screen.getByRole('button', { name: /^remove backend$/i }) as HTMLButtonElement
-    expect(removeBackend.disabled).toBe(true)
-    const addControl = screen.getByLabelText(/^add label$/i) as HTMLSelectElement
-    expect(addControl.disabled).toBe(true)
-  })
+  // Labels editing moved to the component header (badges + popover); its tests
+  // live in HeaderLabelsEditor.test.tsx. GeneralTab no longer renders labels.
 
   it('all SYS-039 entries hidden → none of the SYS-039 controls render', () => {
     mockUseFieldConfigEntry.mockImplementation((path: string) => {
       if (
         path === 'component.releaseManager' ||
         path === 'component.securityChampion' ||
-        path === 'component.copyright' ||
-        path === 'component.labels'
+        path === 'component.copyright'
       ) {
         return makeEntry('hidden')
       }
@@ -535,15 +506,12 @@ describe('GeneralTab SYS-039 fields (Wave 2 PR-G)', () => {
       releaseManager: ['rm'],
       securityChampion: ['sc'],
       copyright: '(c)',
-      labels: ['x'],
     })
     renderWithProviders(<Harness component={component} />)
 
     expect(screen.queryByLabelText(/^release managers?$/i)).toBeNull()
     expect(screen.queryByLabelText(/^security champions?$/i)).toBeNull()
     expect(screen.queryByLabelText(/^copyright$/i)).toBeNull()
-    // labels — hidden hides both the <Label> and the multi-select.
-    expect(screen.queryByText(/^labels$/i)).toBeNull()
   })
 })
 
@@ -703,25 +671,10 @@ describe('GeneralTab — re-hydration guard (tab-switch / refetch must not clobb
     expect(formRef.current!.getValues('displayName')).toBe('Edited Name')
   })
 
-  it('preserves a clear-to-default toggle (Solution true→false) across a tab-switch remount', async () => {
-    // Edge the dirty-only guard would miss: toggling Solution from the server value
-    // true back to false equals the RHF default, so dirtyFields is empty — only the
-    // shouldTouch flag on the Switch's onChange marks the field interacted. Without
-    // it, the remount re-hydrate would silently flip Solution back to true.
-    setAllEditable()
-    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
-    renderWithProviders(<RemountHarness component={baseComponent({ solution: true })} formRef={formRef} />)
-
-    await waitFor(() => expect(formRef.current!.getValues('solution')).toBe(true))
-    fireEvent.click(screen.getByRole('switch', { name: /solution/i })) // true → false (== default)
-    expect(formRef.current!.getValues('solution')).toBe(false)
-
-    fireEvent.click(screen.getByTestId('toggle-mount')) // unmount General
-    fireEvent.click(screen.getByTestId('toggle-mount')) // remount General
-    await waitFor(() => expect(screen.getByRole('switch', { name: /solution/i })).toBeDefined())
-
-    expect(formRef.current!.getValues('solution')).toBe(false)
-  })
+  // The Solution toggle moved to its own tab (SolutionTab); the clear-to-default
+  // touched-flag preservation is exercised in SolutionTab.test.tsx. GeneralTab
+  // still HYDRATES `solution` on mount (it's the default tab) — covered by the
+  // hydration assertions elsewhere in this file.
 })
 
 // ---------------------------------------------------------------------------
@@ -769,33 +722,8 @@ describe('GeneralTab — system single-select + labels chips (task #14)', () => 
     expect(formRef.current?.getValues('system')).toBe('SYS_A')
   })
 
-  it('hydrates labels chips from component.labels and clicking × removes the chip (task #9)', async () => {
-    setAllEditable()
-    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
-    const component = baseComponent({ labels: ['backend', 'internal'] })
-    renderWithProviders(<Harness component={component} formRef={formRef} />)
-
-    const removeBackend = screen.getByRole('button', { name: /^remove backend$/i })
-    await userEvent.click(removeBackend)
-
-    await waitFor(() => {
-      expect(formRef.current?.getValues('labels')).toEqual(['internal'])
-    })
-  })
-
-  it('picking a label from the add control appends to form value (task #9)', async () => {
-    setAllEditable()
-    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
-    const component = baseComponent({ labels: ['backend'] })
-    renderWithProviders(<Harness component={component} formRef={formRef} />)
-
-    const addControl = screen.getByLabelText(/^add label$/i) as HTMLSelectElement
-    await userEvent.selectOptions(addControl, 'frontend')
-
-    await waitFor(() => {
-      expect(formRef.current?.getValues('labels')).toEqual(['backend', 'frontend'])
-    })
-  })
+  // Labels chips add/remove tests moved to HeaderLabelsEditor.test.tsx (the
+  // editor now lives in the component header, not GeneralTab).
 
   it('renders an inline error below the System single-select when form.setError("system") fires (task #14)', async () => {
     // ComponentDetailPage.handleSave is the source of truth for the
@@ -830,15 +758,13 @@ describe('GeneralTab field descriptions (FieldInfo)', () => {
     'component.name',
     'component.displayName',
     // parentComponentName / canBeParent / groupId moved to the Misc tab (see MiscTab.test).
-    'component.solution',
+    // solution → Solution tab, labels → header, docs → Documentation tab.
     'component.componentOwner',
     'component.releaseManager',
     'component.securityChampion',
     'component.system',
     'component.clientCode',
     'component.copyright',
-    'component.labels',
-    'component.docs',
     'component.artifactIds',
   ]
 

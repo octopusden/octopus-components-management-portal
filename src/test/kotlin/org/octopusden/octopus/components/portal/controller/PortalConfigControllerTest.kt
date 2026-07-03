@@ -122,4 +122,60 @@ class PortalConfigControllerTest {
                 .jsonPath("$.dmsBaseUrl").doesNotExist()
         }
     }
+
+    @Nested
+    @SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = [
+            "management.server.port=0",
+            "portal.component.solution-key-patterns=-solution, dmp-bundle ,",
+        ],
+    )
+    @AutoConfigureWebTestClient
+    @ActiveProfiles("test")
+    @Import(TestSecurityConfig::class, PortalInfoControllerTest.TestBuildPropertiesConfig::class)
+    @WithMockUser
+    inner class SolutionKeyPatternsConfigured {
+        @Autowired
+        lateinit var client: WebTestClient
+
+        @Test
+        fun `comma list is trimmed, blanks dropped, returned as an array`() {
+            client.get().uri("/portal/config")
+                .exchange()
+                .expectStatus().isOk
+                .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+                .expectBody()
+                .jsonPath("$.solutionKeyPatterns.length()").isEqualTo(2)
+                .jsonPath("$.solutionKeyPatterns[0]").isEqualTo("-solution")
+                .jsonPath("$.solutionKeyPatterns[1]").isEqualTo("dmp-bundle")
+        }
+    }
+
+    @Nested
+    @SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = [
+            "management.server.port=0",
+            "portal.component.solution-key-patterns=",
+        ],
+    )
+    @AutoConfigureWebTestClient
+    @ActiveProfiles("test")
+    @Import(TestSecurityConfig::class, PortalInfoControllerTest.TestBuildPropertiesConfig::class)
+    @WithMockUser
+    inner class SolutionKeyPatternsEmpty {
+        @Autowired
+        lateinit var client: WebTestClient
+
+        @Test
+        fun `blank config returns an empty array (never omitted)`() {
+            client.get().uri("/portal/config")
+                .exchange()
+                .expectStatus().isOk
+                .expectBody()
+                .jsonPath("$.solutionKeyPatterns").isArray
+                .jsonPath("$.solutionKeyPatterns.length()").isEqualTo(0)
+        }
+    }
 }

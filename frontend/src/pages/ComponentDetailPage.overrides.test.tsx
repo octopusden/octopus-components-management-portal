@@ -28,8 +28,14 @@ vi.mock('../hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }))
 vi.mock('../components/AppFooter', () => ({ AppFooter: () => <footer>footer</footer> }))
 vi.mock('../hooks/useInfo', () => ({
   usePortalLinks: () => ({ data: undefined }),
+  usePortalConfig: () => ({ data: undefined }),
   useCrsInfo: vi.fn(),
   usePortalInfo: () => ({ data: undefined }),
+}))
+// The always-rendered header labels editor calls useLabelsDictionary; mock it so
+// the page test never fires a real api.get('/components/meta/labels/dictionary').
+vi.mock('../hooks/useLabelsDictionary', () => ({
+  useLabelsDictionary: () => ({ data: [], isLoading: false }),
 }))
 vi.mock('../hooks/useFieldConfig', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../hooks/useFieldConfig')>()

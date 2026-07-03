@@ -301,6 +301,18 @@ describe('buildUpdateRequest — dirtyFields gating (pre-hydration safety)', () 
     expect(req.solution).toBe(true)
   })
 
+  it('solution is omitted even when dirty if field-config marks it hidden or readonly', () => {
+    for (const visibility of ['hidden', 'readonly'] as const) {
+      const req = buildUpdateRequest({
+        component: makeComponent({ solution: null }),
+        values: makeValues({ solution: true }),
+        visibilities: { ...EDITABLE, solution: visibility },
+        dirtyFields: { solution: true },
+      })
+      expect(req.solution).toBeUndefined()
+    }
+  })
+
   it('systems form-default empty + had prior + NOT dirty → omits (pre-hydration guard)', () => {
     // Form default is `system: ''` (task #14 single-select). Without the
     // dirty-gate a pre-hydration Save would emit `system: null` and wipe the

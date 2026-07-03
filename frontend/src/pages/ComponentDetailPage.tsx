@@ -1,11 +1,12 @@
 import { useParams, useNavigate, Link } from 'react-router'
 import { useForm } from 'react-hook-form'
-import { ArrowLeft, Copy, Trash2, AlertTriangle, LockKeyhole } from 'lucide-react'
+import { ArrowLeft, Copy, Trash2, AlertTriangle, LockKeyhole, Boxes } from 'lucide-react'
 import { JiraIcon, BitbucketIcon, TeamCityIcon } from '../components/ui/icons/brand-icons'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Layout } from '../components/Layout'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
+import { StatusBanner } from '../components/ui/status-banner'
 import { Separator } from '../components/ui/separator'
 import { InlineError } from '../components/ui/inline-error'
 import { SkeletonBlock } from '../components/ui/skeleton-block'
@@ -19,6 +20,9 @@ import {
   DialogFooter,
 } from '../components/ui/dialog'
 import { GeneralTab, type GeneralFormValues, GENERAL_TAB_FIELDS } from '../components/editor/GeneralTab'
+import { DocumentationTab } from '../components/editor/DocumentationTab'
+import { SolutionTab } from '../components/editor/SolutionTab'
+import { HeaderLabelsEditor } from '../components/editor/HeaderLabelsEditor'
 import { MiscTab, MISC_TAB_FIELDS } from '../components/editor/MiscTab'
 import { buildUpdateRequest } from '../lib/component/buildUpdateRequest'
 import { BuildTab } from '../components/editor/BuildTab'
@@ -67,7 +71,9 @@ import { useAdminMode } from '../lib/adminModeStore'
 import { useFieldConfigEntry, isFieldEditableFor } from '../hooks/useFieldConfig'
 import { useFieldConfig } from '../hooks/useAdminConfig'
 import { parseServerFieldErrors } from '../lib/serverErrors'
-import { usePortalLinks } from '../hooks/useInfo'
+import { usePortalLinks, usePortalConfig } from '../hooks/useInfo'
+import { useLabelsDictionary } from '../hooks/useLabelsDictionary'
+import { isSolutionCandidate } from '../lib/solutionKey'
 import { safeHttpUrl } from '../lib/utils'
 import { useValidationProblems } from '../hooks/useValidationProblems'
 import { allProblemVersions, hasValidationIssue, validationBadgeCount } from '../lib/validation'
@@ -128,6 +134,9 @@ function sectionForField(field: string): string | null {
   if (field.startsWith('jira')) return 'jira'
   if (field.startsWith('escrow') || field === 'productType') return 'escrow'
   if (field.startsWith('distribution') || field === 'securityGroups') return 'distribution'
+  // Doc links moved to their own Documentation topic — route a CRS `docs`/
+  // `docs[i]...` 400 there so the user lands on the owning tab, not a bare toast.
+  if (field === 'docs' || field.startsWith('docs')) return 'documentation'
   return null
 }
 
@@ -208,6 +217,15 @@ function ComponentDetailEditor() {
   const { data: portalLinks } = usePortalLinks()
   const jiraBaseUrl = portalLinks?.jiraBaseUrl ?? undefined
   const gitBaseUrl = portalLinks?.gitBaseUrl ?? undefined
+  // Solution toggle is offered as its own sidebar topic ONLY for a component
+  // whose key matches a service-config pattern; otherwise `solution` stays
+  // server-owned (header badge/banner). Patterns come from /portal/config.
+  const { data: portalConfig } = usePortalConfig()
+  const { entry: solutionFc } = useFieldConfigEntry('component.solution')
+  // Labels editor moved to the header (badges + popover). The dictionary powers
+  // the ChipsInput picker; 404/501 → [] (handled by the hook).
+  const labelsDict = useLabelsDictionary()
+
   // Supported groupId prefixes (CRS rule #10) feed the distribution/ownership
   // group checks; the bitbucket host (gitBaseUrl) feeds the VCS-host check.
   // Both fail-open when unavailable — CRS stays authoritative on save.
@@ -239,6 +257,27 @@ function ComponentDetailEditor() {
   void form.formState.dirtyFields
   void form.formState.touchedFields
   void form.watch()
+
+  // Offer the Solution topic only for a solution-key component AND when the
+  // field isn't hidden by field-config. 'readonly' still shows the tab (with a
+  // disabled switch) so the flag is visible where it's edited. The candidate
+  // check reads the LIVE form key (with a fallback to the server value before
+  // hydration) so a RENAME_COMPONENTS user who renames to a solution key sees
+  // the topic — and can set the flag — in the same edit session, not only after
+  // a save + refetch.
+  const solutionKeyName = form.watch('name') || component?.name
+  const showSolutionToggle =
+    isSolutionCandidate(solutionKeyName, portalConfig?.solutionKeyPatterns) &&
+    solutionFc.visibility !== 'hidden'
+
+  // The Solution topic is conditional (key-pattern gated); if it's not offered —
+  // or stops being offered after config loads / the component / key changes —
+  // never leave the user stranded on an empty tab.
+  useEffect(() => {
+    if (activeTab === 'solution' && !showSolutionToggle) {
+      setActiveTab('general')
+    }
+  }, [activeTab, showSolutionToggle])
 
   // P1-1: re-hydrate the page-level RHF form when the component id CHANGES to a
   // DIFFERENT id — independent of which tab is mounted. GeneralTab's own
@@ -304,6 +343,7 @@ function ComponentDetailEditor() {
         copyright: copyrightFc.visibility ?? 'editable',
         canBeParent: canBeParentFc.visibility ?? 'editable',
         labels: labelsFc.visibility ?? 'editable',
+        solution: solutionFc.visibility ?? 'editable',
       },
       dirtyFields: {
         solution: form.formState.dirtyFields.solution === true,
@@ -516,7 +556,12 @@ function ComponentDetailEditor() {
         for (const [field, message] of fieldErrors) {
           const isGeneral = (GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(field)
           const isMisc = (MISC_TAB_FIELDS as ReadonlyArray<string>).includes(field)
-          if (isGeneral || isMisc) {
+          // `labels` is a page-level RHF field edited in the always-visible
+          // header (not a tab), so it isn't in GENERAL_TAB_FIELDS. Map its 400
+          // to form.setError anyway → HeaderLabelsEditor shows it inline instead
+          // of the user getting only a toast for a field they're looking at.
+          const isHeaderLabels = field === 'labels'
+          if (isGeneral || isMisc || isHeaderLabels) {
             form.setError(field as keyof GeneralFormValues, { type: 'server', message })
             anyFieldMapped = true
           }
@@ -665,7 +710,10 @@ function ComponentDetailEditor() {
                 </Badge>
               )}
               {component.solution && (
-                <Badge variant="outline">Solution</Badge>
+                <Badge variant="info">
+                  <Boxes className="mr-1 h-3 w-3" aria-hidden />
+                  Solution
+                </Badge>
               )}
               {(() => {
                 const system = component.system
@@ -748,6 +796,20 @@ function ComponentDetailEditor() {
             {component.displayName && component.displayName !== component.name && (
               <p className="text-sm text-muted-foreground">{component.displayName}</p>
             )}
+            {/* Labels — badges + popover editor, moved here from the General tab.
+                Wired to the same page form: onChange sets shouldDirty/shouldTouch
+                so the clear-all touched-flag contract in buildPatchRequest holds. */}
+            <div className="pt-1">
+              <HeaderLabelsEditor
+                value={form.watch('labels') ?? []}
+                onChange={(next) => form.setValue('labels', next, { shouldDirty: true, shouldTouch: true })}
+                options={labelsDict.data ?? []}
+                isLoading={labelsDict.isLoading}
+                visibility={labelsFc.visibility ?? 'editable'}
+                canEdit={canEdit}
+                error={form.formState.errors.labels?.message}
+              />
+            </div>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
@@ -781,6 +843,13 @@ function ComponentDetailEditor() {
           </div>
         </div>
 
+        {component.solution && (
+          <StatusBanner variant="info" className="flex items-center gap-2" data-testid="solution-banner">
+            <Boxes className="h-4 w-4 shrink-0" aria-hidden />
+            <span>This component is a <span className="font-medium">Solution</span> — it groups and ships other components together.</span>
+          </StatusBanner>
+        )}
+
         {!canEdit && <WhoCanEditPanel componentId={component.id} />}
 
         <Separator />
@@ -801,8 +870,16 @@ function ComponentDetailEditor() {
               (br?.dockerImages.length ?? 0) +
               (br?.packages.length ?? 0)
             const configCount = component.configurations?.length ?? 0
+            const docsCount = component.docs?.length ?? 0
             const sections: EditorNavSection[] = [
-              { label: 'Overview', items: [{ value: 'general', label: 'General' }] },
+              {
+                label: 'Overview',
+                items: [
+                  { value: 'general', label: 'General' },
+                  // Solution is its own topic, offered only for solution-key components.
+                  ...(showSolutionToggle ? [{ value: 'solution', label: 'Solution' }] : []),
+                ],
+              },
               {
                 label: 'Build & Release',
                 items: [
@@ -810,6 +887,7 @@ function ComponentDetailEditor() {
                   { value: 'vcs', label: 'VCS', count: vcsCount },
                   { value: 'jira', label: 'Jira', count: br?.jira ? 1 : 0 },
                   { value: 'escrow', label: 'Escrow', count: br?.escrow ? 1 : 0 },
+                  { value: 'documentation', label: 'Documentation', count: docsCount },
                 ],
               },
               {
@@ -859,9 +937,23 @@ function ComponentDetailEditor() {
               </EditSurface>
             </TabsContent>
 
+            {showSolutionToggle && (
+              <TabsContent value="solution">
+                <EditSurface canEdit={canEdit} label="Solution">
+                  <SolutionTab form={form} visibility={solutionFc.visibility ?? 'editable'} />
+                </EditSurface>
+              </TabsContent>
+            )}
+
             <TabsContent value="build">
               <EditSurface canEdit={canEdit} label="Build">
                 <BuildTab section={buildSection} canEdit={canEdit} />
+              </EditSurface>
+            </TabsContent>
+
+            <TabsContent value="documentation">
+              <EditSurface canEdit={canEdit} label="Documentation">
+                <DocumentationTab form={form} />
               </EditSurface>
             </TabsContent>
 

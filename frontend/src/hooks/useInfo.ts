@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import type { CrsInfo, PortalInfo, PortalLinks } from '../lib/types'
+import type { CrsInfo, PortalConfig, PortalInfo, PortalLinks } from '../lib/types'
 import { safeHttpUrl } from '../lib/utils'
 
 // /portal/info and /rest/api/4/info are anonymous build-info endpoints used by
@@ -20,17 +20,20 @@ import { safeHttpUrl } from '../lib/utils'
 async function fetchInfo<T>(url: string): Promise<T> {
   const response = await fetch(url, { credentials: 'include' })
   if (!response.ok) {
-    throw new Error(`info fetch failed: ${response.status}`)
+    // Include the URL so a failure names the endpoint (this helper is shared by
+    // /portal/info, /portal/links and /portal/config).
+    throw new Error(`fetch failed for ${url}: ${response.status}`)
   }
   return response.json() as Promise<T>
 }
 
 const QUERY_OPTIONS = {
-  // Build info doesn't change for the lifetime of the page — caching forever
-  // saves a round-trip when AppFooter and any debug surface both consume it.
+  // These portal/runtime metadata endpoints are stable for the lifetime of the
+  // loaded SPA; cache them as fresh so multiple consumers do not pile up
+  // duplicate reads.
   staleTime: Infinity,
-  // No retry on the public footer query — a 5xx here should fail closed and
-  // let AppFooter render its degraded "no version" string rather than blocking.
+  // No retry: these endpoints are auxiliary, and a 5xx should fail closed
+  // instead of blocking the surface that requested the metadata.
   retry: false,
 }
 
@@ -71,6 +74,22 @@ export function usePortalLinks() {
   return useQuery<PortalLinks>({
     queryKey: ['links', 'portal'],
     queryFn: async () => sanitizeLinks(await fetchInfo<PortalLinks>(`${import.meta.env.BASE_URL}portal/links`)),
+    ...QUERY_OPTIONS,
+  })
+}
+
+// /portal/config carries the solution-key patterns. It goes through the same
+// plain `fetch` as /portal/links (NOT the `api` wrapper): /portal/config is not
+// on the API 401-matcher in SecurityConfig, so an expired session yields a
+// browser 302 rather than a clean 401 — the `api` wrapper's OIDC-redirect
+// contract would not hold. On any failure the query just errors and the SPA
+// treats patterns as absent (no Solution toggle); the page's authenticated
+// /components fetch drives the real session-expiry redirect. Cached long —
+// patterns change only via a service-config reload.
+export function usePortalConfig() {
+  return useQuery<PortalConfig>({
+    queryKey: ['config', 'portal'],
+    queryFn: () => fetchInfo<PortalConfig>(`${import.meta.env.BASE_URL}portal/config`),
     ...QUERY_OPTIONS,
   })
 }

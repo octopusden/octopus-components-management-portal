@@ -26,8 +26,14 @@ vi.mock('../hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }))
 vi.mock('../components/AppFooter', () => ({ AppFooter: () => <footer>footer</footer> }))
 vi.mock('../hooks/useInfo', () => ({
   usePortalLinks: () => ({ data: undefined }),
+  usePortalConfig: () => ({ data: undefined }),
   useCrsInfo: vi.fn(),
   usePortalInfo: () => ({ data: undefined }),
+}))
+// The always-rendered header labels editor calls useLabelsDictionary; mock it so
+// the page test never depends on the broad apiMock.get shape for the dictionary.
+vi.mock('../hooks/useLabelsDictionary', () => ({
+  useLabelsDictionary: () => ({ data: [], isLoading: false }),
 }))
 vi.mock('../hooks/useFieldConfig', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../hooks/useFieldConfig')>()
