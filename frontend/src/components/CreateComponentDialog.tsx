@@ -627,11 +627,18 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
   // the CRS create-rule that rejects a non-null value on such a field. One read
   // (field-config + current user) drives the schema, the conditional renders, and
   // the payload strip in buildCreateRequest (generic — no per-field special-casing).
-  const { data: fieldConfigData } = useFieldConfig()
-  const { data: currentUser } = useCurrentUser()
+  const { data: fieldConfigData, isLoading: fcLoading, isError: fcError } = useFieldConfig()
+  const { data: currentUser, isLoading: userLoading } = useCurrentUser()
   const editable = useCallback(
-    (field: string) => isFieldEditableFor(fieldConfigData, `component.${field}`, currentUser),
-    [fieldConfigData, currentUser],
+    (field: string) => {
+      // Fail CLOSED while field-config / current user are unresolved (loading or
+      // errored): an adminOnly field must not be treated as editable before its
+      // policy is known, or a copy-mode submit in that window could carry a
+      // source-only adminOnly value the CRS create-rule rejects (Codex #154 P1).
+      if (fcLoading || fcError || userLoading) return false
+      return isFieldEditableFor(fieldConfigData, `component.${field}`, currentUser)
+    },
+    [fieldConfigData, fcLoading, fcError, currentUser, userLoading],
   )
   // Supported groupId prefixes (CRS rule #10) and the ecosystem Bitbucket host
   // feed two pre-flight validations; both fail-open when unavailable (CRS stays

@@ -418,6 +418,29 @@ describe('buildCreateRequest — copy mode (with source)', () => {
     expect('jiraHotfixVersionFormat' in req).toBe(false)
   })
 
+  it('copy mode: does NOT carry the source jira technical flag or versionFormat (no create-form control)', () => {
+    const src = makeSource({
+      configurations: [
+        makeBaseRow({
+          build: { buildSystem: 'GRADLE' },
+          jira: {
+            projectKey: 'ALPHA',
+            technical: true,
+            versionFormat: '$versionPrefix-$baseVersionFormat',
+            lineVersionFormat: '$major.$minor',
+          },
+        }),
+      ],
+    })
+    const req = buildCreateRequest(makeForm({ name: 'svc-clone' }), src)
+    // technical is adminOnly in baseline — a non-admin "Create Similar" must not
+    // POST it; versionFormat has no create-form field. Both dropped (Codex #154 P1).
+    expect(req.baseConfiguration?.jira?.technical).toBeUndefined()
+    expect(req.baseConfiguration?.jira?.versionFormat).toBeUndefined()
+    // projectKey is never copied either; a real version-format the form owns still flows.
+    expect(req.baseConfiguration?.jira?.projectKey).toBeUndefined()
+  })
+
   it('form fields WIN over source: owner, displayName, flags, RM/SC, copyright', () => {
     const form = makeForm({
       name: 'svc-clone',

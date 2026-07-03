@@ -133,8 +133,14 @@ export interface CreateFormValues {
 // not turn into `jira: {}` on the new component.
 function copyJiraAspect(jira: JiraAspect | null | undefined): JiraAspect | undefined {
   if (!jira) return undefined
+  // Strip fields the create form has NO control for so "Create Similar" can't
+  // silently carry them from the source (Codex #154 P1):
+  //  - projectKey: always component-unique, never copied.
+  //  - technical: adminOnly in baseline → a non-admin copy of a technical
+  //    component would POST technical and hit the CRS create-rule 403.
+  //  - versionFormat: not a create-form field (Q5) → don't leak the source's.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { projectKey, ...rest } = jira
+  const { projectKey, technical, versionFormat, ...rest } = jira
   const hasValue = Object.values(rest).some((v) => v != null)
   return hasValue ? rest : undefined
 }

@@ -837,6 +837,24 @@ describe('CreateComponentDialog — field-config visibility gating', () => {
     expect(screen.queryByLabelText(/display name/i)).toBeNull()
   })
 
+  it('fails closed while field-config is still loading (adminOnly field hidden even for an admin)', async () => {
+    // Codex #154 P1: before the editable axis is known, gated fields must be
+    // treated non-editable — an admin should NOT see displayName until config resolves.
+    mockUseFieldConfig.mockReturnValue({ data: undefined, isLoading: true, isError: false })
+    setUser(['EDIT_ANY_COMPONENT'])
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    expect(screen.queryByLabelText(/display name/i)).toBeNull()
+  })
+
+  it('fails closed when field-config errored (gated field stays hidden)', async () => {
+    mockUseFieldConfig.mockReturnValue({ data: undefined, isLoading: false, isError: true })
+    setUser(['EDIT_ANY_COMPONENT'])
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    expect(screen.queryByLabelText(/display name/i)).toBeNull()
+  })
+
   it('keeps an adminOnly field (displayName) for an admin user (EDIT_ANY_COMPONENT)', async () => {
     mockUseFieldConfig.mockReturnValue({
       data: { component: { displayName: { editable: 'adminOnly' } } },
