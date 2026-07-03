@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { ExternalRegistrySelect, NOT_IN_LIST_SUFFIX } from './ExternalRegistrySelect'
+import userEvent from '@testing-library/user-event'
+import { ExternalRegistrySelect, NOT_IN_LIST_SUFFIX, NOT_AVAILABLE_SENTINEL } from './ExternalRegistrySelect'
 
 vi.mock('../../hooks/useFieldOptions', () => ({
   useFieldOptions: vi.fn(),
@@ -29,6 +30,34 @@ describe('ExternalRegistrySelect — dropdown from field-config options', () => 
     mockUseFieldOptions.mockReturnValue({ options: ['reg-a'], isLoading: false })
     render(<ExternalRegistrySelect value="" onValueChange={() => {}} />)
     expect(screen.getByRole('combobox')).toHaveTextContent('None')
+  })
+})
+
+describe('ExternalRegistrySelect — NOT_AVAILABLE sentinel is never selectable', () => {
+  it('filters NOT_AVAILABLE out of configured options', async () => {
+    mockUseFieldOptions.mockReturnValue({ options: ['reg-a', NOT_AVAILABLE_SENTINEL, 'reg-b'], isLoading: false })
+    render(<ExternalRegistrySelect value="reg-a" onValueChange={() => {}} />)
+    await userEvent.click(screen.getByRole('combobox'))
+    expect(screen.getByRole('option', { name: 'reg-a' })).toBeDefined()
+    expect(screen.getByRole('option', { name: 'reg-b' })).toBeDefined()
+    expect(screen.queryByRole('option', { name: NOT_AVAILABLE_SENTINEL })).toBeNull()
+  })
+
+  it('renders a stored NOT_AVAILABLE value read-only (not a selectable dropdown), pointing to the Jira tab', () => {
+    mockUseFieldOptions.mockReturnValue({ options: ['reg-a', 'reg-b'], isLoading: false })
+    render(<ExternalRegistrySelect value={NOT_AVAILABLE_SENTINEL} onValueChange={() => {}} />)
+    // No dropdown to select from — the sentinel is managed via the toggle.
+    expect(screen.queryByRole('combobox')).toBeNull()
+    expect(screen.getByText(/skip commit check/i)).toBeDefined()
+  })
+
+  it('does not offer NOT_AVAILABLE via the unknown-value branch when options exist but the value is the sentinel', () => {
+    // Even with options configured, a stored sentinel must not become a
+    // selectable "(not in configured list)" item.
+    mockUseFieldOptions.mockReturnValue({ options: ['reg-a'], isLoading: false })
+    render(<ExternalRegistrySelect value={NOT_AVAILABLE_SENTINEL} onValueChange={() => {}} />)
+    expect(screen.queryByRole('combobox')).toBeNull()
+    expect(screen.queryByText(NOT_IN_LIST_SUFFIX)).toBeNull()
   })
 })
 

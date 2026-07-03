@@ -12,6 +12,10 @@ import { useFieldOptions } from '../../hooks/useFieldOptions'
  *  (data older than the list). Exported so tests assert against one source. */
 export const NOT_IN_LIST_SUFFIX = '(not in configured list)'
 
+/** The skip-commit-check sentinel. It is NEVER a selectable registry — it is
+ *  expressed via the Jira-tab Skip Commit Check toggle. Exported for tests. */
+export const NOT_AVAILABLE_SENTINEL = 'NOT_AVAILABLE'
+
 interface ExternalRegistrySelectProps {
   value: string
   onValueChange: (value: string) => void
@@ -35,6 +39,10 @@ interface ExternalRegistrySelectProps {
  *   - options empty/unconfigured → read-only: the stored value (if any) shown
  *     disabled, else a "no registries configured" hint. Never an empty dropdown.
  *   - loading → disabled placeholder.
+ *
+ * The NOT_AVAILABLE sentinel is never selectable: it is filtered out of the
+ * options, and a stored sentinel renders read-only pointing at the Skip Commit
+ * Check toggle (defensive guard for legacy / in-transition data).
  */
 export function ExternalRegistrySelect({
   value,
@@ -44,9 +52,13 @@ export function ExternalRegistrySelect({
   'aria-describedby': ariaDescribedBy,
 }: ExternalRegistrySelectProps) {
   const { options: rawOptions, isLoading } = useFieldOptions('vcs.externalRegistry')
-  // Dedupe: a field-config list may advertise the same name twice; Radix keys
-  // items by value, so a duplicate collides — keep first occurrence / order.
-  const options = rawOptions.filter((opt, i) => rawOptions.indexOf(opt) === i)
+  // Dedupe + drop the sentinel: a field-config list may advertise the same name
+  // twice (Radix keys items by value, so a duplicate collides — keep first
+  // occurrence / order), and NOT_AVAILABLE must never surface as a selectable
+  // registry even if it slipped into the configured options.
+  const options = rawOptions.filter(
+    (opt, i) => rawOptions.indexOf(opt) === i && opt !== NOT_AVAILABLE_SENTINEL,
+  )
 
   if (isLoading) {
     return (
@@ -56,6 +68,20 @@ export function ExternalRegistrySelect({
         </SelectTrigger>
         <SelectContent />
       </Select>
+    )
+  }
+
+  // Defensive guard for legacy / in-transition data: a stored NOT_AVAILABLE is
+  // the skip-commit-check sentinel, not a registry. Post-CRS-C it no longer
+  // lives in storage (it moved to the skipCommitCheck flag), but if it is still
+  // present we render it read-only and NEVER as a selectable option — the value
+  // is preserved (the hook keeps sending it unchanged; we don't overwrite it),
+  // and the user is pointed at the toggle that actually owns this state.
+  if (value === NOT_AVAILABLE_SENTINEL) {
+    return (
+      <p id={id} aria-describedby={ariaDescribedBy} className="text-sm text-muted-foreground">
+        Managed via Skip Commit Check on the Jira tab
+      </p>
     )
   }
 
