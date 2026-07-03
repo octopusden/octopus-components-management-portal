@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, act } from '@testing-library/react'
+import { render, screen, act, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { JiraTab } from './JiraTab'
 import { useJiraSection } from './useJiraSection'
@@ -128,9 +128,38 @@ describe('JiraTab — three-group layout', () => {
     expect(screen.getByRole('heading', { name: 'Flags' })).toBeDefined()
   })
 
-  it('leaves an empty preview slot for the P-2b ladder', () => {
+  it('mounts the version-ladder preview in the reserved slot', () => {
     renderTab({ component: makeComponent() })
-    expect(screen.getByTestId('version-preview-slot')).toBeEmptyDOMElement()
+    const slot = screen.getByTestId('version-preview-slot')
+    expect(within(slot).getByTestId('jira-version-preview')).toBeInTheDocument()
+  })
+})
+
+describe('JiraTab — preview hover linking (integration)', () => {
+  const field = (path: string) => document.querySelector(`[data-field="${path}"]`) as HTMLElement
+  const row = (id: string) => screen.getByTestId(`ladder-row-${id}`)
+
+  it('hovering the Line field highlights the Line and mirrored Minor rows', () => {
+    renderTab({ component: makeComponent({ configurations: [makeBaseRow({ jira: { lineVersionFormat: '$major.$minor' } })] }) })
+    fireEvent.mouseEnter(field('jira.lineVersionFormat'))
+    expect(row('line')).toHaveAttribute('data-highlighted', 'true')
+    expect(row('minor')).toHaveAttribute('data-highlighted', 'true')
+    fireEvent.mouseLeave(field('jira.lineVersionFormat'))
+    expect(row('line')).not.toHaveAttribute('data-highlighted')
+  })
+
+  it('hovering a ladder row highlights the field it links back to', () => {
+    renderTab({ component: makeComponent({ configurations: [makeBaseRow({ jira: { releaseVersionFormat: '$major.$minor.$service' } })] }) })
+    fireEvent.mouseEnter(row('release'))
+    expect(field('jira.releaseVersionFormat')).toHaveAttribute('data-highlighted', 'true')
+    fireEvent.mouseLeave(row('release'))
+    expect(field('jira.releaseVersionFormat')).not.toHaveAttribute('data-highlighted')
+  })
+
+  it('a mirrored Minor row highlights the leading Line field', () => {
+    renderTab({ component: makeComponent({ configurations: [makeBaseRow({ jira: { lineVersionFormat: '$major.$minor' } })] }) })
+    fireEvent.mouseEnter(row('minor'))
+    expect(field('jira.lineVersionFormat')).toHaveAttribute('data-highlighted', 'true')
   })
 })
 
@@ -231,7 +260,9 @@ describe('JiraTab — Technical (admin-gated)', () => {
 
   it('shows the SubComponent Fix Version/s info banner when Technical is ON', () => {
     renderTab({ component: makeComponent({ configurations: [makeBaseRow({ jira: { technical: true } })] }) })
-    expect(screen.getByText(/SubComponent Fix Version\/s/i)).toBeDefined()
+    // Match the banner's unique wording — "SubComponent Fix Version/s" alone now
+    // also appears in the ladder-preview destinations when Technical is on.
+    expect(screen.getByText(/excluded from customer-facing release notes/i)).toBeInTheDocument()
   })
 })
 
