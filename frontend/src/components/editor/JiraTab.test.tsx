@@ -133,6 +133,18 @@ describe('JiraTab — three-group layout', () => {
     const slot = screen.getByTestId('version-preview-slot')
     expect(within(slot).getByTestId('jira-version-preview')).toBeInTheDocument()
   })
+
+  it('editing a preview sample input does NOT dirty the section or change the PATCH (isolation)', async () => {
+    renderTab({ component: makeComponent() })
+    expect(captured.section!.slice.isDirty).toBe(false)
+    const before = JSON.stringify(captured.section!.slice.request)
+    // The preview's local sample state must not leak into the jira section.
+    const sample = screen.getByLabelText('version')
+    await userEvent.clear(sample)
+    await userEvent.type(sample, '9.9.9')
+    expect(captured.section!.slice.isDirty).toBe(false)
+    expect(JSON.stringify(captured.section!.slice.request)).toBe(before)
+  })
 })
 
 describe('JiraTab — preview hover linking (integration)', () => {

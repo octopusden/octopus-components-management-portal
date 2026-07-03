@@ -260,3 +260,23 @@ describe('JiraVersionPreview — hover linking (row → field)', () => {
     expect(onHoverField).toHaveBeenLastCalledWith(null)
   })
 })
+
+describe('JiraVersionPreview — keyboard row → field linking (a11y)', () => {
+  it('rows are focusable and focus reports the same field as hover', () => {
+    const onHoverField = vi.fn()
+    renderPreview({ onHoverField })
+    const release = row('release')
+    expect(release).toHaveAttribute('tabindex', '0')
+    fireEvent.focus(release)
+    expect(onHoverField).toHaveBeenLastCalledWith('jira.releaseVersionFormat')
+    fireEvent.blur(release)
+    expect(onHoverField).toHaveBeenLastCalledWith(null)
+  })
+
+  it('focusing a mirrored Minor row reports the leading Line field (keyboard parity)', () => {
+    const onHoverField = vi.fn()
+    renderPreview({ onHoverField })
+    fireEvent.focus(row('minor'))
+    expect(onHoverField).toHaveBeenLastCalledWith('jira.lineVersionFormat')
+  })
+})

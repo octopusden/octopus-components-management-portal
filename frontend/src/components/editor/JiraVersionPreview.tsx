@@ -250,10 +250,18 @@ function LadderRowView({
     <div
       data-testid={`ladder-row-${row.id}`}
       data-highlighted={highlighted ? 'true' : undefined}
+      // Row→field linking works for keyboard users too, not just mouse: the row is
+      // focusable and focus/blur mirror mouseenter/leave (Codex #153 P2 a11y).
+      tabIndex={0}
+      role="button"
+      aria-label={`Highlight the ${row.label} source field`}
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
+      onFocus={onEnter}
+      onBlur={onLeave}
       className={[
         '-mx-2 rounded-md px-2 py-2 transition-colors data-[highlighted=true]:bg-accent',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         chrome.accent ? 'border-l-2 border-primary pl-3' : '',
       ].join(' ')}
     >
