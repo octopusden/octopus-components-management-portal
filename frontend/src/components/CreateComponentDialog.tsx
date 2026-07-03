@@ -480,20 +480,23 @@ function CreateMirrorField({
           <FieldLabelText path={path} fallback={fallback} />
         </Label>
         <FieldInfo path={path} label={fallback} />
+        {/* Mirror pill on the label row so the full mirrored value stays visible. */}
+        {!separate && (
+          <Badge variant="secondary" className="ml-auto font-normal">
+            {pill}
+          </Badge>
+        )}
       </div>
       {!separate ? (
         <>
-          <div className="flex h-9 items-center gap-2 rounded-md border bg-muted px-3">
+          <div className="flex h-9 items-center rounded-md border bg-muted px-3">
             <input
               readOnly
               tabIndex={-1}
               aria-label={`${fallback} (mirrored)`}
               value={leadingValue}
-              className="min-w-0 flex-1 bg-transparent font-mono text-xs text-muted-foreground outline-none"
+              className="w-full bg-transparent font-mono text-xs text-muted-foreground outline-none"
             />
-            <Badge variant="secondary" className="font-normal">
-              {pill}
-            </Badge>
           </div>
           <Button type="button" variant="outline" size="sm" onClick={onSetSeparate}>
             {setLabel}
