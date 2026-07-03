@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { useForm, Controller } from 'react-hook-form'
+import { useForm, Controller, type UseFormRegisterReturn } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Plus, Copy } from 'lucide-react'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
+import { Badge } from './ui/badge'
 import { PeopleInput } from './ui/PeopleInput'
 import { PeopleListInput } from './ui/PeopleListInput'
 import { ModeRadioGroup } from './ui/ModeRadioGroup'
@@ -29,7 +30,8 @@ import { useFieldOptions } from '../hooks/useFieldOptions'
 import { useSupportedGroups } from '../hooks/useSupportedGroups'
 import { usePortalLinks } from '../hooks/useInfo'
 import { useFieldConfig, useComponentDefaults } from '../hooks/useAdminConfig'
-import { visibilityFor } from '../hooks/useFieldConfig'
+import { isFieldEditableFor } from '../hooks/useFieldConfig'
+import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useComponent, useCreateComponent } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
 import { ApiError } from '../lib/api'
@@ -87,11 +89,14 @@ function makeCreateSchema(
     jiraProjectKey: z.string().trim().min(1, 'Jira Project Key is required'),
     versionPrefix: z.string(),
     // Optional Jira version-format patterns (prefilled from component-defaults).
+    // Line leads Minor and Release leads Build; the *Separate flags track whether
+    // the derived field is edited on its own or mirrors its leading field.
     minorVersionFormat: z.string(),
     releaseVersionFormat: z.string(),
     buildVersionFormat: z.string(),
     lineVersionFormat: z.string(),
-    hotfixVersionFormat: z.string(),
+    minorSeparate: z.boolean(),
+    buildSeparate: z.boolean(),
     vcsUrl: z.string(),
     vcsTag: z.string(),
     vcsBranch: z.string(),
@@ -255,7 +260,8 @@ const SCRATCH_DEFAULTS: CreateFormValues = {
   releaseVersionFormat: '',
   buildVersionFormat: '',
   lineVersionFormat: '',
-  hotfixVersionFormat: '',
+  minorSeparate: false,
+  buildSeparate: false,
   vcsUrl: '',
   vcsTag: '',
   vcsBranch: '',
@@ -281,7 +287,45 @@ interface ComponentVersionFormatDefaults {
   releaseVersionFormat?: string
   buildVersionFormat?: string
   lineVersionFormat?: string
-  hotfixVersionFormat?: string
+}
+
+// The subset of CreateFormValues describing the two leading/derived pairs.
+type VersionFormatSeed = Pick<
+  CreateFormValues,
+  | 'lineVersionFormat'
+  | 'minorVersionFormat'
+  | 'minorSeparate'
+  | 'releaseVersionFormat'
+  | 'buildVersionFormat'
+  | 'buildSeparate'
+>
+
+// Derive the leading/derived pair state from four stored/defaulted format
+// strings (editor JiraTab parity, prep §R6 / brief §7). Line leads Minor: Minor
+// is "separate" only when both are set AND differ (else it mirrors Line — and a
+// minor-only default is promoted to the leading Line so it is never lost).
+// Release leads Build: Build is "separate" only when set AND different from
+// Release (create-time rule §R9 — default build == default release ⇒ mirrored).
+function seedVersionFormats(
+  line: string | null | undefined,
+  minor: string | null | undefined,
+  release: string | null | undefined,
+  build: string | null | undefined,
+): VersionFormatSeed {
+  const l = (line ?? '').trim()
+  const m = (minor ?? '').trim()
+  const r = (release ?? '').trim()
+  const b = (build ?? '').trim()
+  const minorSeparate = l !== '' && m !== '' && l !== m
+  const buildSeparate = b !== '' && b !== r
+  return {
+    lineVersionFormat: l !== '' ? l : m,
+    minorVersionFormat: minorSeparate ? m : '',
+    minorSeparate,
+    releaseVersionFormat: r,
+    buildVersionFormat: buildSeparate ? b : '',
+    buildSeparate,
+  }
 }
 
 interface ComponentDefaults {
@@ -370,34 +414,101 @@ function initialValues(source: ComponentDetail | null, defaults: ComponentDefaul
     copyright: source.copyright ?? '',
     // jiraProjectKey is unique per component → never copied (left blank). versionPrefix and the
     // version formats are reusable patterns, so they ARE prefilled from the source's BASE jira config.
+    // The pairs are seeded through the same leading/derived rule as the editor (mirrored when the
+    // source's derived value matches or is absent). Hotfix is NOT copied (no create field).
     versionPrefix: selectBaseRow(source)?.jira?.versionPrefix ?? '',
-    minorVersionFormat: selectBaseRow(source)?.jira?.minorVersionFormat ?? '',
-    releaseVersionFormat: selectBaseRow(source)?.jira?.releaseVersionFormat ?? '',
-    buildVersionFormat: selectBaseRow(source)?.jira?.buildVersionFormat ?? '',
-    lineVersionFormat: selectBaseRow(source)?.jira?.lineVersionFormat ?? '',
-    hotfixVersionFormat: source.jiraHotfixVersionFormat ?? '',
+    ...seedVersionFormats(
+      selectBaseRow(source)?.jira?.lineVersionFormat,
+      selectBaseRow(source)?.jira?.minorVersionFormat,
+      selectBaseRow(source)?.jira?.releaseVersionFormat,
+      selectBaseRow(source)?.jira?.buildVersionFormat,
+    ),
     vcsTag,
     vcsBranch,
   }
 }
 
-// Maps component-defaults jira.componentVersionFormat → the form's version-format
-// fields (blank when the default is absent). hotfix is included though it maps to
-// the top-level jiraHotfixVersionFormat at request time (see buildCreateRequest).
-function versionFormatsFromDefaults(
-  defaults: ComponentDefaults,
-): Pick<
-  CreateFormValues,
-  'minorVersionFormat' | 'releaseVersionFormat' | 'buildVersionFormat' | 'lineVersionFormat' | 'hotfixVersionFormat'
-> {
+// Maps component-defaults jira.componentVersionFormat → the form's leading/derived
+// version-format pair state (blank/mirrored when the default is absent). Hotfix is
+// NOT included — the create form has no hotfix field (hotfixes disabled at creation).
+function versionFormatsFromDefaults(defaults: ComponentDefaults): VersionFormatSeed {
   const cvf = defaults.jira?.componentVersionFormat ?? {}
-  return {
-    minorVersionFormat: blankToUndefined(cvf.minorVersionFormat) ?? '',
-    releaseVersionFormat: blankToUndefined(cvf.releaseVersionFormat) ?? '',
-    buildVersionFormat: blankToUndefined(cvf.buildVersionFormat) ?? '',
-    lineVersionFormat: blankToUndefined(cvf.lineVersionFormat) ?? '',
-    hotfixVersionFormat: blankToUndefined(cvf.hotfixVersionFormat) ?? '',
-  }
+  return seedVersionFormats(
+    cvf.lineVersionFormat,
+    cvf.minorVersionFormat,
+    cvf.releaseVersionFormat,
+    cvf.buildVersionFormat,
+  )
+}
+
+/**
+ * A derived (mirror) version-format field for the create form — Minor mirrors
+ * Line, Build mirrors Release (editor JiraTab parity). Mirrored: a read-only box
+ * showing the leading value + pill + "Set separate…" button. Separate: an
+ * editable RHF-registered input + "Remove separate format". No per-range override
+ * affordance here (those are added post-create in the editor).
+ */
+function CreateMirrorField({
+  path,
+  fallback,
+  pill,
+  setLabel,
+  placeholder,
+  inputId,
+  separate,
+  leadingValue,
+  onSetSeparate,
+  onRemoveSeparate,
+  inputProps,
+}: {
+  path: string
+  fallback: string
+  pill: string
+  setLabel: string
+  placeholder?: string
+  inputId: string
+  separate: boolean
+  leadingValue: string
+  onSetSeparate: () => void
+  onRemoveSeparate: () => void
+  inputProps: UseFormRegisterReturn
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-1">
+        <Label htmlFor={separate ? inputId : undefined}>
+          <FieldLabelText path={path} fallback={fallback} />
+        </Label>
+        <FieldInfo path={path} label={fallback} />
+      </div>
+      {!separate ? (
+        <>
+          <div className="flex h-9 items-center gap-2 rounded-md border bg-muted px-3">
+            <input
+              readOnly
+              tabIndex={-1}
+              aria-label={`${fallback} (mirrored)`}
+              value={leadingValue}
+              className="min-w-0 flex-1 bg-transparent font-mono text-xs text-muted-foreground outline-none"
+            />
+            <Badge variant="secondary" className="font-normal">
+              {pill}
+            </Badge>
+          </div>
+          <Button type="button" variant="outline" size="sm" onClick={onSetSeparate}>
+            {setLabel}
+          </Button>
+        </>
+      ) : (
+        <>
+          <Input id={inputId} className="font-mono text-xs" placeholder={placeholder} {...inputProps} />
+          <Button type="button" variant="outline" size="sm" onClick={onRemoveSeparate}>
+            Remove separate format
+          </Button>
+        </>
+      )}
+    </div>
+  )
 }
 
 interface CreateComponentDialogProps {
@@ -510,13 +621,17 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
   const createMutation = useCreateComponent()
   const { toast } = useToast()
 
-  // Field-config visibility (code-as-config): a field that is hidden/readonly is
-  // removed from the create form and never sent. One read drives both the schema
-  // and the conditional renders below (generic — no per-field special-casing).
+  // Effective per-user editability (code-as-config): a field that is hidden,
+  // readonly, `editable: none`, or `editable: adminOnly` (for a user without
+  // EDIT_ANY_COMPONENT) is removed from the create form and never sent — matching
+  // the CRS create-rule that rejects a non-null value on such a field. One read
+  // (field-config + current user) drives the schema, the conditional renders, and
+  // the payload strip in buildCreateRequest (generic — no per-field special-casing).
   const { data: fieldConfigData } = useFieldConfig()
+  const { data: currentUser } = useCurrentUser()
   const editable = useCallback(
-    (field: string) => visibilityFor(fieldConfigData, `component.${field}`) === 'editable',
-    [fieldConfigData],
+    (field: string) => isFieldEditableFor(fieldConfigData, `component.${field}`, currentUser),
+    [fieldConfigData, currentUser],
   )
   // Supported groupId prefixes (CRS rule #10) and the ecosystem Bitbucket host
   // feed two pre-flight validations; both fail-open when unavailable (CRS stays
@@ -534,6 +649,7 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
     handleSubmit,
     watch,
     setValue,
+    getValues,
     setError,
     clearErrors,
     control,
@@ -571,6 +687,30 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
   const buildSystemValue = watch('buildSystem')
   const ownershipMode = watch('ownership.mode')
   const showVcs = vcsBlockApplies(buildSystemValue)
+  // Leading values + mirror flags for the Line/Minor and Release/Build pairs.
+  const lineVersionFormatValue = watch('lineVersionFormat')
+  const releaseVersionFormatValue = watch('releaseVersionFormat')
+  const minorSeparate = watch('minorSeparate')
+  const buildSeparate = watch('buildSeparate')
+  // Flip a derived field between mirrored and separate. Promoting to separate
+  // seeds the editable value from the current derived value, else the leading
+  // field (editor JiraTab parity); collapsing clears it so the payload mirrors.
+  const setMinorSeparate = (separate: boolean) => {
+    setValue('minorSeparate', separate, { shouldValidate: false })
+    setValue(
+      'minorVersionFormat',
+      separate ? getValues('minorVersionFormat') || getValues('lineVersionFormat') : '',
+      { shouldValidate: false },
+    )
+  }
+  const setBuildSeparate = (separate: boolean) => {
+    setValue('buildSeparate', separate, { shouldValidate: false })
+    setValue(
+      'buildVersionFormat',
+      separate ? getValues('buildVersionFormat') || getValues('releaseVersionFormat') : '',
+      { shouldValidate: false },
+    )
+  }
   // Full-format placeholder hinting the expected ssh:// shape AND the ecosystem
   // Bitbucket host (the same host the VCS-host validation enforces). Falls back
   // to a generic host when portal-links / gitBaseUrl is unavailable.
@@ -957,18 +1097,41 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
 
       {/* Jira version-format patterns. Optional; prefilled from component-defaults
           (jira.componentVersionFormat) so a new component inherits the configured
-          formats. major/release/build/line map to the BASE jira aspect, hotfix to
-          the component-level jiraHotfixVersionFormat (see buildCreateRequest). */}
+          formats. Line leads Minor and Release leads Build (editor JiraTab parity);
+          a mirrored Minor materializes into both stored fields and a mirrored Build
+          is omitted so CRS falls back to Release (see buildCreateRequest). Hotfix
+          Version Format is intentionally absent — hotfixes are disabled at creation
+          (no hotfix branch yet). Version Format / Technical / External Registry are
+          also not offered here (set later in the editor). */}
       <fieldset className="space-y-4 rounded-md border border-border p-3">
         <legend className="px-1 text-xs font-medium text-muted-foreground">Version formats</legend>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {/* Line (leading) + Minor (mirror) */}
           <div className="space-y-1.5">
             <div className="flex items-center gap-1">
-              <Label htmlFor="create-minorVersionFormat"><FieldLabelText path="jira.minorVersionFormat" fallback="Minor Version Format" /></Label>
-              <FieldInfo path="jira.minorVersionFormat" label="Minor Version Format" />
+              <Label htmlFor="create-lineVersionFormat">
+                <FieldLabelText path="jira.lineVersionFormat" fallback="Line Version Format" />
+                <span className="ml-1 font-normal text-muted-foreground">(Major)</span>
+              </Label>
+              <FieldInfo path="jira.lineVersionFormat" label="Line Version Format" />
             </div>
-            <Input id="create-minorVersionFormat" className="font-mono text-xs" placeholder="$major.$minor" {...register('minorVersionFormat')} />
+            <Input id="create-lineVersionFormat" className="font-mono text-xs" placeholder="e.g. $major.$minor" {...register('lineVersionFormat')} />
           </div>
+          <CreateMirrorField
+            path="jira.minorVersionFormat"
+            fallback="Minor Version Format"
+            pill="from Line"
+            setLabel="Set separate minor format"
+            placeholder="e.g. $major.$minor"
+            inputId="create-minorVersionFormat"
+            separate={minorSeparate}
+            leadingValue={lineVersionFormatValue}
+            onSetSeparate={() => setMinorSeparate(true)}
+            onRemoveSeparate={() => setMinorSeparate(false)}
+            inputProps={register('minorVersionFormat')}
+          />
+
+          {/* Release (leading) + Build (mirror) */}
           <div className="space-y-1.5">
             <div className="flex items-center gap-1">
               <Label htmlFor="create-releaseVersionFormat"><FieldLabelText path="jira.releaseVersionFormat" fallback="Release Version Format" /></Label>
@@ -976,27 +1139,19 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
             </div>
             <Input id="create-releaseVersionFormat" className="font-mono text-xs" placeholder="$major.$minor.$service" {...register('releaseVersionFormat')} />
           </div>
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-1">
-              <Label htmlFor="create-buildVersionFormat"><FieldLabelText path="jira.buildVersionFormat" fallback="Build Version Format" /></Label>
-              <FieldInfo path="jira.buildVersionFormat" label="Build Version Format" />
-            </div>
-            <Input id="create-buildVersionFormat" className="font-mono text-xs" {...register('buildVersionFormat')} />
-          </div>
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-1">
-              <Label htmlFor="create-lineVersionFormat"><FieldLabelText path="jira.lineVersionFormat" fallback="Line Version Format / Major Version Format" /></Label>
-              <FieldInfo path="jira.lineVersionFormat" label="Line Version Format / Major Version Format" />
-            </div>
-            <Input id="create-lineVersionFormat" className="font-mono text-xs" {...register('lineVersionFormat')} />
-          </div>
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-1">
-              <Label htmlFor="create-hotfixVersionFormat"><FieldLabelText path="jira.hotfixVersionFormat" fallback="Hotfix Version Format" /></Label>
-              <FieldInfo path="jira.hotfixVersionFormat" label="Hotfix Version Format" />
-            </div>
-            <Input id="create-hotfixVersionFormat" className="font-mono text-xs" placeholder="$major.$minor.$service-$fix" {...register('hotfixVersionFormat')} />
-          </div>
+          <CreateMirrorField
+            path="jira.buildVersionFormat"
+            fallback="Build Version Format"
+            pill="same as release"
+            setLabel="Set separate build format"
+            placeholder="e.g. $major.$minor.$service.$fix"
+            inputId="create-buildVersionFormat"
+            separate={buildSeparate}
+            leadingValue={releaseVersionFormatValue}
+            onSetSeparate={() => setBuildSeparate(true)}
+            onRemoveSeparate={() => setBuildSeparate(false)}
+            inputProps={register('buildVersionFormat')}
+          />
         </div>
       </fieldset>
 

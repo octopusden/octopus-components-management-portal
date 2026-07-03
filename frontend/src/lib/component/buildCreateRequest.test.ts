@@ -19,7 +19,8 @@ function makeForm(overrides: Partial<CreateFormValues> = {}): CreateFormValues {
     releaseVersionFormat: '',
     buildVersionFormat: '',
     lineVersionFormat: '',
-    hotfixVersionFormat: '',
+    minorSeparate: false,
+    buildSeparate: false,
     vcsUrl: 'ssh://git@host/proj/repo.git',
     vcsTag: '$module-$version',
     vcsBranch: 'master',
@@ -215,14 +216,15 @@ describe('buildCreateRequest — gated (explicit+external) coordinate', () => {
     expect(req.baseConfiguration?.jira).toMatchObject({ projectKey: 'PROJ', versionPrefix: 'svc-new' })
   })
 
-  it('maps the version formats: minor/release/build/line → jira aspect, hotfix → component field', () => {
+  it('maps the version formats onto the jira aspect (all pairs separate)', () => {
     const req = buildCreateRequest(
       makeForm({
         minorVersionFormat: '$major.$minor',
+        minorSeparate: true,
         releaseVersionFormat: '$major.$minor.$service',
         buildVersionFormat: '$b',
+        buildSeparate: true,
         lineVersionFormat: '$l',
-        hotfixVersionFormat: '$major.$minor.$service-$fix',
       }),
     )
     expect(req.baseConfiguration?.jira).toMatchObject({
@@ -231,14 +233,101 @@ describe('buildCreateRequest — gated (explicit+external) coordinate', () => {
       buildVersionFormat: '$b',
       lineVersionFormat: '$l',
     })
-    // hotfix is a top-level component field, NOT on the jira aspect.
-    expect(req.jiraHotfixVersionFormat).toBe('$major.$minor.$service-$fix')
+  })
+
+  it('never sets a hotfix format on create (no field; server default applies)', () => {
+    const req = buildCreateRequest(
+      makeForm({ lineVersionFormat: '$l', releaseVersionFormat: '$r' }),
+      makeSource({ jiraHotfixVersionFormat: '%d.%d.%d.%d' }),
+    )
+    expect('jiraHotfixVersionFormat' in req).toBe(false)
     expect('hotfixVersionFormat' in (req.baseConfiguration?.jira ?? {})).toBe(false)
   })
 
   it('omits jira aspect entirely when no jira fields are set (scratch)', () => {
     const req = buildCreateRequest(makeForm({ jiraProjectKey: '', versionPrefix: '' }))
     expect('jira' in (req.baseConfiguration ?? {})).toBe(false)
+  })
+})
+
+describe('buildCreateRequest — Line/Minor and Release/Build materialization (§R6)', () => {
+  it('Minor MIRRORED materializes the Line value into BOTH stored fields', () => {
+    const req = buildCreateRequest(
+      makeForm({ lineVersionFormat: '$major', minorVersionFormat: '', minorSeparate: false }),
+    )
+    expect(req.baseConfiguration?.jira).toMatchObject({
+      lineVersionFormat: '$major',
+      minorVersionFormat: '$major',
+    })
+  })
+
+  it('Minor SEPARATE keeps its own value distinct from Line', () => {
+    const req = buildCreateRequest(
+      makeForm({
+        lineVersionFormat: '$major.x',
+        minorVersionFormat: '$major.$minor',
+        minorSeparate: true,
+      }),
+    )
+    expect(req.baseConfiguration?.jira).toMatchObject({
+      lineVersionFormat: '$major.x',
+      minorVersionFormat: '$major.$minor',
+    })
+  })
+
+  it('Build MIRRORED omits buildVersionFormat (CRS falls back to Release)', () => {
+    const req = buildCreateRequest(
+      makeForm({
+        releaseVersionFormat: '$major.$minor.$service',
+        buildVersionFormat: '',
+        buildSeparate: false,
+      }),
+    )
+    expect(req.baseConfiguration?.jira?.releaseVersionFormat).toBe('$major.$minor.$service')
+    expect('buildVersionFormat' in (req.baseConfiguration?.jira ?? {})).toBe(false)
+  })
+
+  it('Build SEPARATE keeps its own value', () => {
+    const req = buildCreateRequest(
+      makeForm({
+        releaseVersionFormat: '$major.$minor.$service',
+        buildVersionFormat: '$major.$minor.$service.$fix',
+        buildSeparate: true,
+      }),
+    )
+    expect(req.baseConfiguration?.jira?.buildVersionFormat).toBe('$major.$minor.$service.$fix')
+  })
+
+  it('a Build value lingering in form state is dropped when mirrored', () => {
+    const req = buildCreateRequest(
+      makeForm({
+        releaseVersionFormat: '$r',
+        buildVersionFormat: '$stale',
+        buildSeparate: false,
+      }),
+    )
+    expect('buildVersionFormat' in (req.baseConfiguration?.jira ?? {})).toBe(false)
+  })
+
+  it('copy mode: collapsing Minor to mirror materializes Line, dropping the source Minor', () => {
+    const src = makeSource({
+      configurations: [
+        makeBaseRow({
+          build: { buildSystem: 'GRADLE' },
+          jira: { projectKey: 'ALPHA', lineVersionFormat: '$major', minorVersionFormat: '$major.$minor' },
+        }),
+      ],
+    })
+    // User collapsed Minor back to mirroring Line (minorSeparate false) — Line
+    // must be written into both fields, not the source's separate Minor.
+    const req = buildCreateRequest(
+      makeForm({ name: 'svc-clone', lineVersionFormat: '$major', minorSeparate: false }),
+      src,
+    )
+    expect(req.baseConfiguration?.jira).toMatchObject({
+      lineVersionFormat: '$major',
+      minorVersionFormat: '$major',
+    })
   })
 })
 
@@ -306,9 +395,7 @@ describe('buildCreateRequest — copy mode (with source)', () => {
   const source = makeSource()
 
   it('copies source general fields and lists', () => {
-    // hotfix format is form-driven (copy mode prefills the form from the source in
-    // initialValues), so supply it via the form here rather than relying on a copy.
-    const req = buildCreateRequest(makeForm({ name: 'svc-clone', hotfixVersionFormat: '%d.%d.%d.%d' }), source)
+    const req = buildCreateRequest(makeForm({ name: 'svc-clone' }), source)
     expect(req).toMatchObject({
       name: 'svc-clone',
       productType: 'TYPE_A',
@@ -318,7 +405,6 @@ describe('buildCreateRequest — copy mode (with source)', () => {
       parentComponentName: 'parent-svc',
       releasesInDefaultBranch: true,
       vcsExternalRegistry: 'registry-x',
-      jiraHotfixVersionFormat: '%d.%d.%d.%d',
       labels: ['backend', 'internal'],
       docs: [{ docComponentKey: 'docs-a', majorVersion: '1.x' }],
       securityGroups: [{ groupType: 'LAS', groupName: 'las-alpha' }],
@@ -327,6 +413,9 @@ describe('buildCreateRequest — copy mode (with source)', () => {
     })
     expect('group' in req).toBe(false)
     expect('jiraDisplayName' in req).toBe(false)
+    // Hotfix format is never carried on create (no field), even from a source
+    // that defines one.
+    expect('jiraHotfixVersionFormat' in req).toBe(false)
   })
 
   it('form fields WIN over source: owner, displayName, flags, RM/SC, copyright', () => {
@@ -366,8 +455,12 @@ describe('buildCreateRequest — copy mode (with source)', () => {
         }),
       ],
     })
-    // The dialog prefills minorVersionFormat from the source into the form; supply it here.
-    const req = buildCreateRequest(makeForm({ name: 'svc-clone', minorVersionFormat: '%d.%d' }), src)
+    // The dialog prefills minorVersionFormat from the source into the form; a
+    // source with a separate Minor seeds minorSeparate=true, so it stays distinct.
+    const req = buildCreateRequest(
+      makeForm({ name: 'svc-clone', minorVersionFormat: '%d.%d', minorSeparate: true }),
+      src,
+    )
     expect(req.baseConfiguration?.escrow).toEqual({ reusable: true })
     expect(req.baseConfiguration?.jira).toEqual({ minorVersionFormat: '%d.%d' })
     expect(req.baseConfiguration?.requiredTools).toEqual(['tool-a'])
@@ -455,5 +548,17 @@ describe('buildCreateRequest — copy mode (with source)', () => {
   it('keeps fields the visibility predicate marks editable', () => {
     const req = buildCreateRequest(makeForm({ copyright: 'KEEP' }), makeSource(), () => true)
     expect(req.copyright).toBe('KEEP')
+  })
+
+  // Copy-mode adminOnly gating (§P-4): a field non-editable for the current user
+  // (e.g. External Registry, which is adminOnly) must NOT be copied from the
+  // source — otherwise a non-admin's POST carries a value the server rejects.
+  it('does not copy an adminOnly source value (vcsExternalRegistry) for a non-admin', () => {
+    const req = buildCreateRequest(
+      makeForm(),
+      makeSource({ vcsExternalRegistry: 'registry-x' }),
+      (field) => field !== 'vcsExternalRegistry',
+    )
+    expect('vcsExternalRegistry' in req).toBe(false)
   })
 })
