@@ -1,4 +1,5 @@
 import { Tag } from 'lucide-react'
+import { cn } from '../../lib/utils'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { ChipsInput } from '../ui/ChipsInput'
@@ -59,8 +60,12 @@ export function HeaderLabelsEditor({
               type="button"
               variant="outline"
               size="sm"
-              className="h-6 gap-1 px-2 text-xs"
+              className={cn(
+                'h-6 gap-1 px-2 text-xs',
+                error && 'border-destructive text-destructive',
+              )}
               aria-label="Edit labels"
+              aria-invalid={Boolean(error)}
             >
               <Tag className="h-3 w-3" />
               Edit labels
@@ -78,13 +83,15 @@ export function HeaderLabelsEditor({
               ariaInvalid={Boolean(error)}
               ariaDescribedBy={error ? 'header-labels-error' : undefined}
             />
-            {error && (
-              <p id="header-labels-error" className="text-xs text-destructive">
-                {error}
-              </p>
-            )}
           </PopoverContent>
         </Popover>
+      )}
+      {/* Errors render in the always-visible header row (not only inside the
+          popover) so a server 400 on labels is readable without opening it. */}
+      {error && (
+        <span id="header-labels-error" role="alert" className="text-xs text-destructive">
+          {error}
+        </span>
       )}
     </div>
   )

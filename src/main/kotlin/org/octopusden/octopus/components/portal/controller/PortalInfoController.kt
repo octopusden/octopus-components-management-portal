@@ -42,7 +42,7 @@ class PortalInfoController(
     )
 
     // Component-editor config for the SPA. Currently only the solution-key
-    // patterns that gate the General-tab Solution toggle. Authenticated (falls
+    // patterns that gate the dedicated Solution topic/tab. Authenticated (falls
     // through to anyExchange().authenticated() like /links) — only consumed on
     // the authenticated component-detail page. Always returns the key so the SPA
     // can treat an empty list as "no component offers the toggle".

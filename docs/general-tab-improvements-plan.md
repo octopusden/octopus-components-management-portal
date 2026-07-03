@@ -1,8 +1,6 @@
 # План: улучшение вкладки General (форма редактирования компонента)
 
-Статус: **реализовано** (frontend typecheck + lint + vitest зелёные; backend-код по образцу `PortalLinksProperties`, юнит-тесты контроллера добавлены, но gradle в песочнице офлайн — прогонять на CI/локально).
-
-Примечание: этот файл — новый (untracked), поэтому в `git diff` он не виден по умолчанию (`git add`/`git status` покажет). Основные трекаемые изменения — код и обновлённый `docs/features/component-detail.md`.
+Статус: **реализовано** (frontend typecheck + lint + vitest зелёные; backend-код по образцу `PortalLinksProperties`, юнит-тесты контроллера добавлены).
 
 ## Цели (из уточнений)
 

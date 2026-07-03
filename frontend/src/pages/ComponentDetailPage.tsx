@@ -214,24 +214,10 @@ function ComponentDetailEditor() {
   // server-owned (header badge/banner). Patterns come from /portal/config.
   const { data: portalConfig } = usePortalConfig()
   const { entry: solutionFc } = useFieldConfigEntry('component.solution')
-  // Offer the Solution topic only for a solution-key component AND when the
-  // field isn't hidden by field-config. 'readonly' still shows the tab (with a
-  // disabled switch) so the flag is visible where it's edited.
-  const showSolutionToggle =
-    isSolutionCandidate(component?.name, portalConfig?.solutionKeyPatterns) &&
-    solutionFc.visibility !== 'hidden'
   // Labels editor moved to the header (badges + popover). The dictionary powers
   // the ChipsInput picker; 404/501 → [] (handled by the hook).
   const labelsDict = useLabelsDictionary()
 
-  // The Solution topic is conditional (key-pattern gated); if it's not offered —
-  // or stops being offered after config loads / the component changes — never
-  // leave the user stranded on an empty tab.
-  useEffect(() => {
-    if (activeTab === 'solution' && !showSolutionToggle) {
-      setActiveTab('general')
-    }
-  }, [activeTab, showSolutionToggle])
   // Supported groupId prefixes (CRS rule #10) feed the distribution/ownership
   // group checks; the bitbucket host (gitBaseUrl) feeds the VCS-host check.
   // Both fail-open when unavailable — CRS stays authoritative on save.
@@ -263,6 +249,27 @@ function ComponentDetailEditor() {
   void form.formState.dirtyFields
   void form.formState.touchedFields
   void form.watch()
+
+  // Offer the Solution topic only for a solution-key component AND when the
+  // field isn't hidden by field-config. 'readonly' still shows the tab (with a
+  // disabled switch) so the flag is visible where it's edited. The candidate
+  // check reads the LIVE form key (with a fallback to the server value before
+  // hydration) so a RENAME_COMPONENTS user who renames to a solution key sees
+  // the topic — and can set the flag — in the same edit session, not only after
+  // a save + refetch.
+  const solutionKeyName = form.watch('name') || component?.name
+  const showSolutionToggle =
+    isSolutionCandidate(solutionKeyName, portalConfig?.solutionKeyPatterns) &&
+    solutionFc.visibility !== 'hidden'
+
+  // The Solution topic is conditional (key-pattern gated); if it's not offered —
+  // or stops being offered after config loads / the component / key changes —
+  // never leave the user stranded on an empty tab.
+  useEffect(() => {
+    if (activeTab === 'solution' && !showSolutionToggle) {
+      setActiveTab('general')
+    }
+  }, [activeTab, showSolutionToggle])
 
   // P1-1: re-hydrate the page-level RHF form when the component id CHANGES to a
   // DIFFERENT id — independent of which tab is mounted. GeneralTab's own
@@ -515,7 +522,12 @@ function ComponentDetailEditor() {
         for (const [field, message] of fieldErrors) {
           const isGeneral = (GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(field)
           const isMisc = (MISC_TAB_FIELDS as ReadonlyArray<string>).includes(field)
-          if (isGeneral || isMisc) {
+          // `labels` is a page-level RHF field edited in the always-visible
+          // header (not a tab), so it isn't in GENERAL_TAB_FIELDS. Map its 400
+          // to form.setError anyway → HeaderLabelsEditor shows it inline instead
+          // of the user getting only a toast for a field they're looking at.
+          const isHeaderLabels = field === 'labels'
+          if (isGeneral || isMisc || isHeaderLabels) {
             form.setError(field as keyof GeneralFormValues, { type: 'server', message })
             anyFieldMapped = true
           }

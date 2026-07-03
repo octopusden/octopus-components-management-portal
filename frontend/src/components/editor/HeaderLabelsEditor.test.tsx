@@ -60,4 +60,22 @@ describe('HeaderLabelsEditor', () => {
 
     expect(onChange).toHaveBeenCalledWith(['internal'])
   })
+
+  it('surfaces a server error inline in the always-visible header (no popover open needed)', () => {
+    render(
+      <HeaderLabelsEditor
+        value={['backend']}
+        onChange={() => {}}
+        options={OPTIONS}
+        visibility="editable"
+        error="too many labels"
+      />,
+      { wrapper },
+    )
+    // The popover is closed — the error must still be readable in the header row.
+    expect(screen.queryByRole('dialog')).toBeNull()
+    const err = screen.getByText('too many labels')
+    expect(err).toBeDefined()
+    expect(err.id).toBe('header-labels-error')
+  })
 })

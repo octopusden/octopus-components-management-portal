@@ -605,6 +605,38 @@ describe('ComponentDetailPage — sidebar nav order', () => {
     expect(screen.getAllByRole('tab', { name: /^Solution/ }).length).toBeGreaterThanOrEqual(1)
   })
 
+  it('renaming the key to a candidate in-session reveals the Solution topic (live form value, not just the server key)', async () => {
+    // A user with RENAME_COMPONENTS can change the key inline. The Solution
+    // topic must react to the live form value so the flag can be set in the
+    // same edit session — not only after a save + refetch of the server key.
+    mockedUsePortalConfig.mockReturnValue({
+      data: { solutionKeyPatterns: ['-solution'] },
+    } as unknown as ReturnType<typeof usePortalConfig>)
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('name', component.name)
+      }, [component, form])
+      return React.createElement(
+        'button',
+        {
+          'data-testid': 'do-rename',
+          type: 'button',
+          onClick: () => form.setValue('name', 'payment-solution', { shouldDirty: true }),
+        },
+        'rename',
+      )
+    })
+    const user = makeUser(['ACCESS_COMPONENTS', 'RENAME_COMPONENTS'])
+    renderPage({ ...baseComponent, name: 'payment-service' }, user)
+    // Server key is not a candidate yet → no Solution topic.
+    expect(screen.queryByRole('tab', { name: /^Solution/ })).toBeNull()
+
+    fireEvent.click(screen.getByTestId('do-rename'))
+    await waitFor(() => {
+      expect(screen.getAllByRole('tab', { name: /^Solution/ }).length).toBeGreaterThanOrEqual(1)
+    })
+  })
+
   it('shows per-section counts inside the sidebar items (VCS entries, Distribution items)', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
     // baseComponent's BASE row has 1 vcsEntry and a present build/jira aspect.
@@ -1194,6 +1226,40 @@ describe('ComponentDetailPage — labels clear-all sends [] (PR #44 follow-up: c
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
     // Disabled Save fires no handler, so no need to await: assert directly.
     expect(updateMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('a server 400 on `labels` surfaces inline in the header editor (not just a toast)', async () => {
+    // Labels are edited in the always-visible header. Because `labels` is not a
+    // GeneralTab field, the 400 handler must special-case it to form.setError so
+    // HeaderLabelsEditor renders the message inline — otherwise the only surface
+    // is a toast for a field the user is looking straight at.
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('labels', component.labels ?? [])
+        form.setValue('labels', ['x'], { shouldDirty: true, shouldTouch: true })
+        form.setValue('system', component.system ?? '')
+        form.setValue('displayName', component.displayName ?? '')
+      }, [component, form])
+      return React.createElement('div', { 'data-testid': 'general-tab' })
+    })
+    const updateMutateAsync = vi.fn(() =>
+      Promise.reject(
+        new ApiError(
+          400,
+          'Bad Request',
+          JSON.stringify({ errorMessage: 'Validation failed: labels: too many labels' }),
+        ),
+      ),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    const seeded: ComponentDetail = { ...baseComponent, labels: [] }
+    renderPage(seeded, user, { updateMutation: { mutateAsync: updateMutateAsync } })
+
+    await clickSaveAndConfirm()
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
+    // Inline error is readable in the header without opening the popover.
+    const err = await screen.findByText('too many labels')
+    expect(err.id).toBe('header-labels-error')
   })
 })
 

@@ -38,8 +38,9 @@ import { WhoCanEditPanel } from './WhoCanEditPanel'
  *     CRS business-rule violations like "cannot archive while children exist"
  *     surface as a toast. (releasesInDefaultBranch moved to the Jira tab.)
  *   - labels: the editor moved to the component header (badges + popover);
- *     GeneralTab renders no labels input, so a labels 400 surfaces as a toast
- *     rather than a silent inline error on an unrendered field.
+ *     GeneralTab renders no labels input. A labels 400 is mapped by the page's
+ *     error handler to form.setError('labels') and surfaced inline in the
+ *     always-visible header editor (see ComponentDetailPage + HeaderLabelsEditor).
  */
 export const GENERAL_TAB_FIELDS = [
   'name',

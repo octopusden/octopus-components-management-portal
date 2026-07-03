@@ -77,7 +77,7 @@ portal:
   # Component-editor knobs read by the SPA via /portal/config.
   component:
     # Substrings that mark a component key as a "solution candidate": only those
-    # components expose the Solution toggle on the General tab (every other
+    # components expose the dedicated Solution topic/tab with its toggle (every other
     # component keeps the flag server-owned, shown read-only as a badge/banner).
     # Comma-separated; per-env override in service-config. Blank → no toggle
     # anywhere.
