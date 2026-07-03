@@ -67,6 +67,8 @@ export const fieldDescriptions: Record<string, string> = {
     'The release line (“real major”), e.g. 1.2 from 1.2.3-101. The CRN report by default covers all versions of the current line, from the line start up to the reported release. Minor is derived from this unless set separately. No prefix is applied.',
   'jira.versionFormat':
     'Wrapper template composing the prefix with a base version for everything registered in Jira — canonically $versionPrefix-$baseVersionFormat (the separator is part of the template and per-component).',
+  'jira.skipCommitCheck':
+    'Disables commit-based issue-to-version assignment: commits are not checked at RC/Release registration. Primary use case: several components sharing one repository — commit-based assignment cannot tell which component a commit belongs to and would attach every component’s version to the issue. Also applies when the component has no repository at all, or its repository does not hold the main code. Instead an issue is assigned when it is resolved as Done and its Fix Version/s contains the matching minor (planning) version. Replaces the legacy externalRegistry = NOT_AVAILABLE DSL setting — users never type the sentinel in the new UI.',
 
   // ── BuildTab — build.* ────────────────────────────────────────────────────
   'build.buildSystem':

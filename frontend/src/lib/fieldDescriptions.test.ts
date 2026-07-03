@@ -53,6 +53,7 @@ const EXPECTED_KEYS = [
   'jira.buildVersionFormat',
   'jira.lineVersionFormat',
   'jira.versionFormat',
+  'jira.skipCommitCheck',
   // VcsTab
   'vcs.externalRegistry',
   'vcs.entries',
