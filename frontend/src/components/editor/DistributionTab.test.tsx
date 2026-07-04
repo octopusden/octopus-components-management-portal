@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, act, within } from '@testing-library/react'
+import { render, screen, fireEvent, within } from '@testing-library/react'
 import { DistributionTab } from './DistributionTab'
 import { useDistributionSection } from './useDistributionSection'
 import { TooltipProvider } from '../ui/tooltip'
-import { fieldDescriptions } from '../../lib/fieldDescriptions'
 import type { ComponentDetail, ComponentConfiguration, FieldOverride } from '../../lib/types'
 
 vi.mock('./FieldOverrideInline', () => ({ FieldOverrideInline: () => null }))
@@ -151,7 +150,6 @@ describe('DistributionTab field descriptions (FieldInfo)', () => {
   }
 
   const EXPECTED_PATHS = [
-    'component.distributionExplicit', 'component.distributionExternal',
     'distribution.mavenArtifacts', 'distribution.fileUrlArtifacts', 'distribution.dockerImages',
     'distribution.packages', 'distribution.securityGroups',
     'distribution.maven.groupPattern', 'distribution.maven.artifactPattern', 'distribution.maven.extension', 'distribution.maven.classifier',
@@ -180,12 +178,10 @@ describe('DistributionTab field descriptions (FieldInfo)', () => {
     expect(document.querySelectorAll('[data-field-path="distribution.mavenArtifacts"]')).toHaveLength(1)
   })
 
-  it('opens the registry description for the Explicit toggle on focus', async () => {
-    renderTab(baseComponent())
-    const trigger = document.querySelector('[data-field-path="component.distributionExplicit"]') as HTMLElement
-    act(() => trigger.focus())
-    const tooltip = await screen.findByRole('tooltip')
-    expect(tooltip).toHaveTextContent(fieldDescriptions['component.distributionExplicit']!)
+  it('no longer renders the Explicit / External toggle info icons (moved to General)', () => {
+    renderTab(populatedComponent())
+    expect(document.querySelectorAll('[data-field-path="component.distributionExplicit"]')).toHaveLength(0)
+    expect(document.querySelectorAll('[data-field-path="component.distributionExternal"]')).toHaveLength(0)
   })
 })
 

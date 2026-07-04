@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { Label } from '../ui/label'
 import { Input } from '../ui/input'
-import { Switch } from '../ui/switch'
 import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
 import { FieldInfo } from '../ui/FieldInfo'
@@ -28,15 +27,13 @@ interface DistributionTabProps {
 export function DistributionTab({ section, canEdit, supportedGroups = [] }: DistributionTabProps) {
   const {
     state,
-    setExplicit,
-    setExternal,
     addMaven, updateMaven, removeMaven,
     addFileUrl, updateFileUrl, removeFileUrl,
     addDocker, updateDocker, removeDocker,
     addPackage, updatePackage, removePackage,
     addSecurityGroup, updateSecurityGroup, removeSecurityGroup,
   } = section
-  const { maven, fileUrl, docker, packages, securityGroups, explicit, external } = state
+  const { maven, fileUrl, docker, packages, securityGroups } = state
 
   // Per-range distribution overrides (the four marker paths). All add/edit/delete
   // queue into the same page-level draft the combined Save flushes.
@@ -62,20 +59,9 @@ export function DistributionTab({ section, canEdit, supportedGroups = [] }: Dist
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap gap-6">
-        <div className="flex items-center gap-3">
-          <Switch id="dist-explicit" checked={explicit} onCheckedChange={setExplicit} />
-          <Label htmlFor="dist-explicit" className="cursor-pointer"><FieldLabelText path="component.distributionExplicit" fallback="Explicit" /></Label>
-          <FieldInfo path="component.distributionExplicit" label="Explicit" />
-        </div>
-        <div className="flex items-center gap-3">
-          <Switch id="dist-external" checked={external} onCheckedChange={setExternal} />
-          <Label htmlFor="dist-external" className="cursor-pointer"><FieldLabelText path="component.distributionExternal" fallback="External" /></Label>
-          <FieldInfo path="component.distributionExternal" label="External" />
-        </div>
-      </div>
-
-      <Separator />
+      {/* Explicit / External classification toggles moved to the General tab's
+          Classification section (editor UI-reorg); their state still lives in
+          this section's useDistributionSection. */}
 
       {/* ── Maven Artifacts ────────────────────────────────────────────────── */}
       <div className="space-y-3">

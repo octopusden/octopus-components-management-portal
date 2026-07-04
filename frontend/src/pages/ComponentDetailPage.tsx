@@ -132,6 +132,10 @@ function sectionForField(field: string): string | null {
   // General form), so route an artifactIds 400 there — not General. Checked
   // first because `artifactIds` is deliberately absent from GENERAL_TAB_FIELDS.
   if (field === 'artifactIds' || field.startsWith('artifactIds')) return 'build'
+  // Explicit / External classification toggles moved to the General tab's
+  // Classification section (their state stays in useDistributionSection), so a
+  // 400 on those routes to General — checked before the generic distribution* rule.
+  if (field === 'distributionExplicit' || field === 'distributionExternal') return 'general'
   if ((GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(field)) return 'general'
   if ((MISC_TAB_FIELDS as ReadonlyArray<string>).includes(field)) return 'misc'
   if (field.startsWith('build')) return 'build'
@@ -929,6 +933,12 @@ function ComponentDetailEditor() {
                   form={form}
                   canEdit={canEdit}
                   onOwnerValidatingChange={setOwnerValidating}
+                  classification={{
+                    explicit: distributionSection.state.explicit,
+                    external: distributionSection.state.external,
+                    setExplicit: distributionSection.setExplicit,
+                    setExternal: distributionSection.setExternal,
+                  }}
                 />
               </EditSurface>
             </TabsContent>

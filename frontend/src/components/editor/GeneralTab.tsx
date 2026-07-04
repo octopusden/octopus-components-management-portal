@@ -21,6 +21,7 @@ import { useFieldConfigEntry } from '../../hooks/useFieldConfig'
 import { useSystemsDictionary } from '../../hooks/useSystemsDictionary'
 import { lookupEmployee, useEmployeeStatuses } from '../../hooks/useEmployees'
 import { WhoCanEditPanel } from './WhoCanEditPanel'
+import { ClassificationSection } from './ClassificationSection'
 
 /**
  * Canonical list of field names owned by GeneralTab — used by
@@ -113,9 +114,21 @@ interface GeneralTabProps {
    * otherwise the PATCH would silently omit the user's still-uncommitted edit.
    */
   onOwnerValidatingChange?: (validating: boolean) => void
+  /**
+   * Distribution-classification toggles (Explicit / External), relocated here
+   * from the Distribution tab (editor UI-reorg). The STATE still lives in the
+   * page's `useDistributionSection`; this optional prop is just the wiring, so
+   * GeneralTab tests that don't pass it render no Classification section.
+   */
+  classification?: {
+    explicit: boolean
+    external: boolean
+    setExplicit: (v: boolean) => void
+    setExternal: (v: boolean) => void
+  }
 }
 
-export function GeneralTab({ component, form, isNew = false, canEdit = true, onOwnerValidatingChange }: GeneralTabProps) {
+export function GeneralTab({ component, form, isNew = false, canEdit = true, onOwnerValidatingChange, classification }: GeneralTabProps) {
   const {
     register,
     setValue,
@@ -511,6 +524,18 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
 
           </div>
         </section>
+      )}
+
+      {/* ── Classification ────────────────────────────────────────────────── */}
+      {/* Explicit / External toggles relocated from the Distribution tab; state
+          stays in the page's useDistributionSection (render-location move only). */}
+      {classification && (
+        <ClassificationSection
+          explicit={classification.explicit}
+          external={classification.external}
+          onExplicitChange={classification.setExplicit}
+          onExternalChange={classification.setExternal}
+        />
       )}
 
       {/* Doc Links moved to the dedicated Documentation tab (DocumentationTab).

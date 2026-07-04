@@ -104,7 +104,7 @@ function setAllEditable() {
   mockUseFieldConfigEntry.mockImplementation(() => makeEntry('editable'))
 }
 
-function Harness({ component, formRef, onOwnerValidatingChange, canEdit }: { component: ComponentDetail; formRef?: React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>; onOwnerValidatingChange?: (validating: boolean) => void; canEdit?: boolean }) {
+function Harness({ component, formRef, onOwnerValidatingChange, canEdit, classification }: { component: ComponentDetail; formRef?: React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>; onOwnerValidatingChange?: (validating: boolean) => void; canEdit?: boolean; classification?: { explicit: boolean; external: boolean; setExplicit: (v: boolean) => void; setExternal: (v: boolean) => void } }) {
   const form = useForm<GeneralFormValues>({
     defaultValues: {
       name: component.name,
@@ -131,7 +131,7 @@ function Harness({ component, formRef, onOwnerValidatingChange, canEdit }: { com
     },
   })
   if (formRef) formRef.current = form
-  return <GeneralTab component={component} form={form} canEdit={canEdit} onOwnerValidatingChange={onOwnerValidatingChange} />
+  return <GeneralTab component={component} form={form} canEdit={canEdit} onOwnerValidatingChange={onOwnerValidatingChange} classification={classification} />
 }
 
 beforeEach(() => {
@@ -876,3 +876,44 @@ describe('GeneralTab — owner validating propagation', () => {
 
 // Artifact-ownership ("Produced Artifacts") rendering moved to the Build tab
 // (ProducedArtifactsSection); its tests live in ProducedArtifactsSection.test.tsx.
+
+// ── Classification (Explicit / External) — relocated from the Distribution tab ─
+// The toggle STATE still lives in the page's useDistributionSection; GeneralTab
+// only renders the section when the optional `classification` prop is supplied.
+describe('GeneralTab — Classification', () => {
+  function stubClassification(explicit = false, external = false) {
+    return {
+      explicit,
+      external,
+      setExplicit: vi.fn(),
+      setExternal: vi.fn(),
+    }
+  }
+
+  it('renders both Explicit and External switches reflecting the passed state', () => {
+    setAllEditable()
+    const classification = stubClassification(true, false)
+    renderWithProviders(<Harness component={baseComponent()} classification={classification} />)
+
+    const explicitSwitch = screen.getByRole('switch', { name: /explicit/i })
+    const externalSwitch = screen.getByRole('switch', { name: /external/i })
+    expect(explicitSwitch).toHaveAttribute('aria-checked', 'true')
+    expect(externalSwitch).toHaveAttribute('aria-checked', 'false')
+  })
+
+  it('toggling a switch calls the corresponding setter', async () => {
+    setAllEditable()
+    const classification = stubClassification(false, false)
+    renderWithProviders(<Harness component={baseComponent()} classification={classification} />)
+
+    await userEvent.click(screen.getByRole('switch', { name: /explicit/i }))
+    expect(classification.setExplicit).toHaveBeenCalledWith(true)
+    expect(classification.setExternal).not.toHaveBeenCalled()
+  })
+
+  it('does not render the Classification section when no classification prop is passed', () => {
+    setAllEditable()
+    renderWithProviders(<Harness component={baseComponent()} />)
+    expect(screen.queryByTestId('section-classification')).toBeNull()
+  })
+})
