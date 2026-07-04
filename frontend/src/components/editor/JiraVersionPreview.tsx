@@ -281,6 +281,11 @@ function LadderRowView({
   )
 }
 
+// Stable placeholder request fed to a DISABLED useVersionPreview call so its
+// query key stays constant (no per-keystroke cache growth) — see the hotfix
+// query below.
+const IDLE_REQUEST: VersionPreviewRequest = { version: '', technical: false, hotfixEnabled: false, base: {}, overrides: [] }
+
 /**
  * Version Preview — renders the six version coordinates LIVE from the unsaved
  * editor formats (base + per-range overrides) via the CRS preview endpoint, for
@@ -362,9 +367,12 @@ export function JiraVersionPreview(props: JiraVersionPreviewProps) {
 
   // Hotfix rows: only when hotfixEnabled (VCS-branch-derived in JiraTab via
   // isHotfixEnabled), rendered from the separate hotfix sample with hotfix ON.
+  // When disabled, feed a STABLE request so the (disabled) query key does not
+  // churn per keystroke — otherwise React Query accumulates one inactive cache
+  // entry per edit while the hotfix preview is off (Copilot review).
   const hotfixRequest = useMemo<VersionPreviewRequest>(
-    () => ({ version: hotfixSample, technical, hotfixEnabled: true, base, overrides }),
-    [hotfixSample, technical, base, overrides],
+    () => (hotfixEnabled ? { version: hotfixSample, technical, hotfixEnabled: true, base, overrides } : IDLE_REQUEST),
+    [hotfixEnabled, hotfixSample, technical, base, overrides],
   )
   const hotfixKey = useDebouncedValue(JSON.stringify(hotfixRequest), 350)
   const hotfixQuery = useVersionPreview(
