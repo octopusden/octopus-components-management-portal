@@ -498,7 +498,6 @@ export function JiraTab({ component, section, canEdit, conflictError, effectiveB
               hotfixEnabled={hotfixEnabled}
               hoveredField={hoveredField}
               onHoverField={setHoveredField}
-              whiskey={isWhiskey}
               overrides={jiraPreviewOverrides}
             />
           </aside>

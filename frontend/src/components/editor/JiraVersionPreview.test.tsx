@@ -1,27 +1,53 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, within } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { JiraVersionPreview, type JiraVersionPreviewProps } from './JiraVersionPreview'
-import { useVersionPreview } from '../../hooks/useVersionPreview'
+import { useVersionPreview, type VersionPreviewRequest } from '../../hooks/useVersionPreview'
 import type { DetailedComponentVersion } from '../../lib/types'
 
-// The Whiskey path fetches via useVersionPreview; stub it so the render tests
-// don't need a QueryClient. The client (non-Whiskey) path never calls it.
-// importActual keeps jiraOverridesToPreview real (unused here, but avoids a
-// half-mocked module).
+// The preview renders server-truth via useVersionPreview (one call for the
+// standard rows, one for the hotfix rows). Stub the hook so these render tests
+// don't need a QueryClient; importActual keeps jiraOverridesToPreview real.
 vi.mock('../../hooks/useVersionPreview', async (orig) => ({
   ...(await orig<typeof import('../../hooks/useVersionPreview')>()),
   useVersionPreview: vi.fn(),
 }))
 const mockPreview = vi.mocked(useVersionPreview)
+
+// Returned for BOTH the main and hotfix calls (the mock is arg-agnostic). Values
+// are deliberately distinct per coordinate so a mis-mapped row is caught.
+const DETAILED: DetailedComponentVersion = {
+  component: 'preview',
+  minorVersion: { type: 'MINOR', version: '1.2', jiraVersion: 'acme-1.2' },
+  lineVersion: { type: 'LINE', version: '1.2', jiraVersion: '1.2' },
+  buildVersion: { type: 'BUILD', version: '1.2.3-9', jiraVersion: '1.2.3-9' },
+  rcVersion: { type: 'RC', version: '1.2.3', jiraVersion: 'acme-1.2.3_RC' },
+  releaseVersion: { type: 'RELEASE', version: '1.2.3', jiraVersion: 'acme-1.2.3' },
+  hotfixVersion: { type: 'HOTFIX', version: '1.2.3-9', jiraVersion: 'acme-1.2.3-9' },
+}
+
+type Result = { data?: DetailedComponentVersion; isLoading?: boolean; isError?: boolean }
+
+// The component makes TWO calls — main (hotfixEnabled:false) and hotfix
+// (hotfixEnabled:true). Branch on the request so the two can be driven to
+// DIFFERENT states (a swap of mainQuery.data/hotfixQuery.data would then fail).
+function setPreview(main: Result, hotfix: Result = main) {
+  mockPreview.mockImplementation(
+    (req: VersionPreviewRequest) =>
+      ({ isLoading: false, isError: false, ...(req.hotfixEnabled ? hotfix : main) }) as ReturnType<typeof useVersionPreview>,
+  )
+}
+
+function ok(data: DetailedComponentVersion = DETAILED) {
+  setPreview({ data })
+}
+
 beforeEach(() => {
-  mockPreview.mockReturnValue({ data: undefined, isLoading: false, isError: false } as ReturnType<typeof useVersionPreview>)
+  ok()
 })
 
-/** Brief §4 example defaults (1.2.3 / pgw / hotfix 1.2.3-87), mirrored pairs. */
 function baseProps(overrides: Partial<JiraVersionPreviewProps> = {}): JiraVersionPreviewProps {
   return {
-    versionPrefix: 'pgw',
+    versionPrefix: 'acme',
     versionFormat: '$versionPrefix-$baseVersionFormat',
     lineVersionFormat: '$major.$minor',
     minorVersionFormat: '',
@@ -42,7 +68,6 @@ function renderPreview(overrides: Partial<JiraVersionPreviewProps> = {}) {
   return render(<JiraVersionPreview {...baseProps(overrides)} />)
 }
 
-/** The rendered value text of a ladder row. */
 function rowValue(id: string): string {
   return within(screen.getByTestId(`ladder-row-${id}`)).getByTestId('ladder-value').textContent ?? ''
 }
@@ -50,17 +75,16 @@ function row(id: string): HTMLElement {
   return screen.getByTestId(`ladder-row-${id}`)
 }
 
-describe('JiraVersionPreview — brief §4 ladder example', () => {
-  it('renders each row with the expected value (1.2.3 / pgw / hotfix 1.2.3-87)', () => {
+describe('JiraVersionPreview — server-rendered rows', () => {
+  it('renders each coordinate from the server response (jiraVersion for Jira-facing, version for CI rows)', () => {
     renderPreview()
-    expect(rowValue('release')).toBe('pgw-1.2.3')
-    expect(rowValue('rc')).toBe('pgw-1.2.3_RC')
-    expect(rowValue('minor')).toBe('pgw-1.2')
+    expect(rowValue('release')).toBe('acme-1.2.3')
+    expect(rowValue('rc')).toBe('acme-1.2.3_RC')
+    expect(rowValue('minor')).toBe('acme-1.2')
     expect(rowValue('line')).toBe('1.2')
-    expect(rowValue('build')).toBe('1.2.3')
-    // Hotfix sample is derived from the hotfix format's arity ($…-$fix → 1.2.3-87).
-    expect(rowValue('hotfix-build')).toBe('1.2.3-87')
-    expect(rowValue('hotfix-jira')).toBe('pgw-1.2.3-87')
+    expect(rowValue('build')).toBe('1.2.3-9')
+    expect(rowValue('hotfix-build')).toBe('1.2.3-9')
+    expect(rowValue('hotfix-jira')).toBe('acme-1.2.3-9')
   })
 
   it('renders the rows in ladder order', () => {
@@ -76,32 +100,32 @@ describe('JiraVersionPreview — brief §4 ladder example', () => {
       'ladder-row-hotfix-jira',
     ])
   })
+})
 
-  it('shows the dashed server-computed footer note', () => {
+describe('JiraVersionPreview — sample arity tracks the format', () => {
+  it('the version input default has as many segments as the deepest format uses', () => {
+    // release "$major.$minor.$service" → 3 segments.
     renderPreview()
-    expect(screen.getByText(/filled by the\s+server at build\/release time/i)).toBeInTheDocument()
+    expect(screen.getByLabelText('version')).toHaveValue('1.2.3')
+  })
+
+  it('re-derives a deeper sample when the (separate) build format adds an index', () => {
+    // build "$major.$minor.$service-$fix" is deeper (4) → the sample grows a $fix segment.
+    renderPreview({ buildSeparate: true, buildVersionFormat: '$major.$minor.$service-$fix' })
+    expect(screen.getByLabelText('version')).toHaveValue('1.2.3-87')
   })
 })
 
 describe('JiraVersionPreview — captions & tags', () => {
-  it('Minor is always tagged "in Jira"; mirrored Build keeps the "= release format" tag', () => {
+  it('Minor is tagged "in Jira"; mirrored Build keeps the "= release format" tag', () => {
     renderPreview()
     expect(within(row('minor')).getByText('in Jira')).toBeInTheDocument()
     expect(within(row('build')).getByText('= release format')).toBeInTheDocument()
   })
 
-  it('separate Minor/Build swap to the "in Jira" / "no prefix" tags and own values', () => {
-    renderPreview({
-      minorSeparate: true,
-      minorVersionFormat: '$major',
-      buildSeparate: true,
-      buildVersionFormat: '$major.$minor.$service.$fix',
-    })
-    expect(within(row('minor')).getByText('in Jira')).toBeInTheDocument()
-    expect(rowValue('minor')).toBe('pgw-1')
+  it('separate Build swaps to the "no prefix" tag', () => {
+    renderPreview({ buildSeparate: true, buildVersionFormat: '$major.$minor.$service.$fix' })
     expect(within(row('build')).getByText('no prefix')).toBeInTheDocument()
-    // Sample arity follows the deepest (separate build) format → $fix filled (…87).
-    expect(rowValue('build')).toBe('1.2.3.87')
   })
 
   it('Line renders bare with a "no prefix" tag', () => {
@@ -117,51 +141,65 @@ describe('JiraVersionPreview — captions & tags', () => {
   })
 })
 
-describe('JiraVersionPreview — default sample arity', () => {
-  it('fills every used position for a non-$major-leading build format (no zeroed rows)', () => {
-    // $service.$fix skips the leading positions; the derived sample must still
-    // fill them so the shown sample and the recomputed row agree (P1 regression).
-    renderPreview({ buildSeparate: true, buildVersionFormat: '$service.$fix' })
-    expect(screen.getByLabelText('version')).toHaveValue('1.2.3.87')
-    // Build renders $service.$fix from that sample → 3.87, not the pre-fix 0.0.
-    expect(rowValue('build')).toBe('3.87')
+describe('JiraVersionPreview — hotfix rows', () => {
+  it('shows the hotfix rows + separate hotfix input only when hotfixes are enabled', () => {
+    renderPreview()
+    expect(screen.getByLabelText('hotfix version')).toBeInTheDocument()
+    expect(row('hotfix-build')).toBeInTheDocument()
+    expect(row('hotfix-jira')).toBeInTheDocument()
   })
-})
 
-describe('JiraVersionPreview — hotfix dual rows', () => {
-  it('shows both hotfix rows only when hotfixes are enabled', () => {
+  it('omits the hotfix rows + input when hotfixes are disabled', () => {
     renderPreview({ hotfixEnabled: false })
     expect(screen.queryByTestId('ladder-row-hotfix-build')).toBeNull()
     expect(screen.queryByTestId('ladder-row-hotfix-jira')).toBeNull()
-    // The separate hotfix-version sample input is hidden too.
     expect(screen.queryByLabelText('hotfix version')).toBeNull()
-  })
-
-  it('computes hotfix rows from the separate hotfix sample (different arity)', () => {
-    renderPreview()
-    expect(screen.getByLabelText('hotfix version')).toHaveValue('1.2.3-87')
-    expect(rowValue('hotfix-build')).toBe('1.2.3-87')
   })
 })
 
-describe('JiraVersionPreview — editable samples recompute', () => {
-  it('recomputes the standard rows when the version sample changes', async () => {
+describe('JiraVersionPreview — loading & empty', () => {
+  it('shows the loading notice while the standard rows are pending', () => {
+    setPreview({ isLoading: true })
     renderPreview()
-    const sample = screen.getByLabelText('version')
-    await userEvent.clear(sample)
-    await userEvent.type(sample, '3.4.5')
-    expect(rowValue('release')).toBe('pgw-3.4.5')
-    expect(rowValue('line')).toBe('3.4')
+    expect(screen.getByTestId('version-preview-loading')).toBeInTheDocument()
   })
 
-  it('recomputes only the hotfix rows when the hotfix sample changes', async () => {
+  it('falls back to a notice when the server returns nothing (unparseable version / 4xx)', () => {
+    setPreview({ isError: true })
     renderPreview()
-    const hotfix = screen.getByLabelText('hotfix version')
-    await userEvent.clear(hotfix)
-    await userEvent.type(hotfix, '9.9.9-42')
+    expect(screen.getByTestId('version-preview-empty')).toBeInTheDocument()
+    expect(screen.queryByTestId('ladder-row-release')).toBeNull()
+  })
+
+  it('a failed main version hides the hotfix block entirely (no contradictory "no preview" + hotfix rows)', () => {
+    // main fails, hotfix would succeed — the hotfix block must NOT render alongside
+    // the "No preview" notice (the two run as independent queries).
+    setPreview({ isError: true }, { data: DETAILED })
+    renderPreview()
+    expect(screen.getByTestId('version-preview-empty')).toBeInTheDocument()
+    expect(screen.queryByTestId('ladder-row-hotfix-build')).toBeNull()
+    expect(screen.queryByLabelText('hotfix version')).toBeNull()
+  })
+
+  it('a failed hotfix sample shows a scoped hotfix notice, not silence, with the main rows intact', () => {
+    setPreview({ data: DETAILED }, { isError: true })
+    renderPreview()
+    expect(rowValue('release')).toBe('acme-1.2.3')
+    expect(screen.getByTestId('hotfix-preview-empty')).toBeInTheDocument()
+    expect(screen.queryByTestId('ladder-row-hotfix-build')).toBeNull()
+  })
+
+  it('renders the hotfix rows from a DIFFERENT (hotfix) sample than the main rows', () => {
+    const hotfixData: DetailedComponentVersion = {
+      ...DETAILED,
+      hotfixVersion: { type: 'HOTFIX', version: '9.9.9-42', jiraVersion: 'acme-9.9.9-42' },
+    }
+    setPreview({ data: DETAILED }, { data: hotfixData })
+    renderPreview()
+    // Main build row from the main call; hotfix row from the hotfix call — proving
+    // the two queries are not crossed.
+    expect(rowValue('build')).toBe('1.2.3-9')
     expect(rowValue('hotfix-build')).toBe('9.9.9-42')
-    // Standard rows keep the original sample.
-    expect(rowValue('release')).toBe('pgw-1.2.3')
   })
 })
 
@@ -179,17 +217,10 @@ describe('JiraVersionPreview — hover linking (field → row)', () => {
     expect(row('minor')).not.toHaveAttribute('data-highlighted')
   })
 
-  it('highlights the Release row when the mirrored Build field is hovered', () => {
-    renderPreview({ hoveredField: 'jira.buildVersionFormat' })
-    expect(row('release')).toHaveAttribute('data-highlighted', 'true')
-    expect(row('build')).not.toHaveAttribute('data-highlighted')
-  })
-
   it('highlights Release + RC + the mirrored Build row when the Release field is hovered', () => {
     renderPreview({ hoveredField: 'jira.releaseVersionFormat' })
     expect(row('release')).toHaveAttribute('data-highlighted', 'true')
     expect(row('rc')).toHaveAttribute('data-highlighted', 'true')
-    // Build mirrors Release by default → it lights up too (symmetric with Line→Minor).
     expect(row('build')).toHaveAttribute('data-highlighted', 'true')
   })
 
@@ -205,6 +236,12 @@ describe('JiraVersionPreview — hover linking (field → row)', () => {
       expect(row(id)).toHaveAttribute('data-highlighted', 'true')
     }
     expect(row('line')).not.toHaveAttribute('data-highlighted')
+    expect(row('build')).not.toHaveAttribute('data-highlighted')
+  })
+
+  it('highlights the Release row when the mirrored Build field is hovered', () => {
+    renderPreview({ hoveredField: 'jira.buildVersionFormat' })
+    expect(row('release')).toHaveAttribute('data-highlighted', 'true')
     expect(row('build')).not.toHaveAttribute('data-highlighted')
   })
 
@@ -289,56 +326,5 @@ describe('JiraVersionPreview — keyboard row → field linking (a11y)', () => {
     renderPreview({ onHoverField })
     fireEvent.focus(row('minor'))
     expect(onHoverField).toHaveBeenLastCalledWith('jira.lineVersionFormat')
-  })
-})
-
-describe('JiraVersionPreview — Whiskey (server-rendered)', () => {
-  const detailed: DetailedComponentVersion = {
-    component: 'acme',
-    minorVersion: { type: 'MINOR', version: '03.62', jiraVersion: 'pgw-03.62' },
-    lineVersion: { type: 'LINE', version: '03.62', jiraVersion: '03.62' },
-    buildVersion: { type: 'BUILD', version: '03.62.30.19-9', jiraVersion: 'pgw-03.62.30.19-9' },
-    rcVersion: { type: 'RC', version: '03.62.30.19', jiraVersion: 'pgw-03.62.30.19_RC' },
-    releaseVersion: { type: 'RELEASE', version: '03.62.30.19', jiraVersion: 'pgw-03.62.30.19' },
-    hotfixVersion: { type: 'HOTFIX', version: '03.62.30.19-9', jiraVersion: 'pgw-03.62.30.19-9' },
-  }
-
-  function ok(data: DetailedComponentVersion) {
-    mockPreview.mockReturnValue({ data, isLoading: false, isError: false } as ReturnType<typeof useVersionPreview>)
-  }
-
-  it('renders server-truth rows (bare for CI, jiraVersion for Jira-facing)', () => {
-    ok(detailed)
-    renderPreview({ whiskey: true })
-    expect(rowValue('release')).toBe('pgw-03.62.30.19')
-    expect(rowValue('rc')).toBe('pgw-03.62.30.19_RC')
-    expect(rowValue('minor')).toBe('pgw-03.62')
-    expect(rowValue('line')).toBe('03.62')
-    expect(rowValue('build')).toBe('03.62.30.19-9')
-    expect(rowValue('hotfix-build')).toBe('03.62.30.19-9')
-    expect(rowValue('hotfix-jira')).toBe('pgw-03.62.30.19-9')
-  })
-
-  it('renders live (no saved-configuration caption) with a single version input (no hotfix input)', () => {
-    ok(detailed)
-    renderPreview({ whiskey: true })
-    // The preview is now live from the unsaved edits — the old caption is gone.
-    expect(screen.queryByText(/rendered from the saved configuration/i)).toBeNull()
-    expect(screen.getByLabelText('version')).toBeInTheDocument()
-    expect(screen.queryByLabelText('hotfix version')).toBeNull()
-  })
-
-  it('omits the hotfix rows when hotfixes are disabled even if the server returns one', () => {
-    ok(detailed)
-    renderPreview({ whiskey: true, hotfixEnabled: false })
-    expect(screen.queryByTestId('ladder-row-hotfix-build')).toBeNull()
-    expect(screen.queryByTestId('ladder-row-hotfix-jira')).toBeNull()
-  })
-
-  it('falls back to a notice when the server returns nothing (unparseable version / error)', () => {
-    mockPreview.mockReturnValue({ data: undefined, isLoading: false, isError: true } as ReturnType<typeof useVersionPreview>)
-    renderPreview({ whiskey: true })
-    expect(screen.getByTestId('version-preview-empty')).toBeInTheDocument()
-    expect(screen.queryByTestId('ladder-row-release')).toBeNull()
   })
 })
