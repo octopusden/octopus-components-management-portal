@@ -912,7 +912,7 @@ describe('GeneralTab artifact-ownership rendering (#357)', () => {
     renderWithProviders(<Harness component={withOwnership()} />)
     const checkedLabels = screen.getAllByRole('radio', { checked: true }).map((r) => r.textContent ?? '')
     expect(checkedLabels.length).toBe(2)
-    expect(checkedLabels.some((t) => t.includes('All unclaimed artifacts'))).toBe(true)
+    expect(checkedLabels.some((t) => t.includes('All except artifacts assigned elsewhere'))).toBe(true)
     expect(checkedLabels.some((t) => t.includes('Specific artifacts'))).toBe(true)
   })
 

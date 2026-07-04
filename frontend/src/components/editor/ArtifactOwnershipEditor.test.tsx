@@ -48,21 +48,21 @@ describe('ArtifactOwnershipEditor', () => {
   it('renders a base mapping with its group and mode selected', () => {
     render(<Harness initial={[base()]} />)
     expect(screen.getByDisplayValue('com.example.foo')).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: /All artifacts in these groups/ })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('radio', { name: /All under the group ID/ })).toHaveAttribute('aria-checked', 'true')
   })
 
   it('switching to "Specific artifacts" reveals the token chip input', async () => {
     render(<Harness initial={[base()]} />)
-    expect(screen.queryByLabelText('Artifact IDs')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Specific artifacts')).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('radio', { name: /Specific artifacts/ }))
-    expect(screen.getByLabelText('Artifact IDs')).toBeInTheDocument()
+    expect(screen.getByLabelText('Specific artifacts')).toBeInTheDocument()
     // EXPLICIT with no tokens surfaces the "add at least one" error.
     expect(screen.getByText(/Add at least one artifact/)).toBeInTheDocument()
   })
 
   it('adds a literal token on Enter and rejects regex metacharacters', async () => {
     render(<Harness initial={[base({ mode: 'EXPLICIT' })]} />)
-    const input = screen.getByLabelText('Artifact IDs')
+    const input = screen.getByLabelText('Specific artifacts')
     await userEvent.type(input, 'foo-svc{Enter}')
     expect(screen.getByText('foo-svc')).toBeInTheDocument()
     // A metachar token is not committed (left as a flagged draft).

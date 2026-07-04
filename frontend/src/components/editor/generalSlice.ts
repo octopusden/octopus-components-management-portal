@@ -49,7 +49,7 @@ const FIELD_LABELS: Record<string, string> = {
   securityChampion: 'Security Champions',
   labels: 'Labels',
   docs: 'Doc Links',
-  artifactIds: 'Artifact IDs',
+  artifactIds: 'Produced Artifacts',
 }
 
 // Patch keys that are control flags, not user-facing field changes.

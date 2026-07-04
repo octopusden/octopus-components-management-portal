@@ -203,7 +203,7 @@ function MappingCard({ mapping, allMappings, conflict, configRanges, supportedGr
         </label>
 
         <div className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">Owns</span>
+          <span className="font-medium">artifactId matching mode</span>
           <ModeRadioGroup
             value={mapping.mode}
             disabled={disabled}
@@ -215,11 +215,11 @@ function MappingCard({ mapping, allMappings, conflict, configRanges, supportedGr
 
       {mapping.mode === 'EXPLICIT' && (
         <div className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">Artifacts</span>
+          <span className="font-medium">Specific artifacts</span>
           <ArtifactTokensInput
             tokens={mapping.tokens}
             disabled={disabled}
-            ariaLabel="Artifact IDs"
+            ariaLabel="Specific artifacts"
             onChange={(tokens) => onPatch({ tokens })}
           />
           {explicitEmpty && (

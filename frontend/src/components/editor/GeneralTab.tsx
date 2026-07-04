@@ -531,8 +531,8 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
       {/* Doc Links moved to the dedicated Documentation tab (DocumentationTab). */}
       <section data-testid="section-artifact-ids">
         <div className="flex items-center gap-1 mb-3">
-          <h3 className="text-sm font-medium text-muted-foreground"><FieldLabelText path="component.artifactIds" fallback="Artifact IDs" /></h3>
-          <FieldInfo path="component.artifactIds" label="Artifact IDs" />
+          <h3 className="text-sm font-medium text-muted-foreground"><FieldLabelText path="component.artifactIds" fallback="Produced Artifacts" /></h3>
+          <FieldInfo path="component.artifactIds" label="Produced Artifacts" />
         </div>
         <p className="mb-3 text-[13px] text-muted-foreground">
           Artifact coordinates — the groupId and artifactId of artifacts produced at the build and published in
