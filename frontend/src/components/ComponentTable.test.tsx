@@ -40,7 +40,7 @@ function makeComponent(overrides: Partial<ComponentSummary> = {}): ComponentSumm
     // only when distinct from the name).
     displayName: 'my-component',
     componentOwner: null,
-    system: null,
+    systems: [],
     productType: null,
     archived: false,
     updatedAt: null,
@@ -129,9 +129,13 @@ describe('ComponentTable', () => {
   })
 
   describe('SYS-040 — list view column scope', () => {
-    it('does not render a System column', () => {
-      renderTable([makeComponent({ system: 'CLASSIC' })])
-      expect(screen.queryByRole('columnheader', { name: 'System' })).toBeNull()
+    // System membership is MULTI-value (component_systems junction) — the
+    // System column is back and mirrors Labels: a ChipListCell fed the
+    // component's `systems` array. See 'Wave 2 — System column' below for
+    // the chip/overflow behavior.
+    it('renders a System column', () => {
+      renderTable([makeComponent({ systems: ['CLASSIC'] })])
+      expect(screen.getByRole('columnheader', { name: 'System' })).toBeDefined()
     })
 
     it('does not render a Product Type column', () => {
@@ -281,6 +285,34 @@ describe('ComponentTable', () => {
       // Row 2 still collapsed: s, t absent.
       expect(screen.queryByText('s')).toBeNull()
       expect(screen.queryByText('t')).toBeNull()
+    })
+  })
+
+  describe('System column (multi-value, mirrors Labels)', () => {
+    it('renders em-dash when systems is an empty array', () => {
+      renderTable([makeComponent({ systems: [] })])
+      expect(cellForColumn('System').textContent).toContain('—')
+    })
+
+    it('renders a single system as a Badge chip', () => {
+      renderTable([makeComponent({ systems: ['SYS1'] })])
+      expect(screen.getByText('SYS1')).toBeDefined()
+    })
+
+    it('renders up to 3 systems without overflow badge', () => {
+      renderTable([makeComponent({ systems: ['SYS1', 'SYS2', 'SYS3'] })])
+      expect(screen.getByText('SYS1')).toBeDefined()
+      expect(screen.getByText('SYS2')).toBeDefined()
+      expect(screen.getByText('SYS3')).toBeDefined()
+      expect(screen.queryByText(/^\+/)).toBeNull()
+    })
+
+    it('renders +N overflow badge when more than 3 systems are present', () => {
+      renderTable([makeComponent({ systems: ['SYS1', 'SYS2', 'SYS3', 'SYS4'] })])
+      expect(screen.getByText('SYS1')).toBeDefined()
+      expect(screen.getByText('+1')).toBeDefined()
+      // 'SYS4' is overflow — not rendered until the +N toggle is clicked.
+      expect(screen.queryByText('SYS4')).toBeNull()
     })
   })
 

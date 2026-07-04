@@ -91,7 +91,7 @@ function makeSource(overrides: Partial<ComponentDetail> = {}): ComponentDetail {
     displayName: 'Service Alpha',
     componentOwner: 'alice',
     productType: null,
-    system: 'SYS1',
+    systems: ['SYS1'],
     clientCode: null,
     archived: false,
     solution: null,

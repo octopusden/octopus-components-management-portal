@@ -5,7 +5,7 @@ import type { ComponentDetail, ComponentUpdateRequest } from '../../lib/types'
 function makeComponent(over: Partial<ComponentDetail> = {}): ComponentDetail {
   return {
     id: 'c1', name: 'comp', displayName: 'Old Name', componentOwner: 'alice', productType: null,
-    system: 'SYS1', clientCode: null, archived: false, solution: false, parentComponentName: null,
+    systems: ['SYS1'], clientCode: null, archived: false, solution: false, parentComponentName: null,
     version: 3, createdAt: null, updatedAt: null, labels: ['x'], docs: [], artifactIds: [],
     securityGroups: [], teamcityProjects: [], configurations: [],
     ...over,
@@ -18,26 +18,32 @@ const patch = (over: Partial<ComponentUpdateRequest>): ComponentUpdateRequest =>
 
 describe('generalSlice', () => {
   it('is clean when the patch carries only version/clearGroup', () => {
-    const slice = generalSlice(makeComponent(), patch({}), false)
+    const slice = generalSlice(makeComponent(), patch({}))
     expect(slice.isDirty).toBe(false)
     expect(slice.diff).toEqual([])
   })
 
   it('is dirty when the patch carries a real field; request strips version/clearGroup', () => {
-    const slice = generalSlice(makeComponent(), patch({ displayName: 'New Name' }), false)
+    const slice = generalSlice(makeComponent(), patch({ displayName: 'New Name' }))
     expect(slice.isDirty).toBe(true)
     expect('version' in slice.request).toBe(false)
     expect('clearGroup' in slice.request).toBe(false)
     expect(slice.request.displayName).toBe('New Name')
   })
 
-  it('forces dirty when system clear needs attention even though the patch omits system', () => {
-    const slice = generalSlice(makeComponent(), patch({}), true)
+  it('is dirty (and carries the clear) when systems is cleared to empty', () => {
+    const slice = generalSlice(makeComponent({ systems: ['SYS1'] }), patch({ systems: [] }))
+    expect(slice.isDirty).toBe(true)
+    expect(slice.request.systems).toEqual([])
+  })
+
+  it('is dirty when systems changes', () => {
+    const slice = generalSlice(makeComponent({ systems: ['SYS1'] }), patch({ systems: ['SYS1', 'SYS2'] }))
     expect(slice.isDirty).toBe(true)
   })
 
   it('preserves clearParent (a real General control) in the slice request', () => {
-    const slice = generalSlice(makeComponent({ parentComponentName: 'p' }), patch({ parentComponentName: null, clearParent: true }), false)
+    const slice = generalSlice(makeComponent({ parentComponentName: 'p' }), patch({ parentComponentName: null, clearParent: true }))
     expect(slice.request.clearParent).toBe(true)
   })
 
@@ -46,18 +52,18 @@ describe('generalSlice', () => {
   // instead of dropping it to undefined, so the diff/dirty path sees it. Regression for the
   // silent clear-with-success-toast bug.
   it('is dirty (and carries the clear) when componentOwner is cleared', () => {
-    const slice = generalSlice(makeComponent({ componentOwner: 'alice' }), patch({ componentOwner: '' }), false)
+    const slice = generalSlice(makeComponent({ componentOwner: 'alice' }), patch({ componentOwner: '' }))
     expect(slice.isDirty).toBe(true)
     expect(slice.request.componentOwner).toBe('')
   })
 
   it('is dirty when clientCode is cleared', () => {
-    const slice = generalSlice(makeComponent({ clientCode: 'CC1' }), patch({ clientCode: '' }), false)
+    const slice = generalSlice(makeComponent({ clientCode: 'CC1' }), patch({ clientCode: '' }))
     expect(slice.isDirty).toBe(true)
   })
 
   it('is dirty when copyright is cleared', () => {
-    const slice = generalSlice(makeComponent({ copyright: 'ACME' }), patch({ copyright: '' }), false)
+    const slice = generalSlice(makeComponent({ copyright: 'ACME' }), patch({ copyright: '' }))
     expect(slice.isDirty).toBe(true)
   })
 })
@@ -78,14 +84,14 @@ describe('generalSlice — artifactIds ownership (request shape)', () => {
   ]
 
   it('does not crash and reads clean when a request-shaped artifactIds patch matches the component (load scenario)', () => {
-    const slice = generalSlice(owned, patch({ artifactIds: sameRequest }), false)
+    const slice = generalSlice(owned, patch({ artifactIds: sameRequest }))
     expect(slice.isDirty).toBe(false)
     expect(slice.diff).toEqual([])
   })
 
   it('flags dirty when an ownership token actually changes', () => {
     const changed = sameRequest.map((m, i) => (i === 1 ? { ...m, artifactTokens: ['svc-b'] } : m))
-    const slice = generalSlice(owned, patch({ artifactIds: changed }), false)
+    const slice = generalSlice(owned, patch({ artifactIds: changed }))
     expect(slice.isDirty).toBe(true)
   })
 

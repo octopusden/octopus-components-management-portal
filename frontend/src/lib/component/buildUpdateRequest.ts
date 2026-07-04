@@ -3,12 +3,9 @@ import type { GeneralFormValues } from '../../components/editor/GeneralTab'
 import type { FieldVisibility } from '../../hooks/useFieldConfig'
 import { groupTokens, toArtifactIdRequest } from '../artifactOwnership'
 
-// System is single-value per component. CRS PR #301 collapsed
-// `Component.systems Set<String>` → `Component.system String?`; the
-// Portal form holds a scalar `system: string` and buildUpdateRequest
-// forwards it unchanged to the wire. (Task #14 introduced a `[value]`
-// array-wrap bridge for the pre-#301 DTO — dropped now that the
-// scalar contract has shipped.)
+// System membership is MULTI-value (component_systems junction). The Portal
+// form holds `systems: string[]` and buildUpdateRequest forwards it with the
+// same dirty-gated REPLACE + explicit-empty-clear semantics as `labels`.
 
 // Field-config visibility for every field-config-gated GeneralTab field.
 // Hidden fields are NEVER sent on the wire — CRS does not filter by FC
@@ -17,8 +14,8 @@ import { groupTokens, toArtifactIdRequest } from '../artifactOwnership'
 export interface FieldVisibilities {
   displayName: FieldVisibility
   componentOwner: FieldVisibility
-  // CRS PR #301: field-config key + DTO field renamed to singular.
-  system: FieldVisibility
+  // Field-config key stays `component.system`; the DTO field is `systems`.
+  systems: FieldVisibility
   clientCode: FieldVisibility
   releaseManager: FieldVisibility
   securityChampion: FieldVisibility
@@ -46,7 +43,7 @@ export interface FieldVisibilities {
 // changed to isFieldDirty: the array shape never reaches this layer.
 export interface DirtyFlags {
   solution?: boolean
-  system?: boolean
+  systems?: boolean
   // displayName is nullable + unique server-side. The page passes this as "interacted"
   // (dirty OR touched); buildUpdateRequest value-compares against the persisted value so a
   // clear back to the form default '' is caught (RHF clear-to-default blind-spot) while a
@@ -95,9 +92,15 @@ export interface BuildUpdateRequestParams {
 export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentUpdateRequest {
   const { component, values, visibilities, dirtyFields } = params
 
-  // CRS PR #301 wire shape: `system: string | null`. Trim defensively
-  // (paste-restore round-trip could produce whitespace-only).
-  const systemTrimmed = (values.system ?? '').trim()
+  // Multi-value system membership: trim, drop blanks, keep-first dedupe
+  // (mirrors labels + the server-side canonicalization).
+  const systemsArray = Array.from(
+    new Set(
+      (values.systems ?? [])
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ),
+  )
   const labelsArray = Array.from(
     new Set(
       (values.labels ?? [])
@@ -190,19 +193,15 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
       return next === prior ? undefined : next
     })(),
     // productType is owned by EscrowTab — never sent from the General save.
-    // Two guards on `system`:
-    //   - Pre-hydration: form mounts with `system: ''` BEFORE GeneralTab's
-    //     useEffect hydrates from `component.system`. The dirty-gate
-    //     blocks the unwanted clear.
-    //   - Empty-after-dirty: System is REQUIRED server-side. If the user
-    //     picks then clears the single-select, sending `system: ''` /
-    //     `null` would 400. Omit instead — the page-level guard surfaces
-    //     an inline "System is required" error so the omit-then-re-edit
-    //     cycle is visible rather than silent.
-    system:
-      visibilities.system === 'hidden' || dirtyFields.system !== true || systemTrimmed === ''
+    // `systems` mirrors `labels` exactly: dirty-gated REPLACE with explicit-
+    // empty-clear. !dirty → omit (blocks the pre-hydration form-default `[]`
+    // from wiping server data before GeneralTab hydrates); dirty + [] → emit
+    // [] (clear all — systems is OPTIONAL server-side); dirty + non-empty →
+    // emit the canonicalized list.
+    systems:
+      visibilities.systems === 'hidden' || dirtyFields.systems !== true
         ? undefined
-        : systemTrimmed,
+        : systemsArray,
     clientCode: ((): string | undefined => {
       if (visibilities.clientCode === 'hidden' || dirtyFields.clientCode !== true) return undefined
       const next = (values.clientCode ?? '').trim()

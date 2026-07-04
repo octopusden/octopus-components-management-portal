@@ -25,7 +25,7 @@ function makeComponent(id: string, configurations: ComponentConfiguration[]): Co
     displayName: 'svc',
     componentOwner: null,
     productType: null,
-    system: null,
+    systems: [],
     clientCode: null,
     archived: false,
     solution: null,

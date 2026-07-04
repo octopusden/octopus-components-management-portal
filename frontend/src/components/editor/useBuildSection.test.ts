@@ -20,7 +20,7 @@ function baseRow(over: Partial<ComponentConfiguration> = {}): ComponentConfigura
 function makeComponent(over: Partial<ComponentDetail> = {}): ComponentDetail {
   return {
     id: 'c1', name: 'comp', displayName: null, componentOwner: null, productType: null,
-    system: null, clientCode: null, archived: false, solution: false, parentComponentName: null,
+    systems: [], clientCode: null, archived: false, solution: false, parentComponentName: null,
     version: 1, createdAt: null, updatedAt: null, labels: [], docs: [], artifactIds: [],
     securityGroups: [], teamcityProjects: [],
     configurations: [baseRow({ build: { buildSystem: 'GRADLE', javaVersion: '17' } })],

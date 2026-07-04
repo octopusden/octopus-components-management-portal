@@ -51,7 +51,7 @@ function makeBaseRow(overrides: Partial<ComponentConfiguration> = {}): Component
 function makeComponent(overrides: Partial<ComponentDetail> = {}): ComponentDetail {
   return {
     id: 'c-1', name: 'my-component', displayName: 'My Component', componentOwner: 'alice',
-    productType: null, system: null, clientCode: null, solution: false, parentComponentName: null,
+    productType: null, systems: [], clientCode: null, solution: false, parentComponentName: null,
     archived: false, version: 5, createdAt: null, updatedAt: null, labels: [], docs: [], artifactIds: [],
     securityGroups: [], teamcityProjects: [], skipCommitCheck: false, configurations: [makeBaseRow()],
     ...overrides,

@@ -15,10 +15,9 @@ export interface ComponentSummary {
   // null when the component declares no componentDisplayName (preserves the legacy $.name wire).
   displayName: string | null
   componentOwner: string | null
-  // CRS PR #301 collapsed Component.systems Set<String> → Component.system
-  // String?. Single-value per component in the domain; the list page renders
-  // the scalar directly.
-  system: string | null
+  // A component may belong to several systems (component_systems junction).
+  // The list page renders these as chips (see labels).
+  systems: string[]
   productType: string | null
   archived: boolean
   // Whether this component may be referenced as a parent (parent-picker
@@ -54,10 +53,9 @@ export interface ComponentDetail {
   displayName: string | null
   componentOwner: string | null
   productType: string | null
-  // CRS PR #301 collapsed Component.systems Set<String> → Component.system
-  // String?. Domain is single-value per component; the editor renders a
-  // single-select EnumSelect bound directly to this scalar.
-  system: string | null
+  // A component may belong to several systems (component_systems junction).
+  // The editor renders a multi-select (see labels).
+  systems: string[]
   clientCode: string | null
   archived: boolean
   solution: boolean | null
@@ -369,8 +367,8 @@ export interface ComponentCreateRequest {
   displayName?: string | null
   componentOwner?: string | null
   productType?: string | null
-  // CRS PR #301: scalar field, optional/nullable.
-  system?: string | null
+  // Multi-value system membership; omit to leave unset on create.
+  systems?: string[]
   clientCode?: string | null
   solution?: boolean | null
   parentComponentName?: string | null
@@ -414,9 +412,9 @@ export interface ComponentUpdateRequest {
   displayName?: string | null
   componentOwner?: string | null
   productType?: string | null
-  // CRS PR #301: scalar field, optional/nullable. PATCH semantics — omit
-  // to keep server value, set string to replace, set null to clear.
-  system?: string | null
+  // Multi-value system membership. PATCH semantics — omit to keep server
+  // value, set a (possibly empty) array to REPLACE (empty clears all).
+  systems?: string[]
   clientCode?: string | null
   solution?: boolean | null
   parentComponentName?: string | null

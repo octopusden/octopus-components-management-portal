@@ -189,7 +189,7 @@ function buildCreateOwnership(ownership: CreateFormValues['ownership'] | undefin
 // baseConfiguration, coordinate, archived, collections) are intentionally absent.
 const VISIBILITY_GATED_CREATE_FIELDS = [
   'displayName', 'copyright', 'releaseManager', 'securityChampion',
-  'distributionExplicit', 'distributionExternal', 'system', 'clientCode',
+  'distributionExplicit', 'distributionExternal', 'systems', 'clientCode',
   'solution', 'productType', 'parentComponentName', 'releasesInDefaultBranch',
   'vcsExternalRegistry',
 ] as const
@@ -210,7 +210,7 @@ export function buildCreateRequest(
     componentOwner: form.componentOwner,
     // Source-derived general fields (null/[] defaults in scratch mode).
     productType: source?.productType ?? undefined,
-    system: source?.system ?? null,
+    systems: source?.systems ?? [],
     clientCode: source?.clientCode ?? undefined,
     solution: source?.solution ?? undefined,
     parentComponentName: source?.parentComponentName ?? undefined,

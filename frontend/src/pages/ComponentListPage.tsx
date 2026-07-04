@@ -40,7 +40,7 @@ function summaryFromValidationKey(componentKey: string): ComponentSummary {
     name: componentKey,
     displayName: null,
     componentOwner: null,
-    system: null,
+    systems: [],
     productType: null,
     archived: false,
     updatedAt: null,

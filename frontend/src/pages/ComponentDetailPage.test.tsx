@@ -181,7 +181,7 @@ const baseComponent: ComponentDetail = {
   displayName: 'My Component',
   componentOwner: 'alice',
   productType: 'TYPE_A',
-  system: 'SYS1',
+  systems: ['SYS1'],
   // Fixture group for the read-only Group Key display + role badge. R1: a group is
   // migration-owned aggregator membership, not API-editable — just display data here;
   // there is no save-guard / prefix-check path anymore.
@@ -345,7 +345,7 @@ beforeEach(() => {
   // still override this to exercise the clear-all guards.
   vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
     useEffect(() => {
-      form.setValue('system', component.system ?? '')
+      form.setValue('systems', component.systems ?? [])
       form.setValue('displayName', component.displayName ?? '')
     }, [component, form])
     return React.createElement('div', { 'data-testid': 'general-tab' })
@@ -363,7 +363,7 @@ describe('ComponentDetailPage — Save gating on canEdit', () => {
   function renderDirty(component: ComponentDetail, user: User) {
     vi.mocked(GeneralTab).mockImplementation(({ component: c, form }) => {
       useEffect(() => {
-        form.setValue('system', c.system ?? '')
+        form.setValue('systems', c.systems ?? [])
       }, [c, form])
       return React.createElement(
         'button',
@@ -552,7 +552,7 @@ describe('ComponentDetailPage — breadcrumb badges', () => {
 
   it('(e) System badge not rendered when system array is empty', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
-    renderPage({ ...baseComponent, system: null }, user)
+    renderPage({ ...baseComponent, systems: [] }, user)
     expect(screen.queryByText('SYS1')).toBeNull()
   })
 
@@ -847,7 +847,7 @@ describe('ComponentDetailPage — Save gating on owner validation', () => {
     const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
     vi.mocked(GeneralTab).mockImplementation(({ component: c, form, onOwnerValidatingChange }) => {
       useEffect(() => {
-        form.setValue('system', c.system ?? '')
+        form.setValue('systems', c.systems ?? [])
         form.setValue('displayName', c.displayName ?? '')
       }, [c, form])
       return React.createElement(
@@ -890,7 +890,7 @@ describe('ComponentDetailPage — Save dirty-gate', () => {
   it('Save is disabled on a pristine form, enables after a real edit, then PATCHes', async () => {
     vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
       useEffect(() => {
-        form.setValue('system', component.system ?? '')
+        form.setValue('systems', component.systems ?? [])
         form.setValue('displayName', component.displayName ?? '')
       }, [component, form])
       return React.createElement(
@@ -934,7 +934,7 @@ describe('ComponentDetailPage — Save dirty-gate', () => {
     // touched) so buildUpdateRequest emits '' (server stores null).
     vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
       useEffect(() => {
-        form.setValue('system', component.system ?? '')
+        form.setValue('systems', component.systems ?? [])
         form.setValue('componentOwner', component.componentOwner ?? '')
       }, [component, form])
       return React.createElement(
@@ -969,7 +969,7 @@ describe('ComponentDetailPage — Save dirty-gate', () => {
     // mock hydrates ONCE (deps []), isolating the page-level post-save reset.
     vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
       useEffect(() => {
-        form.setValue('system', component.system ?? '')
+        form.setValue('systems', component.systems ?? [])
         form.setValue('componentOwner', component.componentOwner ?? '')
         // eslint-disable-next-line react-hooks/exhaustive-deps
       }, [])
@@ -1007,7 +1007,7 @@ describe('ComponentDetailPage — Save dirty-gate', () => {
   it('carries the entered Jira key + comment from the Review dialog on the combined PATCH', async () => {
     vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
       useEffect(() => {
-        form.setValue('system', component.system ?? '')
+        form.setValue('systems', component.systems ?? [])
         form.setValue('displayName', component.displayName ?? '')
       }, [component, form])
       return React.createElement(
@@ -1057,19 +1057,27 @@ describe('ComponentDetailPage — Save dirty-gate', () => {
   })
 })
 
-describe('ComponentDetailPage — system clear-blocks-save guard (task #14 single-select)', () => {
-  it('user clears the system → save is blocked, no PATCH fires', async () => {
-    // Task #14 single-select shape: form.system is a scalar string.
-    // The page-level guard fires when server had a system and form now
-    // has '' — without it the user would click Save, hit
-    // buildUpdateRequest (which omits systems on dirty-empty), see a
-    // green toast, and walk away thinking the clear took (server keeps
-    // the original list since the field was absent on the wire).
-    // Stub leaves form.system at the '' default while baseComponent
-    // (`system: 'SYS1'`) has the prior list.
-    vi.mocked(GeneralTab).mockImplementation(() =>
-      React.createElement('div', { 'data-testid': 'general-tab-systems-cleared' }),
-    )
+describe('ComponentDetailPage — systems clear-all sends [] (guard removed; mirrors labels)', () => {
+  // systems is now OPTIONAL server-side and mirrors labels exactly — the old
+  // "system is required" block-save guard is gone. Clearing every system is a
+  // valid user intent: the page now SENDS `systems: []` (explicit clear)
+  // instead of blocking the save.
+
+  it('component had systems + user removes them all via chips × → PATCH body contains systems: []', async () => {
+    // Stub mimics the real GeneralTab + ChipsInput interaction: hydrate from
+    // component.systems, then simulate the chip × path which calls setValue
+    // with shouldDirty + shouldTouch. RHF's value-equality check keeps
+    // dirty=false (final value [] == default []), but touchedFields.systems
+    // flips to true — the signal handleSave's synth-dirty depends on (same
+    // mechanism as the labels clear-all test below).
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('systems', component.systems ?? [])
+        form.setValue('systems', [], { shouldDirty: true, shouldTouch: true })
+        form.setValue('displayName', component.displayName ?? '')
+      }, [component, form])
+      return React.createElement('div', { 'data-testid': 'general-tab-systems-cleared' })
+    })
     const updateMutateAsync = vi.fn(() => Promise.resolve())
     const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
     renderPage(baseComponent, user, { updateMutation: { mutateAsync: updateMutateAsync } })
@@ -1077,21 +1085,23 @@ describe('ComponentDetailPage — system clear-blocks-save guard (task #14 singl
     await waitFor(() => {
       expect(screen.getByTestId('general-tab-systems-cleared')).toBeDefined()
     })
-    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    await waitFor(() => {
+      const btn = screen.getByRole('button', { name: /save changes/i }) as HTMLButtonElement
+      expect(btn.disabled).toBe(false)
+    })
+    await clickSaveAndConfirm()
 
-    // Give React-Query a tick to settle if the mutation were to fire.
-    // Disabled Save fires no handler, so no need to await: assert directly.
-    expect(updateMutateAsync).not.toHaveBeenCalled()
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
+    const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
+    // The explicit `systems: []` clear must reach the wire — not undefined,
+    // not absent. PATCH semantics: present-and-empty-array == REPLACE with
+    // empty list.
+    expect(payload['systems']).toEqual([])
   })
 
-  it('system hidden + a real edit elsewhere → save fires, empty-system guard skipped', async () => {
-    // If admins configured the systems field as hidden via field-config, the
-    // empty-system guard must NOT block: the field isn't user-visible, so we
-    // cannot demand the user select one. We make a real visible change
-    // (displayName) so the Save dirty-gate enables the button, then assert the
-    // save fires despite the form's system being empty — proving the guard is
-    // skipped when the field is hidden. (buildUpdateRequest still omits system
-    // on hidden visibility.)
+  it('systems hidden + a real edit elsewhere → save fires, systems omitted from the PATCH', async () => {
+    // Hidden fields are never sent on the wire regardless of form state —
+    // this is the same hidden-omit contract as every other GeneralTab field.
     mockedUseFieldConfigEntry.mockImplementation((path: string) => ({
       entry: path === 'component.system'
         ? { visibility: 'hidden' as const, required: false }
@@ -1101,8 +1111,8 @@ describe('ComponentDetailPage — system clear-blocks-save guard (task #14 singl
     }))
     // Stub exposes a button that makes a real visible edit (displayName) on
     // click — a user-driven setValue reliably flips RHF's isDirty (mirrors how
-    // the real GeneralTab's registered inputs behave). System is left at the ''
-    // default to model the hidden-and-empty case.
+    // the real GeneralTab's registered inputs behave). systems is left at the
+    // [] default to model the hidden-and-empty case.
     vi.mocked(GeneralTab).mockImplementation(({ form }) =>
       React.createElement(
         'button',
@@ -1126,21 +1136,22 @@ describe('ComponentDetailPage — system clear-blocks-save guard (task #14 singl
     await clickSaveAndConfirm()
 
     await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
+    const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
+    expect(payload['systems']).toBeUndefined()
   })
 })
 
 describe('ComponentDetailPage — labels clear-all sends [] (PR #44 follow-up: close RHF blind-spot)', () => {
-  // The systems guard (above) and the labels clear case both hit the same
-  // RHF quirk: setValue('field', []) does NOT mark the field dirty when
+  // The systems clear-all case (above) and the labels clear case both hit the
+  // same RHF quirk: setValue('field', []) does NOT mark the field dirty when
   // the form default is also [], so `formState.dirtyFields.<field>` stays
-  // false even after a user-driven clear-all. For systems we BLOCK save
-  // (systems is required server-side). For labels we SEND `[]` (labels
-  // is OPTIONAL — clear-all is a valid intent that the previous code
-  // silently dropped because buildUpdateRequest's `dirtyFields.labels !==
-  // true` clause omitted the field).
+  // false even after a user-driven clear-all. Both systems and labels are
+  // OPTIONAL server-side, so both SEND `[]` (clear-all is a valid intent that
+  // the previous code silently dropped because buildUpdateRequest's
+  // `dirtyFields.<field> !== true` clause omitted the field).
   //
-  // The fix synthesises a `dirtyFlags.labels` from the server-vs-form
-  // value compare and feeds that into buildUpdateRequest.
+  // The fix synthesises a `dirtyFlags.<field>` from the server-vs-form value
+  // compare and feeds that into buildUpdateRequest.
 
   it('component had labels + user removes them all via chips × → PATCH body contains labels: []', async () => {
     // Stub mimics the real GeneralTab + ChipsInput interaction: hydrate
@@ -1153,8 +1164,8 @@ describe('ComponentDetailPage — labels clear-all sends [] (PR #44 follow-up: c
       useEffect(() => {
         form.setValue('labels', component.labels ?? [])
         form.setValue('labels', [], { shouldDirty: true, shouldTouch: true })
-        // Hydrate systems too so the unrelated systems guard doesn't trip.
-        form.setValue('system', component.system ?? '')
+        // Hydrate systems too so it doesn't spuriously read as changed.
+        form.setValue('systems', component.systems ?? [])
         form.setValue('displayName', component.displayName ?? '')
       }, [component, form])
       return React.createElement('div', { 'data-testid': 'general-tab-labels-cleared' })
@@ -1253,7 +1264,7 @@ describe('ComponentDetailPage — labels clear-all sends [] (PR #44 follow-up: c
       useEffect(() => {
         form.setValue('labels', component.labels ?? [])
         form.setValue('labels', ['x'], { shouldDirty: true, shouldTouch: true })
-        form.setValue('system', component.system ?? '')
+        form.setValue('systems', component.systems ?? [])
         form.setValue('displayName', component.displayName ?? '')
       }, [component, form])
       return React.createElement('div', { 'data-testid': 'general-tab' })
@@ -1325,7 +1336,7 @@ describe('ComponentDetailPage — cross-tab 400 + displayName clear', () => {
     // GeneralTab stub hydrates displayName + exposes a dirty edit so Save enables.
     vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
       useEffect(() => {
-        form.setValue('system', component.system ?? '')
+        form.setValue('systems', component.systems ?? [])
         form.setValue('displayName', component.displayName ?? '')
       }, [component, form])
       return React.createElement(
@@ -1351,7 +1362,7 @@ describe('ComponentDetailPage — cross-tab 400 + displayName clear', () => {
   it('auto-switches to the Documentation tab when a 400 maps to a docs field', async () => {
     vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
       useEffect(() => {
-        form.setValue('system', component.system ?? '')
+        form.setValue('systems', component.systems ?? [])
         form.setValue('displayName', component.displayName ?? '')
       }, [component, form])
       return React.createElement(
@@ -1376,7 +1387,7 @@ describe('ComponentDetailPage — cross-tab 400 + displayName clear', () => {
   it('clearing displayName PATCHes it as "" (nullable — server clears to null, or 400s for explicit+external)', async () => {
     vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
       useEffect(() => {
-        form.setValue('system', component.system ?? '')
+        form.setValue('systems', component.systems ?? [])
         form.setValue('displayName', component.displayName ?? '')
       }, [component, form])
       return React.createElement(
@@ -1411,7 +1422,7 @@ describe('ComponentDetailPage — 409 conflict handling in the Review dialog', (
   function stubDirtyGeneralTab() {
     vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
       useEffect(() => {
-        form.setValue('system', component.system ?? '')
+        form.setValue('systems', component.systems ?? [])
         form.setValue('displayName', component.displayName ?? '')
       }, [component, form])
       return React.createElement(
