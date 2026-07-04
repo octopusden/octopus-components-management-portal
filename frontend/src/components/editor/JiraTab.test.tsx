@@ -24,9 +24,11 @@ let editableMap: Record<string, boolean> = {}
 
 // Whiskey renders the server-backed preview (useQuery). JiraTab tests don't wrap
 // a QueryClient, so stub the hook — the Whiskey cases here only assert the tab's
-// own controls, not the preview contents.
-vi.mock('../../hooks/useDetailedVersion', () => ({
-  useDetailedVersion: () => ({ data: undefined, isLoading: false, isError: false }),
+// own controls, not the preview contents. importActual keeps jiraOverridesToPreview
+// (which JiraTab imports from the same module) real.
+vi.mock('../../hooks/useVersionPreview', async (orig) => ({
+  ...(await orig<typeof import('../../hooks/useVersionPreview')>()),
+  useVersionPreview: () => ({ data: undefined, isLoading: false, isError: false }),
 }))
 
 vi.mock('../../hooks/useFieldConfig', () => ({

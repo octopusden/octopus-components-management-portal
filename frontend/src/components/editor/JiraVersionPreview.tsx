@@ -1,7 +1,7 @@
-import { useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { computeLadder, expandFormat, parseVersion, type LadderState, type LadderRow, type VersionParts } from '../../lib/versionPreview'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
-import { useDetailedVersion } from '../../hooks/useDetailedVersion'
+import { useVersionPreview, type VersionPreviewOverride, type VersionPreviewRequest } from '../../hooks/useVersionPreview'
 import type { DetailedComponentVersion } from '../../lib/types'
 
 /**
@@ -36,11 +36,12 @@ export interface JiraVersionPreviewProps {
   /**
    * WHISKEY build system: the client can't reproduce its versions (zero-padding,
    * library computation, custom variables), so render server-truth from CRS
-   * instead of the client ladder. Reflects the SAVED configuration.
+   * instead of the client ladder. Rendered LIVE from the unsaved editor formats
+   * (base + per-range overrides) via the preview endpoint — no save needed.
    */
   whiskey?: boolean
-  /** Component key (legacy name) used to query the server-rendered ladder. */
-  componentName?: string
+  /** Per-range jira format overrides (from the overrides draft), for the live preview. */
+  overrides?: VersionPreviewOverride[]
 }
 
 // Field-config paths — shared hover vocabulary with JiraTab's format fields and
@@ -403,20 +404,77 @@ function LadderRowView({
 }
 
 /**
- * Whiskey preview: fetch the server-rendered ladder for the component + an
- * editable input version (debounced) and render it with the same rows/chrome/
- * hover linking as the client panel. Values are authoritative (no approx), but
- * reflect the SAVED configuration — a caption says so; a missing/unparseable
- * version or a fetch error falls back to a notice.
+ * Whiskey preview: render the server-truth ladder LIVE from the unsaved editor
+ * formats (base + per-range overrides) + an editable input version (debounced),
+ * with the same rows/chrome/hover linking as the client panel. Values are
+ * authoritative (no approx) and reflect the CURRENT edits — no save needed. A
+ * version matching no format, or any 4xx, falls back to a notice.
  */
 function JiraVersionPreviewServer(props: JiraVersionPreviewProps) {
-  const { componentName = '', technical, hotfixEnabled, minorSeparate, buildSeparate, hoveredField, onHoverField } = props
+  const {
+    technical,
+    hotfixEnabled,
+    minorSeparate,
+    buildSeparate,
+    minorVersionFormat,
+    lineVersionFormat,
+    releaseVersionFormat,
+    buildVersionFormat,
+    hotfixVersionFormat,
+    versionPrefix,
+    versionFormat,
+    overrides = [],
+    hoveredField,
+    onHoverField,
+  } = props
 
   // Whiskey-shaped seed (5 segments incl. build) so the server has enough to
   // render every format on first paint; the user can edit it.
   const [version, setVersion] = useState('03.62.30.19-4')
-  const debounced = useDebouncedValue(version, 350)
-  const query = useDetailedVersion(componentName, debounced, true)
+
+  // Assemble the preview request from the LIVE editor state, using EXACTLY the
+  // same base materialization the save path sends to CRS (useJiraSection's
+  // effectiveMinor/effectiveBuild) so the preview matches detailed-version:
+  //  - Minor mirrors Line → send the Line value (CRS treats minor as the leader).
+  //  - Build mirrors Release → send '' so CRS's own server-side fallback resolves
+  //    it to the EFFECTIVE (override-aware) release, rather than a stale copy.
+  const payload = useMemo<VersionPreviewRequest>(
+    () => ({
+      version,
+      technical,
+      hotfixEnabled,
+      base: {
+        minorVersionFormat: minorSeparate ? minorVersionFormat : lineVersionFormat,
+        releaseVersionFormat,
+        buildVersionFormat: buildSeparate ? buildVersionFormat : '',
+        lineVersionFormat,
+        hotfixVersionFormat,
+        versionPrefix,
+        versionFormat,
+      },
+      overrides,
+    }),
+    [
+      version,
+      technical,
+      hotfixEnabled,
+      minorSeparate,
+      buildSeparate,
+      minorVersionFormat,
+      lineVersionFormat,
+      releaseVersionFormat,
+      buildVersionFormat,
+      hotfixVersionFormat,
+      versionPrefix,
+      versionFormat,
+      overrides,
+    ],
+  )
+  // Debounce the whole request (serialized, so equal content settles) — the
+  // editor changes formats and the version on every keystroke.
+  const debouncedKey = useDebouncedValue(JSON.stringify(payload), 350)
+  const debouncedPayload = useMemo(() => JSON.parse(debouncedKey) as VersionPreviewRequest, [debouncedKey])
+  const query = useVersionPreview(debouncedPayload, true)
 
   const flags: MirrorFlags = { minorMirrored: !minorSeparate, buildMirrored: !buildSeparate }
   const highlightedRows = new Set(fieldToRows(hoveredField, flags))
@@ -449,9 +507,6 @@ function JiraVersionPreviewServer(props: JiraVersionPreviewProps) {
           />
         </label>
       </div>
-      <p className="mb-3 text-[11px] leading-relaxed text-muted-foreground">
-        Rendered from the saved configuration by the versioning library.
-      </p>
 
       {query.isLoading && (
         <p data-testid="version-preview-loading" className="py-6 text-center text-sm text-muted-foreground">

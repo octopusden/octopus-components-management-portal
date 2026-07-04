@@ -1,4 +1,4 @@
-import { useState, type FocusEvent } from 'react'
+import { useMemo, useState, type FocusEvent } from 'react'
 import { LockKeyhole } from 'lucide-react'
 import { Label } from '../ui/label'
 import { Input } from '../ui/input'
@@ -10,6 +10,7 @@ import { FieldInfo } from '../ui/FieldInfo'
 import { FieldLabelText } from '../ui/FieldLabelText'
 import { FieldOverrideInline } from './FieldOverrideInline'
 import { useOverridesDraft } from './overridesDraft'
+import { jiraOverridesToPreview } from '../../hooks/useVersionPreview'
 import type { ComponentDetail } from '../../lib/types'
 import { isHotfixEnabled } from '../../lib/versionPreview'
 import { JiraVersionPreview } from './JiraVersionPreview'
@@ -291,6 +292,8 @@ export function JiraTab({ component, section, canEdit, conflictError, effectiveB
   const isWhiskey = effectiveBuildSystem === 'WHISKEY'
 
   const hotfixEnabled = isHotfixEnabled(component)
+  // Per-range jira format overrides folded into the live-preview shape.
+  const jiraPreviewOverrides = useMemo(() => jiraOverridesToPreview(effectiveOverrides), [effectiveOverrides])
 
   // Shared hovered format-field path, lifted here so the format fields (below)
   // and the ladder-preview rows cross-highlight in both directions (P-2b).
@@ -496,7 +499,7 @@ export function JiraTab({ component, section, canEdit, conflictError, effectiveB
               hoveredField={hoveredField}
               onHoverField={setHoveredField}
               whiskey={isWhiskey}
-              componentName={component.name}
+              overrides={jiraPreviewOverrides}
             />
           </aside>
         </div>

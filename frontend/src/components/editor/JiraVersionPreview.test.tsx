@@ -2,15 +2,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { JiraVersionPreview, type JiraVersionPreviewProps } from './JiraVersionPreview'
-import { useDetailedVersion } from '../../hooks/useDetailedVersion'
+import { useVersionPreview } from '../../hooks/useVersionPreview'
 import type { DetailedComponentVersion } from '../../lib/types'
 
-// The Whiskey path fetches via useDetailedVersion; stub it so the render tests
+// The Whiskey path fetches via useVersionPreview; stub it so the render tests
 // don't need a QueryClient. The client (non-Whiskey) path never calls it.
-vi.mock('../../hooks/useDetailedVersion', () => ({ useDetailedVersion: vi.fn() }))
-const mockDetailed = vi.mocked(useDetailedVersion)
+// importActual keeps jiraOverridesToPreview real (unused here, but avoids a
+// half-mocked module).
+vi.mock('../../hooks/useVersionPreview', async (orig) => ({
+  ...(await orig<typeof import('../../hooks/useVersionPreview')>()),
+  useVersionPreview: vi.fn(),
+}))
+const mockPreview = vi.mocked(useVersionPreview)
 beforeEach(() => {
-  mockDetailed.mockReturnValue({ data: undefined, isLoading: false, isError: false } as ReturnType<typeof useDetailedVersion>)
+  mockPreview.mockReturnValue({ data: undefined, isLoading: false, isError: false } as ReturnType<typeof useVersionPreview>)
 })
 
 /** Brief §4 example defaults (1.2.3 / pgw / hotfix 1.2.3-87), mirrored pairs. */
@@ -299,12 +304,12 @@ describe('JiraVersionPreview — Whiskey (server-rendered)', () => {
   }
 
   function ok(data: DetailedComponentVersion) {
-    mockDetailed.mockReturnValue({ data, isLoading: false, isError: false } as ReturnType<typeof useDetailedVersion>)
+    mockPreview.mockReturnValue({ data, isLoading: false, isError: false } as ReturnType<typeof useVersionPreview>)
   }
 
   it('renders server-truth rows (bare for CI, jiraVersion for Jira-facing)', () => {
     ok(detailed)
-    renderPreview({ whiskey: true, componentName: 'acme' })
+    renderPreview({ whiskey: true })
     expect(rowValue('release')).toBe('pgw-03.62.30.19')
     expect(rowValue('rc')).toBe('pgw-03.62.30.19_RC')
     expect(rowValue('minor')).toBe('pgw-03.62')
@@ -314,24 +319,25 @@ describe('JiraVersionPreview — Whiskey (server-rendered)', () => {
     expect(rowValue('hotfix-jira')).toBe('pgw-03.62.30.19-9')
   })
 
-  it('shows the saved-configuration caption and a single version input (no hotfix input)', () => {
+  it('renders live (no saved-configuration caption) with a single version input (no hotfix input)', () => {
     ok(detailed)
-    renderPreview({ whiskey: true, componentName: 'acme' })
-    expect(screen.getByText(/rendered from the saved configuration/i)).toBeInTheDocument()
+    renderPreview({ whiskey: true })
+    // The preview is now live from the unsaved edits — the old caption is gone.
+    expect(screen.queryByText(/rendered from the saved configuration/i)).toBeNull()
     expect(screen.getByLabelText('version')).toBeInTheDocument()
     expect(screen.queryByLabelText('hotfix version')).toBeNull()
   })
 
   it('omits the hotfix rows when hotfixes are disabled even if the server returns one', () => {
     ok(detailed)
-    renderPreview({ whiskey: true, componentName: 'acme', hotfixEnabled: false })
+    renderPreview({ whiskey: true, hotfixEnabled: false })
     expect(screen.queryByTestId('ladder-row-hotfix-build')).toBeNull()
     expect(screen.queryByTestId('ladder-row-hotfix-jira')).toBeNull()
   })
 
   it('falls back to a notice when the server returns nothing (unparseable version / error)', () => {
-    mockDetailed.mockReturnValue({ data: undefined, isLoading: false, isError: true } as ReturnType<typeof useDetailedVersion>)
-    renderPreview({ whiskey: true, componentName: 'acme' })
+    mockPreview.mockReturnValue({ data: undefined, isLoading: false, isError: true } as ReturnType<typeof useVersionPreview>)
+    renderPreview({ whiskey: true })
     expect(screen.getByTestId('version-preview-empty')).toBeInTheDocument()
     expect(screen.queryByTestId('ladder-row-release')).toBeNull()
   })
