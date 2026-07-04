@@ -576,8 +576,8 @@ describe('ComponentDetailPage — sidebar nav order', () => {
     const tabs = within(screen.getByRole('tablist')).getAllByRole('tab')
     // Strip count badges ("Build1" → "Build") so the assertion only pins order.
     // The grouping (spec §2.1) puts Jira/Escrow under Build & Release before the
-    // single-item Distribution group, then Metadata (Misc, Configurations), then
-    // Tools (As Code, Overrides, History).
+    // Distribution group (Distribution + Docker), then Metadata (Misc,
+    // Configurations), then Tools (As Code, Overrides, History).
     expect(tabs.map((t) => (t.textContent ?? '').replace(/\d+$/, ''))).toEqual([
       'General',
       'Build',
@@ -586,6 +586,7 @@ describe('ComponentDetailPage — sidebar nav order', () => {
       'Escrow',
       'Documentation',
       'Distribution',
+      'Docker',
       'Misc',
       'Supported Versions',
       'Configurations',

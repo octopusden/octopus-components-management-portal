@@ -29,6 +29,7 @@ import { buildUpdateRequest } from '../lib/component/buildUpdateRequest'
 import { BuildTab } from '../components/editor/BuildTab'
 import { VcsTab } from '../components/editor/VcsTab'
 import { DistributionTab } from '../components/editor/DistributionTab'
+import { DockerImagesTab } from '../components/editor/DockerImagesTab'
 import { JiraTab } from '../components/editor/JiraTab'
 import { EscrowTab } from '../components/editor/EscrowTab'
 import { useBuildSection } from '../components/editor/useBuildSection'
@@ -867,8 +868,8 @@ function ComponentDetailEditor() {
             const distCount =
               (br?.mavenArtifacts.length ?? 0) +
               (br?.fileUrlArtifacts.length ?? 0) +
-              (br?.dockerImages.length ?? 0) +
               (br?.packages.length ?? 0)
+            const dockerCount = br?.dockerImages.length ?? 0
             const configCount = component.configurations?.length ?? 0
             const docsCount = component.docs?.length ?? 0
             const sections: EditorNavSection[] = [
@@ -892,7 +893,10 @@ function ComponentDetailEditor() {
               },
               {
                 label: 'Distribution',
-                items: [{ value: 'distribution', label: 'Distribution', count: distCount }],
+                items: [
+                  { value: 'distribution', label: 'Distribution', count: distCount },
+                  { value: 'docker', label: 'Docker', count: dockerCount },
+                ],
               },
               {
                 label: 'Metadata',
@@ -975,6 +979,12 @@ function ComponentDetailEditor() {
             <TabsContent value="distribution">
               <EditSurface canEdit={canEdit} label="Distribution">
                 <DistributionTab section={distributionSection} canEdit={canEdit} supportedGroups={supportedGroups} />
+              </EditSurface>
+            </TabsContent>
+
+            <TabsContent value="docker">
+              <EditSurface canEdit={canEdit} label="Docker">
+                <DockerImagesTab section={distributionSection} canEdit={canEdit} />
               </EditSurface>
             </TabsContent>
 

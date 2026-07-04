@@ -29,11 +29,10 @@ export function DistributionTab({ section, canEdit, supportedGroups = [] }: Dist
     state,
     addMaven, updateMaven, removeMaven,
     addFileUrl, updateFileUrl, removeFileUrl,
-    addDocker, updateDocker, removeDocker,
     addPackage, updatePackage, removePackage,
     addSecurityGroup, updateSecurityGroup, removeSecurityGroup,
   } = section
-  const { maven, fileUrl, docker, packages, securityGroups } = state
+  const { maven, fileUrl, packages, securityGroups } = state
 
   // Per-range distribution overrides (the four marker paths). All add/edit/delete
   // queue into the same page-level draft the combined Save flushes.
@@ -190,56 +189,6 @@ export function DistributionTab({ section, canEdit, supportedGroups = [] }: Dist
         )}
 
         {perRangeBlock('distribution.fileUrl')}
-      </div>
-
-      <Separator />
-
-      {/* ── Docker Images ──────────────────────────────────────────────────── */}
-      <div className="space-y-3" data-testid="docker-images-section">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1">
-            <h3 className="text-sm font-semibold"><FieldLabelText path="distribution.dockerImages" fallback="Docker Images" /></h3>
-            <FieldInfo path="distribution.dockerImages" label="Docker Images" />
-            {rangeCountBadge('distribution.docker')}
-          </div>
-          <Button variant="ghost" size="sm" onClick={addDocker} disabled={!canEdit}>
-            <Plus className="h-4 w-4" />
-            Add
-          </Button>
-        </div>
-
-        {docker.map((row, i) => (
-          <div key={i} className="rounded-md border p-3 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground">Image {i + 1}</span>
-              <Button variant="ghost" size="sm" onClick={() => removeDocker(i)} disabled={!canEdit} className="h-7 text-destructive hover:text-destructive">
-                <Trash2 className="h-3 w-3" />
-              </Button>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="space-y-1">
-                <div className="flex items-center gap-1">
-                  <Label className="text-xs"><FieldLabelText path="distribution.docker.imageName" fallback="Image Name" /> <span className="text-destructive">*</span></Label>
-                  <FieldInfo path="distribution.docker.imageName" label="Image Name" />
-                </div>
-                <Input required value={row.imageName} onChange={(e) => updateDocker(i, 'imageName', e.target.value)} placeholder="my-org/my-image" className="font-mono text-xs" />
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-1">
-                  <Label className="text-xs"><FieldLabelText path="distribution.docker.flavor" fallback="Flavor" /></Label>
-                  <FieldInfo path="distribution.docker.flavor" label="Flavor" />
-                </div>
-                <Input value={row.flavor} onChange={(e) => updateDocker(i, 'flavor', e.target.value)} placeholder="alpine" className="font-mono text-xs" />
-              </div>
-            </div>
-          </div>
-        ))}
-
-        {docker.length === 0 && (
-          <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">No Docker images.</div>
-        )}
-
-        {perRangeBlock('distribution.docker')}
       </div>
 
       <Separator />
