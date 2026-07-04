@@ -1,19 +1,18 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { computeLadder, expandFormat, parseVersion, type LadderState, type LadderRow, type VersionParts } from '../../lib/versionPreview'
+import { expandFormat, parseVersion, type LadderRow, type VersionParts } from '../../lib/versionPreview'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { useVersionPreview, type VersionPreviewOverride, type VersionPreviewRequest } from '../../hooks/useVersionPreview'
 import type { DetailedComponentVersion } from '../../lib/types'
 
 /**
- * Version-ladder preview panel (design brief §4, P-0 prototype). Reads the
- * current (possibly unsaved) Jira format values, decomposes an editable sample
- * version and renders one row per usage — Release / RC / Minor / Line / Build and
- * the two Hotfix rows. Row VALUES and approx flags come from the shared
- * `computeLadder` lib (reused, not reimplemented); this component supplies the
- * presentation copy (tags/destinations from P-0) and the two-way hover linking.
- * The row↔field hover mapping is computed here rather than read from the lib's
- * `fieldId`, because the lib always reports the Build row's own path and does not
- * encode the Build→Release mirror leader this panel needs for cross-highlighting.
+ * Version-ladder preview panel (design brief §4). Reads the current (possibly
+ * unsaved) Jira format values + per-range overrides, renders one row per usage —
+ * Release / RC / Minor / Line / Build and the two Hotfix rows. Row VALUES come
+ * from the CRS preview endpoint (server-truth — see [JiraVersionPreview]); this
+ * component supplies the editable sample versions, the presentation copy
+ * (tags/destinations from P-0) and the two-way hover linking. The row↔field
+ * hover mapping is computed here so it can encode the Minor→Line / Build→Release
+ * mirror leaders for cross-highlighting.
  */
 export interface JiraVersionPreviewProps {
   versionPrefix: string
@@ -33,13 +32,6 @@ export interface JiraVersionPreviewProps {
   hoveredField: string | null
   /** Report the field a hovered/left row links back to (null on leave). */
   onHoverField: (field: string | null) => void
-  /**
-   * WHISKEY build system: the client can't reproduce its versions (zero-padding,
-   * library computation, custom variables), so render server-truth from CRS
-   * instead of the client ladder. Rendered LIVE from the unsaved editor formats
-   * (base + per-range overrides) via the preview endpoint — no save needed.
-   */
-  whiskey?: boolean
   /** Per-range jira format overrides (from the overrides draft), for the live preview. */
   overrides?: VersionPreviewOverride[]
 }
@@ -236,120 +228,6 @@ function mapDetailedToRows(d: DetailedComponentVersion, hotfixEnabled: boolean):
   return rows
 }
 
-/**
- * Whiskey renders server-truth (its version scheme can't be reproduced
- * client-side); every other build system uses the reactive client ladder.
- */
-export function JiraVersionPreview(props: JiraVersionPreviewProps) {
-  return props.whiskey ? <JiraVersionPreviewServer {...props} /> : <JiraVersionPreviewClient {...props} />
-}
-
-function JiraVersionPreviewClient(props: JiraVersionPreviewProps) {
-  const {
-    versionPrefix,
-    versionFormat,
-    lineVersionFormat,
-    minorVersionFormat,
-    minorSeparate,
-    releaseVersionFormat,
-    buildVersionFormat,
-    buildSeparate,
-    hotfixVersionFormat,
-    technical,
-    hotfixEnabled,
-    hoveredField,
-    onHoverField,
-  } = props
-
-  // Editable samples. Default arity is derived from the current formats (hotfix
-  // carries an extra trailing segment), so the preview matches how many indices
-  // each format uses. A manual edit (override) wins and pins the value; until then
-  // the sample tracks format edits reactively.
-  const [sampleOverride, setSampleOverride] = useState<string | null>(null)
-  const [hotfixOverride, setHotfixOverride] = useState<string | null>(null)
-  const effectiveBuildFormat = buildSeparate ? buildVersionFormat : releaseVersionFormat
-  const sample = sampleOverride ?? deriveSample([releaseVersionFormat, effectiveBuildFormat])
-  const hotfixSample = hotfixOverride ?? deriveSample([hotfixVersionFormat])
-
-  // Feed the lib the effective values: a mirrored derived field passes '' so the
-  // lib falls back to its leader (Minor→Line, Build→Release), matching the
-  // section's materialization/fallback and keeping the ladder in step with what
-  // is saved.
-  const ladderState: LadderState = {
-    sample,
-    hotfixSample,
-    versionPrefix,
-    versionFormat,
-    releaseVersionFormat,
-    minorVersionFormat: minorSeparate ? minorVersionFormat : '',
-    lineVersionFormat,
-    buildVersionFormat: buildSeparate ? buildVersionFormat : '',
-    hotfixVersionFormat,
-    hotfixEnabled,
-    technical,
-  }
-  const rows = computeLadder(ladderState)
-  // Hotfix rows live in their own group below the main ladder (with the hotfix
-  // sample input), so the standard preview reads without the extra-arity noise.
-  const mainRows = rows.filter((r) => !r.id.startsWith('hotfix'))
-  const hotfixRows = rows.filter((r) => r.id.startsWith('hotfix'))
-
-  const flags: MirrorFlags = { minorMirrored: !minorSeparate, buildMirrored: !buildSeparate }
-  const highlightedRows = new Set(fieldToRows(hoveredField, flags))
-
-  const renderRow = (r: LadderRow) => (
-    <LadderRowView
-      key={r.id}
-      row={r}
-      chrome={rowChrome(r.id, technical, flags)}
-      highlighted={highlightedRows.has(r.id)}
-      onEnter={() => onHoverField(rowToField(r.id, flags))}
-      onLeave={() => onHoverField(null)}
-    />
-  )
-
-  return (
-    <PreviewShell>
-      <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
-        <label className="flex items-center gap-2">
-          version
-          <input
-            aria-label="version"
-            value={sample}
-            onChange={(e) => setSampleOverride(e.target.value)}
-            className={SAMPLE_INPUT_CLASS}
-          />
-        </label>
-      </div>
-
-      <div>{mainRows.map(renderRow)}</div>
-
-      {hotfixEnabled && hotfixRows.length > 0 && (
-        <div className="mt-3 border-t border-dashed pt-3">
-          <label
-            className="mb-2 flex items-center gap-2 text-sm text-muted-foreground"
-            title="Hotfix versions carry an extra trailing segment vs standard ones — previewed from their own sample."
-          >
-            hotfix version
-            <input
-              aria-label="hotfix version"
-              value={hotfixSample}
-              onChange={(e) => setHotfixOverride(e.target.value)}
-              className={SAMPLE_INPUT_CLASS}
-            />
-          </label>
-          <div>{hotfixRows.map(renderRow)}</div>
-        </div>
-      )}
-
-      <p className="mt-3 border-t border-dashed pt-3 text-[11px] leading-relaxed text-muted-foreground">
-        <span className="font-mono">$fix</span> and <span className="font-mono">$build</span> are filled by the
-        server at build/release time.
-      </p>
-    </PreviewShell>
-  )
-}
-
 function LadderRowView({
   row,
   chrome,
@@ -404,84 +282,102 @@ function LadderRowView({
 }
 
 /**
- * Whiskey preview: render the server-truth ladder LIVE from the unsaved editor
- * formats (base + per-range overrides) + an editable input version (debounced),
- * with the same rows/chrome/hover linking as the client panel. Values are
- * authoritative (no approx) and reflect the CURRENT edits — no save needed. A
- * version matching no format, or any 4xx, falls back to a notice.
+ * Version Preview — renders the six version coordinates LIVE from the unsaved
+ * editor formats (base + per-range overrides) via the CRS preview endpoint, for
+ * EVERY build system. Rendering server-truth (not a client re-implementation of
+ * the version formatter) is what makes per-range overrides, custom prefixes,
+ * zero-padding and the formatter's special cases match what CRS actually
+ * computes — no client/server drift. Two editable, arity-derived samples drive
+ * it: `version` for the standard rows and a separate `hotfix version` (hotfix
+ * coordinates carry an extra trailing segment). A manual edit pins a sample;
+ * until then it tracks the format arity. A version matching no format, or any
+ * 4xx, falls back to a notice.
  */
-function JiraVersionPreviewServer(props: JiraVersionPreviewProps) {
+export function JiraVersionPreview(props: JiraVersionPreviewProps) {
   const {
-    technical,
-    hotfixEnabled,
-    minorSeparate,
-    buildSeparate,
-    minorVersionFormat,
-    lineVersionFormat,
-    releaseVersionFormat,
-    buildVersionFormat,
-    hotfixVersionFormat,
     versionPrefix,
     versionFormat,
+    lineVersionFormat,
+    minorVersionFormat,
+    minorSeparate,
+    releaseVersionFormat,
+    buildVersionFormat,
+    buildSeparate,
+    hotfixVersionFormat,
+    technical,
+    hotfixEnabled,
     overrides = [],
     hoveredField,
     onHoverField,
   } = props
 
-  // Whiskey-shaped seed (5 segments incl. build) so the server has enough to
-  // render every format on first paint; the user can edit it.
-  const [version, setVersion] = useState('03.62.30.19-4')
+  // Editable samples, arity-derived from the current formats — a manual edit pins
+  // the value; until then it tracks format edits so the sample always has as many
+  // indices as the deepest template uses.
+  const effectiveBuildFormat = buildSeparate ? buildVersionFormat : releaseVersionFormat
+  const [versionOverride, setVersionOverride] = useState<string | null>(null)
+  const [hotfixOverride, setHotfixOverride] = useState<string | null>(null)
+  const version = versionOverride ?? deriveSample([releaseVersionFormat, effectiveBuildFormat])
+  const hotfixSample = hotfixOverride ?? deriveSample([hotfixVersionFormat])
 
-  // Assemble the preview request from the LIVE editor state, using EXACTLY the
-  // same base materialization the save path sends to CRS (useJiraSection's
-  // effectiveMinor/effectiveBuild) so the preview matches detailed-version:
-  //  - Minor mirrors Line → send the Line value (CRS treats minor as the leader).
-  //  - Build mirrors Release → send '' so CRS's own server-side fallback resolves
-  //    it to the EFFECTIVE (override-aware) release, rather than a stale copy.
-  const payload = useMemo<VersionPreviewRequest>(
+  // Base sent to the endpoint — EXACTLY the save-path materialization
+  // (useJiraSection.normalizeJira): Minor mirrors Line → send the Line value (CRS
+  // treats minor as the leader); Build mirrors Release → send '' so CRS's own
+  // server-side fallback resolves it to the effective (override-aware) release.
+  const base = useMemo(
     () => ({
-      version,
-      technical,
-      hotfixEnabled,
-      base: {
-        minorVersionFormat: minorSeparate ? minorVersionFormat : lineVersionFormat,
-        releaseVersionFormat,
-        buildVersionFormat: buildSeparate ? buildVersionFormat : '',
-        lineVersionFormat,
-        hotfixVersionFormat,
-        versionPrefix,
-        versionFormat,
-      },
-      overrides,
+      minorVersionFormat: minorSeparate ? minorVersionFormat : lineVersionFormat,
+      releaseVersionFormat,
+      buildVersionFormat: buildSeparate ? buildVersionFormat : '',
+      lineVersionFormat,
+      hotfixVersionFormat,
+      versionPrefix,
+      versionFormat,
     }),
     [
-      version,
-      technical,
-      hotfixEnabled,
       minorSeparate,
-      buildSeparate,
       minorVersionFormat,
       lineVersionFormat,
       releaseVersionFormat,
+      buildSeparate,
       buildVersionFormat,
       hotfixVersionFormat,
       versionPrefix,
       versionFormat,
-      overrides,
     ],
   )
-  // Debounce the whole request (serialized, so equal content settles) — the
-  // editor changes formats and the version on every keystroke.
-  const debouncedKey = useDebouncedValue(JSON.stringify(payload), 350)
-  const debouncedPayload = useMemo(() => JSON.parse(debouncedKey) as VersionPreviewRequest, [debouncedKey])
-  const query = useVersionPreview(debouncedPayload, true)
+
+  // Standard rows: render the `version` sample with hotfix OFF — the hotfix
+  // coordinate has its own, deeper sample below. Debounce the whole request
+  // (serialized, so equal content settles) since formats + version change live.
+  const mainRequest = useMemo<VersionPreviewRequest>(
+    () => ({ version, technical, hotfixEnabled: false, base, overrides }),
+    [version, technical, base, overrides],
+  )
+  const mainKey = useDebouncedValue(JSON.stringify(mainRequest), 350)
+  const mainQuery = useVersionPreview(
+    useMemo(() => JSON.parse(mainKey) as VersionPreviewRequest, [mainKey]),
+    true,
+  )
+
+  // Hotfix rows: only when hotfixEnabled (VCS-branch-derived in JiraTab via
+  // isHotfixEnabled), rendered from the separate hotfix sample with hotfix ON.
+  const hotfixRequest = useMemo<VersionPreviewRequest>(
+    () => ({ version: hotfixSample, technical, hotfixEnabled: true, base, overrides }),
+    [hotfixSample, technical, base, overrides],
+  )
+  const hotfixKey = useDebouncedValue(JSON.stringify(hotfixRequest), 350)
+  const hotfixQuery = useVersionPreview(
+    useMemo(() => JSON.parse(hotfixKey) as VersionPreviewRequest, [hotfixKey]),
+    hotfixEnabled,
+  )
+
+  const mainRows = mainQuery.data ? mapDetailedToRows(mainQuery.data, false) : []
+  const hotfixRows =
+    hotfixEnabled && hotfixQuery.data ? mapDetailedToRows(hotfixQuery.data, true).filter((r) => r.id.startsWith('hotfix')) : []
 
   const flags: MirrorFlags = { minorMirrored: !minorSeparate, buildMirrored: !buildSeparate }
   const highlightedRows = new Set(fieldToRows(hoveredField, flags))
-
-  const rows = query.data ? mapDetailedToRows(query.data, hotfixEnabled) : []
-  const mainRows = rows.filter((r) => !r.id.startsWith('hotfix'))
-  const hotfixRows = rows.filter((r) => r.id.startsWith('hotfix'))
 
   const renderRow = (r: LadderRow) => (
     <LadderRowView
@@ -496,35 +392,66 @@ function JiraVersionPreviewServer(props: JiraVersionPreviewProps) {
 
   return (
     <PreviewShell>
-      <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+      <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
         <label className="flex items-center gap-2">
           version
           <input
             aria-label="version"
             value={version}
-            onChange={(e) => setVersion(e.target.value)}
+            onChange={(e) => setVersionOverride(e.target.value)}
             className={SAMPLE_INPUT_CLASS}
           />
         </label>
       </div>
 
-      {query.isLoading && (
+      {mainQuery.isLoading && (
         <p data-testid="version-preview-loading" className="py-6 text-center text-sm text-muted-foreground">
           Rendering…
         </p>
       )}
 
-      {!query.isLoading && rows.length === 0 && (
+      {!mainQuery.isLoading && mainRows.length === 0 && (
         <p data-testid="version-preview-empty" className="rounded-md bg-muted px-3 py-4 text-xs leading-relaxed text-muted-foreground">
-          No preview for this version — Whiskey versions are computed by its versioning library. Enter a
-          version this component’s scheme can parse.
+          No preview for this version — enter a version this component’s scheme can parse.
         </p>
       )}
 
-      {rows.length > 0 && (
+      {/* The hotfix block is nested UNDER a successful main render so the main
+          "No preview" notice can never contradict a populated hotfix section
+          (the two run as independent queries). When the hotfix sample itself
+          doesn't render, a scoped note explains it rather than failing silently. */}
+      {mainRows.length > 0 && (
         <>
           <div>{mainRows.map(renderRow)}</div>
-          {hotfixRows.length > 0 && <div className="mt-3 border-t border-dashed pt-3">{hotfixRows.map(renderRow)}</div>}
+
+          {hotfixEnabled && (
+            <div className="mt-3 border-t border-dashed pt-3">
+              <label
+                className="mb-2 flex items-center gap-2 text-sm text-muted-foreground"
+                title="Hotfix versions carry an extra trailing segment vs standard ones — previewed from their own sample."
+              >
+                hotfix version
+                <input
+                  aria-label="hotfix version"
+                  value={hotfixSample}
+                  onChange={(e) => setHotfixOverride(e.target.value)}
+                  className={SAMPLE_INPUT_CLASS}
+                />
+              </label>
+              {hotfixRows.length > 0 ? (
+                <div>{hotfixRows.map(renderRow)}</div>
+              ) : (
+                !hotfixQuery.isLoading && (
+                  <p
+                    data-testid="hotfix-preview-empty"
+                    className="rounded-md bg-muted px-3 py-3 text-xs leading-relaxed text-muted-foreground"
+                  >
+                    No hotfix preview for this version — enter a hotfix version this component’s scheme can parse.
+                  </p>
+                )
+              )}
+            </div>
+          )}
         </>
       )}
     </PreviewShell>

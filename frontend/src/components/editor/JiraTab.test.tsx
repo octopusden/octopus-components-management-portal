@@ -22,13 +22,26 @@ vi.mock('./FieldOverrideInline', () => ({
 let fcEntries: Record<string, { visibility?: string; editable?: string }> = {}
 let editableMap: Record<string, boolean> = {}
 
-// Whiskey renders the server-backed preview (useQuery). JiraTab tests don't wrap
-// a QueryClient, so stub the hook — the Whiskey cases here only assert the tab's
-// own controls, not the preview contents. importActual keeps jiraOverridesToPreview
+// The preview renders server-backed (useQuery). JiraTab tests don't wrap a
+// QueryClient, so stub the hook to return fixed server-truth rows — the
+// preview-hover integration tests assert on the rendered ladder rows, and the
+// other tests only touch the tab's own controls. Arg-agnostic: the same data
+// backs both the main and hotfix calls. importActual keeps jiraOverridesToPreview
 // (which JiraTab imports from the same module) real.
 vi.mock('../../hooks/useVersionPreview', async (orig) => ({
   ...(await orig<typeof import('../../hooks/useVersionPreview')>()),
-  useVersionPreview: () => ({ data: undefined, isLoading: false, isError: false }),
+  useVersionPreview: () => {
+    const data: import('../../lib/types').DetailedComponentVersion = {
+      component: 'preview',
+      minorVersion: { type: 'MINOR', version: '1.2', jiraVersion: '1.2' },
+      lineVersion: { type: 'LINE', version: '1.2', jiraVersion: '1.2' },
+      buildVersion: { type: 'BUILD', version: '1.2.3', jiraVersion: '1.2.3' },
+      rcVersion: { type: 'RC', version: '1.2.3', jiraVersion: '1.2.3_RC' },
+      releaseVersion: { type: 'RELEASE', version: '1.2.3', jiraVersion: '1.2.3' },
+      hotfixVersion: null,
+    }
+    return { data, isLoading: false, isError: false }
+  },
 }))
 
 vi.mock('../../hooks/useFieldConfig', () => ({
