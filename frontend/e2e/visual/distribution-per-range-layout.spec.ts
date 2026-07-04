@@ -38,7 +38,7 @@ const OVERRIDES = RANGES.map((versionRange, i) => ({
 
 const DETAIL = {
   id: ID, name: 'layout-probe', displayName: 'Layout Probe', componentOwner: 'e2e',
-  system: null, productType: null, clientCode: null, solution: false, parentComponentName: null,
+  systems: [], productType: null, clientCode: null, solution: false, parentComponentName: null,
   archived: false, version: 1, createdAt: '2026-01-01T00:00:00Z', updatedAt: null,
   labels: [], docs: [], artifactIds: [], distributionExplicit: false, distributionExternal: false,
   securityGroups: [], teamcityProjects: [], canEdit: true,
