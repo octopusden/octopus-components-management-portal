@@ -143,6 +143,10 @@ function sectionForField(field: string): string | null {
   if (field.startsWith('vcs')) return 'vcs'
   if (field.startsWith('jira')) return 'jira'
   if (field.startsWith('escrow') || field === 'productType') return 'escrow'
+  // Docker images are their own tab now (split out of Distribution), so route a
+  // docker 400 there — both the baseConfiguration `dockerImages` key and the
+  // `distribution.docker*` marker/field paths — before the generic distribution rule.
+  if (field === 'dockerImages' || field.startsWith('distribution.docker')) return 'docker'
   if (field.startsWith('distribution') || field === 'securityGroups') return 'distribution'
   // Doc links moved to their own Documentation topic — route a CRS `docs`/
   // `docs[i]...` 400 there so the user lands on the owning tab, not a bare toast.

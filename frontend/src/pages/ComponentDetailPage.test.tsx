@@ -96,6 +96,9 @@ vi.mock('../components/editor/VcsTab', () => ({
 vi.mock('../components/editor/DistributionTab', () => ({
   DistributionTab: () => React.createElement('div', { 'data-testid': 'distribution-tab' }),
 }))
+vi.mock('../components/editor/DockerImagesTab', () => ({
+  DockerImagesTab: () => React.createElement('div', { 'data-testid': 'docker-tab' }),
+}))
 vi.mock('../components/editor/JiraTab', () => ({
   JiraTab: () => React.createElement('div', { 'data-testid': 'jira-tab' }),
 }))
@@ -1399,6 +1402,33 @@ describe('ComponentDetailPage — cross-tab 400 + displayName clear', () => {
 
     // sectionForField('docs') → 'documentation'; the real DocumentationTab renders.
     await waitFor(() => expect(screen.getByText(/no documentation links configured/i)).toBeDefined())
+  })
+
+  it('auto-switches to the Docker tab when a 400 maps to a docker field', async () => {
+    // Docker moved to its own tab — a dockerImages 400 must route there, not to
+    // the (now docker-less) Distribution tab.
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('systems', component.systems ?? [])
+        form.setValue('displayName', component.displayName ?? '')
+      }, [component, form])
+      return React.createElement(
+        'button',
+        { 'data-testid': 'edit', onClick: () => form.setValue('displayName', 'X', { shouldDirty: true }) },
+        'edit',
+      )
+    })
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(new ApiError(400, 'bad', JSON.stringify({ errorMessage: 'dockerImages: invalid image name' }))),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    // sectionForField('dockerImages') → 'docker'; the Docker tab renders.
+    await waitFor(() => expect(screen.getByTestId('docker-tab')).toBeDefined())
   })
 
   it('clearing displayName PATCHes it as "" (nullable — server clears to null, or 400s for explicit+external)', async () => {
