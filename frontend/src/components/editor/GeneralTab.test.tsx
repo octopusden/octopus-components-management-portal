@@ -928,6 +928,6 @@ describe('GeneralTab artifact-ownership rendering (#357)', () => {
     // Group ID / Artifact fields. A data/migration state — distinct from a binding bug above.
     renderWithProviders(<Harness component={baseComponent({ artifactIds: [] })} />)
     expect(screen.queryByLabelText('Group ID')).toBeNull()
-    expect(screen.getByRole('button', { name: /Add artifact coordinates/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Add one more groupId/i })).toBeTruthy()
   })
 })

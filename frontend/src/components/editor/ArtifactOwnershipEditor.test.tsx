@@ -75,11 +75,11 @@ describe('ArtifactOwnershipEditor', () => {
     expect(screen.getByText('Ownership conflict')).toBeInTheDocument()
   })
 
-  it('"Add artifact coordinates" appends an empty base mapping', async () => {
+  it('"Add one more groupId" appends an empty base mapping (one Group ID per row)', async () => {
     render(<Harness initial={[base()]} />)
-    await userEvent.click(screen.getByRole('button', { name: /Add artifact coordinates/ }))
-    // Two "Artifact coordinates" blocks now.
-    expect(screen.getAllByText('Artifact coordinates')).toHaveLength(2)
+    await userEvent.click(screen.getByRole('button', { name: /Add one more groupId/ }))
+    // Two Group ID rows now — each row is a single Group ID.
+    expect(screen.getAllByLabelText('Group ID')).toHaveLength(2)
   })
 
   it('legacy preview renders the catch-all for an ALL mapping', () => {
@@ -91,7 +91,7 @@ describe('ArtifactOwnershipEditor', () => {
   it('disabled hides add/remove controls', () => {
     const onChange = vi.fn()
     render(<ArtifactOwnershipEditor value={[base()]} onChange={onChange} configRanges={[]} disabled />)
-    expect(screen.queryByRole('button', { name: /Add artifact coordinates/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Add one more groupId/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Remove mapping/ })).not.toBeInTheDocument()
   })
 })

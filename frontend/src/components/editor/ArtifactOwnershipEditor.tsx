@@ -89,7 +89,7 @@ export function ArtifactOwnershipEditor({ value, onChange, configRanges, support
         {!disabled && (
           <Button type="button" variant="outline" size="sm" className="w-max border-dashed" onClick={addBase}>
             <Plus className="h-4 w-4" />
-            Add artifact coordinates
+            Add one more groupId
           </Button>
         )}
       </div>
@@ -150,8 +150,11 @@ function MappingCard({ mapping, allMappings, conflict, configRanges, supportedGr
   return (
     <div className={cn('flex flex-col gap-2.5 rounded-lg border p-3', conflict ? 'border-destructive/40' : 'border-input')}>
       <div className="flex items-center justify-between">
+        {/* Base rows are one Group ID each (the Group ID field labels the row);
+            only overrides need a per-range header. Empty span keeps the remove
+            button right-aligned. */}
         <span className="text-xs font-semibold text-muted-foreground">
-          {mapping.base ? 'Artifact coordinates' : `Override · ${mapping.range ?? ''}`}
+          {mapping.base ? '' : `Override · ${mapping.range ?? ''}`}
         </span>
         {!disabled && (
           <Button
