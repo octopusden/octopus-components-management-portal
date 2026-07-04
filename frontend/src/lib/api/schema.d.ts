@@ -788,6 +788,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/rest/api/4/versions/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview version coordinates from ad-hoc formats
+         * @description Renders a DetailedComponentVersion for the given input version from base + per-range override formats, without persisting or looking up a component.
+         */
+        post: operations["preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1011,6 +1031,12 @@ export interface components {
             /** @enum {string} */
             role: "AGGREGATOR" | "MEMBER";
         };
+        ComponentRegistryVersion: {
+            jiraVersion: string;
+            /** @enum {string} */
+            type: "LINE" | "MINOR" | "BUILD" | "RELEASE" | "RC" | "HOTFIX";
+            version: string;
+        };
         ComponentSummaryResponse: {
             archived: boolean;
             buildSystem?: string;
@@ -1071,6 +1097,15 @@ export interface components {
             vcsExternalRegistry?: string;
             /** Format: int64 */
             version: number;
+        };
+        DetailedComponentVersion: {
+            buildVersion: components["schemas"]["ComponentRegistryVersion"];
+            component: string;
+            hotfixVersion?: components["schemas"]["ComponentRegistryVersion"];
+            lineVersion: components["schemas"]["ComponentRegistryVersion"];
+            minorVersion: components["schemas"]["ComponentRegistryVersion"];
+            rcVersion: components["schemas"]["ComponentRegistryVersion"];
+            releaseVersion: components["schemas"]["ComponentRegistryVersion"];
         };
         DocLinkRequest: {
             docComponentKey: string;
@@ -1510,6 +1545,51 @@ export interface components {
             sortOrder: number;
             tag?: string;
             vcsPath: string;
+        };
+        /** @description Effective BASE Jira version formats (the editor's section draft). */
+        VersionPreviewFormats: {
+            /** @description Falls back to the release version format when blank. */
+            buildVersionFormat?: string;
+            /** @description Hotfix version format. A hotfix coordinate is rendered only when the request's hotfixEnabled is true; this format then shapes it. When hotfixEnabled is true but this is omitted, a degenerate empty hotfix coordinate is rendered (matching detailed-version). Ignored when hotfixEnabled is false. */
+            hotfixVersionFormat?: string;
+            /** @description Falls back to the minor version format when blank. */
+            lineVersionFormat?: string;
+            minorVersionFormat?: string;
+            releaseVersionFormat?: string;
+            /** @description Custom-component wrapper format, e.g. "$versionPrefix-$baseVersionFormat". */
+            versionFormat?: string;
+            /** @description Custom-component version prefix (e.g. "acme"). Requires versionFormat when set. */
+            versionPrefix?: string;
+        };
+        /** @description A per-range format override. Only the fields that differ from the base need to be set; a null field inherits the base. Applied when the input version falls inside versionRange. */
+        VersionPreviewOverride: {
+            buildVersionFormat?: string;
+            hotfixVersionFormat?: string;
+            lineVersionFormat?: string;
+            minorVersionFormat?: string;
+            releaseVersionFormat?: string;
+            versionFormat?: string;
+            versionPrefix?: string;
+            /**
+             * @description Maven-style version range, e.g. "(,1.0.107)" or "[1.0,2.0)".
+             * @example (,1.0.107)
+             */
+            versionRange: string;
+        };
+        /** @description Stateless version-format preview request: render the six version coordinates for `version` from ad-hoc formats (base + per-range overrides) without persisting or looking up a component. */
+        VersionPreviewRequest: {
+            base: components["schemas"]["VersionPreviewFormats"];
+            /** @description Whether hotfix versioning is enabled for the component (in the persisted path this derives from a configured hotfix VCS branch, NOT from the presence of a hotfix format). When true, a hotfix coordinate is rendered — shaped by hotfixVersionFormat, or a degenerate empty coordinate when no format resolves (matching detailed-version). When false, no hotfix coordinate is rendered regardless of the format. */
+            hotfixEnabled: boolean;
+            /** @description Per-range format overrides. First range that contains the version wins; base otherwise. */
+            overrides: components["schemas"]["VersionPreviewOverride"][];
+            /** @description Whether the component is technical. Carried for parity; does not affect rendering. */
+            technical: boolean;
+            /**
+             * @description The input version that drives range selection and rendering.
+             * @example 1.0.50
+             */
+            version: string;
         };
     };
     responses: never;
@@ -6145,6 +6225,93 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["MigrationStatusResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Early */
+            425: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetailedComponentVersion"];
                 };
             };
             /** @description Bad Request */
