@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./**/_wt/**)",
+      "Read(./**/node_modules/**)",
+      "Read(./**/.gradle/**)",
+      "Read(./**/.kotlin/**)",
+      "Read(./**/.idea/**)",
+      "Read(./**/frontend/dist/**)",
+      "Read(./**/frontend/playwright-report/**)",
+      "Read(./**/frontend/test-results/**)",
+      "Read(./**/frontend/.vite/**)"
+    ]
+  },
+  "claudeMdExcludes": [
+    "**/_wt/**",
+    "**/octopus-components-management-portal-wt/**",
+    "**/*-wrapper-archive-*/**",
+    "**/*.backup.git/**"
+  ]
+}
