@@ -66,8 +66,8 @@ export function DockerImagesTab({ section, canEdit }: DockerImagesTabProps) {
           <div key={i} className="rounded-md border p-3 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-muted-foreground">Image {i + 1}</span>
-              <Button variant="ghost" size="sm" onClick={() => removeDocker(i)} disabled={!canEdit} className="h-7 text-destructive hover:text-destructive">
-                <Trash2 className="h-3 w-3" />
+              <Button variant="ghost" size="sm" aria-label={`Remove image ${i + 1}`} onClick={() => removeDocker(i)} disabled={!canEdit} className="h-7 text-destructive hover:text-destructive">
+                <Trash2 className="h-3 w-3" aria-hidden />
               </Button>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

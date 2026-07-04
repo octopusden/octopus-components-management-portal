@@ -112,6 +112,11 @@ describe('DockerImagesTab — render', () => {
     })
   }
 
+  it('gives the icon-only remove button an accessible name', () => {
+    renderTab(populatedComponent())
+    expect(screen.getByRole('button', { name: /Remove image/i })).toBeDefined()
+  })
+
   it('renders the Image Name and Flavor fields for a docker row', () => {
     renderTab(populatedComponent())
     expect(screen.getByText('Image Name')).toBeDefined()
