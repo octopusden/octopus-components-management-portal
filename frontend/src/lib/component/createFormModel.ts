@@ -147,7 +147,7 @@ export function makeCreateSchema(
 ) {
   return z
     .object({
-      name: z.string().min(1, 'Component Key is required'),
+      name: z.string().trim().min(1, 'Component Key is required'),
       displayName: z.string(),
       buildSystem: z.string().min(1, 'Build System is required'),
       componentOwner: z.string().trim().min(1, 'Component Owner is required'),

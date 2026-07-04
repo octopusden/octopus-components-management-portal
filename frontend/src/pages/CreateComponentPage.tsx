@@ -69,7 +69,10 @@ const STEP_LABELS: Record<StepId, string> = {
 }
 
 const SCRATCH_STEPS: StepId[] = ['profile', 'general', 'build', 'vcs', 'jira', 'distribution', 'review']
-const CLONE_STEPS: StepId[] = ['general', 'build', 'vcs', 'jira', 'distribution', 'review']
+// Clone keeps the Profile step too: the profile is pre-derived from the source
+// but stays editable (changing it resets the Component Key + recomputes flags),
+// per the brief. It is not a gate in clone (a profile is always pre-selected).
+const CLONE_STEPS: StepId[] = ['profile', 'general', 'build', 'vcs', 'jira', 'distribution', 'review']
 
 // Map a zod-issue / RHF-error field path to the wizard step that owns it.
 function stepOfField(path: string): StepId {
@@ -910,7 +913,7 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
         <StatusBanner variant="warning">
           <div className="font-semibold">Some steps still need attention</div>
           <ul className="mt-1 space-y-0.5">
-            {[...new Set(parseIssues.map((i) => i.step))].map((step) => (
+            {[...invalidSteps].filter((step) => step !== 'review').map((step) => (
               <li key={step}>
                 <button type="button" className="underline" onClick={() => goToStep(step)}>
                   Go to {STEP_LABELS[step]}
