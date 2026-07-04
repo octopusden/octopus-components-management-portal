@@ -234,17 +234,11 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
       const prior = component.copyright ?? ''
       return next === prior ? undefined : next
     })(),
-    // labels semantics diverge from system (PR #44 P2 fix):
-    //   - Pre-hydration guard mirrors system: !dirty → omit, so the
-    //     form-default `[]` doesn't wipe server data before GeneralTab's
-    //     useEffect hydrates from `component.labels`.
-    //   - Explicit clear IS supported: labels is OPTIONAL server-side, so
-    //     `dirty + empty` now emits `labels: []` (REPLACE-empty) rather than
-    //     omitting. Previously the empty branch silently dropped — user
-    //     unchecked every label, got "saved" toast, server unchanged.
-    // system can't follow the same path because `system: ''`/`null` is
-    // rejected server-side; the UI blocks the empty-save case via a
-    // form-level guard in ComponentDetailPage.handleSave instead.
+    // labels + systems share the same contract (both OPTIONAL server-side):
+    //   - Pre-hydration guard: !dirty → omit, so the form-default `[]` doesn't
+    //     wipe server data before GeneralTab hydrates.
+    //   - Explicit clear IS supported: `dirty + empty` emits `[]` (REPLACE-
+    //     empty) rather than omitting, so unchecking every value persists.
     labels:
       visibilities.labels === 'hidden' || dirtyFields.labels !== true
         ? undefined

@@ -563,9 +563,12 @@ describe('buildCreateRequest — copy mode (with source)', () => {
     expect('copyright' in req).toBe(false)
   })
 
-  it('strips a hidden source-only field (system) from the request', () => {
+  it('strips a hidden source-only field (systems) from the request', () => {
+    // The gate probes the field-config key `component.system` (singular) even
+    // though the request key is `systems` — so a hidden `component.system`
+    // strips the copied `systems` value on "Create Similar".
     const req = buildCreateRequest(makeForm(), makeSource({ systems: ['SYS1'] }), (field) => field !== 'system')
-    expect('system' in req).toBe(false)
+    expect('systems' in req).toBe(false)
   })
 
   it('keeps fields the visibility predicate marks editable', () => {

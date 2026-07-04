@@ -445,8 +445,8 @@ function ComponentDetailEditor() {
 
   function discardAll() {
     // Reset the RHF form to the COMPONENT's values (not the empty form
-    // defaults) — resetting to defaults would set system='' against a server
-    // system, tripping systemClearNeedsAttention and leaving the bar "dirty".
+    // defaults) — resetting to defaults would clear multi-value fields (e.g.
+    // systems=[]) against server data and leave the bar spuriously "dirty".
     // Same mapping as the on-id-change hydration effect (mapComponentToForm).
     if (component) {
       form.reset(mapComponentToForm(component))

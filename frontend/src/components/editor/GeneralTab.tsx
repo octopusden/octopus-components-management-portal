@@ -471,6 +471,7 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
                   options={systemsDict.data ?? []}
                   isLoading={systemsDict.isLoading}
                   placeholder="Add system"
+                  noun="system"
                   disabled={systemEntry.visibility === 'readonly'}
                   ariaInvalid={Boolean(errors.systems)}
                   ariaDescribedBy={errors.systems ? 'component-system-error' : undefined}

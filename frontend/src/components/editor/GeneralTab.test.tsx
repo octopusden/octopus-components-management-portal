@@ -724,10 +724,9 @@ describe('GeneralTab — systems ChipsInput (multi-value)', () => {
     const component = baseComponent({ systems: ['SYS1'] })
     renderWithProviders(<Harness component={component} formRef={formRef} />)
 
-    // ChipsInput's add-select has a fixed `aria-label="Add label"` regardless
-    // of the field it's mounted on (see ChipsInput.tsx) — matches the
-    // HeaderLabelsEditor/labels ChipsInput interaction idiom.
-    await userEvent.selectOptions(screen.getByLabelText(/^add label$/i), 'SYS2')
+    // ChipsInput's add-select is labelled by its `noun` prop; GeneralTab
+    // passes noun="system", so the accessible name is "Add system".
+    await userEvent.selectOptions(screen.getByLabelText(/^add system$/i), 'SYS2')
 
     await waitFor(() => {
       expect(formRef.current?.getValues('systems')).toEqual(['SYS1', 'SYS2'])

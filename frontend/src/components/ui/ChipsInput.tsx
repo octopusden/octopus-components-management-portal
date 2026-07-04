@@ -57,6 +57,12 @@ export interface ChipsInputProps {
    * just the error text via aria-describedby.
    */
   ariaInvalid?: boolean
+  /**
+   * Singular noun for this control's accessible name / empty-state copy
+   * (e.g. "label", "system") so a reused instance announces the right field.
+   * Defaults to "value".
+   */
+  noun?: string
 }
 
 export function ChipsInput({
@@ -70,6 +76,7 @@ export function ChipsInput({
   ariaRequired,
   ariaDescribedBy,
   ariaInvalid,
+  noun = 'value',
 }: ChipsInputProps) {
   const availableToAdd = options.filter((o) => !value.includes(o))
 
@@ -95,7 +102,7 @@ export function ChipsInput({
   return (
     <div className="space-y-2">
       {value.length === 0 ? (
-        <p className="text-xs text-muted-foreground">No labels yet</p>
+        <p className="text-xs text-muted-foreground">No {noun}s yet</p>
       ) : (
         <div className="flex flex-wrap gap-1.5" data-testid="chips-row">
           {value.map((val, idx) => (
@@ -130,7 +137,7 @@ export function ChipsInput({
       )}
       <select
         id={id}
-        aria-label="Add label"
+        aria-label={`Add ${noun}`}
         aria-required={ariaRequired}
         aria-describedby={ariaDescribedBy}
         aria-invalid={ariaInvalid}
