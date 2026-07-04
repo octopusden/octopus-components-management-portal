@@ -10,7 +10,6 @@ import {
   CommandItem,
   CommandSeparator,
 } from './ui/command'
-import { CreateComponentDialog } from './CreateComponentDialog'
 import { useUiOverlay } from '@/lib/uiOverlayStore'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { useComponents } from '@/hooks/useComponents'
@@ -75,10 +74,6 @@ export function CommandPalette() {
     ? rankComponents(results?.content ?? [], debounced, PALETTE_RESULT_CAP)
     : []
 
-  // "New Component" reuses the existing create dialog. We open it after closing
-  // the palette so two stacked dialogs never fight for focus.
-  const [createOpen, setCreateOpen] = useState(false)
-
   // Closing the palette clears the typed query so a prior search doesn't flash
   // its (cached) results on the next open. Setting query to '' also resets the
   // debounced value, so searchActive flips back to false synchronously.
@@ -94,8 +89,7 @@ export function CommandPalette() {
   }
 
   function startCreate() {
-    closePalette()
-    setCreateOpen(true)
+    go('/components/new')
   }
 
   // Static entries, gated by permission. Built every render but cheap.
@@ -194,17 +188,6 @@ export function CommandPalette() {
           ))}
         </CommandList>
       </CommandDialog>
-
-      {/* Reuse the list's create flow. Mounted outside the palette dialog so it
-          survives the palette closing; opened from the "New Component" action. */}
-      {createOpen && (
-        <CreateComponentDialog
-          open
-          onOpenChange={(o) => {
-            if (!o) setCreateOpen(false)
-          }}
-        />
-      )}
     </>
   )
 }

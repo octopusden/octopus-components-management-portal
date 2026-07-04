@@ -56,7 +56,6 @@ import { AsCodeTab } from '../components/editor/AsCodeTab'
 import { ComponentHistoryTab } from '../components/editor/ComponentHistoryTab'
 import { EditorSidebarNav, type EditorNavSection } from '../components/editor/EditorSidebarNav'
 import { ValidationProblemsList } from '../components/ValidationProblemsList'
-import { CreateComponentDialog } from '../components/CreateComponentDialog'
 import { useComponent, useUpdateComponent, useDeleteComponent, useFieldOverrides } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
 import { ApiError } from '../lib/api'
@@ -166,7 +165,6 @@ function ComponentDetailEditor() {
   const { toast } = useToast()
   const handleConflict = useOptimisticConflict(id)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [copyDialogOpen, setCopyDialogOpen] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
   // Persistent save-time conflict message shown in the Review dialog (value 409s
   // like an overlapping/duplicate range) — survives the auto-dismissing toast.
@@ -823,9 +821,13 @@ function ComponentDetailEditor() {
 
           <div className="flex items-center gap-2 shrink-0">
             {canCreate && (
-              <Button variant="outline" size="sm" onClick={() => setCopyDialogOpen(true)}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(`/components/new?from=${component.id}`)}
+              >
                 <Copy className="h-4 w-4" />
-                Create Similar
+                Clone
               </Button>
             )}
             {!component.archived && canArchive && (
@@ -1095,12 +1097,6 @@ function ComponentDetailEditor() {
         onConfirm={runCombinedSave}
         isSaving={updateMutation.isPending}
         errorBanner={reviewError}
-      />
-
-      <CreateComponentDialog
-        sourceId={component.id}
-        open={copyDialogOpen}
-        onOpenChange={setCopyDialogOpen}
       />
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

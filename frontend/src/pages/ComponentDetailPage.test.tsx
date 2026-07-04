@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { createMemoryRouter, RouterProvider } from 'react-router'
+import { createMemoryRouter, RouterProvider, useSearchParams } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React, { useEffect } from 'react'
 import { ComponentDetailPage } from './ComponentDetailPage'
@@ -127,12 +127,6 @@ vi.mock('../hooks/useValidationProblems', () => ({
 // mock the module so the test can assert the newline-joined version list
 // without touching the real clipboard API (same pattern as AsCodeTab.test).
 vi.mock('../lib/clipboard', () => ({ copyToClipboard: vi.fn() }))
-// CreateComponentDialog (copy mode) pulls hooks from the (mocked) useComponent
-// module; stub it so the page test only asserts the open/sourceId wiring.
-vi.mock('../components/CreateComponentDialog', () => ({
-  CreateComponentDialog: ({ sourceId, open }: { sourceId?: string; open: boolean }) =>
-    open ? React.createElement('div', { 'data-testid': 'copy-dialog' }, sourceId) : null,
-}))
 
 import { ApiError } from '../lib/api'
 import { useCurrentUser } from '../hooks/useCurrentUser'
@@ -264,6 +258,11 @@ interface RenderPageOptions {
   deleteMutation?: Partial<typeof idleMutation>
 }
 
+function CreateWizardProbe() {
+  const [params] = useSearchParams()
+  return React.createElement('div', { 'data-testid': 'create-page' }, params.get('from') ?? '')
+}
+
 function renderPage(component: ComponentDetail, user: User | null, opts: RenderPageOptions = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response('{}', { status: 200 }))))
@@ -299,6 +298,9 @@ function renderPage(component: ComponentDetail, user: User | null, opts: RenderP
   const router = createMemoryRouter(
     [
       { path: '/components', element: <div data-testid="list-page" /> },
+      // The Clone action navigates to the full-page create wizard; a probe echoes
+      // the `?from=` source id so the test can assert the wiring.
+      { path: '/components/new', element: <CreateWizardProbe /> },
       { path: '/components/:id', element: <ComponentDetailPage /> },
     ],
     { initialEntries: ['/components/comp-1'] },
@@ -1325,29 +1327,29 @@ describe('ComponentDetailPage — confirmation dialog text', () => {
   })
 })
 
-describe('ComponentDetailPage — Copy button (CREATE_COMPONENTS gate)', () => {
-  it('renders Copy for a user with CREATE_COMPONENTS and opens the dialog with the component id', async () => {
+describe('ComponentDetailPage — Clone button (CREATE_COMPONENTS gate)', () => {
+  it('renders Clone for a user with CREATE_COMPONENTS and navigates to the wizard with the component id', async () => {
     const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
     renderPage(baseComponent, user)
 
-    const copyBtn = screen.getByRole('button', { name: /^create similar$/i })
+    const copyBtn = screen.getByRole('button', { name: /^clone$/i })
     fireEvent.click(copyBtn)
 
     await waitFor(() => {
-      expect(screen.getByTestId('copy-dialog').textContent).toBe('comp-1')
+      expect(screen.getByTestId('create-page').textContent).toBe('comp-1')
     })
   })
 
-  it('hides Copy without CREATE_COMPONENTS', () => {
+  it('hides Clone without CREATE_COMPONENTS', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(baseComponent, user)
-    expect(screen.queryByRole('button', { name: /^create similar$/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^clone$/i })).toBeNull()
   })
 
-  it('Copy is available even when per-component canEdit is false (global create gate, not canEdit)', () => {
+  it('Clone is available even when per-component canEdit is false (global create gate, not canEdit)', () => {
     const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
     renderPage({ ...baseComponent, canEdit: false }, user)
-    expect(screen.getByRole('button', { name: /^create similar$/i })).toBeDefined()
+    expect(screen.getByRole('button', { name: /^clone$/i })).toBeDefined()
   })
 })
 

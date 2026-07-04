@@ -7,7 +7,6 @@ import type {
   JiraAspect,
 } from '../types'
 import { selectBaseRow } from '../api/baseRow'
-import { groupTokens } from '../artifactOwnership'
 
 // Distribution-coordinate enum for the package family — CRS validatePackageType
 // accepts only these (EnumValidValues.kt), so the form constrains them rather
@@ -96,15 +95,17 @@ export interface CreateFormValues {
     packageType: PackageType
     packageName: string
   }
-  // #357 base artifact-ownership. The dialog offers ALL / ALL_EXCEPT_CLAIMED and
-  // EXPLICIT ("Specific artifacts"); multi-group and per-range overrides are added
-  // post-create in the editor. An empty group sends no ownership mapping. `tokens`
-  // holds the literal artifact IDs and is only meaningful for EXPLICIT.
-  ownership: {
-    groups: string
+  // #357 base artifact-ownership. Repeatable per-group rows: each row is one
+  // Group ID + its own matching mode (ALL / ALL_EXCEPT_CLAIMED / EXPLICIT) and,
+  // for EXPLICIT ("Specific artifacts"), its literal artifact tokens. Each row
+  // maps to its own ArtifactIdRequest; per-range overrides are added post-create
+  // in the editor. A row with a blank Group ID sends no ownership mapping.
+  ownership: Array<{
+    groupId: string
     mode: ArtifactIdMode
     tokens: string[]
-  }
+  }>
+
 }
 
 // Builds the POST /components payload for both create modes.
@@ -145,8 +146,9 @@ function copyJiraAspect(jira: JiraAspect | null | undefined): JiraAspect | undef
   return hasValue ? rest : undefined
 }
 
-// Maps the form's single coordinate to the matching BASE-row child list. Only
-// called when the request is gated (explicit+external).
+// Maps the form's single coordinate to the matching BASE-row child list. Called
+// for a gated (explicit+external) request, and for Docker whenever an image name
+// is provided (Docker is not gated — see below).
 function coordinatePatch(
   coordinate: CreateFormValues['coordinate'],
 ): Partial<BaseConfigurationRequest> {
@@ -171,14 +173,19 @@ function coordinatePatch(
   }
 }
 
-// Maps the dialog's base ownership section to a single base mapping (or none).
-function buildCreateOwnership(ownership: CreateFormValues['ownership'] | undefined): ArtifactIdRequest[] {
-  const groups = groupTokens(ownership?.groups ?? '')
-  if (groups.length === 0) return []
-  // Artifact tokens are only meaningful for EXPLICIT ("Specific artifacts"); the
-  // catch-all modes always send an empty token list.
-  const artifactTokens = ownership!.mode === 'EXPLICIT' ? [...ownership!.tokens] : []
-  return [{ versionRange: null, groupPattern: groups.join(','), mode: ownership!.mode, artifactTokens }]
+// Maps the dialog's base ownership rows to one base ArtifactIdRequest per row.
+// Rows with a blank Group ID are skipped (empty result ⇒ no ownership mapping).
+// Artifact tokens are only meaningful for EXPLICIT ("Specific artifacts"); the
+// catch-all modes always send an empty token list.
+function buildCreateOwnership(rows: CreateFormValues['ownership'] | undefined): ArtifactIdRequest[] {
+  return (rows ?? [])
+    .filter((row) => row.groupId.trim() !== '')
+    .map((row) => ({
+      versionRange: null,
+      groupPattern: row.groupId.trim(),
+      mode: row.mode,
+      artifactTokens: row.mode === 'EXPLICIT' ? [...row.tokens] : [],
+    }))
 }
 
 // Component-level fields whose presence on create is governed by field-config
@@ -283,9 +290,17 @@ export function buildCreateRequest(
   if (baseRow && baseRow.requiredTools.length > 0) {
     baseConfiguration.requiredTools = [...baseRow.requiredTools]
   }
-  // The form's distribution coordinate is only meaningful (and only required)
-  // when explicit+external; otherwise no coordinate lists are sent.
-  if (gated) Object.assign(baseConfiguration, coordinatePatch(form.coordinate))
+  // Docker is sent whenever an image name is provided, regardless of the
+  // explicit+external gate (a Docker image can be published outside that
+  // combination). Maven/Package coordinates stay gated — they are only
+  // meaningful (and only required) for an explicit+external component.
+  if (form.coordinate.type === 'docker') {
+    if (form.coordinate.imageName.trim()) {
+      Object.assign(baseConfiguration, coordinatePatch(form.coordinate))
+    }
+  } else if (gated) {
+    Object.assign(baseConfiguration, coordinatePatch(form.coordinate))
+  }
   // VCS entry comes from the FORM ONLY (never the source — the repository is
   // unique per component) and only for VCS-requiring build systems.
   if (vcsBlockApplies(form.buildSystem)) {
