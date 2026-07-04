@@ -4,6 +4,12 @@ Guidance for AI agents and developers working on this repository.
 
 **Start with [`DOCS.md`](DOCS.md)** — the wayfinding map showing what lives in this repo vs the CRS repo, with the "owns vs delegates" rules.
 
+## Search & Context Efficiency
+
+- Backend Kotlin lives in `src/`, the SPA in `frontend/src/`. Scope searches to one of those — don't sweep the whole tree.
+- Do **not** read or grep generated/heavy dirs: `node_modules/`, `frontend/node_modules/`, `.gradle/`, `build/`, `frontend/dist/`, `frontend/build/`, `frontend/playwright-report/`, `frontend/test-results/`, `frontend/.vite/`, `.idea/`. They are gitignored (so `rg`/Grep skip them) and direct `Read` is denied for most in `.claude/settings.json`.
+- **Git worktrees live *beside* the repo, not inside it** — create them under `../octopus-components-management-portal-wt/<name>` (matches CRS). A nested worktree tree inside the repo root confuses IDE indexing, Gradle, and Docker build context; `_wt/` stays gitignored + `Read`-denied only as a defensive net in case one is created there by old habit.
+
 ## Architecture
 
 - Portal-side summary with file paths: [`docs/architecture.md`](docs/architecture.md) and Portal ADR [`docs/adr/001-spring-cloud-gateway-bff.md`](docs/adr/001-spring-cloud-gateway-bff.md).

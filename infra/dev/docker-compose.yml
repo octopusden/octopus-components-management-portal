@@ -47,9 +47,12 @@
 #           docker-compose up -d --no-deps crs
 #      b) Or replace the healthcheck with a TCP probe (separate cleanup PR).
 #
-# 3. Worktree workflows (`git worktree add ...`): `.env` is gitignored and
-#    does NOT propagate to a freshly-created worktree. Copy it explicitly:
-#      cp ../../infra/dev/.env _wt/<name>/infra/dev/.env
+# 3. Worktree workflows: keep worktrees BESIDE the repo, not inside it
+#    (a nested worktree tree confuses IDE indexing / Gradle / Docker context).
+#    `.env` is gitignored and does NOT propagate to a freshly-created worktree,
+#    so create it as a sibling and copy `.env` explicitly (run from repo root):
+#      git worktree add ../octopus-components-management-portal-wt/<name> <branch>
+#      cp infra/dev/.env ../octopus-components-management-portal-wt/<name>/infra/dev/.env
 #
 # 4. When CRS migrations change (any edit under
 #    `components-registry-service-server/src/main/resources/db/migration/`),

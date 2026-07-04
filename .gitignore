@@ -9,6 +9,16 @@ frontend/dist/
 frontend/build/
 frontend/test-results/
 frontend/tsconfig.tsbuildinfo
+# Stray root node_modules — real deps live in frontend/
+/node_modules/
+
+# Worktrees belong BESIDE the repo (../octopus-components-management-portal-wt/), not here.
+# Defensive net: if one is ever created in-repo it stays out of git status + search.
+_wt/
+
+# Vite cache
+frontend/.vite/
+.vite/
 
 # IDE
 .idea/
