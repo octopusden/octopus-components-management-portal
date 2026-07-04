@@ -22,6 +22,13 @@ vi.mock('./FieldOverrideInline', () => ({
 let fcEntries: Record<string, { visibility?: string; editable?: string }> = {}
 let editableMap: Record<string, boolean> = {}
 
+// Whiskey renders the server-backed preview (useQuery). JiraTab tests don't wrap
+// a QueryClient, so stub the hook — the Whiskey cases here only assert the tab's
+// own controls, not the preview contents.
+vi.mock('../../hooks/useDetailedVersion', () => ({
+  useDetailedVersion: () => ({ data: undefined, isLoading: false, isError: false }),
+}))
+
 vi.mock('../../hooks/useFieldConfig', () => ({
   useFieldConfigEntry: (path: string) => ({
     entry: fcEntries[path] ?? { visibility: 'editable', required: false },
@@ -279,9 +286,8 @@ describe('JiraTab — Technical (admin-gated)', () => {
 })
 
 describe('JiraTab — Skip Commit Check (new toggle)', () => {
-  it('renders a "new" pill and is editable by default (non-Whiskey)', () => {
+  it('is editable by default (non-Whiskey)', () => {
     renderTab({ component: makeComponent() })
-    expect(screen.getByText('new')).toBeDefined()
     expect(screen.getByRole('switch', { name: /skip commit check/i })).not.toBeDisabled()
   })
 

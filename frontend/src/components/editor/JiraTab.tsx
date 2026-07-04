@@ -190,22 +190,26 @@ function MirrorField({
         </Label>
         <FieldInfo path={path} label={fallback} />
         {state.adminOnly && state.disabled && <AdminOnlyPill title="Only administrators can change this." />}
+        {/* Mirror pill sits on the label row (not inside the value box) so the full
+            mirrored format value stays visible. */}
+        {!separate && (
+          <Badge variant="secondary" className="ml-auto font-normal">
+            {pill}
+          </Badge>
+        )}
       </div>
 
       {!separate ? (
         <>
-          <div className="flex h-9 items-center gap-2 rounded-md border bg-muted px-3">
+          <div className="flex h-9 items-center rounded-md border bg-muted px-3">
             <input
               readOnly
               tabIndex={-1}
               aria-label={`${fallback} (mirrored)`}
               data-field-mirror={path}
               value={leadingValue}
-              className="min-w-0 flex-1 bg-transparent font-mono text-sm text-muted-foreground outline-none"
+              className="w-full bg-transparent font-mono text-sm text-muted-foreground outline-none"
             />
-            <Badge variant="secondary" className="font-normal">
-              {pill}
-            </Badge>
           </div>
           <Button
             type="button"
@@ -491,6 +495,8 @@ export function JiraTab({ component, section, canEdit, conflictError, effectiveB
               hotfixEnabled={hotfixEnabled}
               hoveredField={hoveredField}
               onHoverField={setHoveredField}
+              whiskey={isWhiskey}
+              componentName={component.name}
             />
           </aside>
         </div>
@@ -557,9 +563,6 @@ export function JiraTab({ component, section, canEdit, conflictError, effectiveB
             <Label htmlFor="jira-skipCommitCheck" className="cursor-pointer">
               <FieldLabelText path="jira.skipCommitCheck" fallback="Skip Commit Check at Issue Assignment at Release" />
             </Label>
-            <Badge variant="info" className="font-normal">
-              new
-            </Badge>
             <FieldInfo path="jira.skipCommitCheck" label="Skip Commit Check at Issue Assignment at Release" />
           </div>
           {isWhiskey && (

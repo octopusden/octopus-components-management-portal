@@ -1,6 +1,8 @@
-import { useState } from 'react'
-import { Badge } from '../ui/badge'
-import { computeLadder, type LadderState, type LadderRow } from '../../lib/versionPreview'
+import { useState, type ReactNode } from 'react'
+import { computeLadder, expandFormat, parseVersion, type LadderState, type LadderRow, type VersionParts } from '../../lib/versionPreview'
+import { useDebouncedValue } from '../../hooks/useDebouncedValue'
+import { useDetailedVersion } from '../../hooks/useDetailedVersion'
+import type { DetailedComponentVersion } from '../../lib/types'
 
 /**
  * Version-ladder preview panel (design brief §4, P-0 prototype). Reads the
@@ -31,6 +33,14 @@ export interface JiraVersionPreviewProps {
   hoveredField: string | null
   /** Report the field a hovered/left row links back to (null on leave). */
   onHoverField: (field: string | null) => void
+  /**
+   * WHISKEY build system: the client can't reproduce its versions (zero-padding,
+   * library computation, custom variables), so render server-truth from CRS
+   * instead of the client ladder. Reflects the SAVED configuration.
+   */
+  whiskey?: boolean
+  /** Component key (legacy name) used to query the server-rendered ladder. */
+  componentName?: string
 }
 
 // Field-config paths — shared hover vocabulary with JiraTab's format fields and
@@ -42,6 +52,47 @@ const MINOR = 'jira.minorVersionFormat'
 const RELEASE = 'jira.releaseVersionFormat'
 const BUILD = 'jira.buildVersionFormat'
 const HOTFIX = 'jira.hotfixVersionFormat'
+
+// Canonical positional part values used to synthesise a realistic default sample
+// version. Non-zero so every referenced segment renders a believable number
+// (e.g. `$major.$minor.$service-$fix` → `1.2.3-87`, not `1.2.3-0`).
+const CANONICAL_PARTS: VersionParts = { major: '1', minor: '2', service: '3', fix: '87', build: '512' }
+const PART_ORDER = ['major', 'minor', 'service', 'fix', 'build'] as const
+
+/** Highest positional segment (1-based) a template references, 0 if none. */
+function templateDepth(template: string): number {
+  let depth = 0
+  PART_ORDER.forEach((key, i) => {
+    if (new RegExp(`\\$${key}(?![A-Za-z])`).test(template)) depth = Math.max(depth, i + 1)
+  })
+  return depth
+}
+
+/**
+ * Synthesise a default sample version whose segment count matches the deepest of
+ * the given format templates — so the preview never shows a fake trailing `0` for
+ * a segment the format actually uses. The deepest template supplies the display
+ * separators (`1.2.3-87` vs `1.2.3.87`); ties prefer the first (leading) template.
+ *
+ * The rendered sample must round-trip through positional `parseVersion` (the same
+ * decode the ladder rows use), else a template that skips a leading position
+ * (e.g. `$service.$fix`) would show a sample the rows then recompute differently.
+ * When it doesn't round-trip, fall back to a positional canonical join that fills
+ * every used position.
+ */
+function deriveSample(templates: string[]): string {
+  const candidates = templates.filter((t) => t.trim())
+  if (candidates.length === 0) return '1.2.3'
+  // reduce with no seed → returns a `string` (throws on empty, which we guarded).
+  const deepest = candidates.reduce((best, t) => (templateDepth(t) > templateDepth(best) ? t : best))
+  const depth = templateDepth(deepest)
+  if (depth === 0) return '1.2.3'
+  const rendered = expandFormat(deepest, CANONICAL_PARTS)
+  const parsed = parseVersion(rendered)
+  const roundTrips =
+    rendered.trim() !== '' && PART_ORDER.slice(0, depth).every((k) => parsed[k] === CANONICAL_PARTS[k])
+  return roundTrips ? rendered : PART_ORDER.slice(0, depth).map((k) => CANONICAL_PARTS[k]).join('.')
+}
 
 interface MirrorFlags {
   minorMirrored: boolean
@@ -101,32 +152,38 @@ interface RowChrome {
   dest: string
   /** Left-accent the primary Release row. */
   accent?: boolean
+  /** Jira-facing row — its "in Jira" tag renders in the accent (blue) colour. */
+  jira?: boolean
 }
 
 /** Presentation copy per row (P-0 prototype §preview); mirror tags depend on state. */
-function rowChrome(id: string, technical: boolean, { minorMirrored, buildMirrored }: MirrorFlags): RowChrome {
+function rowChrome(id: string, technical: boolean, { buildMirrored }: MirrorFlags): RowChrome {
   switch (id) {
     case 'release':
-      return { tag: 'in Jira', accent: true, dest: technical ? 'SubComponent Fix Version/s' : 'Jira "Fix Version/s"' }
+      return { tag: 'in Jira', jira: true, accent: true, dest: technical ? 'SubComponent Fix Version/s' : 'Jira "Fix Version/s"' }
     case 'rc':
       return {
         tag: 'in Jira',
+        jira: true,
         dest: technical
           ? 'Jira, until the release replaces it in SubComponent Fix Version/s'
           : 'Jira, until the release replaces it in Fix Version/s',
       }
     case 'minor':
-      return { tag: minorMirrored ? '= line format' : 'in Jira', dest: 'used for planning in Jira' }
+      // Minor is a Jira-facing planning version → always tagged "in Jira" (the
+      // Line-mirror relationship is still shown by the field pill + hover link).
+      return { tag: 'in Jira', jira: true, dest: 'used for planning in Jira' }
     case 'line':
       return { tag: 'no prefix', dest: 'CRN report — all versions belonging to this line are included by default' }
     case 'build':
-      return { tag: buildMirrored ? '= release format' : 'no prefix', dest: 'CI builds' }
+      return { tag: buildMirrored ? '= release format' : 'no prefix', dest: 'TeamCity builds / Artifactory' }
     case 'hotfix-build':
-      return { tag: 'hotfix build, no prefix', dest: 'hotfix build' }
+      return { tag: 'hotfix build, no prefix', dest: 'hotfix builds in TeamCity / Artifactory' }
     case 'hotfix-jira':
     default:
       return {
         tag: 'in Jira',
+        jira: true,
         dest: technical
           ? 'Jira SubComponent Fix Version/s, wrapped like a release'
           : 'Jira Fix Version, wrapped like a release',
@@ -134,7 +191,59 @@ function rowChrome(id: string, technical: boolean, { minorMirrored, buildMirrore
   }
 }
 
+const SAMPLE_INPUT_CLASS =
+  'w-36 rounded-md border bg-background px-2 py-1 font-mono text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring'
+
+/** The bordered, sticky preview card + its "Version Preview" heading. */
+function PreviewShell({ children }: { children: ReactNode }) {
+  return (
+    <div
+      data-testid="jira-version-preview"
+      className="rounded-xl border bg-muted/40 p-4 lg:sticky lg:top-6"
+    >
+      <div className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+        Version Preview
+      </div>
+      {children}
+    </div>
+  )
+}
+
+/** Map a server DetailedComponentVersion to the panel's ladder rows (bare vs Jira form). */
+function mapDetailedToRows(d: DetailedComponentVersion, hotfixEnabled: boolean): LadderRow[] {
+  const mk = (id: string, label: string, value: string): LadderRow => ({
+    id,
+    label,
+    value,
+    dest: '',
+    approx: false,
+    fieldId: '',
+  })
+  const rows = [
+    mk('release', 'Release Version', d.releaseVersion.jiraVersion),
+    mk('rc', 'RC Version', d.rcVersion.jiraVersion),
+    mk('minor', 'Minor Version', d.minorVersion.jiraVersion),
+    mk('line', 'Major (Line) Version', d.lineVersion.version),
+    mk('build', 'Build Version', d.buildVersion.version),
+  ]
+  if (hotfixEnabled && d.hotfixVersion) {
+    rows.push(
+      mk('hotfix-build', 'Hotfix Version', d.hotfixVersion.version),
+      mk('hotfix-jira', 'Hotfix Version', d.hotfixVersion.jiraVersion),
+    )
+  }
+  return rows
+}
+
+/**
+ * Whiskey renders server-truth (its version scheme can't be reproduced
+ * client-side); every other build system uses the reactive client ladder.
+ */
 export function JiraVersionPreview(props: JiraVersionPreviewProps) {
+  return props.whiskey ? <JiraVersionPreviewServer {...props} /> : <JiraVersionPreviewClient {...props} />
+}
+
+function JiraVersionPreviewClient(props: JiraVersionPreviewProps) {
   const {
     versionPrefix,
     versionFormat,
@@ -151,9 +260,15 @@ export function JiraVersionPreview(props: JiraVersionPreviewProps) {
     onHoverField,
   } = props
 
-  // Editable samples — different arity for hotfix (extra trailing segment).
-  const [sample, setSample] = useState('1.2.3')
-  const [hotfixSample, setHotfixSample] = useState('1.2.3-187')
+  // Editable samples. Default arity is derived from the current formats (hotfix
+  // carries an extra trailing segment), so the preview matches how many indices
+  // each format uses. A manual edit (override) wins and pins the value; until then
+  // the sample tracks format edits reactively.
+  const [sampleOverride, setSampleOverride] = useState<string | null>(null)
+  const [hotfixOverride, setHotfixOverride] = useState<string | null>(null)
+  const effectiveBuildFormat = buildSeparate ? buildVersionFormat : releaseVersionFormat
+  const sample = sampleOverride ?? deriveSample([releaseVersionFormat, effectiveBuildFormat])
+  const hotfixSample = hotfixOverride ?? deriveSample([hotfixVersionFormat])
 
   // Feed the lib the effective values: a mirrored derived field passes '' so the
   // lib falls back to its leader (Minor→Line, Build→Release), matching the
@@ -173,63 +288,64 @@ export function JiraVersionPreview(props: JiraVersionPreviewProps) {
     technical,
   }
   const rows = computeLadder(ladderState)
+  // Hotfix rows live in their own group below the main ladder (with the hotfix
+  // sample input), so the standard preview reads without the extra-arity noise.
+  const mainRows = rows.filter((r) => !r.id.startsWith('hotfix'))
+  const hotfixRows = rows.filter((r) => r.id.startsWith('hotfix'))
 
   const flags: MirrorFlags = { minorMirrored: !minorSeparate, buildMirrored: !buildSeparate }
   const highlightedRows = new Set(fieldToRows(hoveredField, flags))
 
-  return (
-    <div
-      data-testid="jira-version-preview"
-      className="rounded-xl border bg-muted/40 p-4 lg:sticky lg:top-6"
-    >
-      <div className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-        Version Preview
-      </div>
+  const renderRow = (r: LadderRow) => (
+    <LadderRowView
+      key={r.id}
+      row={r}
+      chrome={rowChrome(r.id, technical, flags)}
+      highlighted={highlightedRows.has(r.id)}
+      onEnter={() => onHoverField(rowToField(r.id, flags))}
+      onLeave={() => onHoverField(null)}
+    />
+  )
 
+  return (
+    <PreviewShell>
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
         <label className="flex items-center gap-2">
           version
           <input
             aria-label="version"
             value={sample}
-            onChange={(e) => setSample(e.target.value)}
-            className="w-28 rounded-md border bg-background px-2 py-1 font-mono text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onChange={(e) => setSampleOverride(e.target.value)}
+            className={SAMPLE_INPUT_CLASS}
           />
         </label>
-        {hotfixEnabled && (
+      </div>
+
+      <div>{mainRows.map(renderRow)}</div>
+
+      {hotfixEnabled && hotfixRows.length > 0 && (
+        <div className="mt-3 border-t border-dashed pt-3">
           <label
-            className="flex items-center gap-2"
+            className="mb-2 flex items-center gap-2 text-sm text-muted-foreground"
             title="Hotfix versions carry an extra trailing segment vs standard ones — previewed from their own sample."
           >
             hotfix version
             <input
               aria-label="hotfix version"
               value={hotfixSample}
-              onChange={(e) => setHotfixSample(e.target.value)}
-              className="w-28 rounded-md border bg-background px-2 py-1 font-mono text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onChange={(e) => setHotfixOverride(e.target.value)}
+              className={SAMPLE_INPUT_CLASS}
             />
           </label>
-        )}
-      </div>
-
-      <div>
-        {rows.map((r) => (
-          <LadderRowView
-            key={r.id}
-            row={r}
-            chrome={rowChrome(r.id, technical, flags)}
-            highlighted={highlightedRows.has(r.id)}
-            onEnter={() => onHoverField(rowToField(r.id, flags))}
-            onLeave={() => onHoverField(null)}
-          />
-        ))}
-      </div>
+          <div>{hotfixRows.map(renderRow)}</div>
+        </div>
+      )}
 
       <p className="mt-3 border-t border-dashed pt-3 text-[11px] leading-relaxed text-muted-foreground">
-        <span className="font-mono">$fix</span> and <span className="font-mono">$build</span> are computed by
-        the server at release time — rows marked ≈ are approximate.
+        <span className="font-mono">$fix</span> and <span className="font-mono">$build</span> are filled by the
+        server at build/release time.
       </p>
-    </div>
+    </PreviewShell>
   )
 }
 
@@ -268,19 +384,94 @@ function LadderRowView({
     >
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-semibold">{row.label}</span>
-        <span className="rounded-full border bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+        <span
+          className={
+            chrome.jira
+              ? 'rounded-full border border-transparent bg-[color:var(--color-badge-blue-bg)] px-2 py-0.5 text-[11px] font-semibold text-[color:var(--color-badge-blue-fg)]'
+              : 'rounded-full border bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground'
+          }
+        >
           {chrome.tag}
         </span>
-        {row.approx && (
-          <Badge variant="warning" className="px-2 py-0 text-[10px] font-semibold">
-            ≈ approx
-          </Badge>
-        )}
       </div>
       <div data-testid="ladder-value" className="font-mono text-base font-semibold tracking-tight">
         {row.value}
       </div>
       <div className="text-xs text-muted-foreground">→ {chrome.dest}</div>
     </div>
+  )
+}
+
+/**
+ * Whiskey preview: fetch the server-rendered ladder for the component + an
+ * editable input version (debounced) and render it with the same rows/chrome/
+ * hover linking as the client panel. Values are authoritative (no approx), but
+ * reflect the SAVED configuration — a caption says so; a missing/unparseable
+ * version or a fetch error falls back to a notice.
+ */
+function JiraVersionPreviewServer(props: JiraVersionPreviewProps) {
+  const { componentName = '', technical, hotfixEnabled, minorSeparate, buildSeparate, hoveredField, onHoverField } = props
+
+  // Whiskey-shaped seed (5 segments incl. build) so the server has enough to
+  // render every format on first paint; the user can edit it.
+  const [version, setVersion] = useState('03.62.30.19-4')
+  const debounced = useDebouncedValue(version, 350)
+  const query = useDetailedVersion(componentName, debounced, true)
+
+  const flags: MirrorFlags = { minorMirrored: !minorSeparate, buildMirrored: !buildSeparate }
+  const highlightedRows = new Set(fieldToRows(hoveredField, flags))
+
+  const rows = query.data ? mapDetailedToRows(query.data, hotfixEnabled) : []
+  const mainRows = rows.filter((r) => !r.id.startsWith('hotfix'))
+  const hotfixRows = rows.filter((r) => r.id.startsWith('hotfix'))
+
+  const renderRow = (r: LadderRow) => (
+    <LadderRowView
+      key={r.id}
+      row={r}
+      chrome={rowChrome(r.id, technical, flags)}
+      highlighted={highlightedRows.has(r.id)}
+      onEnter={() => onHoverField(rowToField(r.id, flags))}
+      onLeave={() => onHoverField(null)}
+    />
+  )
+
+  return (
+    <PreviewShell>
+      <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+        <label className="flex items-center gap-2">
+          version
+          <input
+            aria-label="version"
+            value={version}
+            onChange={(e) => setVersion(e.target.value)}
+            className={SAMPLE_INPUT_CLASS}
+          />
+        </label>
+      </div>
+      <p className="mb-3 text-[11px] leading-relaxed text-muted-foreground">
+        Rendered from the saved configuration by the versioning library.
+      </p>
+
+      {query.isLoading && (
+        <p data-testid="version-preview-loading" className="py-6 text-center text-sm text-muted-foreground">
+          Rendering…
+        </p>
+      )}
+
+      {!query.isLoading && rows.length === 0 && (
+        <p data-testid="version-preview-empty" className="rounded-md bg-muted px-3 py-4 text-xs leading-relaxed text-muted-foreground">
+          No preview for this version — Whiskey versions are computed by its versioning library. Enter a
+          version this component’s scheme can parse.
+        </p>
+      )}
+
+      {rows.length > 0 && (
+        <>
+          <div>{mainRows.map(renderRow)}</div>
+          {hotfixRows.length > 0 && <div className="mt-3 border-t border-dashed pt-3">{hotfixRows.map(renderRow)}</div>}
+        </>
+      )}
+    </PreviewShell>
   )
 }
