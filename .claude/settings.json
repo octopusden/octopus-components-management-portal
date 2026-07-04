@@ -7,7 +7,6 @@
       "Read(./**/.kotlin/**)",
       "Read(./**/.idea/**)",
       "Read(./**/frontend/dist/**)",
-      "Read(./**/frontend/build/**)",
       "Read(./**/frontend/playwright-report/**)",
       "Read(./**/frontend/test-results/**)",
       "Read(./**/frontend/.vite/**)"

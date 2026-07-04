@@ -7,7 +7,8 @@ Guidance for AI agents and developers working on this repository.
 ## Search & Context Efficiency
 
 - Backend Kotlin lives in `src/`, the SPA in `frontend/src/`. Scope searches to one of those — don't sweep the whole tree.
-- Do **not** read or grep generated/heavy dirs: `node_modules/`, `frontend/node_modules/`, `.gradle/`, `build/`, `frontend/dist/`, `frontend/build/`, `frontend/playwright-report/`, `frontend/test-results/`, `frontend/.vite/`, `.idea/`. They are gitignored (so `rg`/Grep skip them) and direct `Read` is denied for most in `.claude/settings.json`.
+- Do **not** read or grep generated/heavy dirs: `node_modules/`, `frontend/node_modules/`, `.gradle/`, `.kotlin/`, `frontend/dist/`, `frontend/playwright-report/`, `frontend/test-results/`, `frontend/.vite/`, `.idea/`. They are gitignored (so `rg`/Grep skip them) and direct `Read` is denied in `.claude/settings.json`.
+- **Exception — stay readable:** `build/` and `frontend/build/` are gitignored (skipped by search) but **not** `Read`-denied, because they hold the reports agents legitimately consult (`build/reports/**`, `frontend/build/reports/coverage`, `frontend/build/test-results`).
 - **Git worktrees live *beside* the repo, not inside it** — create them under `../octopus-components-management-portal-wt/<name>` (matches CRS). A nested worktree tree inside the repo root confuses IDE indexing, Gradle, and Docker build context; `_wt/` stays gitignored + `Read`-denied only as a defensive net in case one is created there by old habit.
 
 ## Architecture
