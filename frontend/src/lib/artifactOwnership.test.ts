@@ -61,7 +61,7 @@ describe('artifactOwnership helpers', () => {
   it('groupError flags empty group, bad token, and comma-group ALL_EXCEPT', () => {
     expect(groupError(m({ groups: '' }))).toMatch(/required/)
     expect(groupError(m({ groups: 'a*' }))).toMatch(/Invalid group/)
-    expect(groupError(m({ groups: 'a,b', mode: 'ALL_EXCEPT_CLAIMED' }))).toMatch(/single group/)
+    expect(groupError(m({ groups: 'a,b', mode: 'ALL_EXCEPT_CLAIMED' }))).toMatch(/single Group ID/)
     expect(groupError(m({ groups: 'a,b', mode: 'ALL' }))).toBe('')
   })
 
@@ -181,6 +181,12 @@ describe('humanizeOwnership', () => {
   it('shows (none) for an EXPLICIT mapping with no tokens', () => {
     expect(humanizeOwnership({ groupPattern: 'com.example.foo', mode: 'EXPLICIT', artifactTokens: [], versionRange: '[1,2)' })).toBe(
       '[1,2) · Specific · com.example.foo · (none)',
+    )
+  })
+
+  it('uses the renamed short label for ALL_EXCEPT_CLAIMED (no stale "unclaimed")', () => {
+    expect(humanizeOwnership({ groupPattern: 'com.example.foo', mode: 'ALL_EXCEPT_CLAIMED', versionRange: null })).toBe(
+      'All versions · All except assigned elsewhere · com.example.foo',
     )
   })
 })

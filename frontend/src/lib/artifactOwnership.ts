@@ -18,17 +18,17 @@ export interface OwnershipMode {
 export const OWNERSHIP_MODES: OwnershipMode[] = [
   {
     key: 'ALL',
-    label: 'All artifacts in these groups',
-    help: 'Owns every artifact under these groups. Must be the sole owner of the group in its range.',
+    label: 'All under the group ID',
+    help: 'Owns every artifact under this group ID. Must be the sole owner of the group in its range.',
   },
   {
     key: 'ALL_EXCEPT_CLAIMED',
-    label: 'All unclaimed artifacts',
-    help: 'Owns any artifact not explicitly claimed by another component in an overlapping range.',
+    label: 'All except artifacts assigned elsewhere',
+    help: 'Owns any artifact in the group not explicitly assigned to another component in an overlapping range. Supports a single Group ID.',
   },
   {
     key: 'EXPLICIT',
-    label: 'Specific artifacts',
+    label: 'Specific artifacts only',
     help: 'Owns exactly the listed artifact IDs. Highest priority during resolution.',
   },
 ]
@@ -138,7 +138,7 @@ export function groupError(
     return `Group "${unsupported}" must start with a supported prefix (${supportedGroups.join(', ')}).`
   }
   if (mapping.mode === 'ALL_EXCEPT_CLAIMED' && tokens.length > 1) {
-    return '"All unclaimed" supports a single group only — split into one mapping per group.'
+    return '"All except artifacts assigned elsewhere" supports a single Group ID only — split into one mapping per group.'
   }
   return ''
 }
@@ -268,7 +268,7 @@ export function toArtifactIdRequest(m: OwnershipMappingValue): ArtifactIdRequest
 
 const MODE_SHORT_LABEL: Record<ArtifactIdMode, string> = {
   ALL: 'All in group',
-  ALL_EXCEPT_CLAIMED: 'All unclaimed',
+  ALL_EXCEPT_CLAIMED: 'All except assigned elsewhere',
   EXPLICIT: 'Specific',
 }
 

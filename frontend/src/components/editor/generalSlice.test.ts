@@ -98,7 +98,7 @@ describe('generalSlice — artifactIds ownership (request shape)', () => {
   it('produces a readable itemized diff (removed/added lines, no ::-keys)', () => {
     const changed = sameRequest.map((m, i) => (i === 1 ? { ...m, artifactTokens: ['svc-b'] } : m))
     const diff = generalDiff(owned, patch({ artifactIds: changed }))
-    const row = diff.find((d) => d.label === 'Artifact IDs')
+    const row = diff.find((d) => d.label === 'Produced Artifacts')
     expect(row).toBeDefined()
     // Only the changed mapping appears; the unchanged base mapping is omitted.
     expect(row!.oldItems).toEqual(['[1,2) · Specific · com.example.bar · svc-a'])

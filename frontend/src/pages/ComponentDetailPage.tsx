@@ -24,10 +24,12 @@ import { DocumentationTab } from '../components/editor/DocumentationTab'
 import { SolutionTab } from '../components/editor/SolutionTab'
 import { HeaderLabelsEditor } from '../components/editor/HeaderLabelsEditor'
 import { MiscTab, MISC_TAB_FIELDS } from '../components/editor/MiscTab'
+import { ProducedArtifactsSection } from '../components/editor/ProducedArtifactsSection'
 import { buildUpdateRequest } from '../lib/component/buildUpdateRequest'
 import { BuildTab } from '../components/editor/BuildTab'
 import { VcsTab } from '../components/editor/VcsTab'
 import { DistributionTab } from '../components/editor/DistributionTab'
+import { DockerImagesTab } from '../components/editor/DockerImagesTab'
 import { JiraTab } from '../components/editor/JiraTab'
 import { EscrowTab } from '../components/editor/EscrowTab'
 import { useBuildSection } from '../components/editor/useBuildSection'
@@ -127,12 +129,24 @@ function mapComponentToForm(component: ComponentDetail): GeneralFormValues {
 // Maps a server 400 field error (or a tab section) to the sidebar section that
 // should auto-switch into view. Identifiers match the Phase 3a nav values.
 function sectionForField(field: string): string | null {
+  // Produced Artifacts render on the Build tab (its form state stays in the
+  // General form), so route an artifactIds 400 there — not General. Checked
+  // first because `artifactIds` is deliberately absent from GENERAL_TAB_FIELDS.
+  if (field === 'artifactIds' || field.startsWith('artifactIds')) return 'build'
+  // Explicit / External classification toggles moved to the General tab's
+  // Classification section (their state stays in useDistributionSection), so a
+  // 400 on those routes to General — checked before the generic distribution* rule.
+  if (field === 'distributionExplicit' || field === 'distributionExternal') return 'general'
   if ((GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(field)) return 'general'
   if ((MISC_TAB_FIELDS as ReadonlyArray<string>).includes(field)) return 'misc'
   if (field.startsWith('build')) return 'build'
   if (field.startsWith('vcs')) return 'vcs'
   if (field.startsWith('jira')) return 'jira'
   if (field.startsWith('escrow') || field === 'productType') return 'escrow'
+  // Docker images are their own tab now (split out of Distribution), so route a
+  // docker 400 there — both the baseConfiguration `dockerImages` key and the
+  // `distribution.docker*` marker/field paths — before the generic distribution rule.
+  if (field === 'dockerImages' || field.startsWith('distribution.docker')) return 'docker'
   if (field.startsWith('distribution') || field === 'securityGroups') return 'distribution'
   // Doc links moved to their own Documentation topic — route a CRS `docs`/
   // `docs[i]...` 400 there so the user lands on the owning tab, not a bare toast.
@@ -708,9 +722,13 @@ function ComponentDetailEditor() {
                 const systems = component.systems ?? []
                 const buildSystem = baseRow?.build?.buildSystem
                 const jiraProjectKey = baseRow?.jira?.projectKey
+                // A read-only badge mirroring a field respects field-config
+                // visibility: when `component.system` is hidden, the System
+                // badge is suppressed (not just the input). D7.
+                const systemsHidden = systemFc.visibility === 'hidden'
                 return (
                   <>
-                    {systems.map((s) => (
+                    {!systemsHidden && systems.map((s) => (
                       <Badge key={s} variant="outline">{s}</Badge>
                     ))}
                     {buildSystem && <Badge variant="outline">{buildSystem}</Badge>}
@@ -858,8 +876,8 @@ function ComponentDetailEditor() {
             const distCount =
               (br?.mavenArtifacts.length ?? 0) +
               (br?.fileUrlArtifacts.length ?? 0) +
-              (br?.dockerImages.length ?? 0) +
               (br?.packages.length ?? 0)
+            const dockerCount = br?.dockerImages.length ?? 0
             const configCount = component.configurations?.length ?? 0
             const docsCount = component.docs?.length ?? 0
             const sections: EditorNavSection[] = [
@@ -883,7 +901,10 @@ function ComponentDetailEditor() {
               },
               {
                 label: 'Distribution',
-                items: [{ value: 'distribution', label: 'Distribution', count: distCount }],
+                items: [
+                  { value: 'distribution', label: 'Distribution', count: distCount },
+                  { value: 'docker', label: 'Docker', count: dockerCount },
+                ],
               },
               {
                 label: 'Metadata',
@@ -924,6 +945,12 @@ function ComponentDetailEditor() {
                   form={form}
                   canEdit={canEdit}
                   onOwnerValidatingChange={setOwnerValidating}
+                  classification={{
+                    explicit: distributionSection.state.explicit,
+                    external: distributionSection.state.external,
+                    setExplicit: distributionSection.setExplicit,
+                    setExternal: distributionSection.setExternal,
+                  }}
                 />
               </EditSurface>
             </TabsContent>
@@ -938,7 +965,10 @@ function ComponentDetailEditor() {
 
             <TabsContent value="build">
               <EditSurface canEdit={canEdit} label="Build">
-                <BuildTab section={buildSection} canEdit={canEdit} />
+                <div className="space-y-6">
+                  <BuildTab section={buildSection} canEdit={canEdit} />
+                  <ProducedArtifactsSection form={form} component={component} canEdit={canEdit} />
+                </div>
               </EditSurface>
             </TabsContent>
 
@@ -957,6 +987,12 @@ function ComponentDetailEditor() {
             <TabsContent value="distribution">
               <EditSurface canEdit={canEdit} label="Distribution">
                 <DistributionTab section={distributionSection} canEdit={canEdit} supportedGroups={supportedGroups} />
+              </EditSurface>
+            </TabsContent>
+
+            <TabsContent value="docker">
+              <EditSurface canEdit={canEdit} label="Docker">
+                <DockerImagesTab section={distributionSection} canEdit={canEdit} />
               </EditSurface>
             </TabsContent>
 

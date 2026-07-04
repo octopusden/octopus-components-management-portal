@@ -48,21 +48,21 @@ describe('ArtifactOwnershipEditor', () => {
   it('renders a base mapping with its group and mode selected', () => {
     render(<Harness initial={[base()]} />)
     expect(screen.getByDisplayValue('com.example.foo')).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: /All artifacts in these groups/ })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('radio', { name: /All under the group ID/ })).toHaveAttribute('aria-checked', 'true')
   })
 
   it('switching to "Specific artifacts" reveals the token chip input', async () => {
     render(<Harness initial={[base()]} />)
-    expect(screen.queryByLabelText('Artifact IDs')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Specific artifacts')).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('radio', { name: /Specific artifacts/ }))
-    expect(screen.getByLabelText('Artifact IDs')).toBeInTheDocument()
+    expect(screen.getByLabelText('Specific artifacts')).toBeInTheDocument()
     // EXPLICIT with no tokens surfaces the "add at least one" error.
     expect(screen.getByText(/Add at least one artifact/)).toBeInTheDocument()
   })
 
   it('adds a literal token on Enter and rejects regex metacharacters', async () => {
     render(<Harness initial={[base({ mode: 'EXPLICIT' })]} />)
-    const input = screen.getByLabelText('Artifact IDs')
+    const input = screen.getByLabelText('Specific artifacts')
     await userEvent.type(input, 'foo-svc{Enter}')
     expect(screen.getByText('foo-svc')).toBeInTheDocument()
     // A metachar token is not committed (left as a flagged draft).
@@ -75,11 +75,11 @@ describe('ArtifactOwnershipEditor', () => {
     expect(screen.getByText('Ownership conflict')).toBeInTheDocument()
   })
 
-  it('"Add artifact coordinates" appends an empty base mapping', async () => {
+  it('"Add one more groupId" appends an empty base mapping (one Group ID per row)', async () => {
     render(<Harness initial={[base()]} />)
-    await userEvent.click(screen.getByRole('button', { name: /Add artifact coordinates/ }))
-    // Two "Artifact coordinates" blocks now.
-    expect(screen.getAllByText('Artifact coordinates')).toHaveLength(2)
+    await userEvent.click(screen.getByRole('button', { name: /Add one more groupId/ }))
+    // Two Group ID rows now — each row is a single Group ID.
+    expect(screen.getAllByLabelText('Group ID')).toHaveLength(2)
   })
 
   it('legacy preview renders the catch-all for an ALL mapping', () => {
@@ -91,7 +91,7 @@ describe('ArtifactOwnershipEditor', () => {
   it('disabled hides add/remove controls', () => {
     const onChange = vi.fn()
     render(<ArtifactOwnershipEditor value={[base()]} onChange={onChange} configRanges={[]} disabled />)
-    expect(screen.queryByRole('button', { name: /Add artifact coordinates/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Add one more groupId/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Remove mapping/ })).not.toBeInTheDocument()
   })
 })

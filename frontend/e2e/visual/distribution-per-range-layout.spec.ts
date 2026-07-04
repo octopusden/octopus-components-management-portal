@@ -51,7 +51,7 @@ const DETAIL = {
   ],
 }
 
-test.describe('Distribution tab — per-range variant row layout (issue #146)', () => {
+test.describe('Docker tab — per-range variant row layout (issue #146)', () => {
   test('long per-range summaries truncate; controls never overlap the text or overflow the page', async ({ page }) => {
     await mockComponentList(page, { content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 })
     await mockComponentDetail(page, DETAIL)
@@ -62,7 +62,8 @@ test.describe('Distribution tab — per-range variant row layout (issue #146)', 
     )
 
     await page.goto(`/components/${ID}`)
-    await page.getByRole('tab', { name: /distribution/i }).click()
+    // Docker images (and their per-range variants) moved to their own tab.
+    await page.getByRole('tab', { name: /docker/i }).click()
 
     const section = page.getByTestId('docker-images-section')
     const rows = section.getByTestId('dist-per-range-row')

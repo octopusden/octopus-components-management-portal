@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { GeneralTab, type GeneralFormValues } from './GeneralTab'
-import { fromArtifactId, OWNERSHIP_ALL_VERSIONS } from '../../lib/artifactOwnership'
+import { fromArtifactId } from '../../lib/artifactOwnership'
 import { TooltipProvider } from '../ui/tooltip'
 import { fieldDescriptions } from '../../lib/fieldDescriptions'
 import { lookupEmployee } from '../../hooks/useEmployees'
@@ -104,7 +104,7 @@ function setAllEditable() {
   mockUseFieldConfigEntry.mockImplementation(() => makeEntry('editable'))
 }
 
-function Harness({ component, formRef, onOwnerValidatingChange, canEdit }: { component: ComponentDetail; formRef?: React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>; onOwnerValidatingChange?: (validating: boolean) => void; canEdit?: boolean }) {
+function Harness({ component, formRef, onOwnerValidatingChange, canEdit, classification }: { component: ComponentDetail; formRef?: React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>; onOwnerValidatingChange?: (validating: boolean) => void; canEdit?: boolean; classification?: { explicit: boolean; external: boolean; setExplicit: (v: boolean) => void; setExternal: (v: boolean) => void } }) {
   const form = useForm<GeneralFormValues>({
     defaultValues: {
       name: component.name,
@@ -131,7 +131,7 @@ function Harness({ component, formRef, onOwnerValidatingChange, canEdit }: { com
     },
   })
   if (formRef) formRef.current = form
-  return <GeneralTab component={component} form={form} canEdit={canEdit} onOwnerValidatingChange={onOwnerValidatingChange} />
+  return <GeneralTab component={component} form={form} canEdit={canEdit} onOwnerValidatingChange={onOwnerValidatingChange} classification={classification} />
 }
 
 beforeEach(() => {
@@ -801,7 +801,8 @@ describe('GeneralTab field descriptions (FieldInfo)', () => {
     'component.system',
     'component.clientCode',
     'component.copyright',
-    'component.artifactIds',
+    // component.artifactIds (Produced Artifacts) moved to the Build tab
+    // (ProducedArtifactsSection) — its FieldInfo is asserted there.
   ]
 
   it('renders exactly one info icon per described field', () => {
@@ -873,61 +874,46 @@ describe('GeneralTab — owner validating propagation', () => {
   })
 })
 
-// Guards that the ownership editor DISPLAYS persisted values (groupId, mode, artifact tokens) —
-// not merely that fromArtifactId maps them. This is the regression net for the v4
-// ArtifactIdResponse → editor binding: a field-shape drift (e.g. a CRS build that omits
-// `mode`/`artifactTokens`, or an empty `component_artifact_mappings` table) would otherwise
-// render blank/absent fields while every existing test stayed green. (#357)
-describe('GeneralTab artifact-ownership rendering (#357)', () => {
-  function withOwnership(): ComponentDetail {
-    return baseComponent({
-      artifactIds: [
-        {
-          id: 'ai-1',
-          versionRange: OWNERSHIP_ALL_VERSIONS,
-          groupPattern: 'com.example.alpha',
-          mode: 'ALL_EXCEPT_CLAIMED',
-          artifactTokens: [],
-          legacyArtifactIdPattern: '(?!(?:claimed-model)$)[\\w-\\.]+',
-        },
-        {
-          id: 'ai-2',
-          versionRange: OWNERSHIP_ALL_VERSIONS,
-          groupPattern: 'com.example.tools',
-          mode: 'EXPLICIT',
-          artifactTokens: ['claimed-model', 'claimed-api'],
-        },
-      ],
-    })
+// Artifact-ownership ("Produced Artifacts") rendering moved to the Build tab
+// (ProducedArtifactsSection); its tests live in ProducedArtifactsSection.test.tsx.
+
+// ── Classification (Explicit / External) — relocated from the Distribution tab ─
+// The toggle STATE still lives in the page's useDistributionSection; GeneralTab
+// only renders the section when the optional `classification` prop is supplied.
+describe('GeneralTab — Classification', () => {
+  function stubClassification(explicit = false, external = false) {
+    return {
+      explicit,
+      external,
+      setExplicit: vi.fn(),
+      setExternal: vi.fn(),
+    }
   }
 
-  it('renders the persisted groupId for every mapping', () => {
-    renderWithProviders(<Harness component={withOwnership()} />)
-    const groups = (screen.getAllByLabelText('Group ID') as HTMLInputElement[]).map((i) => i.value)
-    expect(groups).toHaveLength(2)
-    expect(groups).toEqual(expect.arrayContaining(['com.example.alpha', 'com.example.tools']))
+  it('renders both Explicit and External switches reflecting the passed state', () => {
+    setAllEditable()
+    const classification = stubClassification(true, false)
+    renderWithProviders(<Harness component={baseComponent()} classification={classification} />)
+
+    const explicitSwitch = screen.getByRole('switch', { name: /explicit/i })
+    const externalSwitch = screen.getByRole('switch', { name: /external/i })
+    expect(explicitSwitch).toHaveAttribute('aria-checked', 'true')
+    expect(externalSwitch).toHaveAttribute('aria-checked', 'false')
   })
 
-  it('reflects the persisted mode per mapping (ALL_EXCEPT_CLAIMED + EXPLICIT)', () => {
-    renderWithProviders(<Harness component={withOwnership()} />)
-    const checkedLabels = screen.getAllByRole('radio', { checked: true }).map((r) => r.textContent ?? '')
-    expect(checkedLabels.length).toBe(2)
-    expect(checkedLabels.some((t) => t.includes('All unclaimed artifacts'))).toBe(true)
-    expect(checkedLabels.some((t) => t.includes('Specific artifacts'))).toBe(true)
+  it('toggling a switch calls the corresponding setter', async () => {
+    setAllEditable()
+    const classification = stubClassification(false, false)
+    renderWithProviders(<Harness component={baseComponent()} classification={classification} />)
+
+    await userEvent.click(screen.getByRole('switch', { name: /explicit/i }))
+    expect(classification.setExplicit).toHaveBeenCalledWith(true)
+    expect(classification.setExternal).not.toHaveBeenCalled()
   })
 
-  it('renders persisted EXPLICIT artifact tokens as chips', () => {
-    renderWithProviders(<Harness component={withOwnership()} />)
-    expect(screen.getByLabelText('Remove claimed-model')).toBeTruthy()
-    expect(screen.getByLabelText('Remove claimed-api')).toBeTruthy()
-  })
-
-  it('empty artifactIds (e.g. an un-migrated component_artifact_mappings table) renders the section with NO mapping rows', () => {
-    // Reproduces the QA symptom: the v4 detail returns artifactIds: [] (the new table was
-    // never populated for the component), so the editor shows its header + add button but no
-    // Group ID / Artifact fields. A data/migration state — distinct from a binding bug above.
-    renderWithProviders(<Harness component={baseComponent({ artifactIds: [] })} />)
-    expect(screen.queryByLabelText('Group ID')).toBeNull()
-    expect(screen.getByRole('button', { name: /Add artifact coordinates/i })).toBeTruthy()
+  it('does not render the Classification section when no classification prop is passed', () => {
+    setAllEditable()
+    renderWithProviders(<Harness component={baseComponent()} />)
+    expect(screen.queryByTestId('section-classification')).toBeNull()
   })
 })

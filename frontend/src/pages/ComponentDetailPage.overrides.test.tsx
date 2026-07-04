@@ -204,10 +204,11 @@ describe('ComponentDetailPage — field overrides in the combined save (item D)'
   })
 })
 
-// Issue #146 (P3): the same combined-save flow, driven from the REAL Distribution
-// tab. A per-range distribution override delete is NOT reflected in base section
-// state, so this is the highest-risk regression: prove it arms the bar, shows in
-// Review, rides the one PATCH, and is restored by Discard.
+// Issue #146 (P3): the same combined-save flow, driven from the REAL Docker
+// tab (split out of Distribution in the editor UI-reorg). A per-range
+// distribution override delete is NOT reflected in base section state, so this
+// is the highest-risk regression: prove it arms the bar, shows in Review, rides
+// the one PATCH, and is restored by Discard.
 const seededDockerOverride: FieldOverride = {
   id: 'fo-dk', overriddenAttribute: 'distribution.docker', versionRange: '[1.0,2.0)',
   rowType: 'MARKER', value: null,
@@ -219,11 +220,11 @@ describe('ComponentDetailPage — per-range distribution variant in the combined
   beforeEach(() => mockOverrides.mockReturnValue([seededDockerOverride]))
 
   async function deleteDockerVariant() {
-    await openTab(/Distribution/)
+    await openTab(/Docker/)
     click(await screen.findByRole('button', { name: /delete per-range variant/i }))
   }
 
-  it('deleting a per-range docker variant from the Distribution tab arms the SaveBar', async () => {
+  it('deleting a per-range docker variant from the Docker tab arms the SaveBar', async () => {
     renderPage()
     expect(screen.getByText('All changes saved')).toBeDefined()
     await deleteDockerVariant()

@@ -176,7 +176,7 @@ function makeCreateSchema(
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['ownership', 'groups'],
-          message: '"All unclaimed" supports a single group only',
+          message: '"All except artifacts assigned elsewhere" supports a single Group ID only',
         })
       }
       // EXPLICIT ("Specific artifacts") needs at least one literal artifact ID.

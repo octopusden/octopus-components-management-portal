@@ -96,6 +96,9 @@ vi.mock('../components/editor/VcsTab', () => ({
 vi.mock('../components/editor/DistributionTab', () => ({
   DistributionTab: () => React.createElement('div', { 'data-testid': 'distribution-tab' }),
 }))
+vi.mock('../components/editor/DockerImagesTab', () => ({
+  DockerImagesTab: () => React.createElement('div', { 'data-testid': 'docker-tab' }),
+}))
 vi.mock('../components/editor/JiraTab', () => ({
   JiraTab: () => React.createElement('div', { 'data-testid': 'jira-tab' }),
 }))
@@ -556,6 +559,22 @@ describe('ComponentDetailPage — breadcrumb badges', () => {
     expect(screen.queryByText('SYS1')).toBeNull()
   })
 
+  it('(D7) System badge not rendered when component.system field-config visibility is hidden', () => {
+    // A read-only badge mirroring a field must respect field-config visibility:
+    // hidden ⇒ the badge does not render (not only the input). baseComponent has
+    // systems: ['SYS1'], so only the hidden gate can suppress it.
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    mockedUseFieldConfigEntry.mockImplementation((path: string) => ({
+      entry: path === 'component.system'
+        ? { visibility: 'hidden' as const, required: false }
+        : { visibility: 'editable' as const, required: false },
+      isLoading: false,
+      isError: false,
+    }))
+    renderPage(baseComponent, user)
+    expect(screen.queryByText('SYS1')).toBeNull()
+  })
+
   it('(e) BuildSystem badge not rendered when BASE row has no build aspect', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(
@@ -576,8 +595,8 @@ describe('ComponentDetailPage — sidebar nav order', () => {
     const tabs = within(screen.getByRole('tablist')).getAllByRole('tab')
     // Strip count badges ("Build1" → "Build") so the assertion only pins order.
     // The grouping (spec §2.1) puts Jira/Escrow under Build & Release before the
-    // single-item Distribution group, then Metadata (Misc, Configurations), then
-    // Tools (As Code, Overrides, History).
+    // Distribution group (Distribution + Docker), then Metadata (Misc,
+    // Configurations), then Tools (As Code, Overrides, History).
     expect(tabs.map((t) => (t.textContent ?? '').replace(/\d+$/, ''))).toEqual([
       'General',
       'Build',
@@ -586,6 +605,7 @@ describe('ComponentDetailPage — sidebar nav order', () => {
       'Escrow',
       'Documentation',
       'Distribution',
+      'Docker',
       'Misc',
       'Supported Versions',
       'Configurations',
@@ -1382,6 +1402,33 @@ describe('ComponentDetailPage — cross-tab 400 + displayName clear', () => {
 
     // sectionForField('docs') → 'documentation'; the real DocumentationTab renders.
     await waitFor(() => expect(screen.getByText(/no documentation links configured/i)).toBeDefined())
+  })
+
+  it('auto-switches to the Docker tab when a 400 maps to a docker field', async () => {
+    // Docker moved to its own tab — a dockerImages 400 must route there, not to
+    // the (now docker-less) Distribution tab.
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('systems', component.systems ?? [])
+        form.setValue('displayName', component.displayName ?? '')
+      }, [component, form])
+      return React.createElement(
+        'button',
+        { 'data-testid': 'edit', onClick: () => form.setValue('displayName', 'X', { shouldDirty: true }) },
+        'edit',
+      )
+    })
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(new ApiError(400, 'bad', JSON.stringify({ errorMessage: 'dockerImages: invalid image name' }))),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    // sectionForField('dockerImages') → 'docker'; the Docker tab renders.
+    await waitFor(() => expect(screen.getByTestId('docker-tab')).toBeDefined())
   })
 
   it('clearing displayName PATCHes it as "" (nullable — server clears to null, or 400s for explicit+external)', async () => {

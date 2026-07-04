@@ -247,8 +247,8 @@ test.describe.serial('Editor attribute matrix — every tab saves without a fals
       },
     },
     {
-      title: 'Distribution — Docker image',
-      tab: /distribution/i,
+      title: 'Docker — image',
+      tab: /docker/i,
       // Image names are globally unique — suffix again. Scope to the section's
       // data-testid (Maven/FileUrl/Packages/SecurityGroups all render their own
       // Add button, and the heading text is field-config-relabelable).
