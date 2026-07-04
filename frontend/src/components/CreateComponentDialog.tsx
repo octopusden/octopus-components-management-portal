@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { useForm, Controller, type UseFormRegisterReturn } from 'react-hook-form'
+import { useForm, useFieldArray, Controller, type UseFormRegisterReturn } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Plus, Copy } from 'lucide-react'
+import { Plus, Copy, X } from 'lucide-react'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
@@ -108,14 +108,18 @@ function makeCreateSchema(
       packageType: z.enum(['DEB', 'RPM']),
       packageName: z.string(),
     }),
-    // #357 base artifact-ownership. Dialog offers only the tokenless modes; an empty group sends
-    // no ownership mapping (EXPLICIT / multi-group / per-range are added later in the editor).
-    ownership: z.object({
-      groups: z.string(),
-      mode: z.enum(['ALL', 'ALL_EXCEPT_CLAIMED', 'EXPLICIT']),
-      // Literal artifact IDs; only meaningful (and only required) for EXPLICIT.
-      tokens: z.array(z.string()),
-    }),
+    // #357 base artifact-ownership. Repeatable per-group rows: one Group ID +
+    // its own matching mode (+ literal tokens for EXPLICIT). A row with a blank
+    // Group ID sends no ownership mapping; per-range overrides are added later
+    // in the editor.
+    ownership: z.array(
+      z.object({
+        groupId: z.string(),
+        mode: z.enum(['ALL', 'ALL_EXCEPT_CLAIMED', 'EXPLICIT']),
+        // Literal artifact IDs; only meaningful (and only required) for EXPLICIT.
+        tokens: z.array(z.string()),
+      }),
+    ),
   })
   .superRefine((v, ctx) => {
     // Legacy EscrowConfigValidator rule, lost in the DSL→portal migration: a
@@ -152,42 +156,36 @@ function makeCreateSchema(
         })
       }
     }
-    // Base ownership group allowlist + ALL_EXCEPT single-group rule (only when a group is given).
-    const ownGroups = v.ownership.groups.trim()
-    if (ownGroups) {
-      const tokens = ownGroups.split(',').map((t) => t.trim()).filter(Boolean)
-      const bad = tokens.find((t) => isBadToken(t))
-      if (bad) {
+    // Base ownership: validate PER ROW (blank Group ID rows are skipped). One
+    // Group ID per row makes the old ALL_EXCEPT_CLAIMED "single group only" rule
+    // automatic, so it is gone.
+    v.ownership.forEach((row, i) => {
+      const groupId = row.groupId.trim()
+      if (!groupId) return
+      if (isBadToken(groupId)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ['ownership', 'groups'],
-          message: `Invalid group "${bad}" — letters, digits, . _ - only`,
+          path: ['ownership', i, 'groupId'],
+          message: `Invalid group "${groupId}" — letters, digits, . _ - only`,
         })
       }
-      const unsupported = findUnsupportedGroupId(ownGroups, supportedGroups)
+      const unsupported = findUnsupportedGroupId(groupId, supportedGroups)
       if (unsupported) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ['ownership', 'groups'],
+          path: ['ownership', i, 'groupId'],
           message: `Group "${unsupported}" must start with a supported prefix (${supportedGroups.join(', ')})`,
         })
       }
-      if (v.ownership.mode === 'ALL_EXCEPT_CLAIMED' && tokens.length > 1) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['ownership', 'groups'],
-          message: '"All except artifacts assigned elsewhere" supports a single Group ID only',
-        })
-      }
       // EXPLICIT ("Specific artifacts") needs at least one literal artifact ID.
-      if (v.ownership.mode === 'EXPLICIT' && v.ownership.tokens.length === 0) {
+      if (row.mode === 'EXPLICIT' && row.tokens.length === 0) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ['ownership', 'tokens'],
+          path: ['ownership', i, 'tokens'],
           message: 'Add at least one artifact, or switch to a catch-all mode',
         })
       }
-    }
+    })
     if (!(v.distributionExplicit && v.distributionExternal)) return
     if (editable('displayName') && !v.displayName.trim()) {
       ctx.addIssue({
@@ -266,7 +264,7 @@ const SCRATCH_DEFAULTS: CreateFormValues = {
   vcsTag: '',
   vcsBranch: '',
   coordinate: EMPTY_COORDINATE,
-  ownership: { groups: '', mode: 'ALL', tokens: [] },
+  ownership: [{ groupId: '', mode: 'ALL', tokens: [] }],
 }
 
 // vcs.tag / vcs.branch read from GET /config/component-defaults (absent fields
@@ -695,7 +693,16 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
         : 'distribution.mavenArtifacts'
   const nameValue = watch('name')
   const buildSystemValue = watch('buildSystem')
-  const ownershipMode = watch('ownership.mode')
+  // Repeatable per-group ownership rows. `ownershipValues` drives the per-row
+  // EXPLICIT reveal and the "Add one more groupId" enable gate; the field array
+  // owns append/remove and stable row keys.
+  const ownershipRows = useFieldArray({ control, name: 'ownership' })
+  const ownershipValues = watch('ownership')
+  const lastOwnershipRow = ownershipValues[ownershipValues.length - 1]
+  const canAddOwnershipRow =
+    !!lastOwnershipRow &&
+    lastOwnershipRow.groupId.trim() !== '' &&
+    (lastOwnershipRow.mode !== 'EXPLICIT' || lastOwnershipRow.tokens.length > 0)
   const showVcs = vcsBlockApplies(buildSystemValue)
   // Leading values + mirror flags for the Line/Minor and Release/Build pairs.
   const lineVersionFormatValue = watch('lineVersionFormat')
@@ -914,60 +921,88 @@ function CreateComponentForm({ source, isCopy, defaults, onClose }: CreateCompon
         )}
       </div>
 
-      {/* #357 base artifact ownership. Optional here (blank group ⇒ no mapping); EXPLICIT,
-          multi-group and per-range rules are added post-create in the editor, so only the
-          tokenless modes are offered. */}
-      <div className="space-y-1.5" data-testid="create-ownership">
+      {/* #357 base artifact ownership. Repeatable per-group rows (one Group ID +
+          its own mode/tokens). Optional here (a blank Group ID ⇒ no mapping);
+          per-range override rules are added post-create in the editor. */}
+      <div className="space-y-2" data-testid="create-ownership">
         <div className="flex items-center gap-1">
-          <Label htmlFor="create-ownership-groups">
-            <FieldLabelText path="component.artifactIds" fallback="Artifact ownership" />
+          <Label>
+            <FieldLabelText path="component.artifactIds" fallback="Produced Artifacts" />
           </Label>
-          <FieldInfo path="component.artifactIds" label="Artifact ownership" />
+          <FieldInfo path="component.artifactIds" label="Produced Artifacts" />
         </div>
-        <Input
-          id="create-ownership-groups"
-          className="font-mono"
-          placeholder="com.example.foo"
-          aria-invalid={Boolean(errors.ownership?.groups)}
-          {...register('ownership.groups')}
-        />
-        {errors.ownership?.groups && (
-          <p className="text-xs text-destructive">{errors.ownership.groups.message}</p>
-        )}
-        <Controller
-          control={control}
-          name="ownership.mode"
-          render={({ field }) => (
-            <ModeRadioGroup
-              value={field.value}
-              idPrefix="create-mode"
-              onChange={field.onChange}
-            />
-          )}
-        />
-        {ownershipMode === 'EXPLICIT' && (
-          <div className="space-y-1.5">
-            <Label htmlFor="create-ownership-tokens">
-              Artifacts <span className="text-destructive">*</span>
-            </Label>
-            <Controller
-              control={control}
-              name="ownership.tokens"
-              render={({ field }) => (
-                <ArtifactTokensInput
-                  tokens={field.value}
-                  ariaLabel="Artifact IDs"
-                  onChange={field.onChange}
-                />
+        {ownershipRows.fields.map((row, i) => {
+          const rowMode = ownershipValues[i]?.mode
+          return (
+            <div key={row.id} className="space-y-1.5 rounded-md border border-border p-3">
+              <div className="flex items-start gap-2">
+                <div className="flex-1 space-y-1.5">
+                  <Input
+                    aria-label={`Group ID ${i + 1}`}
+                    className="font-mono"
+                    placeholder="com.example.foo"
+                    aria-invalid={Boolean(errors.ownership?.[i]?.groupId)}
+                    {...register(`ownership.${i}.groupId` as const)}
+                  />
+                  {errors.ownership?.[i]?.groupId && (
+                    <p className="text-xs text-destructive">{errors.ownership[i]!.groupId!.message}</p>
+                  )}
+                </div>
+                {ownershipRows.fields.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Remove group ${i + 1}`}
+                    onClick={() => ownershipRows.remove(i)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              <Controller
+                control={control}
+                name={`ownership.${i}.mode` as const}
+                render={({ field }) => (
+                  <ModeRadioGroup value={field.value} idPrefix={`create-mode-${i}`} onChange={field.onChange} />
+                )}
+              />
+              {rowMode === 'EXPLICIT' && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">
+                    Specific artifacts <span className="text-destructive">*</span>
+                  </Label>
+                  <Controller
+                    control={control}
+                    name={`ownership.${i}.tokens` as const}
+                    render={({ field }) => (
+                      <ArtifactTokensInput
+                        tokens={field.value}
+                        ariaLabel="Specific artifacts"
+                        onChange={field.onChange}
+                      />
+                    )}
+                  />
+                  {errors.ownership?.[i]?.tokens && (
+                    <p className="text-xs text-destructive">{errors.ownership[i]!.tokens!.message}</p>
+                  )}
+                </div>
               )}
-            />
-            {errors.ownership?.tokens && (
-              <p className="text-xs text-destructive">{errors.ownership.tokens.message}</p>
-            )}
-          </div>
-        )}
+            </div>
+          )
+        })}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={!canAddOwnershipRow}
+          onClick={() => ownershipRows.append({ groupId: '', mode: 'ALL', tokens: [] })}
+        >
+          <Plus className="h-4 w-4" />
+          Add one more groupId
+        </Button>
         <p className="text-xs text-muted-foreground">
-          A new component starts owning its group. Multi-group and per-range rules are added later in the editor.
+          A new component starts owning its group. Add one Group ID per row; per-range rules are added later in the editor.
         </p>
       </div>
 

@@ -32,7 +32,7 @@ function makeForm(overrides: Partial<CreateFormValues> = {}): CreateFormValues {
       packageType: 'DEB',
       packageName: '',
     },
-    ownership: { groups: '', mode: 'ALL', tokens: [] },
+    ownership: [{ groupId: '', mode: 'ALL', tokens: [] }],
     ...overrides,
   }
 }
@@ -141,7 +141,7 @@ describe('buildCreateRequest — scratch mode (no source)', () => {
 describe('buildCreateRequest — base artifact ownership', () => {
   it('EXPLICIT mode forwards the artifact tokens', () => {
     const req = buildCreateRequest(
-      makeForm({ ownership: { groups: 'org.x', mode: 'EXPLICIT', tokens: ['foo', 'bar'] } }),
+      makeForm({ ownership: [{ groupId: 'org.x', mode: 'EXPLICIT', tokens: ['foo', 'bar'] }] }),
     )
     expect(req.artifactIds).toEqual([
       { versionRange: null, groupPattern: 'org.x', mode: 'EXPLICIT', artifactTokens: ['foo', 'bar'] },
@@ -150,7 +150,16 @@ describe('buildCreateRequest — base artifact ownership', () => {
 
   it('catch-all modes send an empty token list even if tokens linger in form state', () => {
     const req = buildCreateRequest(
-      makeForm({ ownership: { groups: 'org.x', mode: 'ALL', tokens: ['stale'] } }),
+      makeForm({ ownership: [{ groupId: 'org.x', mode: 'ALL', tokens: ['stale'] }] }),
+    )
+    expect(req.artifactIds).toEqual([
+      { versionRange: null, groupPattern: 'org.x', mode: 'ALL', artifactTokens: [] },
+    ])
+  })
+
+  it('trims the Group ID before mapping it to a groupPattern', () => {
+    const req = buildCreateRequest(
+      makeForm({ ownership: [{ groupId: '  org.x  ', mode: 'ALL', tokens: [] }] }),
     )
     expect(req.artifactIds).toEqual([
       { versionRange: null, groupPattern: 'org.x', mode: 'ALL', artifactTokens: [] },
@@ -159,9 +168,25 @@ describe('buildCreateRequest — base artifact ownership', () => {
 
   it('no group ⇒ no ownership mapping (tokens ignored)', () => {
     const req = buildCreateRequest(
-      makeForm({ ownership: { groups: '', mode: 'EXPLICIT', tokens: ['foo'] } }),
+      makeForm({ ownership: [{ groupId: '', mode: 'EXPLICIT', tokens: ['foo'] }] }),
     )
     expect(req.artifactIds).toEqual([])
+  })
+
+  it('emits one ArtifactIdRequest per non-blank group row (blank rows skipped)', () => {
+    const req = buildCreateRequest(
+      makeForm({
+        ownership: [
+          { groupId: 'org.a', mode: 'ALL', tokens: [] },
+          { groupId: '', mode: 'ALL', tokens: ['ignored'] },
+          { groupId: 'org.b', mode: 'EXPLICIT', tokens: ['svc-1', 'svc-2'] },
+        ],
+      }),
+    )
+    expect(req.artifactIds).toEqual([
+      { versionRange: null, groupPattern: 'org.a', mode: 'ALL', artifactTokens: [] },
+      { versionRange: null, groupPattern: 'org.b', mode: 'EXPLICIT', artifactTokens: ['svc-1', 'svc-2'] },
+    ])
   })
 })
 
@@ -191,6 +216,39 @@ describe('buildCreateRequest — gated (explicit+external) coordinate', () => {
     const req = buildCreateRequest(gated({ type: 'docker', imageName: 'acme/svc' }))
     expect(req.baseConfiguration?.dockerImages).toEqual([{ imageName: 'acme/svc', flavor: null }])
     expect('mavenArtifacts' in req.baseConfiguration!).toBe(false)
+  })
+
+  it('docker is un-gated: an image name is sent even when NOT explicit+external', () => {
+    const req = buildCreateRequest(
+      makeForm({
+        distributionExplicit: false,
+        distributionExternal: false,
+        coordinate: { ...makeForm().coordinate, type: 'docker', imageName: 'acme/svc' },
+      }),
+    )
+    expect(req.baseConfiguration?.dockerImages).toEqual([{ imageName: 'acme/svc', flavor: null }])
+  })
+
+  it('docker with a blank image name sends no dockerImages (nothing to publish)', () => {
+    const req = buildCreateRequest(
+      makeForm({
+        distributionExplicit: false,
+        distributionExternal: false,
+        coordinate: { ...makeForm().coordinate, type: 'docker', imageName: '   ' },
+      }),
+    )
+    expect('dockerImages' in (req.baseConfiguration ?? {})).toBe(false)
+  })
+
+  it('maven stays gated: a maven coordinate is NOT sent when not explicit+external', () => {
+    const req = buildCreateRequest(
+      makeForm({
+        distributionExplicit: false,
+        distributionExternal: false,
+        coordinate: { ...makeForm().coordinate, type: 'maven', groupPattern: 'org.acme', artifactPattern: 'svc' },
+      }),
+    )
+    expect('mavenArtifacts' in (req.baseConfiguration ?? {})).toBe(false)
   })
 
   it('package coordinate → one packages entry with DEB/RPM type', () => {

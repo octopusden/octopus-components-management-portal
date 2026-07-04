@@ -197,7 +197,7 @@ describe('CreateComponentDialog — scratch mode base', () => {
       'Minor Version Format',
       'Release Version Format',
       'Build Version Format',
-      'Artifact ownership',
+      'Produced Artifacts',
     ]) {
       expect(screen.getByRole('button', { name: `Description for ${label}` })).toBeDefined()
     }
@@ -573,13 +573,13 @@ describe('CreateComponentDialog — Set/Remove separate version-format toggles',
   })
 })
 
-describe('CreateComponentDialog — artifact ownership "Specific artifacts" (EXPLICIT)', () => {
+describe('CreateComponentDialog — artifact ownership rows', () => {
   it('reveals an artifact-tokens input when "Specific artifacts" is selected', async () => {
     renderWithProviders(<CreateComponentButton />)
     await openScratch()
-    expect(screen.queryByLabelText('Artifact IDs')).toBeNull()
+    expect(screen.queryByLabelText('Specific artifacts')).toBeNull()
     await userEvent.click(screen.getByRole('radio', { name: /specific artifacts/i }))
-    expect(screen.getByLabelText('Artifact IDs')).toBeDefined()
+    expect(screen.getByLabelText('Specific artifacts')).toBeDefined()
   })
 
   it('submits EXPLICIT ownership with artifact tokens', async () => {
@@ -587,9 +587,9 @@ describe('CreateComponentDialog — artifact ownership "Specific artifacts" (EXP
     renderWithProviders(<CreateComponentButton />)
     await openScratch()
     await fillBaseFields()
-    await userEvent.type(screen.getByLabelText('Artifact ownership'), 'com.example.foo')
+    await userEvent.type(screen.getByLabelText('Group ID 1'), 'com.example.foo')
     await userEvent.click(screen.getByRole('radio', { name: /specific artifacts/i }))
-    await userEvent.type(screen.getByLabelText('Artifact IDs'), 'foo,bar,')
+    await userEvent.type(screen.getByLabelText('Specific artifacts'), 'foo,bar,')
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() => expect(mockMutateAsync).toHaveBeenCalled())
     expect(mockMutateAsync.mock.calls[0]![0].artifactIds).toEqual([
@@ -601,11 +601,42 @@ describe('CreateComponentDialog — artifact ownership "Specific artifacts" (EXP
     renderWithProviders(<CreateComponentButton />)
     await openScratch()
     await fillBaseFields()
-    await userEvent.type(screen.getByLabelText('Artifact ownership'), 'com.example.foo')
+    await userEvent.type(screen.getByLabelText('Group ID 1'), 'com.example.foo')
     await userEvent.click(screen.getByRole('radio', { name: /specific artifacts/i }))
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() => expect(screen.getByText(/add at least one artifact/i)).toBeDefined())
     expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('submits one artifactIds entry per Group ID row (distinct modes)', async () => {
+    mockMutateAsync.mockResolvedValue({ id: 'comp-1', name: 'widget' })
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await fillBaseFields()
+    // Row 1: ALL (default) under one group.
+    await userEvent.type(screen.getByLabelText('Group ID 1'), 'com.example.foo')
+    // Add a second row and fill it as EXPLICIT with a token.
+    await userEvent.click(screen.getByRole('button', { name: /add one more groupid/i }))
+    await userEvent.type(screen.getByLabelText('Group ID 2'), 'com.example.bar')
+    // The second row's mode selector is the second "Specific artifacts" radio.
+    await userEvent.click(screen.getAllByRole('radio', { name: /specific artifacts/i })[1]!)
+    await userEvent.type(screen.getByLabelText('Specific artifacts'), 'svc,')
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalled())
+    expect(mockMutateAsync.mock.calls[0]![0].artifactIds).toEqual([
+      { versionRange: null, groupPattern: 'com.example.foo', mode: 'ALL', artifactTokens: [] },
+      { versionRange: null, groupPattern: 'com.example.bar', mode: 'EXPLICIT', artifactTokens: ['svc'] },
+    ])
+  })
+
+  it('removes an added Group ID row', async () => {
+    renderWithProviders(<CreateComponentButton />)
+    await openScratch()
+    await userEvent.type(screen.getByLabelText('Group ID 1'), 'com.example.foo')
+    await userEvent.click(screen.getByRole('button', { name: /add one more groupid/i }))
+    expect(screen.getByLabelText('Group ID 2')).toBeDefined()
+    await userEvent.click(screen.getByRole('button', { name: /remove group 2/i }))
+    expect(screen.queryByLabelText('Group ID 2')).toBeNull()
   })
 })
 
@@ -618,7 +649,7 @@ describe('CreateComponentDialog — supported-groupId prefix validation', () => 
     renderWithProviders(<CreateComponentButton />)
     await openScratch()
     await fillBaseFields()
-    await userEvent.type(screen.getByLabelText('Artifact ownership'), 'org.unsupported.x')
+    await userEvent.type(screen.getByLabelText('Group ID 1'), 'org.unsupported.x')
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() => expect(screen.getByText(/must start with a supported prefix/i)).toBeDefined())
     expect(mockMutateAsync).not.toHaveBeenCalled()
@@ -629,7 +660,7 @@ describe('CreateComponentDialog — supported-groupId prefix validation', () => 
     renderWithProviders(<CreateComponentButton />)
     await openScratch()
     await fillBaseFields()
-    await userEvent.type(screen.getByLabelText('Artifact ownership'), 'com.acme.x')
+    await userEvent.type(screen.getByLabelText('Group ID 1'), 'com.acme.x')
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() => expect(mockMutateAsync).toHaveBeenCalled())
   })
