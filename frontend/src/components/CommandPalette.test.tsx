@@ -28,13 +28,6 @@ vi.mock('@/hooks/useComponents', () => ({
   useComponents: (args: unknown) => mockUseComponents(args),
 }))
 
-// CreateComponentDialog pulls in a large dependency graph; stub it to a sentinel
-// so the "New Component" action can be asserted without mounting the real form.
-vi.mock('./CreateComponentDialog', () => ({
-  CreateComponentDialog: ({ open }: { open: boolean }) =>
-    open ? <div data-testid="create-dialog" /> : null,
-}))
-
 const ADMIN: User = {
   username: 'alice',
   roles: [
@@ -187,11 +180,11 @@ describe('CommandPalette — navigation', () => {
     expect(params.get('owner')).toBeNull()
   })
 
-  it('opens the create dialog on New Component', async () => {
+  it('navigates to the create wizard on New Component', async () => {
     const user = userEvent.setup()
     renderPalette()
     await user.click(screen.getByText('New Component'))
-    expect(await screen.findByTestId('create-dialog')).toBeInTheDocument()
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/components/new'))
   })
 })
 

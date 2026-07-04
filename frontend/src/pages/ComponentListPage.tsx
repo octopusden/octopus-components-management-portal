@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router'
 import { Layout } from '../components/Layout'
 import { ComponentFilters } from '../components/ComponentFilters'
 import { ComponentTable } from '../components/ComponentTable'
 import { ListPresetBar } from '../components/ListPresetBar'
 import { ActiveFilterChips } from '../components/ActiveFilterChips'
 import { Pagination } from '../components/Pagination'
-import { CreateComponentButton } from '../components/CreateComponentDialog'
-import { CreateComponentDialog } from '../components/CreateComponentDialog'
+import { CreateComponentButton } from './CreateComponentPage'
 import { SearchCommandButton } from '../components/SearchCommandButton'
 import { InlineError } from '../components/ui/inline-error'
 import { StatusBanner } from '../components/ui/status-banner'
@@ -53,10 +53,9 @@ export function ComponentListPage() {
   // single source of truth, round-tripped via useFilterUrlState. Page/size stay
   // local (ephemeral paging is not worth a URL entry).
   const { filter, preset: urlPreset, setState } = useFilterUrlState()
+  const navigate = useNavigate()
   const [page, setPage] = useState(0)
   const [size, setSize] = useState(20)
-  // Source component id for the per-row Clone action; non-null = dialog open.
-  const [copySourceId, setCopySourceId] = useState<string | null>(null)
 
   const { data: user } = useCurrentUser()
   const username = user?.username ?? null
@@ -312,7 +311,7 @@ export function ComponentListPage() {
         <ComponentTable
           data={showProblemsOnly ? problemRows : (data?.content ?? [])}
           isLoading={showProblemsOnly ? problems.isLoading : isLoading}
-          onCopy={canCreate ? setCopySourceId : undefined}
+          onCopy={canCreate ? (id) => navigate(`/components/new?from=${id}`) : undefined}
           // Overlay map (admin-mode only): in problems-only mode use the
           // problem-set report; in the normal paged view use the full report.
           // Undefined for non-admins or an empty/failed report → no Validation
@@ -327,19 +326,6 @@ export function ComponentListPage() {
                   : undefined
           }
         />
-
-        {/* One dialog per page (not per row); keyed by source id so each
-            Create-similar click gets a fresh fetch + prefill. */}
-        {copySourceId && (
-          <CreateComponentDialog
-            key={copySourceId}
-            sourceId={copySourceId}
-            open
-            onOpenChange={(open) => {
-              if (!open) setCopySourceId(null)
-            }}
-          />
-        )}
 
         {/* Pagination only in the normal paged view. "with validation problems"
             is the full non-paged report set, so it renders without a pager. */}

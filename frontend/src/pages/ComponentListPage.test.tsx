@@ -78,18 +78,6 @@ vi.mock('../components/ComponentTable', () => ({
 vi.mock('../components/Pagination', () => ({
   Pagination: () => React.createElement('div', { 'data-testid': 'pagination' }),
 }))
-// CreateComponentDialog and CreateComponentButton live in the same module;
-// keep the real button (the "New Component" gate is under test) and stub only
-// the dialog to a sourceId probe.
-vi.mock('../components/CreateComponentDialog', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../components/CreateComponentDialog')>()
-  return {
-    ...actual,
-    CreateComponentDialog: ({ sourceId, open }: { sourceId?: string; open: boolean }) =>
-      open ? React.createElement('div', { 'data-testid': 'copy-dialog' }, sourceId) : null,
-  }
-})
-
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { useComponents } from '../hooks/useComponents'
 import {
@@ -318,15 +306,15 @@ describe('ComponentListPage — error message rendering', () => {
   })
 })
 
-describe('ComponentListPage — per-row Copy gating + dialog wiring', () => {
-  it('passes onCopy to the table for a user with CREATE_COMPONENTS and opens the dialog with the row id', async () => {
+describe('ComponentListPage — per-row Copy gating + clone navigation', () => {
+  it('passes onCopy to the table and navigates to the clone wizard with the row id', async () => {
     mockUser(editorUser)
     mockComponentsOk()
     renderPage()
 
     await userEvent.click(screen.getByTestId('table-copy-trigger'))
-    expect(await screen.findByTestId('copy-dialog')).toBeDefined()
-    expect(screen.getByTestId('copy-dialog').textContent).toBe('comp-x')
+    // The per-row Copy action now navigates to the full-page clone wizard.
+    expect(screen.getByTestId('loc-search').textContent).toBe('?from=comp-x')
   })
 
   it('does not pass onCopy without CREATE_COMPONENTS — no copy trigger rendered', () => {

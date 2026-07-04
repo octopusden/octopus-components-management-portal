@@ -3,6 +3,7 @@ import { createBrowserRouter, RouterProvider, Navigate, Outlet, type RouteObject
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ComponentListPage } from './pages/ComponentListPage'
 import { ComponentDetailPage } from './pages/ComponentDetailPage'
+import { CreateComponentPage } from './pages/CreateComponentPage'
 import { AuditLogPage } from './pages/AuditLogPage'
 import { AdminSettingsPage } from './pages/AdminSettingsPage'
 import { RegistryHealthPage } from './pages/RegistryHealthPage'
@@ -69,6 +70,11 @@ export const appRoutes: RouteObject[] = [
     children: [
       { path: '/', element: <Navigate to="/components" replace /> },
       { path: '/components', element: <ComponentListPage /> },
+      // Static `/components/new` MUST be registered before the dynamic
+      // `/components/:id` — React Router ranks static > dynamic, but we make the
+      // order explicit (and pin it with a regression test) so the wizard route
+      // is never shadowed by the detail route with id="new".
+      { path: '/components/new', element: <CreateComponentPage /> },
       { path: '/components/:id', element: <ComponentDetailPage /> },
       {
         path: '/audit',

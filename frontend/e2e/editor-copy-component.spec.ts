@@ -8,16 +8,18 @@ import {
 } from './visual/_helpers'
 
 // ---------------------------------------------------------------------------
-// Copy-component smoke (PR #83) — route-mocked, chromium-admin.
+// Create/Clone-component smoke — route-mocked, chromium-admin.
 //
-// Exercises the real built SPA end-to-end through both entry points:
-//   1. detail-page header Copy → dialog prefill → POST payload contract →
-//      navigate to the created component;
-//   2. list-row Copy action → dialog fetches the full detail itself.
+// Exercises the real built SPA through the full-page wizard at /components/new
+// via both entry points:
+//   1. detail-page header Clone → /components/new?from={id} → step through the
+//      wizard → POST payload contract → navigate to the created component;
+//   2. list-row Clone action → same wizard route, prefilled from the source;
+//   3. New Component → scratch wizard (profile gate first).
 //
 // ALL CRS data calls are intercepted via page.route, so the spec is
 // self-contained; the POST body assertion is the executable version of the
-// copied-vs-excluded contract documented in buildCopyRequest.ts.
+// copied-vs-excluded contract documented in buildCreateRequest.ts.
 // ---------------------------------------------------------------------------
 
 const SOURCE_ID = '22222222-2222-2222-2222-222222222222'
@@ -207,34 +209,42 @@ async function setupRoutes(page: Page, sourceOverride: Record<string, unknown> =
   return state
 }
 
-test.describe('Copy component — admin smoke', () => {
-  test('detail-page Copy: prefill, POST contract (copied vs excluded), navigate to clone', async ({
+test.describe('Clone component — admin smoke', () => {
+  test('detail-page Clone: prefill, POST contract (copied vs excluded), navigate to clone', async ({
     page,
   }) => {
     const state = await setupRoutes(page)
     await page.goto(`/components/${SOURCE_ID}`)
 
-    await page.getByRole('button', { name: 'Create Similar', exact: true }).click()
-    const dialog = page.getByRole('dialog')
-    await expect(dialog.getByText('Create Similar Component')).toBeVisible()
+    await page.getByRole('button', { name: 'Clone', exact: true }).click()
+    await page.waitForURL('**/components/new?from=*')
+    await expect(page.getByRole('heading', { name: 'Clone svc-copy-source' })).toBeVisible()
 
-    // Display Name is NOT prefilled from the source (it is unique); Component Key starts empty.
-    await expect(dialog.getByLabel(/^display name/i)).toHaveValue('')
-    await expect(dialog.getByLabel(/^component key/i)).toHaveValue('')
+    // Clone skips the Profile step and opens on General. Display Name is NOT
+    // prefilled from the source (it is unique); Component Key starts empty; the
+    // owner IS prefilled. (^-anchored labels skip the FieldInfo buttons.)
+    await expect(page.getByLabel(/^display name/i)).toHaveValue('')
+    await expect(page.getByLabel(/^component key/i)).toHaveValue('')
+    await expect(page.getByPlaceholder('AD userkey')).toHaveValue('owner-oscar')
+    await page.getByLabel(/^component key/i).fill('svc-copy-clone')
+    await page.getByLabel(/^display name/i).fill('Copy Clone Name')
 
-    // GRADLE requires VCS → the block is visible. Tag/branch are reusable
-    // format patterns: branch prefills from the source BASE VCS entry ('main'),
-    // tag (absent on the source entry) from component-defaults. The URL is
-    // unique and starts empty. (^-anchored labels skip the FieldInfo buttons.)
-    await expect(dialog.getByLabel(/^vcs url/i)).toHaveValue('')
-    await expect(dialog.getByLabel(/^tag/i)).toHaveValue('$module-$version')
-    await expect(dialog.getByLabel(/^production branch/i)).toHaveValue('main')
+    // VCS step (GRADLE requires VCS). Tag/branch are reusable format patterns:
+    // branch prefills from the source BASE VCS entry ('main'), tag (absent on
+    // the source entry) from component-defaults. The VCS Path is unique + empty.
+    await page.getByRole('button', { name: /VCS/ }).click()
+    await expect(page.getByLabel(/^tag/i)).toHaveValue('$module-$version')
+    await expect(page.getByLabel(/^production branch/i)).toHaveValue('main')
+    await page.getByLabel(/^vcs path/i).fill('ssh://git@host/proj/clone-repo.git')
 
-    await dialog.getByLabel(/^component key/i).fill('svc-copy-clone')
-    await dialog.getByLabel(/^display name/i).fill('Copy Clone Name')
-    await dialog.getByLabel(/^vcs url/i).fill('ssh://git@host/proj/clone-repo.git')
-    await dialog.getByLabel(/^jira project key/i).fill('CLONE')
-    await dialog.getByRole('button', { name: 'Create' }).click()
+    // Jira step.
+    await page.getByRole('button', { name: /Jira/ }).click()
+    await page.getByLabel(/^jira project key/i).fill('CLONE')
+
+    // Review & create step — Jira task key is required.
+    await page.getByRole('button', { name: /Review/ }).click()
+    await page.getByLabel(/^jira task key/i).fill('ABC-123')
+    await page.getByRole('button', { name: 'Create component' }).click()
 
     // Navigates to the created component.
     await page.waitForURL(`**/components/${CREATED_ID}`)
@@ -288,26 +298,24 @@ test.describe('Copy component — admin smoke', () => {
     expect('group' in body, 'group is migration-owned').toBe(false)
   })
 
-  test('list-row Clone: dialog fetches the source detail itself and prefills', async ({ page }) => {
+  test('list-row Clone: the wizard fetches the source detail itself and prefills', async ({ page }) => {
     await setupRoutes(page)
     await page.goto('/components')
 
-    // The list-row action is now "Clone" (was "Create similar"); its aria-label
-    // is "Clone <key> into a new component". The detail-page button stays
-    // "Create Similar".
+    // The list-row action's aria-label is "Clone <key> into a new component".
     await page.getByRole('button', { name: 'Clone svc-copy-source into a new component' }).click()
-    const dialog = page.getByRole('dialog')
-    await expect(dialog.getByText('Create Similar Component')).toBeVisible()
-    // Owner prefill proves the dialog loaded the FULL detail from a summary-only row.
-    // (displayName is intentionally NOT prefilled — it is unique.)
-    await expect(dialog.getByLabel(/^display name/i)).toHaveValue('')
-    await expect(dialog.getByPlaceholder('AD userkey')).toHaveValue('owner-oscar')
+    await page.waitForURL('**/components/new?from=*')
+    await expect(page.getByRole('heading', { name: 'Clone svc-copy-source' })).toBeVisible()
+    // Owner prefill proves the wizard loaded the FULL detail from a summary-only
+    // row. (displayName is intentionally NOT prefilled — it is unique.)
+    await expect(page.getByLabel(/^display name/i)).toHaveValue('')
+    await expect(page.getByPlaceholder('AD userkey')).toHaveValue('owner-oscar')
 
-    await dialog.getByRole('button', { name: 'Cancel' }).click()
-    await expect(page.getByRole('dialog')).toBeHidden()
+    await page.getByRole('button', { name: 'Cancel' }).first().click()
+    await page.waitForURL('**/components')
   })
 
-  test('explicit+external source: gated block prefilled, user fills coordinate, POST carries it', async ({
+  test('explicit+external source: gated coordinate, user fills it, POST carries it', async ({
     page,
   }) => {
     const state = await setupRoutes(page, {
@@ -317,22 +325,32 @@ test.describe('Copy component — admin smoke', () => {
       securityChampion: ['sc-carol'],
     })
     await page.goto(`/components/${SOURCE_ID}`)
-    await page.getByRole('button', { name: 'Create Similar', exact: true }).click()
-    const dialog = page.getByRole('dialog')
+    await page.getByRole('button', { name: 'Clone', exact: true }).click()
+    await page.waitForURL('**/components/new?from=*')
 
-    // Gated block visible, RM/SC prefilled, coordinate empty.
-    await expect(dialog.getByText(/required for explicit \+ external/i)).toBeVisible()
-    await expect(dialog.getByText('rm-alice')).toBeVisible()
-    await expect(dialog.getByText('sc-carol')).toBeVisible()
+    // General — RM/SC prefilled from the source (required for explicit+external).
+    await expect(page.getByText('rm-alice')).toBeVisible()
+    await expect(page.getByText('sc-carol')).toBeVisible()
+    await page.getByLabel(/^component key/i).fill('svc-copy-clone')
+    await page.getByLabel(/^display name/i).fill('Copy Clone Name')
 
-    await dialog.getByLabel(/^component key/i).fill('svc-copy-clone')
-    await dialog.getByLabel(/^display name/i).fill('Copy Clone Name')
-    await dialog.getByLabel(/^vcs url/i).fill('ssh://git@host/proj/clone-repo.git')
-    await dialog.getByLabel(/^jira project key/i).fill('CLONE')
-    // Fill a maven coordinate (default type).
-    await dialog.getByLabel('Group ID').fill('org.acme')
-    await dialog.getByLabel('Artifact ID').fill('svc')
-    await dialog.getByRole('button', { name: 'Create' }).click()
+    // VCS step.
+    await page.getByRole('button', { name: /VCS/ }).click()
+    await page.getByLabel(/^vcs path/i).fill('ssh://git@host/proj/clone-repo.git')
+
+    // Jira step.
+    await page.getByRole('button', { name: /Jira/ }).click()
+    await page.getByLabel(/^jira project key/i).fill('CLONE')
+
+    // Distribution step — Maven coordinate (gated on explicit+external).
+    await page.getByRole('button', { name: /Distribution/ }).click()
+    await page.getByLabel('Group ID').fill('org.acme')
+    await page.getByLabel('Artifact ID').fill('svc')
+
+    // Review & create.
+    await page.getByRole('button', { name: /Review/ }).click()
+    await page.getByLabel(/^jira task key/i).fill('ABC-123')
+    await page.getByRole('button', { name: 'Create component' }).click()
 
     await page.waitForURL(`**/components/${CREATED_ID}`)
     expect(state.creates).toHaveLength(1)
@@ -350,7 +368,7 @@ test.describe('Copy component — admin smoke', () => {
 })
 
 test.describe('Create component from scratch — admin smoke', () => {
-  test('explicit+external gated block: fill RM/SC + docker coordinate, POST carries them', async ({
+  test('profile gate → explicit external → fill RM/SC + docker coordinate, POST carries them', async ({
     page,
   }) => {
     const state = await setupRoutes(page)
@@ -360,42 +378,26 @@ test.describe('Create component from scratch — admin smoke', () => {
     // new component") also matches /new component/i, so a regex resolves to 2
     // buttons (strict-mode violation). The header create button is exactly "New Component".
     await page.getByRole('button', { name: 'New Component', exact: true }).click()
-    const dialog = page.getByRole('dialog')
-    await expect(dialog.getByText('Create Component')).toBeVisible()
+    await page.waitForURL('**/components/new')
+    await expect(page.getByRole('heading', { name: 'Create component' })).toBeVisible()
 
-    await dialog.getByLabel(/^component key/i).fill('scratch-svc')
-    await dialog.getByLabel(/^display name/i).fill('Scratch Svc')
-    // Build System is a native <select> — selectOption is unambiguous and
-    // closes cleanly (no portal overlay to block later clicks).
-    await dialog.getByLabel(/^build system/i).selectOption('MAVEN')
-    // MAVEN requires VCS → block appears, tag prefilled from component-defaults
-    // and branch from the portal fallback; only the URL needs typing.
-    await expect(dialog.getByLabel(/^tag/i)).toHaveValue('$module-$version')
-    await expect(dialog.getByLabel(/^production branch/i)).toHaveValue('master')
-    await dialog.getByLabel(/^vcs url/i).fill('ssh://git@host/proj/scratch-repo.git')
-    await dialog.getByLabel(/^jira project key/i).fill('SCR')
-    const ownerInput = dialog.getByPlaceholder('AD userkey')
+    // Profile gate: Regular external + "Has explicit distribution? Yes" ⇒
+    // external+explicit (gated).
+    await page.getByRole('button', { name: 'Regular external component' }).click()
+    await page.getByRole('button', { name: 'Yes', exact: true }).click()
+    await page.getByRole('button', { name: /^next$/i }).click()
+
+    // General — key, display name, owner + RM/SC (required for explicit+external).
+    await page.getByLabel(/^component key/i).fill('scratch-svc')
+    await page.getByLabel(/^display name/i).fill('Scratch Svc')
+    const ownerInput = page.getByPlaceholder('AD userkey')
     await ownerInput.fill('owner-oscar')
-    // Click the suggestion to commit + close the popup. (Enter would submit the
-    // whole form; blur commits but leaves the popup open over the checkbox.)
-    // A fast click lands before the 300ms suggestion debounce annotates the
-    // entry with `active`, so the commit may go through the (mocked) network
-    // validation — wait out the indicator so the Create button isn't held by
-    // the validating guard later. (Post-debounce clicks short-circuit and the
-    // indicator never shows; the wait then resolves immediately.)
-    await dialog.getByRole('button', { name: /owner-oscar/i }).click()
-    await expect(dialog.getByText('Validating person...')).toHaveCount(0)
+    await page.getByRole('button', { name: /owner-oscar/i }).click()
+    await expect(page.getByText('Validating person...')).toHaveCount(0)
 
-    // Toggle Explicit (External is on by default) → gated block appears.
-    await dialog.getByLabel(/^explicit/i).check()
-    await expect(dialog.getByText(/required for explicit \+ external/i)).toBeVisible()
-
-    // RM / SC via the add-row autocomplete. A typed person lands as a list row
-    // only after the async lookup validates it — await each COMMITTED row
-    // (scoped to the list container; bare getByText could match the still-open
-    // suggestion popup button) before moving on.
-    const listRows = dialog.getByTestId('people-list-rows')
-    const peopleInputs = dialog.getByPlaceholder('Add person')
+    // RM / SC via the add-row autocomplete (both live in Ownership now).
+    const listRows = page.getByTestId('people-list-rows')
+    const peopleInputs = page.getByPlaceholder('Add person')
     await peopleInputs.nth(0).fill('rm-bob')
     await peopleInputs.nth(0).blur()
     await expect(listRows.getByText('rm-bob', { exact: true })).toBeVisible()
@@ -403,11 +405,29 @@ test.describe('Create component from scratch — admin smoke', () => {
     await peopleInputs.nth(1).blur()
     await expect(listRows.getByText('sc-bob', { exact: true })).toBeVisible()
 
-    // Docker coordinate.
-    await dialog.getByLabel(/^distribution coordinate/i).selectOption('docker')
-    await dialog.getByLabel('Image name').fill('acme/scratch')
+    // Build — MAVEN.
+    await page.getByRole('button', { name: /Build/ }).click()
+    await page.getByLabel(/^build system/i).selectOption('MAVEN')
 
-    await dialog.getByRole('button', { name: 'Create' }).click()
+    // VCS — MAVEN requires it; tag/branch prefilled, URL typed.
+    await page.getByRole('button', { name: /VCS/ }).click()
+    await expect(page.getByLabel(/^tag/i)).toHaveValue('$module-$version')
+    await expect(page.getByLabel(/^production branch/i)).toHaveValue('master')
+    await page.getByLabel(/^vcs path/i).fill('ssh://git@host/proj/scratch-repo.git')
+
+    // Jira.
+    await page.getByRole('button', { name: /Jira/ }).click()
+    await page.getByLabel(/^jira project key/i).fill('SCR')
+
+    // Distribution — Docker coordinate.
+    await page.getByRole('button', { name: /Distribution/ }).click()
+    await page.getByLabel(/^distribution coordinate/i).selectOption('docker')
+    await page.getByLabel('Image name').fill('acme/scratch')
+
+    // Review & create.
+    await page.getByRole('button', { name: /Review/ }).click()
+    await page.getByLabel(/^jira task key/i).fill('ABC-123')
+    await page.getByRole('button', { name: 'Create component' }).click()
     await page.waitForURL(`**/components/${CREATED_ID}`)
 
     expect(state.creates).toHaveLength(1)

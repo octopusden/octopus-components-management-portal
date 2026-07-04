@@ -79,7 +79,6 @@ vi.mock('../components/editor/ComponentHistoryTab', () => ({ ComponentHistoryTab
 vi.mock('../components/editor/ConfigurationsTab', () => ({ ConfigurationsTab: () => <div /> }))
 vi.mock('../components/editor/AsCodeTab', () => ({ AsCodeTab: () => <div /> }))
 vi.mock('../components/editor/WhoCanEditPanel', () => ({ WhoCanEditPanel: () => <div /> }))
-vi.mock('../components/CreateComponentDialog', () => ({ CreateComponentDialog: () => null }))
 vi.mock('../hooks/useValidationProblems', () => ({
   useValidationProblems: () => ({ byComponent: new Map(), isLoading: false }),
 }))
