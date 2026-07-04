@@ -556,6 +556,22 @@ describe('ComponentDetailPage — breadcrumb badges', () => {
     expect(screen.queryByText('SYS1')).toBeNull()
   })
 
+  it('(D7) System badge not rendered when component.system field-config visibility is hidden', () => {
+    // A read-only badge mirroring a field must respect field-config visibility:
+    // hidden ⇒ the badge does not render (not only the input). baseComponent has
+    // systems: ['SYS1'], so only the hidden gate can suppress it.
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    mockedUseFieldConfigEntry.mockImplementation((path: string) => ({
+      entry: path === 'component.system'
+        ? { visibility: 'hidden' as const, required: false }
+        : { visibility: 'editable' as const, required: false },
+      isLoading: false,
+      isError: false,
+    }))
+    renderPage(baseComponent, user)
+    expect(screen.queryByText('SYS1')).toBeNull()
+  })
+
   it('(e) BuildSystem badge not rendered when BASE row has no build aspect', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(

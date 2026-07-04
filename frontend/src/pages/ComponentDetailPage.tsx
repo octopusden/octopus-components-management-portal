@@ -718,9 +718,13 @@ function ComponentDetailEditor() {
                 const systems = component.systems ?? []
                 const buildSystem = baseRow?.build?.buildSystem
                 const jiraProjectKey = baseRow?.jira?.projectKey
+                // A read-only badge mirroring a field respects field-config
+                // visibility: when `component.system` is hidden, the System
+                // badge is suppressed (not just the input). D7.
+                const systemsHidden = systemFc.visibility === 'hidden'
                 return (
                   <>
-                    {systems.map((s) => (
+                    {!systemsHidden && systems.map((s) => (
                       <Badge key={s} variant="outline">{s}</Badge>
                     ))}
                     {buildSystem && <Badge variant="outline">{buildSystem}</Badge>}
