@@ -43,7 +43,7 @@ const KEY_TO_SCHEMA = {
   'component.componentOwner': ['ComponentDetailResponse', 'componentOwner'],
   'component.releaseManager': ['ComponentDetailResponse', 'releaseManager'],
   'component.securityChampion': ['ComponentDetailResponse', 'securityChampion'],
-  'component.system': ['ComponentDetailResponse', 'system'],
+  'component.system': ['ComponentDetailResponse', 'systems'],
   'component.clientCode': ['ComponentDetailResponse', 'clientCode'],
   'component.copyright': ['ComponentDetailResponse', 'copyright'],
   'component.labels': ['ComponentDetailResponse', 'labels'],

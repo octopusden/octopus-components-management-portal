@@ -48,7 +48,7 @@ function setProductTypeVisibility(vis: FieldVisibility) {
 function baseComponent(overrides: Partial<ComponentDetail> = {}): ComponentDetail {
   return {
     id: 'c-1', name: 'my-component', displayName: 'My Component', componentOwner: 'alice',
-    productType: 'TYPE_A', system: null, clientCode: null, solution: false, parentComponentName: null,
+    productType: 'TYPE_A', systems: [], clientCode: null, solution: false, parentComponentName: null,
     archived: false, version: 3, createdAt: null, updatedAt: null, labels: [], docs: [], artifactIds: [],
     securityGroups: [], teamcityProjects: [],
     configurations: [

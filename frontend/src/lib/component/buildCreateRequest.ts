@@ -185,11 +185,13 @@ function buildCreateOwnership(ownership: CreateFormValues['ownership'] | undefin
 // visibility. A hidden/readonly field must NOT be sent on create (matching the
 // read-only create form) — including values copied from the source in "Create
 // Similar" mode. Keys here are both the request keys and the `component.<field>`
-// field-config field names. Structural/required fields (name, componentOwner,
+// field-config field names — EXCEPT `systems`, whose FC key is the singular
+// `component.system` (see the fcField mapping in the strip loop below).
+// Structural/required fields (name, componentOwner,
 // baseConfiguration, coordinate, archived, collections) are intentionally absent.
 const VISIBILITY_GATED_CREATE_FIELDS = [
   'displayName', 'copyright', 'releaseManager', 'securityChampion',
-  'distributionExplicit', 'distributionExternal', 'system', 'clientCode',
+  'distributionExplicit', 'distributionExternal', 'systems', 'clientCode',
   'solution', 'productType', 'parentComponentName', 'releasesInDefaultBranch',
   'vcsExternalRegistry',
 ] as const
@@ -210,7 +212,7 @@ export function buildCreateRequest(
     componentOwner: form.componentOwner,
     // Source-derived general fields (null/[] defaults in scratch mode).
     productType: source?.productType ?? undefined,
-    system: source?.system ?? null,
+    systems: source?.systems ?? [],
     clientCode: source?.clientCode ?? undefined,
     solution: source?.solution ?? undefined,
     parentComponentName: source?.parentComponentName ?? undefined,
@@ -302,7 +304,12 @@ export function buildCreateRequest(
   // is never sent on create — including a value copied from the source. The
   // server then applies its own default, matching the read-only create form.
   for (const field of VISIBILITY_GATED_CREATE_FIELDS) {
-    if (!isFieldEditable(field)) delete req[field as keyof ComponentCreateRequest]
+    // The `systems` request key maps to the field-config key `component.system`
+    // (the API field was pluralized without renaming the FC key, which stays
+    // singular in both CRS and Portal). Every other field's request key and FC
+    // field name coincide.
+    const fcField = field === 'systems' ? 'system' : field
+    if (!isFieldEditable(fcField)) delete req[field as keyof ComponentCreateRequest]
   }
 
   // Drop keys left undefined (scratch mode where the source is absent) so the

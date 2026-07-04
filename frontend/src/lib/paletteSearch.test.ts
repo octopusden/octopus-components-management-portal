@@ -10,7 +10,7 @@ function comp(name: string, displayName: string | null = null): ComponentSummary
     name,
     displayName,
     componentOwner: null,
-    system: null,
+    systems: [],
     productType: null,
     archived: false,
     updatedAt: null,

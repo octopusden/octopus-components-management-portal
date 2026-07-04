@@ -57,7 +57,7 @@ vi.mock('../../hooks/useFieldConfig', () => ({
 function baseComponent(overrides: Partial<ComponentDetail> = {}): ComponentDetail {
   return {
     id: 'c-1', name: 'my-component', displayName: 'My Component', componentOwner: 'alice',
-    system: null, productType: null, clientCode: null, solution: false, parentComponentName: null,
+    systems: [], productType: null, clientCode: null, solution: false, parentComponentName: null,
     archived: false, version: 3, createdAt: null, updatedAt: null, labels: [], docs: [], artifactIds: [],
     distributionExplicit: false, distributionExternal: false, securityGroups: [], teamcityProjects: [],
     configurations: [

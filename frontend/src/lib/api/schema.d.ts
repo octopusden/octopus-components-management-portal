@@ -973,7 +973,7 @@ export interface components {
             /** @description When true, commit checks are skipped at release/RC issue-assignment (issues bind to RCs by builds only). Dedicated flag replacing the legacy externalRegistry="NOT_AVAILABLE" sentinel; legacy v1–v3 clients still see externalRegistry="NOT_AVAILABLE" when this is true. Must be false when the effective BASE build system is WHISKEY (rejected 422 otherwise). */
             skipCommitCheck?: boolean;
             solution?: boolean;
-            system?: string;
+            systems?: string[];
             teamcityProjects?: components["schemas"]["TeamcityProjectRequest"][];
             /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. */
             vcsExternalRegistry?: string;
@@ -1008,7 +1008,7 @@ export interface components {
             securityGroups: components["schemas"]["SecurityGroupResponse"][];
             skipCommitCheck: boolean;
             solution?: boolean;
-            system?: string;
+            systems: string[];
             teamcityProjects: components["schemas"]["TeamcityProjectResponse"][];
             /** Format: date-time */
             updatedAt?: string;
@@ -1051,7 +1051,7 @@ export interface components {
             productType?: string;
             releaseManagers: string[];
             securityChampions: string[];
-            system?: string;
+            systems: string[];
             teamcityProjectId?: string;
             teamcityProjectUrl?: string;
             /** Format: date-time */
@@ -1091,7 +1091,7 @@ export interface components {
             /** @description When true, commit checks are skipped at release/RC issue-assignment (issues bind to RCs by builds only). Dedicated flag replacing the legacy externalRegistry="NOT_AVAILABLE" sentinel; legacy v1–v3 clients still see externalRegistry="NOT_AVAILABLE" when this is true. Must be false when the effective BASE build system is WHISKEY (rejected 422 otherwise). */
             skipCommitCheck?: boolean;
             solution?: boolean;
-            system?: string;
+            systems?: string[];
             teamcityProjects?: components["schemas"]["TeamcityProjectRequest"][];
             /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. */
             vcsExternalRegistry?: string;

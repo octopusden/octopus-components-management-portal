@@ -95,7 +95,7 @@ import { TooltipProvider } from '../components/ui/tooltip'
 
 const baseComponent: ComponentDetail = {
   id: 'comp-1', name: 'my-component', displayName: 'My Component', componentOwner: 'alice',
-  productType: null, system: 'SYS1', clientCode: null, archived: false, solution: false,
+  productType: null, systems: ['SYS1'], clientCode: null, archived: false, solution: false,
   parentComponentName: null, version: 9, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-02T00:00:00Z',
   labels: [], docs: [], artifactIds: [], securityGroups: [], teamcityProjects: [], canEdit: true,
   configurations: [

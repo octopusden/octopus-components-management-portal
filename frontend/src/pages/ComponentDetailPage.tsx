@@ -109,7 +109,7 @@ function mapComponentToForm(component: ComponentDetail): GeneralFormValues {
     displayName: component.displayName ?? '',
     componentOwner: component.componentOwner ?? '',
     productType: component.productType ?? '',
-    system: component.system ?? '',
+    systems: component.systems ?? [],
     clientCode: component.clientCode ?? '',
     solution: component.solution ?? false,
     archived: component.archived,
@@ -237,7 +237,7 @@ function ComponentDetailEditor() {
       displayName: '',
       componentOwner: '',
       productType: '',
-      system: '',
+      systems: [],
       clientCode: '',
       solution: false,
       archived: false,
@@ -336,7 +336,7 @@ function ComponentDetailEditor() {
       visibilities: {
         displayName: displayNameFc.visibility ?? 'editable',
         componentOwner: componentOwnerFc.visibility ?? 'editable',
-        system: systemFc.visibility ?? 'editable',
+        systems: systemFc.visibility ?? 'editable',
         clientCode: clientCodeFc.visibility ?? 'editable',
         releaseManager: releaseManagerFc.visibility ?? 'editable',
         securityChampion: securityChampionFc.visibility ?? 'editable',
@@ -347,7 +347,15 @@ function ComponentDetailEditor() {
       },
       dirtyFields: {
         solution: form.formState.dirtyFields.solution === true,
-        system: form.formState.dirtyFields.system === true,
+        // `systems` is a multi-value array field — same dirty shape as labels
+        // (isFieldDirty handles RHF's collapsed-boolean-or-array form; the
+        // second branch keeps the clear-all case value-compare can't see).
+        systems:
+          isFieldDirty(form.formState.dirtyFields.systems) ||
+          (systemFc.visibility !== 'hidden' &&
+            (form.formState.touchedFields.systems as unknown) === true &&
+            ((component.systems?.length ?? 0) > 0) &&
+            ((form.getValues('systems')?.length ?? 0) === 0)),
         displayName:
           form.formState.dirtyFields.displayName === true ||
           form.formState.touchedFields.displayName === true,
@@ -393,19 +401,14 @@ function ComponentDetailEditor() {
   }
 
   const pendingGeneralPatch = component ? buildPatchRequest() : null
-  const systemClearNeedsAttention =
-    !!component &&
-    systemFc.visibility !== 'hidden' &&
-    (component.system ?? '') !== '' &&
-    ((form.getValues('system') as string | undefined) ?? '') === ''
   // P1-3: Build System is required when a BASE build aspect exists. Block the
-  // save if it has been cleared to empty (server had one, draft is now blank) —
-  // mirrors systemClearNeedsAttention. `buildSystemMissing` = !draft.buildSystem.
+  // save if it has been cleared to empty (server had one, draft is now blank).
+  // `buildSystemMissing` = !draft.buildSystem.
   const serverBuildSystem = selectBaseRow(component ?? EMPTY_COMPONENT)?.build?.buildSystem ?? ''
   const buildSystemNeedsAttention =
     !!component && serverBuildSystem !== '' && buildSection.buildSystemMissing
   const genSlice = component
-    ? generalSlice(component, pendingGeneralPatch, systemClearNeedsAttention)
+    ? generalSlice(component, pendingGeneralPatch)
     : { isDirty: false, request: {}, diff: [] }
 
   // ── Combine every section into ONE request + ONE diff + ONE dirty flag ──
@@ -442,8 +445,8 @@ function ComponentDetailEditor() {
 
   function discardAll() {
     // Reset the RHF form to the COMPONENT's values (not the empty form
-    // defaults) — resetting to defaults would set system='' against a server
-    // system, tripping systemClearNeedsAttention and leaving the bar "dirty".
+    // defaults) — resetting to defaults would clear multi-value fields (e.g.
+    // systems=[]) against server data and leave the bar spuriously "dirty".
     // Same mapping as the on-id-change hydration effect (mapComponentToForm).
     if (component) {
       form.reset(mapComponentToForm(component))
@@ -465,14 +468,7 @@ function ComponentDetailEditor() {
     setReviewError(null)
     setJiraConflict(null)
 
-    // System is REQUIRED server-side — surface the inline error instead of a
-    // silent omit-then-walk-away.
-    if (systemClearNeedsAttention) {
-      setActiveTab('general')
-      form.setError('system', { type: 'required', message: 'System is required' })
-      return
-    }
-    // Build System is REQUIRED too (P1-3). Clearing it would PATCH null = a CRS
+    // Build System is REQUIRED (P1-3). Clearing it would PATCH null = a CRS
     // no-op, so block and surface the Build section's inline required error.
     if (buildSystemNeedsAttention) {
       setActiveTab('build')
@@ -594,14 +590,7 @@ function ComponentDetailEditor() {
 
   function handleOpenReview() {
     if (!component || !canEdit || !dirty) return
-    // Surface the required-system error immediately rather than opening a diff
-    // that the save would reject anyway.
-    if (systemClearNeedsAttention) {
-      setActiveTab('general')
-      form.setError('system', { type: 'required', message: 'System is required' })
-      return
-    }
-    // Same gate for the required Build System (P1-3).
+    // Gate for the required Build System (P1-3).
     if (buildSystemNeedsAttention) {
       setActiveTab('build')
       buildSection.setBuildSystemTouched(true)
@@ -716,12 +705,14 @@ function ComponentDetailEditor() {
                 </Badge>
               )}
               {(() => {
-                const system = component.system
+                const systems = component.systems ?? []
                 const buildSystem = baseRow?.build?.buildSystem
                 const jiraProjectKey = baseRow?.jira?.projectKey
                 return (
                   <>
-                    {system && <Badge variant="outline">{system}</Badge>}
+                    {systems.map((s) => (
+                      <Badge key={s} variant="outline">{s}</Badge>
+                    ))}
                     {buildSystem && <Badge variant="outline">{buildSystem}</Badge>}
                     {jiraBaseUrl && jiraProjectKey && (
                       <a
@@ -1115,7 +1106,7 @@ const EMPTY_COMPONENT: ComponentDetail = {
   displayName: null,
   componentOwner: null,
   productType: null,
-  system: null,
+  systems: [],
   clientCode: null,
   archived: false,
   solution: false,

@@ -80,6 +80,7 @@ export function HeaderLabelsEditor({
               options={options}
               isLoading={isLoading}
               placeholder="Add label"
+              noun="label"
               ariaInvalid={Boolean(error)}
               ariaDescribedBy={error ? 'header-labels-error' : undefined}
             />

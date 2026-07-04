@@ -10,7 +10,7 @@ function makeComponent(overrides: Partial<ComponentDetail> = {}): ComponentDetai
     displayName: 'Service Alpha',
     componentOwner: 'alice',
     productType: 'TYPE_A',
-    system: 'SYS1',
+    systems: ['SYS1'],
     clientCode: null,
     archived: false,
     solution: false,
@@ -34,10 +34,9 @@ function makeValues(overrides: Partial<GeneralFormValues> = {}): GeneralFormValu
     displayName: 'Service Alpha',
     componentOwner: 'alice',
     productType: 'TYPE_A',
-    // system: scalar string both in the form and on the wire (CRS PR #301
-    // collapsed Component.systems Set<String> → Component.system String?).
-    // labels stays string[] (multi-value via chips UX).
-    system: 'SYS1',
+    // systems: string[] both in the form and on the wire — mirrors labels
+    // exactly (multi-value via chips UX).
+    systems: ['SYS1'],
     clientCode: '',
     solution: false,
     archived: false,
@@ -56,7 +55,7 @@ function makeValues(overrides: Partial<GeneralFormValues> = {}): GeneralFormValu
 const EDITABLE: FieldVisibilities = {
   displayName: 'editable',
   componentOwner: 'editable',
-  system: 'editable',
+  systems: 'editable',
   clientCode: 'editable',
   releaseManager: 'editable',
   securityChampion: 'editable',
@@ -95,7 +94,7 @@ describe('buildUpdateRequest — field-config hidden visibility', () => {
       values: makeValues({
         displayName: 'X',
         componentOwner: 'Y',
-        system: 'A',
+        systems: ['A'],
         clientCode: 'C',
         labels: ['x', 'y'],
       }),
@@ -103,15 +102,15 @@ describe('buildUpdateRequest — field-config hidden visibility', () => {
         ...EDITABLE,
         displayName: 'hidden',
         componentOwner: 'hidden',
-        system: 'hidden',
+        systems: 'hidden',
         clientCode: 'hidden',
         labels: 'hidden',
       },
-      dirtyFields: { system: true, labels: true },
+      dirtyFields: { systems: true, labels: true },
     })
     expect(req.displayName).toBeUndefined()
     expect(req.componentOwner).toBeUndefined()
-    expect(req.system).toBeUndefined()
+    expect(req.systems).toBeUndefined()
     expect(req.clientCode).toBeUndefined()
     expect(req.labels).toBeUndefined()
   })
@@ -314,55 +313,51 @@ describe('buildUpdateRequest — dirtyFields gating (pre-hydration safety)', () 
   })
 
   it('systems form-default empty + had prior + NOT dirty → omits (pre-hydration guard)', () => {
-    // Form default is `system: ''` (task #14 single-select). Without the
-    // dirty-gate a pre-hydration Save would emit `system: null` and wipe the
-    // server's list.
+    // Form default is `systems: []`. Without the dirty-gate a pre-hydration
+    // Save would emit `systems: []` and wipe the server's list.
     const req = buildUpdateRequest({
-      component: makeComponent({ system: 'SYS1' }),
-      values: makeValues({ system: '' }),
+      component: makeComponent({ systems: ['SYS1'] }),
+      values: makeValues({ systems: []}),
       visibilities: EDITABLE,
       dirtyFields: {},
     })
-    expect(req.system).toBeUndefined()
+    expect(req.systems).toBeUndefined()
   })
 
-  it('systems dirty + empty string → omits (would otherwise send [] which CRS rejects)', () => {
-    // The page-level save guard ALSO blocks this case with an inline error;
-    // buildUpdateRequest is the belt-and-braces (omit on dirty-empty so a
-    // bypassed guard still doesn't 400 the server).
+  it('systems dirty + empty array → emits [] (explicit clear; systems is OPTIONAL, mirrors labels)', () => {
+    // systems mirrors labels exactly: dirty + empty is a legitimate "clear
+    // all" user intent, not an error — REPLACE-empty is emitted rather than
+    // omitted.
     const req = buildUpdateRequest({
-      component: makeComponent({ system: 'SYS1' }),
-      values: makeValues({ system: '' }),
+      component: makeComponent({ systems: ['SYS1'] }),
+      values: makeValues({ systems: []}),
       visibilities: EDITABLE,
-      dirtyFields: { system: true },
+      dirtyFields: { systems: true },
     })
-    expect(req.system).toBeUndefined()
+    expect(req.systems).toEqual([])
   })
 
-  it('system populated + dirty → forwards scalar string on the wire (CRS #301)', () => {
-    // CRS PR #301 collapsed Component.systems Set<String> → Component.system
-    // String?. The wire shape matches the form shape (scalar string), so
-    // buildUpdateRequest just forwards the value — no array wrap.
+  it('systems populated + dirty → forwards the canonicalized array on the wire', () => {
     const req = buildUpdateRequest({
-      component: makeComponent({ system: 'OLD' }),
-      values: makeValues({ system: 'SYS1' }),
+      component: makeComponent({ systems: ['OLD'] }),
+      values: makeValues({ systems: ['SYS1'] }),
       visibilities: EDITABLE,
-      dirtyFields: { system: true },
+      dirtyFields: { systems: true },
     })
-    expect(req.system).toBe('SYS1')
+    expect(req.systems).toEqual(['SYS1'])
   })
 
-  it('systems dirty + whitespace-only value → omits (defensive trim, task #14)', () => {
-    // The single-select dropdown doesn't allow whitespace-only values, but
-    // a paste-restore round-trip or a stale form snapshot could produce one.
-    // Trim it away → effectively empty → omit (page guard blocks the save).
+  it('systems dirty + whitespace-only value → canonicalizes to [] (explicit clear, defensive trim)', () => {
+    // A paste-restore round-trip or a stale form snapshot could produce a
+    // whitespace-only entry. Trim it away → effectively empty → the same
+    // explicit-clear path as an empty array.
     const req = buildUpdateRequest({
-      component: makeComponent({ system: 'SYS1' }),
-      values: makeValues({ system: '   ' }),
+      component: makeComponent({ systems: ['SYS1'] }),
+      values: makeValues({ systems: ['   '] }),
       visibilities: EDITABLE,
-      dirtyFields: { system: true },
+      dirtyFields: { systems: true },
     })
-    expect(req.system).toBeUndefined()
+    expect(req.systems).toEqual([])
   })
 
   it('empty docs + had prior + not dirty → omits; same for artifactIds', () => {
@@ -579,11 +574,11 @@ describe('buildUpdateRequest — name / parentComponentName', () => {
 })
 
 describe('buildUpdateRequest — labels + systems dirty-gate matrix (ui-swift-sloth §4)', () => {
-  // After the multi-select swap labels mirrors systems' contract: the form
-  // mounts with `labels: []`, so emitting `labels: []` on every save would
-  // wipe server data before the hydration useEffect runs. A dirtyFields
-  // gate (identical to systems) blocks the pre-hydration clobber and the
-  // dirty-but-empty case.
+  // labels and systems share the same contract: both forms mount with `[]`,
+  // so emitting `[]` on every save would wipe server data before the
+  // hydration useEffect runs. A dirtyFields gate blocks the pre-hydration
+  // clobber; dirty + empty is a legitimate explicit clear for both (systems
+  // is OPTIONAL server-side, same as labels).
 
   it('(labels-a) form mounts with labels: [], untouched, save → labels omitted', () => {
     const req = buildUpdateRequest({
@@ -628,34 +623,34 @@ describe('buildUpdateRequest — labels + systems dirty-gate matrix (ui-swift-sl
     expect(req.labels).toEqual(['backend'])
   })
 
-  it('(systems-a) form mounts with system: \'\', untouched, save → systems omitted', () => {
+  it('(systems-a) form mounts with systems: [], untouched, save → systems omitted', () => {
     const req = buildUpdateRequest({
-      component: makeComponent({ system: 'SYS1' }),
-      values: makeValues({ system: '' }),
+      component: makeComponent({ systems: ['SYS1'] }),
+      values: makeValues({ systems: []}),
       visibilities: EDITABLE,
       dirtyFields: {},
     })
-    expect(req.system).toBeUndefined()
+    expect(req.systems).toBeUndefined()
   })
 
-  it('(systems-b) user clears the system → dirty + empty → systems omitted (page guard blocks)', () => {
+  it('(systems-b) user removes all systems → dirty + empty → systems:[] (explicit clear)', () => {
     const req = buildUpdateRequest({
-      component: makeComponent({ system: 'SYS1' }),
-      values: makeValues({ system: '' }),
+      component: makeComponent({ systems: ['SYS1'] }),
+      values: makeValues({ systems: []}),
       visibilities: EDITABLE,
-      dirtyFields: { system: true },
+      dirtyFields: { systems: true },
     })
-    expect(req.system).toBeUndefined()
+    expect(req.systems).toEqual([])
   })
 
-  it('(system-c) user picks a system → dirty + non-empty → scalar on the wire (CRS #301)', () => {
+  it('(systems-c) user adds a system → dirty + non-empty → array forwarded', () => {
     const req = buildUpdateRequest({
-      component: makeComponent({ system: null }),
-      values: makeValues({ system: 'SYS1' }),
+      component: makeComponent({ systems: [] }),
+      values: makeValues({ systems: ['SYS1'] }),
       visibilities: EDITABLE,
-      dirtyFields: { system: true },
+      dirtyFields: { systems: true },
     })
-    expect(req.system).toBe('SYS1')
+    expect(req.systems).toEqual(['SYS1'])
   })
 
   it('non-empty labels untouched (clean) → omitted', () => {

@@ -17,6 +17,7 @@ describe('ChipsInput — rendering', () => {
         onChange={vi.fn()}
         options={['backend', 'internal', 'frontend']}
         placeholder="Add label"
+        noun="label"
       />,
     )
     expect(screen.getByText('backend')).toBeDefined()
@@ -30,6 +31,7 @@ describe('ChipsInput — rendering', () => {
         onChange={vi.fn()}
         options={['backend', 'internal']}
         placeholder="Add label"
+        noun="label"
       />,
     )
     // 'backend' is offered as an <option> in the add control, so the bare
@@ -47,6 +49,7 @@ describe('ChipsInput — rendering', () => {
         onChange={vi.fn()}
         options={['backend']}
         placeholder="Add label"
+        noun="label"
       />,
     )
     const add = screen.getByLabelText(/^add label$/i)
@@ -63,6 +66,7 @@ describe('ChipsInput — interactions', () => {
         onChange={onChange}
         options={['backend', 'internal', 'frontend']}
         placeholder="Add label"
+        noun="label"
       />,
     )
     const removeBackend = screen.getByRole('button', { name: /^remove backend$/i })
@@ -78,6 +82,7 @@ describe('ChipsInput — interactions', () => {
         onChange={onChange}
         options={['backend', 'internal', 'frontend']}
         placeholder="Add label"
+        noun="label"
       />,
     )
     const addControl = screen.getByLabelText(/^add label$/i) as HTMLSelectElement
@@ -92,6 +97,7 @@ describe('ChipsInput — interactions', () => {
         onChange={vi.fn()}
         options={['backend', 'internal', 'frontend']}
         placeholder="Add label"
+        noun="label"
       />,
     )
     const addControl = screen.getByLabelText(/^add label$/i)
@@ -117,6 +123,7 @@ describe('ChipsInput — interactions', () => {
         onChange={onChange}
         options={['backend', 'frontend']}
         placeholder="Add label"
+        noun="label"
       />,
     )
 
@@ -132,6 +139,7 @@ describe('ChipsInput — interactions', () => {
         onChange={onChange}
         options={['backend', 'frontend']}
         placeholder="Add label"
+        noun="label"
       />,
     )
     addControl = screen.getByLabelText(/^add label$/i) as HTMLSelectElement
@@ -148,6 +156,7 @@ describe('ChipsInput — interactions', () => {
         onChange={onChange}
         options={['backend', 'frontend']}
         placeholder="Add label"
+        noun="label"
       />,
     )
 
@@ -170,6 +179,7 @@ describe('ChipsInput — interactions', () => {
         onChange={onChange}
         options={['backend', 'internal']}
         placeholder="Add label"
+        noun="label"
       />,
     )
     // Two chips must render even though both have the same value.
@@ -188,6 +198,7 @@ describe('ChipsInput — interactions', () => {
         onChange={onChange}
         options={['a', 'b']}
         placeholder="Add label"
+        noun="label"
       />,
     )
     // Click the FIRST × button.
@@ -209,6 +220,7 @@ describe('ChipsInput — disabled / loading / a11y', () => {
         onChange={vi.fn()}
         options={['backend', 'internal']}
         placeholder="Add label"
+        noun="label"
         disabled
       />,
     )
@@ -225,6 +237,7 @@ describe('ChipsInput — disabled / loading / a11y', () => {
         onChange={vi.fn()}
         options={['backend']}
         placeholder="Add label"
+        noun="label"
         ariaRequired
         ariaDescribedBy="labels-error"
         ariaInvalid
@@ -246,6 +259,7 @@ describe('ChipsInput — disabled / loading / a11y', () => {
         onChange={vi.fn()}
         options={[]}
         placeholder="Add label"
+        noun="label"
         isLoading
       />,
     )

@@ -4,7 +4,7 @@ import { Label } from '../ui/label'
 import { Input } from '../ui/input'
 import { EmployeeStatusBadge, PeopleInput } from '../ui/PeopleInput'
 import { PeopleListInput } from '../ui/PeopleListInput'
-import { EnumSelect } from '../ui/EnumSelect'
+import { ChipsInput } from '../ui/ChipsInput'
 import { FieldInfo } from '../ui/FieldInfo'
 import { FieldLabelText } from '../ui/FieldLabelText'
 import { ArtifactOwnershipEditor } from './ArtifactOwnershipEditor'
@@ -14,12 +14,12 @@ import type { ComponentDetail } from '../../lib/types'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../../lib/auth'
 import { useFieldConfigEntry } from '../../hooks/useFieldConfig'
-// Task #14: system is single-select but still needs the FULL dictionary
-// (not just in-use values). EnumSelect's default fallback hits
-// /components/meta/systems (in-use), so we override its options with
-// useSystemsDictionary() → /components/meta/systems/dictionary. The
-// filter bar deliberately keeps the in-use endpoint via useFieldOptions
-// (filter UX wants to offer values that exist).
+// system is MULTI-value (a component may belong to several systems —
+// component_systems junction). The editor is a ChipsInput multi-select fed the
+// FULL dictionary (not just in-use values) via useSystemsDictionary() →
+// /components/meta/systems/dictionary, so newly-defined codes no component
+// carries yet are still selectable. The filter bar deliberately keeps the
+// in-use endpoint via useFieldOptions (filter UX wants values that exist).
 import { useSystemsDictionary } from '../../hooks/useSystemsDictionary'
 import { lookupEmployee, useEmployeeStatuses } from '../../hooks/useEmployees'
 import { WhoCanEditPanel } from './WhoCanEditPanel'
@@ -46,7 +46,7 @@ export const GENERAL_TAB_FIELDS = [
   'name',
   'displayName',
   'componentOwner',
-  'system',
+  'systems',
   'clientCode',
   // parentComponentName / canBeParent moved to the Misc tab (see MISC_TAB_FIELDS in MiscTab).
   'releaseManager',
@@ -69,10 +69,9 @@ export interface GeneralFormValues {
   /** productType stays in GeneralFormValues (still part of the ComponentDetail
    *  DTO) but is rendered and saved from EscrowTab (§7.0/2c migration). */
   productType: string
-  // System is single-value per component (CRS PR #301 collapsed the
-  // legacy `systems: Set<String>` DTO to scalar). Build-System-style
-  // EnumSelect UX. Labels remain `string[]` (chips UX, multi-value).
-  system: string
+  // System membership is multi-value (component_systems junction). Chips UX,
+  // same as labels.
+  systems: string[]
   clientCode: string
   solution: boolean
   archived: boolean
@@ -136,15 +135,12 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
   // register'd. releaseManager / securityChampion are ordered string[].
   const releaseManager = watch('releaseManager')
   const securityChampion = watch('securityChampion')
-  // Task #14: `system` is a scalar string (single-select EnumSelect), watched
-  // so the controlled primitive receives the current value. (Labels moved to
-  // the header editor; Doc Links → Documentation tab; Solution → Solution tab —
-  // all see ComponentDetailPage.)
-  const systemValue = watch('system')
+  // `systems` is a multi-value string[] (ChipsInput), watched so the controlled
+  // primitive receives the current array.
+  const systemsValue = watch('systems')
 
-  // Systems dictionary powers the EnumSelect single-select — see note next to
-  // its render block for why we override EnumSelect's internal hook.
-  // 404/501 → [] (handled by the hook).
+  // Systems dictionary powers the ChipsInput options — see the note next to its
+  // render block. 404/501 → [] (handled by the hook).
   const systemsDict = useSystemsDictionary()
 
   const { data: employeeStatuses = {} } = useEmployeeStatuses([
@@ -212,9 +208,6 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
     setValue('displayName', component.displayName ?? '')
     setValue('componentOwner', component.componentOwner ?? '')
     setValue('productType', component.productType ?? '')
-    // CRS PR #301: scalar DTO field, hydrate directly. The `?.[0]` bridge
-    // from task #14 is now obsolete.
-    setValue('system', component.system ?? '')
     setValue('clientCode', component.clientCode ?? '')
     setValue('solution', component.solution ?? false)
     setValue('archived', component.archived)
@@ -238,6 +231,10 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
     // from the pre-hydration race (PR #44 follow-up); only the header
     // ChipsInput's onChange sets shouldTouch, on real interaction.
     setValue('labels', component.labels ?? [])
+    // Multi-value system membership (chips, same contract as labels): hydrate
+    // without shouldTouch so the pre-hydration race isn't mistaken for a user
+    // clear-all.
+    setValue('systems', component.systems ?? [])
     // schema-v2 lists. setValue replaces the array wholesale.
     setValue(
       'docs',
@@ -454,36 +451,34 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
         <section data-testid="section-metadata">
           <h3 className="text-sm font-medium text-muted-foreground mb-3">Metadata</h3>
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            {/* System — single-select EnumSelect. Matches the Build System
-                UX. We pass the FULL systems dictionary via `optionsOverride`
-                rather than relying on EnumSelect's default
-                `useFieldOptions('component.system')` fallback — that
-                fallback hits the in-use endpoint, which would hide
-                newly-defined dictionary values that no component is
-                attached to yet. */}
+            {/* System — MULTI-select chips (a component may belong to several
+                systems). We feed the FULL systems dictionary
+                (useSystemsDictionary → /meta/systems/dictionary) rather than the
+                in-use endpoint, so newly-defined codes no component carries yet
+                are still selectable. Same contract as labels. */}
             {systemEntry.visibility !== 'hidden' && (
               <div className="space-y-1.5">
                 <div className="flex items-center gap-1">
                   <Label htmlFor="component-system"><FieldLabelText path="component.system" fallback="System" /></Label>
                   <FieldInfo path="component.system" label="System" />
                 </div>
-                <EnumSelect
+                <ChipsInput
                   id="component-system"
-                  fieldPath="component.system"
-                  value={systemValue ?? ''}
-                  onValueChange={(v) =>
-                    setValue('system', v, { shouldDirty: true, shouldTouch: true })
+                  value={systemsValue ?? []}
+                  onChange={(next) =>
+                    setValue('systems', next, { shouldDirty: true, shouldTouch: true })
                   }
-                  placeholder="Select system"
+                  options={systemsDict.data ?? []}
+                  isLoading={systemsDict.isLoading}
+                  placeholder="Add system"
+                  noun="system"
                   disabled={systemEntry.visibility === 'readonly'}
-                  optionsOverride={systemsDict.data ?? []}
-                  isLoadingOverride={systemsDict.isLoading}
-                  aria-invalid={Boolean(errors.system)}
-                  aria-describedby={errors.system ? 'component-system-error' : undefined}
+                  ariaInvalid={Boolean(errors.systems)}
+                  ariaDescribedBy={errors.systems ? 'component-system-error' : undefined}
                 />
-                {errors.system && (
+                {errors.systems && (
                   <p id="component-system-error" className="text-xs text-destructive">
-                    {errors.system.message}
+                    {errors.systems.message as string}
                   </p>
                 )}
               </div>

@@ -25,10 +25,10 @@ vi.mock('../../hooks/useComponents', () => ({
   useComponents: vi.fn(() => ({ data: { content: [], totalElements: 0 } })),
 }))
 
-// Dictionary mocks. Task #14: system is a single-select EnumSelect whose
-// options come from useSystemsDictionary (full dictionary endpoint) via
-// the new optionsOverride prop — NOT the in-use endpoint that
-// useFieldOptions falls back to. Labels stays chips with its own dict.
+// Dictionary mocks. `systems` is a ChipsInput multi-select whose options
+// come from useSystemsDictionary (full dictionary endpoint) — NOT the
+// in-use endpoint that useFieldOptions falls back to. Labels stays chips
+// with its own dict (rendered in the header, not GeneralTab).
 const mockUseSystemsDictionary = vi.fn(() => ({ data: ['SYS1', 'SYS2', 'SYS_NEW_DICT_ONLY'], isLoading: false, isError: false }))
 const mockUseLabelsDictionary = vi.fn(() => ({ data: ['backend', 'internal', 'frontend'], isLoading: false, isError: false }))
 vi.mock('../../hooks/useSystemsDictionary', () => ({
@@ -82,7 +82,7 @@ function baseComponent(overrides: Partial<ComponentDetail> = {}): ComponentDetai
     displayName: 'My Component',
     componentOwner: 'alice',
     productType: '',
-    system: null,
+    systems: [],
     clientCode: null,
     solution: false,
     parentComponentName: null,
@@ -111,9 +111,9 @@ function Harness({ component, formRef, onOwnerValidatingChange, canEdit }: { com
       displayName: component.displayName ?? '',
       componentOwner: component.componentOwner ?? '',
       productType: component.productType ?? '',
-      // CRS PR #301: system is scalar `string | null` end-to-end (DTO +
-      // form). Hydrate directly; the array-wrap bridge from PR #45 is gone.
-      system: component.system ?? '',
+      // systems is MULTI-value `string[]` end-to-end (DTO + form), mirroring
+      // labels exactly.
+      systems: component.systems ?? [],
       labels: component.labels ?? [],
       clientCode: component.clientCode ?? '',
       solution: component.solution ?? false,
@@ -282,33 +282,32 @@ describe('GeneralTab visibility-gating', () => {
     expect(input.disabled).toBe(false)
   })
 
-  it('system hidden → System single-select NOT rendered (task #14)', () => {
+  it('system hidden → systems ChipsInput NOT rendered', () => {
     mockUseFieldConfigEntry.mockImplementation((path: string) => {
       if (path === 'component.system') return makeEntry('hidden')
       return makeEntry('editable')
     })
-    const component = baseComponent({ system: 'SYS1' })
+    const component = baseComponent({ systems: ['SYS1'] })
     renderWithProviders(<Harness component={component} />)
 
-    // EnumSelect renders a SelectTrigger with role=combobox labelled
-    // by the outer <Label htmlFor="component-system">. Hidden → no label.
+    // ChipsInput's add-select is labelled by the outer <Label
+    // htmlFor="component-system">. Hidden → no label, no control.
     expect(screen.queryByText(/^system$/i)).toBeNull()
   })
 
-  it('system readonly → System single-select rendered disabled (task #14)', () => {
+  it('system readonly → systems ChipsInput rendered disabled', () => {
     mockUseFieldConfigEntry.mockImplementation((path: string) => {
       if (path === 'component.system') return makeEntry('readonly')
       return makeEntry('editable')
     })
-    const component = baseComponent({ system: 'SYS1' })
+    const component = baseComponent({ systems: ['SYS1'] })
     renderWithProviders(<Harness component={component} />)
 
-    // EnumSelect renders a SelectTrigger (Radix) with role=combobox.
-    // Disabled→ Radix sets `data-disabled` on the trigger.
+    // ChipsInput's add-select carries the `disabled` attribute when the
+    // field-config visibility is 'readonly'; the remove buttons are also
+    // disabled but the add-select is the element labelled "System".
     const trigger = screen.getByLabelText(/^system$/i)
-    expect(
-      trigger.hasAttribute('disabled') || trigger.getAttribute('data-disabled') !== null,
-    ).toBe(true)
+    expect(trigger.hasAttribute('disabled')).toBe(true)
   })
 
   it('componentOwner hidden → Ownership section NOT rendered', () => {
@@ -343,27 +342,27 @@ describe('GeneralTab visibility-gating', () => {
   })
 })
 
-// ── system-field-hidden → undefined (not []) ──────────────────────────────────
-// The actual save-payload filtering lives in ComponentDetailPage.tsx, but we
-// verify the form value contract: when system is hidden the field is still
+// ── systems-field-hidden → undefined (not sent) ───────────────────────────────
+// The actual save-payload filtering lives in buildUpdateRequest, but we
+// verify the form value contract: when systems is hidden the field is still
 // registered (setValue called with original value) but the save handler is
 // responsible for mapping it to undefined. This test verifies the form renders
 // the expected structure so the page-level filter can operate correctly.
-describe('GeneralTab system field hidden → form value contract (CRS #301)', () => {
-  it('when system is hidden, the form still initialises system from component.system (page filters to undefined on save)', () => {
+describe('GeneralTab systems field hidden → form value contract', () => {
+  it('when systems is hidden, the form still initialises systems from component.systems (page filters to undefined on save)', () => {
     mockUseFieldConfigEntry.mockImplementation((path: string) => {
       if (path === 'component.system') return makeEntry('hidden')
       return makeEntry('editable')
     })
     const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
-    const component = baseComponent({ system: 'SYS1' })
+    const component = baseComponent({ systems: ['SYS1'] })
     renderWithProviders(<Harness component={component} formRef={formRef} />)
 
-    // EnumSelect not rendered (hidden)
+    // ChipsInput not rendered (hidden)
     expect(screen.queryByText(/^system$/i)).toBeNull()
-    // Scalar form field hydrates directly from `component.system`.
-    const val = formRef.current?.getValues('system')
-    expect(val).toBe('SYS1')
+    // Multi-value form field hydrates directly from `component.systems`.
+    const val = formRef.current?.getValues('systems')
+    expect(val).toEqual(['SYS1'])
   })
 })
 
@@ -551,17 +550,17 @@ describe('GeneralTab server error display (S3.1a)', () => {
     })
   })
 
-  it('setError("system") renders the message under the System single-select', async () => {
+  it('setError("systems") renders the message under the System ChipsInput', async () => {
     setAllEditable()
     const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
-    renderWithProviders(<Harness component={baseComponent({ system: 'SYS1' })} formRef={formRef} />)
+    renderWithProviders(<Harness component={baseComponent({ systems: ['SYS1'] })} formRef={formRef} />)
 
     await act(async () => {
-      formRef.current?.setError('system', { type: 'server', message: 'must not be null' })
+      formRef.current?.setError('systems', { type: 'server', message: 'duplicate system code' })
     })
 
     await waitFor(() => {
-      expect(screen.getByText('must not be null')).toBeDefined()
+      expect(screen.getByText('duplicate system code')).toBeDefined()
     })
   })
 })
@@ -635,7 +634,7 @@ describe('GeneralTab — re-hydration guard (tab-switch / refetch must not clobb
     // survives GeneralTab's unmount (Radix tab switch).
     const form = useForm<GeneralFormValues>({
       defaultValues: {
-        name: '', displayName: '', componentOwner: '', productType: '', system: '',
+        name: '', displayName: '', componentOwner: '', productType: '', systems: [],
         clientCode: '', solution: false, archived: false, parentComponentName: '',
         canBeParent: false, releaseManager: [], securityChampion: [], copyright: '',
         labels: [], docs: [], artifactIds: [],
@@ -678,68 +677,105 @@ describe('GeneralTab — re-hydration guard (tab-switch / refetch must not clobb
 })
 
 // ---------------------------------------------------------------------------
-// task #14: system → single-select EnumSelect; labels stays chips.
+// systems: ChipsInput multi-select (mirrors labels' add/remove chip
+// contract); systems is now OPTIONAL server-side, so an empty selection is a
+// legitimate state, not an error.
 // ---------------------------------------------------------------------------
 
-describe('GeneralTab — system single-select + labels chips (task #14)', () => {
-  it('hydrates system single-select from component.system[0] (task #14)', () => {
+describe('GeneralTab — systems ChipsInput (multi-value)', () => {
+  it('hydrates the systems ChipsInput from component.systems (full array)', () => {
     setAllEditable()
     const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
-    const component = baseComponent({ system: 'SYS1' })
+    const component = baseComponent({ systems: ['SYS1', 'SYS2'] })
     renderWithProviders(<Harness component={component} formRef={formRef} />)
-    // Form value is the scalar 'SYS1', not ['SYS1'].
-    expect(formRef.current?.getValues('system')).toBe('SYS1')
+    // Form value is the full array — every system, not just the first.
+    expect(formRef.current?.getValues('systems')).toEqual(['SYS1', 'SYS2'])
   })
 
-  it('System single-select offers values from the FULL dictionary, not just in-use values (task #14, Sonnet review finding)', async () => {
+  it('renders one removable chip per system', () => {
+    setAllEditable()
+    const component = baseComponent({ systems: ['SYS1', 'SYS2'] })
+    renderWithProviders(<Harness component={component} />)
+
+    expect(screen.getByText('SYS1')).toBeDefined()
+    expect(screen.getByText('SYS2')).toBeDefined()
+    expect(screen.getByRole('button', { name: /^remove sys1$/i })).toBeDefined()
+    expect(screen.getByRole('button', { name: /^remove sys2$/i })).toBeDefined()
+  })
+
+  it('offers values from the FULL dictionary, not just in-use values (Sonnet review finding)', () => {
     // The dictionary endpoint surfaces values an admin defined but no
     // component is yet attached to. If the editor offered only in-use
     // values, those new dictionary entries would be invisible until
     // someone wired them to a component via a separate path. The mock
     // useSystemsDictionary returns `SYS_NEW_DICT_ONLY` which has no
-    // component reference — verify the dropdown still surfaces it.
+    // component reference — verify the add-picker still offers it. (The
+    // native <select> always renders its <option>s, no "open" step needed.)
     setAllEditable()
-    const component = baseComponent({ system: 'SYS1' })
+    const component = baseComponent({ systems: ['SYS1'] })
     renderWithProviders(<Harness component={component} />)
 
-    // Open the single-select trigger and confirm the dictionary-only
-    // option is offered. (Radix Select renders options in a portal on
-    // open; under jsdom the trigger click materialises them.)
-    const trigger = screen.getByLabelText(/^system$/i)
-    await userEvent.click(trigger)
-    // The dict-only option must be listed alongside the in-use values.
     expect(screen.getByRole('option', { name: 'SYS_NEW_DICT_ONLY' })).toBeDefined()
   })
 
-  it('hydrates the single-select from the scalar component.system field (CRS #301)', () => {
-    // Single-value scalar both in the DTO (CRS PR #301) and in the form.
-    // The hydration useEffect mirrors `component.system` directly into
-    // the EnumSelect's controlled value.
+  it('picking a system in the add-select appends it and marks the field dirty/touched', async () => {
     setAllEditable()
     const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
-    const component = baseComponent({ system: 'SYS_A' })
+    const component = baseComponent({ systems: ['SYS1'] })
     renderWithProviders(<Harness component={component} formRef={formRef} />)
-    expect(formRef.current?.getValues('system')).toBe('SYS_A')
+
+    // ChipsInput's add-select is labelled by its `noun` prop; GeneralTab
+    // passes noun="system", so the accessible name is "Add system".
+    await userEvent.selectOptions(screen.getByLabelText(/^add system$/i), 'SYS2')
+
+    await waitFor(() => {
+      expect(formRef.current?.getValues('systems')).toEqual(['SYS1', 'SYS2'])
+      const state = formRef.current!.getFieldState('systems', formRef.current!.formState)
+      expect(state.isDirty || state.isTouched).toBe(true)
+    })
   })
 
-  // Labels chips add/remove tests moved to HeaderLabelsEditor.test.tsx (the
-  // editor now lives in the component header, not GeneralTab).
-
-  it('renders an inline error below the System single-select when form.setError("system") fires (task #14)', async () => {
-    // ComponentDetailPage.handleSave is the source of truth for the
-    // "systems is required" guard, but the error needs to surface in
-    // GeneralTab's render tree — otherwise the user clicks Save, the page
-    // returns early, and the UI gives no visible feedback.
+  it('removing a chip emits the shorter array', async () => {
     setAllEditable()
     const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
-    renderWithProviders(<Harness component={baseComponent({ system: 'SYS1' })} formRef={formRef} />)
+    const component = baseComponent({ systems: ['SYS1', 'SYS2'] })
+    renderWithProviders(<Harness component={component} formRef={formRef} />)
+
+    await userEvent.click(screen.getByRole('button', { name: /^remove sys1$/i }))
+
+    await waitFor(() => {
+      expect(formRef.current?.getValues('systems')).toEqual(['SYS2'])
+    })
+  })
+
+  it('removing every chip leaves an empty (not undefined) array — clearing all systems is allowed', async () => {
+    // systems is OPTIONAL server-side now: an empty selection is a valid,
+    // save-able state (buildUpdateRequest emits `systems: []` as an explicit
+    // clear), not a validation error to block on.
+    setAllEditable()
+    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    const component = baseComponent({ systems: ['SYS1'] })
+    renderWithProviders(<Harness component={component} formRef={formRef} />)
+
+    await userEvent.click(screen.getByRole('button', { name: /^remove sys1$/i }))
+
+    await waitFor(() => {
+      expect(formRef.current?.getValues('systems')).toEqual([])
+    })
+    expect(screen.queryByText(/system is required/i)).toBeNull()
+  })
+
+  it('renders an inline error below the System ChipsInput when form.setError("systems") fires', async () => {
+    setAllEditable()
+    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    renderWithProviders(<Harness component={baseComponent({ systems: ['SYS1'] })} formRef={formRef} />)
 
     await act(async () => {
-      formRef.current?.setError('system', { type: 'required', message: 'At least one system is required' })
+      formRef.current?.setError('systems', { type: 'server', message: 'unknown system code' })
     })
 
     await waitFor(() => {
-      expect(screen.getByText(/at least one system is required/i)).toBeDefined()
+      expect(screen.getByText(/unknown system code/i)).toBeDefined()
     })
   })
 })

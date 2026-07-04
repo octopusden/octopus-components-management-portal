@@ -17,7 +17,7 @@ vi.mock('../../hooks/useComponents', () => ({
 
 function defaults(over: Partial<GeneralFormValues> = {}): GeneralFormValues {
   return {
-    name: '', displayName: '', componentOwner: '', productType: '', system: '',
+    name: '', displayName: '', componentOwner: '', productType: '', systems: [],
     clientCode: '', solution: false, archived: false, parentComponentName: '',
     canBeParent: false, releaseManager: [], securityChampion: [], copyright: '',
     labels: [], docs: [], artifactIds: [], ...over,

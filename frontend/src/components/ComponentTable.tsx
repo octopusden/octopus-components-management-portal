@@ -96,21 +96,27 @@ function IconLink({ href, label, icon: Icon }: IconLinkProps) {
  * popover obscured adjacent rows and required focus-management that the user
  * found heavier-weight than inline expansion.
  */
-function LabelsCell({ labels }: { labels: string[] | null | undefined }) {
+function ChipListCell({
+  values,
+  noun = 'value',
+}: {
+  values: string[] | null | undefined
+  noun?: string
+}) {
   const [expanded, setExpanded] = useState(false)
-  if (!labels || labels.length === 0) return <span className="text-muted-foreground">—</span>
+  if (!values || values.length === 0) return <span className="text-muted-foreground">—</span>
 
-  const overflowCount = labels.length - 3
+  const overflowCount = values.length - 3
   const showToggle = overflowCount > 0
-  const visible = expanded ? labels : labels.slice(0, 3)
+  const visible = expanded ? values : values.slice(0, 3)
 
   return (
     <div className="flex flex-wrap items-center gap-1">
-      {visible.map((label, i) => (
-        // Index-prefixed key — labels can legally repeat in the array (CRS
+      {visible.map((value, i) => (
+        // Index-prefixed key — values can legally repeat in the array (CRS
         // dedup is a soft contract; defending against duplicates keeps React happy).
-        <Badge key={`${i}-${label}`} variant="secondary" className="text-xs font-mono">
-          {label}
+        <Badge key={`${i}-${value}`} variant="secondary" className="text-xs font-mono">
+          {value}
         </Badge>
       ))}
       {showToggle && (
@@ -124,8 +130,8 @@ function LabelsCell({ labels }: { labels: string[] | null | undefined }) {
           aria-expanded={expanded}
           aria-label={
             expanded
-              ? `Show fewer labels (collapse to first 3 of ${labels.length})`
-              : `Show all ${labels.length} labels`
+              ? `Show fewer ${noun}s (collapse to first 3 of ${values.length})`
+              : `Show all ${values.length} ${noun}s`
           }
         >
           {expanded ? 'show less' : `+${overflowCount}`}
@@ -197,9 +203,14 @@ const columns = [
     },
     enableSorting: false,
   }),
+  columnHelper.accessor('systems', {
+    header: 'System',
+    cell: ({ getValue }) => <ChipListCell values={getValue()} noun="system" />,
+    enableSorting: false,
+  }),
   columnHelper.accessor('labels', {
     header: 'Labels',
-    cell: ({ getValue }) => <LabelsCell labels={getValue()} />,
+    cell: ({ getValue }) => <ChipListCell values={getValue()} noun="label" />,
     enableSorting: false,
   }),
   columnHelper.display({
