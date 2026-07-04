@@ -7,9 +7,7 @@ import { PeopleListInput } from '../ui/PeopleListInput'
 import { ChipsInput } from '../ui/ChipsInput'
 import { FieldInfo } from '../ui/FieldInfo'
 import { FieldLabelText } from '../ui/FieldLabelText'
-import { ArtifactOwnershipEditor } from './ArtifactOwnershipEditor'
-import { useSupportedGroups } from '../../hooks/useSupportedGroups'
-import { fromArtifactId, OWNERSHIP_ALL_VERSIONS, type OwnershipMappingValue } from '../../lib/artifactOwnership'
+import { fromArtifactId, type OwnershipMappingValue } from '../../lib/artifactOwnership'
 import type { ComponentDetail } from '../../lib/types'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../../lib/auth'
@@ -125,10 +123,6 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
     formState: { errors },
   } = form
 
-  // Supported groupId prefixes drive the ownership group-prefix check (CRS rule
-  // #10). Shared (cached) query — also read by the page for the Save gate.
-  const { groups: supportedGroups } = useSupportedGroups()
-
   const componentOwner = watch('componentOwner')
   // parentComponentName / canBeParent moved to the Misc tab (MiscTab.tsx).
   // SYS-039 watchers — PeopleListInput (multi-value) is controlled, not
@@ -148,15 +142,6 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
     ...(component.releaseManager ?? []),
     ...(component.securityChampion ?? []),
   ])
-
-  // Ownership is edited as a whole list by ArtifactOwnershipEditor (not a simple field-array of
-  // inputs), so it is watched + replaced wholesale via setValue.
-  const watchedArtifactIds = watch('artifactIds')
-  // Override mappings must reference an existing configuration range (CRS invariant); offer the
-  // component's distinct non-base ranges.
-  const ownershipConfigRanges = Array.from(
-    new Set((component.configurations ?? []).map((c) => c.versionRange).filter((r) => r && r !== OWNERSHIP_ALL_VERSIONS)),
-  )
 
   // RENAME_COMPONENTS gates the Name input on the edit surface. The same
   // permission is enforced server-side in ComponentControllerV4's PATCH SpEL
@@ -528,24 +513,9 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
         </section>
       )}
 
-      {/* Doc Links moved to the dedicated Documentation tab (DocumentationTab). */}
-      <section data-testid="section-artifact-ids">
-        <div className="flex items-center gap-1 mb-3">
-          <h3 className="text-sm font-medium text-muted-foreground"><FieldLabelText path="component.artifactIds" fallback="Produced Artifacts" /></h3>
-          <FieldInfo path="component.artifactIds" label="Produced Artifacts" />
-        </div>
-        <p className="mb-3 text-[13px] text-muted-foreground">
-          Artifact coordinates — the groupId and artifactId of artifacts produced at the build and published in
-          Artifactory. A component may own several, each with its own rule.
-        </p>
-        <ArtifactOwnershipEditor
-          value={watchedArtifactIds ?? []}
-          configRanges={ownershipConfigRanges}
-          supportedGroups={supportedGroups}
-          disabled={!canEdit}
-          onChange={(next) => setValue('artifactIds', next, { shouldDirty: true, shouldTouch: true })}
-        />
-      </section>
+      {/* Doc Links moved to the dedicated Documentation tab (DocumentationTab).
+          Produced Artifacts moved to the Build tab (ProducedArtifactsSection);
+          its form state still lives in this page-level General form. */}
 
       {/* Who can edit — highlighted read-only footer (owner + RMs + SCs from the
           /editors endpoint; admins also edit). Placed at the bottom of the form

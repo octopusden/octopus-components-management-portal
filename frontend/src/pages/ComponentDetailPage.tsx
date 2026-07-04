@@ -24,6 +24,7 @@ import { DocumentationTab } from '../components/editor/DocumentationTab'
 import { SolutionTab } from '../components/editor/SolutionTab'
 import { HeaderLabelsEditor } from '../components/editor/HeaderLabelsEditor'
 import { MiscTab, MISC_TAB_FIELDS } from '../components/editor/MiscTab'
+import { ProducedArtifactsSection } from '../components/editor/ProducedArtifactsSection'
 import { buildUpdateRequest } from '../lib/component/buildUpdateRequest'
 import { BuildTab } from '../components/editor/BuildTab'
 import { VcsTab } from '../components/editor/VcsTab'
@@ -127,6 +128,10 @@ function mapComponentToForm(component: ComponentDetail): GeneralFormValues {
 // Maps a server 400 field error (or a tab section) to the sidebar section that
 // should auto-switch into view. Identifiers match the Phase 3a nav values.
 function sectionForField(field: string): string | null {
+  // Produced Artifacts render on the Build tab (its form state stays in the
+  // General form), so route an artifactIds 400 there — not General. Checked
+  // first because `artifactIds` is deliberately absent from GENERAL_TAB_FIELDS.
+  if (field === 'artifactIds' || field.startsWith('artifactIds')) return 'build'
   if ((GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(field)) return 'general'
   if ((MISC_TAB_FIELDS as ReadonlyArray<string>).includes(field)) return 'misc'
   if (field.startsWith('build')) return 'build'
@@ -938,7 +943,10 @@ function ComponentDetailEditor() {
 
             <TabsContent value="build">
               <EditSurface canEdit={canEdit} label="Build">
-                <BuildTab section={buildSection} canEdit={canEdit} />
+                <div className="space-y-6">
+                  <BuildTab section={buildSection} canEdit={canEdit} />
+                  <ProducedArtifactsSection form={form} component={component} canEdit={canEdit} />
+                </div>
               </EditSurface>
             </TabsContent>
 
