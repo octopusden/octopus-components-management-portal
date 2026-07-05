@@ -1,7 +1,7 @@
 import type { ArtifactIdRequest, ComponentDetail, ComponentUpdateRequest } from '../types'
 import type { GeneralFormValues } from '../../components/editor/GeneralTab'
 import type { FieldVisibility } from '../../hooks/useFieldConfig'
-import { groupTokens, toArtifactIdRequest } from '../artifactOwnership'
+import { groupTokens, toArtifactIdRequests } from '../artifactOwnership'
 
 // System membership is MULTI-value (component_systems junction). The Portal
 // form holds `systems: string[]` and buildUpdateRequest forwards it with the
@@ -287,7 +287,7 @@ function buildArtifactIdsPatch(
   // Drop mappings with no group token (incomplete rows); the server applies the remaining invariants.
   const cleaned = (values.artifactIds ?? [])
     .filter((m) => groupTokens(m.groups).length > 0)
-    .map(toArtifactIdRequest)
+    .flatMap(toArtifactIdRequests)
   // `?? []` is defensive — see buildDocsPatch (older CRS omits artifactIds).
   const hadPrior = (component.artifactIds ?? []).length > 0
   if (cleaned.length > 0) return { artifactIds: cleaned }
