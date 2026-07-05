@@ -576,7 +576,12 @@ function ComponentDetailEditor() {
           // First non-General offending field decides the section to switch to.
           if (switchTo === null && !(isGeneral && !isMisc)) {
             const target = sectionForField(field)
-            if (target && !(target === 'general')) switchTo = target
+            // Normally 'general' isn't a switch target (RHF general fields render
+            // inline on the default tab). But section-state fields mapped to
+            // General (the Classification Explicit/External toggles, which are NOT
+            // in GENERAL_TAB_FIELDS so `isGeneral` is false) have no inline slot,
+            // so DO navigate there instead of only toasting.
+            if (target && (target !== 'general' || !isGeneral)) switchTo = target
           }
         }
         // Prefer keeping the user on General when a General field also errored.

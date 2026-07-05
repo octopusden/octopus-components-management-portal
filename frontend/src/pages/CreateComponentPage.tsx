@@ -252,8 +252,11 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
       setProfile(next)
       setExplicitAnswer(nextExplicit)
       const flags = flagsForProfile(next, nextExplicit)
-      setValue('distributionExternal', flags.distributionExternal, { shouldValidate: false })
-      setValue('distributionExplicit', flags.distributionExplicit, { shouldValidate: false })
+      // On a real profile change, mark the form dirty so the unsaved-changes
+      // guard fires — in clone mode `isDirty` is the only guard signal (the
+      // scratch `profile !== null` term doesn't apply there).
+      setValue('distributionExternal', flags.distributionExternal, { shouldValidate: false, shouldDirty: changed })
+      setValue('distributionExplicit', flags.distributionExplicit, { shouldValidate: false, shouldDirty: changed })
       if (changed) {
         setValue('name', '', { shouldValidate: false })
         clearErrors('name')
@@ -403,6 +406,11 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
       if (err instanceof ApiError && err.status === 409) {
         message = classifyConflictBody(err.rawBody).errorMessage
           ?? 'A component with this name already exists.'
+        // A save-time uniqueness / data-integrity conflict on Produced Artifacts
+        // routes to the Build step (same as the 400 field-error case), not the
+        // Review banner.
+        const cf = parseServerFieldErrors(err.rawBody)
+        if (cf.get('artifactIds') || cf.get('ownership')) stepId = 'build'
       }
       if (err instanceof ApiError && err.status === 400) {
         const fieldErrors = parseServerFieldErrors(err.rawBody)
@@ -451,7 +459,13 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
     ownerValidating ||
     !!jiraKeyError ||
     fcLoading ||
-    userLoading
+    userLoading ||
+    // Client-side blocking issues: any invalid field (schema parse) or, in
+    // scratch, an unchosen Profile. Excludes serverError (so a failed submit can
+    // be retried after the user edits). Prevents bypassing the Profile gate by
+    // jumping straight to Review via the stepper.
+    parseIssues.length > 0 ||
+    (!isClone && profile === null)
 
   // ---- Rendering helpers ----------------------------------------------------
 
