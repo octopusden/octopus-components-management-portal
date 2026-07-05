@@ -146,6 +146,28 @@ describe('ArtifactOwnershipEditor', () => {
     expect(screen.queryByText(stale)).not.toBeInTheDocument()
   })
 
+  it('clears the stale server legacy pattern when the Group ID is edited without splitting', async () => {
+    const stale = '(?!(?:stale-sibling)$)[\\w-\\.]+'
+    render(
+      <Harness
+        initial={[
+          {
+            id: 'm1',
+            base: true,
+            range: null,
+            groups: 'com.example.a',
+            mode: 'ALL_EXCEPT_CLAIMED',
+            tokens: [],
+            legacyArtifactIdPattern: stale,
+          },
+        ]}
+      />,
+    )
+    await userEvent.type(screen.getByLabelText('Group ID'), 'x')
+    fireEvent.click(screen.getByText('Legacy preview'))
+    expect(screen.queryByText(stale)).not.toBeInTheDocument()
+  })
+
   it('legacy preview renders the catch-all for an ALL mapping', () => {
     render(<Harness initial={[base()]} />)
     fireEvent.click(screen.getByText('Legacy preview'))

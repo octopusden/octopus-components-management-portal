@@ -45,7 +45,7 @@ export function ArtifactOwnershipEditor({ value, onChange, configRanges, support
     if (!raw.includes(',')) return
     const tokens = groupTokens(raw)
     if (tokens.length <= 1) {
-      patch(id, { groups: tokens[0] ?? '' })
+      patch(id, { groups: tokens[0] ?? '', legacyArtifactIdPattern: undefined })
       return
     }
     onChange(
@@ -236,7 +236,9 @@ function MappingCard({ mapping, allMappings, conflict, configRanges, supportedGr
             aria-label="Group ID"
             value={mapping.groups}
             disabled={disabled}
-            onChange={(e) => onPatch({ groups: e.target.value })}
+            // Changing the group invalidates the server-computed legacy pattern (ALL_EXCEPT preview) —
+            // drop it so the preview recomputes locally until the server returns a fresh value.
+            onChange={(e) => onPatch({ groups: e.target.value, legacyArtifactIdPattern: undefined })}
             onFocus={(e) => {
               groupAtFocus.current = e.target.value
             }}
