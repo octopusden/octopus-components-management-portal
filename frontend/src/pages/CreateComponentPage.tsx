@@ -551,6 +551,23 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
   const reenterBorder = isClone ? 'border-amber-400 focus-visible:ring-amber-400' : ''
   const reenterBadge = isClone ? <ReenterPill /> : undefined
 
+  // Roving-radio arrow-key navigation, shared by the profile cards and the
+  // explicit-distribution segment (mirrors ui/ModeRadioGroup).
+  const moveRadio = (
+    e: React.KeyboardEvent,
+    count: number,
+    index: number,
+    select: (i: number) => void,
+  ) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+      e.preventDefault()
+      select((index + 1) % count)
+    } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+      e.preventDefault()
+      select((index - 1 + count) % count)
+    }
+  }
+
   const renderProfileStep = () => (
     <div className="space-y-6">
       <div>
@@ -559,16 +576,25 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
           The profile sets how the component is classified and how its key is named.
         </p>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {PROFILE_META.map((p) => {
+      <div role="radiogroup" aria-label="Component profile" className="grid gap-3 sm:grid-cols-2">
+        {PROFILE_META.map((p, idx) => {
           const selected = profile === p.id
+          const tabbable = selected || (profile === null && idx === 0)
           return (
             <button
               key={p.id}
               type="button"
+              role="radio"
+              aria-checked={selected}
               aria-label={p.label}
+              tabIndex={tabbable ? 0 : -1}
               onClick={() => applyProfile(p.id, explicitAnswer)}
-              aria-pressed={selected}
+              onKeyDown={(e) =>
+                moveRadio(e, PROFILE_META.length, idx, (i) => {
+                  const next = PROFILE_META[i]
+                  if (next) applyProfile(next.id, explicitAnswer)
+                })
+              }
               className={cn(
                 'flex gap-3 rounded-md border p-3 text-left transition-colors',
                 selected ? 'border-ring bg-muted' : 'border-border hover:bg-muted/50',
@@ -608,22 +634,33 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
             Does the component have its own distribution — can it be shipped as a separate unit? No
             → it is shipped inside a packaging component&apos;s distribution.
           </p>
-          <div className="flex gap-2 pt-1">
+          <div role="radiogroup" aria-label="Has explicit distribution" className="flex gap-2 pt-1">
             {[
               { label: 'Yes', value: true },
               { label: 'No', value: false },
-            ].map((opt) => (
-              <Button
-                key={opt.label}
-                type="button"
-                variant={explicitAnswer === opt.value ? 'default' : 'outline'}
-                size="sm"
-                aria-pressed={explicitAnswer === opt.value}
-                onClick={() => applyProfile(profile, opt.value)}
-              >
-                {opt.label}
-              </Button>
-            ))}
+            ].map((opt, idx, arr) => {
+              const selected = explicitAnswer === opt.value
+              return (
+                <Button
+                  key={opt.label}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  tabIndex={selected ? 0 : -1}
+                  variant={selected ? 'default' : 'outline'}
+                  size="sm"
+                  onKeyDown={(e) =>
+                    moveRadio(e, arr.length, idx, (i) => {
+                      const opt = arr[i]
+                      if (opt) applyProfile(profile, opt.value)
+                    })
+                  }
+                  onClick={() => applyProfile(profile, opt.value)}
+                >
+                  {opt.label}
+                </Button>
+              )
+            })}
           </div>
         </fieldset>
       )}

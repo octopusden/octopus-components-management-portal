@@ -158,7 +158,7 @@ describe('CreateComponentPage — scratch profile gate', () => {
     expect(screen.getByText('Choose component profile')).toBeDefined()
     // Next is disabled with no profile selected.
     expect((screen.getByRole('button', { name: /^next$/i }) as HTMLButtonElement).disabled).toBe(true)
-    await userEvent.click(screen.getByRole('button', { name: /Regular internal component/i }))
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
     // Regular profiles ask the explicit-distribution question.
     expect(screen.getByText('Has explicit distribution?')).toBeDefined()
     expect((screen.getByRole('button', { name: /^next$/i }) as HTMLButtonElement).disabled).toBe(false)
@@ -179,7 +179,7 @@ describe('CreateComponentPage — scratch profile gate', () => {
 
   it('a solution key that lacks "-solution" is rejected for the Solution profile', async () => {
     renderWizard()
-    await userEvent.click(screen.getByRole('button', { name: /^Solution$/i }))
+    await userEvent.click(screen.getByRole('radio', { name: /^Solution$/i }))
     await clickNext()
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
     await waitFor(() => expect(screen.getByText(/must contain "-solution"/i)).toBeDefined())
@@ -190,7 +190,7 @@ describe('CreateComponentPage — scratch create flow', () => {
   it('walks the steps and POSTs a from-scratch payload, then navigates to the new component', async () => {
     renderWizard()
     // Profile: regular internal, implicit distribution (not gated).
-    await userEvent.click(screen.getByRole('button', { name: /Regular internal component/i }))
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
     await clickNext()
 
     // General
@@ -236,7 +236,7 @@ describe('CreateComponentPage — scratch create flow', () => {
       new ApiError(409, 'conflict', JSON.stringify({ errorMessage: 'artifactIds: already owned by another component' })),
     )
     renderWizard()
-    await userEvent.click(screen.getByRole('button', { name: /Regular internal component/i }))
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
     await clickNext()
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
     await commitOwner('alice')
@@ -258,7 +258,7 @@ describe('CreateComponentPage — scratch create flow', () => {
 
   it('enforces the VCS Path rule for a VCS-requiring build system and marks the step invalid', async () => {
     renderWizard()
-    await userEvent.click(screen.getByRole('button', { name: /Regular internal component/i }))
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
     await clickNext()
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
     await commitOwner('alice')
@@ -278,7 +278,7 @@ describe('CreateComponentPage — scratch create flow', () => {
 describe('CreateComponentPage — Produced Artifacts rows', () => {
   it('gates "Add one more groupId" on a filled Group ID', async () => {
     renderWizard()
-    await userEvent.click(screen.getByRole('button', { name: /Regular internal component/i }))
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
     await clickNext()
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
     await commitOwner('alice')
@@ -295,7 +295,7 @@ describe('CreateComponentPage — Produced Artifacts rows', () => {
 describe('CreateComponentPage — Solution profile gates the distribution coordinate', () => {
   it('offers the Maven/Package coordinate when explicit+external (Solution)', async () => {
     renderWizard()
-    await userEvent.click(screen.getByRole('button', { name: /^Solution$/i }))
+    await userEvent.click(screen.getByRole('radio', { name: /^Solution$/i }))
     await clickNext()
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'my-solution')
     await commitOwner('alice')
@@ -332,7 +332,7 @@ describe('CreateComponentPage — dialog shell + vertical stepper', () => {
 describe('CreateComponentPage — deferred (non-eager) validation', () => {
   it('does not flag an unvisited step as invalid on load', async () => {
     renderWizard()
-    await userEvent.click(screen.getByRole('button', { name: /Regular internal component/i }))
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
     // General has empty required fields, but the user has not visited it yet, so
     // the rail must not show it as invalid on first load.
     expect(screen.getByRole('button', { name: 'General' }).getAttribute('data-status')).not.toBe('invalid')
@@ -340,7 +340,7 @@ describe('CreateComponentPage — deferred (non-eager) validation', () => {
 
   it('marks a step invalid only after it has been visited and left', async () => {
     renderWizard()
-    await userEvent.click(screen.getByRole('button', { name: /Regular internal component/i }))
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
     await clickNext() // enter General (now the active step)
     // The current step is never shown invalid while you are on it.
     expect(screen.getByRole('button', { name: 'General' }).getAttribute('data-status')).toBe('active')
@@ -353,9 +353,37 @@ describe('CreateComponentPage — deferred (non-eager) validation', () => {
 
   it('marks a visited, valid step as done in the rail', async () => {
     renderWizard()
-    await userEvent.click(screen.getByRole('button', { name: /Regular internal component/i }))
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
     await clickNext() // Profile is now visited, valid, and no longer current.
     expect(screen.getByRole('button', { name: 'Profile' }).getAttribute('data-status')).toBe('done')
+  })
+})
+
+describe('CreateComponentPage — profile radio semantics', () => {
+  it('exposes the profile cards as a single-choice radio group', async () => {
+    renderWizard()
+    expect(screen.getByRole('radiogroup', { name: /component profile/i })).toBeDefined()
+    const internal = screen.getByRole('radio', { name: /Regular internal component/i })
+    expect(internal.getAttribute('aria-checked')).toBe('false')
+    await userEvent.click(internal)
+    expect(internal.getAttribute('aria-checked')).toBe('true')
+    // The explicit-distribution answer is its own radio group for Regular profiles.
+    expect(screen.getByRole('radiogroup', { name: /explicit distribution/i })).toBeDefined()
+    expect(screen.getByRole('radio', { name: 'No' }).getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('moves the selection with arrow keys', async () => {
+    renderWizard()
+    const external = screen.getByRole('radio', { name: /Regular external component/i })
+    await userEvent.click(external)
+    external.focus()
+    await userEvent.keyboard('{ArrowDown}')
+    // Arrow advances to the next profile (Regular internal is last in PROFILE_META).
+    await waitFor(() =>
+      expect(
+        screen.getByRole('radio', { name: /Regular internal component/i }).getAttribute('aria-checked'),
+      ).toBe('true'),
+    )
   })
 })
 
@@ -387,7 +415,7 @@ describe('CreateComponentPage — clone unsaved-changes guard', () => {
     // RHF's isDirty never flips — but the submitted `solution` flag changed, so the
     // guard must still block navigation away.
     await userEvent.click(screen.getByRole('button', { name: 'Profile' }))
-    await userEvent.click(screen.getByRole('button', { name: /^Solution$/i }))
+    await userEvent.click(screen.getByRole('radio', { name: /^Solution$/i }))
     await waitFor(() =>
       expect(screen.getByTestId('unsaved-guard').getAttribute('data-when')).toBe('true'),
     )
