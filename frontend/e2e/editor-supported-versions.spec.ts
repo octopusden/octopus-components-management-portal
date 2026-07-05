@@ -23,7 +23,11 @@ import { test, expect, type Page } from '@playwright/test'
 const SUFFIX = Date.now().toString(36)
 const COMPONENT = `e2e-sv-${SUFFIX}`
 const RANGE_A = '[1.0,2.0)'
-const RANGE_B = '[2.0,3.0)'
+// Non-adjacent to RANGE_A (gap at [2.0,3.0)): CRS collapses the coverage into its
+// canonical MERGED union, so an adjacent range would coalesce with RANGE_A into a
+// single row and neither verbatim range would survive the reload. A disjoint range
+// persists as its own row, which is what the "both ranges present" assertion needs.
+const RANGE_B = '[3.0,4.0)'
 
 async function mutationHeaders(page: Page): Promise<Record<string, string>> {
   await page.request.get('/rest/api/4/components?page=0&size=1')
@@ -89,7 +93,9 @@ test.describe.serial('Supported Versions ride the combined Save (admin, real CRS
     await page.getByRole('button', { name: `Remove supported range ${RANGE_A}` }).click()
     await expect(confirm).toBeVisible()
     await confirm.getByRole('button', { name: /widen to all versions/i }).click()
-    await expect(page.getByText('All versions')).toBeVisible()
+    // exact: match only the "All versions" coverage-state label, not the
+    // "Set to all versions" widen button (a substring match would hit both).
+    await expect(page.getByText('All versions', { exact: true })).toBeVisible()
     await expect(page.getByText('Unsaved changes')).toBeVisible()
 
     // Discard → reverts to the server-scoped range; the silent widen never happened.
@@ -101,7 +107,9 @@ test.describe.serial('Supported Versions ride the combined Save (admin, real CRS
     await page.reload({ waitUntil: 'networkidle' })
     await page.getByRole('tab', { name: /supported versions/i }).click()
     await expect(page.getByText(RANGE_A)).toBeVisible()
-    await expect(page.getByText('All versions')).toBeHidden()
+    // exact: the "Set to all versions" button is present in bounded mode and a
+    // substring match on "All versions" would wrongly fail this assertion.
+    await expect(page.getByText('All versions', { exact: true })).toBeHidden()
   })
 
   test('adding a range flows through the SaveBar → Review → separate PUT and persists', async ({ page }) => {
