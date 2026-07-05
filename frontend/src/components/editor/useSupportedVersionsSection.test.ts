@@ -105,6 +105,33 @@ describe('useSupportedVersionsSection', () => {
     expect(result.current.state.all).toBe(true)
   })
 
+  it('save() forwards jiraTaskKey/changeComment into the PUT when present (variant B)', async () => {
+    mockData = resp({ ranges: ['[1.0,2.0)'] })
+    mockMutateAsync.mockResolvedValue(resp({ ranges: ['[1.0,2.0)', '[2.0,)'] }))
+    const { result } = renderHook(() => useSupportedVersionsSection('c-1'))
+    act(() => result.current.addRange('[2.0,)'))
+    await act(async () => {
+      await result.current.save({ jiraTaskKey: 'ABC-123', changeComment: 'widen coverage' })
+    })
+    expect(mockMutateAsync.mock.calls[0]?.[0]).toEqual({
+      ranges: ['[1.0,2.0)', '[2.0,)'],
+      jiraTaskKey: 'ABC-123',
+      changeComment: 'widen coverage',
+    })
+  })
+
+  it('save() omits blank/absent metadata from the PUT body (clean request)', async () => {
+    mockData = resp({ ranges: ['[1.0,2.0)'] })
+    mockMutateAsync.mockResolvedValue(resp({ all: true }))
+    const { result } = renderHook(() => useSupportedVersionsSection('c-1'))
+    act(() => result.current.setAllVersions())
+    await act(async () => {
+      await result.current.save({ jiraTaskKey: '   ', changeComment: '' })
+    })
+    // Blank values are dropped — the body stays exactly {all:true}, no empty strings.
+    expect(mockMutateAsync.mock.calls[0]?.[0]).toEqual({ all: true })
+  })
+
   it('adopts a fresh server value while clean (refetch), but keeps an in-progress edit', () => {
     mockData = resp({ ranges: ['[1.0,2.0)'] })
     const { result, rerender } = renderHook(() => useSupportedVersionsSection('c-1'))

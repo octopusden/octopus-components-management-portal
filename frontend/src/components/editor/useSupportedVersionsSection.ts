@@ -50,7 +50,7 @@ export interface SupportedVersionsSection {
   removeRange: (range: string) => void
   setAllVersions: () => void
   reset: () => void
-  save: () => Promise<void>
+  save: (meta?: { jiraTaskKey?: string; changeComment?: string }) => Promise<void>
 }
 
 export function useSupportedVersionsSection(componentId: string): SupportedVersionsSection {
@@ -115,8 +115,15 @@ export function useSupportedVersionsSection(componentId: string): SupportedVersi
       setState((p) => ({ ...p, ranges: p.ranges.filter((r) => r !== range) })),
     setAllVersions: () => setState({ all: true, ranges: [] }),
     reset: () => reseedTo(snapshotFrom(data)),
-    save: async () => {
-      const request = state.all ? { all: true } : { ranges: state.ranges }
+    save: async (meta) => {
+      // Change metadata (Jira task key + comment) is recorded on the audit row by
+      // CRS. Include each only when non-blank so the body stays clean (a blank Jira
+      // key would pass the server's `^\s*$` pattern but adds nothing).
+      const meta_ = {
+        ...(meta?.jiraTaskKey?.trim() ? { jiraTaskKey: meta.jiraTaskKey } : {}),
+        ...(meta?.changeComment?.trim() ? { changeComment: meta.changeComment } : {}),
+      }
+      const request = state.all ? { all: true, ...meta_ } : { ranges: state.ranges, ...meta_ }
       const res = await updateMutation.mutateAsync(request)
       // Adopt the server's MERGED coverage as the new baseline AND draft, so the
       // tab shows the canonical set and reads clean even when the server

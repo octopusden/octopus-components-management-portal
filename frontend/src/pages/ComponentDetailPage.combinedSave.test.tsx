@@ -642,4 +642,34 @@ describe('ComponentDetailPage — combined PATCH (Phase 3b)', () => {
     expect(patch).toHaveBeenCalledOnce()
     expect(order).toEqual(['patch', 'put'])
   })
+
+  // Variant B: the Jira task key + comment typed in the Review dialog must reach
+  // the supported-versions PUT on a coverage-only save (previously dropped — the
+  // PUT had no field for them and the combined PATCH never fired).
+  it('threads Review metadata (jira key + comment) into a supported-versions-only PUT (variant B)', async () => {
+    svMock.data = { all: false, ranges: ['[1.0,2.0)'], warnings: [] }
+    svMock.mutateAsync.mockResolvedValue({ all: false, ranges: ['[1.0,2.0)', '[2.0,)'], warnings: [] })
+    const patch = vi.fn(() => Promise.resolve())
+    renderPage(baseComponent, patch)
+
+    await openTab(/Supported Versions/)
+    fireEvent.change(screen.getByLabelText('New supported version range'), { target: { value: '[2.0,)' } })
+    fireEvent.click(screen.getByRole('button', { name: /add range/i }))
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    const dialog = await screen.findByRole('dialog')
+    // The Review dialog shows the metadata inputs even for a coverage-only change.
+    fireEvent.change(within(dialog).getByLabelText(/jira task key/i), { target: { value: 'ABC-123' } })
+    fireEvent.change(within(dialog).getByLabelText(/comment/i), { target: { value: 'widen coverage' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: /^confirm$/i }))
+
+    await waitFor(() =>
+      expect(svMock.mutateAsync).toHaveBeenCalledWith({
+        ranges: ['[1.0,2.0)', '[2.0,)'],
+        jiraTaskKey: 'ABC-123',
+        changeComment: 'widen coverage',
+      }),
+    )
+    expect(patch).not.toHaveBeenCalled()
+  })
 })

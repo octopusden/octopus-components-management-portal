@@ -525,9 +525,15 @@ function ComponentDetailEditor() {
       }
       // Supported-versions coverage persists via its OWN PUT (off the PATCH
       // contract), sequenced AFTER the PATCH. The hook re-seeds its draft to the
-      // MERGED server response, so the tab reads clean once this resolves.
+      // MERGED server response, so the tab reads clean once this resolves. The
+      // change metadata rides along on this PUT too (variant B) — the SV endpoint
+      // records it on the audit row, so a coverage-only save keeps the Jira key /
+      // comment the user typed in the Review dialog.
       if (supportedVersionsSection.isDirty) {
-        await supportedVersionsSection.save()
+        await supportedVersionsSection.save({
+          jiraTaskKey: meta.jiraTaskKey,
+          changeComment: meta.changeComment,
+        })
       }
       // Clear the override draft after a successful save. The combined PATCH
       // persisted the desired set; useUpdateComponent invalidates

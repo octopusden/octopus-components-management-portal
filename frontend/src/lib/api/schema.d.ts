@@ -1471,6 +1471,8 @@ export interface components {
         };
         SupportedVersionsRequest: {
             all?: boolean;
+            changeComment?: string;
+            jiraTaskKey?: string;
             ranges?: string[];
         };
         SupportedVersionsResponse: {
