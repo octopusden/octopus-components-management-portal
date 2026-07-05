@@ -302,6 +302,67 @@ describe('CreateComponentPage — Solution profile gates the distribution coordi
   })
 })
 
+describe('CreateComponentPage — dialog shell + vertical stepper', () => {
+  it('presents the wizard inside a dialog with the vertical stepper subtitles', () => {
+    renderWizard()
+    expect(screen.getByRole('dialog')).toBeDefined()
+    // Vertical rail shows each step's one-line subtitle.
+    expect(screen.getByText('Identity & ownership')).toBeDefined()
+    expect(screen.getByText('Build system & artifacts')).toBeDefined()
+    expect(screen.getByText('Summary & save')).toBeDefined()
+    // Footer position indicator.
+    expect(screen.getByText(/step 1 of 7/i)).toBeDefined()
+  })
+
+  it('closing the dialog navigates back to the components list', async () => {
+    renderWizard()
+    // Fresh scratch load: no profile chosen and the form is pristine, so the
+    // unsaved-changes guard is inactive and the close goes straight through.
+    await userEvent.click(screen.getByRole('button', { name: /close/i }))
+    await waitFor(() => expect(screen.getByTestId('list-page')).toBeDefined())
+  })
+})
+
+describe('CreateComponentPage — deferred (non-eager) validation', () => {
+  it('does not flag an unvisited step as invalid on load', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('button', { name: /Regular internal component/i }))
+    // General has empty required fields, but the user has not visited it yet, so
+    // the rail must not show it as invalid on first load.
+    expect(screen.getByRole('button', { name: 'General' }).getAttribute('data-status')).not.toBe('invalid')
+  })
+
+  it('marks a step invalid only after it has been visited and left', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('button', { name: /Regular internal component/i }))
+    await clickNext() // enter General (now the active step)
+    // The current step is never shown invalid while you are on it.
+    expect(screen.getByRole('button', { name: 'General' }).getAttribute('data-status')).toBe('active')
+    // Jump away via the rail, leaving General incomplete → now it shows invalid.
+    await userEvent.click(screen.getByRole('button', { name: 'Build' }))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'General' }).getAttribute('data-status')).toBe('invalid'),
+    )
+  })
+
+  it('marks a visited, valid step as done in the rail', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('button', { name: /Regular internal component/i }))
+    await clickNext() // Profile is now visited, valid, and no longer current.
+    expect(screen.getByRole('button', { name: 'Profile' }).getAttribute('data-status')).toBe('done')
+  })
+})
+
+describe('CreateComponentPage — clone re-enter affordances', () => {
+  it('shows a re-enter pill on the unique Component Key field in clone mode', async () => {
+    mockUseComponent.mockReturnValue({ data: makeSource(), isLoading: false, error: null })
+    renderWizard('/components/new?from=c-1')
+    // Clone opens on General, where the Component Key must be re-entered.
+    // The banner uses lowercase "(re-enter)"; the field pill is the exact "Re-enter".
+    expect(screen.getAllByText('Re-enter').length).toBeGreaterThan(0)
+  })
+})
+
 describe('CreateComponentPage — clone mode', () => {
   it('prefills from the source, skips the Profile step and shows the Included/Excluded banner', async () => {
     mockUseComponent.mockReturnValue({ data: makeSource(), isLoading: false, error: null })

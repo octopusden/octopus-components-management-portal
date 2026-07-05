@@ -7,9 +7,9 @@ import {
   type UseFormRegisterReturn,
 } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Check, ChevronLeft, ChevronRight, Plus, X, AlertCircle } from 'lucide-react'
-import { Layout } from '../components/Layout'
+import { Check, ChevronLeft, ChevronRight, Plus, X, AlertCircle, Loader2 } from 'lucide-react'
 import { Button } from '../components/ui/button'
+import { Dialog, DialogContent, DialogTitle } from '../components/ui/dialog'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Badge } from '../components/ui/badge'
@@ -68,6 +68,16 @@ const STEP_LABELS: Record<StepId, string> = {
   review: 'Review & create',
 }
 
+const STEP_SUBTITLES: Record<StepId, string> = {
+  profile: 'What are you creating?',
+  general: 'Identity & ownership',
+  build: 'Build system & artifacts',
+  vcs: 'Repository & branch',
+  jira: 'Project & versions',
+  distribution: 'Docker & coordinate',
+  review: 'Summary & save',
+}
+
 const SCRATCH_STEPS: StepId[] = ['profile', 'general', 'build', 'vcs', 'jira', 'distribution', 'review']
 // Clone keeps the Profile step too: the profile is pre-derived from the source
 // but stays editable (changing it resets the Component Key + recomputes flags),
@@ -115,7 +125,13 @@ export function CreateComponentButton() {
  * `/components/new?from={id}` (clone). Replaces the old modal. Reuses the shared
  * create form model (schema, defaults, buildCreateRequest) and shared controls.
  */
+// The wizard is presented as a near-fullscreen dialog over the components list.
+// The width override drops the global `sm:max-w-lg` at the call site only.
+const DIALOG_CLASS =
+  'w-[96vw] max-w-[1560px] h-[96vh] p-0 overflow-hidden flex flex-col gap-0 rounded-[14px]'
+
 export function CreateComponentPage() {
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const sourceId = searchParams.get('from') ?? ''
   const isClone = !!sourceId
@@ -126,31 +142,45 @@ export function CreateComponentPage() {
   const ready = (!isClone || (!!source && !error)) && (defaults.isSuccess || defaults.isError)
 
   return (
-    <Layout>
-      {isClone && error ? (
-        <InlineError
-          message={
-            <>
-              Failed to load the source component:{' '}
-              {error instanceof Error ? error.message : String(error)}
-            </>
-          }
-        />
-      ) : !ready ? (
-        <div className="mx-auto max-w-2xl space-y-4">
-          <SkeletonBlock className="h-9 w-64" />
-          <SkeletonBlock className="h-9 w-full" />
-          <SkeletonBlock className="h-9 w-full" />
-        </div>
-      ) : (
-        <CreateComponentWizard
-          key={source?.id ?? 'scratch'}
-          source={source ?? null}
-          isClone={isClone}
-          defaults={componentDefaults}
-        />
-      )}
-    </Layout>
+    <Dialog
+      open
+      onOpenChange={(next) => {
+        // The dialog is always open; closing it (Cancel / ✕ / Esc / backdrop)
+        // navigates back to the list. The UnsavedChangesGuard still intercepts a
+        // dirty form because the navigation goes through the router.
+        if (!next) navigate('/components')
+      }}
+    >
+      <DialogContent className={DIALOG_CLASS}>
+        {isClone && error ? (
+          <div className="flex flex-1 flex-col gap-4 p-6">
+            <DialogTitle>Clone component</DialogTitle>
+            <InlineError
+              message={
+                <>
+                  Failed to load the source component:{' '}
+                  {error instanceof Error ? error.message : String(error)}
+                </>
+              }
+            />
+          </div>
+        ) : !ready ? (
+          <div className="flex flex-1 flex-col gap-4 p-6">
+            <DialogTitle className="sr-only">Create component</DialogTitle>
+            <SkeletonBlock className="h-9 w-64" />
+            <SkeletonBlock className="h-9 w-full" />
+            <SkeletonBlock className="h-9 w-full" />
+          </div>
+        ) : (
+          <CreateComponentWizard
+            key={source?.id ?? 'scratch'}
+            source={source ?? null}
+            isClone={isClone}
+            defaults={componentDefaults}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -340,6 +370,17 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
   // ---- Steps + cross-step validity ------------------------------------------
   const steps = isClone ? CLONE_STEPS : SCRATCH_STEPS
   const [current, setCurrent] = useState<StepId>(isClone ? 'general' : 'profile')
+  // Steps the user has landed on, plus whether a Create was attempted. Together
+  // they gate the rail's invalid/done markers so nothing is flagged eagerly on
+  // first load — only after a step is visited (and left) or a submit is tried.
+  const [visitedSteps, setVisitedSteps] = useState<Set<StepId>>(
+    () => new Set<StepId>([isClone ? 'general' : 'profile']),
+  )
+  const [attempted, setAttempted] = useState(false)
+  const enterStep = (step: StepId) => {
+    setCurrent(step)
+    setVisitedSteps((prev) => (prev.has(step) ? prev : new Set(prev).add(step)))
+  }
 
   // Cross-step validity from a full parse (independent of RHF's touched state) so
   // the stepper can mark ANY step invalid, not just the current one.
@@ -361,21 +402,34 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
     return set
   }, [parseIssues, isClone, profile, jiraKeyError, serverError])
 
+  // Invalid steps actually shown as such: only those visited (or all, once a
+  // Create was attempted), and never the step you are currently on until you
+  // leave it or submit. This is the eager-validation fix.
+  const shownInvalidSteps = useMemo(() => {
+    const set = new Set<StepId>()
+    for (const step of invalidSteps) {
+      if (!attempted && !visitedSteps.has(step)) continue
+      if (step === current && !attempted) continue
+      set.add(step)
+    }
+    return set
+  }, [invalidSteps, visitedSteps, attempted, current])
+
   const currentIndex = steps.indexOf(current)
   const isLast = currentIndex === steps.length - 1
   const currentValid = !invalidSteps.has(current)
 
   const goToStep = (step: StepId) => {
-    if (steps.includes(step)) setCurrent(step)
+    if (steps.includes(step)) enterStep(step)
   }
   const goNext = () => {
     if (!currentValid) return
     const next = steps[currentIndex + 1]
-    if (next) setCurrent(next)
+    if (next) enterStep(next)
   }
   const goBack = () => {
     const prev = steps[currentIndex - 1]
-    if (prev) setCurrent(prev)
+    if (prev) enterStep(prev)
   }
 
   // On a successful create, flip `submitted` (releases the unsaved-changes guard)
@@ -388,6 +442,7 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
   }, [submitted, createdPath, navigate])
 
   async function onSubmit(formValues: CreateFormValues) {
+    setAttempted(true)
     if (jiraKeyError) return
     setServerError(null)
     try {
@@ -452,7 +507,7 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
         }
       }
       setServerError({ message, stepId })
-      setCurrent(stepId)
+      enterStep(stepId)
       toast({ title: 'Failed to create component', description: message, variant: 'destructive' })
     }
   }
@@ -475,6 +530,11 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
 
   // ---- Rendering helpers ----------------------------------------------------
 
+  // Amber input border for the unique-per-component fields the user must re-enter
+  // in clone mode (paired with the <ReenterPill /> on the label).
+  const reenterBorder = isClone ? 'border-amber-400 focus-visible:ring-amber-400' : ''
+  const reenterBadge = isClone ? <ReenterPill /> : undefined
+
   const renderProfileStep = () => (
     <div className="space-y-6">
       <div>
@@ -483,7 +543,7 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
           The profile sets how the component is classified and how its key is named.
         </p>
       </div>
-      <div className="grid gap-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         {PROFILE_META.map((p) => {
           const selected = profile === p.id
           return (
@@ -494,19 +554,37 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
               onClick={() => applyProfile(p.id, explicitAnswer)}
               aria-pressed={selected}
               className={cn(
-                'rounded-md border p-4 text-left transition-colors',
-                selected ? 'border-primary ring-1 ring-primary' : 'border-border hover:bg-muted/50',
+                'flex gap-3 rounded-md border p-3 text-left transition-colors',
+                selected ? 'border-ring bg-muted' : 'border-border hover:bg-muted/50',
               )}
             >
-              <div className="flex items-center gap-2">
+              <span
+                aria-hidden
+                className={cn(
+                  'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border',
+                  selected ? 'border-ring' : 'border-muted-foreground/40',
+                )}
+              >
+                {selected && <span className="h-2 w-2 rounded-full bg-foreground" />}
+              </span>
+              <span className="flex flex-col">
                 <span className="font-medium">{p.label}</span>
-                {selected && <Check className="h-4 w-4 text-primary" />}
-              </div>
-              <p className="mt-1 text-sm text-muted-foreground">{p.description}</p>
+                <span className="mt-1 text-sm text-muted-foreground">{p.description}</span>
+              </span>
             </button>
           )
         })}
       </div>
+      {profile && (
+        <p className="text-sm text-muted-foreground">
+          This component will be:{' '}
+          <span className="font-medium text-foreground">{external ? 'External' : 'Internal'}</span>
+          {' · '}
+          <span className="font-medium text-foreground">
+            {explicit ? 'Explicit' : 'Not explicit'}
+          </span>
+        </p>
+      )}
       {profile && PROFILE_META.find((p) => p.id === profile)?.asksExplicit && (
         <fieldset className="space-y-2 rounded-md border border-border p-4">
           <legend className="px-1 text-sm font-medium">Has explicit distribution?</legend>
@@ -548,8 +626,8 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
   const renderGeneralStep = () => (
     <div className="space-y-6">
       <SectionHeader title="Identity" />
-      <Field label="Component Key" htmlFor="create-name" path="component.name" required>
-        <Input id="create-name" placeholder="my-component" autoFocus {...register('name')} />
+      <Field label="Component Key" htmlFor="create-name" path="component.name" required badge={reenterBadge}>
+        <Input id="create-name" className={reenterBorder} placeholder="my-component" autoFocus {...register('name')} />
         <FieldError message={errors.name?.message} />
       </Field>
       {editable('displayName') && (
@@ -724,10 +802,10 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
       <SectionHeader title="VCS" />
       {vcsApplies ? (
         <>
-          <Field label="VCS Path" htmlFor="create-vcsUrl" path="vcs.vcsPath" required>
+          <Field label="VCS Path" htmlFor="create-vcsUrl" path="vcs.vcsPath" required badge={reenterBadge}>
             <Input
               id="create-vcsUrl"
-              className="font-mono text-xs"
+              className={cn('font-mono text-xs', reenterBorder)}
               placeholder={vcsUrlPlaceholder}
               aria-required
               aria-invalid={Boolean(errors.vcsUrl)}
@@ -771,9 +849,10 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
   const renderJiraStep = () => (
     <div className="space-y-6">
       <SectionHeader title="Jira project" />
-      <Field label="Jira Project Key" htmlFor="create-jiraProjectKey" path="jira.projectKey" required>
+      <Field label="Jira Project Key" htmlFor="create-jiraProjectKey" path="jira.projectKey" required badge={reenterBadge}>
         <Input
           id="create-jiraProjectKey"
+          className={reenterBorder}
           placeholder="JIRA project key"
           aria-required
           aria-invalid={Boolean(errors.jiraProjectKey)}
@@ -855,12 +934,13 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
       {gated ? (
         <>
           <div className="space-y-1.5">
-            <Label htmlFor="create-coordinate-type">
+            <Label htmlFor="create-coordinate-type" className="flex items-center gap-1">
               Distribution coordinate <span className="text-destructive">*</span>
+              {reenterBadge}
             </Label>
             <select
               id="create-coordinate-type"
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+              className={cn('h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm', reenterBorder)}
               value={coordinateType}
               onChange={(e) => selectCoordinateType(e.target.value as CreateFormValues['coordinate']['type'])}
             >
@@ -911,8 +991,11 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
       ) : (
         <>
           <div className="space-y-1.5">
-            <Label htmlFor="create-imageName">Image Name</Label>
-            <Input id="create-imageName" placeholder="image name" aria-label="Image name" {...register('coordinate.imageName')} />
+            <Label htmlFor="create-imageName" className="flex items-center gap-1">
+              Image Name
+              {reenterBadge}
+            </Label>
+            <Input id="create-imageName" className={reenterBorder} placeholder="image name" aria-label="Image name" {...register('coordinate.imageName')} />
           </div>
           <p className="text-xs text-muted-foreground">
             Maven / Package distribution coordinates are available only for an explicit external
@@ -1002,93 +1085,119 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
     : 'Create component'
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="mx-auto max-w-4xl pb-24">
+    <form onSubmit={handleSubmit(onSubmit)} className="flex h-full flex-col overflow-hidden">
       <UnsavedChangesGuard when={(isDirty || (!isClone && profile !== null)) && !submitted} />
 
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">{headerTitle}</h1>
-        <Button type="button" variant="ghost" onClick={() => navigate('/components')}>
-          Cancel
-        </Button>
+      {/* Header bar */}
+      <div className="flex items-center gap-3 border-b px-6 py-4 pr-12">
+        <DialogTitle className="text-lg font-semibold tracking-tight">{headerTitle}</DialogTitle>
+        {isClone && <Badge variant="secondary">Clone</Badge>}
       </div>
 
-      {isClone && source && (
-        <div className="mb-6 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground space-y-1">
-          <p>
-            <span className="font-medium text-foreground">Included:</span> general details, people,
-            labels, docs, security groups, and the base build / escrow / Jira configuration
-            {vcsApplies && ', plus the VCS tag / production branch formats'}.
-          </p>
-          <p>
-            <span className="font-medium text-foreground">Excluded (re-enter):</span> the Component
-            Key, {vcsApplies && 'VCS Path, '}Jira project key, and distribution coordinate are unique
-            per component — enter new values.
-          </p>
-        </div>
-      )}
-
-      {/* Stepper */}
-      <nav aria-label="Wizard steps" className="mb-8 flex flex-wrap gap-2">
-        {steps.map((step, i) => {
-          const active = step === current
-          const invalid = invalidSteps.has(step)
-          return (
-            <button
-              key={step}
-              type="button"
-              onClick={() => goToStep(step)}
-              aria-current={active ? 'step' : undefined}
-              className={cn(
-                'flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm',
-                active ? 'border-primary bg-primary/5 font-medium' : 'border-border',
-                invalid && !active && 'border-destructive/50 text-destructive',
-              )}
-            >
-              <span
+      {/* Body row: vertical stepper rail + scrollable content */}
+      <div className="flex min-h-0 flex-1">
+        <nav
+          aria-label="Wizard steps"
+          className="flex w-64 shrink-0 flex-col gap-1 overflow-y-auto border-r bg-card p-4"
+        >
+          {steps.map((step, i) => {
+            const active = step === current
+            const showInvalid = shownInvalidSteps.has(step)
+            const done = !active && visitedSteps.has(step) && !invalidSteps.has(step)
+            const status = active ? 'active' : showInvalid ? 'invalid' : done ? 'done' : 'todo'
+            return (
+              <button
+                key={step}
+                type="button"
+                aria-label={STEP_LABELS[step]}
+                data-status={status}
+                onClick={() => goToStep(step)}
+                aria-current={active ? 'step' : undefined}
                 className={cn(
-                  'flex h-5 w-5 items-center justify-center rounded-full text-xs',
-                  active ? 'bg-primary text-primary-foreground' : 'bg-muted',
+                  'flex items-start gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors',
+                  active ? 'bg-muted font-medium' : 'hover:bg-muted',
+                  showInvalid && 'text-destructive',
                 )}
               >
-                {invalid ? <AlertCircle className="h-3.5 w-3.5" /> : i + 1}
-              </span>
-              {STEP_LABELS[step]}
-            </button>
-          )
-        })}
-      </nav>
+                <span
+                  aria-hidden
+                  className={cn(
+                    'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs',
+                    active
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : showInvalid
+                        ? 'border-destructive/50 text-destructive'
+                        : done
+                          ? 'border-emerald-600/40 bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
+                          : 'border-border text-muted-foreground',
+                  )}
+                >
+                  {showInvalid ? (
+                    <AlertCircle className="h-3.5 w-3.5" />
+                  ) : done ? (
+                    <Check className="h-3.5 w-3.5" />
+                  ) : (
+                    i + 1
+                  )}
+                </span>
+                <span className="flex flex-col">
+                  <span>{STEP_LABELS[step]}</span>
+                  <span className="text-xs font-normal text-muted-foreground">{STEP_SUBTITLES[step]}</span>
+                </span>
+              </button>
+            )
+          })}
+        </nav>
 
-      {/* Step body */}
-      <div className="max-w-2xl">{stepBody[current]()}</div>
-
-      {/* Sticky footer */}
-      <div className="fixed inset-x-0 bottom-0 border-t bg-background/95 backdrop-blur">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-3">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={goBack}
-            disabled={currentIndex === 0}
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Back
-          </Button>
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="ghost" onClick={() => navigate('/components')}>
-              Cancel
-            </Button>
-            {isLast ? (
-              <Button type="submit" disabled={submitDisabled}>
-                <Plus className="h-4 w-4" />
-                Create component
-              </Button>
-            ) : (
-              <Button type="button" onClick={goNext} disabled={!currentValid}>
-                Next
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="mx-auto max-w-2xl space-y-6">
+            {isClone && source && (
+              <div className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground space-y-1">
+                <p>
+                  <span className="font-medium text-foreground">Included:</span> general details, people,
+                  labels, docs, security groups, and the base build / escrow / Jira configuration
+                  {vcsApplies && ', plus the VCS tag / production branch formats'}.
+                </p>
+                <p>
+                  <span className="font-medium text-foreground">Excluded (re-enter):</span> the Component
+                  Key, {vcsApplies && 'VCS Path, '}Jira project key, and distribution coordinate are unique
+                  per component — enter new values.
+                </p>
+              </div>
             )}
+            {stepBody[current]()}
           </div>
+        </div>
+      </div>
+
+      {/* Sticky footer inside the card */}
+      <div className="flex items-center justify-between border-t bg-background px-6 py-3">
+        <Button type="button" variant="outline" onClick={goBack} disabled={currentIndex === 0}>
+          <ChevronLeft className="h-4 w-4" />
+          Back
+        </Button>
+        <span className="text-sm text-muted-foreground">
+          Step {currentIndex + 1} of {steps.length}
+        </span>
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="ghost" onClick={() => navigate('/components')}>
+            Cancel
+          </Button>
+          {isLast ? (
+            <Button type="submit" disabled={submitDisabled}>
+              {createMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              Create component
+            </Button>
+          ) : (
+            <Button type="button" onClick={goNext} disabled={!currentValid}>
+              Next
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
     </form>
@@ -1111,12 +1220,14 @@ function Field({
   htmlFor,
   path,
   required,
+  badge,
   children,
 }: {
   label: string
   htmlFor?: string
   path?: string
   required?: boolean
+  badge?: React.ReactNode
   children: React.ReactNode
 }) {
   return (
@@ -1127,9 +1238,23 @@ function Field({
           {required && <span className="text-destructive"> *</span>}
         </Label>
         {path && <FieldInfo path={path} label={label} />}
+        {badge && <span className="ml-1">{badge}</span>}
       </div>
       {children}
     </div>
+  )
+}
+
+/**
+ * Amber "re-enter" pill shown on the unique-per-component fields in clone mode
+ * (Component Key, VCS Path, Jira project key, distribution coordinate) so the
+ * user sees which values must be new.
+ */
+function ReenterPill() {
+  return (
+    <span className="inline-flex items-center rounded-full border border-amber-400/60 bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:border-amber-500/40 dark:bg-amber-950 dark:text-amber-300">
+      Re-enter
+    </span>
   )
 }
 
