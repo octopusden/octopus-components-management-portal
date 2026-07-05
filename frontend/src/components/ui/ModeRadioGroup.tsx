@@ -22,7 +22,12 @@ export function ModeRadioGroup({ value, onChange, allowed, disabled, idPrefix = 
     if (disabled) return
     const i = modes.findIndex((m) => m.key === value)
     const next = modes[(((i < 0 ? 0 : i) + delta) % modes.length + modes.length) % modes.length]
-    if (next) onChange(next.key)
+    if (!next) return
+    onChange(next.key)
+    // Roving tabindex: carry keyboard focus to the newly selected radio so it
+    // doesn't stay stranded on the previous row (which is about to become
+    // tabIndex=-1). The row element persists across the re-render (keyed by id).
+    document.getElementById(`${idPrefix}-${next.key}`)?.focus()
   }
   const selectedIndex = modes.findIndex((m) => m.key === value)
   return (

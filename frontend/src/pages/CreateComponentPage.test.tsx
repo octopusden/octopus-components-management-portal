@@ -399,6 +399,20 @@ describe('CreateComponentPage — profile radio semantics', () => {
       ).toBe('true'),
     )
   })
+
+  it('carries keyboard focus to the newly selected profile on arrow keys', async () => {
+    renderWizard()
+    const external = screen.getByRole('radio', { name: /Regular external component/i })
+    await userEvent.click(external)
+    external.focus()
+    expect(external).toHaveFocus()
+    await userEvent.keyboard('{ArrowDown}')
+    const internal = screen.getByRole('radio', { name: /Regular internal component/i })
+    await waitFor(() => expect(internal).toHaveAttribute('aria-checked', 'true'))
+    // Roving-tabindex: focus must follow the selection to the next profile, not
+    // stay stranded on the previous (now tabIndex=-1) radio.
+    expect(internal).toHaveFocus()
+  })
 })
 
 describe('CreateComponentPage — client code (external only)', () => {
