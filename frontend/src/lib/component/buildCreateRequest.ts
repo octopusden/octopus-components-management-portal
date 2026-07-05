@@ -109,7 +109,13 @@ export interface CreateFormValues {
     mode: ArtifactIdMode
     tokens: string[]
   }>
-
+  // BASE escrow aspect `generation` (the only escrow field exposed at create).
+  // Free-form string carrying an enum value or '' (never blocks submit). Scratch
+  // seeds it from componentDefaults.escrow.generation; clone seeds it from the
+  // source BASE-row escrow.generation. On submit it overlays `generation` on the
+  // escrow aspect (form wins) while the rest of the escrow aspect is copied from
+  // the source as before — see buildCreateRequest.
+  escrowGeneration: string
 }
 
 // Builds the POST /components payload for both create modes.

@@ -4,7 +4,7 @@ import { findUnsupportedGroupId } from '../groupValidation'
 import { isVcsHostSupported, hostOf } from '../vcsHost'
 import { isSolutionCandidate } from '../solutionKey'
 import { selectBaseRow } from '../api/baseRow'
-import type { ComponentDetail } from '../types'
+import type { ComponentDetail, EscrowAspect } from '../types'
 import {
   vcsBlockApplies,
   DEPRECATED_BUILD_SYSTEMS,
@@ -183,6 +183,9 @@ export function makeCreateSchema(
           tokens: z.array(z.string()),
         }),
       ),
+      // Free-form: an enum value or ''. Never blocks submit (the escrow
+      // generation is optional at create and validated server-side).
+      escrowGeneration: z.string(),
     })
     .superRefine((v, ctx) => {
       // Profile-dependent Component-Key rule (strict for new components).
@@ -330,6 +333,7 @@ export const SCRATCH_DEFAULTS: CreateFormValues = {
   vcsBranch: '',
   coordinate: EMPTY_COORDINATE,
   ownership: [{ groupId: '', mode: 'ALL', tokens: [] }],
+  escrowGeneration: '',
 }
 
 // vcs.tag / vcs.branch read from GET /config/component-defaults.
@@ -387,6 +391,9 @@ export interface ComponentDefaults {
   jira?: { projectKey?: string; componentVersionFormat?: ComponentVersionFormatDefaults }
   distribution?: { explicit?: boolean; external?: boolean }
   vcs?: VcsDefaults
+  // Only `generation` is consumed by the create wizard (the sole escrow field
+  // it exposes); the rest of the escrow aspect is not seeded from defaults.
+  escrow?: EscrowAspect
 }
 
 export function blankToUndefined(s: string | null | undefined): string | undefined {
@@ -437,6 +444,7 @@ export function initialValues(
       distributionExternal,
       jiraProjectKey: blankToUndefined(defaults.jira?.projectKey) ?? '',
       ...versionFormatsFromDefaults(defaults),
+      escrowGeneration: blankToUndefined(defaults.escrow?.generation) ?? '',
       vcsTag,
       vcsBranch,
     }
@@ -459,6 +467,7 @@ export function initialValues(
       selectBaseRow(source)?.jira?.releaseVersionFormat,
       selectBaseRow(source)?.jira?.buildVersionFormat,
     ),
+    escrowGeneration: selectBaseRow(source)?.escrow?.generation ?? '',
     vcsTag,
     vcsBranch,
   }

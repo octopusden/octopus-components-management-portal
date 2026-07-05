@@ -34,6 +34,7 @@ function makeForm(overrides: Partial<CreateFormValues> = {}): CreateFormValues {
       packageName: '',
     },
     ownership: [{ groupId: '', mode: 'ALL', tokens: [] }],
+    escrowGeneration: '',
     ...overrides,
   }
 }
