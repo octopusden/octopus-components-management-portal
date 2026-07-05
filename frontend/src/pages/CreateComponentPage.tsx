@@ -752,6 +752,12 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
       <p className="text-sm text-muted-foreground">
         Derived from the profile: <span className="font-medium text-foreground">{classificationRecap()}</span>.
       </p>
+      {external && editable('clientCode') && (
+        <Field label="Client Code" htmlFor="create-clientCode" path="component.clientCode">
+          <Input id="create-clientCode" placeholder="CLIENT_CODE" {...register('clientCode')} />
+          <FieldError message={errors.clientCode?.message} />
+        </Field>
+      )}
     </div>
   )
 

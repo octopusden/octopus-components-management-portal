@@ -57,6 +57,10 @@ export interface CreateFormValues {
   releaseManager: string[]
   securityChampion: string[]
   copyright: string
+  // Only settable in the form for an external component (distributionExternal);
+  // copyable from the source, not unique. When the external gate is off the form
+  // value is ignored and the source value (if any) is preserved.
+  clientCode: string
   // BASE jira aspect fields settable at create. jiraProjectKey is unique per component (never
   // copied); versionPrefix defaults to the component key in scratch mode (mirrored in the form).
   jiraProjectKey: string
@@ -114,9 +118,11 @@ export interface CreateFormValues {
 //   - form WINS for: name, displayName, buildSystem (baseConfiguration.build),
 //     componentOwner, distributionExplicit/External, releaseManager,
 //     securityChampion, copyright;
+//   - clientCode: form WINS when external (distributionExternal); when not
+//     external the source value is preserved (form value ignored);
 //   - distribution coordinate comes from the FORM ONLY, never from the source
 //     (unique per component) — and only when explicit+external;
-//   - copied from source: productType, system, clientCode, solution,
+//   - copied from source: productType, system, solution,
 //     parentComponentName, labels, docs, securityGroups, releasesInDefaultBranch,
 //     jiraHotfixVersionFormat, vcsExternalRegistry, and from the BASE row the
 //     escrow aspect, jira aspect (source projectKey stripped — the form supplies jiraProjectKey
@@ -220,7 +226,12 @@ export function buildCreateRequest(
     // Source-derived general fields (null/[] defaults in scratch mode).
     productType: source?.productType ?? undefined,
     systems: source?.systems ?? [],
-    clientCode: source?.clientCode ?? undefined,
+    // clientCode is a General-step field for external components: the form wins
+    // when external, otherwise the source value is preserved (non-external clone
+    // semantics unchanged). A hidden/readonly field is stripped below regardless.
+    clientCode: form.distributionExternal
+      ? form.clientCode || undefined
+      : (source?.clientCode ?? undefined),
     solution: source?.solution ?? undefined,
     parentComponentName: source?.parentComponentName ?? undefined,
     archived: false,

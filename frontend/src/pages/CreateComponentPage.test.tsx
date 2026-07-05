@@ -401,6 +401,30 @@ describe('CreateComponentPage — profile radio semantics', () => {
   })
 })
 
+describe('CreateComponentPage — client code (external only)', () => {
+  it('shows the Client Code field only for external profiles', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext() // General step
+    expect(screen.queryByLabelText('Client Code')).toBeNull()
+    // Switch to an external profile → the field appears.
+    await userEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    await userEvent.click(screen.getByRole('radio', { name: /Regular external component/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'General' }))
+    expect(screen.getByLabelText('Client Code')).toBeDefined()
+  })
+
+  it('seeds Client Code from the source in clone mode', () => {
+    mockUseComponent.mockReturnValue({
+      data: makeSource({ distributionExternal: true, clientCode: 'CL1' }),
+      isLoading: false,
+      error: null,
+    })
+    renderWizard('/components/new?from=c-1')
+    expect((screen.getByLabelText('Client Code') as HTMLInputElement).value).toBe('CL1')
+  })
+})
+
 describe('CreateComponentPage — clone re-enter affordances', () => {
   it('shows a re-enter pill on the unique Component Key field in clone mode', async () => {
     mockUseComponent.mockReturnValue({ data: makeSource(), isLoading: false, error: null })
