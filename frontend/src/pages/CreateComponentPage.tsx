@@ -221,6 +221,17 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
   )
   const [profile, setProfile] = useState<ComponentProfile | null>(derived?.profile ?? null)
   const [explicitAnswer, setExplicitAnswer] = useState<boolean>(derived?.explicit ?? false)
+  // The clone profile/explicit are seeded once from `derived`, but `derived` is
+  // recomputed when solutionKeyPatterns arrive after mount (portal-config loads
+  // async), which can change the derived profile (e.g. solution → dmp-bundle).
+  // Re-seed from `derived` until the user actually picks a profile, so a late
+  // config load never looks like an unsaved edit.
+  const userPickedProfile = useRef(false)
+  useEffect(() => {
+    if (userPickedProfile.current || !derived) return
+    setProfile(derived.profile)
+    setExplicitAnswer(derived.explicit)
+  }, [derived])
   // A profile is needed for the (profile-dependent) key rule even before the
   // scratch gate is passed; fall back to the base-regex profile for the schema.
   const effectiveProfile: ComponentProfile = profile ?? 'regular-external'
@@ -281,6 +292,7 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
   // the Component Key so the profile-dependent rule is re-entered (brief).
   const applyProfile = useCallback(
     (next: ComponentProfile, nextExplicit: boolean) => {
+      userPickedProfile.current = true
       const changed = next !== profile
       setProfile(next)
       setExplicitAnswer(nextExplicit)

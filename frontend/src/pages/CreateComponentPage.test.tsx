@@ -392,6 +392,34 @@ describe('CreateComponentPage — clone unsaved-changes guard', () => {
       expect(screen.getByTestId('unsaved-guard').getAttribute('data-when')).toBe('true'),
     )
   })
+
+  it('does not engage the guard when late portal-config changes the derived clone profile', async () => {
+    // solutionKeyPatterns arrive only after mount; until then a solution source
+    // derives 'solution', and once the bundle pattern loads it re-derives to
+    // 'dmp-bundle'. That re-derivation must not read as a user profile change.
+    let patternsLoaded = false
+    mockUsePortalConfig.mockImplementation(() => ({
+      data: patternsLoaded ? { solutionKeyPatterns: ['-solution', 'dmp-bundle'] } : undefined,
+    }))
+    mockUseComponent.mockReturnValue({
+      data: makeSource({
+        solution: true,
+        name: 'acme-dmp-bundle',
+        distributionExternal: true,
+        distributionExplicit: true,
+      }),
+      isLoading: false,
+      error: null,
+    })
+    renderWizard('/components/new?from=c-1')
+    expect(screen.getByTestId('unsaved-guard').getAttribute('data-when')).toBe('false')
+    // Patterns load; force a re-render without touching the profile.
+    patternsLoaded = true
+    await userEvent.click(screen.getByRole('button', { name: 'Build' }))
+    await waitFor(() =>
+      expect(screen.getByTestId('unsaved-guard').getAttribute('data-when')).toBe('false'),
+    )
+  })
 })
 
 describe('CreateComponentPage — clone mode', () => {
