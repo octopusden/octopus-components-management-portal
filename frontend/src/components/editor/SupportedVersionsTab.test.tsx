@@ -1,29 +1,34 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { SupportedVersionsResponse } from '../../lib/types'
 import { SupportedVersionsTab } from './SupportedVersionsTab'
+import { useSupportedVersionsSection } from './useSupportedVersionsSection'
 
-const mockUpdate = vi.fn()
-let mockData: { all: boolean; ranges: string[]; warnings: string[] } | undefined
+// The tab is presentational — it renders a SupportedVersionsSection draft. Drive
+// it through the REAL section hook (with the data/mutation hooks mocked) so the
+// add/remove/set-all interactions exercise the actual draft behaviour, and assert
+// that NO PUT fires from the tab (persist is deferred to the page's Save).
+let mockData: SupportedVersionsResponse | undefined
+const mockMutateAsync = vi.fn(() => Promise.resolve(mockData as SupportedVersionsResponse))
 
 vi.mock('../../hooks/useComponent', () => ({
   useSupportedVersions: () => ({ data: mockData, isLoading: mockData === undefined }),
-  useUpdateSupportedVersions: () => ({ mutate: mockUpdate, isPending: false }),
+  useUpdateSupportedVersions: () => ({ mutateAsync: mockMutateAsync, isPending: false }),
 }))
 
+function Harness({ canEdit }: { canEdit: boolean }) {
+  const section = useSupportedVersionsSection('c-1')
+  return <SupportedVersionsTab section={section} canEdit={canEdit} />
+}
+
 function renderTab(canEdit = true) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <SupportedVersionsTab componentId="c-1" canEdit={canEdit} />
-    </QueryClientProvider>,
-  )
+  return render(<Harness canEdit={canEdit} />)
 }
 
 describe('SupportedVersionsTab', () => {
   beforeEach(() => {
-    mockUpdate.mockReset()
+    mockMutateAsync.mockReset()
     mockData = undefined
   })
 
@@ -40,34 +45,34 @@ describe('SupportedVersionsTab', () => {
     expect(Array.from(items).map((c) => c.textContent)).toEqual(['[1.0,2.0)', '[2.0,)'])
   })
 
-  it('PUTs the full set with the new range appended on add', async () => {
+  it('appends the new range to the draft on add (no PUT — deferred to Save)', async () => {
     mockData = { all: false, ranges: ['[1.0,2.0)'], warnings: [] }
     renderTab()
     fireEvent.change(screen.getByLabelText('New supported version range'), { target: { value: '[2.0,)' } })
     await userEvent.click(screen.getByRole('button', { name: /add range/i }))
-    expect(mockUpdate).toHaveBeenCalledTimes(1)
-    expect(mockUpdate.mock.calls[0]?.[0]).toEqual({ ranges: ['[1.0,2.0)', '[2.0,)'] })
+    const items = screen.getByLabelText('Supported version ranges').querySelectorAll('code')
+    expect(Array.from(items).map((c) => c.textContent)).toEqual(['[1.0,2.0)', '[2.0,)'])
+    expect(mockMutateAsync).not.toHaveBeenCalled()
   })
 
   it('allows an OVERLAPPING range on add (no client disjoint requirement — server merges)', async () => {
     // ADR-018 redesign: coverage is stored merged, so overlapping/adjacent input is valid — the
-    // client must NOT reject it; the server collapses it into the canonical union.
+    // client must NOT reject it; the server collapses it into the canonical union on save.
     mockData = { all: false, ranges: ['[1.0,2.0)'], warnings: [] }
     renderTab()
     fireEvent.change(screen.getByLabelText('New supported version range'), { target: { value: '[1.5,3.0)' } })
     expect(screen.getByRole('button', { name: /add range/i })).not.toBeDisabled()
     await userEvent.click(screen.getByRole('button', { name: /add range/i }))
-    expect(mockUpdate).toHaveBeenCalledTimes(1)
-    expect(mockUpdate.mock.calls[0]?.[0]).toEqual({ ranges: ['[1.0,2.0)', '[1.5,3.0)'] })
+    const items = screen.getByLabelText('Supported version ranges').querySelectorAll('code')
+    expect(Array.from(items).map((c) => c.textContent)).toEqual(['[1.0,2.0)', '[1.5,3.0)'])
   })
 
-  it('rejects an all-versions range on add — live error, Add disabled, no PUT', async () => {
+  it('rejects an all-versions range on add — live error, Add disabled, no draft change', async () => {
     mockData = { all: false, ranges: ['[1.0,2.0)'], warnings: [] }
     renderTab()
     fireEvent.change(screen.getByLabelText('New supported version range'), { target: { value: '(,)' } })
     await waitFor(() => expect(screen.getByText(/all-versions default/i)).toBeDefined())
     expect(screen.getByRole('button', { name: /add range/i })).toBeDisabled()
-    expect(mockUpdate).not.toHaveBeenCalled()
   })
 
   it('rejects a COMPOSITE all-versions range like (,),[1.0,2.0) (sentinel inside a composite)', async () => {
@@ -76,65 +81,61 @@ describe('SupportedVersionsTab', () => {
     fireEvent.change(screen.getByLabelText('New supported version range'), { target: { value: '(,),[1.0,2.0)' } })
     await waitFor(() => expect(screen.getByText(/all-versions default/i)).toBeDefined())
     expect(screen.getByRole('button', { name: /add range/i })).toBeDisabled()
-    expect(mockUpdate).not.toHaveBeenCalled()
   })
 
-  it('all-versions → bounded: adding a range from all-versions PUTs {ranges:[range]}', async () => {
+  it('all-versions → bounded: adding a range from all-versions shows the single bounded range', async () => {
     mockData = { all: true, ranges: [], warnings: [] }
     renderTab()
     fireEvent.change(screen.getByLabelText('New supported version range'), { target: { value: '[2.0,)' } })
     await userEvent.click(screen.getByRole('button', { name: /add range/i }))
-    expect(mockUpdate).toHaveBeenCalledTimes(1)
-    expect(mockUpdate.mock.calls[0]?.[0]).toEqual({ ranges: ['[2.0,)'] })
+    const items = screen.getByLabelText('Supported version ranges').querySelectorAll('code')
+    expect(Array.from(items).map((c) => c.textContent)).toEqual(['[2.0,)'])
   })
 
-  it('PUTs the set without the removed range on delete (still ≥1 range left — no dialog)', async () => {
+  it('removes a range from the draft on delete when ≥1 remains (no dialog, no PUT)', async () => {
     mockData = { all: false, ranges: ['[1.0,2.0)', '[2.0,)'], warnings: [] }
     renderTab()
     await userEvent.click(screen.getByRole('button', { name: 'Remove supported range [2.0,)' }))
-    expect(mockUpdate).toHaveBeenCalledWith({ ranges: ['[1.0,2.0)'] }, expect.anything())
+    const items = screen.getByLabelText('Supported version ranges').querySelectorAll('code')
+    expect(Array.from(items).map((c) => c.textContent)).toEqual(['[1.0,2.0)'])
+    expect(mockMutateAsync).not.toHaveBeenCalled()
   })
 
-  // Cutover blocker: removing the ONLY remaining range canonically collapses to
-  // all=true server-side (empty ranges ⇒ all). That silent widen-to-ALL on a
-  // single misclick is the defect — deleting the last range must require an
-  // explicit confirmation and must NEVER silently PUT ranges:[].
-  it('deleting the LAST remaining range opens a confirmation dialog and does not PUT', async () => {
+  // Cutover blocker: removing the ONLY remaining range would empty coverage,
+  // which is all-versions. That silent widen-to-ALL on a single misclick is the
+  // defect — deleting the last range must require an explicit confirmation and
+  // must never silently drop coverage to []. In the draft flow nothing is PUT
+  // until Save, so the confirmation gates the intent, not the network.
+  it('deleting the LAST remaining range opens a confirmation dialog and stages nothing yet', async () => {
     mockData = { all: false, ranges: ['[1.0,2.0)'], warnings: [] }
     renderTab()
     await userEvent.click(screen.getByRole('button', { name: 'Remove supported range [1.0,2.0)' }))
-    // Nothing sent yet — the widen is gated behind an explicit confirmation.
-    expect(mockUpdate).not.toHaveBeenCalled()
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText(/only supported range/i)).toBeDefined()
     expect(within(dialog).getByText(/sets coverage to/i)).toBeDefined()
+    // Range still shown, nothing PUT.
+    expect(screen.getByText('[1.0,2.0)')).toBeDefined()
+    expect(mockMutateAsync).not.toHaveBeenCalled()
   })
 
-  it('confirming the widen dialog PUTs {all:true} (explicit intent, never a silent ranges:[])', async () => {
+  it('confirming the widen dialog flips the draft to All versions (explicit intent, no PUT)', async () => {
     mockData = { all: false, ranges: ['[1.0,2.0)'], warnings: [] }
     renderTab()
     await userEvent.click(screen.getByRole('button', { name: 'Remove supported range [1.0,2.0)' }))
     const dialog = await screen.findByRole('dialog')
     await userEvent.click(within(dialog).getByRole('button', { name: /widen to all versions/i }))
-    expect(mockUpdate).toHaveBeenCalledTimes(1)
-    expect(mockUpdate.mock.calls[0]?.[0]).toEqual({ all: true })
+    expect(screen.getByText('All versions')).toBeDefined()
+    expect(mockMutateAsync).not.toHaveBeenCalled()
   })
 
-  it('cancelling the widen dialog keeps the range and makes no PUT', async () => {
+  it('cancelling the widen dialog keeps the range and stages nothing', async () => {
     mockData = { all: false, ranges: ['[1.0,2.0)'], warnings: [] }
     renderTab()
     await userEvent.click(screen.getByRole('button', { name: 'Remove supported range [1.0,2.0)' }))
     const dialog = await screen.findByRole('dialog')
     await userEvent.click(within(dialog).getByRole('button', { name: /cancel/i }))
-    expect(mockUpdate).not.toHaveBeenCalled()
     expect(screen.getByText('[1.0,2.0)')).toBeDefined()
-  })
-
-  it('PUTs {all:true} via "Set to all versions"', async () => {
-    mockData = { all: false, ranges: ['[1.0,2.0)'], warnings: [] }
-    renderTab()
-    await userEvent.click(screen.getByRole('button', { name: /set to all versions/i }))
-    expect(mockUpdate).toHaveBeenCalledWith({ all: true }, expect.anything())
+    expect(mockMutateAsync).not.toHaveBeenCalled()
   })
 
   it('surfaces V1/V5 warnings from the API', () => {

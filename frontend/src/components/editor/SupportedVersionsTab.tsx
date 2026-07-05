@@ -10,11 +10,11 @@ import {
   DialogDescription,
   DialogFooter,
 } from '../ui/dialog'
-import { useSupportedVersions, useUpdateSupportedVersions } from '../../hooks/useComponent'
+import type { SupportedVersionsSection } from './useSupportedVersionsSection'
 import { isValidVersionRange, isAllowedOverrideRange, formatVersionRange, compareVersionRanges } from '../../lib/versionRange'
 
 interface SupportedVersionsTabProps {
-  componentId: string
+  section: SupportedVersionsSection
   // Read-only when the user can't edit the component — the list still renders.
   canEdit: boolean
 }
@@ -24,28 +24,29 @@ interface SupportedVersionsTabProps {
  * overrides: a version outside `supported` resolves to 404. `all = true` means every version is
  * covered (no bounded rows); otherwise coverage is the union of the listed ranges.
  *
- * The API is declarative — every edit PUTs the full desired set, which the server stores MERGED
- * (overlapping / contiguous ranges collapse; a set tiling all-versions becomes `all`). Coverage is
- * decoupled from overrides — it never reshapes them; the v2/v3 range VIEWS are derived at read time.
- * The response surfaces V1/V5 warnings (an override left entirely outside supported).
+ * Presentational only: the draft, dirty flag, diff and PUT live in
+ * `useSupportedVersionsSection` (owned by ComponentDetailPage). Every edit is a
+ * DRAFT change that flows through the page's single sticky Save bar → Review
+ * diff → PUT on Confirm; Discard reverts. There is no immediate per-edit PUT.
+ * Coverage is stored MERGED server-side (overlapping / contiguous ranges
+ * collapse; a set tiling all-versions becomes `all`), so the response the save
+ * re-seeds from may be a canonicalised form of what was typed.
  */
-export function SupportedVersionsTab({ componentId, canEdit }: SupportedVersionsTabProps) {
-  const { data, isLoading } = useSupportedVersions(componentId)
-  const updateMutation = useUpdateSupportedVersions(componentId)
+export function SupportedVersionsTab({ section, canEdit }: SupportedVersionsTabProps) {
+  const { state, warnings, isLoading, addRange, removeRange, setAllVersions } = section
 
   const [newRange, setNewRange] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  // Confirmation gate for the silent widen-to-ALL: deleting the ONLY remaining
-  // range collapses coverage to all versions server-side, so the last-range
-  // trash click opens this dialog instead of firing the PUT.
+  // Confirmation gate for the silent widen-to-ALL: removing the last remaining
+  // range would empty coverage, which is all-versions — so route that through an
+  // explicit confirmation that flips the draft to all=true (a deliberate intent),
+  // never a delete side-effect.
   const [confirmWidenOpen, setConfirmWidenOpen] = useState(false)
 
-  if (isLoading || !data) {
+  if (isLoading) {
     return <p className="text-sm text-muted-foreground">Loading supported versions…</p>
   }
 
-  const ranges = [...data.ranges].sort(compareVersionRanges)
-  const warnings = data.warnings ?? []
+  const ranges = [...state.ranges].sort(compareVersionRanges)
 
   // Live validation of the add input so the button can pre-disable (consistent with the field-override
   // editors) and the error shows as you type, not only after a click.
@@ -59,38 +60,26 @@ export function SupportedVersionsTab({ componentId, canEdit }: SupportedVersions
           ? 'That is the all-versions default — use “Set to all versions”, or enter a bounded / open-upper range'
           : null
 
-  function put(next: { all?: boolean; ranges?: string[] }, onSuccess?: () => void) {
-    setError(null)
-    updateMutation.mutate(next, {
-      onSuccess: () => onSuccess?.(),
-      onError: (e: unknown) => setError(e instanceof Error ? e.message : 'Failed to update supported versions'),
-    })
-  }
-
   function handleAdd() {
     if (trimmedNew === '' || addRangeError !== null) return
-    // Clear the input only after the PUT succeeds, so a server rejection leaves the value to fix.
-    put({ ranges: [...ranges, trimmedNew] }, () => setNewRange(''))
+    addRange(trimmedNew)
+    setNewRange('')
   }
 
   function handleRemove(range: string) {
-    // Removing this range would leave an empty set, which CRS canonically stores
-    // as all=true — a silent widen to ALL versions. Gate that behind an explicit
-    // confirmation (a deliberate widen), never a delete side-effect. Key off the
-    // POST-filter result (not ranges.length) so a defensive empty-after-remove is
-    // caught even in the unexpected event of a duplicate range string.
-    const remaining = ranges.filter((r) => r !== range)
-    if (remaining.length === 0) {
+    // Removing this range would leave an empty set, which is all-versions
+    // coverage. Gate that behind an explicit confirmation; a delete that still
+    // leaves ≥1 range is unambiguous, so apply it to the draft immediately.
+    if (ranges.filter((r) => r !== range).length === 0) {
       setConfirmWidenOpen(true)
       return
     }
-    put({ ranges: remaining })
+    removeRange(range)
   }
 
   function confirmWiden() {
-    // Transition to all=true only via this explicit confirmation — send {all:true}
-    // rather than an empty ranges list, so the intent is unmistakable on the wire.
-    put({ all: true }, () => setConfirmWidenOpen(false))
+    setAllVersions()
+    setConfirmWidenOpen(false)
   }
 
   return (
@@ -113,7 +102,7 @@ export function SupportedVersionsTab({ componentId, canEdit }: SupportedVersions
         </div>
       )}
 
-      {data.all ? (
+      {state.all ? (
         <div className="flex items-center gap-2 text-sm">
           <InfinityIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           <span>
@@ -131,7 +120,6 @@ export function SupportedVersionsTab({ componentId, canEdit }: SupportedVersions
                   size="icon"
                   className="h-6 w-6"
                   aria-label={`Remove supported range ${range}`}
-                  disabled={updateMutation.isPending}
                   onClick={() => handleRemove(range)}
                 >
                   <X className="h-3 w-3" />
@@ -150,30 +138,22 @@ export function SupportedVersionsTab({ componentId, canEdit }: SupportedVersions
               placeholder="[1.0,2.0) or [2.0,)"
               className="font-mono max-w-xs"
               value={newRange}
-              onChange={(e) => {
-                setNewRange(e.target.value)
-                setError(null)
-              }}
+              onChange={(e) => setNewRange(e.target.value)}
             />
             <Button
               size="sm"
-              disabled={trimmedNew === '' || addRangeError !== null || updateMutation.isPending}
+              disabled={trimmedNew === '' || addRangeError !== null}
               onClick={handleAdd}
             >
               <Plus className="mr-1 h-3 w-3" /> Add range
             </Button>
-            {!data.all && (
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={updateMutation.isPending}
-                onClick={() => put({ all: true })}
-              >
+            {!state.all && (
+              <Button size="sm" variant="outline" onClick={setAllVersions}>
                 Set to all versions
               </Button>
             )}
           </div>
-          {(addRangeError ?? error) && <p className="text-xs text-destructive">{addRangeError ?? error}</p>}
+          {addRangeError && <p className="text-xs text-destructive">{addRangeError}</p>}
         </div>
       )}
 
@@ -210,15 +190,7 @@ export function SupportedVersionsTab({ componentId, canEdit }: SupportedVersions
         </p>
       </div>
 
-      <Dialog
-        open={confirmWidenOpen}
-        // Hold the dialog open while the confirm PUT is in flight so Escape /
-        // overlay-click can't "cancel" a request that will still land.
-        onOpenChange={(open) => {
-          if (updateMutation.isPending) return
-          setConfirmWidenOpen(open)
-        }}
-      >
+      <Dialog open={confirmWidenOpen} onOpenChange={setConfirmWidenOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -229,23 +201,14 @@ export function SupportedVersionsTab({ componentId, canEdit }: SupportedVersions
               This is the last range, so removing it sets coverage to{' '}
               <strong>all versions</strong> — every historical version becomes supported, and
               per-attribute overrides resolve for versions you had excluded. This is not the same
-              as deleting one of several ranges.
+              as deleting one of several ranges. The change is staged; review and Save to apply it.
             </DialogDescription>
           </DialogHeader>
-          {error && (
-            <p className="text-sm text-destructive" role="alert">
-              {error}
-            </p>
-          )}
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setConfirmWidenOpen(false)}
-              disabled={updateMutation.isPending}
-            >
+            <Button variant="outline" onClick={() => setConfirmWidenOpen(false)}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={confirmWiden} disabled={updateMutation.isPending}>
+            <Button variant="destructive" onClick={confirmWiden}>
               Widen to all versions
             </Button>
           </DialogFooter>

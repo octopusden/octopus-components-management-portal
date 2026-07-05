@@ -23,6 +23,8 @@ vi.mock('../hooks/useComponent', () => ({
   useUpdateComponent: vi.fn(),
   useDeleteComponent: vi.fn(),
   useFieldOverrides: () => ({ data: mockOverrides() }),
+  useSupportedVersions: () => ({ data: undefined, isLoading: false }),
+  useUpdateSupportedVersions: () => ({ mutateAsync: vi.fn(() => Promise.resolve()), isPending: false }),
 }))
 vi.mock('../hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }))
 vi.mock('../components/AppFooter', () => ({ AppFooter: () => <footer>footer</footer> }))

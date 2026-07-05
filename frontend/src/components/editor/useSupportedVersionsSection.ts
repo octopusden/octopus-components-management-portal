@@ -30,7 +30,9 @@ const EMPTY: SupportedVersionsState = { all: false, ranges: [] }
 
 function snapshotFrom(data: SupportedVersionsResponse | undefined): SupportedVersionsState {
   if (!data) return EMPTY
-  return { all: data.all, ranges: [...data.ranges].sort(compareVersionRanges) }
+  // Tolerate a missing/partial payload (?? []) so a slow or shape-off response
+  // never throws on the spread — coverage just reads as an empty (bounded) set.
+  return { all: data.all ?? false, ranges: [...(data.ranges ?? [])].sort(compareVersionRanges) }
 }
 
 function coverageText(s: SupportedVersionsState): string {

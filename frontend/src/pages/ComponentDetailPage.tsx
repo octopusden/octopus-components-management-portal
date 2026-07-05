@@ -37,6 +37,7 @@ import { useVcsSection } from '../components/editor/useVcsSection'
 import { useDistributionSection } from '../components/editor/useDistributionSection'
 import { useJiraSection } from '../components/editor/useJiraSection'
 import { useEscrowSection } from '../components/editor/useEscrowSection'
+import { useSupportedVersionsSection } from '../components/editor/useSupportedVersionsSection'
 import { generalSlice } from '../components/editor/generalSlice'
 import { combineRequest, collectDiff, anyDirty } from '../lib/editor/combineRequest'
 import { isFieldDirty } from '../lib/editor/dirtyField'
@@ -338,6 +339,11 @@ function ComponentDetailEditor() {
   // Field-overrides slice — draft lives in OverridesDraftProvider (wraps this
   // component), so this just projects it into a SectionSlice like the others.
   const overridesSection = useOverridesSection()
+  // Supported-versions (coverage) draft. NOT a PATCH slice — it persists via a
+  // separate PUT (endpoint off the combined-PATCH contract) — so it feeds the
+  // page dirty flag + Review diff directly and is saved inside runCombinedSave
+  // after the PATCH. Seeded from shell.id so the hook is called unconditionally.
+  const supportedVersionsSection = useSupportedVersionsSection(shell.id)
 
   // ── General/Misc slice (RHF touched-not-dirty gate, preserved verbatim) ──
   function buildPatchRequest() {
@@ -433,8 +439,10 @@ function ComponentDetailEditor() {
     escrowSection.slice,
     overridesSection.slice,
   ]
-  const dirty = anyDirty(slices)
-  const diff = collectDiff(slices)
+  // Supported-versions coverage lives on a separate PUT endpoint (not a PATCH
+  // slice), so fold its dirty flag + diff into the page's unified pair here.
+  const dirty = anyDirty(slices) || supportedVersionsSection.isDirty
+  const diff = [...collectDiff(slices), ...supportedVersionsSection.diff]
 
   // Client-side artifact-ownership validity gate: block save while the editor shows unresolved
   // issues (invalid group, empty EXPLICIT, intra-component conflict, overlapping override ranges).
@@ -469,6 +477,7 @@ function ComponentDetailEditor() {
     jiraSection.reset()
     escrowSection.reset()
     overridesSection.reset()
+    supportedVersionsSection.reset()
     form.clearErrors()
   }
 
@@ -491,6 +500,7 @@ function ComponentDetailEditor() {
     // Change metadata (Jira task key + comment) is recorded on the audit row, not
     // the component — merge it onto the combined PATCH. Values arrive already
     // normalized (undefined when blank), so JSON.stringify omits them.
+    const patchDirty = anyDirty(slices)
     const request = {
       ...combineRequest(component.version, slices),
       jiraTaskKey: meta.jiraTaskKey,
@@ -498,16 +508,26 @@ function ComponentDetailEditor() {
     }
 
     try {
-      const saved = await updateMutation.mutateAsync(request)
-      // Re-baseline the General/Misc form to the SAVED (server-normalized) component.
-      // The GeneralTab re-hydration guard skips while the form is dirty/touched, so without
-      // an explicit reset here the form would stay dirty for the rest of the session and a
-      // later same-id refetch would never reflect a value CRS normalized on write. The
-      // section hooks re-seed themselves via their snapshot deep-equal; only the RHF form
-      // needs the nudge. (`if (saved)` keeps tests whose mutateAsync resolves undefined inert.)
-      if (saved) {
-        form.reset(mapComponentToForm(saved))
-        form.clearErrors()
+      // The combined PATCH fires only when a PATCH-backed section is dirty — a
+      // supported-versions-only save must not send an (essentially empty) PATCH.
+      if (patchDirty) {
+        const saved = await updateMutation.mutateAsync(request)
+        // Re-baseline the General/Misc form to the SAVED (server-normalized) component.
+        // The GeneralTab re-hydration guard skips while the form is dirty/touched, so without
+        // an explicit reset here the form would stay dirty for the rest of the session and a
+        // later same-id refetch would never reflect a value CRS normalized on write. The
+        // section hooks re-seed themselves via their snapshot deep-equal; only the RHF form
+        // needs the nudge. (`if (saved)` keeps tests whose mutateAsync resolves undefined inert.)
+        if (saved) {
+          form.reset(mapComponentToForm(saved))
+          form.clearErrors()
+        }
+      }
+      // Supported-versions coverage persists via its OWN PUT (off the PATCH
+      // contract), sequenced AFTER the PATCH. The hook re-seeds its draft to the
+      // MERGED server response, so the tab reads clean once this resolves.
+      if (supportedVersionsSection.isDirty) {
+        await supportedVersionsSection.save()
       }
       // Clear the override draft after a successful save. The combined PATCH
       // persisted the desired set; useUpdateComponent invalidates
@@ -1023,7 +1043,7 @@ function ComponentDetailEditor() {
 
             <TabsContent value="supported-versions">
               <EditSurface canEdit={canEdit} label="Supported Versions">
-                <SupportedVersionsTab componentId={component.id} canEdit={canEdit} />
+                <SupportedVersionsTab section={supportedVersionsSection} canEdit={canEdit} />
               </EditSurface>
             </TabsContent>
 
