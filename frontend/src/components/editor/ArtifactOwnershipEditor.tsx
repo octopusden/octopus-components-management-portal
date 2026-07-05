@@ -247,7 +247,8 @@ function MappingCard({ mapping, allMappings, conflict, configRanges, supportedGr
             }}
             // Pasting a comma list expands into rows immediately (merge at the caret).
             onPaste={(e) => {
-              const pasted = e.clipboardData.getData('text')
+              // Prefer the standard `text/plain` MIME; fall back to the legacy `text` alias.
+              const pasted = e.clipboardData.getData('text/plain') || e.clipboardData.getData('text')
               if (!pasted.includes(',')) return
               e.preventDefault()
               const el = e.currentTarget
