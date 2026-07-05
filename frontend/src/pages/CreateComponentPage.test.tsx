@@ -409,6 +409,13 @@ describe('CreateComponentPage — clone re-enter affordances', () => {
     // The banner uses lowercase "(re-enter)"; the field pill is the exact "Re-enter".
     expect(screen.getAllByText('Re-enter').length).toBeGreaterThan(0)
   })
+
+  it('associates the Re-enter pill with its input via aria-describedby', async () => {
+    mockUseComponent.mockReturnValue({ data: makeSource(), isLoading: false, error: null })
+    renderWizard('/components/new?from=c-1')
+    // The Component Key input's accessible description includes the pill text.
+    expect(screen.getByPlaceholderText('my-component')).toHaveAccessibleDescription(/re-enter/i)
+  })
 })
 
 describe('CreateComponentPage — clone unsaved-changes guard', () => {

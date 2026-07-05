@@ -546,10 +546,15 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
 
   // ---- Rendering helpers ----------------------------------------------------
 
-  // Amber input border for the unique-per-component fields the user must re-enter
-  // in clone mode (paired with the <ReenterPill /> on the label).
+  // Amber input border + associated "Re-enter" pill for the unique-per-component
+  // fields the user must re-enter in clone mode. Each pill gets a stable id so the
+  // matching input can reference it via aria-describedby.
   const reenterBorder = isClone ? 'border-amber-400 focus-visible:ring-amber-400' : ''
-  const reenterBadge = isClone ? <ReenterPill /> : undefined
+  const reenterId = (field: string) => (isClone ? `${field}-reenter` : undefined)
+  const reenterBadgeFor = (field: string) => {
+    const id = reenterId(field)
+    return id ? <ReenterPill id={id} /> : undefined
+  }
 
   // Roving-radio arrow-key navigation, shared by the profile cards and the
   // explicit-distribution segment (mirrors ui/ModeRadioGroup).
@@ -679,8 +684,8 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
   const renderGeneralStep = () => (
     <div className="space-y-6">
       <SectionHeader title="Identity" />
-      <Field label="Component Key" htmlFor="create-name" path="component.name" required badge={reenterBadge}>
-        <Input id="create-name" className={reenterBorder} placeholder="my-component" autoFocus {...register('name')} />
+      <Field label="Component Key" htmlFor="create-name" path="component.name" required badge={reenterBadgeFor('create-name')}>
+        <Input id="create-name" className={reenterBorder} placeholder="my-component" autoFocus aria-describedby={reenterId('create-name')} {...register('name')} />
         <FieldError message={errors.name?.message} />
       </Field>
       {editable('displayName') && (
@@ -855,13 +860,14 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
       <SectionHeader title="VCS" />
       {vcsApplies ? (
         <>
-          <Field label="VCS Path" htmlFor="create-vcsUrl" path="vcs.vcsPath" required badge={reenterBadge}>
+          <Field label="VCS Path" htmlFor="create-vcsUrl" path="vcs.vcsPath" required badge={reenterBadgeFor('create-vcsUrl')}>
             <Input
               id="create-vcsUrl"
               className={cn('font-mono text-xs', reenterBorder)}
               placeholder={vcsUrlPlaceholder}
               aria-required
               aria-invalid={Boolean(errors.vcsUrl)}
+              aria-describedby={reenterId('create-vcsUrl')}
               {...register('vcsUrl')}
             />
             <FieldError message={errors.vcsUrl?.message} />
@@ -902,13 +908,14 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
   const renderJiraStep = () => (
     <div className="space-y-6">
       <SectionHeader title="Jira project" />
-      <Field label="Jira Project Key" htmlFor="create-jiraProjectKey" path="jira.projectKey" required badge={reenterBadge}>
+      <Field label="Jira Project Key" htmlFor="create-jiraProjectKey" path="jira.projectKey" required badge={reenterBadgeFor('create-jiraProjectKey')}>
         <Input
           id="create-jiraProjectKey"
           className={reenterBorder}
           placeholder="JIRA project key"
           aria-required
           aria-invalid={Boolean(errors.jiraProjectKey)}
+          aria-describedby={reenterId('create-jiraProjectKey')}
           {...register('jiraProjectKey')}
         />
         <FieldError message={errors.jiraProjectKey?.message} />
@@ -991,10 +998,11 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
               <Label htmlFor="create-coordinate-type">
                 Distribution coordinate <span className="text-destructive">*</span>
               </Label>
-              {reenterBadge}
+              {reenterBadgeFor('create-coordinate-type')}
             </div>
             <select
               id="create-coordinate-type"
+              aria-describedby={reenterId('create-coordinate-type')}
               className={cn('h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm', reenterBorder)}
               value={coordinateType}
               onChange={(e) => selectCoordinateType(e.target.value as CreateFormValues['coordinate']['type'])}
@@ -1048,9 +1056,9 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
           <div className="space-y-1.5">
             <div className="flex items-center gap-1">
               <Label htmlFor="create-imageName">Image Name</Label>
-              {reenterBadge}
+              {reenterBadgeFor('create-imageName')}
             </div>
-            <Input id="create-imageName" className={reenterBorder} placeholder="image name" aria-label="Image name" {...register('coordinate.imageName')} />
+            <Input id="create-imageName" className={reenterBorder} placeholder="image name" aria-label="Image name" aria-describedby={reenterId('create-imageName')} {...register('coordinate.imageName')} />
           </div>
           <p className="text-xs text-muted-foreground">
             Maven / Package distribution coordinates are available only for an explicit external
@@ -1322,9 +1330,12 @@ function Field({
  * (Component Key, VCS Path, Jira project key, distribution coordinate) so the
  * user sees which values must be new.
  */
-function ReenterPill() {
+function ReenterPill({ id }: { id?: string }) {
   return (
-    <span className="inline-flex items-center rounded-full border border-amber-400/60 bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:border-amber-500/40 dark:bg-amber-950 dark:text-amber-300">
+    <span
+      id={id}
+      className="inline-flex items-center rounded-full border border-amber-400/60 bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:border-amber-500/40 dark:bg-amber-950 dark:text-amber-300"
+    >
       Re-enter
     </span>
   )
