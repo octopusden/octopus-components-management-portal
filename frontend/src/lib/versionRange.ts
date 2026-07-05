@@ -290,6 +290,44 @@ export function compareVersionRanges(a: string, b: string): number {
   return compareUpperEdge(ra, rb)
 }
 
+// ─── Adjacency merge (display coalescing of contiguous per-range overrides) ──
+//
+// Two per-attribute overrides on adjacent, exactly-touching ranges that carry
+// the SAME value read as one logical rule; the editor shows them as a single
+// coalesced row spanning both (parity with the merged supported-versions view).
+// `mergeAdjacentRanges` decides only the "exactly touching" geometry — value
+// equality is the caller's concern.
+
+const SINGLE_SEGMENT_RE = /^([[(])([^,]*),([^,]*)([\])])$/
+
+/**
+ * When `a` (the lower range) and `b` (the higher range) are single dot-numeric
+ * segments that meet EXACTLY — `a`'s upper bound equals `b`'s lower bound with
+ * exactly one side inclusive, so the shared version is covered once (not zero
+ * times, not twice) — returns the union range `a.lower … b.upper`, preserving
+ * the original bound tokens (e.g. `(,1.0.107)` + `[1.0.107,1.2.471)` →
+ * `(,1.2.471)`). Returns null when they overlap (both bounds inclusive at the
+ * join), leave a gap (both exclusive), are out of order / non-touching, or
+ * either side isn't a single parseable segment. Callers pass ranges pre-sorted
+ * so `a` is the lower one.
+ */
+export function mergeAdjacentRanges(a: string, b: string): string | null {
+  const ra = parseSimpleSegment(a)
+  const rb = parseSimpleSegment(b)
+  if (!ra || !rb) return null
+  // Both bounds at the join must exist and be equal as versions.
+  if (ra.hi === null || rb.lo === null) return null
+  if (compareVersionArrays(ra.hi, rb.lo) !== 0) return null
+  // Exactly one side inclusive at the join (`)`+`[` or `]`+`(`). Two inclusive
+  // bounds overlap at the shared version; two exclusive bounds skip it — neither
+  // is a clean, coverage-preserving merge.
+  if (ra.hiIncl === rb.loIncl) return null
+  const ma = SINGLE_SEGMENT_RE.exec(normalize(a))
+  const mb = SINGLE_SEGMENT_RE.exec(normalize(b))
+  if (!ma || !mb) return null
+  return `${ma[1]}${ma[2]},${mb[3]}${mb[4]}`
+}
+
 /**
  * The numeric-highest lower bound across a set of ranges, as a dot-string
  * (e.g. `1.5.1400`), or `null` when none has a usable lower bound. Used to seed

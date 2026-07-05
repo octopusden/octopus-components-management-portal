@@ -1,6 +1,7 @@
 import { Plus, Trash2 } from 'lucide-react'
 import { Button } from '../ui/button'
 import { formatVersionRange } from '../../lib/versionRange'
+import { coalescePerRangeOverrides, type PerRangeGroup } from './perRangeGrouping'
 import type { FieldOverride } from '../../lib/types'
 
 /** One-line human summary of a distribution marker override's children —
@@ -20,37 +21,50 @@ export interface DistributionPerRangeProps {
   overrides: FieldOverride[]
   canEdit: boolean
   onAdd: () => void
-  onEdit: (o: FieldOverride) => void
-  onDelete: (id: string) => void
+  /** Edit a coalesced group (a run of contiguous same-value overrides shown as
+   *  one row). A single-member group edits that one override; a multi-member
+   *  group edits the merged range and collapses on save. */
+  onEdit: (group: PerRangeGroup) => void
+  /** Delete every override in the coalesced group. */
+  onDelete: (group: PerRangeGroup) => void
 }
 
 /**
- * Per-range variants block shown under a Distribution subsection (issue #146).
- * Lists the effective per-range overrides for one `distribution.*` marker path
- * and offers add/edit/delete — all of which queue into the shared override
- * draft so they ride the editor's one combined Save.
+ * Per-range overrides block shown under a Distribution subsection (issue #146).
+ * Lists the effective per-range overrides for one `distribution.*` marker path,
+ * coalescing contiguous same-value ones into a single row (parity with the
+ * merged supported-versions view), and offers add/edit/delete — all of which
+ * queue into the shared override draft so they ride the editor's one combined
+ * Save. Terminology matches the Overrides tab ("override", not "variant").
  */
 export function DistributionPerRange({ overrides, canEdit, onAdd, onEdit, onDelete }: DistributionPerRangeProps) {
+  const groups = coalescePerRangeOverrides(overrides)
   return (
     <div className="rounded-md border border-dashed p-3 space-y-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-muted-foreground">
-          Per-range variants{overrides.length > 0 ? ` (${overrides.length})` : ''}
+          Per-range overrides{groups.length > 0 ? ` (${groups.length})` : ''}
         </span>
         <Button variant="ghost" size="sm" type="button" onClick={onAdd} disabled={!canEdit} className="h-7">
           <Plus className="h-3 w-3" />
-          Add per-range variant
+          Add override
         </Button>
       </div>
-      {overrides.map((o) => {
-        const summary = summarize(o)
+      {groups.map((group) => {
+        const summary = summarize(group.representative)
         return (
-          <div key={o.id} data-testid="dist-per-range-row" className="flex items-center justify-between gap-2 rounded border px-2 py-1">
+          <div key={group.members.map((m) => m.id).join('|')} data-testid="dist-per-range-row" className="flex items-center justify-between gap-2 rounded border px-2 py-1">
             <div className="flex min-w-0 flex-1 items-baseline gap-2">
-              <span className="shrink-0 font-mono text-xs">{formatVersionRange(o.versionRange)}</span>
-              {summary && (
+              <span className="shrink-0 font-mono text-xs">{formatVersionRange(group.displayRange)}</span>
+              {summary ? (
                 <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={summary}>
                   {summary}
+                </span>
+              ) : (
+                // No image/artifact set for this range — the override replaces the
+                // base list with nothing. Spell it out so the row isn't a bare range.
+                <span className="min-w-0 flex-1 truncate text-xs italic text-muted-foreground">
+                  Not specified
                 </span>
               )}
             </div>
@@ -59,8 +73,8 @@ export function DistributionPerRange({ overrides, canEdit, onAdd, onEdit, onDele
                 variant="ghost"
                 size="sm"
                 type="button"
-                aria-label={`Edit per-range variant ${o.versionRange}`}
-                onClick={() => onEdit(o)}
+                aria-label={`Edit override ${group.displayRange}`}
+                onClick={() => onEdit(group)}
                 disabled={!canEdit}
                 className="h-7"
               >
@@ -70,8 +84,8 @@ export function DistributionPerRange({ overrides, canEdit, onAdd, onEdit, onDele
                 variant="ghost"
                 size="sm"
                 type="button"
-                aria-label={`Delete per-range variant ${o.versionRange}`}
-                onClick={() => onDelete(o.id)}
+                aria-label={`Delete override ${group.displayRange}`}
+                onClick={() => onDelete(group)}
                 disabled={!canEdit}
                 className="h-7 text-destructive hover:text-destructive"
               >

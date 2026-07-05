@@ -118,13 +118,13 @@ export const fieldDescriptions: Record<string, string> = {
   'component.distributionExternal':
     'Marks the component as delivered to external consumers rather than internal-only. Combined with Explicit it enables external-distribution checks and the requirement for release managers, security champions and copyright.',
   'distribution.mavenArtifacts':
-    'Artifact coordinates (group/artifact patterns) this component publishes to the artifact repository. Patterns support dynamic variables. Distribution automation publishes and validates these coordinates on release. You can also add per-range variants that apply only to specific version ranges.',
+    'Artifact coordinates (group/artifact patterns) this component publishes to the artifact repository. Patterns support dynamic variables. Distribution automation publishes and validates these coordinates on release. You can also add per-range overrides that apply only to specific version ranges.',
   'distribution.fileUrlArtifacts':
-    'Direct file URLs of pre-built artifacts to publish, optionally with an explicit artifact ID and classifier. Distribution automation fetches the files from these URLs and uploads them under the given coordinates. You can also add per-range variants that apply only to specific version ranges.',
+    'Direct file URLs of pre-built artifacts to publish, optionally with an explicit artifact ID and classifier. Distribution automation fetches the files from these URLs and uploads them under the given coordinates. You can also add per-range overrides that apply only to specific version ranges.',
   'distribution.dockerImages':
-    'Container images this component distributes (repository/image names, optionally with a flavor). Container-publishing automation pushes and validates these images on release. You can also add per-range variants that apply only to specific version ranges.',
+    'Container images this component distributes (repository/image names, optionally with a flavor). Container-publishing automation pushes and validates these images on release. You can also add per-range overrides that apply only to specific version ranges.',
   'distribution.packages':
-    'OS package coordinates the component distributes (e.g. rpm or deb packages). Package-publishing automation builds and uploads them on release. You can also add per-range variants that apply only to specific version ranges.',
+    'OS package coordinates the component distributes (e.g. rpm or deb packages). Package-publishing automation builds and uploads them on release. You can also add per-range overrides that apply only to specific version ranges.',
   'distribution.securityGroups':
     'Access-control groups gating who may download this component’s distributed artifacts. Distribution and escrow automation apply these groups when publishing.',
   'distribution.maven.groupPattern':
