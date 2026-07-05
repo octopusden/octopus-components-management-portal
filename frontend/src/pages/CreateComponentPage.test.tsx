@@ -585,6 +585,70 @@ describe('CreateComponentPage — Escrow step', () => {
     expect(screen.getByRole('button', { name: /^create component$/i })).toBeDefined()
   })
 
+  it('lists the chosen Escrow Generation on the Review summary', async () => {
+    mockUseComponentDefaults.mockReturnValue({
+      ...COMPONENT_DEFAULTS_OK,
+      data: { vcs: { tag: '$module-$version' }, escrow: { generation: 'AUTO' } },
+    })
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await userEvent.click(screen.getByRole('button', { name: /Review & create/i }))
+    // The summary "everything below will be created" carries the escrow generation.
+    expect(screen.getByText('Generation')).toBeDefined()
+    expect(screen.getByText('+ AUTO')).toBeDefined()
+  })
+
+  it('disables the Generation select when field-config marks escrow.generation readonly', async () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: { escrow: { generation: { visibility: 'readonly' } } },
+      isLoading: false,
+      isError: false,
+    })
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Escrow' }))
+    expect((screen.getByLabelText(/^Generation/i) as HTMLSelectElement).disabled).toBe(true)
+  })
+
+  it('hides the Generation field and shows a note when escrow.generation is hidden', async () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: { escrow: { generation: { visibility: 'hidden' } } },
+      isLoading: false,
+      isError: false,
+    })
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Escrow' }))
+    expect(screen.queryByLabelText(/^Generation/i)).toBeNull()
+    expect(screen.getByText(/not configurable for new components/i)).toBeDefined()
+  })
+
+  it('routes a 400 escrow-generation error to the Escrow step', async () => {
+    mockMutateAsync.mockRejectedValueOnce(
+      new ApiError(400, 'bad', JSON.stringify({ errorMessage: 'generation: unknown escrow generation' })),
+    )
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext() // General
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await clickNext() // Build
+    await userEvent.selectOptions(screen.getByLabelText(/^Build System/i), 'PROVIDED')
+    await clickNext() // VCS note
+    await clickNext() // Jira
+    await userEvent.type(screen.getByLabelText(/^Jira Project Key/i), 'WIDG')
+    await clickNext() // Distribution
+    await clickNext() // Escrow
+    await clickNext() // Review
+    await userEvent.type(screen.getByLabelText(/^Jira task key/i), 'ABC-123')
+    await userEvent.click(screen.getByRole('button', { name: /^create component$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1))
+    // The rejected generation lands the user back on the Escrow step.
+    const escrowStep = await screen.findByRole('button', { name: 'Escrow' })
+    await waitFor(() => expect(escrowStep).toHaveAttribute('aria-current', 'step'))
+    expect(escrowStep.getAttribute('data-status')).toBe('invalid')
+  })
+
   it('seeds the Escrow Generation from the source base row in clone mode', async () => {
     mockUseComponent.mockReturnValue({
       data: makeSource({

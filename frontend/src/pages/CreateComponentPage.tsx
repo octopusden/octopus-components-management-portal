@@ -541,6 +541,12 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
         if (fieldErrors.get('artifactIds') || fieldErrors.get('ownership')) {
           stepId = 'build'
         }
+        // A rejected escrow generation (stale/invalid enum value) routes to the
+        // Escrow step. CRS reports the aspect scalar as the bare `generation`
+        // field name (parseServerFieldErrors never emits dotted keys).
+        if (fieldErrors.get('generation')) {
+          stepId = 'escrow'
+        }
       }
       setServerError({ message, stepId })
       enterStep(stepId)
@@ -1158,6 +1164,10 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
         gated={gated}
         vcsApplies={vcsApplies}
         classification={classificationRecap()}
+        // Only surface the escrow generation when it will actually be sent — a
+        // hidden/readonly (non-editable) field is stripped from the payload, so
+        // it must not appear in the "everything below will be created" summary.
+        escrowGeneration={escrowGenerationEditable ? values.escrowGeneration : ''}
       />
 
       <fieldset className="space-y-4 rounded-md border border-border p-3">
@@ -1419,11 +1429,13 @@ function SummaryDiff({
   gated,
   vcsApplies,
   classification,
+  escrowGeneration,
 }: {
   values: CreateFormValues
   gated: boolean
   vcsApplies: boolean
   classification: string
+  escrowGeneration: string
 }) {
   const groups: { heading: string; rows: [string, string][] }[] = []
   const push = (heading: string, rows: [string, string | undefined][]) => {
@@ -1478,6 +1490,7 @@ function SummaryDiff({
           ? `${coord.packageType} ${coord.packageName}`
           : ''
   push('Distribution', [[coord.type === 'docker' ? 'Docker image' : 'Distribution coordinate', coordSummary]])
+  push('Escrow', [['Generation', escrowGeneration]])
 
   return (
     <div className="rounded-md border">
