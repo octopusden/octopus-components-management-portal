@@ -280,7 +280,12 @@ describe('CreateComponentPage — scratch create flow', () => {
     await userEvent.click(screen.getByRole('button', { name: /^create component$/i }))
     await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1))
     const buildStep = await screen.findByRole('button', { name: 'Build' })
-    await waitFor(() => expect(buildStep.getAttribute('data-status')).toBe('invalid'))
+    // Prove the conflict actually routed TO Build (it is the current step) AND that
+    // the current+invalid step reads "invalid", not "active" — the whole point of
+    // the precedence. Without the aria-current check the guard would pass even if
+    // the UI stayed elsewhere while merely flagging Build invalid.
+    await waitFor(() => expect(buildStep).toHaveAttribute('aria-current', 'step'))
+    expect(buildStep.getAttribute('data-status')).toBe('invalid')
   })
 
   it('enforces the VCS Path rule for a VCS-requiring build system and marks the step invalid', async () => {
