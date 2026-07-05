@@ -125,8 +125,10 @@ export function CreateComponentButton() {
  * `/components/new?from={id}` (clone). Replaces the old modal. Reuses the shared
  * create form model (schema, defaults, buildCreateRequest) and shared controls.
  */
-// The wizard is presented as a near-fullscreen dialog over the components list.
-// The width override drops the global `sm:max-w-lg` at the call site only.
+// The wizard is presented as a near-fullscreen dialog over a dimmed backdrop.
+// `/components/new` is its own route (the list is not mounted behind it), so the
+// backdrop is neutral rather than the live list. The width override drops the
+// global `sm:max-w-lg` at the call site only.
 const DIALOG_CLASS =
   'w-[96vw] max-w-[1560px] h-[96vh] p-0 overflow-hidden flex flex-col gap-0 rounded-[14px]'
 
@@ -1181,7 +1183,11 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
             const active = step === current
             const showInvalid = shownInvalidSteps.has(step)
             const done = !active && visitedSteps.has(step) && !invalidSteps.has(step)
-            const status = active ? 'active' : showInvalid ? 'invalid' : done ? 'done' : 'todo'
+            // `invalid` wins over `active`: the current step can also be invalid
+            // once a Create attempt marks every step attempted, and that must stay
+            // distinguishable (data-status + destructive styling). aria-current
+            // still conveys "active" independently.
+            const status = showInvalid ? 'invalid' : active ? 'active' : done ? 'done' : 'todo'
             // Announce the icon-only status to assistive tech (the circle is
             // aria-hidden). `active` is already conveyed by aria-current="step".
             const statusText = showInvalid ? 'has errors' : done ? 'completed' : null
@@ -1204,10 +1210,10 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
                   aria-hidden
                   className={cn(
                     'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs',
-                    active
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : showInvalid
-                        ? 'border-destructive/50 text-destructive'
+                    showInvalid
+                      ? 'border-destructive/50 text-destructive'
+                      : active
+                        ? 'border-primary bg-primary text-primary-foreground'
                         : done
                           ? 'border-emerald-600/40 bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
                           : 'border-border text-muted-foreground',
