@@ -1471,7 +1471,9 @@ export interface components {
         };
         SupportedVersionsRequest: {
             all?: boolean;
+            /** @description Optional free-text comment describing the change; recorded on the audit row. */
             changeComment?: string;
+            /** @description Optional Jira task key motivating the change (e.g. ABC-123); recorded on the audit row. */
             jiraTaskKey?: string;
             ranges?: string[];
         };
