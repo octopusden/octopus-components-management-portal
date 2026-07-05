@@ -2,6 +2,14 @@ import { useState } from 'react'
 import { Plus, X, AlertTriangle, Infinity as InfinityIcon, Clock } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '../ui/dialog'
 import { useSupportedVersions, useUpdateSupportedVersions } from '../../hooks/useComponent'
 import { isValidVersionRange, isAllowedOverrideRange, formatVersionRange, compareVersionRanges } from '../../lib/versionRange'
 
@@ -27,6 +35,10 @@ export function SupportedVersionsTab({ componentId, canEdit }: SupportedVersions
 
   const [newRange, setNewRange] = useState('')
   const [error, setError] = useState<string | null>(null)
+  // Confirmation gate for the silent widen-to-ALL: deleting the ONLY remaining
+  // range collapses coverage to all versions server-side, so the last-range
+  // trash click opens this dialog instead of firing the PUT.
+  const [confirmWidenOpen, setConfirmWidenOpen] = useState(false)
 
   if (isLoading || !data) {
     return <p className="text-sm text-muted-foreground">Loading supported versions…</p>
@@ -62,7 +74,23 @@ export function SupportedVersionsTab({ componentId, canEdit }: SupportedVersions
   }
 
   function handleRemove(range: string) {
-    put({ ranges: ranges.filter((r) => r !== range) })
+    // Removing this range would leave an empty set, which CRS canonically stores
+    // as all=true — a silent widen to ALL versions. Gate that behind an explicit
+    // confirmation (a deliberate widen), never a delete side-effect. Key off the
+    // POST-filter result (not ranges.length) so a defensive empty-after-remove is
+    // caught even in the unexpected event of a duplicate range string.
+    const remaining = ranges.filter((r) => r !== range)
+    if (remaining.length === 0) {
+      setConfirmWidenOpen(true)
+      return
+    }
+    put({ ranges: remaining })
+  }
+
+  function confirmWiden() {
+    // Transition to all=true only via this explicit confirmation — send {all:true}
+    // rather than an empty ranges list, so the intent is unmistakable on the wire.
+    put({ all: true }, () => setConfirmWidenOpen(false))
   }
 
   return (
@@ -181,6 +209,48 @@ export function SupportedVersionsTab({ componentId, canEdit }: SupportedVersions
           Preview only — not yet editable.
         </p>
       </div>
+
+      <Dialog
+        open={confirmWidenOpen}
+        // Hold the dialog open while the confirm PUT is in flight so Escape /
+        // overlay-click can't "cancel" a request that will still land.
+        onOpenChange={(open) => {
+          if (updateMutation.isPending) return
+          setConfirmWidenOpen(open)
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" aria-hidden="true" />
+              Remove the only supported range?
+            </DialogTitle>
+            <DialogDescription>
+              This is the last range, so removing it sets coverage to{' '}
+              <strong>all versions</strong> — every historical version becomes supported, and
+              per-attribute overrides resolve for versions you had excluded. This is not the same
+              as deleting one of several ranges.
+            </DialogDescription>
+          </DialogHeader>
+          {error && (
+            <p className="text-sm text-destructive" role="alert">
+              {error}
+            </p>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmWidenOpen(false)}
+              disabled={updateMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmWiden} disabled={updateMutation.isPending}>
+              Widen to all versions
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

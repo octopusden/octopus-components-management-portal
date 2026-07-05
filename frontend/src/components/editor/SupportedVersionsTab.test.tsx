@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { SupportedVersionsTab } from './SupportedVersionsTab'
@@ -88,11 +88,46 @@ describe('SupportedVersionsTab', () => {
     expect(mockUpdate.mock.calls[0]?.[0]).toEqual({ ranges: ['[2.0,)'] })
   })
 
-  it('PUTs the set without the removed range on delete', async () => {
+  it('PUTs the set without the removed range on delete (still ≥1 range left — no dialog)', async () => {
     mockData = { all: false, ranges: ['[1.0,2.0)', '[2.0,)'], warnings: [] }
     renderTab()
     await userEvent.click(screen.getByRole('button', { name: 'Remove supported range [2.0,)' }))
     expect(mockUpdate).toHaveBeenCalledWith({ ranges: ['[1.0,2.0)'] }, expect.anything())
+  })
+
+  // Cutover blocker: removing the ONLY remaining range canonically collapses to
+  // all=true server-side (empty ranges ⇒ all). That silent widen-to-ALL on a
+  // single misclick is the defect — deleting the last range must require an
+  // explicit confirmation and must NEVER silently PUT ranges:[].
+  it('deleting the LAST remaining range opens a confirmation dialog and does not PUT', async () => {
+    mockData = { all: false, ranges: ['[1.0,2.0)'], warnings: [] }
+    renderTab()
+    await userEvent.click(screen.getByRole('button', { name: 'Remove supported range [1.0,2.0)' }))
+    // Nothing sent yet — the widen is gated behind an explicit confirmation.
+    expect(mockUpdate).not.toHaveBeenCalled()
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(/only supported range/i)).toBeDefined()
+    expect(within(dialog).getByText(/sets coverage to/i)).toBeDefined()
+  })
+
+  it('confirming the widen dialog PUTs {all:true} (explicit intent, never a silent ranges:[])', async () => {
+    mockData = { all: false, ranges: ['[1.0,2.0)'], warnings: [] }
+    renderTab()
+    await userEvent.click(screen.getByRole('button', { name: 'Remove supported range [1.0,2.0)' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: /widen to all versions/i }))
+    expect(mockUpdate).toHaveBeenCalledTimes(1)
+    expect(mockUpdate.mock.calls[0]?.[0]).toEqual({ all: true })
+  })
+
+  it('cancelling the widen dialog keeps the range and makes no PUT', async () => {
+    mockData = { all: false, ranges: ['[1.0,2.0)'], warnings: [] }
+    renderTab()
+    await userEvent.click(screen.getByRole('button', { name: 'Remove supported range [1.0,2.0)' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: /cancel/i }))
+    expect(mockUpdate).not.toHaveBeenCalled()
+    expect(screen.getByText('[1.0,2.0)')).toBeDefined()
   })
 
   it('PUTs {all:true} via "Set to all versions"', async () => {
