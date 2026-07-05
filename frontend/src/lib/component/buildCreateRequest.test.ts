@@ -24,6 +24,7 @@ function makeForm(overrides: Partial<CreateFormValues> = {}): CreateFormValues {
     vcsUrl: 'ssh://git@host/proj/repo.git',
     vcsTag: '$module-$version',
     vcsBranch: 'master',
+    clientCode: '',
     coordinate: {
       type: 'maven',
       groupPattern: '',
@@ -92,6 +93,38 @@ function makeSource(overrides: Partial<ComponentDetail> = {}): ComponentDetail {
     ...overrides,
   }
 }
+
+describe('buildCreateRequest — clientCode (external-gated)', () => {
+  it('sends the form clientCode, overriding the source, when external', () => {
+    const req = buildCreateRequest(
+      makeForm({ distributionExternal: true, clientCode: 'FORM_CC' }),
+      makeSource({ clientCode: 'SRC_CC' }),
+    )
+    expect(req.clientCode).toBe('FORM_CC')
+  })
+
+  it('falls back to the source clientCode and ignores the form value when not external', () => {
+    const req = buildCreateRequest(
+      makeForm({ distributionExternal: false, clientCode: 'FORM_CC' }),
+      makeSource({ clientCode: 'SRC_CC' }),
+    )
+    expect(req.clientCode).toBe('SRC_CC')
+  })
+
+  it('omits clientCode when external but the form value is empty (scratch)', () => {
+    const req = buildCreateRequest(makeForm({ distributionExternal: true, clientCode: '' }))
+    expect('clientCode' in req).toBe(false)
+  })
+
+  it('never sends clientCode when the field is not editable (hidden/readonly)', () => {
+    const req = buildCreateRequest(
+      makeForm({ distributionExternal: true, clientCode: 'FORM_CC' }),
+      makeSource({ clientCode: 'SRC_CC' }),
+      (field) => field !== 'clientCode',
+    )
+    expect('clientCode' in req).toBe(false)
+  })
+})
 
 describe('buildCreateRequest — scratch mode (no source)', () => {
   it('builds the from-scratch payload mirroring the legacy CreateComponentDialog shape', () => {
@@ -458,7 +491,8 @@ describe('buildCreateRequest — copy mode (with source)', () => {
       name: 'svc-clone',
       productType: 'TYPE_A',
       systems: ['SYS1'],
-      clientCode: 'CL1',
+      // clientCode is external-gated and covered separately; this form is external
+      // so it comes from the form, not the source.
       solution: true,
       parentComponentName: 'parent-svc',
       releasesInDefaultBranch: true,

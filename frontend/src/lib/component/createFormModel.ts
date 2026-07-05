@@ -156,6 +156,7 @@ export function makeCreateSchema(
       releaseManager: z.array(z.string()),
       securityChampion: z.array(z.string()),
       copyright: z.string(),
+      clientCode: z.string(),
       jiraProjectKey: z.string().trim().min(1, 'Jira Project Key is required'),
       versionPrefix: z.string(),
       minorVersionFormat: z.string(),
@@ -315,6 +316,7 @@ export const SCRATCH_DEFAULTS: CreateFormValues = {
   releaseManager: [],
   securityChampion: [],
   copyright: '',
+  clientCode: '',
   jiraProjectKey: '',
   versionPrefix: '',
   minorVersionFormat: '',
@@ -449,6 +451,7 @@ export function initialValues(
     releaseManager: [...(source.releaseManager ?? [])],
     securityChampion: [...(source.securityChampion ?? [])],
     copyright: source.copyright ?? '',
+    clientCode: source.clientCode ?? '',
     versionPrefix: selectBaseRow(source)?.jira?.versionPrefix ?? '',
     ...seedVersionFormats(
       selectBaseRow(source)?.jira?.lineVersionFormat,

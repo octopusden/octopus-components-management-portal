@@ -7,9 +7,9 @@ import {
   type UseFormRegisterReturn,
 } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Check, ChevronLeft, ChevronRight, Plus, X, AlertCircle } from 'lucide-react'
-import { Layout } from '../components/Layout'
+import { Check, ChevronLeft, ChevronRight, Plus, X, AlertCircle, Loader2 } from 'lucide-react'
 import { Button } from '../components/ui/button'
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../components/ui/dialog'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Badge } from '../components/ui/badge'
@@ -68,6 +68,16 @@ const STEP_LABELS: Record<StepId, string> = {
   review: 'Review & create',
 }
 
+const STEP_SUBTITLES: Record<StepId, string> = {
+  profile: 'What are you creating?',
+  general: 'Identity & ownership',
+  build: 'Build system & artifacts',
+  vcs: 'Repository & branch',
+  jira: 'Project & versions',
+  distribution: 'Docker & coordinate',
+  review: 'Summary & save',
+}
+
 const SCRATCH_STEPS: StepId[] = ['profile', 'general', 'build', 'vcs', 'jira', 'distribution', 'review']
 // Clone keeps the Profile step too: the profile is pre-derived from the source
 // but stays editable (changing it resets the Component Key + recomputes flags),
@@ -115,7 +125,15 @@ export function CreateComponentButton() {
  * `/components/new?from={id}` (clone). Replaces the old modal. Reuses the shared
  * create form model (schema, defaults, buildCreateRequest) and shared controls.
  */
+// The wizard is presented as a near-fullscreen dialog over a dimmed backdrop.
+// `/components/new` is its own route (the list is not mounted behind it), so the
+// backdrop is neutral rather than the live list. The width override drops the
+// global `sm:max-w-lg` at the call site only.
+const DIALOG_CLASS =
+  'w-[96vw] max-w-[1560px] h-[96vh] p-0 overflow-hidden flex flex-col gap-0 rounded-[14px]'
+
 export function CreateComponentPage() {
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const sourceId = searchParams.get('from') ?? ''
   const isClone = !!sourceId
@@ -126,31 +144,48 @@ export function CreateComponentPage() {
   const ready = (!isClone || (!!source && !error)) && (defaults.isSuccess || defaults.isError)
 
   return (
-    <Layout>
-      {isClone && error ? (
-        <InlineError
-          message={
-            <>
-              Failed to load the source component:{' '}
-              {error instanceof Error ? error.message : String(error)}
-            </>
-          }
-        />
-      ) : !ready ? (
-        <div className="mx-auto max-w-2xl space-y-4">
-          <SkeletonBlock className="h-9 w-64" />
-          <SkeletonBlock className="h-9 w-full" />
-          <SkeletonBlock className="h-9 w-full" />
-        </div>
-      ) : (
-        <CreateComponentWizard
-          key={source?.id ?? 'scratch'}
-          source={source ?? null}
-          isClone={isClone}
-          defaults={componentDefaults}
-        />
-      )}
-    </Layout>
+    <Dialog
+      open
+      onOpenChange={(next) => {
+        // The dialog is always open; closing it (Cancel / ✕ / Esc / backdrop)
+        // navigates back to the list. The UnsavedChangesGuard still intercepts a
+        // dirty form because the navigation goes through the router.
+        if (!next) navigate('/components')
+      }}
+    >
+      <DialogContent className={DIALOG_CLASS}>
+        <DialogDescription className="sr-only">
+          Fill in the steps to create a new component.
+        </DialogDescription>
+        {isClone && error ? (
+          <div className="flex flex-1 flex-col gap-4 p-6">
+            <DialogTitle>Clone component</DialogTitle>
+            <InlineError
+              message={
+                <>
+                  Failed to load the source component:{' '}
+                  {error instanceof Error ? error.message : String(error)}
+                </>
+              }
+            />
+          </div>
+        ) : !ready ? (
+          <div className="flex flex-1 flex-col gap-4 p-6">
+            <DialogTitle className="sr-only">Create component</DialogTitle>
+            <SkeletonBlock className="h-9 w-64" />
+            <SkeletonBlock className="h-9 w-full" />
+            <SkeletonBlock className="h-9 w-full" />
+          </div>
+        ) : (
+          <CreateComponentWizard
+            key={source?.id ?? 'scratch'}
+            source={source ?? null}
+            isClone={isClone}
+            defaults={componentDefaults}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -188,6 +223,17 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
   )
   const [profile, setProfile] = useState<ComponentProfile | null>(derived?.profile ?? null)
   const [explicitAnswer, setExplicitAnswer] = useState<boolean>(derived?.explicit ?? false)
+  // The clone profile/explicit are seeded once from `derived`, but `derived` is
+  // recomputed when solutionKeyPatterns arrive after mount (portal-config loads
+  // async), which can change the derived profile (e.g. solution → dmp-bundle).
+  // Re-seed from `derived` until the user actually picks a profile, so a late
+  // config load never looks like an unsaved edit.
+  const userPickedProfile = useRef(false)
+  useEffect(() => {
+    if (userPickedProfile.current || !derived) return
+    setProfile(derived.profile)
+    setExplicitAnswer(derived.explicit)
+  }, [derived])
   // A profile is needed for the (profile-dependent) key rule even before the
   // scratch gate is passed; fall back to the base-regex profile for the schema.
   const effectiveProfile: ComponentProfile = profile ?? 'regular-external'
@@ -248,15 +294,17 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
   // the Component Key so the profile-dependent rule is re-entered (brief).
   const applyProfile = useCallback(
     (next: ComponentProfile, nextExplicit: boolean) => {
+      userPickedProfile.current = true
       const changed = next !== profile
       setProfile(next)
       setExplicitAnswer(nextExplicit)
       const flags = flagsForProfile(next, nextExplicit)
       // Mark the form dirty when the profile OR its derived distribution flags
       // change — e.g. toggling the explicit-distribution answer for the SAME
-      // profile still changes submitted values. In clone mode `isDirty` is the
-      // only unsaved-guard signal (the scratch `profile !== null` term doesn't
-      // apply there).
+      // profile still changes submitted values. A profile-only change that leaves
+      // the RHF flags at their defaults is caught separately by `profileTouched`
+      // (see the UnsavedChangesGuard), since the profile also drives non-RHF
+      // submitted values such as the `solution` flag.
       const flagsChanged =
         flags.distributionExternal !== getValues('distributionExternal') ||
         flags.distributionExplicit !== getValues('distributionExplicit')
@@ -340,6 +388,17 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
   // ---- Steps + cross-step validity ------------------------------------------
   const steps = isClone ? CLONE_STEPS : SCRATCH_STEPS
   const [current, setCurrent] = useState<StepId>(isClone ? 'general' : 'profile')
+  // Steps the user has landed on, plus whether a Create was attempted. Together
+  // they gate the rail's invalid/done markers so nothing is flagged eagerly on
+  // first load — only after a step is visited (and left) or a submit is tried.
+  const [visitedSteps, setVisitedSteps] = useState<Set<StepId>>(
+    () => new Set<StepId>([isClone ? 'general' : 'profile']),
+  )
+  const [attempted, setAttempted] = useState(false)
+  const enterStep = (step: StepId) => {
+    setCurrent(step)
+    setVisitedSteps((prev) => (prev.has(step) ? prev : new Set(prev).add(step)))
+  }
 
   // Cross-step validity from a full parse (independent of RHF's touched state) so
   // the stepper can mark ANY step invalid, not just the current one.
@@ -361,21 +420,34 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
     return set
   }, [parseIssues, isClone, profile, jiraKeyError, serverError])
 
+  // Invalid steps actually shown as such: only those visited (or all, once a
+  // Create was attempted), and never the step you are currently on until you
+  // leave it or submit. This is the eager-validation fix.
+  const shownInvalidSteps = useMemo(() => {
+    const set = new Set<StepId>()
+    for (const step of invalidSteps) {
+      if (!attempted && !visitedSteps.has(step)) continue
+      if (step === current && !attempted) continue
+      set.add(step)
+    }
+    return set
+  }, [invalidSteps, visitedSteps, attempted, current])
+
   const currentIndex = steps.indexOf(current)
   const isLast = currentIndex === steps.length - 1
   const currentValid = !invalidSteps.has(current)
 
   const goToStep = (step: StepId) => {
-    if (steps.includes(step)) setCurrent(step)
+    if (steps.includes(step)) enterStep(step)
   }
   const goNext = () => {
     if (!currentValid) return
     const next = steps[currentIndex + 1]
-    if (next) setCurrent(next)
+    if (next) enterStep(next)
   }
   const goBack = () => {
     const prev = steps[currentIndex - 1]
-    if (prev) setCurrent(prev)
+    if (prev) enterStep(prev)
   }
 
   // On a successful create, flip `submitted` (releases the unsaved-changes guard)
@@ -388,6 +460,7 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
   }, [submitted, createdPath, navigate])
 
   async function onSubmit(formValues: CreateFormValues) {
+    setAttempted(true)
     if (jiraKeyError) return
     setServerError(null)
     try {
@@ -452,7 +525,7 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
         }
       }
       setServerError({ message, stepId })
-      setCurrent(stepId)
+      enterStep(stepId)
       toast({ title: 'Failed to create component', description: message, variant: 'destructive' })
     }
   }
@@ -475,6 +548,33 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
 
   // ---- Rendering helpers ----------------------------------------------------
 
+  // Amber input border + associated "Re-enter" pill for the unique-per-component
+  // fields the user must re-enter in clone mode. Each pill gets a stable id so the
+  // matching input can reference it via aria-describedby.
+  const reenterBorder = isClone ? 'border-amber-400 focus-visible:ring-amber-400' : ''
+  const reenterId = (field: string) => (isClone ? `${field}-reenter` : undefined)
+  const reenterBadgeFor = (field: string) => {
+    const id = reenterId(field)
+    return id ? <ReenterPill id={id} /> : undefined
+  }
+
+  // Roving-radio arrow-key navigation, shared by the profile tiles and the
+  // explicit-distribution segment (mirrors ui/ModeRadioGroup).
+  const moveRadio = (
+    e: React.KeyboardEvent,
+    count: number,
+    index: number,
+    select: (i: number) => void,
+  ) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+      e.preventDefault()
+      select((index + 1) % count)
+    } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+      e.preventDefault()
+      select((index - 1 + count) % count)
+    }
+  }
+
   const renderProfileStep = () => (
     <div className="space-y-6">
       <div>
@@ -483,30 +583,57 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
           The profile sets how the component is classified and how its key is named.
         </p>
       </div>
-      <div className="grid gap-3">
-        {PROFILE_META.map((p) => {
+      <div role="radiogroup" aria-label="Component profile" className="grid gap-3 sm:grid-cols-2">
+        {PROFILE_META.map((p, idx) => {
           const selected = profile === p.id
+          const tabbable = selected || (profile === null && idx === 0)
           return (
             <button
               key={p.id}
               type="button"
+              role="radio"
+              aria-checked={selected}
               aria-label={p.label}
+              tabIndex={tabbable ? 0 : -1}
               onClick={() => applyProfile(p.id, explicitAnswer)}
-              aria-pressed={selected}
+              onKeyDown={(e) =>
+                moveRadio(e, PROFILE_META.length, idx, (i) => {
+                  const next = PROFILE_META[i]
+                  if (next) applyProfile(next.id, explicitAnswer)
+                })
+              }
               className={cn(
-                'rounded-md border p-4 text-left transition-colors',
-                selected ? 'border-primary ring-1 ring-primary' : 'border-border hover:bg-muted/50',
+                'flex gap-3 rounded-md border p-3 text-left transition-colors',
+                selected ? 'border-ring bg-muted' : 'border-border hover:bg-muted/50',
               )}
             >
-              <div className="flex items-center gap-2">
+              <span
+                aria-hidden
+                className={cn(
+                  'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border',
+                  selected ? 'border-ring' : 'border-muted-foreground/40',
+                )}
+              >
+                {selected && <span className="h-2 w-2 rounded-full bg-foreground" />}
+              </span>
+              <span className="flex flex-col">
                 <span className="font-medium">{p.label}</span>
-                {selected && <Check className="h-4 w-4 text-primary" />}
-              </div>
-              <p className="mt-1 text-sm text-muted-foreground">{p.description}</p>
+                <span className="mt-1 text-sm text-muted-foreground">{p.description}</span>
+              </span>
             </button>
           )
         })}
       </div>
+      {profile && (
+        <p className="text-sm text-muted-foreground">
+          This component will be:{' '}
+          <span className="font-medium text-foreground">{external ? 'External' : 'Internal'}</span>
+          {' · '}
+          <span className="font-medium text-foreground">
+            {explicit ? 'Explicit' : 'Not explicit'}
+          </span>
+        </p>
+      )}
       {profile && PROFILE_META.find((p) => p.id === profile)?.asksExplicit && (
         <fieldset className="space-y-2 rounded-md border border-border p-4">
           <legend className="px-1 text-sm font-medium">Has explicit distribution?</legend>
@@ -514,22 +641,33 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
             Does the component have its own distribution — can it be shipped as a separate unit? No
             → it is shipped inside a packaging component&apos;s distribution.
           </p>
-          <div className="flex gap-2 pt-1">
+          <div role="radiogroup" aria-label="Has explicit distribution" className="flex gap-2 pt-1">
             {[
               { label: 'Yes', value: true },
               { label: 'No', value: false },
-            ].map((opt) => (
-              <Button
-                key={opt.label}
-                type="button"
-                variant={explicitAnswer === opt.value ? 'default' : 'outline'}
-                size="sm"
-                aria-pressed={explicitAnswer === opt.value}
-                onClick={() => applyProfile(profile, opt.value)}
-              >
-                {opt.label}
-              </Button>
-            ))}
+            ].map((opt, idx, arr) => {
+              const selected = explicitAnswer === opt.value
+              return (
+                <Button
+                  key={opt.label}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  tabIndex={selected ? 0 : -1}
+                  variant={selected ? 'default' : 'outline'}
+                  size="sm"
+                  onKeyDown={(e) =>
+                    moveRadio(e, arr.length, idx, (i) => {
+                      const opt = arr[i]
+                      if (opt) applyProfile(profile, opt.value)
+                    })
+                  }
+                  onClick={() => applyProfile(profile, opt.value)}
+                >
+                  {opt.label}
+                </Button>
+              )
+            })}
           </div>
         </fieldset>
       )}
@@ -548,8 +686,8 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
   const renderGeneralStep = () => (
     <div className="space-y-6">
       <SectionHeader title="Identity" />
-      <Field label="Component Key" htmlFor="create-name" path="component.name" required>
-        <Input id="create-name" placeholder="my-component" autoFocus {...register('name')} />
+      <Field label="Component Key" htmlFor="create-name" path="component.name" required badge={reenterBadgeFor('create-name')}>
+        <Input id="create-name" className={reenterBorder} placeholder="my-component" autoFocus aria-describedby={reenterId('create-name')} {...register('name')} />
         <FieldError message={errors.name?.message} />
       </Field>
       {editable('displayName') && (
@@ -616,6 +754,12 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
       <p className="text-sm text-muted-foreground">
         Derived from the profile: <span className="font-medium text-foreground">{classificationRecap()}</span>.
       </p>
+      {external && editable('clientCode') && (
+        <Field label="Client Code" htmlFor="create-clientCode" path="component.clientCode">
+          <Input id="create-clientCode" placeholder="CLIENT_CODE" {...register('clientCode')} />
+          <FieldError message={errors.clientCode?.message} />
+        </Field>
+      )}
     </div>
   )
 
@@ -724,13 +868,14 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
       <SectionHeader title="VCS" />
       {vcsApplies ? (
         <>
-          <Field label="VCS Path" htmlFor="create-vcsUrl" path="vcs.vcsPath" required>
+          <Field label="VCS Path" htmlFor="create-vcsUrl" path="vcs.vcsPath" required badge={reenterBadgeFor('create-vcsUrl')}>
             <Input
               id="create-vcsUrl"
-              className="font-mono text-xs"
+              className={cn('font-mono text-xs', reenterBorder)}
               placeholder={vcsUrlPlaceholder}
               aria-required
               aria-invalid={Boolean(errors.vcsUrl)}
+              aria-describedby={reenterId('create-vcsUrl')}
               {...register('vcsUrl')}
             />
             <FieldError message={errors.vcsUrl?.message} />
@@ -771,12 +916,14 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
   const renderJiraStep = () => (
     <div className="space-y-6">
       <SectionHeader title="Jira project" />
-      <Field label="Jira Project Key" htmlFor="create-jiraProjectKey" path="jira.projectKey" required>
+      <Field label="Jira Project Key" htmlFor="create-jiraProjectKey" path="jira.projectKey" required badge={reenterBadgeFor('create-jiraProjectKey')}>
         <Input
           id="create-jiraProjectKey"
+          className={reenterBorder}
           placeholder="JIRA project key"
           aria-required
           aria-invalid={Boolean(errors.jiraProjectKey)}
+          aria-describedby={reenterId('create-jiraProjectKey')}
           {...register('jiraProjectKey')}
         />
         <FieldError message={errors.jiraProjectKey?.message} />
@@ -855,12 +1002,16 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
       {gated ? (
         <>
           <div className="space-y-1.5">
-            <Label htmlFor="create-coordinate-type">
-              Distribution coordinate <span className="text-destructive">*</span>
-            </Label>
+            <div className="flex items-center gap-1">
+              <Label htmlFor="create-coordinate-type">
+                Distribution coordinate <span className="text-destructive">*</span>
+              </Label>
+              {reenterBadgeFor('create-coordinate-type')}
+            </div>
             <select
               id="create-coordinate-type"
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+              aria-describedby={reenterId('create-coordinate-type')}
+              className={cn('h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm', reenterBorder)}
               value={coordinateType}
               onChange={(e) => selectCoordinateType(e.target.value as CreateFormValues['coordinate']['type'])}
             >
@@ -911,8 +1062,11 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
       ) : (
         <>
           <div className="space-y-1.5">
-            <Label htmlFor="create-imageName">Image Name</Label>
-            <Input id="create-imageName" placeholder="image name" aria-label="Image name" {...register('coordinate.imageName')} />
+            <div className="flex items-center gap-1">
+              <Label htmlFor="create-imageName">Image Name</Label>
+              {reenterBadgeFor('create-imageName')}
+            </div>
+            <Input id="create-imageName" className={reenterBorder} placeholder="image name" aria-label="Image name" aria-describedby={reenterId('create-imageName')} {...register('coordinate.imageName')} />
           </div>
           <p className="text-xs text-muted-foreground">
             Maven / Package distribution coordinates are available only for an explicit external
@@ -1001,94 +1155,141 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
     ? `Clone ${source?.name ?? 'component'}`
     : 'Create component'
 
-  return (
-    <form onSubmit={handleSubmit(onSubmit)} className="mx-auto max-w-4xl pb-24">
-      <UnsavedChangesGuard when={(isDirty || (!isClone && profile !== null)) && !submitted} />
+  // The profile lives outside RHF and drives submitted flags (incl. `solution`,
+  // which is not an RHF field), so isDirty alone misses a profile-only change. In
+  // clone mode compare against the source-derived profile/explicit; in scratch any
+  // chosen profile counts.
+  const profileTouched = isClone
+    ? profile !== (derived?.profile ?? null) || explicitAnswer !== (derived?.explicit ?? false)
+    : profile !== null
 
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">{headerTitle}</h1>
-        <Button type="button" variant="ghost" onClick={() => navigate('/components')}>
-          Cancel
-        </Button>
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="flex h-full flex-col overflow-hidden">
+      <UnsavedChangesGuard when={(isDirty || profileTouched) && !submitted} />
+
+      {/* Header bar */}
+      <div className="flex items-center gap-3 border-b px-6 py-4 pr-12">
+        <DialogTitle className="text-lg font-semibold tracking-tight">{headerTitle}</DialogTitle>
+        {isClone && <Badge variant="secondary">Clone</Badge>}
       </div>
 
-      {isClone && source && (
-        <div className="mb-6 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground space-y-1">
-          <p>
-            <span className="font-medium text-foreground">Included:</span> general details, people,
-            labels, docs, security groups, and the base build / escrow / Jira configuration
-            {vcsApplies && ', plus the VCS tag / production branch formats'}.
-          </p>
-          <p>
-            <span className="font-medium text-foreground">Excluded (re-enter):</span> the Component
-            Key, {vcsApplies && 'VCS Path, '}Jira project key, and distribution coordinate are unique
-            per component — enter new values.
-          </p>
-        </div>
-      )}
-
-      {/* Stepper */}
-      <nav aria-label="Wizard steps" className="mb-8 flex flex-wrap gap-2">
-        {steps.map((step, i) => {
-          const active = step === current
-          const invalid = invalidSteps.has(step)
-          return (
-            <button
-              key={step}
-              type="button"
-              onClick={() => goToStep(step)}
-              aria-current={active ? 'step' : undefined}
-              className={cn(
-                'flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm',
-                active ? 'border-primary bg-primary/5 font-medium' : 'border-border',
-                invalid && !active && 'border-destructive/50 text-destructive',
-              )}
-            >
-              <span
+      {/* Body row: vertical stepper rail + scrollable content */}
+      <div className="flex min-h-0 flex-1">
+        <nav
+          aria-label="Wizard steps"
+          className="flex w-64 shrink-0 flex-col gap-1 overflow-y-auto border-r bg-card p-4"
+        >
+          {steps.map((step, i) => {
+            const active = step === current
+            const showInvalid = shownInvalidSteps.has(step)
+            const done = !active && visitedSteps.has(step) && !invalidSteps.has(step)
+            // `invalid` wins over `active`: the current step can also be invalid
+            // once a Create attempt marks every step attempted, and that must stay
+            // distinguishable (data-status + destructive styling). aria-current
+            // still conveys "active" independently.
+            const status = showInvalid ? 'invalid' : active ? 'active' : done ? 'done' : 'todo'
+            // Announce the icon-only status to assistive tech (the circle is
+            // aria-hidden). `active` is already conveyed by aria-current="step".
+            const statusText = showInvalid ? 'has errors' : done ? 'completed' : null
+            return (
+              <button
+                key={step}
+                type="button"
+                aria-label={STEP_LABELS[step]}
+                aria-describedby={statusText ? `step-status-${step}` : undefined}
+                data-status={status}
+                onClick={() => goToStep(step)}
+                aria-current={active ? 'step' : undefined}
                 className={cn(
-                  'flex h-5 w-5 items-center justify-center rounded-full text-xs',
-                  active ? 'bg-primary text-primary-foreground' : 'bg-muted',
+                  'flex items-start gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors',
+                  active ? 'bg-muted font-medium' : 'hover:bg-muted',
+                  showInvalid && 'text-destructive',
                 )}
               >
-                {invalid ? <AlertCircle className="h-3.5 w-3.5" /> : i + 1}
-              </span>
-              {STEP_LABELS[step]}
-            </button>
-          )
-        })}
-      </nav>
+                <span
+                  aria-hidden
+                  className={cn(
+                    'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs',
+                    showInvalid
+                      ? 'border-destructive/50 text-destructive'
+                      : active
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : done
+                          ? 'border-emerald-600/40 bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
+                          : 'border-border text-muted-foreground',
+                  )}
+                >
+                  {showInvalid ? (
+                    <AlertCircle className="h-3.5 w-3.5" />
+                  ) : done ? (
+                    <Check className="h-3.5 w-3.5" />
+                  ) : (
+                    i + 1
+                  )}
+                </span>
+                <span className="flex flex-col">
+                  <span>{STEP_LABELS[step]}</span>
+                  <span className="text-xs font-normal text-muted-foreground">{STEP_SUBTITLES[step]}</span>
+                </span>
+                {statusText && (
+                  <span id={`step-status-${step}`} className="sr-only">
+                    {statusText}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </nav>
 
-      {/* Step body */}
-      <div className="max-w-2xl">{stepBody[current]()}</div>
-
-      {/* Sticky footer */}
-      <div className="fixed inset-x-0 bottom-0 border-t bg-background/95 backdrop-blur">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-3">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={goBack}
-            disabled={currentIndex === 0}
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Back
-          </Button>
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="ghost" onClick={() => navigate('/components')}>
-              Cancel
-            </Button>
-            {isLast ? (
-              <Button type="submit" disabled={submitDisabled}>
-                <Plus className="h-4 w-4" />
-                Create component
-              </Button>
-            ) : (
-              <Button type="button" onClick={goNext} disabled={!currentValid}>
-                Next
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="mx-auto max-w-2xl space-y-6">
+            {isClone && source && (
+              <div className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground space-y-1">
+                <p>
+                  <span className="font-medium text-foreground">Included:</span> general details, people,
+                  labels, docs, security groups, and the base build / escrow / Jira configuration
+                  {vcsApplies && ', plus the VCS tag / production branch formats'}.
+                </p>
+                <p>
+                  <span className="font-medium text-foreground">Excluded (re-enter):</span> the Component
+                  Key, {vcsApplies && 'VCS Path, '}Jira project key, and distribution coordinate are unique
+                  per component — enter new values.
+                </p>
+              </div>
             )}
+            {stepBody[current]()}
           </div>
+        </div>
+      </div>
+
+      {/* Sticky footer inside the card */}
+      <div className="flex items-center justify-between border-t bg-background px-6 py-3">
+        <Button type="button" variant="outline" onClick={goBack} disabled={currentIndex === 0}>
+          <ChevronLeft className="h-4 w-4" />
+          Back
+        </Button>
+        <span className="text-sm text-muted-foreground">
+          Step {currentIndex + 1} of {steps.length}
+        </span>
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="ghost" onClick={() => navigate('/components')}>
+            Cancel
+          </Button>
+          {isLast ? (
+            <Button type="submit" disabled={submitDisabled}>
+              {createMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              Create component
+            </Button>
+          ) : (
+            <Button type="button" onClick={goNext} disabled={!currentValid}>
+              Next
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
     </form>
@@ -1111,12 +1312,14 @@ function Field({
   htmlFor,
   path,
   required,
+  badge,
   children,
 }: {
   label: string
   htmlFor?: string
   path?: string
   required?: boolean
+  badge?: React.ReactNode
   children: React.ReactNode
 }) {
   return (
@@ -1127,9 +1330,26 @@ function Field({
           {required && <span className="text-destructive"> *</span>}
         </Label>
         {path && <FieldInfo path={path} label={label} />}
+        {badge && <span className="ml-1">{badge}</span>}
       </div>
       {children}
     </div>
+  )
+}
+
+/**
+ * Amber "re-enter" pill shown on the unique-per-component fields in clone mode
+ * (Component Key, VCS Path, Jira project key, distribution coordinate) so the
+ * user sees which values must be new.
+ */
+function ReenterPill({ id }: { id?: string }) {
+  return (
+    <span
+      id={id}
+      className="inline-flex items-center rounded-full border border-amber-400/60 bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:border-amber-500/40 dark:bg-amber-950 dark:text-amber-300"
+    >
+      Re-enter
+    </span>
   )
 }
 

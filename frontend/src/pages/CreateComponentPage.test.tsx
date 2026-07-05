@@ -54,6 +54,12 @@ vi.mock('../components/Layout', () => ({
   Layout: ({ children }: { children: React.ReactNode }) =>
     React.createElement('div', { 'data-testid': 'layout' }, children),
 }))
+// Expose the guard's `when` signal so a test can assert whether navigation would
+// be blocked, without wiring up a real useBlocker round-trip.
+vi.mock('../components/editor/UnsavedChangesGuard', () => ({
+  UnsavedChangesGuard: ({ when }: { when: boolean }) =>
+    React.createElement('div', { 'data-testid': 'unsaved-guard', 'data-when': String(when) }),
+}))
 
 function makeSource(overrides: Partial<ComponentDetail> = {}): ComponentDetail {
   return {
@@ -152,7 +158,7 @@ describe('CreateComponentPage — scratch profile gate', () => {
     expect(screen.getByText('Choose component profile')).toBeDefined()
     // Next is disabled with no profile selected.
     expect((screen.getByRole('button', { name: /^next$/i }) as HTMLButtonElement).disabled).toBe(true)
-    await userEvent.click(screen.getByRole('button', { name: /Regular internal component/i }))
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
     // Regular profiles ask the explicit-distribution question.
     expect(screen.getByText('Has explicit distribution?')).toBeDefined()
     expect((screen.getByRole('button', { name: /^next$/i }) as HTMLButtonElement).disabled).toBe(false)
@@ -173,7 +179,7 @@ describe('CreateComponentPage — scratch profile gate', () => {
 
   it('a solution key that lacks "-solution" is rejected for the Solution profile', async () => {
     renderWizard()
-    await userEvent.click(screen.getByRole('button', { name: /^Solution$/i }))
+    await userEvent.click(screen.getByRole('radio', { name: /^Solution$/i }))
     await clickNext()
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
     await waitFor(() => expect(screen.getByText(/must contain "-solution"/i)).toBeDefined())
@@ -184,7 +190,7 @@ describe('CreateComponentPage — scratch create flow', () => {
   it('walks the steps and POSTs a from-scratch payload, then navigates to the new component', async () => {
     renderWizard()
     // Profile: regular internal, implicit distribution (not gated).
-    await userEvent.click(screen.getByRole('button', { name: /Regular internal component/i }))
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
     await clickNext()
 
     // General
@@ -230,7 +236,7 @@ describe('CreateComponentPage — scratch create flow', () => {
       new ApiError(409, 'conflict', JSON.stringify({ errorMessage: 'artifactIds: already owned by another component' })),
     )
     renderWizard()
-    await userEvent.click(screen.getByRole('button', { name: /Regular internal component/i }))
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
     await clickNext()
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
     await commitOwner('alice')
@@ -252,7 +258,7 @@ describe('CreateComponentPage — scratch create flow', () => {
 
   it('enforces the VCS Path rule for a VCS-requiring build system and marks the step invalid', async () => {
     renderWizard()
-    await userEvent.click(screen.getByRole('button', { name: /Regular internal component/i }))
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
     await clickNext()
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
     await commitOwner('alice')
@@ -272,7 +278,7 @@ describe('CreateComponentPage — scratch create flow', () => {
 describe('CreateComponentPage — Produced Artifacts rows', () => {
   it('gates "Add one more groupId" on a filled Group ID', async () => {
     renderWizard()
-    await userEvent.click(screen.getByRole('button', { name: /Regular internal component/i }))
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
     await clickNext()
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
     await commitOwner('alice')
@@ -289,7 +295,7 @@ describe('CreateComponentPage — Produced Artifacts rows', () => {
 describe('CreateComponentPage — Solution profile gates the distribution coordinate', () => {
   it('offers the Maven/Package coordinate when explicit+external (Solution)', async () => {
     renderWizard()
-    await userEvent.click(screen.getByRole('button', { name: /^Solution$/i }))
+    await userEvent.click(screen.getByRole('radio', { name: /^Solution$/i }))
     await clickNext()
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'my-solution')
     await commitOwner('alice')
@@ -299,6 +305,193 @@ describe('CreateComponentPage — Solution profile gates the distribution coordi
     await userEvent.click(screen.getByRole('button', { name: /^Distribution$/i }))
     expect(screen.getByText('Distribution coordinate')).toBeDefined()
     expect(screen.getByRole('option', { name: 'Maven GAV' })).toBeDefined()
+  })
+})
+
+describe('CreateComponentPage — dialog shell + vertical stepper', () => {
+  it('presents the wizard inside a dialog with the vertical stepper subtitles', () => {
+    renderWizard()
+    expect(screen.getByRole('dialog')).toBeDefined()
+    // Vertical rail shows each step's one-line subtitle.
+    expect(screen.getByText('Identity & ownership')).toBeDefined()
+    expect(screen.getByText('Build system & artifacts')).toBeDefined()
+    expect(screen.getByText('Summary & save')).toBeDefined()
+    // Footer position indicator.
+    expect(screen.getByText(/step 1 of 7/i)).toBeDefined()
+  })
+
+  it('closing the dialog navigates back to the components list', async () => {
+    renderWizard()
+    // Fresh scratch load: no profile chosen and the form is pristine, so the
+    // unsaved-changes guard is inactive and the close goes straight through.
+    await userEvent.click(screen.getByRole('button', { name: /close/i }))
+    await waitFor(() => expect(screen.getByTestId('list-page')).toBeDefined())
+  })
+})
+
+describe('CreateComponentPage — deferred (non-eager) validation', () => {
+  it('does not flag an unvisited step as invalid on load', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    // General has empty required fields, but the user has not visited it yet, so
+    // the rail must not show it as invalid on first load.
+    expect(screen.getByRole('button', { name: 'General' }).getAttribute('data-status')).not.toBe('invalid')
+  })
+
+  it('marks a step invalid only after it has been visited and left', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext() // enter General (now the active step)
+    // The current step is never shown invalid while you are on it.
+    expect(screen.getByRole('button', { name: 'General' }).getAttribute('data-status')).toBe('active')
+    // Jump away via the rail, leaving General incomplete → now it shows invalid.
+    await userEvent.click(screen.getByRole('button', { name: 'Build' }))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'General' }).getAttribute('data-status')).toBe('invalid'),
+    )
+  })
+
+  it('marks a visited, valid step as done in the rail', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext() // Profile is now visited, valid, and no longer current.
+    expect(screen.getByRole('button', { name: 'Profile' }).getAttribute('data-status')).toBe('done')
+  })
+})
+
+describe('CreateComponentPage — stepper status is announced', () => {
+  it('exposes invalid and done state in each rail step accessible description', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext() // Profile → General; Profile is now done.
+    expect(screen.getByRole('button', { name: 'Profile' })).toHaveAccessibleDescription(/completed/i)
+    // Leave General incomplete → it must announce the error state, not just color it.
+    await userEvent.click(screen.getByRole('button', { name: 'Build' }))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'General' })).toHaveAccessibleDescription(/errors|invalid/i),
+    )
+  })
+})
+
+describe('CreateComponentPage — profile radio semantics', () => {
+  it('exposes the profile tiles as a single-choice radio group', async () => {
+    renderWizard()
+    expect(screen.getByRole('radiogroup', { name: /component profile/i })).toBeDefined()
+    const internal = screen.getByRole('radio', { name: /Regular internal component/i })
+    expect(internal.getAttribute('aria-checked')).toBe('false')
+    await userEvent.click(internal)
+    expect(internal.getAttribute('aria-checked')).toBe('true')
+    // The explicit-distribution answer is its own radio group for Regular profiles.
+    expect(screen.getByRole('radiogroup', { name: /explicit distribution/i })).toBeDefined()
+    expect(screen.getByRole('radio', { name: 'No' }).getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('moves the selection with arrow keys', async () => {
+    renderWizard()
+    const external = screen.getByRole('radio', { name: /Regular external component/i })
+    await userEvent.click(external)
+    external.focus()
+    await userEvent.keyboard('{ArrowDown}')
+    // Arrow advances to the next profile (Regular internal is last in PROFILE_META).
+    await waitFor(() =>
+      expect(
+        screen.getByRole('radio', { name: /Regular internal component/i }).getAttribute('aria-checked'),
+      ).toBe('true'),
+    )
+  })
+})
+
+describe('CreateComponentPage — client code (external only)', () => {
+  it('shows the Client Code field only for external profiles', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext() // General step
+    expect(screen.queryByLabelText('Client Code')).toBeNull()
+    // Switch to an external profile → the field appears.
+    await userEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    await userEvent.click(screen.getByRole('radio', { name: /Regular external component/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'General' }))
+    expect(screen.getByLabelText('Client Code')).toBeDefined()
+  })
+
+  it('seeds Client Code from the source in clone mode', () => {
+    mockUseComponent.mockReturnValue({
+      data: makeSource({ distributionExternal: true, clientCode: 'CL1' }),
+      isLoading: false,
+      error: null,
+    })
+    renderWizard('/components/new?from=c-1')
+    expect((screen.getByLabelText('Client Code') as HTMLInputElement).value).toBe('CL1')
+  })
+})
+
+describe('CreateComponentPage — clone re-enter affordances', () => {
+  it('shows a re-enter pill on the unique Component Key field in clone mode', async () => {
+    mockUseComponent.mockReturnValue({ data: makeSource(), isLoading: false, error: null })
+    renderWizard('/components/new?from=c-1')
+    // Clone opens on General, where the Component Key must be re-entered.
+    // The banner uses lowercase "(re-enter)"; the field pill is the exact "Re-enter".
+    expect(screen.getAllByText('Re-enter').length).toBeGreaterThan(0)
+  })
+
+  it('associates the Re-enter pill with its input via aria-describedby', async () => {
+    mockUseComponent.mockReturnValue({ data: makeSource(), isLoading: false, error: null })
+    renderWizard('/components/new?from=c-1')
+    // The Component Key input's accessible description includes the pill text.
+    expect(screen.getByPlaceholderText('my-component')).toHaveAccessibleDescription(/re-enter/i)
+  })
+})
+
+describe('CreateComponentPage — clone unsaved-changes guard', () => {
+  it('engages the guard when only the profile changed (no RHF field is dirty)', async () => {
+    // Source derives regular-external + explicit=true; its distribution flags
+    // (external=true, explicit=true) are the clone defaults and the Component Key
+    // starts cleared.
+    mockUseComponent.mockReturnValue({
+      data: makeSource({ distributionExternal: true, distributionExplicit: true, solution: null }),
+      isLoading: false,
+      error: null,
+    })
+    renderWizard('/components/new?from=c-1')
+    // Nothing touched yet → the guard is inactive.
+    expect(screen.getByTestId('unsaved-guard').getAttribute('data-when')).toBe('false')
+    // Switch the (editable) clone profile regular-external → Solution. The derived
+    // distribution flags stay equal to the defaults and the name stays cleared, so
+    // RHF's isDirty never flips — but the submitted `solution` flag changed, so the
+    // guard must still block navigation away.
+    await userEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    await userEvent.click(screen.getByRole('radio', { name: /^Solution$/i }))
+    await waitFor(() =>
+      expect(screen.getByTestId('unsaved-guard').getAttribute('data-when')).toBe('true'),
+    )
+  })
+
+  it('does not engage the guard when late portal-config changes the derived clone profile', async () => {
+    // solutionKeyPatterns arrive only after mount; until then a solution source
+    // derives 'solution', and once the bundle pattern loads it re-derives to
+    // 'dmp-bundle'. That re-derivation must not read as a user profile change.
+    let patternsLoaded = false
+    mockUsePortalConfig.mockImplementation(() => ({
+      data: patternsLoaded ? { solutionKeyPatterns: ['-solution', 'dmp-bundle'] } : undefined,
+    }))
+    mockUseComponent.mockReturnValue({
+      data: makeSource({
+        solution: true,
+        name: 'acme-dmp-bundle',
+        distributionExternal: true,
+        distributionExplicit: true,
+      }),
+      isLoading: false,
+      error: null,
+    })
+    renderWizard('/components/new?from=c-1')
+    expect(screen.getByTestId('unsaved-guard').getAttribute('data-when')).toBe('false')
+    // Patterns load; force a re-render without touching the profile.
+    patternsLoaded = true
+    await userEvent.click(screen.getByRole('button', { name: 'Build' }))
+    await waitFor(() =>
+      expect(screen.getByTestId('unsaved-guard').getAttribute('data-when')).toBe('false'),
+    )
   })
 })
 
