@@ -204,7 +204,7 @@ The current `/components/new` matches the design in **content** but not in **pre
 2. **Stepper:** currently a **horizontal chip row** (`Profile · General · Build · …`) → **vertical
    left rail** (see "Target change 2"): circle (number / ✓ / alert) + step title + one-line subtitle,
    current highlighted, connector look. All 7 steps visible.
-3. **Profile cards:** currently plain full-width stacked cards with **no radio indicator, no selected
+3. **Profile tiles:** currently plain full-width stacked tiles with **no radio indicator, no selected
    state, single column** → match the prototype: **2-column grid**, each card has a **radio dot**
    (filled when selected) and a **selected highlight** (`border-ring` + `bg-muted`), tighter padding.
    Keep `PROFILE_META` copy. Below the grid add:
@@ -223,7 +223,7 @@ Clone (`/components/new?from={id}`) uses the **same** wizard; align these specif
 - **Profile:** the Profile step stays, but it's **pre-derived** from the source (`profileFromSource`)
   and **editable** (changing it resets the Component Key + recomputes flags). It's **not a gate** in
   clone (a profile is always pre-selected) — so the user can jump straight ahead. Render the profile
-  cards + recap the same way as scratch.
+  tiles + recap the same way as scratch.
 - **Included / Excluded banner** at the top of the content column (already in code) — keep it, styled as
   a muted note.
 - **Re-enter (amber) flags** on the unique-per-component fields: **Component Key**, **VCS Path**

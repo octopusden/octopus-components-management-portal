@@ -558,7 +558,7 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
     return id ? <ReenterPill id={id} /> : undefined
   }
 
-  // Roving-radio arrow-key navigation, shared by the profile cards and the
+  // Roving-radio arrow-key navigation, shared by the profile tiles and the
   // explicit-distribution segment (mirrors ui/ModeRadioGroup).
   const moveRadio = (
     e: React.KeyboardEvent,

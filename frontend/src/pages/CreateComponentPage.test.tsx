@@ -374,7 +374,7 @@ describe('CreateComponentPage — stepper status is announced', () => {
 })
 
 describe('CreateComponentPage — profile radio semantics', () => {
-  it('exposes the profile cards as a single-choice radio group', async () => {
+  it('exposes the profile tiles as a single-choice radio group', async () => {
     renderWizard()
     expect(screen.getByRole('radiogroup', { name: /component profile/i })).toBeDefined()
     const internal = screen.getByRole('radio', { name: /Regular internal component/i })
