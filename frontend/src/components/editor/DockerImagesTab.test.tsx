@@ -26,22 +26,25 @@ vi.mock('./overridesDraft', () => ({
 
 // Stub the modal — its internals are covered by OverrideRowEditor.test.tsx.
 // Capture the props DockerImagesTab opens it with so we can assert the wiring.
-let lastEditorProps: { open: boolean; mode: string; presetAttribute?: string; override?: FieldOverride } | null = null
+type CapturedEditorProps = { open: boolean; mode: string; presetAttribute?: string; override?: FieldOverride; collapseMemberIds?: string[] }
+let lastEditorProps: CapturedEditorProps | null = null
 vi.mock('./OverrideRowEditor', () => ({
-  OverrideRowEditor: (props: { open: boolean; mode: string; presetAttribute?: string; override?: FieldOverride }) => {
+  OverrideRowEditor: (props: CapturedEditorProps) => {
     lastEditorProps = props
     return props.open ? <div data-testid="override-row-editor" /> : null
   },
 }))
 
-function dockerOverride(range: string, id = `fo-${range}`): FieldOverride {
+function dockerOverride(range: string, id = `fo-${range}`, imageName: string | null = 'acme/app'): FieldOverride {
   return {
     id,
     overriddenAttribute: 'distribution.docker',
     versionRange: range,
     rowType: 'MARKER',
     value: null,
-    markerChildren: { dockerImages: [{ imageName: 'acme/app', flavor: null }] },
+    // `imageName: null` models an override that replaces the base list with
+    // nothing (the empty-summary "Not specified" case).
+    markerChildren: { dockerImages: imageName === null ? [] : [{ imageName, flavor: null }] },
     createdAt: null,
     updatedAt: null,
   }
@@ -162,20 +165,20 @@ describe('DockerImagesTab — per-range variants (issue #146)', () => {
   it('shows a per-range count and variant row for an existing docker override', () => {
     mockEffective = [dockerOverride('[1,2)')]
     renderTab(baseComponent())
-    expect(dockerSection().getByText(/Per-range variants \(1\)/)).toBeDefined()
+    expect(dockerSection().getByText(/Per-range overrides \(1\)/)).toBeDefined()
     expect(dockerSection().getByText('[1,2)')).toBeDefined()
   })
 
-  it('opens the editor in create mode locked to the path on "Add per-range variant"', () => {
+  it('opens the editor in create mode locked to the path on "Add override"', () => {
     renderTab(baseComponent())
-    fireEvent.click(dockerSection().getByRole('button', { name: /add per-range variant/i }))
+    fireEvent.click(dockerSection().getByRole('button', { name: /add override/i }))
     expect(lastEditorProps).toMatchObject({ open: true, mode: 'create', presetAttribute: 'distribution.docker' })
   })
 
   it('opens the editor in edit mode with the override on "Edit"', () => {
     mockEffective = [dockerOverride('[1,2)', 'fo-x')]
     renderTab(baseComponent())
-    fireEvent.click(dockerSection().getByRole('button', { name: /edit per-range variant/i }))
+    fireEvent.click(dockerSection().getByRole('button', { name: /edit override/i }))
     expect(lastEditorProps).toMatchObject({ open: true, mode: 'edit' })
     expect(lastEditorProps!.override?.id).toBe('fo-x')
   })
@@ -183,15 +186,73 @@ describe('DockerImagesTab — per-range variants (issue #146)', () => {
   it('queues a delete of the override id on "Delete"', () => {
     mockEffective = [dockerOverride('[1,2)', 'fo-x')]
     renderTab(baseComponent())
-    fireEvent.click(dockerSection().getByRole('button', { name: /delete per-range variant/i }))
+    fireEvent.click(dockerSection().getByRole('button', { name: /delete override/i }))
     expect(mockQueueDelete).toHaveBeenCalledWith('fo-x')
   })
 
   it('disables per-range add/edit/delete when canEdit is false', () => {
     mockEffective = [dockerOverride('[1,2)', 'fo-x')]
     renderTab(baseComponent(), false)
-    expect(dockerSection().getByRole('button', { name: /add per-range variant/i })).toBeDisabled()
-    expect(dockerSection().getByRole('button', { name: /edit per-range variant/i })).toBeDisabled()
-    expect(dockerSection().getByRole('button', { name: /delete per-range variant/i })).toBeDisabled()
+    expect(dockerSection().getByRole('button', { name: /add override/i })).toBeDisabled()
+    expect(dockerSection().getByRole('button', { name: /edit override/i })).toBeDisabled()
+    expect(dockerSection().getByRole('button', { name: /delete override/i })).toBeDisabled()
+  })
+})
+
+describe('DockerImagesTab — coalesced per-range overrides', () => {
+  function dockerSection() {
+    return within(screen.getByTestId('docker-images-section'))
+  }
+
+  // The 3DSecure QA shape: three contiguous ranges, each an empty-image override.
+  const emptyContiguous = () => [
+    dockerOverride('(,1.0.107)', 'fo-a', null),
+    dockerOverride('[1.0.107,1.2.471)', 'fo-b', null),
+    dockerOverride('[1.2.471,1.2.474)', 'fo-c', null),
+  ]
+
+  it('coalesces contiguous same-value overrides into one row spanning the union range', () => {
+    mockEffective = emptyContiguous()
+    renderTab(baseComponent())
+    expect(dockerSection().getAllByTestId('dist-per-range-row')).toHaveLength(1)
+    expect(dockerSection().getByText('(,1.2.474)')).toBeDefined()
+    // Count badge + block header both reflect the coalesced group count.
+    expect(dockerSection().getByText(/Per-range overrides \(1\)/)).toBeDefined()
+    expect(dockerSection().getByText(/^1 per-range$/)).toBeDefined()
+  })
+
+  it('shows "Not specified" when the coalesced override has no image', () => {
+    mockEffective = emptyContiguous()
+    renderTab(baseComponent())
+    expect(dockerSection().getByText('Not specified')).toBeDefined()
+  })
+
+  it('does NOT coalesce contiguous ranges whose images differ', () => {
+    mockEffective = [
+      dockerOverride('(,1.0.107)', 'fo-a', 'acme/one'),
+      dockerOverride('[1.0.107,1.2.471)', 'fo-b', 'acme/two'),
+    ]
+    renderTab(baseComponent())
+    expect(dockerSection().getAllByTestId('dist-per-range-row')).toHaveLength(2)
+  })
+
+  it('editing a coalesced group opens the merged range and passes the extra member ids to collapse', () => {
+    mockEffective = emptyContiguous()
+    renderTab(baseComponent())
+    fireEvent.click(dockerSection().getByRole('button', { name: /edit override \(,1\.2\.474\)/i }))
+    expect(lastEditorProps).toMatchObject({ open: true, mode: 'edit' })
+    expect(lastEditorProps!.override?.id).toBe('fo-a') // representative = lowest range
+    expect(lastEditorProps!.override?.versionRange).toBe('(,1.2.474)')
+    expect(lastEditorProps!.collapseMemberIds).toEqual(['fo-b', 'fo-c'])
+  })
+
+  it('deleting a coalesced group queues a delete for every member', () => {
+    mockEffective = emptyContiguous()
+    renderTab(baseComponent())
+    fireEvent.click(dockerSection().getByRole('button', { name: /delete override \(,1\.2\.474\)/i }))
+    expect(mockQueueDelete).toHaveBeenCalledWith('fo-a')
+    expect(mockQueueDelete).toHaveBeenCalledWith('fo-b')
+    expect(mockQueueDelete).toHaveBeenCalledWith('fo-c')
+    expect(mockQueueDelete).toHaveBeenCalledTimes(3)
   })
 })

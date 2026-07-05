@@ -12,11 +12,14 @@ import { expectNoHorizontalOverflow, expectNoOverlap, expectNoPageOverflow } fro
 const ID = '11111111-1111-1111-1111-111111111111'
 
 // Long docker summaries — generic tokens only. Six images per variant → a
-// summary far wider than the row, so a non-truncating layout overflows.
-const LONG_DOCKER = Array.from({ length: 6 }, (_, i) => ({
-  imageName: `com.example.distribution.sample/example-service-module-${i}`,
-  flavor: 'release',
-}))
+// summary far wider than the row, so a non-truncating layout overflows. The
+// per-override `salt` keeps each variant's value distinct so contiguous ranges
+// are NOT coalesced into one row (this guard needs every range on its own row).
+const longDocker = (salt: number) =>
+  Array.from({ length: 6 }, (_, i) => ({
+    imageName: `com.example.distribution.sample/example-service-module-${salt}-${i}`,
+    flavor: 'release',
+  }))
 
 const RANGES = [
   '[1.7.3076,1.7.3209]', '[1.7.3210,1.7.3234)', '[1.7.3234,1.7.3431]', '(1.7.3431,1.7.3455)',
@@ -31,7 +34,7 @@ const OVERRIDES = RANGES.map((versionRange, i) => ({
   versionRange,
   rowType: 'MARKER',
   value: null,
-  markerChildren: { dockerImages: LONG_DOCKER },
+  markerChildren: { dockerImages: longDocker(i) },
   createdAt: null,
   updatedAt: null,
 }))
@@ -77,7 +80,7 @@ test.describe('Docker tab — per-range variant row layout (issue #146)', () => 
       // The Edit control must not sit on top of the (truncated) summary text.
       await expectNoOverlap(
         row.getByTitle(/example-service/),
-        row.getByRole('button', { name: /edit per-range variant/i }),
+        row.getByRole('button', { name: /edit override/i }),
       )
     }
 

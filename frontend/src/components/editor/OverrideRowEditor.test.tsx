@@ -13,6 +13,7 @@ import type { FieldOverride } from '../../lib/types'
 
 const mockQueueCreate = vi.fn()
 const mockQueueUpdate = vi.fn()
+const mockQueueDelete = vi.fn()
 
 // Mutable list of existing field-overrides for overlap-detection tests.
 // Tests that need preset overrides assign to this array; the draft mock reads
@@ -27,7 +28,7 @@ vi.mock('./overridesDraft', () => ({
     isDirty: false,
     queueCreate: mockQueueCreate,
     queueUpdate: mockQueueUpdate,
-    queueDelete: vi.fn(),
+    queueDelete: mockQueueDelete,
     reset: vi.fn(),
   }),
 }))
@@ -482,6 +483,71 @@ describe('OverrideRowEditor — edit mode (marker)', () => {
     renderEditor({ mode: 'edit', override: makeMarkerOverride() })
     await userEvent.click(screen.getByRole('button', { name: /add artifact/i }))
     expect(screen.getByText('Artifact 2')).toBeDefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests: collapsing a coalesced group on edit (contiguous same-value rows shown
+// as one). The edited row updates; its former siblings are deleted on save.
+// ---------------------------------------------------------------------------
+
+describe('OverrideRowEditor — coalesced-group collapse', () => {
+  beforeEach(() => {
+    mockQueueCreate.mockReset()
+    mockQueueUpdate.mockReset()
+    mockQueueDelete.mockReset()
+    mockToast.mockReset()
+    // The three underlying members still live in the effective set until save.
+    mockOverridesList = [
+      makeMarkerOverride({ id: 'fo-a', overriddenAttribute: 'distribution.docker', versionRange: '(,1.0.107)', markerChildren: { dockerImages: [] } }),
+      makeMarkerOverride({ id: 'fo-b', overriddenAttribute: 'distribution.docker', versionRange: '[1.0.107,1.2.471)', markerChildren: { dockerImages: [] } }),
+      makeMarkerOverride({ id: 'fo-c', overriddenAttribute: 'distribution.docker', versionRange: '[1.2.471,1.2.474)', markerChildren: { dockerImages: [] } }),
+    ]
+  })
+
+  const collapsingRepresentative = () =>
+    makeMarkerOverride({ id: 'fo-a', overriddenAttribute: 'distribution.docker', versionRange: '(,1.2.474)', markerChildren: { dockerImages: [] } })
+
+  it('does not report a false overlap against the group members being collapsed', () => {
+    renderEditor({ mode: 'edit', override: collapsingRepresentative(), collapseMemberIds: ['fo-b', 'fo-c'] })
+    // The merged range spans fo-b/fo-c, but they are excluded from the preview.
+    expect(screen.queryByText(/Overlaps with existing override/)).toBeNull()
+    expect(screen.getByRole('button', { name: /^update$/i })).not.toBeDisabled()
+  })
+
+  it('updates the representative to the merged range and deletes the other members on save', async () => {
+    renderEditor({ mode: 'edit', override: collapsingRepresentative(), collapseMemberIds: ['fo-b', 'fo-c'] })
+
+    await userEvent.click(screen.getByRole('button', { name: /^update$/i }))
+
+    await waitFor(() => {
+      expect(mockQueueUpdate).toHaveBeenCalledOnce()
+      expect(mockQueueUpdate.mock.calls[0]![0]).toBe('fo-a')
+      expect(mockQueueUpdate.mock.calls[0]![1].versionRange).toBe('(,1.2.474)')
+    })
+    expect(mockQueueDelete).toHaveBeenCalledWith('fo-b')
+    expect(mockQueueDelete).toHaveBeenCalledWith('fo-c')
+    expect(mockQueueDelete).toHaveBeenCalledTimes(2)
+  })
+
+  it('narrowing the merged range on save keeps the narrowed range and still drops the members (coverage shrinks — intended, like editing one override)', async () => {
+    renderEditor({ mode: 'edit', override: collapsingRepresentative(), collapseMemberIds: ['fo-b', 'fo-c'] })
+
+    const rangeInput = screen.getByLabelText('Version Range')
+    await userEvent.clear(rangeInput)
+    await userEvent.type(rangeInput, '(,1.0.200)')
+    await userEvent.click(screen.getByRole('button', { name: /^update$/i }))
+
+    await waitFor(() => {
+      expect(mockQueueUpdate).toHaveBeenCalledOnce()
+      expect(mockQueueUpdate.mock.calls[0]![0]).toBe('fo-a')
+      expect(mockQueueUpdate.mock.calls[0]![1].versionRange).toBe('(,1.0.200)')
+    })
+    // The former siblings are still removed — the group collapses into the one
+    // edited (now narrower) override; versions above 1.0.200 lose the override.
+    expect(mockQueueDelete).toHaveBeenCalledWith('fo-b')
+    expect(mockQueueDelete).toHaveBeenCalledWith('fo-c')
+    expect(mockQueueDelete).toHaveBeenCalledTimes(2)
   })
 })
 

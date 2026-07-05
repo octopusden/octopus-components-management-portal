@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatVersionRange, isValidVersionRange, isClosedVersionRange, isAllowedOverrideRange, isEmptyVersionRange, rangesOverlap, classifyRangeConflict, compareVersionRanges, highestLowerBoundVersion } from './versionRange'
+import { formatVersionRange, isValidVersionRange, isClosedVersionRange, isAllowedOverrideRange, isEmptyVersionRange, rangesOverlap, classifyRangeConflict, compareVersionRanges, highestLowerBoundVersion, mergeAdjacentRanges } from './versionRange'
 
 describe('formatVersionRange', () => {
   it('formats (,) as "All versions"', () => {
@@ -466,5 +466,48 @@ describe('isEmptyVersionRange', () => {
     expect(isEmptyVersionRange('(,0),[0,)')).toBe(false)
     expect(isEmptyVersionRange('[1.0-RC,2.0]')).toBe(false)
     expect(isEmptyVersionRange('garbage')).toBe(false)
+  })
+})
+
+describe('mergeAdjacentRanges', () => {
+  it('merges a left-unbounded range with the closed range that starts where it ends', () => {
+    expect(mergeAdjacentRanges('(,1.0.107)', '[1.0.107,1.2.471)')).toBe('(,1.2.471)')
+  })
+
+  it('merges two closed ranges that touch (exclusive upper meets inclusive lower)', () => {
+    expect(mergeAdjacentRanges('[1.0,1.2.471)', '[1.2.471,1.2.474)')).toBe('[1.0,1.2.474)')
+  })
+
+  it('merges into an open-upper range', () => {
+    expect(mergeAdjacentRanges('[1.0,2.0)', '[2.0,)')).toBe('[1.0,)')
+  })
+
+  it('merges when the closing bracket is inclusive and the next opens exclusive', () => {
+    expect(mergeAdjacentRanges('[1.0,2.0]', '(2.0,3.0)')).toBe('[1.0,3.0)')
+  })
+
+  it('does NOT merge when both bounds are inclusive at the join (they overlap on that version)', () => {
+    expect(mergeAdjacentRanges('[1.0,2.0]', '[2.0,3.0)')).toBeNull()
+  })
+
+  it('does NOT merge when both bounds are exclusive at the join (a gap at that version)', () => {
+    expect(mergeAdjacentRanges('[1.0,2.0)', '(2.0,3.0)')).toBeNull()
+  })
+
+  it('does NOT merge non-touching ranges (a gap between them)', () => {
+    expect(mergeAdjacentRanges('[1.0,2.0)', '[2.1,3.0)')).toBeNull()
+  })
+
+  it('preserves the original bound tokens rather than reformatting', () => {
+    expect(mergeAdjacentRanges('(,1.0.107)', '[1.0.107,1.2.471]')).toBe('(,1.2.471]')
+  })
+
+  it('returns null for composite / unparseable ranges', () => {
+    expect(mergeAdjacentRanges('(,1.0),[2.0,3.0)', '[3.0,4.0)')).toBeNull()
+    expect(mergeAdjacentRanges('[1.0,2.0)', 'garbage')).toBeNull()
+  })
+
+  it('returns null when the lower range is open-upper (nothing to meet)', () => {
+    expect(mergeAdjacentRanges('[1.0,)', '[2.0,3.0)')).toBeNull()
   })
 })

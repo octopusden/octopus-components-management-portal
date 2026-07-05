@@ -9,6 +9,7 @@ import { FieldLabelText } from '../ui/FieldLabelText'
 import type { DistributionSection } from './useDistributionSection'
 import { useDistributionOverrides, type DistributionMarkerPath } from './useDistributionOverrides'
 import { DistributionPerRange } from './DistributionPerRange'
+import { coalescePerRangeOverrides, type PerRangeGroup } from './perRangeGrouping'
 import { OverrideRowEditor } from './OverrideRowEditor'
 import type { FieldOverride } from '../../lib/types'
 
@@ -27,22 +28,38 @@ export function DockerImagesTab({ section, canEdit }: DockerImagesTabProps) {
   // Per-range docker overrides ride the same page-level draft the combined Save
   // flushes; only the `distribution.docker` marker path is relevant here.
   const distOverrides = useDistributionOverrides()
-  const [editor, setEditor] = useState<{ path: DistributionMarkerPath; override?: FieldOverride } | null>(null)
+  const [editor, setEditor] = useState<{ path: DistributionMarkerPath; override?: FieldOverride; collapseMemberIds?: string[] } | null>(null)
   const openCreate = (path: DistributionMarkerPath) => setEditor({ path })
-  const openEdit = (o: FieldOverride) => setEditor({ path: o.overriddenAttribute as DistributionMarkerPath, override: o })
+  // A coalesced group edits as one override: a lone member edits itself; a
+  // multi-member group edits the merged range and collapses its extras on save.
+  const openEditGroup = (group: PerRangeGroup) => {
+    const path = group.representative.overriddenAttribute as DistributionMarkerPath
+    if (group.members.length === 1) {
+      setEditor({ path, override: group.members[0] })
+    } else {
+      setEditor({
+        path,
+        override: { ...group.representative, versionRange: group.displayRange },
+        collapseMemberIds: group.members.slice(1).map((m) => m.id),
+      })
+    }
+  }
+  const deleteGroup = (group: PerRangeGroup) => group.members.forEach((m) => distOverrides.queueDelete(m.id))
 
-  const rangeCountBadge = (path: DistributionMarkerPath) =>
-    distOverrides.byPath[path].length > 0 ? (
-      <Badge variant="secondary" className="ml-1 text-[10px]">{distOverrides.byPath[path].length} per-range</Badge>
+  const rangeCountBadge = (path: DistributionMarkerPath) => {
+    const count = coalescePerRangeOverrides(distOverrides.byPath[path]).length
+    return count > 0 ? (
+      <Badge variant="secondary" className="ml-1 text-[10px]">{count} per-range</Badge>
     ) : null
+  }
 
   const perRangeBlock = (path: DistributionMarkerPath) => (
     <DistributionPerRange
       overrides={distOverrides.byPath[path]}
       canEdit={canEdit}
       onAdd={() => openCreate(path)}
-      onEdit={openEdit}
-      onDelete={distOverrides.queueDelete}
+      onEdit={openEditGroup}
+      onDelete={deleteGroup}
     />
   )
 
@@ -101,6 +118,7 @@ export function DockerImagesTab({ section, canEdit }: DockerImagesTabProps) {
         mode={editor?.override ? 'edit' : 'create'}
         presetAttribute={editor && !editor.override ? editor.path : undefined}
         override={editor?.override}
+        collapseMemberIds={editor?.collapseMemberIds}
         onOpenChange={(o) => { if (!o) setEditor(null) }}
       />
     </div>

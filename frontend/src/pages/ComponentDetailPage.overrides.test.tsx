@@ -222,7 +222,7 @@ describe('ComponentDetailPage — per-range distribution variant in the combined
 
   async function deleteDockerVariant() {
     await openTab(/Docker/)
-    click(await screen.findByRole('button', { name: /delete per-range variant/i }))
+    click(await screen.findByRole('button', { name: /delete override/i }))
   }
 
   it('deleting a per-range docker variant from the Docker tab arms the SaveBar', async () => {
@@ -255,6 +255,6 @@ describe('ComponentDetailPage — per-range distribution variant in the combined
     click(screen.getByRole('button', { name: /discard/i }))
 
     await waitFor(() => expect(screen.getByText('All changes saved')).toBeDefined())
-    expect(await screen.findByRole('button', { name: /delete per-range variant/i })).toBeDefined()
+    expect(await screen.findByRole('button', { name: /delete override/i })).toBeDefined()
   })
 })

@@ -123,18 +123,25 @@ export interface OverrideRowEditorProps {
    *  Distribution tab to open the editor pinned to e.g. `distribution.docker`).
    *  Suppresses the scalar/marker type picker and the attribute selector. */
   presetAttribute?: string
+  /** Edit-mode only: when editing a COALESCED group (several contiguous
+   *  same-value overrides shown as one row), the ids of the OTHER members. The
+   *  edited row is `override` (its range preset to the merged span); on save the
+   *  group collapses — `override` is updated and these are deleted. They are
+   *  also excluded from the overlap-conflict preview so the merged range doesn't
+   *  report a false conflict against its own members. */
+  collapseMemberIds?: string[]
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAttribute }: OverrideRowEditorProps) {
+export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAttribute, collapseMemberIds }: OverrideRowEditorProps) {
   // Item D: the modal queues the create/update into the page-level draft (the
   // real write is the editor's one combined Save), so it closes immediately on
   // submit. Conflict detection reads the effective (draft-applied) set so a
   // queued-but-unsaved sibling still blocks an overlapping range.
-  const { effectiveOverrides, queueCreate, queueUpdate } = useOverridesDraft()
+  const { effectiveOverrides, queueCreate, queueUpdate, queueDelete } = useOverridesDraft()
   const { toast } = useToast()
 
   // Single field-config read resolves display labels for the whole attribute
@@ -497,6 +504,12 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
       } else {
         queueUpdate(override.id, { versionRange, value: null, markerChildren: buildMarkerChildren() })
       }
+      // Collapse a coalesced group: the row is presented as ONE override, so on
+      // save it becomes one — the edited representative keeps the (possibly
+      // narrowed) range and the former siblings are dropped. Narrowing the range
+      // therefore shrinks the override's coverage exactly as narrowing a genuine
+      // single override would; the backing rows are an implementation detail.
+      collapseMemberIds?.forEach((id) => queueDelete(id))
     } else if (overrideType === 'scalar') {
       queueCreate({ overriddenAttribute: attribute, versionRange, value: buildScalarValue(), markerChildren: null })
     } else {
@@ -530,6 +543,9 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
     for (const o of effectiveOverrides) {
       if (o.overriddenAttribute !== attribute) continue
       if (mode === 'edit' && override && o.id === override.id) continue
+      // Members of the group being collapsed are about to be deleted on save;
+      // don't let the merged range report a conflict against them.
+      if (collapseMemberIds?.includes(o.id)) continue
       const kind = classifyRangeConflict(versionRange, o.versionRange)
       if (kind === 'partial' || kind === 'contains' || kind === 'equal') {
         return { range: o.versionRange, kind }
