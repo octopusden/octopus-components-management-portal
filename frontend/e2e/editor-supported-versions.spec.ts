@@ -23,7 +23,11 @@ import { test, expect, type Page } from '@playwright/test'
 const SUFFIX = Date.now().toString(36)
 const COMPONENT = `e2e-sv-${SUFFIX}`
 const RANGE_A = '[1.0,2.0)'
-const RANGE_B = '[2.0,3.0)'
+// Non-adjacent to RANGE_A (gap at [2.0,3.0)): CRS collapses the coverage into its
+// canonical MERGED union, so an adjacent range would coalesce with RANGE_A into a
+// single row and neither verbatim range would survive the reload. A disjoint range
+// persists as its own row, which is what the "both ranges present" assertion needs.
+const RANGE_B = '[3.0,4.0)'
 
 async function mutationHeaders(page: Page): Promise<Record<string, string>> {
   await page.request.get('/rest/api/4/components?page=0&size=1')
