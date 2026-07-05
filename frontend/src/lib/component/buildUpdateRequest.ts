@@ -25,10 +25,9 @@ export interface FieldVisibilities {
   // `solution` is field-config-gated too (SolutionTab). A hidden/readonly
   // solution must never reach the wire — CRS does not filter by FC, so a
   // stray value would silently overwrite the server flag (defense-in-depth
-  // behind the UI's disabled switch). Optional so pre-existing callers that
-  // don't set it default to 'editable' (the switch can only become dirty when
-  // it is actually rendered editable).
-  solution?: FieldVisibility
+  // behind the UI's disabled switch). Required so every buildUpdateRequest
+  // caller must pass the field-config visibility explicitly.
+  solution: FieldVisibility
 }
 
 // Subset of RHF `formState.dirtyFields` that drives clear/omit/REPLACE

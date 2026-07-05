@@ -62,6 +62,7 @@ const EDITABLE: FieldVisibilities = {
   copyright: 'editable',
   canBeParent: 'editable',
   labels: 'editable',
+  solution: 'editable',
 }
 
 const NO_DIRTY: DirtyFlags = {}
