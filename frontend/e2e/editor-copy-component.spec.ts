@@ -383,8 +383,8 @@ test.describe('Create component from scratch — admin smoke', () => {
 
     // Profile gate: Regular external + "Has explicit distribution? Yes" ⇒
     // external+explicit (gated).
-    await page.getByRole('button', { name: 'Regular external component' }).click()
-    await page.getByRole('button', { name: 'Yes', exact: true }).click()
+    await page.getByRole('radio', { name: 'Regular external component' }).click()
+    await page.getByRole('radio', { name: 'Yes', exact: true }).click()
     await page.getByRole('button', { name: /^next$/i }).click()
 
     // General — key, display name, owner + RM/SC (required for explicit+external).
