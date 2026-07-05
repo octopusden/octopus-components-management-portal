@@ -120,6 +120,32 @@ describe('ArtifactOwnershipEditor', () => {
     expect(input.value).toBe('com.example.a,com.example.b')
   })
 
+  it('drops the pre-split server legacy pattern so a split ALL_EXCEPT row recomputes its preview', () => {
+    const stale = '(?!(?:stale-sibling)$)[\\w-\\.]+'
+    render(
+      <Harness
+        initial={[
+          {
+            id: 'm1',
+            base: true,
+            range: null,
+            groups: '',
+            mode: 'ALL_EXCEPT_CLAIMED',
+            tokens: [],
+            legacyArtifactIdPattern: stale,
+          },
+        ]}
+      />,
+    )
+    const input = screen.getByLabelText('Group ID')
+    input.focus()
+    fireEvent.paste(input, { clipboardData: { getData: () => 'com.example.a,com.example.b' } })
+    expect(screen.getAllByLabelText('Group ID')).toHaveLength(2)
+    // The stale server pattern (computed for the pre-split group set) must not survive on the split rows.
+    fireEvent.click(screen.getAllByText('Legacy preview')[0]!)
+    expect(screen.queryByText(stale)).not.toBeInTheDocument()
+  })
+
   it('legacy preview renders the catch-all for an ALL mapping', () => {
     render(<Harness initial={[base()]} />)
     fireEvent.click(screen.getByText('Legacy preview'))

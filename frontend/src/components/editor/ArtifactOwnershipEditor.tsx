@@ -57,6 +57,10 @@ export function ArtifactOwnershipEditor({ value, onChange, configRanges, support
               id: i === 0 ? m.id : newMappingId(),
               serverId: i === 0 ? m.serverId : undefined,
               groups: g,
+              // The server-computed legacy pattern was for the pre-split group set; it's stale for a
+              // single-group row (matters for the ALL_EXCEPT preview). Drop it so the preview recomputes
+              // locally until the server returns a fresh value on save.
+              legacyArtifactIdPattern: undefined,
             })),
       ),
     )
