@@ -21,7 +21,11 @@ vi.mock('../hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }))
 
 const mockLookupEmployee = vi.hoisted(() => vi.fn())
 vi.mock('../hooks/useFieldOptions', () => ({
-  useFieldOptions: vi.fn(() => ({ options: ['MAVEN', 'GRADLE', 'BS2_0', 'PROVIDED'], isLoading: false })),
+  useFieldOptions: vi.fn((fieldPath: string) =>
+    fieldPath === 'generation'
+      ? { options: ['AUTO', 'MANUAL'], isLoading: false }
+      : { options: ['MAVEN', 'GRADLE', 'BS2_0', 'PROVIDED'], isLoading: false },
+  ),
 }))
 const mockUseSupportedGroups = vi.fn(() => ({ groups: [] as string[], isLoading: false }))
 vi.mock('../hooks/useSupportedGroups', () => ({ useSupportedGroups: () => mockUseSupportedGroups() }))
@@ -213,6 +217,9 @@ describe('CreateComponentPage — scratch create flow', () => {
     // Distribution — not gated, Docker only.
     await clickNext()
 
+    // Escrow — Generation only; optional, nothing required.
+    await clickNext()
+
     // Review — Jira task key required.
     const createBtn = screen.getByRole('button', { name: /^create component$/i })
     expect((createBtn as HTMLButtonElement).disabled).toBe(true)
@@ -247,6 +254,7 @@ describe('CreateComponentPage — scratch create flow', () => {
     await userEvent.type(screen.getByLabelText(/^Jira Project Key/i), 'WIDG')
     await clickNext()
     await clickNext() // Distribution
+    await clickNext() // Escrow
     await userEvent.type(screen.getByLabelText(/^Jira task key/i), 'ABC-123')
     await userEvent.click(screen.getByRole('button', { name: /^create component$/i }))
     await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1))
@@ -276,6 +284,7 @@ describe('CreateComponentPage — scratch create flow', () => {
     await userEvent.type(screen.getByLabelText(/^Jira Project Key/i), 'WIDG')
     await clickNext()
     await clickNext() // Distribution
+    await clickNext() // Escrow
     await userEvent.type(screen.getByLabelText(/^Jira task key/i), 'ABC-123')
     await userEvent.click(screen.getByRole('button', { name: /^create component$/i }))
     await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1))
@@ -349,7 +358,7 @@ describe('CreateComponentPage — dialog shell + vertical stepper', () => {
     expect(screen.getByText('Build system & artifacts')).toBeDefined()
     expect(screen.getByText('Summary & save')).toBeDefined()
     // Footer position indicator.
-    expect(screen.getByText(/step 1 of 7/i)).toBeDefined()
+    expect(screen.getByText(/step 1 of 8/i)).toBeDefined()
   })
 
   it('closing the dialog navigates back to the components list', async () => {
@@ -538,6 +547,72 @@ describe('CreateComponentPage — clone unsaved-changes guard', () => {
     await waitFor(() =>
       expect(screen.getByTestId('unsaved-guard').getAttribute('data-when')).toBe('false'),
     )
+  })
+})
+
+describe('CreateComponentPage — Escrow step', () => {
+  it('exposes an Escrow step whose Generation field defaults to the component-defaults value (scratch)', async () => {
+    mockUseComponentDefaults.mockReturnValue({
+      ...COMPONENT_DEFAULTS_OK,
+      data: { vcs: { tag: '$module-$version' }, escrow: { generation: 'AUTO' } },
+    })
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    // The Escrow step is present in the rail (between Distribution and Review).
+    await userEvent.click(screen.getByRole('button', { name: 'Escrow' }))
+    const select = screen.getByLabelText(/^Generation/i) as HTMLSelectElement
+    expect(select.value).toBe('AUTO')
+    // Its options come from the escrow-generation vocabulary.
+    expect(screen.getByRole('option', { name: 'MANUAL' })).toBeDefined()
+  })
+
+  it('is reachable via Next after Distribution and before Review', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext() // General
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await clickNext() // Build
+    await userEvent.selectOptions(screen.getByLabelText(/^Build System/i), 'PROVIDED')
+    await clickNext() // VCS note
+    await clickNext() // Jira
+    await userEvent.type(screen.getByLabelText(/^Jira Project Key/i), 'WIDG')
+    await clickNext() // Distribution
+    await clickNext() // Escrow — the Generation field is shown here
+    expect(screen.getByLabelText(/^Generation/i)).toBeDefined()
+    // Next from Escrow lands on Review (Create button).
+    await clickNext()
+    expect(screen.getByRole('button', { name: /^create component$/i })).toBeDefined()
+  })
+
+  it('seeds the Escrow Generation from the source base row in clone mode', async () => {
+    mockUseComponent.mockReturnValue({
+      data: makeSource({
+        configurations: [
+          {
+            id: 'cfg-base',
+            versionRange: '(,0),[0,)',
+            rowType: 'BASE',
+            overriddenAttribute: null,
+            isSyntheticBase: false,
+            build: { buildSystem: 'GRADLE' },
+            escrow: { generation: 'MANUAL' },
+            jira: null,
+            vcsEntries: [],
+            mavenArtifacts: [],
+            fileUrlArtifacts: [],
+            dockerImages: [],
+            packages: [],
+            requiredTools: [],
+          },
+        ],
+      }),
+      isLoading: false,
+      error: null,
+    })
+    renderWizard('/components/new?from=c-1')
+    await userEvent.click(screen.getByRole('button', { name: 'Escrow' }))
+    expect((screen.getByLabelText(/^Generation/i) as HTMLSelectElement).value).toBe('MANUAL')
   })
 })
 

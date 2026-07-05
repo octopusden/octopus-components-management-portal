@@ -29,7 +29,7 @@ import { useFieldOptions } from '../hooks/useFieldOptions'
 import { useSupportedGroups } from '../hooks/useSupportedGroups'
 import { usePortalLinks, usePortalConfig } from '../hooks/useInfo'
 import { useFieldConfig, useComponentDefaults } from '../hooks/useAdminConfig'
-import { isFieldEditableFor } from '../hooks/useFieldConfig'
+import { isFieldEditableFor, useFieldEditable, useFieldConfigEntry } from '../hooks/useFieldConfig'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useComponent, useCreateComponent } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
@@ -56,7 +56,7 @@ import type { ComponentDetail } from '../lib/types'
 import { OWNERSHIP_MODES } from '../lib/artifactOwnership'
 import { validateJiraKey, normalizeJiraKey, normalizeChangeComment } from '../lib/editor/jiraKey'
 
-type StepId = 'profile' | 'general' | 'build' | 'vcs' | 'jira' | 'distribution' | 'review'
+type StepId = 'profile' | 'general' | 'build' | 'vcs' | 'jira' | 'distribution' | 'escrow' | 'review'
 
 const STEP_LABELS: Record<StepId, string> = {
   profile: 'Profile',
@@ -65,6 +65,7 @@ const STEP_LABELS: Record<StepId, string> = {
   vcs: 'VCS',
   jira: 'Jira',
   distribution: 'Distribution',
+  escrow: 'Escrow',
   review: 'Review & create',
 }
 
@@ -75,14 +76,15 @@ const STEP_SUBTITLES: Record<StepId, string> = {
   vcs: 'Repository & branch',
   jira: 'Project & versions',
   distribution: 'Docker & coordinate',
+  escrow: 'Source escrow generation',
   review: 'Summary & save',
 }
 
-const SCRATCH_STEPS: StepId[] = ['profile', 'general', 'build', 'vcs', 'jira', 'distribution', 'review']
+const SCRATCH_STEPS: StepId[] = ['profile', 'general', 'build', 'vcs', 'jira', 'distribution', 'escrow', 'review']
 // Clone keeps the Profile step too: the profile is pre-derived from the source
 // but stays editable (changing it resets the Component Key + recomputes flags),
 // per the brief. It is not a gate in clone (a profile is always pre-selected).
-const CLONE_STEPS: StepId[] = ['profile', 'general', 'build', 'vcs', 'jira', 'distribution', 'review']
+const CLONE_STEPS: StepId[] = ['profile', 'general', 'build', 'vcs', 'jira', 'distribution', 'escrow', 'review']
 
 // Map a zod-issue / RHF-error field path to the wizard step that owns it.
 function stepOfField(path: string): StepId {
@@ -104,6 +106,11 @@ function stepOfField(path: string): StepId {
       return 'jira'
     case 'coordinate':
       return 'distribution'
+    // Both the RHF field name (`escrowGeneration`) and the CRS aspect path head
+    // (`escrow` from `escrow.generation`) route to the Escrow step.
+    case 'escrowGeneration':
+    case 'escrow':
+      return 'escrow'
     default:
       return 'general'
   }
@@ -269,6 +276,17 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
     () => buildSystems.filter((bs) => !DEPRECATED_BUILD_SYSTEMS.has(bs)),
     [buildSystems],
   )
+
+  // Escrow · Generation: the only escrow field exposed on the wizard. Its enum
+  // vocabulary comes from the same meta endpoint the editor's EscrowTab uses
+  // (/components/meta/escrow-generations). Visibility/editability are gated on
+  // the field-config key `escrow.generation` (NOT `component.escrow.generation`),
+  // mirroring EscrowTab; `useFieldEditable` fails closed while field-config
+  // loads, consistent with the wizard's `editable()`.
+  const { options: escrowGenerations } = useFieldOptions('generation')
+  const { entry: escrowGenerationEntry } = useFieldConfigEntry('escrow.generation')
+  const escrowGenerationHidden = escrowGenerationEntry.visibility === 'hidden'
+  const escrowGenerationEditable = useFieldEditable('escrow.generation')
 
   const explicit = values.distributionExplicit
   const external = values.distributionExternal
@@ -464,7 +482,7 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
     if (jiraKeyError) return
     setServerError(null)
     try {
-      const base = buildCreateRequest(formValues, source ?? undefined, editable)
+      const base = buildCreateRequest(formValues, source ?? undefined, editable, escrowGenerationEditable)
       const flags = flagsForProfile(effectiveProfile, explicitAnswer)
       const request = {
         ...base,
@@ -1085,6 +1103,34 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
     </div>
   )
 
+  const renderEscrowStep = () => (
+    <div className="space-y-6">
+      <SectionHeader
+        title="Escrow"
+        subtitle="Escrow generation for the source archive. The remaining escrow settings are configured later in the editor."
+      />
+      {escrowGenerationHidden ? (
+        <StatusBanner variant="info">Escrow generation is not configurable for new components.</StatusBanner>
+      ) : (
+        <Field label="Generation" htmlFor="create-escrowGeneration" path="escrow.generation">
+          <select
+            id="create-escrowGeneration"
+            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+            disabled={!escrowGenerationEditable}
+            {...register('escrowGeneration')}
+          >
+            <option value="">Select generation</option>
+            {escrowGenerations.map((g) => (
+              <option key={g} value={g}>
+                {g}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+    </div>
+  )
+
   const renderReviewStep = () => (
     <div className="space-y-6">
       <SectionHeader title="Review & create" subtitle="Everything below will be created." />
@@ -1156,6 +1202,7 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
     vcs: renderVcsStep,
     jira: renderJiraStep,
     distribution: renderDistributionStep,
+    escrow: renderEscrowStep,
     review: renderReviewStep,
   }
 
