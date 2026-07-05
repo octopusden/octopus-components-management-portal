@@ -566,13 +566,21 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
     index: number,
     select: (i: number) => void,
   ) => {
-    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
-      e.preventDefault()
-      select((index + 1) % count)
-    } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
-      e.preventDefault()
-      select((index - 1 + count) % count)
-    }
+    const delta =
+      e.key === 'ArrowDown' || e.key === 'ArrowRight'
+        ? 1
+        : e.key === 'ArrowUp' || e.key === 'ArrowLeft'
+          ? -1
+          : 0
+    if (!delta) return
+    e.preventDefault()
+    const next = (index + delta + count) % count
+    select(next)
+    // Roving tabindex: carry keyboard focus to the newly selected radio in the
+    // same group so it doesn't stay stranded on the previous (now tabIndex=-1)
+    // one. The radio nodes persist across the re-render (keyed).
+    const group = e.currentTarget.closest('[role="radiogroup"]')
+    group?.querySelectorAll<HTMLElement>('[role="radio"]')[next]?.focus()
   }
 
   const renderProfileStep = () => (
