@@ -1168,11 +1168,15 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
             const showInvalid = shownInvalidSteps.has(step)
             const done = !active && visitedSteps.has(step) && !invalidSteps.has(step)
             const status = active ? 'active' : showInvalid ? 'invalid' : done ? 'done' : 'todo'
+            // Announce the icon-only status to assistive tech (the circle is
+            // aria-hidden). `active` is already conveyed by aria-current="step".
+            const statusText = showInvalid ? 'has errors' : done ? 'completed' : null
             return (
               <button
                 key={step}
                 type="button"
                 aria-label={STEP_LABELS[step]}
+                aria-describedby={statusText ? `step-status-${step}` : undefined}
                 data-status={status}
                 onClick={() => goToStep(step)}
                 aria-current={active ? 'step' : undefined}
@@ -1207,6 +1211,11 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
                   <span>{STEP_LABELS[step]}</span>
                   <span className="text-xs font-normal text-muted-foreground">{STEP_SUBTITLES[step]}</span>
                 </span>
+                {statusText && (
+                  <span id={`step-status-${step}`} className="sr-only">
+                    {statusText}
+                  </span>
+                )}
               </button>
             )
           })}

@@ -359,6 +359,20 @@ describe('CreateComponentPage — deferred (non-eager) validation', () => {
   })
 })
 
+describe('CreateComponentPage — stepper status is announced', () => {
+  it('exposes invalid and done state in each rail step accessible description', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext() // Profile → General; Profile is now done.
+    expect(screen.getByRole('button', { name: 'Profile' })).toHaveAccessibleDescription(/completed/i)
+    // Leave General incomplete → it must announce the error state, not just color it.
+    await userEvent.click(screen.getByRole('button', { name: 'Build' }))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'General' })).toHaveAccessibleDescription(/errors|invalid/i),
+    )
+  })
+})
+
 describe('CreateComponentPage — profile radio semantics', () => {
   it('exposes the profile cards as a single-choice radio group', async () => {
     renderWizard()
