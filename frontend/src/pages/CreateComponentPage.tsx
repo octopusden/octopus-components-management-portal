@@ -252,15 +252,24 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
       setProfile(next)
       setExplicitAnswer(nextExplicit)
       const flags = flagsForProfile(next, nextExplicit)
-      setValue('distributionExternal', flags.distributionExternal, { shouldValidate: false })
-      setValue('distributionExplicit', flags.distributionExplicit, { shouldValidate: false })
+      // Mark the form dirty when the profile OR its derived distribution flags
+      // change — e.g. toggling the explicit-distribution answer for the SAME
+      // profile still changes submitted values. In clone mode `isDirty` is the
+      // only unsaved-guard signal (the scratch `profile !== null` term doesn't
+      // apply there).
+      const flagsChanged =
+        flags.distributionExternal !== getValues('distributionExternal') ||
+        flags.distributionExplicit !== getValues('distributionExplicit')
+      const markDirty = changed || flagsChanged
+      setValue('distributionExternal', flags.distributionExternal, { shouldValidate: false, shouldDirty: markDirty })
+      setValue('distributionExplicit', flags.distributionExplicit, { shouldValidate: false, shouldDirty: markDirty })
       if (changed) {
         setValue('name', '', { shouldValidate: false })
         clearErrors('name')
       }
       void trigger('name')
     },
-    [profile, setValue, clearErrors, trigger],
+    [profile, setValue, getValues, clearErrors, trigger],
   )
 
   // Scratch: seed the owner from the current user once (brief §Ownership).
@@ -403,6 +412,11 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
       if (err instanceof ApiError && err.status === 409) {
         message = classifyConflictBody(err.rawBody).errorMessage
           ?? 'A component with this name already exists.'
+        // A save-time uniqueness / data-integrity conflict on Produced Artifacts
+        // routes to the Build step (same as the 400 field-error case), not the
+        // Review banner.
+        const cf = parseServerFieldErrors(err.rawBody)
+        if (cf.get('artifactIds') || cf.get('ownership')) stepId = 'build'
       }
       if (err instanceof ApiError && err.status === 400) {
         const fieldErrors = parseServerFieldErrors(err.rawBody)
@@ -451,7 +465,13 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
     ownerValidating ||
     !!jiraKeyError ||
     fcLoading ||
-    userLoading
+    userLoading ||
+    // Client-side blocking issues: any invalid field (schema parse) or, in
+    // scratch, an unchosen Profile. Excludes serverError (so a failed submit can
+    // be retried after the user edits). Prevents bypassing the Profile gate by
+    // jumping straight to Review via the stepper.
+    parseIssues.length > 0 ||
+    (!isClone && profile === null)
 
   // ---- Rendering helpers ----------------------------------------------------
 

@@ -5,6 +5,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 import { CreateComponentPage } from './CreateComponentPage'
+import { ApiError } from '../lib/api'
 import { TooltipProvider } from '../components/ui/tooltip'
 import type { ComponentDetail } from '../lib/types'
 
@@ -157,6 +158,19 @@ describe('CreateComponentPage — scratch profile gate', () => {
     expect((screen.getByRole('button', { name: /^next$/i }) as HTMLButtonElement).disabled).toBe(false)
   })
 
+  it('cannot bypass the Profile gate via the stepper — Create stays disabled with no profile chosen', async () => {
+    renderWizard()
+    // No profile selected. Jump straight to the Review step via the stepper.
+    await userEvent.click(screen.getByRole('button', { name: /Review & create/i }))
+    // Even after entering a valid Jira task key, Create must stay disabled while
+    // the scratch profile is unchosen (and required fields are empty).
+    await userEvent.type(screen.getByLabelText(/Jira task key/i), 'ABC-1')
+    expect(
+      (screen.getByRole('button', { name: /^create component$/i }) as HTMLButtonElement).disabled,
+    ).toBe(true)
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+
   it('a solution key that lacks "-solution" is rejected for the Solution profile', async () => {
     renderWizard()
     await userEvent.click(screen.getByRole('button', { name: /^Solution$/i }))
@@ -209,6 +223,31 @@ describe('CreateComponentPage — scratch create flow', () => {
     expect(payload.solution).toBe(false)
     expect(payload.jiraTaskKey).toBe('ABC-123')
     await waitFor(() => expect(screen.getByTestId('detail-page')).toBeDefined())
+  })
+
+  it('routes a save-time 409 Produced-Artifacts conflict to the Build step', async () => {
+    mockMutateAsync.mockRejectedValueOnce(
+      new ApiError(409, 'conflict', JSON.stringify({ errorMessage: 'artifactIds: already owned by another component' })),
+    )
+    renderWizard()
+    await userEvent.click(screen.getByRole('button', { name: /Regular internal component/i }))
+    await clickNext()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await clickNext()
+    await userEvent.selectOptions(screen.getByLabelText(/^Build System/i), 'PROVIDED')
+    await clickNext()
+    await clickNext() // VCS note
+    await userEvent.type(screen.getByLabelText(/^Jira Project Key/i), 'WIDG')
+    await clickNext()
+    await clickNext() // Distribution
+    await userEvent.type(screen.getByLabelText(/^Jira task key/i), 'ABC-123')
+    await userEvent.click(screen.getByRole('button', { name: /^create component$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1))
+    // A 409 ownership conflict lands the user on the Build step (Produced
+    // Artifacts lives there), not the Review step — the "Add one more groupId"
+    // control is Build-specific.
+    await waitFor(() => expect(screen.getByRole('button', { name: /Add one more groupId/i })).toBeDefined())
   })
 
   it('enforces the VCS Path rule for a VCS-requiring build system and marks the step invalid', async () => {
