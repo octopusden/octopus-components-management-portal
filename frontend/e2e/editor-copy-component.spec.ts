@@ -141,6 +141,12 @@ async function setupRoutes(page: Page, sourceOverride: Record<string, unknown> =
   await page.route('**/rest/api/4/components/meta/build-systems', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(['MAVEN', 'GRADLE']) }),
   )
+  // The Escrow step's Generation select reads useFieldOptions('generation') →
+  // /components/meta/escrow-generations. Mock it so the scratch path can pick a
+  // value deterministically without the live CRS meta endpoint.
+  await page.route('**/rest/api/4/components/meta/escrow-generations', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(['AUTO', 'MANUAL']) }),
+  )
   // The create dialog pre-validates the maven Group ID against the supported
   // groupId prefixes (CRS v2 /common/supported-groups). Mock it so the spec is
   // self-contained and the 'org.acme' coordinate used below passes the check —
@@ -424,6 +430,11 @@ test.describe('Create component from scratch — admin smoke', () => {
     await page.getByLabel(/^distribution coordinate/i).selectOption('docker')
     await page.getByLabel('Image name').fill('acme/scratch')
 
+    // Escrow — pick a Generation (the only escrow field on the wizard). It sits
+    // between Distribution and Review.
+    await page.getByRole('button', { name: 'Escrow', exact: true }).click()
+    await page.getByLabel(/^generation/i).selectOption('MANUAL')
+
     // Review & create.
     await page.getByRole('button', { name: /Review/ }).click()
     await page.getByLabel(/^jira task key/i).fill('ABC-123')
@@ -442,6 +453,8 @@ test.describe('Create component from scratch — admin smoke', () => {
         build: { buildSystem: 'MAVEN' },
         dockerImages: [{ imageName: 'acme/scratch' }],
         jira: { projectKey: 'SCR' },
+        // The chosen escrow Generation flows through (form-supplied).
+        escrow: { generation: 'MANUAL' },
         vcsEntries: [
           { vcsPath: 'ssh://git@host/proj/scratch-repo.git', tag: '$module-$version', branch: 'master' },
         ],
