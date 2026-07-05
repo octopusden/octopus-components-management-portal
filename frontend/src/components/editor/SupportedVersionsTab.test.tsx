@@ -38,12 +38,20 @@ describe('SupportedVersionsTab', () => {
     mockIsError = false
   })
 
-  it('surfaces an error (no editable draft) when the coverage GET fails', () => {
+  it('surfaces an error (no editable draft) when the coverage GET fails with no baseline', () => {
     mockIsError = true
     renderTab()
     expect(screen.getByRole('alert')).toHaveTextContent(/could not load supported versions/i)
     // No add control / range list rendered against an unknown baseline.
     expect(screen.queryByLabelText('Supported version ranges')).toBeNull()
+  })
+
+  it('keeps showing the loaded draft when a background refetch errors (data still present)', () => {
+    mockData = { all: false, ranges: ['[1.0,2.0)'], warnings: [] }
+    mockIsError = true
+    renderTab()
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.getByLabelText('Supported version ranges')).toBeDefined()
   })
 
   it('shows "All versions" when coverage is unbounded', () => {

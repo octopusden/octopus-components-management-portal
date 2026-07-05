@@ -106,7 +106,11 @@ export function useSupportedVersionsSection(componentId: string): SupportedVersi
     state,
     warnings: data?.warnings ?? [],
     isLoading,
-    isError,
+    // Only a load error with NO baseline yet — a background refetch failure that
+    // still has prior `data` (React Query keeps it) must NOT blank the tab and
+    // discard an in-progress edit; only an initial load with nothing to fall back
+    // on should block editing.
+    isError: isError && data === undefined,
     isDirty,
     diff,
     addRange: (range) =>

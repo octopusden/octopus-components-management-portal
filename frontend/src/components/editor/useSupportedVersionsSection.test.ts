@@ -137,11 +137,21 @@ describe('useSupportedVersionsSection', () => {
     expect(mockMutateAsync.mock.calls[0]?.[0]).toEqual({ all: true, jiraTaskKey: 'ABC-123' })
   })
 
-  it('exposes isError when the coverage GET fails (no empty-draft fallthrough)', () => {
+  it('exposes isError when the coverage GET fails with no baseline (no empty-draft fallthrough)', () => {
     mockIsError = true
     const { result } = renderHook(() => useSupportedVersionsSection('c-1'))
     expect(result.current.isError).toBe(true)
     expect(result.current.isLoading).toBe(false)
+  })
+
+  it('does NOT flag isError when a background refetch fails but a baseline is present', () => {
+    // React Query keeps prior `data` on a background refetch error; blanking the
+    // tab then would hide an in-progress edit and push the user to reload (losing it).
+    mockData = resp({ ranges: ['[1.0,2.0)'] })
+    mockIsError = true
+    const { result } = renderHook(() => useSupportedVersionsSection('c-1'))
+    expect(result.current.isError).toBe(false)
+    expect(result.current.state).toEqual({ all: false, ranges: ['[1.0,2.0)'] })
   })
 
   it('save() omits blank/absent metadata from the PUT body (clean request)', async () => {
