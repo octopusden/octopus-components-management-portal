@@ -252,18 +252,24 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
       setProfile(next)
       setExplicitAnswer(nextExplicit)
       const flags = flagsForProfile(next, nextExplicit)
-      // On a real profile change, mark the form dirty so the unsaved-changes
-      // guard fires — in clone mode `isDirty` is the only guard signal (the
-      // scratch `profile !== null` term doesn't apply there).
-      setValue('distributionExternal', flags.distributionExternal, { shouldValidate: false, shouldDirty: changed })
-      setValue('distributionExplicit', flags.distributionExplicit, { shouldValidate: false, shouldDirty: changed })
+      // Mark the form dirty when the profile OR its derived distribution flags
+      // change — e.g. toggling the explicit-distribution answer for the SAME
+      // profile still changes submitted values. In clone mode `isDirty` is the
+      // only unsaved-guard signal (the scratch `profile !== null` term doesn't
+      // apply there).
+      const flagsChanged =
+        flags.distributionExternal !== getValues('distributionExternal') ||
+        flags.distributionExplicit !== getValues('distributionExplicit')
+      const markDirty = changed || flagsChanged
+      setValue('distributionExternal', flags.distributionExternal, { shouldValidate: false, shouldDirty: markDirty })
+      setValue('distributionExplicit', flags.distributionExplicit, { shouldValidate: false, shouldDirty: markDirty })
       if (changed) {
         setValue('name', '', { shouldValidate: false })
         clearErrors('name')
       }
       void trigger('name')
     },
-    [profile, setValue, clearErrors, trigger],
+    [profile, setValue, getValues, clearErrors, trigger],
   )
 
   // Scratch: seed the owner from the current user once (brief §Ownership).
