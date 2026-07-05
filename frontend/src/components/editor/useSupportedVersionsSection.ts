@@ -44,6 +44,7 @@ export interface SupportedVersionsSection {
   state: SupportedVersionsState
   warnings: string[]
   isLoading: boolean
+  isError: boolean
   isDirty: boolean
   diff: DiffEntry[]
   addRange: (range: string) => void
@@ -54,7 +55,7 @@ export interface SupportedVersionsSection {
 }
 
 export function useSupportedVersionsSection(componentId: string): SupportedVersionsSection {
-  const { data, isLoading } = useSupportedVersions(componentId)
+  const { data, isLoading, isError } = useSupportedVersions(componentId)
   const updateMutation = useUpdateSupportedVersions(componentId)
 
   const [state, setState] = useState<SupportedVersionsState>(() => snapshotFrom(data))
@@ -105,6 +106,7 @@ export function useSupportedVersionsSection(componentId: string): SupportedVersi
     state,
     warnings: data?.warnings ?? [],
     isLoading,
+    isError,
     isDirty,
     diff,
     addRange: (range) =>
@@ -125,9 +127,12 @@ export function useSupportedVersionsSection(componentId: string): SupportedVersi
       }
       // Change metadata (Jira task key + comment) is recorded on the audit row by
       // CRS. Include each only when non-blank so the body stays clean (a blank Jira
-      // key would pass the server's `^\s*$` pattern but adds nothing).
+      // key would pass the server's `^\s*$` pattern but adds nothing). Send the
+      // Jira key TRIMMED — a padded " ABC-123 " passes this presence check but is
+      // rejected by the server's `^[A-Z][A-Z0-9]+-\d+$` pattern (400).
+      const jiraTaskKey = meta?.jiraTaskKey?.trim()
       const meta_ = {
-        ...(meta?.jiraTaskKey?.trim() ? { jiraTaskKey: meta.jiraTaskKey } : {}),
+        ...(jiraTaskKey ? { jiraTaskKey } : {}),
         ...(meta?.changeComment?.trim() ? { changeComment: meta.changeComment } : {}),
       }
       const request = state.all ? { all: true, ...meta_ } : { ranges: state.ranges, ...meta_ }

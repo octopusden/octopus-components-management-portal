@@ -33,7 +33,7 @@ interface SupportedVersionsTabProps {
  * re-seeds from may be a canonicalised form of what was typed.
  */
 export function SupportedVersionsTab({ section, canEdit }: SupportedVersionsTabProps) {
-  const { state, warnings, isLoading, addRange, removeRange, setAllVersions } = section
+  const { state, warnings, isLoading, isError, addRange, removeRange, setAllVersions } = section
 
   const [newRange, setNewRange] = useState('')
   // Confirmation gate for the silent widen-to-ALL: removing the last remaining
@@ -44,6 +44,17 @@ export function SupportedVersionsTab({ section, canEdit }: SupportedVersionsTabP
 
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">Loading supported versions…</p>
+  }
+
+  // A failed GET must NOT fall through to an empty draft — that would let the user
+  // stage coverage changes against an unknown baseline (and a save could widen or
+  // narrow from the wrong starting point). Surface the error and render nothing editable.
+  if (isError) {
+    return (
+      <p className="text-sm text-destructive" role="alert">
+        Could not load supported versions. Reload the page before editing coverage.
+      </p>
+    )
   }
 
   const ranges = [...state.ranges].sort(compareVersionRanges)

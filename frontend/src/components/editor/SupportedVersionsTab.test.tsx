@@ -10,10 +10,15 @@ import { useSupportedVersionsSection } from './useSupportedVersionsSection'
 // add/remove/set-all interactions exercise the actual draft behaviour, and assert
 // that NO PUT fires from the tab (persist is deferred to the page's Save).
 let mockData: SupportedVersionsResponse | undefined
+let mockIsError = false
 const mockMutateAsync = vi.fn(() => Promise.resolve(mockData as SupportedVersionsResponse))
 
 vi.mock('../../hooks/useComponent', () => ({
-  useSupportedVersions: () => ({ data: mockData, isLoading: mockData === undefined }),
+  useSupportedVersions: () => ({
+    data: mockData,
+    isLoading: !mockIsError && mockData === undefined,
+    isError: mockIsError,
+  }),
   useUpdateSupportedVersions: () => ({ mutateAsync: mockMutateAsync, isPending: false }),
 }))
 
@@ -30,6 +35,15 @@ describe('SupportedVersionsTab', () => {
   beforeEach(() => {
     mockMutateAsync.mockReset()
     mockData = undefined
+    mockIsError = false
+  })
+
+  it('surfaces an error (no editable draft) when the coverage GET fails', () => {
+    mockIsError = true
+    renderTab()
+    expect(screen.getByRole('alert')).toHaveTextContent(/could not load supported versions/i)
+    // No add control / range list rendered against an unknown baseline.
+    expect(screen.queryByLabelText('Supported version ranges')).toBeNull()
   })
 
   it('shows "All versions" when coverage is unbounded', () => {

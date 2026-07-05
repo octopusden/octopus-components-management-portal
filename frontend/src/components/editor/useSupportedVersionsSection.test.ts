@@ -6,10 +6,15 @@ import type { SupportedVersionsResponse } from '../../lib/types'
 // (NOT ComponentDetail), so mock those two hooks. `mockData` is swapped between
 // renders to exercise the re-seed rules; `mockMutateAsync` captures the PUT.
 let mockData: SupportedVersionsResponse | undefined
+let mockIsError = false
 const mockMutateAsync = vi.fn<(req: unknown) => Promise<SupportedVersionsResponse>>()
 
 vi.mock('../../hooks/useComponent', () => ({
-  useSupportedVersions: () => ({ data: mockData, isLoading: mockData === undefined }),
+  useSupportedVersions: () => ({
+    data: mockData,
+    isLoading: !mockIsError && mockData === undefined,
+    isError: mockIsError,
+  }),
   useUpdateSupportedVersions: () => ({ mutateAsync: mockMutateAsync, isPending: false }),
 }))
 
@@ -21,6 +26,7 @@ function resp(over: Partial<SupportedVersionsResponse> = {}): SupportedVersionsR
 
 beforeEach(() => {
   mockData = undefined
+  mockIsError = false
   mockMutateAsync.mockReset()
 })
 
@@ -118,6 +124,24 @@ describe('useSupportedVersionsSection', () => {
       jiraTaskKey: 'ABC-123',
       changeComment: 'widen coverage',
     })
+  })
+
+  it('save() trims a padded jiraTaskKey before sending (server pattern would 400 on whitespace)', async () => {
+    mockData = resp({ ranges: ['[1.0,2.0)'] })
+    mockMutateAsync.mockResolvedValue(resp({ ranges: ['[1.0,2.0)'] }))
+    const { result } = renderHook(() => useSupportedVersionsSection('c-1'))
+    act(() => result.current.setAllVersions())
+    await act(async () => {
+      await result.current.save({ jiraTaskKey: '  ABC-123  ' })
+    })
+    expect(mockMutateAsync.mock.calls[0]?.[0]).toEqual({ all: true, jiraTaskKey: 'ABC-123' })
+  })
+
+  it('exposes isError when the coverage GET fails (no empty-draft fallthrough)', () => {
+    mockIsError = true
+    const { result } = renderHook(() => useSupportedVersionsSection('c-1'))
+    expect(result.current.isError).toBe(true)
+    expect(result.current.isLoading).toBe(false)
   })
 
   it('save() omits blank/absent metadata from the PUT body (clean request)', async () => {
