@@ -128,10 +128,14 @@ export interface CreateFormValues {
 //     external the source value is preserved (form value ignored);
 //   - distribution coordinate comes from the FORM ONLY, never from the source
 //     (unique per component) — and only when explicit+external;
+//   - escrow.generation comes from the FORM (form WINS) when that field is
+//     editable and a value was chosen; the rest of the escrow aspect is copied
+//     from the source BASE row. A non-editable field falls back to the source
+//     escrow (form value ignored);
 //   - copied from source: productType, system, solution,
 //     parentComponentName, labels, docs, securityGroups, releasesInDefaultBranch,
 //     jiraHotfixVersionFormat, vcsExternalRegistry, and from the BASE row the
-//     escrow aspect, jira aspect (source projectKey stripped — the form supplies jiraProjectKey
+//     escrow aspect (generation overlaid from the form — see above), jira aspect (source projectKey stripped — the form supplies jiraProjectKey
 //     and versionPrefix, which win), requiredTools, and the build aspect (merged with the form's
 //     buildSystem);
 //   - required-but-not-copied collections: artifactIds: [], teamcityProjects: [];
@@ -221,6 +225,11 @@ export function buildCreateRequest(
   // Returns true if a `component.<field>` is editable (i.e. should be sent).
   // Defaults to "everything editable" so existing call-sites/tests are unchanged.
   isFieldEditable: (field: string) => boolean = () => true,
+  // Editability of the nested `escrow.generation` field. It is NOT a top-level
+  // `component.<field>`, so it is gated separately from `isFieldEditable` (whose
+  // callers prefix `component.`). When false the form generation is ignored and
+  // the source escrow (if any) is preserved unchanged.
+  escrowGenerationEditable = true,
 ): ComponentCreateRequest {
   const gated = form.distributionExplicit && form.distributionExternal
   const baseRow = source ? selectBaseRow(source) : undefined
@@ -273,7 +282,19 @@ export function buildCreateRequest(
   const baseConfiguration: BaseConfigurationRequest = {
     build: { ...(baseRow?.build ?? {}), buildSystem: form.buildSystem },
   }
-  if (baseRow?.escrow) baseConfiguration.escrow = { ...baseRow.escrow }
+  // Escrow aspect: copied from the source BASE row (clone), with the form's
+  // `generation` overlaid when the escrow.generation field is editable and a
+  // value was chosen (form WINS). The rest of the escrow aspect is preserved as
+  // copied. When the field is not editable, the form value is ignored and the
+  // source escrow (if any) is preserved unchanged. An empty generation with no
+  // source escrow creates no escrow object.
+  const escrowGeneration = escrowGenerationEditable ? form.escrowGeneration.trim() : ''
+  if (baseRow?.escrow || escrowGeneration) {
+    baseConfiguration.escrow = {
+      ...(baseRow?.escrow ?? {}),
+      ...(escrowGeneration ? { generation: escrowGeneration } : {}),
+    }
+  }
   // Jira aspect: start from the source's copied aspect (projectKey stripped), then overlay the
   // form's jiraProjectKey + versionPrefix (form wins). Only attach when something is present.
   const jira: JiraAspect = { ...(copyJiraAspect(baseRow?.jira) ?? {}) }

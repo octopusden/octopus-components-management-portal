@@ -483,6 +483,66 @@ describe('buildCreateRequest — VCS entry (legacy EscrowConfigValidator rule)',
   })
 })
 
+describe('buildCreateRequest — escrow generation (form-supplied)', () => {
+  it('scratch: a chosen generation lands on baseConfiguration.escrow.generation', () => {
+    const req = buildCreateRequest(makeForm({ escrowGeneration: 'AUTO' }))
+    expect(req.baseConfiguration?.escrow).toEqual({ generation: 'AUTO' })
+  })
+
+  it('scratch: an empty generation creates no escrow object', () => {
+    const req = buildCreateRequest(makeForm({ escrowGeneration: '' }))
+    expect('escrow' in (req.baseConfiguration ?? {})).toBe(false)
+  })
+
+  it('clone: the form generation overrides the source while the rest of the escrow aspect is kept', () => {
+    const src = makeSource({
+      configurations: [
+        makeBaseRow({
+          build: { buildSystem: 'GRADLE' },
+          escrow: { generation: 'MANUAL', reusable: true, diskSpace: '10GB' },
+        }),
+      ],
+    })
+    const req = buildCreateRequest(makeForm({ name: 'svc-clone', escrowGeneration: 'AUTO' }), src)
+    expect(req.baseConfiguration?.escrow).toEqual({ generation: 'AUTO', reusable: true, diskSpace: '10GB' })
+  })
+
+  it('clone: an empty generation keeps the source escrow (including its generation) unchanged', () => {
+    const src = makeSource({
+      configurations: [
+        makeBaseRow({ build: { buildSystem: 'GRADLE' }, escrow: { generation: 'MANUAL', reusable: true } }),
+      ],
+    })
+    const req = buildCreateRequest(makeForm({ name: 'svc-clone', escrowGeneration: '' }), src)
+    expect(req.baseConfiguration?.escrow).toEqual({ generation: 'MANUAL', reusable: true })
+  })
+
+  it('does NOT send the form generation when the escrow.generation field is not editable (source escrow preserved)', () => {
+    const src = makeSource({
+      configurations: [
+        makeBaseRow({ build: { buildSystem: 'GRADLE' }, escrow: { generation: 'MANUAL', reusable: true } }),
+      ],
+    })
+    const req = buildCreateRequest(
+      makeForm({ name: 'svc-clone', escrowGeneration: 'AUTO' }),
+      src,
+      () => true,
+      false, // escrow.generation not editable
+    )
+    expect(req.baseConfiguration?.escrow).toEqual({ generation: 'MANUAL', reusable: true })
+  })
+
+  it('scratch: a chosen generation is dropped when the escrow.generation field is not editable', () => {
+    const req = buildCreateRequest(makeForm({ escrowGeneration: 'AUTO' }), undefined, () => true, false)
+    expect('escrow' in (req.baseConfiguration ?? {})).toBe(false)
+  })
+
+  it('trims the chosen generation before overlaying it', () => {
+    const req = buildCreateRequest(makeForm({ escrowGeneration: '  AUTO  ' }))
+    expect(req.baseConfiguration?.escrow).toEqual({ generation: 'AUTO' })
+  })
+})
+
 describe('buildCreateRequest — copy mode (with source)', () => {
   const source = makeSource()
 
