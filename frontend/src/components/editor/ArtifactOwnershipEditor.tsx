@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ChevronRight, Plus, Trash2, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -35,6 +35,32 @@ export function ArtifactOwnershipEditor({ value, onChange, configRanges, support
   const patch = (id: string, next: Partial<OwnershipMappingValue>) =>
     onChange(value.map((m) => (m.id === id ? { ...m, ...next } : m)))
   const remove = (id: string) => onChange(value.filter((m) => m.id !== id))
+
+  // One groupId per row: a comma group-list (typed, pasted, or grandfathered from a legacy
+  // record) fans out into one row per groupId, each keeping this row's mode/tokens/range. The
+  // first token stays on the original row (preserving its server id); the rest become new rows.
+  const splitGroups = (id: string, raw: string) => {
+    // No separator ⇒ nothing to split; leave the row untouched (avoids a spurious dirty flag
+    // on a plain focus/blur — onChange already keeps the single group current).
+    if (!raw.includes(',')) return
+    const tokens = groupTokens(raw)
+    if (tokens.length <= 1) {
+      patch(id, { groups: tokens[0] ?? '' })
+      return
+    }
+    onChange(
+      value.flatMap((m) =>
+        m.id !== id
+          ? [m]
+          : tokens.map((g, i) => ({
+              ...m,
+              id: i === 0 ? m.id : newMappingId(),
+              serverId: i === 0 ? m.serverId : undefined,
+              groups: g,
+            })),
+      ),
+    )
+  }
 
   const addBase = () =>
     onChange([...value, { id: newMappingId(), base: true, range: null, groups: '', mode: 'ALL', tokens: [] }])
@@ -83,6 +109,7 @@ export function ArtifactOwnershipEditor({ value, onChange, configRanges, support
             supportedGroups={supportedGroups}
             disabled={disabled}
             onPatch={(next) => patch(m.id, next)}
+            onSplitGroups={(raw) => splitGroups(m.id, raw)}
             onRemove={() => remove(m.id)}
           />
         ))}
@@ -109,6 +136,7 @@ export function ArtifactOwnershipEditor({ value, onChange, configRanges, support
             supportedGroups={supportedGroups}
             disabled={disabled}
             onPatch={(next) => patch(m.id, next)}
+            onSplitGroups={(raw) => splitGroups(m.id, raw)}
             onRemove={() => remove(m.id)}
           />
         ))}
@@ -139,11 +167,15 @@ interface MappingCardProps {
   supportedGroups?: readonly string[]
   disabled?: boolean
   onPatch: (next: Partial<OwnershipMappingValue>) => void
+  onSplitGroups: (raw: string) => void
   onRemove: () => void
 }
 
-function MappingCard({ mapping, allMappings, conflict, configRanges, supportedGroups = [], disabled, onPatch, onRemove }: MappingCardProps) {
+function MappingCard({ mapping, allMappings, conflict, configRanges, supportedGroups = [], disabled, onPatch, onSplitGroups, onRemove }: MappingCardProps) {
   const [legacyOpen, setLegacyOpen] = useState(false)
+  // Value of the Group ID field when it gained focus — so blur only splits after a REAL edit.
+  // A grandfathered "a,b" row that the user merely clicks into / tabs past must not split or dirty.
+  const groupAtFocus = useRef<string | null>(null)
   const gErr = groupError(mapping, supportedGroups)
   const explicitEmpty = isExplicitEmpty(mapping)
 
@@ -201,6 +233,24 @@ function MappingCard({ mapping, allMappings, conflict, configRanges, supportedGr
             value={mapping.groups}
             disabled={disabled}
             onChange={(e) => onPatch({ groups: e.target.value })}
+            onFocus={(e) => {
+              groupAtFocus.current = e.target.value
+            }}
+            // One groupId per row: fan a comma list into separate rows on blur — but ONLY when the
+            // field was actually edited, so inspecting a grandfathered "a,b" row never splits/dirties it.
+            onBlur={(e) => {
+              if (e.target.value !== groupAtFocus.current) onSplitGroups(e.target.value)
+            }}
+            // Pasting a comma list expands into rows immediately (merge at the caret).
+            onPaste={(e) => {
+              const pasted = e.clipboardData.getData('text')
+              if (!pasted.includes(',')) return
+              e.preventDefault()
+              const el = e.currentTarget
+              const start = el.selectionStart ?? el.value.length
+              const end = el.selectionEnd ?? el.value.length
+              onSplitGroups(el.value.slice(0, start) + pasted + el.value.slice(end))
+            }}
           />
           {gErr && <span className="text-xs text-destructive">{gErr}</span>}
         </label>

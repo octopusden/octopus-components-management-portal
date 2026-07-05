@@ -256,14 +256,21 @@ export function fromArtifactId(a: ArtifactId): OwnershipMappingValue {
   }
 }
 
-/** Map editor form state back into a write request (full-replacement PATCH/POST). */
-export function toArtifactIdRequest(m: OwnershipMappingValue): ArtifactIdRequest {
-  return {
+/**
+ * Map editor form state into write requests — ONE `ArtifactIdRequest` per groupId
+ * (canonicalization: one groupId per stored row, matching the create form and CRS).
+ * A row that still carries a comma group-list (grandfathered / not yet split in the UI)
+ * fans out to one request per group, sharing the same mode/tokens/range. A row with no
+ * group token yields no request.
+ */
+export function toArtifactIdRequests(m: OwnershipMappingValue): ArtifactIdRequest[] {
+  const tokens = m.mode === 'EXPLICIT' ? m.tokens : []
+  return groupTokens(m.groups).map((groupPattern) => ({
     versionRange: m.base ? null : m.range,
-    groupPattern: groupTokens(m.groups).join(','),
+    groupPattern,
     mode: m.mode,
-    artifactTokens: m.mode === 'EXPLICIT' ? m.tokens : [],
-  }
+    artifactTokens: tokens,
+  }))
 }
 
 const MODE_SHORT_LABEL: Record<ArtifactIdMode, string> = {

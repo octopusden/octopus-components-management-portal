@@ -11,7 +11,7 @@ import {
   legacyArtifactPattern,
   OWNERSHIP_ALL_VERSIONS,
   splitTokens,
-  toArtifactIdRequest,
+  toArtifactIdRequests,
   type OwnershipMappingValue,
 } from './artifactOwnership'
 import type { ArtifactId } from './types'
@@ -131,19 +131,17 @@ describe('artifactOwnership helpers', () => {
     ).toBe(false)
   })
 
-  it('toArtifactIdRequest: base → null range, EXPLICIT carries tokens, ALL drops them', () => {
-    expect(toArtifactIdRequest(m({ base: true, groups: ' a , b ', mode: 'EXPLICIT', tokens: ['t'] }))).toEqual({
-      versionRange: null,
-      groupPattern: 'a,b',
-      mode: 'EXPLICIT',
-      artifactTokens: ['t'],
-    })
-    expect(toArtifactIdRequest(m({ base: false, range: '[1,2)', mode: 'ALL', tokens: ['ignored'] }))).toEqual({
-      versionRange: '[1,2)',
-      groupPattern: 'com.example',
-      mode: 'ALL',
-      artifactTokens: [],
-    })
+  it('toArtifactIdRequests: splits a (grandfathered) comma group-list into ONE request per groupId, same mode/tokens/range', () => {
+    // Canonicalization: one groupId per request. A row that still carries "a,b" (legacy /
+    // pre-split) fans out to two per-group requests — matching the create form and CRS storage.
+    expect(toArtifactIdRequests(m({ base: true, groups: ' a , b ', mode: 'EXPLICIT', tokens: ['t'] }))).toEqual([
+      { versionRange: null, groupPattern: 'a', mode: 'EXPLICIT', artifactTokens: ['t'] },
+      { versionRange: null, groupPattern: 'b', mode: 'EXPLICIT', artifactTokens: ['t'] },
+    ])
+    // Single group → single request; ALL drops tokens; override keeps its range.
+    expect(toArtifactIdRequests(m({ base: false, range: '[1,2)', mode: 'ALL', tokens: ['ignored'] }))).toEqual([
+      { versionRange: '[1,2)', groupPattern: 'com.example', mode: 'ALL', artifactTokens: [] },
+    ])
   })
 
   it('fromArtifactId: ALL_VERSIONS / null versionRange → base; else override', () => {
