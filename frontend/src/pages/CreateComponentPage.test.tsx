@@ -54,6 +54,12 @@ vi.mock('../components/Layout', () => ({
   Layout: ({ children }: { children: React.ReactNode }) =>
     React.createElement('div', { 'data-testid': 'layout' }, children),
 }))
+// Expose the guard's `when` signal so a test can assert whether navigation would
+// be blocked, without wiring up a real useBlocker round-trip.
+vi.mock('../components/editor/UnsavedChangesGuard', () => ({
+  UnsavedChangesGuard: ({ when }: { when: boolean }) =>
+    React.createElement('div', { 'data-testid': 'unsaved-guard', 'data-when': String(when) }),
+}))
 
 function makeSource(overrides: Partial<ComponentDetail> = {}): ComponentDetail {
   return {
@@ -360,6 +366,31 @@ describe('CreateComponentPage — clone re-enter affordances', () => {
     // Clone opens on General, where the Component Key must be re-entered.
     // The banner uses lowercase "(re-enter)"; the field pill is the exact "Re-enter".
     expect(screen.getAllByText('Re-enter').length).toBeGreaterThan(0)
+  })
+})
+
+describe('CreateComponentPage — clone unsaved-changes guard', () => {
+  it('engages the guard when only the profile changed (no RHF field is dirty)', async () => {
+    // Source derives regular-external + explicit=true; its distribution flags
+    // (external=true, explicit=true) are the clone defaults and the Component Key
+    // starts cleared.
+    mockUseComponent.mockReturnValue({
+      data: makeSource({ distributionExternal: true, distributionExplicit: true, solution: null }),
+      isLoading: false,
+      error: null,
+    })
+    renderWizard('/components/new?from=c-1')
+    // Nothing touched yet → the guard is inactive.
+    expect(screen.getByTestId('unsaved-guard').getAttribute('data-when')).toBe('false')
+    // Switch the (editable) clone profile regular-external → Solution. The derived
+    // distribution flags stay equal to the defaults and the name stays cleared, so
+    // RHF's isDirty never flips — but the submitted `solution` flag changed, so the
+    // guard must still block navigation away.
+    await userEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    await userEvent.click(screen.getByRole('button', { name: /^Solution$/i }))
+    await waitFor(() =>
+      expect(screen.getByTestId('unsaved-guard').getAttribute('data-when')).toBe('true'),
+    )
   })
 })
 

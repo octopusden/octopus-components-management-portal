@@ -287,9 +287,10 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
       const flags = flagsForProfile(next, nextExplicit)
       // Mark the form dirty when the profile OR its derived distribution flags
       // change — e.g. toggling the explicit-distribution answer for the SAME
-      // profile still changes submitted values. In clone mode `isDirty` is the
-      // only unsaved-guard signal (the scratch `profile !== null` term doesn't
-      // apply there).
+      // profile still changes submitted values. A profile-only change that leaves
+      // the RHF flags at their defaults is caught separately by `profileTouched`
+      // (see the UnsavedChangesGuard), since the profile also drives non-RHF
+      // submitted values such as the `solution` flag.
       const flagsChanged =
         flags.distributionExternal !== getValues('distributionExternal') ||
         flags.distributionExplicit !== getValues('distributionExplicit')
@@ -1089,9 +1090,17 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
     ? `Clone ${source?.name ?? 'component'}`
     : 'Create component'
 
+  // The profile lives outside RHF and drives submitted flags (incl. `solution`,
+  // which is not an RHF field), so isDirty alone misses a profile-only change. In
+  // clone mode compare against the source-derived profile/explicit; in scratch any
+  // chosen profile counts.
+  const profileTouched = isClone
+    ? profile !== (derived?.profile ?? null) || explicitAnswer !== (derived?.explicit ?? false)
+    : profile !== null
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex h-full flex-col overflow-hidden">
-      <UnsavedChangesGuard when={(isDirty || (!isClone && profile !== null)) && !submitted} />
+      <UnsavedChangesGuard when={(isDirty || profileTouched) && !submitted} />
 
       {/* Header bar */}
       <div className="flex items-center gap-3 border-b px-6 py-4 pr-12">
