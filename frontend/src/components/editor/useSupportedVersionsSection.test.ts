@@ -55,6 +55,14 @@ describe('useSupportedVersionsSection', () => {
     expect(result.current.diff[0]?.label).toBe('Supported Versions')
   })
 
+  it('addRange dedupes — adding a range already present is a no-op (no duplicate rows)', () => {
+    mockData = resp({ ranges: ['[1.0,2.0)'] })
+    const { result } = renderHook(() => useSupportedVersionsSection('c-1'))
+    act(() => result.current.addRange('[1.0,2.0)'))
+    expect(result.current.state.ranges).toEqual(['[1.0,2.0)'])
+    expect(result.current.isDirty).toBe(false)
+  })
+
   it('removeRange (multi) filters the range and stays bounded', () => {
     mockData = resp({ ranges: ['[1.0,2.0)', '[2.0,)'] })
     const { result } = renderHook(() => useSupportedVersionsSection('c-1'))
@@ -126,15 +134,19 @@ describe('useSupportedVersionsSection', () => {
     })
   })
 
-  it('save() trims a padded jiraTaskKey before sending (server pattern would 400 on whitespace)', async () => {
+  it('save() trims padded metadata before sending (server pattern would 400; audit stays clean)', async () => {
     mockData = resp({ ranges: ['[1.0,2.0)'] })
     mockMutateAsync.mockResolvedValue(resp({ ranges: ['[1.0,2.0)'] }))
     const { result } = renderHook(() => useSupportedVersionsSection('c-1'))
     act(() => result.current.setAllVersions())
     await act(async () => {
-      await result.current.save({ jiraTaskKey: '  ABC-123  ' })
+      await result.current.save({ jiraTaskKey: '  ABC-123  ', changeComment: '  widen coverage  ' })
     })
-    expect(mockMutateAsync.mock.calls[0]?.[0]).toEqual({ all: true, jiraTaskKey: 'ABC-123' })
+    expect(mockMutateAsync.mock.calls[0]?.[0]).toEqual({
+      all: true,
+      jiraTaskKey: 'ABC-123',
+      changeComment: 'widen coverage',
+    })
   })
 
   it('exposes isError when the coverage GET fails with no baseline (no empty-draft fallthrough)', () => {

@@ -114,7 +114,14 @@ export function useSupportedVersionsSection(componentId: string): SupportedVersi
     isDirty,
     diff,
     addRange: (range) =>
-      setState((p) => ({ all: false, ranges: [...p.ranges, range].sort(compareVersionRanges) })),
+      // Dedupe: adding a range already in the draft is a no-op — otherwise the
+      // draft carries duplicate rows (and the tab keys list items by the range
+      // string, so React would warn on duplicate keys until the next save/merge).
+      setState((p) =>
+        p.ranges.includes(range)
+          ? p
+          : { all: false, ranges: [...p.ranges, range].sort(compareVersionRanges) },
+      ),
     // Filter only — the tab guards the last-range case (confirm → setAllVersions),
     // so this never silently empties coverage into an implicit all=true.
     removeRange: (range) =>
@@ -131,13 +138,16 @@ export function useSupportedVersionsSection(componentId: string): SupportedVersi
       }
       // Change metadata (Jira task key + comment) is recorded on the audit row by
       // CRS. Include each only when non-blank so the body stays clean (a blank Jira
-      // key would pass the server's `^\s*$` pattern but adds nothing). Send the
-      // Jira key TRIMMED — a padded " ABC-123 " passes this presence check but is
-      // rejected by the server's `^[A-Z][A-Z0-9]+-\d+$` pattern (400).
+      // key would pass the server's `^\s*$` pattern but adds nothing). Send both
+      // TRIMMED — a padded " ABC-123 " passes this presence check but is rejected
+      // by the server's `^[A-Z][A-Z0-9]+-\d+$` pattern (400), and trimming the
+      // comment's edges keeps accidental whitespace out of the audit row (internal
+      // spacing is preserved).
       const jiraTaskKey = meta?.jiraTaskKey?.trim()
+      const changeComment = meta?.changeComment?.trim()
       const meta_ = {
         ...(jiraTaskKey ? { jiraTaskKey } : {}),
-        ...(meta?.changeComment?.trim() ? { changeComment: meta.changeComment } : {}),
+        ...(changeComment ? { changeComment } : {}),
       }
       const request = state.all ? { all: true, ...meta_ } : { ranges: state.ranges, ...meta_ }
       const res = await updateMutation.mutateAsync(request)
