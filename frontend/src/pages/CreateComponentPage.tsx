@@ -9,7 +9,7 @@ import {
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Check, ChevronLeft, ChevronRight, Plus, X, AlertCircle, Loader2 } from 'lucide-react'
 import { Button } from '../components/ui/button'
-import { Dialog, DialogContent, DialogTitle } from '../components/ui/dialog'
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../components/ui/dialog'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { Badge } from '../components/ui/badge'
@@ -152,6 +152,9 @@ export function CreateComponentPage() {
       }}
     >
       <DialogContent className={DIALOG_CLASS}>
+        <DialogDescription className="sr-only">
+          Fill in the steps to create a new component.
+        </DialogDescription>
         {isClone && error ? (
           <div className="flex flex-1 flex-col gap-4 p-6">
             <DialogTitle>Clone component</DialogTitle>
@@ -934,10 +937,12 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
       {gated ? (
         <>
           <div className="space-y-1.5">
-            <Label htmlFor="create-coordinate-type" className="flex items-center gap-1">
-              Distribution coordinate <span className="text-destructive">*</span>
+            <div className="flex items-center gap-1">
+              <Label htmlFor="create-coordinate-type">
+                Distribution coordinate <span className="text-destructive">*</span>
+              </Label>
               {reenterBadge}
-            </Label>
+            </div>
             <select
               id="create-coordinate-type"
               className={cn('h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm', reenterBorder)}
@@ -991,10 +996,10 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
       ) : (
         <>
           <div className="space-y-1.5">
-            <Label htmlFor="create-imageName" className="flex items-center gap-1">
-              Image Name
+            <div className="flex items-center gap-1">
+              <Label htmlFor="create-imageName">Image Name</Label>
               {reenterBadge}
-            </Label>
+            </div>
             <Input id="create-imageName" className={reenterBorder} placeholder="image name" aria-label="Image name" {...register('coordinate.imageName')} />
           </div>
           <p className="text-xs text-muted-foreground">
