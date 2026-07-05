@@ -256,6 +256,38 @@ describe('CreateComponentPage — scratch create flow', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /Add one more groupId/i })).toBeDefined())
   })
 
+  it('marks the current step invalid (not active) after a save-time conflict routes to it', async () => {
+    // Regression guard for the rail's invalid-over-active precedence: a step can be
+    // both current AND invalid once a Create attempt fails (here a 409 routes to
+    // Build). `data-status` must read "invalid", not "active", or the error is
+    // invisible to CSS/AT while the user sits on the offending step.
+    mockMutateAsync.mockRejectedValueOnce(
+      new ApiError(409, 'conflict', JSON.stringify({ errorMessage: 'artifactIds: already owned by another component' })),
+    )
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await clickNext()
+    await userEvent.selectOptions(screen.getByLabelText(/^Build System/i), 'PROVIDED')
+    await clickNext()
+    await clickNext() // VCS note
+    await userEvent.type(screen.getByLabelText(/^Jira Project Key/i), 'WIDG')
+    await clickNext()
+    await clickNext() // Distribution
+    await userEvent.type(screen.getByLabelText(/^Jira task key/i), 'ABC-123')
+    await userEvent.click(screen.getByRole('button', { name: /^create component$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1))
+    const buildStep = await screen.findByRole('button', { name: 'Build' })
+    // Prove the conflict actually routed TO Build (it is the current step) AND that
+    // the current+invalid step reads "invalid", not "active" — the whole point of
+    // the precedence. Without the aria-current check the guard would pass even if
+    // the UI stayed elsewhere while merely flagging Build invalid.
+    await waitFor(() => expect(buildStep).toHaveAttribute('aria-current', 'step'))
+    expect(buildStep.getAttribute('data-status')).toBe('invalid')
+  })
+
   it('enforces the VCS Path rule for a VCS-requiring build system and marks the step invalid', async () => {
     renderWizard()
     await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
