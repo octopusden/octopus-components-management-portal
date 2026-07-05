@@ -608,10 +608,16 @@ export interface SupportedVersionsResponse {
 }
 
 // Declarative replacement: send `all: true` (or an empty `ranges`) for all-versions coverage,
-// else the desired non-overlapping set of supported ranges.
+// else the desired non-overlapping set of supported ranges. This is the type the PUT hook
+// actually uses (the vendored schema.d.ts is a separate re-export) — keep it aligned with the
+// endpoint contract.
 export interface SupportedVersionsRequest {
   all?: boolean
   ranges?: string[]
+  // Optional change metadata recorded on the audit row (not on the component),
+  // mirroring the component create/update requests. See CRS SupportedVersionsRequest.
+  jiraTaskKey?: string
+  changeComment?: string
 }
 
 // ---------------------------------------------------------------------------
