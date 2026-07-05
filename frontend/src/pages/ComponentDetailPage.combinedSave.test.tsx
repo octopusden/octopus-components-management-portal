@@ -13,14 +13,25 @@ import type { ComponentDetail } from '@/lib/types'
 // run and contribute slices to the ONE combined PATCH — that is what this suite
 // exercises (the whole point of Phase 3b).
 vi.mock('../hooks/useCurrentUser', () => ({ useCurrentUser: vi.fn() }))
+// Supported-versions coverage lives on a separate PUT endpoint. Hoisted so each
+// test can seed the GET data and capture the PUT (mutateAsync).
+const svMock = vi.hoisted(() => ({
+  data: undefined as { all: boolean; ranges: string[]; warnings: string[] } | undefined,
+  mutateAsync: vi.fn(() => Promise.resolve(undefined as unknown)),
+}))
 vi.mock('../hooks/useComponent', () => ({
   useComponent: vi.fn(),
   useUpdateComponent: vi.fn(),
   useDeleteComponent: vi.fn(),
   // item D: the page wrapper seeds OverridesDraftProvider from this; no overrides here.
   useFieldOverrides: vi.fn(() => ({ data: [] })),
+  useSupportedVersions: () => ({ data: svMock.data, isLoading: false }),
+  useUpdateSupportedVersions: () => ({ mutateAsync: svMock.mutateAsync, isPending: false }),
 }))
-vi.mock('../hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }))
+// Hoisted so tests can assert the toast title/description (e.g. the P2-1
+// "Partly saved" surface). Reset in beforeEach.
+const toastMock = vi.hoisted(() => vi.fn())
+vi.mock('../hooks/use-toast', () => ({ useToast: () => ({ toast: toastMock }) }))
 vi.mock('../components/AppFooter', () => ({ AppFooter: () => <footer>footer</footer> }))
 vi.mock('../hooks/useInfo', () => ({
   usePortalLinks: () => ({ data: undefined }),
@@ -154,7 +165,15 @@ async function openTab(name: RegExp) {
   await userEvent.setup().click(screen.getByRole('tab', { name }))
 }
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  // Default: no supported-versions coverage loaded (section stays clean and
+  // contributes nothing) unless a test opts in.
+  svMock.data = undefined
+  svMock.mutateAsync.mockReset()
+  svMock.mutateAsync.mockResolvedValue(undefined)
+  toastMock.mockReset()
+})
 
 describe('ComponentDetailPage — combined PATCH (Phase 3b)', () => {
   it('fires ONE PATCH with a single version, merging General + Build slices', async () => {
@@ -551,5 +570,176 @@ describe('ComponentDetailPage — combined PATCH (Phase 3b)', () => {
     // Bar is clean, so Save is a no-op (review won't open / nothing to confirm).
     expect(screen.queryByRole('button', { name: /^confirm$/i })).toBeNull()
     expect(patchSpy).not.toHaveBeenCalled()
+  })
+
+  // Cutover blocker (tier B): a Supported Versions edit is NOT an immediate PUT —
+  // it becomes a page-level draft that flows through the sticky Save bar → Review
+  // diff → a separate PUT sequenced after the combined PATCH.
+  it('routes a supported-versions edit through the Save bar → Review → separate PUT', async () => {
+    svMock.data = { all: false, ranges: ['[1.0,2.0)'], warnings: [] }
+    svMock.mutateAsync.mockResolvedValue({ all: false, ranges: ['[1.0,2.0)', '[2.0,)'], warnings: [] })
+    const patch = vi.fn(() => Promise.resolve())
+    renderPage(baseComponent, patch)
+
+    await openTab(/Supported Versions/)
+    // Adding a range only stages the draft — no PUT yet.
+    fireEvent.change(screen.getByLabelText('New supported version range'), { target: { value: '[2.0,)' } })
+    fireEvent.click(screen.getByRole('button', { name: /add range/i }))
+    await waitFor(() => expect(screen.getByText('Unsaved changes')).toBeDefined())
+    expect(svMock.mutateAsync).not.toHaveBeenCalled()
+
+    // Save → Review lists the coverage change → Confirm.
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('Supported Versions')).toBeDefined()
+    fireEvent.click(within(dialog).getByRole('button', { name: /^confirm$/i }))
+
+    // The PUT carries the desired declarative set; the PATCH never fires (no
+    // PATCH-backed section was dirty).
+    await waitFor(() => expect(svMock.mutateAsync).toHaveBeenCalledWith({ ranges: ['[1.0,2.0)', '[2.0,)'] }))
+    expect(patch).not.toHaveBeenCalled()
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('Discard reverts a supported-versions draft (nothing was PUT)', async () => {
+    svMock.data = { all: false, ranges: ['[1.0,2.0)'], warnings: [] }
+    renderPage(baseComponent)
+
+    await openTab(/Supported Versions/)
+    fireEvent.change(screen.getByLabelText('New supported version range'), { target: { value: '[2.0,)' } })
+    fireEvent.click(screen.getByRole('button', { name: /add range/i }))
+    await waitFor(() => expect(screen.getByText('Unsaved changes')).toBeDefined())
+
+    fireEvent.click(screen.getByRole('button', { name: /discard/i }))
+    await waitFor(() => expect(screen.getByText('All changes saved')).toBeDefined())
+    // Draft reverted to the single server range; no PUT ever fired.
+    const items = screen.getByLabelText('Supported version ranges').querySelectorAll('code')
+    expect(Array.from(items).map((c) => c.textContent)).toEqual(['[1.0,2.0)'])
+    expect(svMock.mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('sequences the supported-versions PUT AFTER the combined PATCH when both are dirty', async () => {
+    svMock.data = { all: false, ranges: ['[1.0,2.0)'], warnings: [] }
+    svMock.mutateAsync.mockResolvedValue({ all: true, ranges: [], warnings: [] })
+    const order: string[] = []
+    const patch = vi.fn(() => {
+      order.push('patch')
+      return Promise.resolve()
+    })
+    svMock.mutateAsync.mockImplementation(() => {
+      order.push('put')
+      return Promise.resolve({ all: true, ranges: [], warnings: [] })
+    })
+    renderPage(baseComponent, patch)
+
+    // Dirty a PATCH-backed section (Build) …
+    await openTab(/^Build/)
+    fireEvent.change(screen.getByTestId('enum-build-javaVersion'), { target: { value: '21' } })
+    // … and the supported-versions draft (explicit widen).
+    await openTab(/Supported Versions/)
+    fireEvent.click(screen.getByRole('button', { name: /set to all versions/i }))
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /^confirm$/i }))
+
+    await waitFor(() => expect(svMock.mutateAsync).toHaveBeenCalledWith({ all: true }))
+    expect(patch).toHaveBeenCalledOnce()
+    expect(order).toEqual(['patch', 'put'])
+  })
+
+  // Variant B: the Jira task key + comment typed in the Review dialog must reach
+  // the supported-versions PUT on a coverage-only save (previously dropped — the
+  // PUT had no field for them and the combined PATCH never fired).
+  it('threads Review metadata (jira key + comment) into a supported-versions-only PUT (variant B)', async () => {
+    svMock.data = { all: false, ranges: ['[1.0,2.0)'], warnings: [] }
+    svMock.mutateAsync.mockResolvedValue({ all: false, ranges: ['[1.0,2.0)', '[2.0,)'], warnings: [] })
+    const patch = vi.fn(() => Promise.resolve())
+    renderPage(baseComponent, patch)
+
+    await openTab(/Supported Versions/)
+    fireEvent.change(screen.getByLabelText('New supported version range'), { target: { value: '[2.0,)' } })
+    fireEvent.click(screen.getByRole('button', { name: /add range/i }))
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    const dialog = await screen.findByRole('dialog')
+    // The Review dialog shows the metadata inputs even for a coverage-only change.
+    fireEvent.change(within(dialog).getByLabelText(/jira task key/i), { target: { value: 'ABC-123' } })
+    fireEvent.change(within(dialog).getByLabelText(/comment/i), { target: { value: 'widen coverage' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: /^confirm$/i }))
+
+    await waitFor(() =>
+      expect(svMock.mutateAsync).toHaveBeenCalledWith({
+        ranges: ['[1.0,2.0)', '[2.0,)'],
+        jiraTaskKey: 'ABC-123',
+        changeComment: 'widen coverage',
+      }),
+    )
+    expect(patch).not.toHaveBeenCalled()
+  })
+
+  // P2-1: the supported-versions PUT fails AFTER a successful combined PATCH. The
+  // part that persisted must be acknowledged (overrides reset, no misleading
+  // generic "Save failed") and the failure surfaced distinctly as "Partly saved".
+  it('surfaces a "Partly saved" toast when the SV PUT fails after a good PATCH (P2-1)', async () => {
+    svMock.data = { all: false, ranges: ['[1.0,2.0)'], warnings: [] }
+    svMock.mutateAsync.mockRejectedValue(new Error('coverage service unavailable'))
+    const patch = vi.fn(() => Promise.resolve())
+    renderPage(baseComponent, patch)
+
+    // Dirty a PATCH-backed section (Build) …
+    await openTab(/^Build/)
+    fireEvent.change(screen.getByTestId('enum-build-javaVersion'), { target: { value: '21' } })
+    // … and the supported-versions draft (explicit widen).
+    await openTab(/Supported Versions/)
+    fireEvent.click(screen.getByRole('button', { name: /set to all versions/i }))
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /^confirm$/i }))
+
+    // PATCH persisted; the SV PUT then rejected → distinct "Partly saved" toast
+    // naming the failure, and the review dialog closes.
+    await waitFor(() => expect(patch).toHaveBeenCalledOnce())
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Partly saved',
+          description: expect.stringContaining('coverage service unavailable'),
+          variant: 'destructive',
+        }),
+      ),
+    )
+    // NOT the generic "Save failed", and NOT the all-clear "Component saved".
+    const titles = toastMock.mock.calls.map((c) => (c[0] as { title?: string }).title)
+    expect(titles).not.toContain('Save failed')
+    expect(titles).not.toContain('Component saved')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  // P2-1 (other half): a COVERAGE-ONLY save that fails (no PATCH persisted) is a
+  // plain "Save failed" — NOT "Partly saved" (nothing else landed) — and defers
+  // to the shared error handling (dialog closes on a generic error).
+  it('shows a plain "Save failed" when a coverage-only PUT fails (no PATCH)', async () => {
+    svMock.data = { all: false, ranges: ['[1.0,2.0)'], warnings: [] }
+    svMock.mutateAsync.mockRejectedValue(new Error('coverage service unavailable'))
+    const patch = vi.fn(() => Promise.resolve())
+    renderPage(baseComponent, patch)
+
+    await openTab(/Supported Versions/)
+    fireEvent.click(screen.getByRole('button', { name: /set to all versions/i }))
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /^confirm$/i }))
+
+    await waitFor(() => expect(svMock.mutateAsync).toHaveBeenCalled())
+    // No PATCH fired, so this is a plain "Save failed", not "Partly saved".
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Save failed', variant: 'destructive' }),
+      ),
+    )
+    expect(patch).not.toHaveBeenCalled()
+    const titles = toastMock.mock.calls.map((c) => (c[0] as { title?: string }).title)
+    expect(titles).not.toContain('Partly saved')
+    expect(titles).not.toContain('Component saved')
   })
 })

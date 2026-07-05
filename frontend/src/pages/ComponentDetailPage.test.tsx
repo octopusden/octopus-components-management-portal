@@ -18,6 +18,8 @@ vi.mock('../hooks/useComponent', () => ({
   useDeleteComponent: vi.fn(),
   // item D: the page wrapper seeds OverridesDraftProvider from this.
   useFieldOverrides: vi.fn(() => ({ data: [] })),
+  useSupportedVersions: () => ({ data: undefined, isLoading: false }),
+  useUpdateSupportedVersions: () => ({ mutateAsync: vi.fn(() => Promise.resolve()), isPending: false }),
 }))
 vi.mock('../hooks/use-toast', () => ({
   useToast: () => ({ toast: vi.fn() }),
