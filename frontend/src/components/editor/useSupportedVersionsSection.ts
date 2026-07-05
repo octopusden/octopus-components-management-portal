@@ -116,6 +116,13 @@ export function useSupportedVersionsSection(componentId: string): SupportedVersi
     setAllVersions: () => setState({ all: true, ranges: [] }),
     reset: () => reseedTo(snapshotFrom(data)),
     save: async (meta) => {
+      // Backstop against a silent widen: a bounded (all=false) set with no ranges
+      // would PUT `{ranges: []}`, which the server collapses to all=true. The tab's
+      // last-range delete routes through setAllVersions() with explicit confirmation,
+      // so reaching save() with an empty bounded set is a bug — fail loudly.
+      if (!state.all && state.ranges.length === 0) {
+        throw new Error('Cannot save an empty supported-versions set; use "All versions" to widen coverage.')
+      }
       // Change metadata (Jira task key + comment) is recorded on the audit row by
       // CRS. Include each only when non-blank so the body stays clean (a blank Jira
       // key would pass the server's `^\s*$` pattern but adds nothing).

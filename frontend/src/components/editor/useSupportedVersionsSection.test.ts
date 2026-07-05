@@ -132,6 +132,20 @@ describe('useSupportedVersionsSection', () => {
     expect(mockMutateAsync.mock.calls[0]?.[0]).toEqual({ all: true })
   })
 
+  it('save() throws and does NOT call the mutation on an empty bounded set (no silent widen — P3-2)', async () => {
+    mockData = resp({ ranges: ['[1.0,2.0)'] })
+    const { result } = renderHook(() => useSupportedVersionsSection('c-1'))
+    // Filter the only range away directly (bypassing the tab's confirm→setAllVersions
+    // guard) → a bounded, empty draft. save() must fail loudly, not PUT {ranges:[]}
+    // (which the server collapses to all=true — a silent widen).
+    act(() => result.current.removeRange('[1.0,2.0)'))
+    expect(result.current.state).toEqual({ all: false, ranges: [] })
+    await act(async () => {
+      await expect(result.current.save()).rejects.toThrow(/empty|all versions/i)
+    })
+    expect(mockMutateAsync).not.toHaveBeenCalled()
+  })
+
   it('adopts a fresh server value while clean (refetch), but keeps an in-progress edit', () => {
     mockData = resp({ ranges: ['[1.0,2.0)'] })
     const { result, rerender } = renderHook(() => useSupportedVersionsSection('c-1'))

@@ -28,7 +28,10 @@ vi.mock('../hooks/useComponent', () => ({
   useSupportedVersions: () => ({ data: svMock.data, isLoading: false }),
   useUpdateSupportedVersions: () => ({ mutateAsync: svMock.mutateAsync, isPending: false }),
 }))
-vi.mock('../hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }))
+// Hoisted so tests can assert the toast title/description (e.g. the P2-1
+// "Partly saved" surface). Reset in beforeEach.
+const toastMock = vi.hoisted(() => vi.fn())
+vi.mock('../hooks/use-toast', () => ({ useToast: () => ({ toast: toastMock }) }))
 vi.mock('../components/AppFooter', () => ({ AppFooter: () => <footer>footer</footer> }))
 vi.mock('../hooks/useInfo', () => ({
   usePortalLinks: () => ({ data: undefined }),
@@ -169,6 +172,7 @@ beforeEach(() => {
   svMock.data = undefined
   svMock.mutateAsync.mockReset()
   svMock.mutateAsync.mockResolvedValue(undefined)
+  toastMock.mockReset()
 })
 
 describe('ComponentDetailPage — combined PATCH (Phase 3b)', () => {
@@ -671,5 +675,71 @@ describe('ComponentDetailPage — combined PATCH (Phase 3b)', () => {
       }),
     )
     expect(patch).not.toHaveBeenCalled()
+  })
+
+  // P2-1: the supported-versions PUT fails AFTER a successful combined PATCH. The
+  // part that persisted must be acknowledged (overrides reset, no misleading
+  // generic "Save failed") and the failure surfaced distinctly as "Partly saved".
+  it('surfaces a "Partly saved" toast when the SV PUT fails after a good PATCH (P2-1)', async () => {
+    svMock.data = { all: false, ranges: ['[1.0,2.0)'], warnings: [] }
+    svMock.mutateAsync.mockRejectedValue(new Error('coverage service unavailable'))
+    const patch = vi.fn(() => Promise.resolve())
+    renderPage(baseComponent, patch)
+
+    // Dirty a PATCH-backed section (Build) …
+    await openTab(/^Build/)
+    fireEvent.change(screen.getByTestId('enum-build-javaVersion'), { target: { value: '21' } })
+    // … and the supported-versions draft (explicit widen).
+    await openTab(/Supported Versions/)
+    fireEvent.click(screen.getByRole('button', { name: /set to all versions/i }))
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /^confirm$/i }))
+
+    // PATCH persisted; the SV PUT then rejected → distinct "Partly saved" toast
+    // naming the failure, and the review dialog closes.
+    await waitFor(() => expect(patch).toHaveBeenCalledOnce())
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Partly saved',
+          description: expect.stringContaining('coverage service unavailable'),
+          variant: 'destructive',
+        }),
+      ),
+    )
+    // NOT the generic "Save failed", and NOT the all-clear "Component saved".
+    const titles = toastMock.mock.calls.map((c) => (c[0] as { title?: string }).title)
+    expect(titles).not.toContain('Save failed')
+    expect(titles).not.toContain('Component saved')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  // P2-1 (other half): a COVERAGE-ONLY save that fails (no PATCH persisted) is a
+  // plain "Save failed" — NOT "Partly saved" (nothing else landed) — and defers
+  // to the shared error handling (dialog closes on a generic error).
+  it('shows a plain "Save failed" when a coverage-only PUT fails (no PATCH)', async () => {
+    svMock.data = { all: false, ranges: ['[1.0,2.0)'], warnings: [] }
+    svMock.mutateAsync.mockRejectedValue(new Error('coverage service unavailable'))
+    const patch = vi.fn(() => Promise.resolve())
+    renderPage(baseComponent, patch)
+
+    await openTab(/Supported Versions/)
+    fireEvent.click(screen.getByRole('button', { name: /set to all versions/i }))
+
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /^confirm$/i }))
+
+    await waitFor(() => expect(svMock.mutateAsync).toHaveBeenCalled())
+    // No PATCH fired, so this is a plain "Save failed", not "Partly saved".
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Save failed', variant: 'destructive' }),
+      ),
+    )
+    expect(patch).not.toHaveBeenCalled()
+    const titles = toastMock.mock.calls.map((c) => (c[0] as { title?: string }).title)
+    expect(titles).not.toContain('Partly saved')
+    expect(titles).not.toContain('Component saved')
   })
 })

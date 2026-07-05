@@ -530,10 +530,34 @@ function ComponentDetailEditor() {
       // records it on the audit row, so a coverage-only save keeps the Jira key /
       // comment the user typed in the Review dialog.
       if (supportedVersionsSection.isDirty) {
-        await supportedVersionsSection.save({
-          jiraTaskKey: meta.jiraTaskKey,
-          changeComment: meta.changeComment,
-        })
+        try {
+          await supportedVersionsSection.save({
+            jiraTaskKey: meta.jiraTaskKey,
+            changeComment: meta.changeComment,
+          })
+        } catch (svErr) {
+          // P2-1: the PUT failed. If a PATCH already persisted, the save is only
+          // PARTLY done — the combined diff can't be safely re-edited (the PATCH is
+          // committed, so its "from" values are stale), so reset the overrides for
+          // the part that landed and surface the failure distinctly rather than as
+          // a misleading generic "Save failed".
+          if (patchDirty) {
+            const msg = svErr instanceof Error ? svErr.message : String(svErr)
+            overridesSection.reset()
+            setReviewOpen(false)
+            toast({
+              title: 'Partly saved',
+              description: `Your other changes were saved, but updating supported versions failed: ${msg}`,
+              variant: 'destructive',
+            })
+            return
+          }
+          // Coverage-only failure: nothing else persisted, so defer to the shared
+          // conflict / 400 / generic handling below. That keeps an in-place-fixable
+          // value conflict (or a field-mapped 400) routed to its banner/section
+          // instead of flattening every SV error to a generic toast.
+          throw svErr
+        }
       }
       // Clear the override draft after a successful save. The combined PATCH
       // persisted the desired set; useUpdateComponent invalidates
