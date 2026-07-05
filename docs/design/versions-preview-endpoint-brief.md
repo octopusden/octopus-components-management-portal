@@ -8,7 +8,7 @@ server, instead of the current saved-config `detailed-version` call.
 **Already shipped (context):** portal PR **#156** (Whiskey preview via saved-config `detailed-version`).
 **Supersedes note:** memory `project_whiskey_version_preview_server_render`.
 
-Start the session in the **CRS repo** cwd: `/Users/pgorbachev/projects/octopus/octopus-components-registry-service` (active branch `v3`).
+Start the session in the **CRS repo** cwd: `<projects>/octopus-components-registry-service` (active branch `v3`).
 
 ---
 
@@ -25,14 +25,16 @@ So within one session: build + locally test **both**, but land **CRS → v3 firs
 portal vendor-spec against merged v3 and open the portal PR. The portal PR merges after CRS.
 
 Do all work in **manual worktrees** (repo rule): CRS worktrees live in the sibling
-`octopus-components-registry-service-wt/`; portal worktrees in `_wt/`.
+`octopus-components-registry-service-wt/`; portal worktrees beside the repo in
+`../octopus-components-management-portal-wt/` (the repo rule — `_wt/` nested inside
+the checkout is discouraged and confuses tooling).
 
 ---
 
 ## PHASE 1 — CRS endpoint (TDD, branch off `origin/v3`)
 
 ```
-git -C /Users/pgorbachev/projects/octopus/octopus-components-registry-service fetch origin v3
+git -C <projects>/octopus-components-registry-service fetch origin v3
 git worktree add -b feat/versions-preview-endpoint \
   ../octopus-components-registry-service-wt/versions-preview-endpoint origin/v3
 ```
@@ -104,8 +106,9 @@ Open CRS PR → `v3`. Review (Sonnet), iterate to clean, **merge to v3**.
 ## PHASE 2 — Portal switch (branch off `origin/develop`, after CRS is in v3)
 
 ```
-git -C /Users/pgorbachev/projects/octopus/octopus-components-management-portal fetch origin develop
-git worktree add -b feat/jira-preview-live-render _wt/jira-preview-live origin/develop
+git -C <projects>/octopus-components-management-portal fetch origin develop
+git worktree add -b feat/jira-preview-live-render \
+  ../octopus-components-management-portal-wt/jira-preview-live origin/develop
 ```
 (node_modules per repo rule: generate via Gradle Node, `./gradlew npmCi` — do NOT symlink for a real run.)
 
