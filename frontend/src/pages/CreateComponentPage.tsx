@@ -147,7 +147,8 @@ export function CreateComponentPage() {
   const [searchParams] = useSearchParams()
   const sourceId = searchParams.get('from') ?? ''
   const isClone = !!sourceId
-  // Bumped by the wizard's "Create another" to remount it with a fresh blank form.
+  // Bumped by the wizard's "Create another" to remount it with a fresh form
+  // instance (same mode — a clone restarts as another clone of the same source).
   const [remountKey, setRemountKey] = useState(0)
 
   const { data: source, error } = useComponent(sourceId)
@@ -206,7 +207,8 @@ interface WizardProps {
   source: ComponentDetail | null
   isClone: boolean
   defaults: ComponentDefaults
-  /** Reset the wizard to a blank scratch form (remount) after a successful create. */
+  /** Remount the wizard as a fresh form instance after a successful create (same
+   *  mode — scratch stays scratch, a clone restarts as another clone of the source). */
   onCreateAnother: () => void
 }
 

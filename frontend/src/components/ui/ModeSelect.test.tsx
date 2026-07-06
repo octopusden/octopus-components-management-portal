@@ -37,4 +37,11 @@ describe('ModeSelect', () => {
     const select = screen.getByLabelText('artifactId matching mode') as HTMLSelectElement
     expect(Array.from(select.options).map((o) => o.value)).toEqual(['ALL', 'ALL_EXCEPT_CLAIMED'])
   })
+
+  it('coerces a value outside `allowed` to the first offered mode (no blank selection)', () => {
+    // EXPLICIT is not in `allowed` → the select must fall back to the first option, not render empty.
+    render(<Harness initial="EXPLICIT" allowed={['ALL', 'ALL_EXCEPT_CLAIMED']} />)
+    const select = screen.getByLabelText('artifactId matching mode') as HTMLSelectElement
+    expect(select.value).toBe('ALL')
+  })
 })

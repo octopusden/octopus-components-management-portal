@@ -23,7 +23,10 @@ interface ModeSelectProps {
  */
 export function ModeSelect({ value, onChange, allowed, disabled, id }: ModeSelectProps) {
   const modes = allowed ? OWNERSHIP_MODES.filter((m) => allowed.includes(m.key)) : OWNERSHIP_MODES
-  const help = OWNERSHIP_MODES.find((m) => m.key === value)?.help
+  // Coerce to a rendered value that actually has an <option> — otherwise a value
+  // outside `allowed` shows as a blank selection. Falls back to the first offered mode.
+  const rendered = modes.some((m) => m.key === value) ? value : (modes[0]?.key ?? value)
+  const help = OWNERSHIP_MODES.find((m) => m.key === rendered)?.help
   return (
     <div className="flex flex-col gap-1.5 text-sm">
       <label htmlFor={id} className="font-medium">
@@ -32,7 +35,7 @@ export function ModeSelect({ value, onChange, allowed, disabled, id }: ModeSelec
       <select
         id={id}
         disabled={disabled}
-        value={value}
+        value={rendered}
         onChange={(e) => onChange(e.target.value as ArtifactIdMode)}
         className={cn(
           'h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm',
