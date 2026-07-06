@@ -171,6 +171,22 @@ describe('JiraVersionPreview — loading & empty', () => {
     expect(screen.queryByTestId('ladder-row-release')).toBeNull()
   })
 
+  it('names the missing Full Version Format when a prefix is set but the format is blank', () => {
+    setPreview({ isError: true })
+    renderPreview({ versionPrefix: 'acme', versionFormat: '' })
+    expect(screen.getByTestId('version-preview-empty').textContent).toMatch(
+      /Full Version Format in Jira is not set/i,
+    )
+  })
+
+  it('uses the generic notice when the format is present (blames the version, not the scheme)', () => {
+    setPreview({ isError: true })
+    renderPreview({ versionPrefix: 'acme', versionFormat: '$versionPrefix-$baseVersionFormat' })
+    expect(screen.getByTestId('version-preview-empty').textContent).toMatch(
+      /enter a version this component/i,
+    )
+  })
+
   it('a failed main version hides the hotfix block entirely (no contradictory "no preview" + hotfix rows)', () => {
     // main fails, hotfix would succeed — the hotfix block must NOT render alongside
     // the "No preview" notice (the two run as independent queries).
