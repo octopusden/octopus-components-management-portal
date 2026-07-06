@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { OWNERSHIP_MODES } from '@/lib/artifactOwnership'
 import type { ArtifactIdMode } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -25,8 +26,14 @@ export function ModeSelect({ value, onChange, allowed, disabled, id }: ModeSelec
   const modes = allowed ? OWNERSHIP_MODES.filter((m) => allowed.includes(m.key)) : OWNERSHIP_MODES
   // Coerce to a rendered value that actually has an <option> — otherwise a value
   // outside `allowed` shows as a blank selection. Falls back to the first offered mode.
-  const rendered = modes.some((m) => m.key === value) ? value : (modes[0]?.key ?? value)
+  const inAllowed = modes.some((m) => m.key === value)
+  const rendered = inAllowed ? value : (modes[0]?.key ?? value)
   const help = OWNERSHIP_MODES.find((m) => m.key === rendered)?.help
+  // If `allowed` excludes the current value, normalize the parent once so the stored
+  // value matches the displayed selection (no UI/state divergence on submit).
+  useEffect(() => {
+    if (!inAllowed && rendered !== value) onChange(rendered)
+  }, [inAllowed, rendered, value, onChange])
   return (
     <div className="flex flex-col gap-1.5 text-sm">
       <label htmlFor={id} className="font-medium">
