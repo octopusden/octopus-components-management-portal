@@ -32,7 +32,7 @@ CRS_SPEC_PATH="components-registry-service-server/src/main/resources/openapi/v4.
 # Pre-cutover: the v4 contract lives on the `v3` integration line.
 # Post-cutover: repoint to a released CRS tag (e.g. `v2.0.88`) so Portal tracks
 # released contracts, not in-flight ones. Bump here + in README.md.
-CRS_SPEC_REF="${CRS_SPEC_REF:-v3}"
+CRS_SPEC_REF="${CRS_SPEC_REF:-main}"
 # -----------------------------------------------------------------------------
 
 # Resolve dest relative to this script so it works from any CWD.
