@@ -94,7 +94,8 @@ class ValidationServiceTest {
         return ValidationService(registry, rmClient, listOf(validator), properties, serviceEventClient)
     }
 
-    /** Capturing double (kotlin-spring opens @Component members) — records emitted sweep statuses. */
+    /** Capturing double — records emitted sweep statuses. ServiceEventClient is explicitly `open`
+     * (this app does not apply the kotlin-spring all-open plugin to @Component), so it is subclassable here. */
     private class CapturingServiceEventClient :
         org.octopusden.octopus.components.portal.serviceevent.ServiceEventClient(
             ValidationProperties().apply { registryBaseUrl = "http://unused" },

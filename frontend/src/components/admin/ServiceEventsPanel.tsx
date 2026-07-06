@@ -136,7 +136,18 @@ export function ServiceEventsPanel() {
                 <Fragment key={e.id}>
                   <tr
                     className={`border-t ${hasDetail ? 'cursor-pointer hover:bg-muted/40' : ''}`}
+                    // Keyboard-accessible detail toggle: focusable + Enter/Space activate, with
+                    // aria-expanded reflecting state (rows without detail are inert).
+                    role={hasDetail ? 'button' : undefined}
+                    tabIndex={hasDetail ? 0 : undefined}
+                    aria-expanded={hasDetail ? isOpen : undefined}
                     onClick={() => hasDetail && setExpanded(isOpen ? null : e.id)}
+                    onKeyDown={(ev) => {
+                      if (hasDetail && (ev.key === 'Enter' || ev.key === ' ')) {
+                        ev.preventDefault()
+                        setExpanded(isOpen ? null : e.id)
+                      }
+                    }}
                   >
                     <td className="whitespace-nowrap px-3 py-2 tabular-nums text-muted-foreground">
                       {formatDateTimeShort(e.startedAt)}

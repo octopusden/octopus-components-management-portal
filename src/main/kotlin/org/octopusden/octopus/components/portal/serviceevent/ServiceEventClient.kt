@@ -10,8 +10,9 @@ import java.time.Instant
 /**
  * SYS-061: reports portal-owned operational events into the CRS `service_event` journal
  * via `POST /rest/api/4/admin/service-events`. Best-effort and fire-and-forget — a
- * reporting failure must never disturb the sweep or startup that triggered it, so calls
- * are subscribed off-thread with errors only logged.
+ * reporting failure must never disturb the sweep or startup that triggered it: the call is
+ * subscribed without blocking the caller (the HTTP request runs asynchronously on the
+ * WebClient's Reactor Netty connection) and any error is only logged.
  *
  * Auth is the shared-secret `X-Service-Event-Token` header (the portal calls CRS
  * tokenless otherwise). Inert unless [ServiceEventReportingProperties.enabled] and a
