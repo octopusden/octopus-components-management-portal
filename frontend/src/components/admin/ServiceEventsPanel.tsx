@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react'
-import { Loader2, RefreshCw } from 'lucide-react'
+import { ChevronDown, ChevronRight, Loader2, RefreshCw } from 'lucide-react'
 import { useServiceEvents, type ServiceEventFilter } from '@/hooks/useServiceEvents'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -105,6 +105,9 @@ export function ServiceEventsPanel() {
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
             <tr>
+              <th className="w-8 px-2 py-2">
+                <span className="sr-only">Expand</span>
+              </th>
               <th className="px-3 py-2 font-medium">Time</th>
               <th className="px-3 py-2 font-medium">Type</th>
               <th className="px-3 py-2 font-medium">Source</th>
@@ -117,14 +120,14 @@ export function ServiceEventsPanel() {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-muted-foreground">
+                <td colSpan={8} className="px-3 py-6 text-center text-muted-foreground">
                   <Loader2 className="mx-auto h-4 w-4 animate-spin" />
                 </td>
               </tr>
             )}
             {!isLoading && events.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-muted-foreground">
+                <td colSpan={8} className="px-3 py-6 text-center text-muted-foreground">
                   No service events recorded.
                 </td>
               </tr>
@@ -134,21 +137,21 @@ export function ServiceEventsPanel() {
               const isOpen = expanded === e.id
               return (
                 <Fragment key={e.id}>
-                  <tr
-                    className={`border-t ${hasDetail ? 'cursor-pointer hover:bg-muted/40' : ''}`}
-                    // Keyboard-accessible detail toggle: focusable + Enter/Space activate, with
-                    // aria-expanded reflecting state (rows without detail are inert).
-                    role={hasDetail ? 'button' : undefined}
-                    tabIndex={hasDetail ? 0 : undefined}
-                    aria-expanded={hasDetail ? isOpen : undefined}
-                    onClick={() => hasDetail && setExpanded(isOpen ? null : e.id)}
-                    onKeyDown={(ev) => {
-                      if (hasDetail && (ev.key === 'Enter' || ev.key === ' ')) {
-                        ev.preventDefault()
-                        setExpanded(isOpen ? null : e.id)
-                      }
-                    }}
-                  >
+                  <tr className="border-t">
+                    {/* Real, keyboard-accessible toggle button (not an onClick on the <tr>). */}
+                    <td className="px-2 py-2 align-top">
+                      {hasDetail && (
+                        <button
+                          type="button"
+                          className="rounded p-0.5 text-muted-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+                          aria-expanded={isOpen}
+                          aria-label={isOpen ? 'Collapse event detail' : 'Expand event detail'}
+                          onClick={() => setExpanded(isOpen ? null : e.id)}
+                        >
+                          {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        </button>
+                      )}
+                    </td>
                     <td className="whitespace-nowrap px-3 py-2 tabular-nums text-muted-foreground">
                       {formatDateTimeShort(e.startedAt)}
                     </td>
@@ -167,7 +170,7 @@ export function ServiceEventsPanel() {
                   </tr>
                   {isOpen && hasDetail && (
                     <tr className="border-t bg-muted/20">
-                      <td colSpan={7} className="px-3 py-2">
+                      <td colSpan={8} className="px-3 py-2">
                         <pre className="overflow-x-auto text-xs text-muted-foreground">
                           {JSON.stringify(e.detail, null, 2)}
                         </pre>

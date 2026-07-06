@@ -31,6 +31,11 @@ open class ServiceEventClient(
     private val webClient: WebClient =
         WebClient.builder().baseUrl(validationProperties.registryBaseUrl).build()
 
+    // Bound each fire-and-forget POST so a slow/blackholed CRS can't leave the Mono (and its
+    // connection) lingering. Reuses the sweep's per-request timeout.
+    private val requestTimeout: java.time.Duration =
+        java.time.Duration.ofSeconds(validationProperties.requestTimeoutSeconds)
+
     /** Portal (re)deploy marker. */
     open fun reportStartup(version: String?) =
         post(
@@ -76,9 +81,11 @@ open class ServiceEventClient(
             .bodyValue(body)
             .retrieve()
             .toBodilessEntity()
+            .timeout(requestTimeout)
             .subscribe(
                 { /* accepted */ },
-                { e -> LOG.warn("Failed to report {} service-event to CRS: {}", body.eventType, e.toString()) },
+                // Pass the throwable so the stack trace (403 vs connect-timeout etc.) reaches the log.
+                { e -> LOG.warn("Failed to report {} service-event to CRS", body.eventType, e) },
             )
     }
 
