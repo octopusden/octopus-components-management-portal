@@ -284,8 +284,16 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
   // mirroring EscrowTab; `useFieldEditable` fails closed while field-config
   // loads, consistent with the wizard's `editable()`.
   const { options: escrowGenerations } = useFieldOptions('generation')
-  const { entry: escrowGenerationEntry } = useFieldConfigEntry('escrow.generation')
-  const escrowGenerationHidden = escrowGenerationEntry.visibility === 'hidden'
+  const {
+    entry: escrowGenerationEntry,
+    isLoading: escrowFcLoading,
+    isError: escrowFcError,
+  } = useFieldConfigEntry('escrow.generation')
+  // Fail closed: while field-config is loading/errored the entry defaults to
+  // `editable`, so treat generation as hidden until we actually know — otherwise a
+  // truly-hidden field flashes visible on load. Mirrors useFieldEditable's fail-closed.
+  const escrowGenerationHidden =
+    escrowFcLoading || escrowFcError || escrowGenerationEntry.visibility === 'hidden'
   const escrowGenerationEditable = useFieldEditable('escrow.generation')
 
   const explicit = values.distributionExplicit
@@ -482,7 +490,13 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
     if (jiraKeyError) return
     setServerError(null)
     try {
-      const base = buildCreateRequest(formValues, source ?? undefined, editable, escrowGenerationEditable)
+      const base = buildCreateRequest(
+        formValues,
+        source ?? undefined,
+        editable,
+        escrowGenerationEditable,
+        escrowGenerationHidden,
+      )
       const flags = flagsForProfile(effectiveProfile, explicitAnswer)
       const request = {
         ...base,
@@ -1116,7 +1130,7 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
         subtitle="Escrow generation for the source archive. The remaining escrow settings are configured later in the editor."
       />
       {escrowGenerationHidden ? (
-        <StatusBanner variant="info">Escrow generation is not configurable for new components.</StatusBanner>
+        <StatusBanner variant="info">Escrow generation isn&apos;t configurable here.</StatusBanner>
       ) : (
         <Field label="Generation" htmlFor="create-escrowGeneration" path="escrow.generation">
           <select
@@ -1166,11 +1180,14 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
         classification={classificationRecap()}
         // Surface the escrow generation exactly when it will actually be sent, so
         // the "everything below will be created" summary matches the payload:
+        //  - hidden → never (the builder strips it; the field isn't shown);
         //  - editable → the form value (what the builder overlays);
-        //  - clone + non-editable → the seeded source value is still copied with
-        //    the rest of the source escrow aspect, so show it too;
+        //  - clone + readonly → the seeded source value is copied with the rest of
+        //    the source escrow aspect, so show it too;
         //  - scratch + non-editable → nothing is sent (no source escrow to copy).
-        escrowGeneration={escrowGenerationEditable || isClone ? values.escrowGeneration : ''}
+        escrowGeneration={
+          !escrowGenerationHidden && (escrowGenerationEditable || isClone) ? values.escrowGeneration : ''
+        }
       />
 
       <fieldset className="space-y-4 rounded-md border border-border p-3">

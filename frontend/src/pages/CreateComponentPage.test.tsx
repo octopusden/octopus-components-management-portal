@@ -641,7 +641,34 @@ describe('CreateComponentPage — Escrow step', () => {
     await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Escrow' }))
     expect(screen.queryByLabelText(/^Generation/i)).toBeNull()
-    expect(screen.getByText(/not configurable for new components/i)).toBeDefined()
+    expect(screen.getByText(/isn.t configurable here/i)).toBeDefined()
+  })
+
+  it('treats generation as hidden while field-config is still loading (fail closed)', async () => {
+    mockUseFieldConfig.mockReturnValue({ data: undefined, isLoading: true, isError: false })
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Escrow' }))
+    // The field must not flash visible before field-config resolves.
+    expect(screen.queryByLabelText(/^Generation/i)).toBeNull()
+  })
+
+  it('omits Generation from the Review summary in clone mode when escrow.generation is hidden', async () => {
+    // Hidden → the builder strips generation from the copied source escrow, so it is
+    // NOT sent and must not appear on the "everything below will be created" summary.
+    mockUseFieldConfig.mockReturnValue({
+      data: { escrow: { generation: { visibility: 'hidden' } } },
+      isLoading: false,
+      isError: false,
+    })
+    const source = makeSource()
+    source.configurations = source.configurations.map((c) =>
+      c.rowType === 'BASE' ? { ...c, escrow: { generation: 'MANUAL' } } : c,
+    )
+    mockUseComponent.mockReturnValue({ data: source, isLoading: false, error: null })
+    renderWizard('/components/new?from=c-1')
+    await userEvent.click(screen.getByRole('button', { name: /Review & create/i }))
+    expect(screen.queryByText('+ MANUAL')).toBeNull()
   })
 
   it('routes a 400 escrow-generation error to the Escrow step', async () => {

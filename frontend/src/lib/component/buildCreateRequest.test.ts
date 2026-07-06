@@ -537,6 +537,30 @@ describe('buildCreateRequest — escrow generation (form-supplied)', () => {
     expect('escrow' in (req.baseConfiguration ?? {})).toBe(false)
   })
 
+  it('clone: a HIDDEN generation is stripped from the copied source escrow (other fields kept)', () => {
+    const src = makeSource({
+      configurations: [
+        makeBaseRow({ build: { buildSystem: 'GRADLE' }, escrow: { generation: 'MANUAL', reusable: true } }),
+      ],
+    })
+    const req = buildCreateRequest(
+      makeForm({ name: 'svc-clone', escrowGeneration: 'AUTO' }),
+      src,
+      () => true,
+      false, // not editable
+      true, // hidden
+    )
+    expect(req.baseConfiguration?.escrow).toEqual({ reusable: true })
+  })
+
+  it('clone: a HIDDEN generation with no other escrow fields leaves no escrow object', () => {
+    const src = makeSource({
+      configurations: [makeBaseRow({ build: { buildSystem: 'GRADLE' }, escrow: { generation: 'MANUAL' } })],
+    })
+    const req = buildCreateRequest(makeForm({ name: 'svc-clone' }), src, () => true, false, true)
+    expect('escrow' in (req.baseConfiguration ?? {})).toBe(false)
+  })
+
   it('trims the chosen generation before overlaying it', () => {
     const req = buildCreateRequest(makeForm({ escrowGeneration: '  AUTO  ' }))
     expect(req.baseConfiguration?.escrow).toEqual({ generation: 'AUTO' })
