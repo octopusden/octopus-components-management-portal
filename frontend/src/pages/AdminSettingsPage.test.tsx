@@ -135,7 +135,9 @@ beforeEach(() => {
     refetch: vi.fn(),
   } as unknown as ReturnType<typeof useCurrentUser>)
   mockUseMigrationStatus.mockReturnValue({
-    data: { git: 0, db: 0, total: 0 },
+    // git > 0: migration not complete, so the Run-migration button is enabled once Admin mode
+    // is armed (this suite exercises the arm-gate, not the migration-complete guard).
+    data: { git: 5, db: 0, total: 5 },
     isLoading: false,
     isError: false,
     error: null,
