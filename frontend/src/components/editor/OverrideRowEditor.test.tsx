@@ -700,7 +700,7 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
     await userEvent.selectOptions(select, 'distribution.docker')
 
     await userEvent.click(screen.getByRole('button', { name: /add image/i }))
-    const imageInputs = await screen.findAllByPlaceholderText('my-org/my-image')
+    const imageInputs = await screen.findAllByPlaceholderText('acme/my-service')
     await userEvent.type(imageInputs[0]!, 'my-org/svc')
 
     fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1.0,2.0)' } })
@@ -963,7 +963,7 @@ describe('OverrideRowEditor — presetAttribute (create, locked marker path)', (
     const user = userEvent.setup()
     renderEditor({ mode: 'create', presetAttribute: 'distribution.docker' })
     await user.click(screen.getByRole('button', { name: /add image/i }))
-    fireEvent.change(screen.getByPlaceholderText('my-org/my-image'), { target: { value: 'acme/app' } })
+    fireEvent.change(screen.getByPlaceholderText('acme/my-service'), { target: { value: 'acme/app' } })
     fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1,2)' } })
     await user.click(screen.getByRole('button', { name: /^create$/i }))
     expect(mockQueueCreate).toHaveBeenCalledWith(
@@ -988,7 +988,7 @@ describe('OverrideRowEditor — empty/inverted version range (client-side early 
     const user = userEvent.setup()
     renderEditor({ mode: 'create', presetAttribute: 'distribution.docker' })
     await user.click(screen.getByRole('button', { name: /add image/i }))
-    fireEvent.change(screen.getByPlaceholderText('my-org/my-image'), { target: { value: 'acme/app' } })
+    fireEvent.change(screen.getByPlaceholderText('acme/my-service'), { target: { value: 'acme/app' } })
     fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1.7.3076,1.7.3010]' } })
 
     expect(screen.getByText(/lower bound must be below the upper bound/i)).toBeInTheDocument()

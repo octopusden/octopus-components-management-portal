@@ -30,6 +30,7 @@ function makeForm(overrides: Partial<CreateFormValues> = {}): CreateFormValues {
       groupPattern: '',
       artifactPattern: '',
       imageName: '',
+      flavor: '',
       packageType: 'DEB',
       packageName: '',
     },
@@ -250,6 +251,16 @@ describe('buildCreateRequest — gated (explicit+external) coordinate', () => {
     const req = buildCreateRequest(gated({ type: 'docker', imageName: 'acme/svc' }))
     expect(req.baseConfiguration?.dockerImages).toEqual([{ imageName: 'acme/svc', flavor: null }])
     expect('mavenArtifacts' in req.baseConfiguration!).toBe(false)
+  })
+
+  it('docker coordinate carries a trimmed flavor when provided', () => {
+    const req = buildCreateRequest(gated({ type: 'docker', imageName: 'acme/svc', flavor: '  alpine  ' }))
+    expect(req.baseConfiguration?.dockerImages).toEqual([{ imageName: 'acme/svc', flavor: 'alpine' }])
+  })
+
+  it('docker coordinate sends flavor:null when the flavor is blank', () => {
+    const req = buildCreateRequest(gated({ type: 'docker', imageName: 'acme/svc', flavor: '   ' }))
+    expect(req.baseConfiguration?.dockerImages).toEqual([{ imageName: 'acme/svc', flavor: null }])
   })
 
   it('docker is un-gated: an image name is sent even when NOT explicit+external', () => {

@@ -51,7 +51,8 @@ export const PROFILE_META: readonly ProfileMeta[] = [
   {
     id: 'regular-external',
     label: 'Regular external component',
-    description: 'An ordinary component that is delivered to the client.',
+    description:
+      'An ordinary component that is delivered to the client (explicitly or as part of other component).',
     asksExplicit: true,
   },
   {
@@ -173,6 +174,8 @@ export function makeCreateSchema(
         groupPattern: z.string(),
         artifactPattern: z.string(),
         imageName: z.string(),
+        // Optional Docker flavor (e.g. "alpine"); only meaningful for a docker image.
+        flavor: z.string(),
         packageType: z.enum(['DEB', 'RPM']),
         packageName: z.string(),
       }),
@@ -305,6 +308,7 @@ export const EMPTY_COORDINATE: CreateFormValues['coordinate'] = {
   groupPattern: '',
   artifactPattern: '',
   imageName: '',
+  flavor: '',
   packageType: 'DEB',
   packageName: '',
 }

@@ -255,11 +255,11 @@ test.describe.serial('Editor attribute matrix — every tab saves without a fals
       edit: async (page) => {
         const dockerSection = page.getByTestId('docker-images-section')
         await dockerSection.getByRole('button', { name: 'Add', exact: true }).click()
-        await dockerSection.getByPlaceholder('my-org/my-image').fill(`e2e/attr-${SUFFIX}`)
+        await dockerSection.getByPlaceholder('acme/my-service').fill(`e2e/attr-${SUFFIX}`)
       },
       assertPersisted: async (page) => {
         await expect(
-          page.getByTestId('docker-images-section').getByPlaceholder('my-org/my-image'),
+          page.getByTestId('docker-images-section').getByPlaceholder('acme/my-service'),
         ).toHaveValue(`e2e/attr-${SUFFIX}`)
       },
     },

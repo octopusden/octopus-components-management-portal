@@ -15,13 +15,14 @@ import { Label } from '../components/ui/label'
 import { Badge } from '../components/ui/badge'
 import { PeopleInput } from '../components/ui/PeopleInput'
 import { PeopleListInput } from '../components/ui/PeopleListInput'
-import { ModeRadioGroup } from '../components/ui/ModeRadioGroup'
+import { ModeSelect } from '../components/ui/ModeSelect'
 import { ArtifactTokensInput } from '../components/ui/ArtifactTokensInput'
 import { InlineError } from '../components/ui/inline-error'
 import { StatusBanner } from '../components/ui/status-banner'
 import { SkeletonBlock } from '../components/ui/skeleton-block'
 import { FieldLabelText } from '../components/ui/FieldLabelText'
 import { FieldInfo } from '../components/ui/FieldInfo'
+import { JiraVersionPreview } from '../components/editor/JiraVersionPreview'
 import { UnsavedChangesGuard } from '../components/editor/UnsavedChangesGuard'
 import { cn } from '../lib/utils'
 import { hostOf } from '../lib/vcsHost'
@@ -222,13 +223,16 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
   const solutionPatterns = portalConfig?.solutionKeyPatterns
   const gitBaseUrl = portalLinks?.gitBaseUrl
 
-  // Profile (brief "Choose component profile"). Scratch starts unselected (the
-  // Profile gate step); clone derives it from the source (editable afterwards).
+  // Profile (brief "Choose component profile"). Scratch pre-selects the most
+  // common profile ("Regular external component") so the step is ready to go;
+  // clone derives it from the source (editable afterwards).
   const derived = useMemo(
     () => (source ? profileFromSource(source, solutionPatterns) : null),
     [source, solutionPatterns],
   )
-  const [profile, setProfile] = useState<ComponentProfile | null>(derived?.profile ?? null)
+  const [profile, setProfile] = useState<ComponentProfile | null>(
+    derived?.profile ?? 'regular-external',
+  )
   const [explicitAnswer, setExplicitAnswer] = useState<boolean>(derived?.explicit ?? false)
   // The clone profile/explicit are seeded once from `derived`, but `derived` is
   // recomputed when solutionKeyPatterns arrive after mount (portal-config loads
@@ -414,6 +418,9 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
   // at create (required-guard over the shared validateJiraKey).
   const [jiraTaskKey, setJiraTaskKey] = useState('')
   const [changeComment, setChangeComment] = useState('')
+  // Cross-highlight link between the Jira version-format fields and the live
+  // Version Preview rows (same control the editor uses).
+  const [jiraHoveredField, setJiraHoveredField] = useState<string | null>(null)
   const jiraFormatError = validateJiraKey(jiraTaskKey)
   const jiraKeyError = jiraFormatError ?? (jiraTaskKey.trim() === '' ? 'Jira task key is required' : null)
 
@@ -610,7 +617,7 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
   }
 
   // Roving-radio arrow-key navigation, shared by the profile tiles and the
-  // explicit-distribution segment (mirrors ui/ModeRadioGroup).
+  // explicit-distribution segment.
   const moveRadio = (
     e: React.KeyboardEvent,
     count: number,
@@ -854,7 +861,7 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
                   <Input
                     aria-label={`Group ID ${i + 1}`}
                     className="font-mono"
-                    placeholder="com.example.foo"
+                    placeholder={supportedGroups[0] ?? 'com.example.foo'}
                     aria-invalid={Boolean(errors.ownership?.[i]?.groupId)}
                     {...register(`ownership.${i}.groupId` as const)}
                   />
@@ -878,7 +885,7 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
                 control={control}
                 name={`ownership.${i}.mode` as const}
                 render={({ field }) => (
-                  <ModeRadioGroup value={field.value} idPrefix={`create-mode-${i}`} onChange={field.onChange} />
+                  <ModeSelect value={field.value} id={`create-mode-${i}`} onChange={field.onChange} />
                 )}
               />
               {rowMode === 'EXPLICIT' && (
@@ -989,59 +996,84 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
       </Field>
 
       <SectionHeader title="Version formats" />
-      <Field label="Jira Version Prefix" htmlFor="create-versionPrefix" path="jira.versionPrefix">
-        <Input
-          id="create-versionPrefix"
-          placeholder="e.g. the component key"
-          {...register('versionPrefix', { onChange: () => setVersionPrefixEdited(true) })}
-        />
-      </Field>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-1">
-            <Label htmlFor="create-lineVersionFormat">
-              <FieldLabelText path="jira.lineVersionFormat" fallback="Line Version Format" />
-              <span className="ml-1 font-normal text-muted-foreground">(Major)</span>
-            </Label>
-            <FieldInfo path="jira.lineVersionFormat" label="Line Version Format" />
+      <div className="flex flex-col gap-6 lg:flex-row">
+        <div className="min-w-0 flex-1 space-y-4">
+          <Field label="Jira Version Prefix" htmlFor="create-versionPrefix" path="jira.versionPrefix">
+            <Input
+              id="create-versionPrefix"
+              placeholder="e.g. the component key"
+              {...register('versionPrefix', { onChange: () => setVersionPrefixEdited(true) })}
+            />
+          </Field>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1">
+                <Label htmlFor="create-lineVersionFormat">
+                  <FieldLabelText path="jira.lineVersionFormat" fallback="Line Version Format" />
+                  <span className="ml-1 font-normal text-muted-foreground">(Major)</span>
+                </Label>
+                <FieldInfo path="jira.lineVersionFormat" label="Line Version Format" />
+              </div>
+              <Input id="create-lineVersionFormat" className="font-mono text-xs" placeholder="e.g. $major.$minor" {...register('lineVersionFormat')} />
+            </div>
+            <CreateMirrorField
+              path="jira.minorVersionFormat"
+              fallback="Minor Version Format"
+              pill="from Line"
+              setLabel="Set separate minor format"
+              placeholder="e.g. $major.$minor"
+              inputId="create-minorVersionFormat"
+              separate={values.minorSeparate}
+              leadingValue={values.lineVersionFormat}
+              onSetSeparate={() => setMinorSeparate(true)}
+              onRemoveSeparate={() => setMinorSeparate(false)}
+              inputProps={register('minorVersionFormat')}
+            />
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1">
+                <Label htmlFor="create-releaseVersionFormat">
+                  <FieldLabelText path="jira.releaseVersionFormat" fallback="Release Version Format" />
+                </Label>
+                <FieldInfo path="jira.releaseVersionFormat" label="Release Version Format" />
+              </div>
+              <Input id="create-releaseVersionFormat" className="font-mono text-xs" placeholder="$major.$minor.$service" {...register('releaseVersionFormat')} />
+            </div>
+            <CreateMirrorField
+              path="jira.buildVersionFormat"
+              fallback="Build Version Format"
+              pill="same as release"
+              setLabel="Set separate build format"
+              placeholder="e.g. $major.$minor.$service.$fix"
+              inputId="create-buildVersionFormat"
+              separate={values.buildSeparate}
+              leadingValue={values.releaseVersionFormat}
+              onSetSeparate={() => setBuildSeparate(true)}
+              onRemoveSeparate={() => setBuildSeparate(false)}
+              inputProps={register('buildVersionFormat')}
+            />
           </div>
-          <Input id="create-lineVersionFormat" className="font-mono text-xs" placeholder="e.g. $major.$minor" {...register('lineVersionFormat')} />
         </div>
-        <CreateMirrorField
-          path="jira.minorVersionFormat"
-          fallback="Minor Version Format"
-          pill="from Line"
-          setLabel="Set separate minor format"
-          placeholder="e.g. $major.$minor"
-          inputId="create-minorVersionFormat"
-          separate={values.minorSeparate}
-          leadingValue={values.lineVersionFormat}
-          onSetSeparate={() => setMinorSeparate(true)}
-          onRemoveSeparate={() => setMinorSeparate(false)}
-          inputProps={register('minorVersionFormat')}
-        />
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-1">
-            <Label htmlFor="create-releaseVersionFormat">
-              <FieldLabelText path="jira.releaseVersionFormat" fallback="Release Version Format" />
-            </Label>
-            <FieldInfo path="jira.releaseVersionFormat" label="Release Version Format" />
-          </div>
-          <Input id="create-releaseVersionFormat" className="font-mono text-xs" placeholder="$major.$minor.$service" {...register('releaseVersionFormat')} />
-        </div>
-        <CreateMirrorField
-          path="jira.buildVersionFormat"
-          fallback="Build Version Format"
-          pill="same as release"
-          setLabel="Set separate build format"
-          placeholder="e.g. $major.$minor.$service.$fix"
-          inputId="create-buildVersionFormat"
-          separate={values.buildSeparate}
-          leadingValue={values.releaseVersionFormat}
-          onSetSeparate={() => setBuildSeparate(true)}
-          onRemoveSeparate={() => setBuildSeparate(false)}
-          inputProps={register('buildVersionFormat')}
-        />
+        {/* Live version-ladder preview — identical control to the editor's Jira tab.
+            Create has no per-range overrides and never sets a hotfix format (hotfixes
+            are disabled at creation), so overrides=[] and hotfix is off. */}
+        <aside data-testid="version-preview-slot" className="w-full lg:w-[360px] lg:flex-none">
+          <JiraVersionPreview
+            versionPrefix={values.versionPrefix}
+            versionFormat=""
+            lineVersionFormat={values.lineVersionFormat}
+            minorVersionFormat={values.minorVersionFormat}
+            minorSeparate={values.minorSeparate}
+            releaseVersionFormat={values.releaseVersionFormat}
+            buildVersionFormat={values.buildVersionFormat}
+            buildSeparate={values.buildSeparate}
+            hotfixVersionFormat=""
+            technical={false}
+            hotfixEnabled={false}
+            hoveredField={jiraHoveredField}
+            onHoverField={setJiraHoveredField}
+            overrides={[]}
+          />
+        </aside>
       </div>
     </div>
   )
@@ -1049,7 +1081,7 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
   const selectCoordinateType = (type: CreateFormValues['coordinate']['type']) => {
     setValue(
       'coordinate',
-      { type, groupPattern: '', artifactPattern: '', imageName: '', packageType: 'DEB', packageName: '' },
+      { type, groupPattern: '', artifactPattern: '', imageName: '', flavor: '', packageType: 'DEB', packageName: '' },
       { shouldValidate: false },
     )
     clearErrors('coordinate')
@@ -1085,7 +1117,30 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
               </div>
             )}
             {coordinateType === 'docker' && (
-              <Input placeholder="image name" aria-label="Image name" {...register('coordinate.imageName')} />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-coordinate-imageName" className="text-xs">Image Name</Label>
+                  <Input
+                    id="create-coordinate-imageName"
+                    className="font-mono text-xs"
+                    placeholder="acme/my-service"
+                    aria-label="Image name"
+                    {...register('coordinate.imageName')}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-coordinate-flavor" className="text-xs">
+                    Flavor <span className="font-normal text-muted-foreground">(optional)</span>
+                  </Label>
+                  <Input
+                    id="create-coordinate-flavor"
+                    className="font-mono text-xs"
+                    placeholder="e.g. alpine"
+                    aria-label="Flavor"
+                    {...register('coordinate.flavor')}
+                  />
+                </div>
+              </div>
             )}
             {coordinateType === 'package' && (
               <div className="flex gap-2">
@@ -1120,12 +1175,20 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
         </>
       ) : (
         <>
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-1">
-              <Label htmlFor="create-imageName">Image Name</Label>
-              {reenterBadgeFor('create-imageName')}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1">
+                <Label htmlFor="create-imageName">Image Name</Label>
+                {reenterBadgeFor('create-imageName')}
+              </div>
+              <Input id="create-imageName" className={cn('font-mono text-xs', reenterBorder)} placeholder="acme/my-service" aria-label="Image name" aria-describedby={reenterId('create-imageName')} {...register('coordinate.imageName')} />
             </div>
-            <Input id="create-imageName" className={reenterBorder} placeholder="image name" aria-label="Image name" aria-describedby={reenterId('create-imageName')} {...register('coordinate.imageName')} />
+            <div className="space-y-1.5">
+              <Label htmlFor="create-flavor">
+                Flavor <span className="font-normal text-muted-foreground">(optional)</span>
+              </Label>
+              <Input id="create-flavor" className="font-mono text-xs" placeholder="e.g. alpine" aria-label="Flavor" {...register('coordinate.flavor')} />
+            </div>
           </div>
           <p className="text-xs text-muted-foreground">
             Maven / Package distribution coordinates are available only for an explicit external

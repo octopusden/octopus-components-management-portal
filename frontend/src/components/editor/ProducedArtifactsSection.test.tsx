@@ -113,10 +113,11 @@ describe('ProducedArtifactsSection artifact-ownership rendering (#357)', () => {
 
   it('reflects the persisted mode per mapping (ALL_EXCEPT_CLAIMED + EXPLICIT)', () => {
     renderWithProviders(<Harness component={withOwnership()} />)
-    const checkedLabels = screen.getAllByRole('radio', { checked: true }).map((r) => r.textContent ?? '')
-    expect(checkedLabels.length).toBe(2)
-    expect(checkedLabels.some((t) => t.includes('All except artifacts assigned elsewhere'))).toBe(true)
-    expect(checkedLabels.some((t) => t.includes('Specific artifacts'))).toBe(true)
+    const selectedModes = (screen.getAllByLabelText('artifactId matching mode') as HTMLSelectElement[]).map(
+      (s) => s.value,
+    )
+    expect(selectedModes.length).toBe(2)
+    expect(selectedModes).toEqual(expect.arrayContaining(['ALL_EXCEPT_CLAIMED', 'EXPLICIT']))
   })
 
   it('renders persisted EXPLICIT artifact tokens as chips', () => {

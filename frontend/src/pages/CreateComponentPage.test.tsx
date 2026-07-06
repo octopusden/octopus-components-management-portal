@@ -19,6 +19,12 @@ vi.mock('../hooks/useComponent', () => ({
 
 vi.mock('../hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }))
 
+// The Jira step embeds the live JiraVersionPreview, which hits the CRS preview
+// endpoint. Stub the query hook so the step renders offline in tests.
+vi.mock('../hooks/useVersionPreview', () => ({
+  useVersionPreview: vi.fn(() => ({ data: undefined, isLoading: false })),
+}))
+
 const mockLookupEmployee = vi.hoisted(() => vi.fn())
 vi.mock('../hooks/useFieldOptions', () => ({
   useFieldOptions: vi.fn((fieldPath: string) =>
@@ -155,25 +161,26 @@ beforeEach(() => {
   mockUseCurrentUser.mockReturnValue({ data: undefined, isLoading: false })
 })
 
-describe('CreateComponentPage — scratch profile gate', () => {
-  it('opens on the Profile step and blocks Next until a profile is chosen', async () => {
+describe('CreateComponentPage — scratch profile default', () => {
+  it('opens on the Profile step with Regular external pre-selected and Next enabled', async () => {
     renderWizard()
     expect(screen.getByText('Create component')).toBeDefined()
     expect(screen.getByText('Choose component profile')).toBeDefined()
-    // Next is disabled with no profile selected.
-    expect((screen.getByRole('button', { name: /^next$/i }) as HTMLButtonElement).disabled).toBe(true)
-    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
-    // Regular profiles ask the explicit-distribution question.
+    // Regular external is checked by default → the step is ready and Next is enabled.
+    expect(
+      screen.getByRole('radio', { name: /Regular external component/i }).getAttribute('aria-checked'),
+    ).toBe('true')
+    // A Regular profile asks the explicit-distribution question straight away.
     expect(screen.getByText('Has explicit distribution?')).toBeDefined()
     expect((screen.getByRole('button', { name: /^next$/i }) as HTMLButtonElement).disabled).toBe(false)
   })
 
-  it('cannot bypass the Profile gate via the stepper — Create stays disabled with no profile chosen', async () => {
+  it('keeps Create disabled from the stepper while required fields are empty', async () => {
     renderWizard()
-    // No profile selected. Jump straight to the Review step via the stepper.
+    // Regular external is pre-selected; jump straight to Review via the stepper.
     await userEvent.click(screen.getByRole('button', { name: /Review & create/i }))
     // Even after entering a valid Jira task key, Create must stay disabled while
-    // the scratch profile is unchosen (and required fields are empty).
+    // the required General fields (name, owner) are still empty.
     await userEvent.type(screen.getByLabelText(/Jira task key/i), 'ABC-1')
     expect(
       (screen.getByRole('button', { name: /^create component$/i }) as HTMLButtonElement).disabled,
@@ -187,6 +194,77 @@ describe('CreateComponentPage — scratch profile gate', () => {
     await clickNext()
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
     await waitFor(() => expect(screen.getByText(/must contain "-solution"/i)).toBeDefined())
+  })
+})
+
+describe('CreateComponentPage — wizard UI polish', () => {
+  // Walk the not-gated (Docker-only) flow up to the given step for a scratch component.
+  async function walkToDistribution() {
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext() // → General
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await clickNext() // → Build
+    await userEvent.selectOptions(screen.getByLabelText(/^Build System/i), 'PROVIDED')
+    await clickNext() // → VCS (note only)
+    await clickNext() // → Jira
+    await userEvent.type(screen.getByLabelText(/^Jira Project Key/i), 'WIDG')
+    await clickNext() // → Distribution
+  }
+
+  it('uses the first supported group as the Produced Artifacts Group ID placeholder', async () => {
+    mockUseSupportedGroups.mockReturnValue({ groups: ['com.acme', 'org.acme'], isLoading: false })
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext() // General
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await clickNext() // Build (Produced Artifacts)
+    expect((screen.getByLabelText('Group ID 1') as HTMLInputElement).placeholder).toBe('com.acme')
+  })
+
+  it('renders the ownership matching mode as a select with per-mode help', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext() // General
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await clickNext() // Build
+    const modeSelect = screen.getByLabelText('artifactId matching mode') as HTMLSelectElement
+    expect(modeSelect.tagName).toBe('SELECT')
+    expect(modeSelect.value).toBe('ALL')
+    // Switching to EXPLICIT reveals the Specific-artifacts token input.
+    await userEvent.selectOptions(modeSelect, 'EXPLICIT')
+    expect(screen.getByLabelText('Specific artifacts')).toBeDefined()
+  })
+
+  it('shows the Version Preview on the Jira step', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext() // → General
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await clickNext() // → Build
+    await userEvent.selectOptions(screen.getByLabelText(/^Build System/i), 'PROVIDED')
+    await clickNext() // → VCS (note only)
+    await clickNext() // → Jira
+    expect(screen.getByTestId('version-preview-slot')).toBeDefined()
+    expect(screen.getByTestId('jira-version-preview')).toBeDefined()
+  })
+
+  it('exposes an optional Docker Flavor field and POSTs it with the image', async () => {
+    renderWizard()
+    await walkToDistribution()
+    // Not gated → the Docker section shows Image Name + optional Flavor.
+    await userEvent.type(screen.getByLabelText('Image name'), 'acme/svc')
+    await userEvent.type(screen.getByLabelText('Flavor'), 'alpine')
+    await clickNext() // → Escrow (Generation only; optional)
+    await clickNext() // → Review
+    await userEvent.type(screen.getByLabelText(/^Jira task key/i), 'ABC-123')
+    await userEvent.click(screen.getByRole('button', { name: /^create component$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1))
+    const payload = mockMutateAsync.mock.calls[0]![0]
+    expect(payload.baseConfiguration.dockerImages).toEqual([{ imageName: 'acme/svc', flavor: 'alpine' }])
   })
 })
 

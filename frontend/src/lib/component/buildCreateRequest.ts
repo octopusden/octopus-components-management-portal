@@ -97,6 +97,8 @@ export interface CreateFormValues {
     groupPattern: string
     artifactPattern: string
     imageName: string
+    // Optional Docker flavor (e.g. "alpine"); sent as null when blank.
+    flavor: string
     packageType: PackageType
     packageName: string
   }
@@ -183,7 +185,9 @@ function coordinatePatch(
         ],
       }
     case 'docker':
-      return { dockerImages: [{ imageName: coordinate.imageName, flavor: null }] }
+      return {
+        dockerImages: [{ imageName: coordinate.imageName, flavor: coordinate.flavor.trim() || null }],
+      }
     case 'package':
       return {
         packages: [{ packageType: coordinate.packageType, packageName: coordinate.packageName }],
