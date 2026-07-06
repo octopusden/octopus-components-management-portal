@@ -253,6 +253,8 @@ test.describe('Clone component — admin smoke', () => {
     await page.getByRole('button', { name: /Review/ }).click()
     await page.getByLabel(/^jira task key/i).fill('ABC-123')
     await page.getByRole('button', { name: 'Create component' }).click()
+    // A2: create now shows a success panel — click through to the new component.
+    await page.getByRole('button', { name: /go to component/i }).click()
 
     // Navigates to the created component.
     await page.waitForURL(`**/components/${CREATED_ID}`)
@@ -361,6 +363,8 @@ test.describe('Clone component — admin smoke', () => {
     await page.getByRole('button', { name: /Review/ }).click()
     await page.getByLabel(/^jira task key/i).fill('ABC-123')
     await page.getByRole('button', { name: 'Create component' }).click()
+    // A2: create now shows a success panel — click through to the new component.
+    await page.getByRole('button', { name: /go to component/i }).click()
 
     await page.waitForURL(`**/components/${CREATED_ID}`)
     expect(state.creates).toHaveLength(1)
@@ -446,6 +450,8 @@ test.describe('Create component from scratch — admin smoke', () => {
     await page.getByRole('button', { name: /Review/ }).click()
     await page.getByLabel(/^jira task key/i).fill('ABC-123')
     await page.getByRole('button', { name: 'Create component' }).click()
+    // A2: create now shows a success panel — click through to the new component.
+    await page.getByRole('button', { name: /go to component/i }).click()
     await page.waitForURL(`**/components/${CREATED_ID}`)
 
     expect(state.creates).toHaveLength(1)
