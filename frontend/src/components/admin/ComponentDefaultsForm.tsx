@@ -188,6 +188,7 @@ export function ComponentDefaultsForm() {
               <ReadField label="Build Version Format" value={jiraCvf.buildVersionFormat} mono />
               <ReadField label="Line Version Format / Major Version Format" value={jiraCvf.lineVersionFormat} mono />
               <ReadField label="Hotfix Version Format" value={jiraCvf.hotfixVersionFormat} mono />
+              <ReadField label="Full Version Format" value={jiraCvf.versionFormat} mono />
             </div>
           </TabsContent>
 
