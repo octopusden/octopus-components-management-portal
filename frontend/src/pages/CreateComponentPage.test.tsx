@@ -598,7 +598,23 @@ describe('CreateComponentPage — Escrow step', () => {
     expect(screen.getByText('+ AUTO')).toBeDefined()
   })
 
-  it('disables the Generation select when field-config marks escrow.generation readonly', async () => {
+  it('shows a disabled Generation select in clone mode when escrow.generation is readonly', async () => {
+    // Clone copies + sends the source escrow generation even when readonly, so the
+    // disabled select (seeded from source) is shown — its value is really created.
+    mockUseFieldConfig.mockReturnValue({
+      data: { escrow: { generation: { visibility: 'readonly' } } },
+      isLoading: false,
+      isError: false,
+    })
+    mockUseComponent.mockReturnValue({ data: makeSource(), isLoading: false, error: null })
+    renderWizard('/components/new?from=c-1')
+    await userEvent.click(screen.getByRole('button', { name: 'Escrow' }))
+    expect((screen.getByLabelText(/^Generation/i) as HTMLSelectElement).disabled).toBe(true)
+  })
+
+  it('shows the info note (not a disabled select) for scratch + readonly generation', async () => {
+    // Scratch never sends a readonly-seeded default (no source to copy), so showing a
+    // disabled select would disagree with the payload/summary — show the note instead.
     mockUseFieldConfig.mockReturnValue({
       data: { escrow: { generation: { visibility: 'readonly' } } },
       isLoading: false,
@@ -607,7 +623,8 @@ describe('CreateComponentPage — Escrow step', () => {
     renderWizard()
     await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Escrow' }))
-    expect((screen.getByLabelText(/^Generation/i) as HTMLSelectElement).disabled).toBe(true)
+    expect(screen.queryByLabelText(/^Generation/i)).toBeNull()
+    expect(screen.getByText(/isn.t configurable here/i)).toBeDefined()
   })
 
   it('shows the seeded source Generation on the Review summary in clone mode even when readonly', async () => {

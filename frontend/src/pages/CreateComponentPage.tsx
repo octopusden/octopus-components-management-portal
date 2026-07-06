@@ -299,6 +299,11 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
   const { options: escrowGenerations } = useFieldOptions('generation', {
     enabled: !escrowGenerationHidden,
   })
+  // Show the Generation control only when its value is actually created: editable
+  // (form value) or a clone (seeded source value, copied). Otherwise — hidden, or
+  // scratch + readonly (a seeded default that scratch never sends) — show the info
+  // note instead, keeping the step UI in sync with the Review summary + payload.
+  const showEscrowGeneration = !escrowGenerationHidden && (escrowGenerationEditable || isClone)
 
   const explicit = values.distributionExplicit
   const external = values.distributionExternal
@@ -1139,7 +1144,7 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
       />
       {escrowFcLoading ? (
         <p className="text-sm text-muted-foreground">Loading escrow generation…</p>
-      ) : escrowGenerationHidden ? (
+      ) : !showEscrowGeneration ? (
         <StatusBanner variant="info">Escrow generation isn&apos;t configurable here.</StatusBanner>
       ) : (
         <Field label="Generation" htmlFor="create-escrowGeneration" path="escrow.generation">
