@@ -492,7 +492,8 @@ export function initialValues(
     copyright: source.copyright ?? '',
     clientCode: source.clientCode ?? '',
     versionPrefix: selectBaseRow(source)?.jira?.versionPrefix ?? '',
-    versionFormat: selectBaseRow(source)?.jira?.versionFormat || SCRATCH_DEFAULTS.versionFormat,
+    versionFormat:
+      blankToUndefined(selectBaseRow(source)?.jira?.versionFormat) ?? SCRATCH_DEFAULTS.versionFormat,
     ...seedVersionFormats(
       selectBaseRow(source)?.jira?.lineVersionFormat,
       selectBaseRow(source)?.jira?.minorVersionFormat,
