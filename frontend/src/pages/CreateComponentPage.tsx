@@ -560,9 +560,13 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
           stepId = 'build'
         }
         // A rejected escrow generation (stale/invalid enum value) routes to the
-        // Escrow step. CRS reports the aspect scalar as the bare `generation`
-        // field name (parseServerFieldErrors never emits dotted keys).
-        if (fieldErrors.get('generation')) {
+        // Escrow step AND surfaces inline under the field (like the other mapped
+        // fields), so the reason survives the toast. CRS reports the aspect scalar
+        // as the bare `generation` field name (parseServerFieldErrors never emits
+        // dotted keys).
+        const generationMsg = fieldErrors.get('generation')
+        if (generationMsg) {
+          setError('escrowGeneration', { type: 'server', message: generationMsg })
           stepId = 'escrow'
         }
       }
@@ -1133,7 +1137,9 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
         title="Escrow"
         subtitle="Escrow generation for the source archive. The remaining escrow settings are configured later in the editor."
       />
-      {escrowGenerationHidden ? (
+      {escrowFcLoading ? (
+        <p className="text-sm text-muted-foreground">Loading escrow generation…</p>
+      ) : escrowGenerationHidden ? (
         <StatusBanner variant="info">Escrow generation isn&apos;t configurable here.</StatusBanner>
       ) : (
         <Field label="Generation" htmlFor="create-escrowGeneration" path="escrow.generation">
@@ -1150,6 +1156,7 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
               </option>
             ))}
           </select>
+          <FieldError message={errors.escrowGeneration?.message} />
         </Field>
       )}
     </div>

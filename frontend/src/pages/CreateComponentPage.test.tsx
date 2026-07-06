@@ -649,8 +649,11 @@ describe('CreateComponentPage — Escrow step', () => {
     renderWizard()
     await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Escrow' }))
-    // The field must not flash visible before field-config resolves.
+    // The field must not flash visible before field-config resolves — and while
+    // loading we show a loading note, not the (misleading) "isn't configurable" one.
     expect(screen.queryByLabelText(/^Generation/i)).toBeNull()
+    expect(screen.getByText(/loading escrow generation/i)).toBeDefined()
+    expect(screen.queryByText(/isn.t configurable here/i)).toBeNull()
   })
 
   it('omits Generation from the Review summary in clone mode when escrow.generation is hidden', async () => {
@@ -691,10 +694,12 @@ describe('CreateComponentPage — Escrow step', () => {
     await userEvent.type(screen.getByLabelText(/^Jira task key/i), 'ABC-123')
     await userEvent.click(screen.getByRole('button', { name: /^create component$/i }))
     await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1))
-    // The rejected generation lands the user back on the Escrow step.
+    // The rejected generation lands the user back on the Escrow step...
     const escrowStep = await screen.findByRole('button', { name: 'Escrow' })
     await waitFor(() => expect(escrowStep).toHaveAttribute('aria-current', 'step'))
     expect(escrowStep.getAttribute('data-status')).toBe('invalid')
+    // ...and surfaces the reason inline under the Generation field (not just a toast).
+    expect(screen.getByText(/unknown escrow generation/i)).toBeDefined()
   })
 
   it('seeds the Escrow Generation from the source base row in clone mode', async () => {
