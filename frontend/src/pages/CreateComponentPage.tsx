@@ -1164,10 +1164,13 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
         gated={gated}
         vcsApplies={vcsApplies}
         classification={classificationRecap()}
-        // Only surface the escrow generation when it will actually be sent — a
-        // hidden/readonly (non-editable) field is stripped from the payload, so
-        // it must not appear in the "everything below will be created" summary.
-        escrowGeneration={escrowGenerationEditable ? values.escrowGeneration : ''}
+        // Surface the escrow generation exactly when it will actually be sent, so
+        // the "everything below will be created" summary matches the payload:
+        //  - editable → the form value (what the builder overlays);
+        //  - clone + non-editable → the seeded source value is still copied with
+        //    the rest of the source escrow aspect, so show it too;
+        //  - scratch + non-editable → nothing is sent (no source escrow to copy).
+        escrowGeneration={escrowGenerationEditable || isClone ? values.escrowGeneration : ''}
       />
 
       <fieldset className="space-y-4 rounded-md border border-border p-3">

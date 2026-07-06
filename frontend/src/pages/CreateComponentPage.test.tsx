@@ -610,6 +610,27 @@ describe('CreateComponentPage — Escrow step', () => {
     expect((screen.getByLabelText(/^Generation/i) as HTMLSelectElement).disabled).toBe(true)
   })
 
+  it('shows the seeded source Generation on the Review summary in clone mode even when readonly', async () => {
+    // Clone + non-editable generation: the field is disabled, but the builder still
+    // copies the source escrow (incl. generation) into the payload — so the summary
+    // must reflect that value, not hide it (regression guard: with the old
+    // editable-only gate the row was dropped while the value was still sent).
+    mockUseFieldConfig.mockReturnValue({
+      data: { escrow: { generation: { visibility: 'readonly' } } },
+      isLoading: false,
+      isError: false,
+    })
+    const source = makeSource()
+    source.configurations = source.configurations.map((c) =>
+      c.rowType === 'BASE' ? { ...c, escrow: { generation: 'MANUAL' } } : c,
+    )
+    mockUseComponent.mockReturnValue({ data: source, isLoading: false, error: null })
+    renderWizard('/components/new?from=c-1')
+    await userEvent.click(screen.getByRole('button', { name: /Review & create/i }))
+    expect(screen.getByText('Generation')).toBeDefined()
+    expect(screen.getByText('+ MANUAL')).toBeDefined()
+  })
+
   it('hides the Generation field and shows a note when escrow.generation is hidden', async () => {
     mockUseFieldConfig.mockReturnValue({
       data: { escrow: { generation: { visibility: 'hidden' } } },
