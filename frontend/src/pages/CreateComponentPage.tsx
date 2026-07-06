@@ -283,7 +283,6 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
   // the field-config key `escrow.generation` (NOT `component.escrow.generation`),
   // mirroring EscrowTab; `useFieldEditable` fails closed while field-config
   // loads, consistent with the wizard's `editable()`.
-  const { options: escrowGenerations } = useFieldOptions('generation')
   const {
     entry: escrowGenerationEntry,
     isLoading: escrowFcLoading,
@@ -295,6 +294,11 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
   const escrowGenerationHidden =
     escrowFcLoading || escrowFcError || escrowGenerationEntry.visibility === 'hidden'
   const escrowGenerationEditable = useFieldEditable('escrow.generation')
+  // Skip the escrow-generations meta fetch when the field is hidden — the control
+  // isn't rendered and generation isn't sent, so the vocabulary is never needed.
+  const { options: escrowGenerations } = useFieldOptions('generation', {
+    enabled: !escrowGenerationHidden,
+  })
 
   const explicit = values.distributionExplicit
   const external = values.distributionExternal
