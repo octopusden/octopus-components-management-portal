@@ -625,7 +625,7 @@ describe('OverrideRowEditor — marker child trim + blank-row filter', () => {
     // Row 1 — both patterns populated with surrounding whitespace
     await userEvent.click(screen.getByRole('button', { name: /add artifact/i }))
     const groupInputs = await screen.findAllByPlaceholderText('org.example.alpha')
-    const artifactInputs = await screen.findAllByPlaceholderText('my-component-*')
+    const artifactInputs = await screen.findAllByPlaceholderText('my-component')
     await userEvent.type(groupInputs[0]!, '  org.example.alpha  ')
     await userEvent.type(artifactInputs[0]!, '  my-lib-*  ')
 
@@ -633,7 +633,7 @@ describe('OverrideRowEditor — marker child trim + blank-row filter', () => {
     // (satisfies HTML5 required) → row dropped by trim+filter
     await userEvent.click(screen.getByRole('button', { name: /add artifact/i }))
     const groupInputs2 = await screen.findAllByPlaceholderText('org.example.alpha')
-    const artifactInputs2 = await screen.findAllByPlaceholderText('my-component-*')
+    const artifactInputs2 = await screen.findAllByPlaceholderText('my-component')
     await userEvent.type(groupInputs2[1]!, 'org.example.beta')
     await userEvent.type(artifactInputs2[1]!, '   ')
 

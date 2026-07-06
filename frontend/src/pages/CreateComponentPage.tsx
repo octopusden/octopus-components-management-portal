@@ -145,6 +145,8 @@ export function CreateComponentPage() {
   const [searchParams] = useSearchParams()
   const sourceId = searchParams.get('from') ?? ''
   const isClone = !!sourceId
+  // Bumped by the wizard's "Create another" to remount it with a fresh blank form.
+  const [remountKey, setRemountKey] = useState(0)
 
   const { data: source, error } = useComponent(sourceId)
   const defaults = useComponentDefaults({ retry: false })
@@ -186,10 +188,11 @@ export function CreateComponentPage() {
           </div>
         ) : (
           <CreateComponentWizard
-            key={source?.id ?? 'scratch'}
+            key={`${source?.id ?? 'scratch'}-${remountKey}`}
             source={source ?? null}
             isClone={isClone}
             defaults={componentDefaults}
+            onCreateAnother={() => setRemountKey((k) => k + 1)}
           />
         )}
       </DialogContent>
@@ -201,9 +204,11 @@ interface WizardProps {
   source: ComponentDetail | null
   isClone: boolean
   defaults: ComponentDefaults
+  /** Reset the wizard to a blank scratch form (remount) after a successful create. */
+  onCreateAnother: () => void
 }
 
-function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
+function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: WizardProps) {
   const navigate = useNavigate()
   const createMutation = useCreateComponent()
   const { toast } = useToast()
@@ -479,6 +484,15 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
   const isLast = currentIndex === steps.length - 1
   const currentValid = !invalidSteps.has(current)
 
+  // Cross-step "another step is broken" banner, shown above every step's body so
+  // a late-gate break is noticeable while you browse (not only on Review). On the
+  // Review step use the raw invalid set — it explains a disabled Create even for
+  // steps never visited; elsewhere use the eager-validation-gated set so a
+  // pristine wizard stays quiet. Never lists the step you are currently on.
+  const crossStepInvalid = [...(current === 'review' ? invalidSteps : shownInvalidSteps)].filter(
+    (s) => s !== current,
+  )
+
   const goToStep = (step: StepId) => {
     if (steps.includes(step)) enterStep(step)
   }
@@ -493,13 +507,10 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
   }
 
   // On a successful create, flip `submitted` (releases the unsaved-changes guard)
-  // and navigate from an effect AFTER the re-render, so the blocker sees the new
-  // value and lets the redirect to the detail page through.
+  // and swap the wizard body for a success panel (below) offering "Go to
+  // component" / "Create another" — rather than redirecting immediately.
   const [submitted, setSubmitted] = useState(false)
-  const [createdPath, setCreatedPath] = useState<string | null>(null)
-  useEffect(() => {
-    if (submitted && createdPath) navigate(createdPath)
-  }, [submitted, createdPath, navigate])
+  const [created, setCreated] = useState<{ id: string; name: string } | null>(null)
 
   async function onSubmit(formValues: CreateFormValues) {
     setAttempted(true)
@@ -525,8 +536,8 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
       }
       const component = await createMutation.mutateAsync(request)
       toast({ title: 'Component created', description: `"${component.name}" was created.` })
-      setCreatedPath(`/components/${component.id}`)
       setSubmitted(true)
+      setCreated({ id: component.id, name: component.name })
     } catch (err) {
       let message = err instanceof Error ? err.message : String(err)
       let stepId: StepId = 'review'
@@ -643,12 +654,10 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
 
   const renderProfileStep = () => (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold">Choose component profile</h2>
-        <p className="text-sm text-muted-foreground">
-          The profile sets how the component is classified and how its key is named.
-        </p>
-      </div>
+      <StepHeading
+        title="Choose component profile"
+        subtitle="The profile sets how the component is classified and how its key is named."
+      />
       <div role="radiogroup" aria-label="Component profile" className="grid gap-3 sm:grid-cols-2">
         {PROFILE_META.map((p, idx) => {
           const selected = profile === p.id
@@ -751,6 +760,7 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
 
   const renderGeneralStep = () => (
     <div className="space-y-6">
+      <StepHeading title="General" subtitle="Identity, ownership, and classification." />
       <SectionHeader title="Identity" />
       <Field label="Component Key" htmlFor="create-name" path="component.name" required badge={reenterBadgeFor('create-name')}>
         <Input id="create-name" className={reenterBorder} placeholder="my-component" autoFocus aria-describedby={reenterId('create-name')} {...register('name')} />
@@ -831,6 +841,7 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
 
   const renderBuildStep = () => (
     <div className="space-y-6">
+      <StepHeading title="Build" subtitle="The build system determines whether a VCS root is required." />
       <SectionHeader title="Build System" />
       <Field label="Build System" htmlFor="create-buildSystem" path="build.buildSystem" required>
         <select
@@ -931,7 +942,7 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
 
   const renderVcsStep = () => (
     <div className="space-y-6">
-      <SectionHeader title="VCS" />
+      <StepHeading title="VCS" subtitle="Where the component's source is tracked." />
       {vcsApplies ? (
         <>
           <Field label="VCS Path" htmlFor="create-vcsUrl" path="vcs.vcsPath" required badge={reenterBadgeFor('create-vcsUrl')}>
@@ -981,6 +992,7 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
 
   const renderJiraStep = () => (
     <div className="space-y-6">
+      <StepHeading title="Jira" subtitle="Project key and how versions are formatted." />
       <SectionHeader title="Jira project" />
       <Field label="Jira Project Key" htmlFor="create-jiraProjectKey" path="jira.projectKey" required badge={reenterBadgeFor('create-jiraProjectKey')}>
         <Input
@@ -1089,6 +1101,7 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
 
   const renderDistributionStep = () => (
     <div className="space-y-6">
+      <StepHeading title="Distribution" subtitle="How the component's artifacts are published." />
       <SectionHeader title="Docker" subtitle="A Docker image can be published regardless of distribution type." />
       {gated ? (
         <>
@@ -1111,9 +1124,19 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
               <option value="package">Package</option>
             </select>
             {coordinateType === 'maven' && (
-              <div className="flex gap-2">
-                <Input placeholder="groupId" aria-label="Group ID" {...register('coordinate.groupPattern')} />
-                <Input placeholder="artifactId" aria-label="Artifact ID" {...register('coordinate.artifactPattern')} />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-coordinate-groupId" className="text-xs">groupId</Label>
+                  <Input id="create-coordinate-groupId" className="font-mono text-xs"
+                    placeholder="org.example.alpha" aria-label="groupId"
+                    {...register('coordinate.groupPattern')} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-coordinate-artifactId" className="text-xs">artifactId</Label>
+                  <Input id="create-coordinate-artifactId" className="font-mono text-xs"
+                    placeholder="my-component" aria-label="artifactId"
+                    {...register('coordinate.artifactPattern')} />
+                </div>
               </div>
             )}
             {coordinateType === 'docker' && (
@@ -1143,23 +1166,32 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
               </div>
             )}
             {coordinateType === 'package' && (
-              <div className="flex gap-2">
-                <Controller
-                  control={control}
-                  name="coordinate.packageType"
-                  render={({ field }) => (
-                    <select
-                      aria-label="Package type"
-                      className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-                      value={field.value}
-                      onChange={field.onChange}
-                    >
-                      <option value="DEB">DEB</option>
-                      <option value="RPM">RPM</option>
-                    </select>
-                  )}
-                />
-                <Input placeholder="package name" aria-label="Package name" {...register('coordinate.packageName')} />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-coordinate-packageType" className="text-xs">Package Type</Label>
+                  <Controller
+                    control={control}
+                    name="coordinate.packageType"
+                    render={({ field }) => (
+                      <select
+                        id="create-coordinate-packageType"
+                        aria-label="Package Type"
+                        className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+                        value={field.value}
+                        onChange={field.onChange}
+                      >
+                        <option value="DEB">DEB</option>
+                        <option value="RPM">RPM</option>
+                      </select>
+                    )}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-coordinate-packageName" className="text-xs">Package Name</Label>
+                  <Input id="create-coordinate-packageName" className="font-mono text-xs"
+                    placeholder="my-package" aria-label="Package Name"
+                    {...register('coordinate.packageName')} />
+                </div>
               </div>
             )}
             {errors.coordinate && (
@@ -1232,24 +1264,30 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
 
   const renderReviewStep = () => (
     <div className="space-y-6">
-      <SectionHeader title="Review & create" subtitle="Everything below will be created." />
+      <div className="flex items-start justify-between gap-3">
+        <SectionHeader title="Review & create" subtitle="Everything below will be created." />
+        {/* Reserved view switch: only Summary works today. The As-code (DSL) view
+            arrives once CRS exposes a server-side create-preview endpoint. */}
+        <div
+          role="group"
+          aria-label="Review view"
+          className="inline-flex shrink-0 rounded-md border border-input p-0.5 text-xs"
+        >
+          <span className="rounded-[5px] bg-primary px-2.5 py-1 font-medium text-primary-foreground">
+            Summary
+          </span>
+          <span
+            className="cursor-not-allowed px-2.5 py-1 text-muted-foreground/70"
+            aria-disabled="true"
+            aria-label="As code — available once a server-side create-preview renders the DSL"
+            title="Available once a server-side create-preview renders the DSL"
+          >
+            As code
+          </span>
+        </div>
+      </div>
       {serverError && (
         <InlineError message={serverError.message} />
-      )}
-      {invalidSteps.size > 0 && (
-        <StatusBanner variant="warning">
-          <div className="font-semibold">Some steps still need attention</div>
-          <ul className="mt-1 space-y-0.5">
-            {[...invalidSteps].filter((step) => step !== 'review').map((step) => (
-              <li key={step}>
-                <button type="button" className="underline" onClick={() => goToStep(step)}>
-                  Go to {STEP_LABELS[step]}
-                </button>
-              </li>
-            ))}
-            {jiraKeyError && <li>Enter a Jira task key below.</li>}
-          </ul>
-        </StatusBanner>
       )}
 
       <SummaryDiff
@@ -1326,6 +1364,34 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
   const profileTouched = isClone
     ? profile !== (derived?.profile ?? null) || explicitAnswer !== (derived?.explicit ?? false)
     : profile !== null
+
+  // Post-create success panel — replaces the wizard body once the component is
+  // created. `submitted` is already true, so no unsaved-changes guard is needed.
+  if (created) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-5 p-10 text-center">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
+          <Check className="h-7 w-7" aria-hidden />
+        </div>
+        <div className="space-y-1">
+          <DialogTitle className="text-xl font-semibold">Component created</DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">{created.name}</span> was added to the registry.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Button type="button" variant="outline" onClick={onCreateAnother}>
+            <Plus className="h-4 w-4" />
+            Create another
+          </Button>
+          <Button type="button" onClick={() => navigate(`/components/${created.id}`)}>
+            Go to component
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex h-full flex-col overflow-hidden">
@@ -1421,6 +1487,20 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
                 </p>
               </div>
             )}
+            {crossStepInvalid.length > 0 && (
+              <StatusBanner variant="warning">
+                <div className="font-semibold">Other steps need attention before you can create</div>
+                <ul className="mt-1 space-y-0.5">
+                  {crossStepInvalid.map((step) => (
+                    <li key={step}>
+                      <button type="button" className="underline" onClick={() => goToStep(step)}>
+                        Go to {STEP_LABELS[step]}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </StatusBanner>
+            )}
             {stepBody[current]()}
           </div>
         </div>
@@ -1461,6 +1541,17 @@ function CreateComponentWizard({ source, isClone, defaults }: WizardProps) {
 }
 
 // ---- Small presentational helpers -------------------------------------------
+
+// Step-level heading (one per wizard step), above the step's sub-sections —
+// mirrors the Profile step's header and the approved mockup's per-step intro.
+function StepHeading({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <div>
+      <h2 className="text-lg font-semibold">{title}</h2>
+      <p className="text-sm text-muted-foreground">{subtitle}</p>
+    </div>
+  )
+}
 
 function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
   return (

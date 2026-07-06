@@ -85,7 +85,7 @@ describe('DistributionTab — blank-row filter (slice payload)', () => {
     renderTab(baseComponent())
     fireEvent.click(screen.getAllByRole('button', { name: /^Add$/ })[0]!)
     fireEvent.change(screen.getByPlaceholderText('org.example.alpha'), { target: { value: 'com.example' } })
-    fireEvent.change(screen.getByPlaceholderText('my-component-*'), { target: { value: 'my-app' } })
+    fireEvent.change(screen.getByPlaceholderText('my-component'), { target: { value: 'my-app' } })
     const maven = captured.section!.slice.request.baseConfiguration?.mavenArtifacts
     expect(maven).toHaveLength(1)
     expect(maven?.[0]?.groupPattern).toBe('com.example')

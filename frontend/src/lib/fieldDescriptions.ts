@@ -118,7 +118,7 @@ export const fieldDescriptions: Record<string, string> = {
   'component.distributionExternal':
     'Marks the component as delivered to external consumers rather than internal-only. Combined with Explicit it enables external-distribution checks and the requirement for release managers, security champions and copyright.',
   'distribution.mavenArtifacts':
-    'Artifact coordinates (group/artifact patterns) this component publishes to the artifact repository. Patterns support dynamic variables. Distribution automation publishes and validates these coordinates on release. You can also add per-range overrides that apply only to specific version ranges.',
+    'Maven coordinates (groupId / artifactId) this component publishes to the artifact repository. Distribution automation publishes and validates these coordinates on release. You can also add per-range overrides that apply only to specific version ranges.',
   'distribution.fileUrlArtifacts':
     'Direct file URLs of pre-built artifacts to publish, optionally with an explicit artifact ID and classifier. Distribution automation fetches the files from these URLs and uploads them under the given coordinates. You can also add per-range overrides that apply only to specific version ranges.',
   'distribution.dockerImages':
@@ -128,9 +128,9 @@ export const fieldDescriptions: Record<string, string> = {
   'distribution.securityGroups':
     'Access-control groups gating who may download this component’s distributed artifacts. Distribution and escrow automation apply these groups when publishing.',
   'distribution.maven.groupPattern':
-    'Maven group pattern of the published artifact (e.g. org.example.alpha). Required — together with the artifact pattern it forms the coordinate that distribution automation publishes and resolves.',
+    'Maven groupId of the published artifact (e.g. org.example.alpha). Required — together with the artifactId it forms the coordinate that distribution automation publishes and resolves.',
   'distribution.maven.artifactPattern':
-    'Maven artifact-id pattern; wildcards allowed (e.g. my-component-*). Required. Matched against the artifacts actually published by the release.',
+    'Maven artifactId of the published artifact (e.g. my-component). Required. Matched against the artifacts actually published by the release.',
   'distribution.maven.extension':
     'Artifact packaging/extension (e.g. jar, zip). Optional — leave empty for the repository default.',
   'distribution.maven.classifier':

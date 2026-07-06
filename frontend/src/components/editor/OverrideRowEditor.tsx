@@ -758,12 +758,12 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
                       </div>
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         <div className="space-y-1">
-                          <Label className="text-xs">Group Pattern <span className="text-destructive">*</span></Label>
+                          <Label className="text-xs">groupId <span className="text-destructive">*</span></Label>
                           <Input required value={row.groupPattern} onChange={(e) => updateMaven(i, 'groupPattern', e.target.value)} placeholder="org.example.alpha" className="font-mono text-xs" />
                         </div>
                         <div className="space-y-1">
-                          <Label className="text-xs">Artifact Pattern <span className="text-destructive">*</span></Label>
-                          <Input required value={row.artifactPattern} onChange={(e) => updateMaven(i, 'artifactPattern', e.target.value)} placeholder="my-component-*" className="font-mono text-xs" />
+                          <Label className="text-xs">artifactId <span className="text-destructive">*</span></Label>
+                          <Input required value={row.artifactPattern} onChange={(e) => updateMaven(i, 'artifactPattern', e.target.value)} placeholder="my-component" className="font-mono text-xs" />
                         </div>
                         <div className="space-y-1">
                           <Label className="text-xs">Extension</Label>

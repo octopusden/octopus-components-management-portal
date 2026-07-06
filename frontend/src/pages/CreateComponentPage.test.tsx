@@ -266,6 +266,78 @@ describe('CreateComponentPage — wizard UI polish', () => {
     const payload = mockMutateAsync.mock.calls[0]![0]
     expect(payload.baseConfiguration.dockerImages).toEqual([{ imageName: 'acme/svc', flavor: 'alpine' }])
   })
+
+  it('labels the gated Maven coordinate with the Maven groupId / artifactId terms', async () => {
+    renderWizard()
+    // Solution → explicit + external → the gated coordinate selector appears.
+    await userEvent.click(screen.getByRole('radio', { name: /^Solution$/i }))
+    await clickNext() // General
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'my-solution')
+    await commitOwner('alice')
+    await userEvent.type(screen.getByLabelText(/^Display Name/i), 'My Solution')
+    // Jump straight to Distribution via the rail, then pick the Maven coordinate.
+    await userEvent.click(screen.getByRole('button', { name: /^Distribution$/i }))
+    await userEvent.selectOptions(screen.getByLabelText(/Distribution coordinate/i), 'maven')
+    expect(screen.getByLabelText('groupId')).toBeDefined()
+    expect(screen.getByLabelText('artifactId')).toBeDefined()
+    expect(screen.queryByText(/Group Pattern|Artifact Pattern/)).toBeNull()
+  })
+
+  it('shows a cross-step banner on an earlier step when a later step is invalid', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext() // General
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await clickNext() // Build
+    await userEvent.selectOptions(screen.getByLabelText(/^Build System/i), 'PROVIDED')
+    await clickNext() // VCS
+    await clickNext() // Jira — leave the (required) project key empty → invalid
+    // Jump back to Build via the rail; Jira is now visited + invalid.
+    await userEvent.click(screen.getByRole('button', { name: 'Jira' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Build' }))
+    expect(screen.getByText(/Other steps need attention/i)).toBeDefined()
+    expect(screen.getByRole('button', { name: /Go to Jira/i })).toBeDefined()
+  })
+
+  it('shows a success panel with "Create another" that resets to a blank wizard', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext() // General
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await clickNext() // Build
+    await userEvent.selectOptions(screen.getByLabelText(/^Build System/i), 'PROVIDED')
+    await clickNext() // VCS (note only)
+    await clickNext() // Jira
+    await userEvent.type(screen.getByLabelText(/^Jira Project Key/i), 'WIDG')
+    await clickNext() // Distribution
+    await clickNext() // Escrow
+    await clickNext() // Review
+    await userEvent.type(screen.getByLabelText(/^Jira task key/i), 'ABC-123')
+    await userEvent.click(screen.getByRole('button', { name: /^create component$/i }))
+    await screen.findByText('Component created')
+    await userEvent.click(screen.getByRole('button', { name: /create another/i }))
+    // Remounts a fresh wizard back on the Profile step (step 1 of 8).
+    await screen.findByText('Choose component profile')
+    expect(screen.getByText(/step 1 of 8/i)).toBeDefined()
+  })
+
+  it('renders a reserved (disabled) "As code" view switch on the Review step', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Review & create' }))
+    expect(screen.getByText('Summary')).toBeDefined()
+    const asCode = screen.getByText('As code')
+    expect(asCode.getAttribute('aria-disabled')).toBe('true')
+  })
+
+  it('gives each step a heading (A5)', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext() // General
+    expect(screen.getByRole('heading', { level: 2, name: 'General' })).toBeDefined()
+  })
 })
 
 describe('CreateComponentPage — scratch create flow', () => {
@@ -313,6 +385,9 @@ describe('CreateComponentPage — scratch create flow', () => {
     expect(payload.distributionExplicit).toBe(false)
     expect(payload.solution).toBe(false)
     expect(payload.jiraTaskKey).toBe('ABC-123')
+    // Success panel, then "Go to component" navigates to the new component.
+    await screen.findByText('Component created')
+    await userEvent.click(screen.getByRole('button', { name: /go to component/i }))
     await waitFor(() => expect(screen.getByTestId('detail-page')).toBeDefined())
   })
 
