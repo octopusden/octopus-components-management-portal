@@ -8,8 +8,11 @@ interface ModeSelectProps {
   /** Restrict the offered modes (e.g. the tokenless ALL / ALL_EXCEPT_CLAIMED). */
   allowed?: ArtifactIdMode[]
   disabled?: boolean
-  /** Element id for the <select>, associated with the "matching mode" label. */
-  id?: string
+  /**
+   * Element id for the <select>, associated with the "matching mode" label.
+   * Required so per-row instances get unique ids (no duplicate-id/label collisions).
+   */
+  id: string
 }
 
 /**
@@ -18,7 +21,7 @@ interface ModeSelectProps {
  * create wizard and the editor's per-row ArtifactOwnershipEditor so the control
  * looks and behaves identically in both.
  */
-export function ModeSelect({ value, onChange, allowed, disabled, id = 'mode' }: ModeSelectProps) {
+export function ModeSelect({ value, onChange, allowed, disabled, id }: ModeSelectProps) {
   const modes = allowed ? OWNERSHIP_MODES.filter((m) => allowed.includes(m.key)) : OWNERSHIP_MODES
   const help = OWNERSHIP_MODES.find((m) => m.key === value)?.help
   return (

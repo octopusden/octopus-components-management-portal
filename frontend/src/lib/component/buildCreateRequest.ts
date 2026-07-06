@@ -66,6 +66,10 @@ export interface CreateFormValues {
   // copied); versionPrefix defaults to the component key in scratch mode (mirrored in the form).
   jiraProjectKey: string
   versionPrefix: string
+  // Full/custom version-format wrapper (jira.versionFormat), e.g.
+  // "$versionPrefix-$baseVersionFormat". Required by CRS whenever versionPrefix
+  // is set; seeded from component-defaults and editable on the Jira step.
+  versionFormat: string
   // Jira version-format patterns (BASE jira aspect), prefilled from
   // component-defaults (jira.componentVersionFormat.*) so a new component
   // inherits the configured formats. Line leads its pair (Minor derives from it)
@@ -159,7 +163,9 @@ function copyJiraAspect(jira: JiraAspect | null | undefined): JiraAspect | undef
   //  - projectKey: always component-unique, never copied.
   //  - technical: adminOnly in baseline → a non-admin copy of a technical
   //    component would POST technical and hit the CRS create-rule 403.
-  //  - versionFormat: not a create-form field (Q5) → don't leak the source's.
+  //  - versionFormat: stripped here, then re-applied from the form (which seeds it
+  //    from the source in clone) via assignOrDelete — so clearing it in the form
+  //    isn't silently overridden by the copied source value.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { projectKey, technical, versionFormat, ...rest } = jira
   const hasValue = Object.values(rest).some((v) => v != null)
@@ -172,13 +178,15 @@ function copyJiraAspect(jira: JiraAspect | null | undefined): JiraAspect | undef
 function coordinatePatch(
   coordinate: CreateFormValues['coordinate'],
 ): Partial<BaseConfigurationRequest> {
+  // Trim every coordinate value: the presence gate checks trimmed strings, so the
+  // payload must not carry leading/trailing whitespace CRS would reject.
   switch (coordinate.type) {
     case 'maven':
       return {
         mavenArtifacts: [
           {
-            groupPattern: coordinate.groupPattern,
-            artifactPattern: coordinate.artifactPattern,
+            groupPattern: coordinate.groupPattern.trim(),
+            artifactPattern: coordinate.artifactPattern.trim(),
             extension: null,
             classifier: null,
           },
@@ -186,11 +194,11 @@ function coordinatePatch(
       }
     case 'docker':
       return {
-        dockerImages: [{ imageName: coordinate.imageName, flavor: coordinate.flavor.trim() || null }],
+        dockerImages: [{ imageName: coordinate.imageName.trim(), flavor: coordinate.flavor.trim() || null }],
       }
     case 'package':
       return {
-        packages: [{ packageType: coordinate.packageType, packageName: coordinate.packageName }],
+        packages: [{ packageType: coordinate.packageType, packageName: coordinate.packageName.trim() }],
       }
   }
 }
@@ -329,7 +337,12 @@ export function buildCreateRequest(
   const release = form.releaseVersionFormat.trim()
   const build = form.buildSeparate ? form.buildVersionFormat.trim() : ''
   const assignOrDelete = (
-    k: 'lineVersionFormat' | 'minorVersionFormat' | 'releaseVersionFormat' | 'buildVersionFormat',
+    k:
+      | 'lineVersionFormat'
+      | 'minorVersionFormat'
+      | 'releaseVersionFormat'
+      | 'buildVersionFormat'
+      | 'versionFormat',
     v: string,
   ) => {
     if (v) jira[k] = v
@@ -339,6 +352,9 @@ export function buildCreateRequest(
   assignOrDelete('minorVersionFormat', minor)
   assignOrDelete('releaseVersionFormat', release)
   assignOrDelete('buildVersionFormat', build)
+  // Full/custom version-format wrapper. Required by CRS when versionPrefix is set;
+  // form-driven like the other formats (assign the trimmed value or clear it).
+  assignOrDelete('versionFormat', form.versionFormat.trim())
   if (Object.values(jira).some((v) => v != null)) baseConfiguration.jira = jira
   if (baseRow && baseRow.requiredTools.length > 0) {
     baseConfiguration.requiredTools = [...baseRow.requiredTools]

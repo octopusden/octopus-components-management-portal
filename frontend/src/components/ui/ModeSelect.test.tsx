@@ -9,7 +9,7 @@ import type { ArtifactIdMode } from '@/lib/types'
 // what updates the shown help text.
 function Harness({ initial = 'ALL' as ArtifactIdMode, allowed }: { initial?: ArtifactIdMode; allowed?: ArtifactIdMode[] }) {
   const [value, setValue] = useState<ArtifactIdMode>(initial)
-  return <ModeSelect value={value} allowed={allowed} onChange={setValue} />
+  return <ModeSelect value={value} allowed={allowed} onChange={setValue} id="mode-test" />
 }
 
 describe('ModeSelect', () => {

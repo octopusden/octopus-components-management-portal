@@ -15,6 +15,7 @@ function makeForm(overrides: Partial<CreateFormValues> = {}): CreateFormValues {
     copyright: '',
     jiraProjectKey: '',
     versionPrefix: '',
+    versionFormat: '$versionPrefix-$baseVersionFormat',
     minorVersionFormat: '',
     releaseVersionFormat: '',
     buildVersionFormat: '',
@@ -319,6 +320,21 @@ describe('buildCreateRequest — gated (explicit+external) coordinate', () => {
     expect(req.baseConfiguration?.jira).toMatchObject({ projectKey: 'PROJ', versionPrefix: 'svc-new' })
   })
 
+  it('emits the full versionFormat onto baseConfiguration.jira (trimmed)', () => {
+    const req = buildCreateRequest(makeForm({ versionFormat: '  $versionPrefix-$baseVersionFormat  ' }))
+    expect(req.baseConfiguration?.jira?.versionFormat).toBe('$versionPrefix-$baseVersionFormat')
+  })
+
+  it('clones the source versionFormat unless the form clears it', () => {
+    // Form value wins: a blank form versionFormat clears the copied source value
+    // (the schema blocks a blank submit, but the builder must not silently re-send it).
+    const source = makeSource({
+      configurations: [makeBaseRow({ jira: { projectKey: 'SRC', versionFormat: '$versionPrefix-$baseVersionFormat' } })],
+    })
+    const req = buildCreateRequest(makeForm({ versionFormat: '' }), source)
+    expect('versionFormat' in (req.baseConfiguration?.jira ?? {})).toBe(false)
+  })
+
   it('maps the version formats onto the jira aspect (all pairs separate)', () => {
     const req = buildCreateRequest(
       makeForm({
@@ -348,7 +364,7 @@ describe('buildCreateRequest — gated (explicit+external) coordinate', () => {
   })
 
   it('omits jira aspect entirely when no jira fields are set (scratch)', () => {
-    const req = buildCreateRequest(makeForm({ jiraProjectKey: '', versionPrefix: '' }))
+    const req = buildCreateRequest(makeForm({ jiraProjectKey: '', versionPrefix: '', versionFormat: '' }))
     expect('jira' in (req.baseConfiguration ?? {})).toBe(false)
   })
 })
@@ -606,7 +622,7 @@ describe('buildCreateRequest — copy mode (with source)', () => {
     expect('jiraHotfixVersionFormat' in req).toBe(false)
   })
 
-  it('copy mode: does NOT carry the source jira technical flag or versionFormat (no create-form control)', () => {
+  it('copy mode: drops the source jira technical flag (no create-form control); versionFormat is form-driven', () => {
     const src = makeSource({
       configurations: [
         makeBaseRow({
@@ -614,18 +630,18 @@ describe('buildCreateRequest — copy mode (with source)', () => {
           jira: {
             projectKey: 'ALPHA',
             technical: true,
-            versionFormat: '$versionPrefix-$baseVersionFormat',
+            versionFormat: 'SOURCE-FMT',
             lineVersionFormat: '$major.$minor',
           },
         }),
       ],
     })
-    const req = buildCreateRequest(makeForm({ name: 'svc-clone' }), src)
-    // technical is adminOnly in baseline — a non-admin "Create Similar" must not
-    // POST it; versionFormat has no create-form field. Both dropped (Codex #154 P1).
+    const req = buildCreateRequest(makeForm({ name: 'svc-clone', versionFormat: 'FORM-FMT' }), src)
+    // technical is adminOnly in baseline — a non-admin "Create Similar" must not POST it (dropped).
     expect(req.baseConfiguration?.jira?.technical).toBeUndefined()
-    expect(req.baseConfiguration?.jira?.versionFormat).toBeUndefined()
-    // projectKey is never copied either; a real version-format the form owns still flows.
+    // versionFormat is now a required create-form field: the form value wins over the source.
+    expect(req.baseConfiguration?.jira?.versionFormat).toBe('FORM-FMT')
+    // projectKey is never copied.
     expect(req.baseConfiguration?.jira?.projectKey).toBeUndefined()
   })
 
@@ -673,7 +689,11 @@ describe('buildCreateRequest — copy mode (with source)', () => {
       src,
     )
     expect(req.baseConfiguration?.escrow).toEqual({ reusable: true })
-    expect(req.baseConfiguration?.jira).toEqual({ minorVersionFormat: '%d.%d' })
+    // versionFormat is the required form default (seeded from component-defaults).
+    expect(req.baseConfiguration?.jira).toEqual({
+      minorVersionFormat: '%d.%d',
+      versionFormat: '$versionPrefix-$baseVersionFormat',
+    })
     expect(req.baseConfiguration?.requiredTools).toEqual(['tool-a'])
   })
 

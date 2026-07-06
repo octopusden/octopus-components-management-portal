@@ -52,7 +52,7 @@ export const PROFILE_META: readonly ProfileMeta[] = [
     id: 'regular-external',
     label: 'Regular external component',
     description:
-      'An ordinary component that is delivered to the client (explicitly or as part of other component).',
+      'An ordinary component that is delivered to the client (explicitly or as part of another component).',
     asksExplicit: true,
   },
   {
@@ -160,6 +160,10 @@ export function makeCreateSchema(
       clientCode: z.string(),
       jiraProjectKey: z.string().trim().min(1, 'Jira Project Key is required'),
       versionPrefix: z.string(),
+      // A component's Jira versions can't render without a full version format,
+      // so it must never be blank — it is seeded from component-defaults and
+      // stays required even if the user clears it.
+      versionFormat: z.string().trim().min(1, 'Full Version Format is required'),
       minorVersionFormat: z.string(),
       releaseVersionFormat: z.string(),
       buildVersionFormat: z.string(),
@@ -326,6 +330,7 @@ export const SCRATCH_DEFAULTS: CreateFormValues = {
   clientCode: '',
   jiraProjectKey: '',
   versionPrefix: '',
+  versionFormat: '',
   minorVersionFormat: '',
   releaseVersionFormat: '',
   buildVersionFormat: '',
@@ -351,6 +356,9 @@ export interface ComponentVersionFormatDefaults {
   releaseVersionFormat?: string
   buildVersionFormat?: string
   lineVersionFormat?: string
+  // Full/custom version-format wrapper (e.g. "$versionPrefix-$baseVersionFormat").
+  // Seeds the create form's Full Version Format field; not part of a mirror pair.
+  versionFormat?: string
 }
 
 // The subset of CreateFormValues describing the two leading/derived pairs.
@@ -448,6 +456,7 @@ export function initialValues(
       distributionExternal,
       jiraProjectKey: blankToUndefined(defaults.jira?.projectKey) ?? '',
       ...versionFormatsFromDefaults(defaults),
+      versionFormat: blankToUndefined(defaults.jira?.componentVersionFormat?.versionFormat) ?? '',
       escrowGeneration: blankToUndefined(defaults.escrow?.generation) ?? '',
       vcsTag,
       vcsBranch,
@@ -465,6 +474,7 @@ export function initialValues(
     copyright: source.copyright ?? '',
     clientCode: source.clientCode ?? '',
     versionPrefix: selectBaseRow(source)?.jira?.versionPrefix ?? '',
+    versionFormat: selectBaseRow(source)?.jira?.versionFormat ?? '',
     ...seedVersionFormats(
       selectBaseRow(source)?.jira?.lineVersionFormat,
       selectBaseRow(source)?.jira?.minorVersionFormat,

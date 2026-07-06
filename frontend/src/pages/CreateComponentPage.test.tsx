@@ -47,7 +47,10 @@ vi.mock('../hooks/useEmployees', () => ({
 }))
 const mockUseFieldConfig = vi.fn(() => ({ data: undefined as unknown, isLoading: false, isError: false }))
 const COMPONENT_DEFAULTS_OK = {
-  data: { vcs: { tag: '$module-$version' } } as unknown,
+  data: {
+    vcs: { tag: '$module-$version' },
+    jira: { componentVersionFormat: { versionFormat: '$versionPrefix-$baseVersionFormat' } },
+  } as unknown,
   isSuccess: true,
   isError: false,
   isLoading: false,
@@ -236,6 +239,49 @@ describe('CreateComponentPage — wizard UI polish', () => {
     // Switching to EXPLICIT reveals the Specific-artifacts token input.
     await userEvent.selectOptions(modeSelect, 'EXPLICIT')
     expect(screen.getByLabelText('Specific artifacts')).toBeDefined()
+  })
+
+  it('prefills the required Full Version Format from component-defaults', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext() // General
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await clickNext() // Build
+    await userEvent.selectOptions(screen.getByLabelText(/^Build System/i), 'PROVIDED')
+    await clickNext() // VCS
+    await clickNext() // Jira
+    const vf = screen.getByRole('textbox', { name: /Full Version Format/i }) as HTMLInputElement
+    expect(vf.value).toBe('$versionPrefix-$baseVersionFormat')
+  })
+
+  it('blocks create with an empty Full Version Format (required)', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext() // General
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await clickNext() // Build
+    await userEvent.selectOptions(screen.getByLabelText(/^Build System/i), 'PROVIDED')
+    await clickNext() // VCS
+    await clickNext() // Jira — clear the prefilled version format
+    await userEvent.clear(screen.getByRole('textbox', { name: /Full Version Format/i }))
+    // Next off the Jira step is blocked (step invalid).
+    expect((screen.getByRole('button', { name: /^next$/i }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText('Full Version Format is required')).toBeDefined()
+  })
+
+  it('POSTs the Full Version Format on create', async () => {
+    renderWizard()
+    await walkToDistribution()
+    await clickNext() // Escrow
+    await clickNext() // Review
+    await userEvent.type(screen.getByLabelText(/^Jira task key/i), 'ABC-123')
+    await userEvent.click(screen.getByRole('button', { name: /^create component$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1))
+    expect(mockMutateAsync.mock.calls[0]![0].baseConfiguration.jira.versionFormat).toBe(
+      '$versionPrefix-$baseVersionFormat',
+    )
   })
 
   it('shows the Version Preview on the Jira step', async () => {
@@ -651,6 +697,14 @@ describe('CreateComponentPage — clone re-enter affordances', () => {
 })
 
 describe('CreateComponentPage — clone unsaved-changes guard', () => {
+  it('does not engage the guard on a pristine scratch wizard (profile pre-selected)', async () => {
+    // Regression: the profile defaults to regular-external (never null), so a
+    // "profile !== null" touched-check would fire a spurious unsaved prompt on a
+    // fresh wizard. The guard must stay inactive until something actually changes.
+    renderWizard()
+    expect(screen.getByTestId('unsaved-guard').getAttribute('data-when')).toBe('false')
+  })
+
   it('engages the guard when only the profile changed (no RHF field is dirty)', async () => {
     // Source derives regular-external + explicit=true; its distribution flags
     // (external=true, explicit=true) are the clone defaults and the Component Key

@@ -59,6 +59,9 @@ import { validateJiraKey, normalizeJiraKey, normalizeChangeComment } from '../li
 
 type StepId = 'profile' | 'general' | 'build' | 'vcs' | 'jira' | 'distribution' | 'escrow' | 'review'
 
+// Scratch pre-selects the most common profile so the first step is ready to go.
+const DEFAULT_SCRATCH_PROFILE: ComponentProfile = 'regular-external'
+
 const STEP_LABELS: Record<StepId, string> = {
   profile: 'Profile',
   general: 'General',
@@ -100,6 +103,7 @@ function stepOfField(path: string): StepId {
       return 'vcs'
     case 'jiraProjectKey':
     case 'versionPrefix':
+    case 'versionFormat':
     case 'lineVersionFormat':
     case 'minorVersionFormat':
     case 'releaseVersionFormat':
@@ -236,7 +240,7 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
     [source, solutionPatterns],
   )
   const [profile, setProfile] = useState<ComponentProfile | null>(
-    derived?.profile ?? 'regular-external',
+    derived?.profile ?? DEFAULT_SCRATCH_PROFILE,
   )
   const [explicitAnswer, setExplicitAnswer] = useState<boolean>(derived?.explicit ?? false)
   // The clone profile/explicit are seeded once from `derived`, but `derived` is
@@ -1008,8 +1012,8 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
       </Field>
 
       <SectionHeader title="Version formats" />
-      <div className="flex flex-col gap-6 lg:flex-row">
-        <div className="min-w-0 flex-1 space-y-4">
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Jira Version Prefix" htmlFor="create-versionPrefix" path="jira.versionPrefix">
             <Input
               id="create-versionPrefix"
@@ -1017,7 +1021,26 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
               {...register('versionPrefix', { onChange: () => setVersionPrefixEdited(true) })}
             />
           </Field>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1">
+              <Label htmlFor="create-versionFormat">
+                <FieldLabelText path="jira.versionFormat" fallback="Full Version Format in Jira" />
+                <span className="ml-1 text-destructive">*</span>
+              </Label>
+              <FieldInfo path="jira.versionFormat" label="Full Version Format in Jira" />
+            </div>
+            <Input
+              id="create-versionFormat"
+              className="font-mono text-xs"
+              placeholder="$versionPrefix-$baseVersionFormat"
+              aria-required
+              aria-invalid={Boolean(errors.versionFormat)}
+              {...register('versionFormat')}
+            />
+            <FieldError message={errors.versionFormat?.message} />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <div className="flex items-center gap-1">
                 <Label htmlFor="create-lineVersionFormat">
@@ -1065,28 +1088,28 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
             />
           </div>
         </div>
-        {/* Live version-ladder preview — identical control to the editor's Jira tab.
-            Create has no per-range overrides and never sets a hotfix format (hotfixes
-            are disabled at creation), so overrides=[] and hotfix is off. */}
-        <aside data-testid="version-preview-slot" className="w-full lg:w-[360px] lg:flex-none">
-          <JiraVersionPreview
-            versionPrefix={values.versionPrefix}
-            versionFormat=""
-            lineVersionFormat={values.lineVersionFormat}
-            minorVersionFormat={values.minorVersionFormat}
-            minorSeparate={values.minorSeparate}
-            releaseVersionFormat={values.releaseVersionFormat}
-            buildVersionFormat={values.buildVersionFormat}
-            buildSeparate={values.buildSeparate}
-            hotfixVersionFormat=""
-            technical={false}
-            hotfixEnabled={false}
-            hoveredField={jiraHoveredField}
-            onHoverField={setJiraHoveredField}
-            overrides={[]}
-          />
-        </aside>
-      </div>
+      {/* Live version-ladder preview — same control as the editor's Jira tab,
+          stacked below the fields (the wizard column is too narrow for a side
+          panel). Create has no per-range overrides and never sets a hotfix
+          format (hotfixes are disabled at creation), so overrides=[] / hotfix off. */}
+      <aside data-testid="version-preview-slot" className="w-full">
+        <JiraVersionPreview
+          versionPrefix={values.versionPrefix}
+          versionFormat={values.versionFormat}
+          lineVersionFormat={values.lineVersionFormat}
+          minorVersionFormat={values.minorVersionFormat}
+          minorSeparate={values.minorSeparate}
+          releaseVersionFormat={values.releaseVersionFormat}
+          buildVersionFormat={values.buildVersionFormat}
+          buildSeparate={values.buildSeparate}
+          hotfixVersionFormat=""
+          technical={false}
+          hotfixEnabled={false}
+          hoveredField={jiraHoveredField}
+          onHoverField={setJiraHoveredField}
+          overrides={[]}
+        />
+      </aside>
     </div>
   )
 
@@ -1359,11 +1382,13 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
 
   // The profile lives outside RHF and drives submitted flags (incl. `solution`,
   // which is not an RHF field), so isDirty alone misses a profile-only change. In
-  // clone mode compare against the source-derived profile/explicit; in scratch any
-  // chosen profile counts.
+  // clone mode compare against the source-derived profile/explicit; in scratch
+  // compare against the pre-selected default — since the profile is never null in
+  // scratch, "!== null" would make this always true and fire a spurious
+  // unsaved-changes prompt on a pristine wizard.
   const profileTouched = isClone
     ? profile !== (derived?.profile ?? null) || explicitAnswer !== (derived?.explicit ?? false)
-    : profile !== null
+    : profile !== DEFAULT_SCRATCH_PROFILE || explicitAnswer !== false
 
   // Post-create success panel — replaces the wizard body once the component is
   // created. `submitted` is already true, so no unsaved-changes guard is needed.
