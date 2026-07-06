@@ -246,11 +246,15 @@ test.describe('Clone component — admin smoke', () => {
     // Jira step.
     await page.getByRole('button', { name: /Jira/ }).click()
     await page.getByLabel(/^jira project key/i).fill('CLONE')
+    // Full Version Format is required; the stand's defaults don't seed it.
+    await page.getByRole('textbox', { name: /Full Version Format/i }).fill('$versionPrefix-$baseVersionFormat')
 
     // Review & create step — Jira task key is required.
     await page.getByRole('button', { name: /Review/ }).click()
     await page.getByLabel(/^jira task key/i).fill('ABC-123')
     await page.getByRole('button', { name: 'Create component' }).click()
+    // A2: create now shows a success panel — click through to the new component.
+    await page.getByRole('button', { name: /go to component/i }).click()
 
     // Navigates to the created component.
     await page.waitForURL(`**/components/${CREATED_ID}`)
@@ -347,16 +351,20 @@ test.describe('Clone component — admin smoke', () => {
     // Jira step.
     await page.getByRole('button', { name: /Jira/ }).click()
     await page.getByLabel(/^jira project key/i).fill('CLONE')
+    // Full Version Format is required; the stand's defaults don't seed it.
+    await page.getByRole('textbox', { name: /Full Version Format/i }).fill('$versionPrefix-$baseVersionFormat')
 
     // Distribution step — Maven coordinate (gated on explicit+external).
     await page.getByRole('button', { name: /Distribution/ }).click()
-    await page.getByLabel('Group ID').fill('org.acme')
-    await page.getByLabel('Artifact ID').fill('svc')
+    await page.getByLabel('groupId').fill('org.acme')
+    await page.getByLabel('artifactId').fill('svc')
 
     // Review & create.
     await page.getByRole('button', { name: /Review/ }).click()
     await page.getByLabel(/^jira task key/i).fill('ABC-123')
     await page.getByRole('button', { name: 'Create component' }).click()
+    // A2: create now shows a success panel — click through to the new component.
+    await page.getByRole('button', { name: /go to component/i }).click()
 
     await page.waitForURL(`**/components/${CREATED_ID}`)
     expect(state.creates).toHaveLength(1)
@@ -424,6 +432,9 @@ test.describe('Create component from scratch — admin smoke', () => {
     // Jira.
     await page.getByRole('button', { name: /Jira/ }).click()
     await page.getByLabel(/^jira project key/i).fill('SCR')
+    // Full Version Format is required (the version prefix defaults to the component
+    // key). The stand's component-defaults doesn't seed it, so fill it explicitly.
+    await page.getByRole('textbox', { name: /Full Version Format/i }).fill('$versionPrefix-$baseVersionFormat')
 
     // Distribution — Docker coordinate.
     await page.getByRole('button', { name: /Distribution/ }).click()
@@ -439,6 +450,8 @@ test.describe('Create component from scratch — admin smoke', () => {
     await page.getByRole('button', { name: /Review/ }).click()
     await page.getByLabel(/^jira task key/i).fill('ABC-123')
     await page.getByRole('button', { name: 'Create component' }).click()
+    // A2: create now shows a success panel — click through to the new component.
+    await page.getByRole('button', { name: /go to component/i }).click()
     await page.waitForURL(`**/components/${CREATED_ID}`)
 
     expect(state.creates).toHaveLength(1)

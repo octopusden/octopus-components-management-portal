@@ -24,6 +24,13 @@ export const BASE_KEY_REGEX = /^[a-z][a-z0-9-]*$/
 // the Component-Key naming rule (see brief "Choose component profile").
 export type ComponentProfile = 'solution' | 'dmp-bundle' | 'regular-external' | 'regular-internal'
 
+// Scratch pre-selects the most common profile ("Regular external component").
+// Its flags are the source of truth for a from-scratch component's distribution
+// classification — so `initialValues` seeds the RHF flags from this profile, not
+// from `component-defaults`, keeping the pre-selected profile and the payload in
+// lockstep (the wizard only overlays `solution` at submit).
+export const DEFAULT_SCRATCH_PROFILE: ComponentProfile = 'regular-external'
+
 export interface ProfileMeta {
   id: ComponentProfile
   label: string
@@ -51,7 +58,8 @@ export const PROFILE_META: readonly ProfileMeta[] = [
   {
     id: 'regular-external',
     label: 'Regular external component',
-    description: 'An ordinary component that is delivered to the client.',
+    description:
+      'An ordinary component that is delivered to the client (explicitly or as part of another component).',
     asksExplicit: true,
   },
   {
@@ -159,6 +167,10 @@ export function makeCreateSchema(
       clientCode: z.string(),
       jiraProjectKey: z.string().trim().min(1, 'Jira Project Key is required'),
       versionPrefix: z.string(),
+      // A component's Jira versions can't render without a full version format,
+      // so it must never be blank — it is seeded from component-defaults and
+      // stays required even if the user clears it.
+      versionFormat: z.string().trim().min(1, 'Full Version Format is required'),
       minorVersionFormat: z.string(),
       releaseVersionFormat: z.string(),
       buildVersionFormat: z.string(),
@@ -173,6 +185,8 @@ export function makeCreateSchema(
         groupPattern: z.string(),
         artifactPattern: z.string(),
         imageName: z.string(),
+        // Optional Docker flavor (e.g. "alpine"); only meaningful for a docker image.
+        flavor: z.string(),
         packageType: z.enum(['DEB', 'RPM']),
         packageName: z.string(),
       }),
@@ -305,6 +319,7 @@ export const EMPTY_COORDINATE: CreateFormValues['coordinate'] = {
   groupPattern: '',
   artifactPattern: '',
   imageName: '',
+  flavor: '',
   packageType: 'DEB',
   packageName: '',
 }
@@ -322,6 +337,9 @@ export const SCRATCH_DEFAULTS: CreateFormValues = {
   clientCode: '',
   jiraProjectKey: '',
   versionPrefix: '',
+  // Universal fallback (legacy global default) so the REQUIRED Full Version Format
+  // is never blank. component-defaults / the cloned source OVERRIDE it when present.
+  versionFormat: '$versionPrefix-$baseVersionFormat',
   minorVersionFormat: '',
   releaseVersionFormat: '',
   buildVersionFormat: '',
@@ -347,6 +365,9 @@ export interface ComponentVersionFormatDefaults {
   releaseVersionFormat?: string
   buildVersionFormat?: string
   lineVersionFormat?: string
+  // Full/custom version-format wrapper (e.g. "$versionPrefix-$baseVersionFormat").
+  // Seeds the create form's Full Version Format field; not part of a mirror pair.
+  versionFormat?: string
 }
 
 // The subset of CreateFormValues describing the two leading/derived pairs.
@@ -389,6 +410,9 @@ export interface ComponentDefaults {
   componentDisplayName?: string
   copyright?: string
   jira?: { projectKey?: string; componentVersionFormat?: ComponentVersionFormatDefaults }
+  // Part of the component-defaults contract, but the create wizard no longer
+  // seeds the distribution flags from here — a scratch component's
+  // external/explicit are DERIVED FROM THE PRE-SELECTED PROFILE (see initialValues).
   distribution?: { explicit?: boolean; external?: boolean }
   vcs?: VcsDefaults
   // Only `generation` is consumed by the create wizard (the sole escrow field
@@ -425,10 +449,14 @@ export function initialValues(
     blankToUndefined(baseVcs?.branch) ?? blankToUndefined(vcsDefaults.branch) ?? FALLBACK_VCS_BRANCH
   if (!source) {
     const defaultBuildSystem = blankToUndefined(defaults.buildSystem)
-    const distributionExplicit =
-      defaults.distribution?.explicit ?? SCRATCH_DEFAULTS.distributionExplicit
-    const distributionExternal =
-      defaults.distribution?.external ?? SCRATCH_DEFAULTS.distributionExternal
+    // Distribution classification is DERIVED FROM THE PRE-SELECTED PROFILE (the
+    // wizard's source of truth), not from component-defaults — otherwise the
+    // pre-selected profile and the seeded flags could disagree and the payload
+    // would carry a classification that contradicts the shown profile.
+    const { distributionExplicit, distributionExternal } = flagsForProfile(
+      DEFAULT_SCRATCH_PROFILE,
+      SCRATCH_DEFAULTS.distributionExplicit,
+    )
     return {
       ...SCRATCH_DEFAULTS,
       buildSystem:
@@ -444,6 +472,9 @@ export function initialValues(
       distributionExternal,
       jiraProjectKey: blankToUndefined(defaults.jira?.projectKey) ?? '',
       ...versionFormatsFromDefaults(defaults),
+      versionFormat:
+        blankToUndefined(defaults.jira?.componentVersionFormat?.versionFormat) ??
+        SCRATCH_DEFAULTS.versionFormat,
       escrowGeneration: blankToUndefined(defaults.escrow?.generation) ?? '',
       vcsTag,
       vcsBranch,
@@ -461,6 +492,8 @@ export function initialValues(
     copyright: source.copyright ?? '',
     clientCode: source.clientCode ?? '',
     versionPrefix: selectBaseRow(source)?.jira?.versionPrefix ?? '',
+    versionFormat:
+      blankToUndefined(selectBaseRow(source)?.jira?.versionFormat) ?? SCRATCH_DEFAULTS.versionFormat,
     ...seedVersionFormats(
       selectBaseRow(source)?.jira?.lineVersionFormat,
       selectBaseRow(source)?.jira?.minorVersionFormat,

@@ -26,13 +26,11 @@ CRS_REPO="octopusden/octopus-components-registry-service"
 CRS_SPEC_PATH="components-registry-service-server/src/main/resources/openapi/v4.json"
 
 # --- Pinned CRS ref ----------------------------------------------------------
-# The ref MUST contain the spec file above. Today only the `v3` branch does:
-# TD-003 added it there and v3 has not cut over to main yet, so neither `main`
-# nor any released tag (`v2.0.x`) carries the spec.
-# Pre-cutover: the v4 contract lives on the `v3` integration line.
-# Post-cutover: repoint to a released CRS tag (e.g. `v2.0.88`) so Portal tracks
-# released contracts, not in-flight ones. Bump here + in README.md.
-CRS_SPEC_REF="${CRS_SPEC_REF:-v3}"
+# The ref MUST contain the spec file above. CRS now integrates on `main` (the
+# former `v3` branch was removed), so `main` carries the v4 contract.
+# Later: repoint to a released CRS tag so Portal tracks released contracts,
+# not in-flight ones. Bump here + in README.md.
+CRS_SPEC_REF="${CRS_SPEC_REF:-main}"
 # -----------------------------------------------------------------------------
 
 # Resolve dest relative to this script so it works from any CWD.

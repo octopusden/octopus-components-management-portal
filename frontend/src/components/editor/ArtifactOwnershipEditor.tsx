@@ -3,7 +3,7 @@ import { ChevronRight, Plus, Trash2, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ArtifactTokensInput } from '@/components/ui/ArtifactTokensInput'
-import { ModeRadioGroup } from '@/components/ui/ModeRadioGroup'
+import { ModeSelect } from '@/components/ui/ModeSelect'
 import {
   detectIntraComponentConflicts,
   groupError,
@@ -262,15 +262,12 @@ function MappingCard({ mapping, allMappings, conflict, configRanges, supportedGr
           {gErr && <span className="text-xs text-destructive">{gErr}</span>}
         </label>
 
-        <div className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">artifactId matching mode</span>
-          <ModeRadioGroup
-            value={mapping.mode}
-            disabled={disabled}
-            idPrefix={`mode-${mapping.id}`}
-            onChange={(mode) => onPatch({ mode })}
-          />
-        </div>
+        <ModeSelect
+          value={mapping.mode}
+          disabled={disabled}
+          id={`mode-${mapping.id}`}
+          onChange={(mode) => onPatch({ mode })}
+        />
       </div>
 
       {mapping.mode === 'EXPLICIT' && (

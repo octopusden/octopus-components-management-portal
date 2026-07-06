@@ -93,14 +93,14 @@ export function DockerImagesTab({ section, canEdit }: DockerImagesTabProps) {
                   <Label className="text-xs"><FieldLabelText path="distribution.docker.imageName" fallback="Image Name" /> <span className="text-destructive">*</span></Label>
                   <FieldInfo path="distribution.docker.imageName" label="Image Name" />
                 </div>
-                <Input required value={row.imageName} onChange={(e) => updateDocker(i, 'imageName', e.target.value)} placeholder="my-org/my-image" className="font-mono text-xs" />
+                <Input required value={row.imageName} onChange={(e) => updateDocker(i, 'imageName', e.target.value)} placeholder="acme/my-service" className="font-mono text-xs" />
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-1">
                   <Label className="text-xs"><FieldLabelText path="distribution.docker.flavor" fallback="Flavor" /></Label>
                   <FieldInfo path="distribution.docker.flavor" label="Flavor" />
                 </div>
-                <Input value={row.flavor} onChange={(e) => updateDocker(i, 'flavor', e.target.value)} placeholder="alpine" className="font-mono text-xs" />
+                <Input value={row.flavor} onChange={(e) => updateDocker(i, 'flavor', e.target.value)} placeholder="e.g. alpine" className="font-mono text-xs" />
               </div>
             </div>
           </div>

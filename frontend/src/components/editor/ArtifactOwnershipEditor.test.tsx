@@ -48,13 +48,13 @@ describe('ArtifactOwnershipEditor', () => {
   it('renders a base mapping with its group and mode selected', () => {
     render(<Harness initial={[base()]} />)
     expect(screen.getByDisplayValue('com.example.foo')).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: /All under the group ID/ })).toHaveAttribute('aria-checked', 'true')
+    expect((screen.getByLabelText('artifactId matching mode') as HTMLSelectElement).value).toBe('ALL')
   })
 
   it('switching to "Specific artifacts" reveals the token chip input', async () => {
     render(<Harness initial={[base()]} />)
     expect(screen.queryByLabelText('Specific artifacts')).not.toBeInTheDocument()
-    await userEvent.click(screen.getByRole('radio', { name: /Specific artifacts/ }))
+    await userEvent.selectOptions(screen.getByLabelText('artifactId matching mode'), 'EXPLICIT')
     expect(screen.getByLabelText('Specific artifacts')).toBeInTheDocument()
     // EXPLICIT with no tokens surfaces the "add at least one" error.
     expect(screen.getByText(/Add at least one artifact/)).toBeInTheDocument()

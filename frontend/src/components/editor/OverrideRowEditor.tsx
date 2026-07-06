@@ -758,12 +758,12 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
                       </div>
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         <div className="space-y-1">
-                          <Label className="text-xs">Group Pattern <span className="text-destructive">*</span></Label>
+                          <Label className="text-xs">groupId <span className="text-destructive">*</span></Label>
                           <Input required value={row.groupPattern} onChange={(e) => updateMaven(i, 'groupPattern', e.target.value)} placeholder="org.example.alpha" className="font-mono text-xs" />
                         </div>
                         <div className="space-y-1">
-                          <Label className="text-xs">Artifact Pattern <span className="text-destructive">*</span></Label>
-                          <Input required value={row.artifactPattern} onChange={(e) => updateMaven(i, 'artifactPattern', e.target.value)} placeholder="my-component-*" className="font-mono text-xs" />
+                          <Label className="text-xs">artifactId <span className="text-destructive">*</span></Label>
+                          <Input required value={row.artifactPattern} onChange={(e) => updateMaven(i, 'artifactPattern', e.target.value)} placeholder="my-component" className="font-mono text-xs" />
                         </div>
                         <div className="space-y-1">
                           <Label className="text-xs">Extension</Label>
@@ -839,11 +839,11 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         <div className="space-y-1">
                           <Label className="text-xs">Image Name <span className="text-destructive">*</span></Label>
-                          <Input required value={row.imageName} onChange={(e) => updateDocker(i, 'imageName', e.target.value)} placeholder="my-org/my-image" className="font-mono text-xs" />
+                          <Input required value={row.imageName} onChange={(e) => updateDocker(i, 'imageName', e.target.value)} placeholder="acme/my-service" className="font-mono text-xs" />
                         </div>
                         <div className="space-y-1">
                           <Label className="text-xs">Flavor</Label>
-                          <Input value={row.flavor} onChange={(e) => updateDocker(i, 'flavor', e.target.value)} placeholder="alpine" className="font-mono text-xs" />
+                          <Input value={row.flavor} onChange={(e) => updateDocker(i, 'flavor', e.target.value)} placeholder="e.g. alpine" className="font-mono text-xs" />
                         </div>
                       </div>
                     </div>

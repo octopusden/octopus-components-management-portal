@@ -420,7 +420,9 @@ export function JiraVersionPreview(props: JiraVersionPreviewProps) {
 
       {!mainQuery.isLoading && mainRows.length === 0 && (
         <p data-testid="version-preview-empty" className="rounded-md bg-muted px-3 py-4 text-xs leading-relaxed text-muted-foreground">
-          No preview for this version — enter a version this component’s scheme can parse.
+          {versionPrefix.trim() !== '' && versionFormat.trim() === ''
+            ? 'Full Version Format in Jira is not set — a version prefix requires it before versions can be previewed.'
+            : 'No preview for this version — enter a version this component’s scheme can parse.'}
         </p>
       )}
 

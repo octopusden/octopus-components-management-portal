@@ -19,6 +19,12 @@ vi.mock('../hooks/useComponent', () => ({
 
 vi.mock('../hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }))
 
+// The Jira step embeds the live JiraVersionPreview, which hits the CRS preview
+// endpoint. Stub the query hook so the step renders offline in tests.
+vi.mock('../hooks/useVersionPreview', () => ({
+  useVersionPreview: vi.fn(() => ({ data: undefined, isLoading: false })),
+}))
+
 const mockLookupEmployee = vi.hoisted(() => vi.fn())
 vi.mock('../hooks/useFieldOptions', () => ({
   useFieldOptions: vi.fn((fieldPath: string) =>
@@ -41,7 +47,10 @@ vi.mock('../hooks/useEmployees', () => ({
 }))
 const mockUseFieldConfig = vi.fn(() => ({ data: undefined as unknown, isLoading: false, isError: false }))
 const COMPONENT_DEFAULTS_OK = {
-  data: { vcs: { tag: '$module-$version' } } as unknown,
+  data: {
+    vcs: { tag: '$module-$version' },
+    jira: { componentVersionFormat: { versionFormat: '$versionPrefix-$baseVersionFormat' } },
+  } as unknown,
   isSuccess: true,
   isError: false,
   isLoading: false,
@@ -155,25 +164,26 @@ beforeEach(() => {
   mockUseCurrentUser.mockReturnValue({ data: undefined, isLoading: false })
 })
 
-describe('CreateComponentPage — scratch profile gate', () => {
-  it('opens on the Profile step and blocks Next until a profile is chosen', async () => {
+describe('CreateComponentPage — scratch profile default', () => {
+  it('opens on the Profile step with Regular external pre-selected and Next enabled', async () => {
     renderWizard()
     expect(screen.getByText('Create component')).toBeDefined()
     expect(screen.getByText('Choose component profile')).toBeDefined()
-    // Next is disabled with no profile selected.
-    expect((screen.getByRole('button', { name: /^next$/i }) as HTMLButtonElement).disabled).toBe(true)
-    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
-    // Regular profiles ask the explicit-distribution question.
+    // Regular external is checked by default → the step is ready and Next is enabled.
+    expect(
+      screen.getByRole('radio', { name: /Regular external component/i }).getAttribute('aria-checked'),
+    ).toBe('true')
+    // A Regular profile asks the explicit-distribution question straight away.
     expect(screen.getByText('Has explicit distribution?')).toBeDefined()
     expect((screen.getByRole('button', { name: /^next$/i }) as HTMLButtonElement).disabled).toBe(false)
   })
 
-  it('cannot bypass the Profile gate via the stepper — Create stays disabled with no profile chosen', async () => {
+  it('keeps Create disabled from the stepper while required fields are empty', async () => {
     renderWizard()
-    // No profile selected. Jump straight to the Review step via the stepper.
+    // Regular external is pre-selected; jump straight to Review via the stepper.
     await userEvent.click(screen.getByRole('button', { name: /Review & create/i }))
     // Even after entering a valid Jira task key, Create must stay disabled while
-    // the scratch profile is unchosen (and required fields are empty).
+    // the required General fields (name, owner) are still empty.
     await userEvent.type(screen.getByLabelText(/Jira task key/i), 'ABC-1')
     expect(
       (screen.getByRole('button', { name: /^create component$/i }) as HTMLButtonElement).disabled,
@@ -187,6 +197,200 @@ describe('CreateComponentPage — scratch profile gate', () => {
     await clickNext()
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
     await waitFor(() => expect(screen.getByText(/must contain "-solution"/i)).toBeDefined())
+  })
+})
+
+describe('CreateComponentPage — wizard UI polish', () => {
+  // Walk the not-gated (Docker-only) flow up to the given step for a scratch component.
+  async function walkToDistribution() {
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext() // → General
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await clickNext() // → Build
+    await userEvent.selectOptions(screen.getByLabelText(/^Build System/i), 'PROVIDED')
+    await clickNext() // → VCS (note only)
+    await clickNext() // → Jira
+    await userEvent.type(screen.getByLabelText(/^Jira Project Key/i), 'WIDG')
+    await clickNext() // → Distribution
+  }
+
+  it('uses the first supported group as the Produced Artifacts Group ID placeholder', async () => {
+    mockUseSupportedGroups.mockReturnValue({ groups: ['com.acme', 'org.acme'], isLoading: false })
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext() // General
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await clickNext() // Build (Produced Artifacts)
+    expect((screen.getByLabelText('Group ID 1') as HTMLInputElement).placeholder).toBe('com.acme')
+  })
+
+  it('renders the ownership matching mode as a select with per-mode help', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext() // General
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await clickNext() // Build
+    const modeSelect = screen.getByLabelText('artifactId matching mode') as HTMLSelectElement
+    expect(modeSelect.tagName).toBe('SELECT')
+    expect(modeSelect.value).toBe('ALL')
+    // Switching to EXPLICIT reveals the Specific-artifacts token input.
+    await userEvent.selectOptions(modeSelect, 'EXPLICIT')
+    expect(screen.getByLabelText('Specific artifacts')).toBeDefined()
+  })
+
+  it('prefills the required Full Version Format from component-defaults', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext() // General
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await clickNext() // Build
+    await userEvent.selectOptions(screen.getByLabelText(/^Build System/i), 'PROVIDED')
+    await clickNext() // VCS
+    await clickNext() // Jira
+    const vf = screen.getByRole('textbox', { name: /Full Version Format/i }) as HTMLInputElement
+    expect(vf.value).toBe('$versionPrefix-$baseVersionFormat')
+  })
+
+  it('blocks create with an empty Full Version Format (required)', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext() // General
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await clickNext() // Build
+    await userEvent.selectOptions(screen.getByLabelText(/^Build System/i), 'PROVIDED')
+    await clickNext() // VCS
+    await clickNext() // Jira — clear the prefilled version format
+    await userEvent.clear(screen.getByRole('textbox', { name: /Full Version Format/i }))
+    // Next off the Jira step is blocked (step invalid).
+    expect((screen.getByRole('button', { name: /^next$/i }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText('Full Version Format is required')).toBeDefined()
+  })
+
+  it('POSTs the Full Version Format on create', async () => {
+    renderWizard()
+    await walkToDistribution()
+    await clickNext() // Escrow
+    await clickNext() // Review
+    await userEvent.type(screen.getByLabelText(/^Jira task key/i), 'ABC-123')
+    await userEvent.click(screen.getByRole('button', { name: /^create component$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1))
+    expect(mockMutateAsync.mock.calls[0]![0].baseConfiguration.jira.versionFormat).toBe(
+      '$versionPrefix-$baseVersionFormat',
+    )
+  })
+
+  it('lists the Full Version Format on the Review summary', async () => {
+    renderWizard()
+    await walkToDistribution()
+    await clickNext() // Escrow
+    await clickNext() // Review
+    expect(screen.getByText('Full Version Format')).toBeDefined()
+    expect(screen.getByText(/\$versionPrefix-\$baseVersionFormat/)).toBeDefined()
+  })
+
+  it('shows the Version Preview on the Jira step', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext() // → General
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await clickNext() // → Build
+    await userEvent.selectOptions(screen.getByLabelText(/^Build System/i), 'PROVIDED')
+    await clickNext() // → VCS (note only)
+    await clickNext() // → Jira
+    expect(screen.getByTestId('version-preview-slot')).toBeDefined()
+    expect(screen.getByTestId('jira-version-preview')).toBeDefined()
+  })
+
+  it('exposes an optional Docker Flavor field and POSTs it with the image', async () => {
+    renderWizard()
+    await walkToDistribution()
+    // Not gated → the Docker section shows Image Name + optional Flavor.
+    await userEvent.type(screen.getByLabelText('Image name'), 'acme/svc')
+    await userEvent.type(screen.getByLabelText('Flavor'), 'alpine')
+    await clickNext() // → Escrow (Generation only; optional)
+    await clickNext() // → Review
+    await userEvent.type(screen.getByLabelText(/^Jira task key/i), 'ABC-123')
+    await userEvent.click(screen.getByRole('button', { name: /^create component$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1))
+    const payload = mockMutateAsync.mock.calls[0]![0]
+    expect(payload.baseConfiguration.dockerImages).toEqual([{ imageName: 'acme/svc', flavor: 'alpine' }])
+  })
+
+  it('labels the gated Maven coordinate with the Maven groupId / artifactId terms', async () => {
+    renderWizard()
+    // Solution → explicit + external → the gated coordinate selector appears.
+    await userEvent.click(screen.getByRole('radio', { name: /^Solution$/i }))
+    await clickNext() // General
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'my-solution')
+    await commitOwner('alice')
+    await userEvent.type(screen.getByLabelText(/^Display Name/i), 'My Solution')
+    // Jump straight to Distribution via the rail, then pick the Maven coordinate.
+    await userEvent.click(screen.getByRole('button', { name: /^Distribution$/i }))
+    await userEvent.selectOptions(screen.getByLabelText(/Distribution coordinate/i), 'maven')
+    expect(screen.getByLabelText('groupId')).toBeDefined()
+    expect(screen.getByLabelText('artifactId')).toBeDefined()
+    expect(screen.queryByText(/Group Pattern|Artifact Pattern/)).toBeNull()
+  })
+
+  it('shows a cross-step banner on an earlier step when a later step is invalid', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext() // General
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await clickNext() // Build
+    await userEvent.selectOptions(screen.getByLabelText(/^Build System/i), 'PROVIDED')
+    await clickNext() // VCS
+    await clickNext() // Jira — leave the (required) project key empty → invalid
+    // Jump back to Build via the rail; Jira is now visited + invalid.
+    await userEvent.click(screen.getByRole('button', { name: 'Jira' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Build' }))
+    expect(screen.getByText(/Other steps need attention/i)).toBeDefined()
+    expect(screen.getByRole('button', { name: /Go to Jira/i })).toBeDefined()
+  })
+
+  it('shows a success panel with "Create another" that resets to a blank wizard', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext() // General
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await clickNext() // Build
+    await userEvent.selectOptions(screen.getByLabelText(/^Build System/i), 'PROVIDED')
+    await clickNext() // VCS (note only)
+    await clickNext() // Jira
+    await userEvent.type(screen.getByLabelText(/^Jira Project Key/i), 'WIDG')
+    await clickNext() // Distribution
+    await clickNext() // Escrow
+    await clickNext() // Review
+    await userEvent.type(screen.getByLabelText(/^Jira task key/i), 'ABC-123')
+    await userEvent.click(screen.getByRole('button', { name: /^create component$/i }))
+    await screen.findByText('Component created')
+    await userEvent.click(screen.getByRole('button', { name: /create another/i }))
+    // Remounts a fresh wizard back on the Profile step (step 1 of 8).
+    await screen.findByText('Choose component profile')
+    expect(screen.getByText(/step 1 of 8/i)).toBeDefined()
+  })
+
+  it('renders a reserved (disabled) "As code" view switch on the Review step', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Review & create' }))
+    expect(screen.getByRole('button', { name: 'Summary' })).toBeDefined()
+    expect((screen.getByRole('button', { name: /As code/i }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('gives each step a heading (A5)', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext() // General
+    expect(screen.getByRole('heading', { level: 2, name: 'General' })).toBeDefined()
   })
 })
 
@@ -235,6 +439,9 @@ describe('CreateComponentPage — scratch create flow', () => {
     expect(payload.distributionExplicit).toBe(false)
     expect(payload.solution).toBe(false)
     expect(payload.jiraTaskKey).toBe('ABC-123')
+    // Success panel, then "Go to component" navigates to the new component.
+    await screen.findByText('Component created')
+    await userEvent.click(screen.getByRole('button', { name: /go to component/i }))
     await waitFor(() => expect(screen.getByTestId('detail-page')).toBeDefined())
   })
 
@@ -498,6 +705,14 @@ describe('CreateComponentPage — clone re-enter affordances', () => {
 })
 
 describe('CreateComponentPage — clone unsaved-changes guard', () => {
+  it('does not engage the guard on a pristine scratch wizard (profile pre-selected)', async () => {
+    // Regression: the profile defaults to regular-external (never null), so a
+    // "profile !== null" touched-check would fire a spurious unsaved prompt on a
+    // fresh wizard. The guard must stay inactive until something actually changes.
+    renderWizard()
+    expect(screen.getByTestId('unsaved-guard').getAttribute('data-when')).toBe('false')
+  })
+
   it('engages the guard when only the profile changed (no RHF field is dirty)', async () => {
     // Source derives regular-external + explicit=true; its distribution flags
     // (external=true, explicit=true) are the clone defaults and the Component Key

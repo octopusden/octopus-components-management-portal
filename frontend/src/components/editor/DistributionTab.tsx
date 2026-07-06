@@ -104,8 +104,8 @@ export function DistributionTab({ section, canEdit, supportedGroups = [] }: Dist
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1">
                 <div className="flex items-center gap-1">
-                  <Label className="text-xs"><FieldLabelText path="distribution.maven.groupPattern" fallback="Group Pattern" /> <span className="text-destructive">*</span></Label>
-                  <FieldInfo path="distribution.maven.groupPattern" label="Group Pattern" />
+                  <Label className="text-xs"><FieldLabelText path="distribution.maven.groupPattern" fallback="groupId" /> <span className="text-destructive">*</span></Label>
+                  <FieldInfo path="distribution.maven.groupPattern" label="groupId" />
                 </div>
                 <Input required value={row.groupPattern} onChange={(e) => updateMaven(i, 'groupPattern', e.target.value)} placeholder="org.example.alpha" className="font-mono text-xs" />
                 {(() => {
@@ -121,10 +121,10 @@ export function DistributionTab({ section, canEdit, supportedGroups = [] }: Dist
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-1">
-                  <Label className="text-xs"><FieldLabelText path="distribution.maven.artifactPattern" fallback="Artifact Pattern" /> <span className="text-destructive">*</span></Label>
-                  <FieldInfo path="distribution.maven.artifactPattern" label="Artifact Pattern" />
+                  <Label className="text-xs"><FieldLabelText path="distribution.maven.artifactPattern" fallback="artifactId" /> <span className="text-destructive">*</span></Label>
+                  <FieldInfo path="distribution.maven.artifactPattern" label="artifactId" />
                 </div>
-                <Input required value={row.artifactPattern} onChange={(e) => updateMaven(i, 'artifactPattern', e.target.value)} placeholder="my-component-*" className="font-mono text-xs" />
+                <Input required value={row.artifactPattern} onChange={(e) => updateMaven(i, 'artifactPattern', e.target.value)} placeholder="my-component" className="font-mono text-xs" />
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-1">

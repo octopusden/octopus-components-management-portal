@@ -78,3 +78,34 @@ describe('initialValues — escrow generation', () => {
     expect(initialValues(source, {}).escrowGeneration).toBe('')
   })
 })
+
+describe('initialValues — Full Version Format (config-first with a universal fallback)', () => {
+  const FALLBACK = '$versionPrefix-$baseVersionFormat'
+  it('scratch: uses the component-defaults value, else the universal fallback (never blank)', () => {
+    expect(initialValues(null, {}).versionFormat).toBe(FALLBACK)
+    const defaults: ComponentDefaults = {
+      jira: { componentVersionFormat: { versionFormat: '$prefix-$custom' } },
+    }
+    expect(initialValues(null, defaults).versionFormat).toBe('$prefix-$custom')
+  })
+
+  it('clone: uses the source versionFormat, else the universal fallback', () => {
+    const withFmt = makeSource({
+      configurations: [makeBaseRow({ jira: { projectKey: 'A', versionFormat: 'SRC-FMT' } })],
+    })
+    expect(initialValues(withFmt, {}).versionFormat).toBe('SRC-FMT')
+    const noFmt = makeSource({ configurations: [makeBaseRow({ jira: { projectKey: 'A' } })] })
+    expect(initialValues(noFmt, {}).versionFormat).toBe(FALLBACK)
+  })
+})
+
+describe('initialValues — scratch distribution flags follow the pre-selected profile', () => {
+  it('derives External/Explicit from the default profile, NOT from defaults.distribution', () => {
+    // Even if component-defaults say internal/explicit, a scratch component starts
+    // as the pre-selected Regular external profile → external=true, explicit=false.
+    const defaults: ComponentDefaults = { distribution: { external: false, explicit: true } }
+    const v = initialValues(null, defaults)
+    expect(v.distributionExternal).toBe(true)
+    expect(v.distributionExplicit).toBe(false)
+  })
+})
