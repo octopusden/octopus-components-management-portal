@@ -117,11 +117,11 @@ portal:
     max-response-bytes: ${PORTAL_VALIDATION_MAX_RESPONSE_BYTES:16777216}
   service-events:
     # SYS-061: report portal redeploys + validation-sweep runs into the CRS service_event
-    # journal (surfaced on the Admin "Events" tab). Disabled by default; enable + set the
-    # shared secret per env in service-config. Blank token ⇒ client no-ops (and CRS would
-    # reject fail-closed anyway). Targets portal.validation.registry-base-url.
+    # journal (surfaced on the Admin "Events" tab). Disabled by default; flip `enabled` per env.
+    # `token` is a SECRET and is intentionally NOT declared here — it is supplied by key from
+    # Vault (`portal.service-events.token`, per-env), like every other secret. Blank token ⇒
+    # client no-ops (and CRS would reject fail-closed anyway). Targets portal.validation.registry-base-url.
     enabled: ${PORTAL_SERVICE_EVENTS_ENABLED:false}
-    token: ${PORTAL_SERVICE_EVENTS_TOKEN:}
 
 management:
   endpoints:
