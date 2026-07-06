@@ -1296,17 +1296,22 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
           aria-label="Review view"
           className="inline-flex shrink-0 rounded-md border border-input p-0.5 text-xs"
         >
-          <span className="rounded-[5px] bg-primary px-2.5 py-1 font-medium text-primary-foreground">
+          <button
+            type="button"
+            aria-pressed="true"
+            className="rounded-[5px] bg-primary px-2.5 py-1 font-medium text-primary-foreground"
+          >
             Summary
-          </span>
-          <span
+          </button>
+          <button
+            type="button"
+            disabled
             className="cursor-not-allowed px-2.5 py-1 text-muted-foreground/70"
-            aria-disabled="true"
             aria-label="As code — available once a server-side create-preview renders the DSL"
             title="Available once a server-side create-preview renders the DSL"
           >
             As code
-          </span>
+          </button>
         </div>
       </div>
       {serverError && (

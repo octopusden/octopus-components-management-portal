@@ -382,9 +382,8 @@ describe('CreateComponentPage — wizard UI polish', () => {
     renderWizard()
     await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
     await userEvent.click(screen.getByRole('button', { name: 'Review & create' }))
-    expect(screen.getByText('Summary')).toBeDefined()
-    const asCode = screen.getByText('As code')
-    expect(asCode.getAttribute('aria-disabled')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Summary' })).toBeDefined()
+    expect((screen.getByRole('button', { name: /As code/i }) as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('gives each step a heading (A5)', async () => {
