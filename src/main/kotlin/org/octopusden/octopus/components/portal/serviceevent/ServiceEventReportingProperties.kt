@@ -7,17 +7,14 @@ import org.springframework.boot.context.properties.ConfigurationProperties
  * redeploys, validation-sweep runs) into the shared CRS `service_event` journal.
  * Bound from `portal.service-events.*`.
  *
- * Inert by default: with [enabled] false (or a blank [token]) the [ServiceEventClient]
- * no-ops, so dev/unconfigured envs don't POST. Production wires the shared secret through
- * service-config; the CRS side rejects a blank token fail-closed anyway. The target URL is
- * the same components-registry base URL the validation sweep already uses
- * (`portal.validation.registry-base-url`).
+ * The [token] is the single on/off gate (same model as the CRS ingest side): a blank
+ * token → [ServiceEventClient] no-ops, so dev/unconfigured envs don't POST and setting the
+ * per-env secret in Vault (`portal.service-events.token`) is all it takes to turn reporting
+ * on. The target URL is the same components-registry base URL the validation sweep already
+ * uses (`portal.validation.registry-base-url`).
  */
 @ConfigurationProperties(prefix = "portal.service-events")
 class ServiceEventReportingProperties {
-    /** Master switch. False → no events are reported (client no-ops). */
-    var enabled: Boolean = false
-
-    /** Shared secret sent as `X-Service-Event-Token`. Blank → client no-ops (CRS would 403). */
+    /** Shared secret sent as `X-Service-Event-Token`. Blank → reporting off (CRS would 403 anyway). */
     var token: String = ""
 }

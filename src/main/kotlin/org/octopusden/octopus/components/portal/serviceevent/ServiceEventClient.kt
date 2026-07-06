@@ -15,8 +15,8 @@ import java.time.Instant
  * WebClient's Reactor Netty connection) and any error is only logged.
  *
  * Auth is the shared-secret `X-Service-Event-Token` header (the portal calls CRS
- * tokenless otherwise). Inert unless [ServiceEventReportingProperties.enabled] and a
- * non-blank token are configured — mirrors the CRS fail-closed ingest gate.
+ * tokenless otherwise). Inert unless a non-blank token is configured (from Vault) —
+ * the token is the single on/off gate, mirroring the CRS fail-closed ingest side.
  *
  * WebClient is built directly (no builder bean in this Boot-4 gateway app), mirroring
  * [org.octopusden.octopus.components.portal.validation.client.RegistryClient].
@@ -72,7 +72,7 @@ open class ServiceEventClient(
     )
 
     private fun post(body: IngestRequest) {
-        if (!properties.enabled || properties.token.isBlank()) return
+        if (properties.token.isBlank()) return
         webClient
             .post()
             .uri("/rest/api/4/admin/service-events")

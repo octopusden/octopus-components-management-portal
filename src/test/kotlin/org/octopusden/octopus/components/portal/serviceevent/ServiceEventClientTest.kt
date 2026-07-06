@@ -41,17 +41,16 @@ class ServiceEventClientTest {
     fun stop() = server.stop(0)
 
     private fun client(
-        enabled: Boolean,
         token: String,
     ): ServiceEventClient {
         val validation = ValidationProperties().apply { registryBaseUrl = "http://localhost:${server.address.port}" }
-        val props = ServiceEventReportingProperties().apply { this.enabled = enabled; this.token = token }
+        val props = ServiceEventReportingProperties().apply { this.token = token }
         return ServiceEventClient(validation, props)
     }
 
     @Test
-    fun `reports startup with the shared-secret header when enabled`() {
-        client(enabled = true, token = "secret").reportStartup("1.2.3")
+    fun `reports startup with the shared-secret header when a token is configured`() {
+        client(token = "secret").reportStartup("1.2.3")
         assertTrue(latch.await(3, TimeUnit.SECONDS), "expected a POST to CRS")
         val req = requests.single()
         assertEquals("/rest/api/4/admin/service-events", req.path)
@@ -62,15 +61,8 @@ class ServiceEventClientTest {
     }
 
     @Test
-    fun `does not call CRS when disabled`() {
-        client(enabled = false, token = "secret").reportStartup("1.2.3")
-        assertFalse(latch.await(1, TimeUnit.SECONDS), "must not POST when reporting is disabled")
-        assertTrue(requests.isEmpty())
-    }
-
-    @Test
-    fun `does not call CRS when token is blank (fail-closed)`() {
-        client(enabled = true, token = "").reportStartup("1.2.3")
+    fun `does not call CRS when token is blank (fail-closed = off)`() {
+        client(token = "").reportStartup("1.2.3")
         assertFalse(latch.await(1, TimeUnit.SECONDS), "must not POST without a configured token")
         assertTrue(requests.isEmpty())
     }
