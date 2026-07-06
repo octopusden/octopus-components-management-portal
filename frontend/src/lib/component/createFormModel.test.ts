@@ -79,20 +79,23 @@ describe('initialValues — escrow generation', () => {
   })
 })
 
-describe('initialValues — Full Version Format (sourced from defaults, no hardcode)', () => {
-  it('scratch: seeds versionFormat from component-defaults, empty when absent', () => {
-    expect(initialValues(null, {}).versionFormat).toBe('')
+describe('initialValues — Full Version Format (config-first with a universal fallback)', () => {
+  const FALLBACK = '$versionPrefix-$baseVersionFormat'
+  it('scratch: uses the component-defaults value, else the universal fallback (never blank)', () => {
+    expect(initialValues(null, {}).versionFormat).toBe(FALLBACK)
     const defaults: ComponentDefaults = {
-      jira: { componentVersionFormat: { versionFormat: '$versionPrefix-$baseVersionFormat' } },
+      jira: { componentVersionFormat: { versionFormat: '$prefix-$custom' } },
     }
-    expect(initialValues(null, defaults).versionFormat).toBe('$versionPrefix-$baseVersionFormat')
+    expect(initialValues(null, defaults).versionFormat).toBe('$prefix-$custom')
   })
 
-  it('clone: seeds versionFormat from the source base-row jira.versionFormat', () => {
-    const source = makeSource({
+  it('clone: uses the source versionFormat, else the universal fallback', () => {
+    const withFmt = makeSource({
       configurations: [makeBaseRow({ jira: { projectKey: 'A', versionFormat: 'SRC-FMT' } })],
     })
-    expect(initialValues(source, {}).versionFormat).toBe('SRC-FMT')
+    expect(initialValues(withFmt, {}).versionFormat).toBe('SRC-FMT')
+    const noFmt = makeSource({ configurations: [makeBaseRow({ jira: { projectKey: 'A' } })] })
+    expect(initialValues(noFmt, {}).versionFormat).toBe(FALLBACK)
   })
 })
 

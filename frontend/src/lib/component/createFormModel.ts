@@ -337,9 +337,9 @@ export const SCRATCH_DEFAULTS: CreateFormValues = {
   clientCode: '',
   jiraProjectKey: '',
   versionPrefix: '',
-  // Sourced from component-defaults (service-config), not hardcoded here — empty
-  // until that default is present. The REQUIRED guard then blocks a blank submit.
-  versionFormat: '',
+  // Universal fallback (legacy global default) so the REQUIRED Full Version Format
+  // is never blank. component-defaults / the cloned source OVERRIDE it when present.
+  versionFormat: '$versionPrefix-$baseVersionFormat',
   minorVersionFormat: '',
   releaseVersionFormat: '',
   buildVersionFormat: '',
@@ -472,7 +472,9 @@ export function initialValues(
       distributionExternal,
       jiraProjectKey: blankToUndefined(defaults.jira?.projectKey) ?? '',
       ...versionFormatsFromDefaults(defaults),
-      versionFormat: blankToUndefined(defaults.jira?.componentVersionFormat?.versionFormat) ?? '',
+      versionFormat:
+        blankToUndefined(defaults.jira?.componentVersionFormat?.versionFormat) ??
+        SCRATCH_DEFAULTS.versionFormat,
       escrowGeneration: blankToUndefined(defaults.escrow?.generation) ?? '',
       vcsTag,
       vcsBranch,
@@ -490,7 +492,7 @@ export function initialValues(
     copyright: source.copyright ?? '',
     clientCode: source.clientCode ?? '',
     versionPrefix: selectBaseRow(source)?.jira?.versionPrefix ?? '',
-    versionFormat: selectBaseRow(source)?.jira?.versionFormat ?? '',
+    versionFormat: selectBaseRow(source)?.jira?.versionFormat || SCRATCH_DEFAULTS.versionFormat,
     ...seedVersionFormats(
       selectBaseRow(source)?.jira?.lineVersionFormat,
       selectBaseRow(source)?.jira?.minorVersionFormat,
