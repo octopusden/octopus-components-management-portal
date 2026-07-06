@@ -204,7 +204,7 @@ describe('DockerImagesTab — coalesced per-range overrides', () => {
     return within(screen.getByTestId('docker-images-section'))
   }
 
-  // The 3DSecure QA shape: three contiguous ranges, each an empty-image override.
+  // A real QA shape: three contiguous ranges, each an empty-image override.
   const emptyContiguous = () => [
     dockerOverride('(,1.0.107)', 'fo-a', null),
     dockerOverride('[1.0.107,1.2.471)', 'fo-b', null),
