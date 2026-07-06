@@ -40,12 +40,25 @@ class ValidationService(
     private val releaseManagementClient: ReleaseManagementClient,
     private val validators: List<ComponentValidator>,
     private val properties: ValidationProperties,
+    // SYS-061: nullable (NOT defaulted) — a Kotlin default value would generate a second
+    // synthetic constructor and break Spring's constructor autowiring ("no default constructor").
+    // Spring injects the real bean for this nullable param when present; tests pass null via the
+    // `service(...)` helper's own default.
+    private val serviceEventClient: org.octopusden.octopus.components.portal.serviceevent.ServiceEventClient?,
 ) {
     private val log = LoggerFactory.getLogger(ValidationService::class.java)
 
     @Volatile
     private var report: ValidationReport =
         ValidationReport(generatedAt = null, lastAttemptAt = null, refreshError = null, components = emptyList())
+
+    /**
+     * SYS-061 coalescing: emit a FAILED service-event only on a success→fail transition, so a
+     * multi-hour outage on the short retry cadence doesn't spam near-identical FAILED rows.
+     * Successful sweeps emit COMPLETED every run (that IS the job-run operators want to see).
+     */
+    @Volatile
+    private var lastSweepFailed = false
 
     /** Single-flight guard: an overlapping refresh is a no-op rather than a double sweep. */
     private val refreshing = AtomicBoolean(false)
@@ -173,6 +186,7 @@ class ValidationService(
             log.debug("Validation refresh already running, skipping this trigger")
             return
         }
+        val startedAt = Instant.now()
         try {
             if (skipSweepWhileMigrating()) {
                 return
@@ -181,63 +195,103 @@ class ValidationService(
             if (fresh != null) {
                 report = fresh
                 log.info("Validation sweep completed: {} component(s)", fresh.components.size)
+                emitSweepCompleted(startedAt, fresh)
             } else {
                 retainStale("sweep produced no report")
+                emitSweepFailedOnce(startedAt)
             }
         } catch (e: Exception) {
-            // Broad catch is intentional: .block() throws reactor's ReactiveException wrapper
-            // or an IllegalStateException on the sweep-budget timeout — all must retain the
-            // previous report rather than crash the scheduler thread. Each kind needs a
-            // DIFFERENT operator hint, and a timeout must NOT masquerade as "unreachable"
-            // (connectivity is fine; the sweep is just slow). The host-bearing detail stays
-            // in the SERVER log; the client-facing refreshError is the sanitized category.
-            when (classifyFailure(e)) {
-                FailureKind.TIMEOUT -> {
-                    // Distinguish the whole-sweep .block(budget) overrun from a propagated
-                    // per-request timeout (in practice the un-isolated component-list fetch),
-                    // because the operator hint differs.
-                    val budgetExceeded =
-                        generateSequence(e as Throwable?) { it.cause }
-                            .take(MAX_CAUSE_CHAIN)
-                            .any { it is IllegalStateException && it.message?.contains(BLOCKING_READ_TIMEOUT) == true }
-                    val detail =
-                        if (budgetExceeded) {
-                            "did not finish within its ${properties.sweepTimeoutSeconds}s budget; consider raising " +
-                                "portal.validation.sweep-timeout-seconds or lowering portal.validation.concurrency"
-                        } else {
-                            "aborted: a request exceeded the ${properties.requestTimeoutSeconds}s " +
-                                "per-request timeout (most likely the component-list fetch); consider " +
-                                "raising portal.validation.request-timeout-seconds"
-                        }
-                    log.warn(
-                        "Validation sweep {} (components-registry at {}) — downstream slow or under load, " +
-                            "or add components-registry capacity",
-                        detail,
-                        properties.registryBaseUrl,
-                        e,
-                    )
-                    retainStale(SWEEP_TIMED_OUT)
-                }
-
-                FailureKind.UNREACHABLE -> {
-                    log.warn(
-                        "Validation sweep failed reaching components-registry at {} — set " +
-                            "portal.validation.registry-base-url (env COMPONENTS_REGISTRY_SERVICE_URL) " +
-                            "to a reachable https URL",
-                        properties.registryBaseUrl,
-                        e,
-                    )
-                    retainStale("$REGISTRY_LABEL unreachable: ${shortReason(e)}")
-                }
-
-                FailureKind.OTHER -> {
-                    log.warn("Validation sweep failed, retaining previous report: {}", e.toString())
-                    retainStale(shortReason(e))
-                }
-            }
+            handleSweepFailure(e)
+            emitSweepFailedOnce(startedAt)
         } finally {
             refreshing.set(false)
         }
+    }
+
+    /**
+     * Classify a sweep failure and retainStale with the right operator hint.
+     *
+     * Broad catch (in [refresh]) is intentional: .block() throws reactor's ReactiveException
+     * wrapper or an IllegalStateException on the sweep-budget timeout — all must retain the
+     * previous report rather than crash the scheduler thread. Each kind needs a DIFFERENT
+     * operator hint, and a timeout must NOT masquerade as "unreachable" (connectivity is fine;
+     * the sweep is just slow). The host-bearing detail stays in the SERVER log; the
+     * client-facing refreshError is the sanitized category.
+     */
+    private fun handleSweepFailure(e: Exception) {
+        when (classifyFailure(e)) {
+            FailureKind.TIMEOUT -> {
+                // Distinguish the whole-sweep .block(budget) overrun from a propagated
+                // per-request timeout (in practice the un-isolated component-list fetch),
+                // because the operator hint differs.
+                val budgetExceeded =
+                    generateSequence(e as Throwable?) { it.cause }
+                        .take(MAX_CAUSE_CHAIN)
+                        .any { it is IllegalStateException && it.message?.contains(BLOCKING_READ_TIMEOUT) == true }
+                val detail =
+                    if (budgetExceeded) {
+                        "did not finish within its ${properties.sweepTimeoutSeconds}s budget; consider raising " +
+                            "portal.validation.sweep-timeout-seconds or lowering portal.validation.concurrency"
+                    } else {
+                        "aborted: a request exceeded the ${properties.requestTimeoutSeconds}s " +
+                            "per-request timeout (most likely the component-list fetch); consider " +
+                            "raising portal.validation.request-timeout-seconds"
+                    }
+                log.warn(
+                    "Validation sweep {} (components-registry at {}) — downstream slow or under load, " +
+                        "or add components-registry capacity",
+                    detail,
+                    properties.registryBaseUrl,
+                    e,
+                )
+                retainStale(SWEEP_TIMED_OUT)
+            }
+
+            FailureKind.UNREACHABLE -> {
+                log.warn(
+                    "Validation sweep failed reaching components-registry at {} — set " +
+                        "portal.validation.registry-base-url (env COMPONENTS_REGISTRY_SERVICE_URL) " +
+                        "to a reachable https URL",
+                    properties.registryBaseUrl,
+                    e,
+                )
+                retainStale("$REGISTRY_LABEL unreachable: ${shortReason(e)}")
+            }
+
+            FailureKind.OTHER -> {
+                log.warn("Validation sweep failed, retaining previous report: {}", e.toString())
+                retainStale(shortReason(e))
+            }
+        }
+    }
+
+    /** SYS-061: report a successful sweep (every run). finishedAt = report generatedAt. */
+    private fun emitSweepCompleted(
+        startedAt: Instant,
+        fresh: ValidationReport,
+    ) {
+        lastSweepFailed = false
+        val problems = fresh.components.sumOf { it.problems.size }
+        serviceEventClient?.reportValidationSweep(
+            status = "COMPLETED",
+            startedAt = startedAt,
+            finishedAt = fresh.generatedAt ?: Instant.now(),
+            summary = "Validation sweep completed: ${fresh.components.size} component(s), $problems problem(s)",
+            detail = mapOf("components" to fresh.components.size, "problems" to problems),
+        )
+    }
+
+    /** SYS-061: report a FAILED sweep only on the success→fail transition (coalesce). */
+    private fun emitSweepFailedOnce(startedAt: Instant) {
+        if (lastSweepFailed) return
+        lastSweepFailed = true
+        serviceEventClient?.reportValidationSweep(
+            status = "FAILED",
+            startedAt = startedAt,
+            finishedAt = report.lastAttemptAt ?: Instant.now(),
+            summary = "Validation sweep failed",
+            detail = mapOf("error" to (report.refreshError ?: "unknown")),
+        )
     }
 
     /**

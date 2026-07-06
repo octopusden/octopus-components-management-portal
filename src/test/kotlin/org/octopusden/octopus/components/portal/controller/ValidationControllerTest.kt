@@ -192,7 +192,7 @@ class ValidationControllerTest {
             val registry = RegistryClient(properties)
             val rmClient = ReleaseManagementClient(properties)
             val validator = UnregisteredReleasedVersionsValidator(registry)
-            val service = ValidationService(registry, rmClient, listOf(validator), properties)
+            val service = ValidationService(registry, rmClient, listOf(validator), properties, null)
 
             // Phase 1: a good sweep → populates the cache (clean / problem / broken).
             service.refresh()

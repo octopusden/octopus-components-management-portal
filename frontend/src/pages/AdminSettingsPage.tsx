@@ -9,6 +9,7 @@ import { ComponentDefaultsForm } from '../components/admin/ComponentDefaultsForm
 import { MigrationHistoryPanel } from '../components/admin/MigrationHistoryPanel'
 import { MigrationPanel } from '../components/admin/MigrationPanel'
 import { TeamCityResyncPanel } from '../components/admin/TeamCityResyncPanel'
+import { ServiceEventsPanel } from '../components/admin/ServiceEventsPanel'
 import { AdminModeArmBar } from '../components/admin/AdminModeArmBar'
 import { RuntimeSection } from '../components/RuntimeSection'
 import { useReloadConfig } from '../hooks/useAdminConfig'
@@ -80,6 +81,7 @@ export function AdminSettingsPage() {
             <TabsTrigger value="field-config">Field Configuration</TabsTrigger>
             <TabsTrigger value="component-defaults">Component Defaults</TabsTrigger>
             <TabsTrigger value="migration">Migration</TabsTrigger>
+            <TabsTrigger value="events">Events</TabsTrigger>
             {showSystem && <TabsTrigger value="system">System</TabsTrigger>}
           </TabsList>
 
@@ -144,6 +146,19 @@ export function AdminSettingsPage() {
                 <div className="pt-2">
                   <TeamCityResyncPanel />
                 </div>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="events" className="mt-4">
+            <div className="rounded-lg border p-6 space-y-2">
+              <h2 className="text-lg font-semibold">Service Events</h2>
+              <p className="text-sm text-muted-foreground">
+                Operational history across both services — redeploys, data migrations,
+                TeamCity resync, and the scheduled component-validation sweep. Read-only.
+              </p>
+              <div className="pt-2">
+                <ServiceEventsPanel />
               </div>
             </div>
           </TabsContent>

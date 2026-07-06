@@ -2,6 +2,7 @@ package org.octopusden.octopus.components.portal
 
 import org.octopusden.octopus.components.portal.configuration.PortalComponentProperties
 import org.octopusden.octopus.components.portal.configuration.PortalLinksProperties
+import org.octopusden.octopus.components.portal.serviceevent.ServiceEventReportingProperties
 import org.octopusden.octopus.components.portal.validation.ValidationProperties
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -14,6 +15,7 @@ import org.springframework.scheduling.annotation.EnableScheduling
     PortalLinksProperties::class,
     PortalComponentProperties::class,
     ValidationProperties::class,
+    ServiceEventReportingProperties::class,
 )
 open class ComponentsManagementPortalApplication
 
