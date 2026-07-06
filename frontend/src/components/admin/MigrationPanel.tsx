@@ -123,7 +123,12 @@ export function MigrationPanel() {
     await startMigration.mutateAsync().catch(() => undefined)
   }
 
-  const buttonDisabled = !adminMode || isRunning || startMigration.isPending || historyRunning
+  // Migration is complete when no git-sourced components remain (git === 0). Re-running is
+  // then forbidden (the backend also returns 409 `migration-complete`); disable the button so
+  // the operator can't kick a pointless re-run. `undefined` while status loads → not disabled.
+  const migrationComplete = status.data?.git === 0
+  const buttonDisabled =
+    !adminMode || isRunning || startMigration.isPending || historyRunning || migrationComplete
 
   return (
     <div className="space-y-4">
@@ -152,6 +157,11 @@ export function MigrationPanel() {
         {adminMode && historyRunning && !isRunning && (
           <span className="text-xs text-muted-foreground">
             History migration is running — wait for it to finish.
+          </span>
+        )}
+        {adminMode && migrationComplete && !isRunning && !historyRunning && (
+          <span className="text-xs text-muted-foreground">
+            Migration complete — nothing left in Git to migrate.
           </span>
         )}
         {jobData?.finishedAt && !isRunning && (
