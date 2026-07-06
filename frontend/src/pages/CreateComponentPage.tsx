@@ -50,6 +50,7 @@ import {
   flagsForProfile,
   profileFromSource,
   PROFILE_META,
+  DEFAULT_SCRATCH_PROFILE,
   type ComponentProfile,
   type ComponentDefaults,
 } from '../lib/component/createFormModel'
@@ -58,9 +59,6 @@ import { OWNERSHIP_MODES } from '../lib/artifactOwnership'
 import { validateJiraKey, normalizeJiraKey, normalizeChangeComment } from '../lib/editor/jiraKey'
 
 type StepId = 'profile' | 'general' | 'build' | 'vcs' | 'jira' | 'distribution' | 'escrow' | 'review'
-
-// Scratch pre-selects the most common profile so the first step is ready to go.
-const DEFAULT_SCRATCH_PROFILE: ComponentProfile = 'regular-external'
 
 const STEP_LABELS: Record<StepId, string> = {
   profile: 'Profile',
@@ -1688,6 +1686,7 @@ function SummaryDiff({
   push('Jira', [
     ['Jira Project Key', values.jiraProjectKey],
     ['Version Prefix', values.versionPrefix],
+    ['Full Version Format', values.versionFormat],
     ['Line Version Format', values.lineVersionFormat],
     ['Minor Version Format', values.minorSeparate ? values.minorVersionFormat : values.lineVersionFormat],
     ['Release Version Format', values.releaseVersionFormat],

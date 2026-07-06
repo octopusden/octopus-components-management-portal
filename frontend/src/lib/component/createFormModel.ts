@@ -24,6 +24,13 @@ export const BASE_KEY_REGEX = /^[a-z][a-z0-9-]*$/
 // the Component-Key naming rule (see brief "Choose component profile").
 export type ComponentProfile = 'solution' | 'dmp-bundle' | 'regular-external' | 'regular-internal'
 
+// Scratch pre-selects the most common profile ("Regular external component").
+// Its flags are the source of truth for a from-scratch component's distribution
+// classification — so `initialValues` seeds the RHF flags from this profile, not
+// from `component-defaults`, keeping the pre-selected profile and the payload in
+// lockstep (the wizard only overlays `solution` at submit).
+export const DEFAULT_SCRATCH_PROFILE: ComponentProfile = 'regular-external'
+
 export interface ProfileMeta {
   id: ComponentProfile
   label: string
@@ -330,6 +337,8 @@ export const SCRATCH_DEFAULTS: CreateFormValues = {
   clientCode: '',
   jiraProjectKey: '',
   versionPrefix: '',
+  // Sourced from component-defaults (service-config), not hardcoded here — empty
+  // until that default is present. The REQUIRED guard then blocks a blank submit.
   versionFormat: '',
   minorVersionFormat: '',
   releaseVersionFormat: '',
@@ -401,6 +410,9 @@ export interface ComponentDefaults {
   componentDisplayName?: string
   copyright?: string
   jira?: { projectKey?: string; componentVersionFormat?: ComponentVersionFormatDefaults }
+  // Part of the component-defaults contract, but the create wizard no longer
+  // seeds the distribution flags from here — a scratch component's
+  // external/explicit are DERIVED FROM THE PRE-SELECTED PROFILE (see initialValues).
   distribution?: { explicit?: boolean; external?: boolean }
   vcs?: VcsDefaults
   // Only `generation` is consumed by the create wizard (the sole escrow field
@@ -437,10 +449,14 @@ export function initialValues(
     blankToUndefined(baseVcs?.branch) ?? blankToUndefined(vcsDefaults.branch) ?? FALLBACK_VCS_BRANCH
   if (!source) {
     const defaultBuildSystem = blankToUndefined(defaults.buildSystem)
-    const distributionExplicit =
-      defaults.distribution?.explicit ?? SCRATCH_DEFAULTS.distributionExplicit
-    const distributionExternal =
-      defaults.distribution?.external ?? SCRATCH_DEFAULTS.distributionExternal
+    // Distribution classification is DERIVED FROM THE PRE-SELECTED PROFILE (the
+    // wizard's source of truth), not from component-defaults — otherwise the
+    // pre-selected profile and the seeded flags could disagree and the payload
+    // would carry a classification that contradicts the shown profile.
+    const { distributionExplicit, distributionExternal } = flagsForProfile(
+      DEFAULT_SCRATCH_PROFILE,
+      SCRATCH_DEFAULTS.distributionExplicit,
+    )
     return {
       ...SCRATCH_DEFAULTS,
       buildSystem:

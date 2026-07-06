@@ -78,3 +78,31 @@ describe('initialValues — escrow generation', () => {
     expect(initialValues(source, {}).escrowGeneration).toBe('')
   })
 })
+
+describe('initialValues — Full Version Format (sourced from defaults, no hardcode)', () => {
+  it('scratch: seeds versionFormat from component-defaults, empty when absent', () => {
+    expect(initialValues(null, {}).versionFormat).toBe('')
+    const defaults: ComponentDefaults = {
+      jira: { componentVersionFormat: { versionFormat: '$versionPrefix-$baseVersionFormat' } },
+    }
+    expect(initialValues(null, defaults).versionFormat).toBe('$versionPrefix-$baseVersionFormat')
+  })
+
+  it('clone: seeds versionFormat from the source base-row jira.versionFormat', () => {
+    const source = makeSource({
+      configurations: [makeBaseRow({ jira: { projectKey: 'A', versionFormat: 'SRC-FMT' } })],
+    })
+    expect(initialValues(source, {}).versionFormat).toBe('SRC-FMT')
+  })
+})
+
+describe('initialValues — scratch distribution flags follow the pre-selected profile', () => {
+  it('derives External/Explicit from the default profile, NOT from defaults.distribution', () => {
+    // Even if component-defaults say internal/explicit, a scratch component starts
+    // as the pre-selected Regular external profile → external=true, explicit=false.
+    const defaults: ComponentDefaults = { distribution: { external: false, explicit: true } }
+    const v = initialValues(null, defaults)
+    expect(v.distributionExternal).toBe(true)
+    expect(v.distributionExplicit).toBe(false)
+  })
+})

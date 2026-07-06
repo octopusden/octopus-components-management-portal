@@ -284,6 +284,15 @@ describe('CreateComponentPage — wizard UI polish', () => {
     )
   })
 
+  it('lists the Full Version Format on the Review summary', async () => {
+    renderWizard()
+    await walkToDistribution()
+    await clickNext() // Escrow
+    await clickNext() // Review
+    expect(screen.getByText('Full Version Format')).toBeDefined()
+    expect(screen.getByText(/\$versionPrefix-\$baseVersionFormat/)).toBeDefined()
+  })
+
   it('shows the Version Preview on the Jira step', async () => {
     renderWizard()
     await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
