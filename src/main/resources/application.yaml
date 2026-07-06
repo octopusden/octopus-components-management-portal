@@ -115,6 +115,11 @@ portal:
     # list is ~1.3 MB and grows; WebClient's default 256 KB limit overflows it
     # (DataBufferLimitException). 16 MiB (16777216) gives generous headroom.
     max-response-bytes: ${PORTAL_VALIDATION_MAX_RESPONSE_BYTES:16777216}
+  # SYS-061: portal.service-events.token (SECRET) gates reporting of portal redeploys +
+  # validation-sweep runs into the CRS service_event journal (Admin "Events" tab). It is
+  # intentionally NOT declared here — supplied by key from Vault (portal.service-events.token,
+  # per-env), like every other secret. Blank/unset ⇒ reporting off (and CRS would 403 anyway).
+  # Targets portal.validation.registry-base-url. No separate enable flag — the token is the switch.
 
 management:
   endpoints:

@@ -192,6 +192,20 @@ describe('MigrationPanel — status + Admin-mode gate', () => {
     expect(screen.getByText(/Arm Admin mode above/i)).toBeDefined()
   })
 
+  it('disables Run migration when migration is complete (git === 0) even with Admin mode armed', () => {
+    // Nothing left in Git → re-running is forbidden (the backend also 409s). The button
+    // must stay disabled and a hint explains why.
+    mockUseMigrationStatus.mockReturnValue(statusReturn({ git: 0, db: 15, total: 15 }))
+    renderPanel()
+
+    act(() => {
+      useAdminMode.setState({ enabled: true })
+    })
+
+    expect(screen.getByRole('button', { name: /run migration/i })).toBeDisabled()
+    expect(screen.getByText(/Migration complete — nothing left in Git/i)).toBeDefined()
+  })
+
   it('enables Run migration once adminMode flips to true and no job is RUNNING', () => {
     renderPanel()
     expect(screen.getByRole('button', { name: /run migration/i })).toBeDisabled()

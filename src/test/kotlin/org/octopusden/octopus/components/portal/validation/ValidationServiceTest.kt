@@ -75,6 +75,7 @@ class ValidationServiceTest {
         sweepTimeoutSeconds: Long = 30,
         refreshIntervalMs: Long = 14_400_000,
         retryIntervalMs: Long = 600_000,
+        serviceEventClient: org.octopusden.octopus.components.portal.serviceevent.ServiceEventClient? = null,
     ): ValidationService {
         val properties =
             ValidationProperties().apply {
@@ -90,7 +91,29 @@ class ValidationServiceTest {
         val registry = RegistryClient(properties)
         val rmClient = ReleaseManagementClient(properties)
         val validator = UnregisteredReleasedVersionsValidator(registry)
-        return ValidationService(registry, rmClient, listOf(validator), properties)
+        return ValidationService(registry, rmClient, listOf(validator), properties, serviceEventClient)
+    }
+
+    /** Capturing double — records emitted sweep statuses. ServiceEventClient is explicitly `open`
+     * (this app does not apply the kotlin-spring all-open plugin to @Component), so it is subclassable here. */
+    private class CapturingServiceEventClient :
+        org.octopusden.octopus.components.portal.serviceevent.ServiceEventClient(
+            ValidationProperties().apply { registryBaseUrl = "http://unused" },
+            org.octopusden.octopus.components.portal.serviceevent.ServiceEventReportingProperties(),
+        ) {
+        val statuses = mutableListOf<String>()
+
+        override fun reportValidationSweep(
+            status: String,
+            startedAt: java.time.Instant,
+            finishedAt: java.time.Instant,
+            summary: String,
+            detail: Map<String, Any?>,
+        ) {
+            statuses += status
+        }
+
+        override fun reportStartup(version: String?) = Unit
     }
 
     @Test
@@ -136,6 +159,29 @@ class ValidationServiceTest {
         val good = report.components.single { it.component == "good" }
         assertTrue(good.problems.isEmpty())
         assertFalse(good.checkFailed)
+    }
+
+    @Test
+    @DisplayName("SYS-061: a successful sweep reports a COMPLETED service-event")
+    fun `successful sweep emits COMPLETED service event`() {
+        val crs = newServer()
+        crs.createContext("/rest/api/3/components") { exchange ->
+            respondJson(exchange, 200, """[{"component":{"id":"good"},"variants":{}}]""")
+        }
+        crs.createContext("/rest/api/2/components") { exchange ->
+            respondJson(exchange, 200, """{"versions":{"1.0.1":{}}}""")
+        }
+        val rm = newServer()
+        rm.createContext("/rest/api/1/builds/component") { exchange ->
+            respondJson(exchange, 200, """[{"version":"1.0.1","status":"RELEASE"}]""")
+        }
+
+        val client = CapturingServiceEventClient()
+        val svc = service(crs, rm, serviceEventClient = client)
+
+        svc.refresh()
+
+        assertEquals(listOf("COMPLETED"), client.statuses)
     }
 
     @Test

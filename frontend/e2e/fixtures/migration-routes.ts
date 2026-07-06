@@ -45,11 +45,12 @@ export async function mockHappyPathMigration(page: Page, opts?: { jobId?: string
   const jobId = opts?.jobId ?? 'e2e-migration-job-1'
   const total = 936
 
-  // Status counters move git → db as the migration runs. We don't tie
-  // these to the job state precisely — a stable post-run shape keeps
-  // the assertions honest without coupling them to poll timing.
+  // git > 0: there ARE components to migrate, so the Run button is enabled (git==0
+  // would mean "migration complete" and the button is disabled by design). We don't tie
+  // these to the job state precisely — a stable pre-run shape keeps the assertions honest
+  // without coupling them to poll timing.
   await page.route(STATUS_PATH, (route) =>
-    jsonRoute(route, 200, { git: 0, db: total, total }),
+    jsonRoute(route, 200, { git: total, db: 0, total }),
   )
 
   // POST /migrate seeds the job. Returns RUNNING.

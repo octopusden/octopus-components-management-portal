@@ -64,7 +64,7 @@ class ValidationSweepHealthIndicatorTest {
         val registry = RegistryClient(properties)
         val rmClient = ReleaseManagementClient(properties)
         val validator = UnregisteredReleasedVersionsValidator(registry)
-        return ValidationService(registry, rmClient, listOf(validator), properties)
+        return ValidationService(registry, rmClient, listOf(validator), properties, null)
     }
 
     /**

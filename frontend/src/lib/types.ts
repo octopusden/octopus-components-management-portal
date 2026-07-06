@@ -1032,3 +1032,25 @@ export interface DetailedComponentVersion {
   releaseVersion: ComponentRegistryVersion
   hotfixVersion?: ComponentRegistryVersion | null
 }
+
+/**
+ * SYS-060: one operational service-event row from `GET /rest/api/4/admin/service-events`.
+ * Redeploys (STARTUP), migration/history/TC-resync runs, and portal validation sweeps.
+ * Mirrors the CRS `ServiceEventResponse` (camelCase).
+ */
+export interface ServiceEvent {
+  id: number
+  /** STARTUP | MIGRATION_COMPONENTS | MIGRATION_HISTORY | TEAMCITY_RESYNC | VALIDATION_SWEEP */
+  eventType: string
+  /** RUNNING | COMPLETED | FAILED */
+  status: string
+  /** crs | portal */
+  source: string
+  triggeredBy: string | null
+  serviceVersion: string | null
+  correlationId: string | null
+  summary: string | null
+  detail: Record<string, unknown> | null
+  startedAt: string
+  finishedAt: string | null
+}
