@@ -1,15 +1,5 @@
 # Design brief — «Create Component» wizard (multi-step, отдельная страница)
 
-> **Post-approval implementation deltas** (реализовано в коде, брифом не покрыто):
-> - **Escrow** — добавлен отдельный шаг между Distribution и Review с единственным
->   полем `Generation` (BASE `escrow.generation`, gated по field-config). Шаги теперь
->   Profile/General/Build/VCS/Jira/Distribution/**Escrow**/Review.
-> - **Client Code** — показывается на шаге General для external-компонентов (в брифе
->   был помечен editor-only). Остальные metadata-поля по-прежнему только в редакторе.
-> - **Distribution coordinate** — Maven-подполя подписаны `groupId` / `artifactId`
->   (не «Group Pattern/Artifact Pattern»): по данным стенда это литеральные Maven-
->   координаты, без wildcard/comma; тот же нейминг применён в редакторе.
-
 > Постановка для Claude Design. Цель — визуальный дизайн полноэкранного пошагового
 > мастера создания компонента с финальным шагом-«сохранением», на котором
 > показывается сводка/дифф изменений и вводятся Jira task key + commit message
