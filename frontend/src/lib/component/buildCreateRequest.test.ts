@@ -34,6 +34,7 @@ function makeForm(overrides: Partial<CreateFormValues> = {}): CreateFormValues {
       packageName: '',
     },
     ownership: [{ groupId: '', mode: 'ALL', tokens: [] }],
+    escrowGeneration: '',
     ...overrides,
   }
 }
@@ -479,6 +480,90 @@ describe('buildCreateRequest — VCS entry (legacy EscrowConfigValidator rule)',
     expect(vcsBlockApplies('WHISKEY')).toBe(false)
     expect(DEPRECATED_BUILD_SYSTEMS.has('BS2_0')).toBe(true)
     expect(FALLBACK_VCS_BRANCH).toBe('master')
+  })
+})
+
+describe('buildCreateRequest — escrow generation (form-supplied)', () => {
+  it('scratch: a chosen generation lands on baseConfiguration.escrow.generation', () => {
+    const req = buildCreateRequest(makeForm({ escrowGeneration: 'AUTO' }))
+    expect(req.baseConfiguration?.escrow).toEqual({ generation: 'AUTO' })
+  })
+
+  it('scratch: an empty generation creates no escrow object', () => {
+    const req = buildCreateRequest(makeForm({ escrowGeneration: '' }))
+    expect('escrow' in (req.baseConfiguration ?? {})).toBe(false)
+  })
+
+  it('clone: the form generation overrides the source while the rest of the escrow aspect is kept', () => {
+    const src = makeSource({
+      configurations: [
+        makeBaseRow({
+          build: { buildSystem: 'GRADLE' },
+          escrow: { generation: 'MANUAL', reusable: true, diskSpace: '10GB' },
+        }),
+      ],
+    })
+    const req = buildCreateRequest(makeForm({ name: 'svc-clone', escrowGeneration: 'AUTO' }), src)
+    expect(req.baseConfiguration?.escrow).toEqual({ generation: 'AUTO', reusable: true, diskSpace: '10GB' })
+  })
+
+  it('clone: an empty generation keeps the source escrow (including its generation) unchanged', () => {
+    const src = makeSource({
+      configurations: [
+        makeBaseRow({ build: { buildSystem: 'GRADLE' }, escrow: { generation: 'MANUAL', reusable: true } }),
+      ],
+    })
+    const req = buildCreateRequest(makeForm({ name: 'svc-clone', escrowGeneration: '' }), src)
+    expect(req.baseConfiguration?.escrow).toEqual({ generation: 'MANUAL', reusable: true })
+  })
+
+  it('does NOT send the form generation when the escrow.generation field is not editable (source escrow preserved)', () => {
+    const src = makeSource({
+      configurations: [
+        makeBaseRow({ build: { buildSystem: 'GRADLE' }, escrow: { generation: 'MANUAL', reusable: true } }),
+      ],
+    })
+    const req = buildCreateRequest(
+      makeForm({ name: 'svc-clone', escrowGeneration: 'AUTO' }),
+      src,
+      () => true,
+      false, // escrow.generation not editable
+    )
+    expect(req.baseConfiguration?.escrow).toEqual({ generation: 'MANUAL', reusable: true })
+  })
+
+  it('scratch: a chosen generation is dropped when the escrow.generation field is not editable', () => {
+    const req = buildCreateRequest(makeForm({ escrowGeneration: 'AUTO' }), undefined, () => true, false)
+    expect('escrow' in (req.baseConfiguration ?? {})).toBe(false)
+  })
+
+  it('clone: a HIDDEN generation is stripped from the copied source escrow (other fields kept)', () => {
+    const src = makeSource({
+      configurations: [
+        makeBaseRow({ build: { buildSystem: 'GRADLE' }, escrow: { generation: 'MANUAL', reusable: true } }),
+      ],
+    })
+    const req = buildCreateRequest(
+      makeForm({ name: 'svc-clone', escrowGeneration: 'AUTO' }),
+      src,
+      () => true,
+      false, // not editable
+      true, // hidden
+    )
+    expect(req.baseConfiguration?.escrow).toEqual({ reusable: true })
+  })
+
+  it('clone: a HIDDEN generation with no other escrow fields leaves no escrow object', () => {
+    const src = makeSource({
+      configurations: [makeBaseRow({ build: { buildSystem: 'GRADLE' }, escrow: { generation: 'MANUAL' } })],
+    })
+    const req = buildCreateRequest(makeForm({ name: 'svc-clone' }), src, () => true, false, true)
+    expect('escrow' in (req.baseConfiguration ?? {})).toBe(false)
+  })
+
+  it('trims the chosen generation before overlaying it', () => {
+    const req = buildCreateRequest(makeForm({ escrowGeneration: '  AUTO  ' }))
+    expect(req.baseConfiguration?.escrow).toEqual({ generation: 'AUTO' })
   })
 })
 

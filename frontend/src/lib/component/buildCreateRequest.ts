@@ -4,6 +4,7 @@ import type {
   BaseConfigurationRequest,
   ComponentCreateRequest,
   ComponentDetail,
+  EscrowAspect,
   JiraAspect,
 } from '../types'
 import { selectBaseRow } from '../api/baseRow'
@@ -109,7 +110,13 @@ export interface CreateFormValues {
     mode: ArtifactIdMode
     tokens: string[]
   }>
-
+  // BASE escrow aspect `generation` (the only escrow field exposed at create).
+  // Free-form string carrying an enum value or '' (never blocks submit). Scratch
+  // seeds it from componentDefaults.escrow.generation; clone seeds it from the
+  // source BASE-row escrow.generation. On submit it overlays `generation` on the
+  // escrow aspect (form wins) while the rest of the escrow aspect is copied from
+  // the source as before — see buildCreateRequest.
+  escrowGeneration: string
 }
 
 // Builds the POST /components payload for both create modes.
@@ -122,10 +129,15 @@ export interface CreateFormValues {
 //     external the source value is preserved (form value ignored);
 //   - distribution coordinate comes from the FORM ONLY, never from the source
 //     (unique per component) — and only when explicit+external;
-//   - copied from source: productType, system, solution,
+//   - escrow.generation comes from the FORM (form WINS) when that field is
+//     editable and a value was chosen; the rest of the escrow aspect is copied
+//     from the source BASE row. Readonly falls back to the source escrow
+//     generation (form value ignored); HIDDEN strips generation from the copied
+//     escrow entirely (not part of a new component);
+//   - copied from source: productType, systems, solution,
 //     parentComponentName, labels, docs, securityGroups, releasesInDefaultBranch,
 //     jiraHotfixVersionFormat, vcsExternalRegistry, and from the BASE row the
-//     escrow aspect, jira aspect (source projectKey stripped — the form supplies jiraProjectKey
+//     escrow aspect (generation overlaid from the form — see above), jira aspect (source projectKey stripped — the form supplies jiraProjectKey
 //     and versionPrefix, which win), requiredTools, and the build aspect (merged with the form's
 //     buildSystem);
 //   - required-but-not-copied collections: artifactIds: [], teamcityProjects: [];
@@ -215,6 +227,15 @@ export function buildCreateRequest(
   // Returns true if a `component.<field>` is editable (i.e. should be sent).
   // Defaults to "everything editable" so existing call-sites/tests are unchanged.
   isFieldEditable: (field: string) => boolean = () => true,
+  // Editability of the nested `escrow.generation` field. It is NOT a top-level
+  // `component.<field>`, so it is gated separately from `isFieldEditable` (whose
+  // callers prefix `component.`). When false the form generation is ignored and
+  // the source escrow (if any) is preserved unchanged (readonly case).
+  escrowGenerationEditable = true,
+  // Whether `escrow.generation` is field-config HIDDEN. Hidden means the field is
+  // not part of a new component's escrow, so its value is stripped even from a
+  // cloned source escrow — keeping the payload consistent with the hidden UI.
+  escrowGenerationHidden = false,
 ): ComponentCreateRequest {
   const gated = form.distributionExplicit && form.distributionExternal
   const baseRow = source ? selectBaseRow(source) : undefined
@@ -267,7 +288,24 @@ export function buildCreateRequest(
   const baseConfiguration: BaseConfigurationRequest = {
     build: { ...(baseRow?.build ?? {}), buildSystem: form.buildSystem },
   }
-  if (baseRow?.escrow) baseConfiguration.escrow = { ...baseRow.escrow }
+  // Escrow aspect: copied from the source BASE row (clone), with the form's
+  // `generation` overlaid when the escrow.generation field is editable and a
+  // value was chosen (form WINS). The rest of the escrow aspect is preserved as
+  // copied. Generation handling by field-config:
+  //  - editable → the trimmed form value overlays the copied escrow;
+  //  - readonly (not editable, not hidden) → the source escrow generation is kept;
+  //  - hidden → generation is stripped even from the copied source escrow, so the
+  //    payload matches the hidden UI (the rest of the escrow aspect is still copied).
+  // An empty escrow (no fields left) is not attached.
+  const escrowGeneration = escrowGenerationEditable ? form.escrowGeneration.trim() : ''
+  if (baseRow?.escrow || escrowGeneration) {
+    const escrow: EscrowAspect = {
+      ...(baseRow?.escrow ?? {}),
+      ...(escrowGeneration ? { generation: escrowGeneration } : {}),
+    }
+    if (escrowGenerationHidden) delete escrow.generation
+    if (Object.keys(escrow).length > 0) baseConfiguration.escrow = escrow
+  }
   // Jira aspect: start from the source's copied aspect (projectKey stripped), then overlay the
   // form's jiraProjectKey + versionPrefix (form wins). Only attach when something is present.
   const jira: JiraAspect = { ...(copyJiraAspect(baseRow?.jira) ?? {}) }
