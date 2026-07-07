@@ -1,16 +1,25 @@
 package org.octopusden.octopus.components.portal.controller
 
+import org.eclipse.jgit.api.Git
+import org.eclipse.jgit.lib.PersonIdent
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import org.octopusden.octopus.components.portal.configuration.OnboardingVideoProperties
 import org.octopusden.octopus.components.portal.configuration.TestSecurityConfig
+import org.octopusden.octopus.components.portal.onboarding.OnboardingVideoService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
 import org.springframework.security.test.context.support.WithMockUser
+import org.springframework.test.annotation.DirtiesContext
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.reactive.server.WebTestClient
+import java.nio.file.Files
+import java.nio.file.Path
 
 // /portal/links is authenticated — it falls through to the default
 // anyExchange().authenticated() rule in SecurityConfig and is NOT on the
@@ -176,6 +185,78 @@ class PortalConfigControllerTest {
                 .expectBody()
                 .jsonPath("$.solutionKeyPatterns").isArray
                 .jsonPath("$.solutionKeyPatterns.length()").isEqualTo(0)
+        }
+    }
+
+    // Default test config leaves portal.onboarding-video.vcs.root blank → the feature is
+    // off, so /portal/config reports it disabled with no poster.
+    @Nested
+    @SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = ["management.server.port=0"],
+    )
+    @AutoConfigureWebTestClient
+    @ActiveProfiles("test")
+    @Import(TestSecurityConfig::class, PortalInfoControllerTest.TestBuildPropertiesConfig::class)
+    @WithMockUser
+    inner class OnboardingVideoDisabled {
+        @Autowired
+        lateinit var client: WebTestClient
+
+        @Test
+        fun `blank root reports disabled and no poster`() {
+            client.get().uri("/portal/config")
+                .exchange()
+                .expectStatus().isOk
+                .expectBody()
+                .jsonPath("$.onboardingVideoStatus").isEqualTo("disabled")
+                .jsonPath("$.onboardingVideoHasPoster").isEqualTo(false)
+        }
+    }
+
+    // After the service loads a fixture repo, /portal/config flips to ready and reports the
+    // poster presence — the tri-/quad-state the SPA polls on.
+    // Mutates the singleton service to READY → isolated context (own cache key) +
+    // @DirtiesContext, so the DISABLED/links/solution contexts never see a loaded bean.
+    @Nested
+    @SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = ["management.server.port=0", "test.context=onboarding-video-ready-config"],
+    )
+    @AutoConfigureWebTestClient
+    @ActiveProfiles("test")
+    @Import(TestSecurityConfig::class, PortalInfoControllerTest.TestBuildPropertiesConfig::class)
+    @WithMockUser
+    @DirtiesContext
+    inner class OnboardingVideoReady {
+        @Autowired lateinit var client: WebTestClient
+        @Autowired lateinit var service: OnboardingVideoService
+        @Autowired lateinit var props: OnboardingVideoProperties
+
+        @BeforeEach
+        fun loadFixture(@TempDir tmp: Path) {
+            val repo = Files.createDirectory(tmp.resolve("repo"))
+            Git.init().setDirectory(repo.toFile()).call().use { git ->
+                Files.write(repo.resolve("intro.mp4"), byteArrayOf(1, 2, 3))
+                Files.write(repo.resolve("poster.jpg"), byteArrayOf(4, 5))
+                git.add().addFilepattern(".").call()
+                val who = PersonIdent("test", "test@example.com")
+                git.commit().setMessage("fixture").setAuthor(who).setCommitter(who).call()
+            }
+            props.workDir = Files.createDirectory(tmp.resolve("work")).toString()
+            props.vcs.root = repo.toUri().toString()
+            props.posterPath = "poster.jpg"
+            check(service.tryLoadSafely())
+        }
+
+        @Test
+        fun `loaded video reports ready with poster`() {
+            client.get().uri("/portal/config")
+                .exchange()
+                .expectStatus().isOk
+                .expectBody()
+                .jsonPath("$.onboardingVideoStatus").isEqualTo("ready")
+                .jsonPath("$.onboardingVideoHasPoster").isEqualTo(true)
         }
     }
 }

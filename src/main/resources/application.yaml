@@ -74,6 +74,24 @@ portal:
     git-base-url: ${PORTAL_LINKS_GIT_BASE_URL:}
     tc-base-url: ${PORTAL_LINKS_TC_BASE_URL:}
     dms-base-url: ${PORTAL_LINKS_DMS_BASE_URL:}
+  # Onboarding presentation video. The media lives in a small dedicated git repo
+  # (Bitbucket), NOT in this jar; the portal clones it into memory at startup and
+  # serves it same-origin (see OnboardingVideoService). Same config shape as CRS's
+  # `components-registry.vcs.*`. Blank `vcs.root` → feature OFF (SPA hides the
+  # button/coachmark) — the default, so local/dev/PR-CI never touch the network.
+  # Per-env: set vcs.root/branch/path in service-config; vcs.username/password are
+  # secrets (Vault → env). See docs/onboarding for the runtime-config contour.
+  onboarding-video:
+    enabled: ${PORTAL_ONBOARDING_VIDEO_ENABLED:true}
+    vcs:
+      root: ${PORTAL_ONBOARDING_VIDEO_VCS_ROOT:}
+      username: ${PORTAL_ONBOARDING_VIDEO_VCS_USERNAME:}
+      password: ${PORTAL_ONBOARDING_VIDEO_VCS_PASSWORD:}
+      branch: ${PORTAL_ONBOARDING_VIDEO_VCS_BRANCH:}
+    work-dir: ${PORTAL_ONBOARDING_VIDEO_WORK_DIR:/tmp/portal-onboarding-video}
+    path: ${PORTAL_ONBOARDING_VIDEO_PATH:intro.mp4}
+    poster-path: ${PORTAL_ONBOARDING_VIDEO_POSTER_PATH:}
+    retry-interval-ms: ${PORTAL_ONBOARDING_VIDEO_RETRY_INTERVAL_MS:1800000}
   # Component-editor knobs read by the SPA via /portal/config.
   component:
     # Substrings that mark a component key as a "solution candidate": only those

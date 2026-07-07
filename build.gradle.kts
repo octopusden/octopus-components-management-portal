@@ -93,6 +93,11 @@ dependencies {
 
     implementation("io.micrometer:micrometer-registry-prometheus")
 
+    // JGit: clones the small onboarding-video media repo into memory at startup
+    // (see OnboardingVideoService), mirroring CRS's GitVcsServiceImpl. Not managed
+    // by the Spring BOM, so the version is pinned explicitly in gradle.properties.
+    implementation("org.eclipse.jgit:org.eclipse.jgit:${project.property("jgit.version")}")
+
     testImplementation(kotlin("test"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     // Boot 4 split WebTestClient autoconfig into its own module; @AutoConfigureWebTestClient

@@ -93,3 +93,30 @@ export function usePortalConfig() {
     ...QUERY_OPTIONS,
   })
 }
+
+// Onboarding-video availability, on its OWN query key with its OWN cache policy —
+// deliberately NOT the shared usePortalConfig (staleTime: Infinity), which would
+// cache a first-load `loading`/`disabled` forever and never see the video go `ready`.
+//
+// The backend clones the media repo asynchronously at startup, so on first paint the
+// status can be `loading`. We poll ONLY while `loading` and stop on any terminal state
+// (`ready`/`disabled`/`failed`) — so a genuinely-off portal never polls, and a broken
+// media repo (backend → `failed`) doesn't turn every browser into a backend retry loop.
+// Backend-side recovery from `failed` is a slow scheduled re-clone; a tab picks that up
+// on the next natural refetch (mount/focus), which is an accepted trade-off.
+// Poll ONLY while the backend is still cloning (`loading`); stop on every terminal
+// state. Exported so the polling decision is unit-testable without a live query.
+export const ONBOARDING_VIDEO_POLL_MS = 4000
+export function onboardingVideoRefetchInterval(status: PortalConfig['onboardingVideoStatus']): number | false {
+  return status === 'loading' ? ONBOARDING_VIDEO_POLL_MS : false
+}
+
+export function useOnboardingVideoStatus() {
+  return useQuery<PortalConfig>({
+    queryKey: ['onboarding-video-status'],
+    queryFn: () => fetchInfo<PortalConfig>(`${import.meta.env.BASE_URL}portal/config`),
+    staleTime: 0,
+    retry: false,
+    refetchInterval: (query) => onboardingVideoRefetchInterval(query.state.data?.onboardingVideoStatus),
+  })
+}

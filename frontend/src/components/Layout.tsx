@@ -6,6 +6,7 @@ import { usePortalInfo } from '@/hooks/useInfo'
 import { hasPermission, logout, PERMISSIONS } from '@/lib/auth'
 import { AppFooter } from './AppFooter'
 import { EmployeeIntegrationAlert } from './EmployeeIntegrationAlert'
+import { OnboardingVideoButton } from './OnboardingVideoButton'
 import { Badge } from './ui/badge'
 import { StatusBanner } from './ui/status-banner'
 import { useAdminMode } from '@/lib/adminModeStore'
@@ -105,6 +106,7 @@ export function Layout({ children }: LayoutProps) {
             })}
           </nav>
           <div className="ml-auto flex items-center gap-3 text-sm">
+            <OnboardingVideoButton />
             {/* ADMIN badge: double-gate — adminMode Zustand state AND real IMPORT_DATA
                 permission. Without the permission check, any user could set adminMode=true
                 in localStorage and see the badge without having admin rights. */}
