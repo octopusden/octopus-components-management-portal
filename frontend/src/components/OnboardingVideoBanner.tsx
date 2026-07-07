@@ -1,26 +1,28 @@
+import { useState } from 'react'
 import { PlayCircle, X } from 'lucide-react'
 import { Button } from './ui/button'
 import { useOnboardingVideoStatus } from '@/hooks/useInfo'
 import { useOnboardingVideo } from '@/lib/onboardingVideoStore'
 import { useOnboardingSeen } from '@/lib/onboardingSeen'
 
+const POSTER_URL = `${import.meta.env.BASE_URL}portal/media/onboarding-video/poster`
+
 /**
- * First-login nudge for the onboarding video: a page-wide dismissible strip under the
- * header (not a floating coachmark, so it neither collides with the command-palette
- * coachmark nor gets lost in the corner). Shown only when the video is `ready` AND the
- * per-user seen-state still wants it (pending / snoozed-below-cap). Actions mirror the
- * previous coachmark: Watch (primary, marks done) / Later (snooze, re-shows up to the cap)
- * / Don't show again (terminal) / × (= Later). The permanent re-watch path is the header
- * button (OnboardingVideoButton), which stays regardless.
+ * First-login onboarding nudge: a floating card (bottom-right) whose hero is the video's
+ * poster frame with a Play overlay — clicking it opens the player. Dismissible via Later
+ * (snooze, re-shows up to the cap next session), Don't-show-again (terminal), or × (= Later).
+ * Session dismissal lives in the store so it survives navigation (Layout/AppShell remounts);
+ * the permanent re-watch path is the header button.
  */
 export function OnboardingVideoBanner() {
   const { data } = useOnboardingVideoStatus()
   const ready = data?.onboardingVideoStatus === 'ready'
+  const hasPoster = data?.onboardingVideoHasPoster === true
   const openVideo = useOnboardingVideo((s) => s.openVideo)
-  // Session-scoped dismissal in the store (survives navigation — Layout remounts per page).
   const bannerDismissed = useOnboardingVideo((s) => s.bannerDismissed)
   const dismissBanner = useOnboardingVideo((s) => s.dismissBanner)
   const { shouldShow, markDone, snoozeLater, dismissForever } = useOnboardingSeen()
+  const [posterFailed, setPosterFailed] = useState(false)
 
   if (!ready || !shouldShow || bannerDismissed) return null
 
@@ -38,20 +40,50 @@ export function OnboardingVideoBanner() {
     dismissForever()
   }
 
+  const showPoster = hasPoster && !posterFailed
+
   return (
     <div
       role="status"
       aria-label="Onboarding video"
       data-testid="onboarding-video-banner"
-      className="border-b border-border bg-gradient-to-r from-primary/10 via-primary/5 to-transparent animate-in fade-in slide-in-from-top-1 motion-reduce:animate-none"
+      className="fixed bottom-4 right-4 z-50 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-border bg-card shadow-2xl animate-in fade-in slide-in-from-bottom-2 motion-reduce:animate-none"
     >
-      <div className="max-w-screen-xl mx-auto px-6 py-2.5 flex items-center gap-3">
-        <PlayCircle className="h-5 w-5 shrink-0 text-primary" aria-hidden />
-        <p className="text-sm text-foreground">
-          <span className="font-medium">New to the portal?</span>{' '}
-          <span className="text-muted-foreground">Take a 5-minute video tour of what you can do here.</span>
+      {/* Poster hero with a Play overlay — the whole thing opens the player. */}
+      <button
+        type="button"
+        onClick={watch}
+        aria-label="Play the intro video"
+        className="group relative block aspect-video w-full bg-gradient-to-br from-primary/25 to-primary/5"
+      >
+        {showPoster && (
+          <img
+            src={POSTER_URL}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+            onError={() => setPosterFailed(true)}
+          />
+        )}
+        <span className="absolute inset-0 flex items-center justify-center bg-black/20 transition-colors group-hover:bg-black/30">
+          <PlayCircle className="h-14 w-14 text-white drop-shadow-lg transition-transform group-hover:scale-110" />
+        </span>
+      </button>
+
+      <button
+        type="button"
+        aria-label="Remind me later"
+        onClick={later}
+        className="absolute right-2 top-2 rounded-full bg-black/40 p-1 text-white/90 hover:bg-black/60 hover:text-white"
+      >
+        <X className="h-4 w-4" />
+      </button>
+
+      <div className="p-3.5">
+        <p className="text-sm font-semibold text-foreground">New to the portal?</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Take a 5-minute video tour of what you can do here.
         </p>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="mt-3 flex items-center gap-2">
           <Button size="sm" onClick={watch} className="gap-1.5">
             <PlayCircle className="h-4 w-4" />
             Watch intro
@@ -62,17 +94,9 @@ export function OnboardingVideoBanner() {
           <button
             type="button"
             onClick={never}
-            className="text-[11px] text-muted-foreground/70 underline-offset-2 hover:text-muted-foreground hover:underline"
+            className="ml-auto text-[11px] text-muted-foreground/70 underline-offset-2 hover:text-muted-foreground hover:underline"
           >
             Don&apos;t show again
-          </button>
-          <button
-            type="button"
-            aria-label="Remind me later"
-            onClick={later}
-            className="rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
-          >
-            <X className="h-4 w-4" />
           </button>
         </div>
       </div>

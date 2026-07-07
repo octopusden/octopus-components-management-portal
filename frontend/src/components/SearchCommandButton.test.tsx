@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { SearchCommandButton } from './SearchCommandButton'
@@ -6,9 +6,18 @@ import { useUiOverlay } from '@/lib/uiOverlayStore'
 
 const COACHMARK_KEY = 'crs_kbd_hint'
 
+// The button yields to the onboarding-video banner (one first-run popup at a time).
+// Mock the eligibility hook so these tests control it (and so they don't need a
+// QueryClient/auth context, which the real hook pulls in transitively).
+const mockBannerVisible = vi.fn(() => false)
+vi.mock('@/hooks/useOnboardingBannerVisible', () => ({
+  useOnboardingBannerVisible: () => mockBannerVisible(),
+}))
+
 beforeEach(() => {
   useUiOverlay.setState({ paletteOpen: false, shortcutsOpen: false })
   localStorage.clear()
+  mockBannerVisible.mockReturnValue(false)
 })
 
 describe('SearchCommandButton', () => {
@@ -26,6 +35,12 @@ describe('SearchCommandButton', () => {
 
   it('does not show the coachmark once dismissed (flag set)', () => {
     localStorage.setItem(COACHMARK_KEY, '1')
+    render(<SearchCommandButton />)
+    expect(screen.queryByTestId('kbd-coachmark')).not.toBeInTheDocument()
+  })
+
+  it('suppresses the coachmark while the onboarding-video banner is showing', () => {
+    mockBannerVisible.mockReturnValue(true)
     render(<SearchCommandButton />)
     expect(screen.queryByTestId('kbd-coachmark')).not.toBeInTheDocument()
   })

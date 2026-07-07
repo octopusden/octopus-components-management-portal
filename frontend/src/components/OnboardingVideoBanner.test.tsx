@@ -33,6 +33,22 @@ describe('OnboardingVideoBanner', () => {
     expect(screen.getByTestId('onboarding-video-banner')).toBeInTheDocument()
   })
 
+  it('renders the poster image when the backend has one', () => {
+    mockStatus.mockReturnValue({ data: { onboardingVideoStatus: 'ready', onboardingVideoHasPoster: true } })
+    render(<OnboardingVideoBanner />)
+    const img = screen.getByTestId('onboarding-video-banner').querySelector('img')
+    expect(img?.getAttribute('src')).toContain('portal/media/onboarding-video/poster')
+  })
+
+  it('clicking the poster opens the video and marks done', async () => {
+    ready()
+    const user = userEvent.setup()
+    render(<OnboardingVideoBanner />)
+    await user.click(screen.getByRole('button', { name: /play the intro video/i }))
+    expect(useOnboardingVideo.getState().open).toBe(true)
+    expect(JSON.parse(localStorage.getItem(KEY)!).status).toBe('done')
+  })
+
   it('is hidden once the user has dismissed it', () => {
     ready()
     localStorage.setItem(KEY, JSON.stringify({ status: 'dismissed', shownCount: 0 }))

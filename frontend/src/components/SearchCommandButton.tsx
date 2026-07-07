@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Search, X } from 'lucide-react'
 import { Button } from './ui/button'
 import { useUiOverlay } from '@/lib/uiOverlayStore'
+import { useOnboardingBannerVisible } from '@/hooks/useOnboardingBannerVisible'
 import { isMac } from '@/lib/platform'
 
 // One-time coachmark dismissal flag. Persisted so the hint shows exactly once
@@ -33,12 +34,16 @@ function dismissCoachmark() {
  */
 export function SearchCommandButton() {
   const openPalette = useUiOverlay((s) => s.openPalette)
+  // Yield to the onboarding-video nudge: only one first-run popup at a time. If the intro
+  // banner is showing (or still eligible) at mount, suppress this ⌘K coachmark; it can
+  // surface on a later mount once the banner is gone.
+  const introBannerVisible = useOnboardingBannerVisible()
   // Resolve the dismissal flag once on mount (not during render) so the first
   // paint is stable and SSR/storage-less environments don't flash the hint.
   const [showHint, setShowHint] = useState(false)
   useEffect(() => {
-    if (!coachmarkDismissed()) setShowHint(true)
-  }, [])
+    if (!coachmarkDismissed() && !introBannerVisible) setShowHint(true)
+  }, [introBannerVisible])
 
   function hideHint() {
     setShowHint(false)
