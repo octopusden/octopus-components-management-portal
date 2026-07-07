@@ -42,6 +42,7 @@ import java.util.concurrent.atomic.AtomicReference
  *    backend retry mechanism.
  */
 @Service
+@Suppress("TooManyFunctions") // cohesive service: small state accessors + the load lifecycle
 class OnboardingVideoService(
     private val props: OnboardingVideoProperties,
 ) {
@@ -107,6 +108,7 @@ class OnboardingVideoService(
      * → FAILED on any error (never throws). Returns true on success. Used by the scheduled
      * retry and directly by tests.
      */
+    @Suppress("TooGenericExceptionCaught") // fail-soft: any load failure must flip to FAILED, never propagate
     fun tryLoadSafely(): Boolean {
         if (!isConfigured()) {
             status.set(Status.DISABLED)
@@ -137,6 +139,9 @@ class OnboardingVideoService(
                 .setURI(props.vcs.root)
                 .setDirectory(attemptDir.toFile())
                 .setDepth(1)
+                // Bound a hung transport so the attempt fails (→ retry → FAILED) instead of
+                // hanging in LOADING forever; the whole point of the FAILED state + scheduled retry.
+                .setTimeout(props.cloneTimeoutSeconds)
             props.vcs.branch.takeIf { it.isNotBlank() }?.let { clone.setBranch(it) }
             props.vcs.username?.takeIf { it.isNotBlank() }?.let {
                 clone.setCredentialsProvider(UsernamePasswordCredentialsProvider(it, props.vcs.password))

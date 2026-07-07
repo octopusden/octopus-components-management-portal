@@ -29,6 +29,7 @@ vi.mock('../hooks/useInfo', () => ({
   usePortalConfig: () => ({ data: undefined }),
   useCrsInfo: vi.fn(),
   usePortalInfo: () => ({ data: undefined }),
+  useOnboardingVideoStatus: () => ({ data: undefined }),
 }))
 // The always-rendered header labels editor calls useLabelsDictionary; mock it so
 // the page test never depends on the broad apiMock.get shape for the dictionary.

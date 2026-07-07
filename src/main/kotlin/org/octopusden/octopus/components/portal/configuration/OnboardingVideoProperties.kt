@@ -3,7 +3,7 @@ package org.octopusden.octopus.components.portal.configuration
 import org.springframework.boot.context.properties.ConfigurationProperties
 
 /**
- * Config for the onboarding presentation video (see [org.octopusden.octopus.components.portal.onboarding.OnboardingVideoService]).
+ * Config for the onboarding presentation video (see OnboardingVideoService).
  *
  * The video (and optional poster) lives in a small dedicated git repo (Bitbucket),
  * NOT in the portal jar. At startup the portal clones it once and holds the bytes in
@@ -39,6 +39,12 @@ class OnboardingVideoProperties {
 
     /** Base backoff between initial-load retry attempts, in milliseconds. */
     var retryBackoffMs: Long = 5_000
+
+    /**
+     * JGit transport timeout (seconds) per clone. Bounds a hung git connection so the load
+     * actually fails (→ retry → FAILED) instead of leaving the status stuck at LOADING forever.
+     */
+    var cloneTimeoutSeconds: Int = 60
 
     class VcsSettings {
         /** Git repo URL. Blank → feature disabled. */
