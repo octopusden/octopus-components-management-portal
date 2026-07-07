@@ -6,15 +6,6 @@ on:
 
 jobs:
   build:
-    # Reusable workflows run with the token permissions granted by the caller job.
-    # The first release must CREATE the ghcr.io/octopusden/components-management-portal
-    # package (it does not exist yet) and push a tag/GitHub release, which the
-    # repo-default (read-only) GITHUB_TOKEN cannot do — the push failed with
-    # "denied: installation not allowed to Create organization package". Grant the
-    # write scopes the release actually needs.
-    permissions:
-      contents: write
-      packages: write
     uses: octopusden/octopus-base/.github/workflows/common-java-gradle-release.yml@v2.3.5
     with:
       flow-type: hybrid
