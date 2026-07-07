@@ -269,10 +269,12 @@ object id50ReleasePostProcessingAuto : BuildType({
     templates(AbsoluteId("Octopus_OctopusComponents_HOctopusTest_OctopusReleasePostProcessing"))
     id("50ReleasePostProcessingAuto")
     name = "[4.0] Release Post Processing [AUTO]"
-
-    params {
-        param("LAST_RELEASE_VERSION", "%LAST_RELEASE_VERSION%")
-    }
+    // LAST_RELEASE_VERSION is inherited from the project level; do NOT redeclare it
+    // here. A build-config param `LAST_RELEASE_VERSION = %LAST_RELEASE_VERSION%` is a
+    // self-reference (X = %X% resolves to itself), which makes TeamCity's parameter
+    // resolution circular. Step 6 "Update latest release version" then 500s when it
+    // PUTs the project param via REST (the server re-resolves the tree and hits the
+    // cycle). CRS's post-processing does not redeclare it — matching that here.
 })
 
 object id50DeployToOkdQaAuto : BuildType({
