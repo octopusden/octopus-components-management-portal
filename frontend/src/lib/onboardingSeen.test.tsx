@@ -83,4 +83,19 @@ describe('useOnboardingSeen', () => {
     expect(result.current.state?.status).toBe('dismissed')
     expect(result.current.shouldShow).toBe(false)
   })
+
+  it('snoozeLater does not downgrade a terminal done written by another instance', () => {
+    const { result } = renderHook(() => useOnboardingSeen())
+    // Simulate another mounted hook / tab having marked done after this instance hydrated.
+    localStorage.setItem(KEY, JSON.stringify({ status: 'done', shownCount: 0 }))
+    act(() => result.current.snoozeLater())
+    expect(JSON.parse(localStorage.getItem(KEY)!).status).toBe('done')
+  })
+
+  it('snoozeLater bases its count on the latest persisted value', () => {
+    const { result } = renderHook(() => useOnboardingSeen())
+    localStorage.setItem(KEY, JSON.stringify({ status: 'later', shownCount: 1 }))
+    act(() => result.current.snoozeLater())
+    expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({ status: 'later', shownCount: 2 })
+  })
 })

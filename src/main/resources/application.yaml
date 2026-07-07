@@ -93,6 +93,7 @@ portal:
     poster-path: ${PORTAL_ONBOARDING_VIDEO_POSTER_PATH:}
     retry-interval-ms: ${PORTAL_ONBOARDING_VIDEO_RETRY_INTERVAL_MS:1800000}
     clone-timeout-seconds: ${PORTAL_ONBOARDING_VIDEO_CLONE_TIMEOUT_SECONDS:60}
+    max-bytes: ${PORTAL_ONBOARDING_VIDEO_MAX_BYTES:52428800}
   # Component-editor knobs read by the SPA via /portal/config.
   component:
     # Substrings that mark a component key as a "solution candidate": only those

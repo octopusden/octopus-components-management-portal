@@ -42,7 +42,11 @@ export function SearchCommandButton() {
   // paint is stable and SSR/storage-less environments don't flash the hint.
   const [showHint, setShowHint] = useState(false)
   useEffect(() => {
-    if (!coachmarkDismissed() && !introBannerVisible) setShowHint(true)
+    // Track banner eligibility in BOTH directions: hide the ⌘K hint when the onboarding
+    // banner is (or becomes) visible, and show it once the banner is gone — so a hint shown
+    // before onboarding state hydrated doesn't get stuck on screen next to the banner.
+    if (coachmarkDismissed()) return
+    setShowHint(!introBannerVisible)
   }, [introBannerVisible])
 
   function hideHint() {

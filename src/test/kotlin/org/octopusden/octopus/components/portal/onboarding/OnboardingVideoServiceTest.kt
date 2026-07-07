@@ -208,4 +208,18 @@ class OnboardingVideoServiceTest {
         assertEquals(OnboardingVideoService.Status.FAILED, service.status())
         assertNull(service.videoResource())
     }
+
+    @Test
+    fun `a media file larger than maxBytes is rejected (FAILED, nothing served)`(@TempDir tmp: Path) {
+        val repo = Files.createDirectory(tmp.resolve("repo"))
+        makeRepo(repo) // intro.mp4 is 10 bytes
+        val service = OnboardingVideoService(
+            props(tmp, root = repo.toUri().toString()).apply { maxBytes = 5 },
+        )
+
+        assertFalse(service.tryLoadSafely())
+
+        assertEquals(OnboardingVideoService.Status.FAILED, service.status())
+        assertNull(service.videoResource())
+    }
 }

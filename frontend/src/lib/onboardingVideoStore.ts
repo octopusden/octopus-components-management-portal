@@ -22,7 +22,10 @@ interface OnboardingVideoState {
 
 export const useOnboardingVideo = create<OnboardingVideoState>((set) => ({
   open: false,
-  openVideo: () => set({ open: true }),
+  // Opening the player (from ANY entry point — header button or banner) also dismisses the
+  // banner for this session via the shared store flag, so it can't linger behind the modal
+  // or reappear after close even though each component has its own useOnboardingSeen state.
+  openVideo: () => set({ open: true, bannerDismissed: true }),
   closeVideo: () => set({ open: false }),
   setOpen: (open) => set({ open }),
   bannerDismissed: false,

@@ -76,7 +76,7 @@ class OnboardingVideoService(
             log.info("Onboarding video disabled (enabled={}, root blank={})", props.enabled, props.vcs.root.isBlank())
             return
         }
-        log.info("Onboarding video: loading from {} (async, non-fatal)", props.vcs.root)
+        log.info("Onboarding video: loading from {} (async, non-fatal)", sanitizeUrl(props.vcs.root))
         Mono.fromRunnable<Void> { load() }
             .subscribeOn(Schedulers.boundedElastic())
             .retryWhen(Retry.backoff(props.retryMaxAttempts, Duration.ofMillis(props.retryBackoffMs)))
@@ -148,9 +148,9 @@ class OnboardingVideoService(
             }
             clone.call().use { /* close the Git handle; we only need the working tree files */ }
 
-            val videoBytes = Files.readAllBytes(resolveWithin(attemptDir, props.path))
+            val videoBytes = readMediaFile(attemptDir, props.path)
             val poster = props.posterPath.takeIf { it.isNotBlank() }?.let {
-                ByteArrayResource(Files.readAllBytes(resolveWithin(attemptDir, it)))
+                ByteArrayResource(readMediaFile(attemptDir, it))
             }
             videoRef.set(ByteArrayResource(videoBytes))
             posterRef.set(poster)
@@ -167,14 +167,28 @@ class OnboardingVideoService(
         }
     }
 
-    // Defense-in-depth: props.path/posterPath come from trusted service-config, but resolve
-    // + normalize and confirm the result stays inside the clone dir so a stray `../…` value
-    // can never read arbitrary files off the portal host.
-    private fun resolveWithin(base: java.nio.file.Path, relative: String): java.nio.file.Path {
+    /**
+     * Resolves a configured media path inside the clone and reads it into memory, with
+     * defense-in-depth even though props.path/posterPath come from trusted service-config:
+     *  - lexical `../` containment, then symlink-safe real-path containment (`toRealPath`
+     *    resolves every symlink; a committed symlink pointing outside the clone therefore
+     *    fails the check) so a repo commit can't make the portal read arbitrary host files;
+     *  - a size cap checked BEFORE the read so an oversized commit can't exhaust the heap.
+     */
+    private fun readMediaFile(base: java.nio.file.Path, relative: String): ByteArray {
         val resolved = base.resolve(relative).normalize()
         require(resolved.startsWith(base)) { "configured path '$relative' escapes the repo working tree" }
-        return resolved
+        require(!Files.isSymbolicLink(resolved)) { "configured path '$relative' is a symlink" }
+        val real = resolved.toRealPath()
+        require(real.startsWith(base.toRealPath())) { "configured path '$relative' resolves outside the repo" }
+        val size = Files.size(real)
+        require(size <= props.maxBytes) { "media file '$relative' is $size bytes, exceeds max ${props.maxBytes}" }
+        return Files.readAllBytes(real)
     }
+
+    // Strips any user:password@ userinfo from a git URL so credentials embedded in the URL
+    // can't leak into logs (our config uses a separate credentials provider, but be safe).
+    private fun sanitizeUrl(url: String): String = Regex("(://)[^@/]*@").replace(url, "$1")
 
     private fun contentTypeFor(path: String, table: Map<String, String>, fallback: String): String {
         val ext = path.substringAfterLast('.', "").lowercase()

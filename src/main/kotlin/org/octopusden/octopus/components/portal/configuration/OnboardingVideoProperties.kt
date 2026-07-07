@@ -46,6 +46,12 @@ class OnboardingVideoProperties {
      */
     var cloneTimeoutSeconds: Int = 60
 
+    /**
+     * Hard cap (bytes) on the video/poster file read into memory. A bad/oversized commit is
+     * rejected before allocation so it can't exhaust the heap. Default 50 MiB.
+     */
+    var maxBytes: Long = 52_428_800
+
     class VcsSettings {
         /** Git repo URL. Blank → feature disabled. */
         var root: String = ""

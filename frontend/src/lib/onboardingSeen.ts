@@ -85,18 +85,24 @@ export function useOnboardingSeen() {
     [username],
   )
 
-  const markDone = useCallback(
-    () => update({ status: 'done', shownCount: state?.shownCount ?? 0 }),
-    [update, state],
-  )
+  // Transitions re-read the LATEST persisted value (not the captured render state) so a write
+  // from another mounted hook instance or another tab isn't clobbered — and a snooze can never
+  // downgrade a terminal `done`/`dismissed` back to `later` (which would re-show the nudge).
+  const markDone = useCallback(() => {
+    if (!username) return
+    update({ status: 'done', shownCount: readSeen(username)?.shownCount ?? 0 })
+  }, [update, username])
   const snoozeLater = useCallback(() => {
-    const shownCount = (state?.shownCount ?? 0) + 1
+    if (!username) return
+    const latest = readSeen(username)
+    if (latest && (latest.status === 'done' || latest.status === 'dismissed')) return
+    const shownCount = (latest?.shownCount ?? 0) + 1
     update({ status: shownCount >= LATER_CAP ? 'dismissed' : 'later', shownCount })
-  }, [update, state])
-  const dismissForever = useCallback(
-    () => update({ status: 'dismissed', shownCount: state?.shownCount ?? 0 }),
-    [update, state],
-  )
+  }, [update, username])
+  const dismissForever = useCallback(() => {
+    if (!username) return
+    update({ status: 'dismissed', shownCount: readSeen(username)?.shownCount ?? 0 })
+  }, [update, username])
 
   return { state, shouldShow: shouldShowCoachmark(state), markDone, snoozeLater, dismissForever }
 }
