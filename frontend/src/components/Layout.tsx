@@ -7,6 +7,7 @@ import { hasPermission, logout, PERMISSIONS } from '@/lib/auth'
 import { AppFooter } from './AppFooter'
 import { EmployeeIntegrationAlert } from './EmployeeIntegrationAlert'
 import { OnboardingVideoButton } from './OnboardingVideoButton'
+import { OnboardingVideoBanner } from './OnboardingVideoBanner'
 import { Badge } from './ui/badge'
 import { StatusBanner } from './ui/status-banner'
 import { useAdminMode } from '@/lib/adminModeStore'
@@ -144,6 +145,7 @@ export function Layout({ children }: LayoutProps) {
           </div>
         </div>
       </header>
+      <OnboardingVideoBanner />
       <EmployeeIntegrationAlert />
       <main className="flex-1 max-w-screen-xl w-full mx-auto px-6 py-6">{children}</main>
       <AppFooter />
