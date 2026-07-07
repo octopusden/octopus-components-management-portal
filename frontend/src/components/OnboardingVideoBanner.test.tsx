@@ -17,7 +17,7 @@ const ready = () => mockStatus.mockReturnValue({ data: { onboardingVideoStatus: 
 
 beforeEach(() => {
   localStorage.clear()
-  useOnboardingVideo.setState({ open: false })
+  useOnboardingVideo.setState({ open: false, bannerDismissed: false })
   mockStatus.mockReturnValue({ data: { onboardingVideoStatus: 'loading' } })
 })
 
@@ -59,17 +59,42 @@ describe('OnboardingVideoBanner', () => {
     expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({ status: 'later', shownCount: 1 })
   })
 
-  it("Don't show again persists dismissed", async () => {
+  it("Don't show again persists dismissed and removes the banner from the DOM", async () => {
     ready()
     const user = userEvent.setup()
     render(<OnboardingVideoBanner />)
     await user.click(screen.getByRole('button', { name: /don't show again/i }))
     expect(JSON.parse(localStorage.getItem(KEY)!).status).toBe('dismissed')
+    expect(screen.queryByTestId('onboarding-video-banner')).not.toBeInTheDocument()
+  })
+
+  it('the × control snoozes like Later and hides the banner', async () => {
+    ready()
+    const user = userEvent.setup()
+    render(<OnboardingVideoBanner />)
+    await user.click(screen.getByRole('button', { name: /remind me later/i }))
+    expect(screen.queryByTestId('onboarding-video-banner')).not.toBeInTheDocument()
+    expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({ status: 'later', shownCount: 1 })
+  })
+
+  it('re-shows for a snoozed state below the cap', () => {
+    ready()
+    localStorage.setItem(KEY, JSON.stringify({ status: 'later', shownCount: 1 }))
+    render(<OnboardingVideoBanner />)
+    expect(screen.getByTestId('onboarding-video-banner')).toBeInTheDocument()
   })
 
   it('stays hidden after the Later cap is reached', () => {
     ready()
     localStorage.setItem(KEY, JSON.stringify({ status: 'later', shownCount: 3 }))
+    render(<OnboardingVideoBanner />)
+    expect(screen.queryByTestId('onboarding-video-banner')).not.toBeInTheDocument()
+  })
+
+  it('stays hidden across navigation once dismissed this session (store-scoped flag)', () => {
+    ready()
+    // Simulate a prior dismissal this session (store flag survives Layout remounts).
+    useOnboardingVideo.setState({ bannerDismissed: true })
     render(<OnboardingVideoBanner />)
     expect(screen.queryByTestId('onboarding-video-banner')).not.toBeInTheDocument()
   })

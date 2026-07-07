@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { PlayCircle, X } from 'lucide-react'
 import { Button } from './ui/button'
 import { useOnboardingVideoStatus } from '@/hooks/useInfo'
@@ -18,31 +17,30 @@ export function OnboardingVideoBanner() {
   const { data } = useOnboardingVideoStatus()
   const ready = data?.onboardingVideoStatus === 'ready'
   const openVideo = useOnboardingVideo((s) => s.openVideo)
+  // Session-scoped dismissal in the store (survives navigation — Layout remounts per page).
+  const bannerDismissed = useOnboardingVideo((s) => s.bannerDismissed)
+  const dismissBanner = useOnboardingVideo((s) => s.dismissBanner)
   const { shouldShow, markDone, snoozeLater, dismissForever } = useOnboardingSeen()
 
-  // Session-local close so an action hides the banner immediately even when the seen-state
-  // stays eligible (a snooze keeps shouldShow true below the cap for the NEXT session).
-  const [closed, setClosed] = useState(false)
-
-  if (!ready || !shouldShow || closed) return null
+  if (!ready || !shouldShow || bannerDismissed) return null
 
   const watch = () => {
-    setClosed(true)
+    dismissBanner()
     markDone()
     openVideo()
   }
   const later = () => {
-    setClosed(true)
+    dismissBanner()
     snoozeLater()
   }
   const never = () => {
-    setClosed(true)
+    dismissBanner()
     dismissForever()
   }
 
   return (
     <div
-      role="region"
+      role="status"
       aria-label="Onboarding video"
       data-testid="onboarding-video-banner"
       className="border-b border-border bg-gradient-to-r from-primary/10 via-primary/5 to-transparent animate-in fade-in slide-in-from-top-1 motion-reduce:animate-none"

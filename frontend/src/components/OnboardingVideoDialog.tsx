@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog'
 import { useOnboardingVideo } from '@/lib/onboardingVideoStore'
 import { useOnboardingVideoStatus } from '@/hooks/useInfo'
@@ -14,16 +14,28 @@ const POSTER_URL = `${import.meta.env.BASE_URL}portal/media/onboarding-video/pos
  *
  * The <video> is only in the DOM while the dialog is open, so `preload="none"` means the
  * ~11 MB never loads for anyone who doesn't open it. Opening is a user gesture, so
- * autoPlay-with-sound is permitted; native controls are the fallback. Finishing the video
- * marks onboarding done (no more coachmark). A poster is used only when the backend has one.
+ * autoPlay-with-sound is permitted; native controls are the fallback. A poster is used
+ * only when the backend has one.
+ *
+ * Opening the player (from ANY entry point — the header button or the banner) marks
+ * onboarding as done, so the first-login banner never nags a user who has already engaged,
+ * regardless of whether they watch to the end. This is the single place both entry points
+ * funnel through, which fixes the gap where clicking the header button (which just opens
+ * the dialog) left the seen-state untouched.
  */
 export function OnboardingVideoDialog() {
   const open = useOnboardingVideo((s) => s.open)
   const setOpen = useOnboardingVideo((s) => s.setOpen)
   const { data } = useOnboardingVideoStatus()
   const hasPoster = data?.onboardingVideoHasPoster === true
-  const { markDone } = useOnboardingSeen()
+  const { state: seen, markDone } = useOnboardingSeen()
   const [errored, setErrored] = useState(false)
+
+  // Mark done when the player opens. Guarded on the current status so this settles in one
+  // pass (markDone flips status → effect re-runs → condition false) rather than looping.
+  useEffect(() => {
+    if (open && seen && seen.status !== 'done') markDone()
+  }, [open, seen, markDone])
 
   return (
     <Dialog
