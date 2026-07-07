@@ -41,6 +41,19 @@ class OnboardingVideoServiceTest {
         this.workDir = workDir.toString()
         vcs.root = root
         retryIntervalMs = 60_000
+        // Keep the async retry fast so the onApplicationReady() tests don't wait on backoff.
+        retryMaxAttempts = 2
+        retryBackoffMs = 1
+    }
+
+    /** Polls the service status until it matches [expected] or the timeout elapses. */
+    private fun awaitStatus(service: OnboardingVideoService, expected: OnboardingVideoService.Status) {
+        val deadline = System.currentTimeMillis() + 5_000
+        while (System.currentTimeMillis() < deadline) {
+            if (service.status() == expected) return
+            Thread.sleep(25)
+        }
+        assertEquals(expected, service.status(), "status did not reach $expected within timeout")
     }
 
     @Test
@@ -136,5 +149,40 @@ class OnboardingVideoServiceTest {
         service.scheduledRetry() // source fixed → recovers
 
         assertEquals(OnboardingVideoService.Status.READY, service.status())
+    }
+
+    @Test
+    fun `onApplicationReady loads asynchronously to READY`(@TempDir tmp: Path) {
+        val repo = Files.createDirectory(tmp.resolve("repo"))
+        makeRepo(repo)
+        val service = OnboardingVideoService(props(tmp, root = repo.toUri().toString()))
+
+        service.onApplicationReady() // returns immediately; load happens off-thread
+
+        awaitStatus(service, OnboardingVideoService.Status.READY)
+        assertArrayEquals(videoBytes, service.videoResource()!!.inputStream.readBytes())
+    }
+
+    @Test
+    fun `onApplicationReady ends in FAILED after the async retries are exhausted`(@TempDir tmp: Path) {
+        val service = OnboardingVideoService(props(tmp, root = tmp.resolve("nope").toUri().toString()))
+
+        service.onApplicationReady()
+
+        awaitStatus(service, OnboardingVideoService.Status.FAILED)
+    }
+
+    @Test
+    fun `a path escaping the repo is rejected (FAILED, nothing served)`(@TempDir tmp: Path) {
+        val repo = Files.createDirectory(tmp.resolve("repo"))
+        makeRepo(repo)
+        val service = OnboardingVideoService(
+            props(tmp, root = repo.toUri().toString()).apply { path = "../../etc/hosts" },
+        )
+
+        assertFalse(service.tryLoadSafely())
+
+        assertEquals(OnboardingVideoService.Status.FAILED, service.status())
+        assertNull(service.videoResource())
     }
 }

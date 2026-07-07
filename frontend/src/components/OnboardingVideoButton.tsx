@@ -53,7 +53,7 @@ export function OnboardingVideoButton() {
       <Button
         variant="ghost"
         size="sm"
-        onClick={openVideo}
+        onClick={watch}
         className="gap-2 text-muted-foreground"
         aria-label="Watch the intro video"
         title="Watch intro"

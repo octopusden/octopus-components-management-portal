@@ -34,6 +34,12 @@ class OnboardingVideoProperties {
     /** Milliseconds between server-side re-attempts while the status is FAILED. Default 30 min. */
     var retryIntervalMs: Long = 1_800_000
 
+    /** Max attempts for the initial startup load's bounded retry (Reactor backoff). */
+    var retryMaxAttempts: Long = 3
+
+    /** Base backoff between initial-load retry attempts, in milliseconds. */
+    var retryBackoffMs: Long = 5_000
+
     class VcsSettings {
         /** Git repo URL. Blank → feature disabled. */
         var root: String = ""

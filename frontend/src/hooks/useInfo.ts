@@ -116,7 +116,12 @@ export function useOnboardingVideoStatus() {
     queryKey: ['onboarding-video-status'],
     queryFn: () => fetchInfo<PortalConfig>(`${import.meta.env.BASE_URL}portal/config`),
     staleTime: 0,
-    retry: false,
+    // Unlike the other metadata hooks (retry: false), retry here: a transient failure on
+    // the FIRST fetch (while the backend is still `loading`) would otherwise leave `data`
+    // undefined forever — refetchInterval keys off last-known data, so polling would never
+    // start and the feature would stay hidden for the whole session. A few retries recover
+    // the transient case; a persistent failure just leaves the feature off (acceptable).
+    retry: 3,
     refetchInterval: (query) => onboardingVideoRefetchInterval(query.state.data?.onboardingVideoStatus),
   })
 }

@@ -78,7 +78,7 @@ class OnboardingVideoService(
         log.info("Onboarding video: loading from {} (async, non-fatal)", props.vcs.root)
         Mono.fromRunnable<Void> { load() }
             .subscribeOn(Schedulers.boundedElastic())
-            .retryWhen(Retry.backoff(MAX_RETRIES, Duration.ofSeconds(RETRY_BACKOFF_SECONDS)))
+            .retryWhen(Retry.backoff(props.retryMaxAttempts, Duration.ofMillis(props.retryBackoffMs)))
             .doOnError { e ->
                 status.set(Status.FAILED)
                 log.warn("Onboarding video: load failed after retries (status=FAILED until next scheduled attempt)", e)
@@ -143,9 +143,9 @@ class OnboardingVideoService(
             }
             clone.call().use { /* close the Git handle; we only need the working tree files */ }
 
-            val videoBytes = Files.readAllBytes(attemptDir.resolve(props.path))
+            val videoBytes = Files.readAllBytes(resolveWithin(attemptDir, props.path))
             val poster = props.posterPath.takeIf { it.isNotBlank() }?.let {
-                ByteArrayResource(Files.readAllBytes(attemptDir.resolve(it)))
+                ByteArrayResource(Files.readAllBytes(resolveWithin(attemptDir, it)))
             }
             videoRef.set(ByteArrayResource(videoBytes))
             posterRef.set(poster)
@@ -162,6 +162,15 @@ class OnboardingVideoService(
         }
     }
 
+    // Defense-in-depth: props.path/posterPath come from trusted service-config, but resolve
+    // + normalize and confirm the result stays inside the clone dir so a stray `../…` value
+    // can never read arbitrary files off the portal host.
+    private fun resolveWithin(base: java.nio.file.Path, relative: String): java.nio.file.Path {
+        val resolved = base.resolve(relative).normalize()
+        require(resolved.startsWith(base)) { "configured path '$relative' escapes the repo working tree" }
+        return resolved
+    }
+
     private fun contentTypeFor(path: String, table: Map<String, String>, fallback: String): String {
         val ext = path.substringAfterLast('.', "").lowercase()
         return table[ext] ?: fallback
@@ -169,8 +178,6 @@ class OnboardingVideoService(
 
     companion object {
         private val log = LoggerFactory.getLogger(OnboardingVideoService::class.java)
-        private const val MAX_RETRIES = 3L
-        private const val RETRY_BACKOFF_SECONDS = 5L
         private val VIDEO_TYPES = mapOf("mp4" to "video/mp4", "webm" to "video/webm", "mov" to "video/quicktime")
         private val IMAGE_TYPES = mapOf(
             "png" to "image/png",

@@ -72,12 +72,16 @@ describe('OnboardingVideoButton', () => {
     expect(JSON.parse(localStorage.getItem(KEY)!).status).toBe('dismissed')
   })
 
-  it('clicking the header button opens the video directly', async () => {
+  it('clicking the header button opens the video, marks done, and closes the coachmark', async () => {
     ready()
-    localStorage.setItem(KEY, JSON.stringify({ status: 'done', shownCount: 0 }))
     const user = userEvent.setup()
     render(<OnboardingVideoButton />)
+    // Coachmark is auto-showing (first login); clicking the header button should open the
+    // video, mark onboarding done, and dismiss the coachmark — no lingering nag.
+    expect(await screen.findByTestId('onboarding-video-coachmark')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /watch the intro video/i }))
     expect(useOnboardingVideo.getState().open).toBe(true)
+    expect(JSON.parse(localStorage.getItem(KEY)!).status).toBe('done')
+    expect(screen.queryByTestId('onboarding-video-coachmark')).not.toBeInTheDocument()
   })
 })

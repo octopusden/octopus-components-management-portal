@@ -35,3 +35,23 @@ constraint must be accounted for before/at prod deploy:
   lift this limit) is tracked in [TD-003](../tech-debt/TD-003-persisted-session-store.md) /
   [issue #96](https://github.com/octopusden/octopus-components-management-portal/issues/96) — until
   then prod stays pinned to one replica.
+
+### Onboarding video (optional feature — OFF until configured)
+
+The header "Watch intro" button + first-login coachmark only appear once the portal has cloned a
+presentation video into memory at startup. The media lives in a **small dedicated git repo**
+(e.g. Bitbucket), NOT in the portal jar/image. With `PORTAL_ONBOARDING_VIDEO_VCS_ROOT` blank
+(the default) the feature is fully off and nothing is cloned — so this is a deliberate rollout step,
+not a deploy blocker.
+
+To enable, create the media repo (commit `intro.mp4`, optionally a poster e.g. `poster.jpg`), grant
+the portal's service account read access, then set:
+
+- **Non-secret (Spring Cloud Config / Helm values):** `PORTAL_ONBOARDING_VIDEO_VCS_ROOT` (git URL),
+  `PORTAL_ONBOARDING_VIDEO_VCS_BRANCH` (blank → default branch), `PORTAL_ONBOARDING_VIDEO_PATH`
+  (default `intro.mp4`), `PORTAL_ONBOARDING_VIDEO_POSTER_PATH` (blank → no poster).
+- **Secret (Vault → OKD secret), only if the repo isn't anonymously readable:**
+  `PORTAL_ONBOARDING_VIDEO_VCS_USERNAME`, `PORTAL_ONBOARDING_VIDEO_VCS_PASSWORD`.
+
+The clone is async and non-fatal (a bad URL never blocks boot; it just leaves the feature hidden and
+retries on a slow schedule), and the video is served same-origin behind portal auth.
