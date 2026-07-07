@@ -56,6 +56,23 @@ class OnboardingVideoServiceTest {
         assertEquals(expected, service.status(), "status did not reach $expected within timeout")
     }
 
+    /**
+     * Waits until the async load's background `finally` cleanup has removed its `clone-*`
+     * attempt dir from [workDir]. The status flips (READY/FAILED) BEFORE that cleanup runs on
+     * the boundedElastic thread, so async tests must join on cleanup before returning —
+     * otherwise it races JUnit's @TempDir teardown deleting the same tree.
+     */
+    private fun awaitCleanup(workDir: Path) {
+        val deadline = System.currentTimeMillis() + 5_000
+        while (System.currentTimeMillis() < deadline) {
+            val remaining = Files.list(workDir).use { it.count() }
+            if (remaining == 0L) return
+            Thread.sleep(25)
+        }
+        val leftovers = Files.list(workDir).use { it.toList() }
+        assertTrue(leftovers.isEmpty(), "async load left clone dirs behind: $leftovers")
+    }
+
     @Test
     fun `blank root is DISABLED and never loads`(@TempDir tmp: Path) {
         val service = OnboardingVideoService(props(tmp, root = ""))
@@ -155,21 +172,27 @@ class OnboardingVideoServiceTest {
     fun `onApplicationReady loads asynchronously to READY`(@TempDir tmp: Path) {
         val repo = Files.createDirectory(tmp.resolve("repo"))
         makeRepo(repo)
-        val service = OnboardingVideoService(props(tmp, root = repo.toUri().toString()))
+        // Dedicated work dir + join on cleanup so the background finally-delete can't race
+        // JUnit's @TempDir teardown of the same tree.
+        val workDir = Files.createDirectory(tmp.resolve("work"))
+        val service = OnboardingVideoService(props(workDir, root = repo.toUri().toString()))
 
         service.onApplicationReady() // returns immediately; load happens off-thread
 
         awaitStatus(service, OnboardingVideoService.Status.READY)
         assertArrayEquals(videoBytes, service.videoResource()!!.inputStream.readBytes())
+        awaitCleanup(workDir)
     }
 
     @Test
     fun `onApplicationReady ends in FAILED after the async retries are exhausted`(@TempDir tmp: Path) {
-        val service = OnboardingVideoService(props(tmp, root = tmp.resolve("nope").toUri().toString()))
+        val workDir = Files.createDirectory(tmp.resolve("work"))
+        val service = OnboardingVideoService(props(workDir, root = tmp.resolve("nope").toUri().toString()))
 
         service.onApplicationReady()
 
         awaitStatus(service, OnboardingVideoService.Status.FAILED)
+        awaitCleanup(workDir)
     }
 
     @Test
