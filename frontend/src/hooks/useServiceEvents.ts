@@ -5,6 +5,8 @@ import type { Page, ServiceEvent } from '../lib/types'
 /** SYS-060 filter for `GET /admin/service-events`; each field independently optional. */
 export interface ServiceEventFilter {
   eventType?: string
+  /** SYSTEM | USER — separates operational events from product-usage (video views). */
+  category?: string
   source?: string
   status?: string
   /** ISO-8601 instant; closed lower bound (`>= from`). */
@@ -44,6 +46,7 @@ export function useServiceEvents({
   params.set('size', String(size))
   params.set('sort', 'startedAt,desc')
   if (filter?.eventType) params.set('eventType', filter.eventType)
+  if (filter?.category) params.set('category', filter.category)
   if (filter?.source) params.set('source', filter.source)
   if (filter?.status) params.set('status', filter.status)
   if (filter?.from) params.set('from', filter.from)

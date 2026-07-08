@@ -39,6 +39,16 @@ describe('useServiceEvents', () => {
     expect(url).toContain('status=FAILED')
   })
 
+  it('passes the category filter (USER/SYSTEM split)', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result } = renderHook(() => useServiceEvents({ filter: { category: 'USER' } }), {
+      wrapper: makeWrapper(),
+    })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const url = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    expect(url).toContain('category=USER')
+  })
+
   it('degrades a 404 to an empty page (no-db profile), not an error', async () => {
     mockApi.get.mockRejectedValue(new ApiError(404, 'Not Found', ''))
     const { result } = renderHook(() => useServiceEvents(), { wrapper: makeWrapper() })
