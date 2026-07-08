@@ -49,6 +49,18 @@ open class ServiceEventClient(
             ),
         )
 
+    /** A user opened the onboarding intro video. [username] is the viewer (source=portal). */
+    open fun reportVideoView(username: String) =
+        post(
+            IngestRequest(
+                eventType = "ONBOARDING_VIDEO_VIEW",
+                status = "COMPLETED",
+                triggeredBy = username,
+                summary = "watched onboarding video",
+                startedAt = Instant.now(),
+            ),
+        )
+
     /**
      * One validation-sweep run outcome. [finishedAt] is the report's generatedAt (success)
      * or lastAttemptAt (failure).
