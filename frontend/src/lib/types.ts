@@ -38,6 +38,7 @@ export interface ComponentSummary {
   // SYS-040 list-view extras — derived by the v4 mapper from the BASE
   // configuration row + first child (sort_order = 0); blank strings normalized to null.
   buildSystem?: string | null
+  javaVersion?: string | null
   jiraProjectKey?: string | null
   vcsPath?: string | null
   teamcityProjectId?: string | null
@@ -500,6 +501,8 @@ export interface ComponentFilter {
   solution?: boolean
   /** Exact-match OR across BASE-row values; sourced from /components/meta/jira-project-keys. CSV on the wire. */
   jiraProjectKey?: string[]
+  /** Exact-match OR across BASE-row values (a component has one BASE javaVersion); sourced from /components/meta/java-versions. CSV on the wire. */
+  javaVersion?: string[]
   jiraTechnical?: boolean
   vcsPath?: string
   productionBranch?: string

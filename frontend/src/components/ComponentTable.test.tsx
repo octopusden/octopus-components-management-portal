@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
@@ -13,8 +13,20 @@ vi.mock('../hooks/useInfo', () => ({
   useCrsInfo: vi.fn(),
 }))
 
+// The System list column is gated on the `component.system` field-config
+// visibility. Mock only `useFieldConfig` (preserve the module's other exports)
+// so we can drive the visibility flag without hitting the network. The default
+// implementation returns `{ data: undefined }` → `visibilityFor` falls back to
+// 'editable', so every existing test keeps the System column visible.
+vi.mock('../hooks/useAdminConfig', async (importActual) => {
+  const actual = await importActual<typeof import('../hooks/useAdminConfig')>()
+  return { ...actual, useFieldConfig: vi.fn(() => ({ data: undefined })) }
+})
+
 import { usePortalLinks } from '../hooks/useInfo'
+import { useFieldConfig } from '../hooks/useAdminConfig'
 const mockedUsePortalLinks = vi.mocked(usePortalLinks)
+const mockedUseFieldConfig = vi.mocked(useFieldConfig)
 
 /**
  * Helper: get the body cell that lines up with a header by display name.
@@ -313,6 +325,141 @@ describe('ComponentTable', () => {
       expect(screen.getByText('+1')).toBeDefined()
       // 'SYS4' is overflow — not rendered until the +N toggle is clicked.
       expect(screen.queryByText('SYS4')).toBeNull()
+    })
+  })
+
+  describe('Release Manager column', () => {
+    afterEach(() => {
+      // Reset the shared module mock so a `hidden` set within a test cannot
+      // leak into a later one (robust to reordering / .only / shuffle).
+      mockedUseFieldConfig.mockReturnValue({ data: undefined } as unknown as ReturnType<
+        typeof useFieldConfig
+      >)
+    })
+
+    it('renders a Release Manager column header', () => {
+      renderTable([makeComponent()])
+      expect(screen.getByRole('columnheader', { name: 'Release Manager' })).toBeDefined()
+    })
+
+    it('places the Release Manager column immediately after Owner', () => {
+      renderTable([makeComponent()])
+      const headers = screen.getAllByRole('columnheader').map((h) => h.textContent?.trim())
+      const ownerIdx = headers.findIndex((h) => h === 'Owner')
+      const rmIdx = headers.findIndex((h) => h === 'Release Manager')
+      expect(ownerIdx).toBeGreaterThanOrEqual(0)
+      expect(rmIdx).toBe(ownerIdx + 1)
+    })
+
+    it('renders em-dash when releaseManagers is empty', () => {
+      renderTable([makeComponent({ releaseManagers: [] })])
+      expect(cellForColumn('Release Manager').textContent).toContain('—')
+    })
+
+    it('renders em-dash when releaseManagers is absent (optional field)', () => {
+      // makeComponent omits releaseManagers → getValue() is undefined.
+      renderTable([makeComponent()])
+      expect(cellForColumn('Release Manager').textContent).toContain('—')
+    })
+
+    it('renders a single release manager as a chip', () => {
+      renderTable([makeComponent({ releaseManagers: ['jsmith'] })])
+      expect(within(cellForColumn('Release Manager')).getByText('jsmith')).toBeDefined()
+    })
+
+    it('renders +N overflow badge when more than 3 release managers are present', () => {
+      renderTable([makeComponent({ releaseManagers: ['a', 'b', 'c', 'd'] })])
+      const cell = cellForColumn('Release Manager')
+      expect(within(cell).getByText('a')).toBeDefined()
+      expect(within(cell).getByText('+1')).toBeDefined()
+      expect(within(cell).queryByText('d')).toBeNull()
+    })
+
+    it('hides the Release Manager column when component.releaseManager visibility is hidden', () => {
+      // Same code-as-config gate as the System column — a hidden field-config
+      // entry must remove the list column, not only the editor control.
+      mockedUseFieldConfig.mockReturnValue({
+        data: { component: { releaseManager: { visibility: 'hidden' } } },
+      } as unknown as ReturnType<typeof useFieldConfig>)
+      renderTable([makeComponent({ releaseManagers: ['jsmith'] })])
+      expect(screen.queryByRole('columnheader', { name: 'Release Manager' })).toBeNull()
+      expect(screen.queryByText('jsmith')).toBeNull()
+    })
+  })
+
+  describe('Java Version column', () => {
+    afterEach(() => {
+      mockedUseFieldConfig.mockReturnValue({ data: undefined } as unknown as ReturnType<
+        typeof useFieldConfig
+      >)
+    })
+
+    it('renders a Java Version column header', () => {
+      renderTable([makeComponent()])
+      expect(screen.getByRole('columnheader', { name: 'Java Version' })).toBeDefined()
+    })
+
+    it('places the Java Version column immediately after Build System', () => {
+      renderTable([makeComponent()])
+      const headers = screen.getAllByRole('columnheader').map((h) => h.textContent?.trim())
+      const bsIdx = headers.findIndex((h) => h === 'Build System')
+      const jvIdx = headers.findIndex((h) => h === 'Java Version')
+      expect(bsIdx).toBeGreaterThanOrEqual(0)
+      expect(jvIdx).toBe(bsIdx + 1)
+    })
+
+    it('renders javaVersion as a Badge when set', () => {
+      renderTable([makeComponent({ javaVersion: '21' })])
+      expect(within(cellForColumn('Java Version')).getByText('21')).toBeDefined()
+    })
+
+    it('renders em-dash when javaVersion is null/absent', () => {
+      renderTable([makeComponent({ javaVersion: null })])
+      expect(cellForColumn('Java Version').textContent).toContain('—')
+    })
+
+    it('hides the Java Version column when build.javaVersion visibility is hidden', () => {
+      mockedUseFieldConfig.mockReturnValue({
+        data: { build: { javaVersion: { visibility: 'hidden' } } },
+      } as unknown as ReturnType<typeof useFieldConfig>)
+      renderTable([makeComponent({ javaVersion: '21' })])
+      expect(screen.queryByRole('columnheader', { name: 'Java Version' })).toBeNull()
+      expect(screen.queryByText('21')).toBeNull()
+    })
+  })
+
+  describe('System column visibility (field-config `component.system.visibility`)', () => {
+    // The list table honours the field-config visibility flag: an installation
+    // that sets `component.system.visibility: hidden` in service-config expects
+    // the System column gone from the list, not just from the editor forms.
+    afterEach(() => {
+      // Reset to the default so a `hidden` set here does not leak into the
+      // shared module mock used by every other test in the file.
+      mockedUseFieldConfig.mockReturnValue({ data: undefined } as unknown as ReturnType<typeof useFieldConfig>)
+    })
+
+    it('hides the System column when component.system visibility is hidden', () => {
+      mockedUseFieldConfig.mockReturnValue({
+        data: { component: { system: { visibility: 'hidden' } } },
+      } as unknown as ReturnType<typeof useFieldConfig>)
+      renderTable([makeComponent({ systems: ['SYS1'] })])
+      expect(screen.queryByRole('columnheader', { name: 'System' })).toBeNull()
+      // The value chip must be gone too — not just the header.
+      expect(screen.queryByText('SYS1')).toBeNull()
+    })
+
+    it('shows the System column when component.system visibility is editable', () => {
+      mockedUseFieldConfig.mockReturnValue({
+        data: { component: { system: { visibility: 'editable' } } },
+      } as unknown as ReturnType<typeof useFieldConfig>)
+      renderTable([makeComponent({ systems: ['SYS1'] })])
+      expect(screen.getByRole('columnheader', { name: 'System' })).toBeDefined()
+    })
+
+    it('shows the System column when no field-config is present (defaults to editable)', () => {
+      // Default mock → data undefined → visibilityFor falls back to 'editable'.
+      renderTable([makeComponent({ systems: ['SYS1'] })])
+      expect(screen.getByRole('columnheader', { name: 'System' })).toBeDefined()
     })
   })
 
@@ -629,5 +776,26 @@ describe('ComponentTable — per-row Clone action', () => {
   it('renders no Clone buttons or actions column when onCopy is omitted', () => {
     renderTable([makeComponent({ id: 'c1', name: 'alpha' })])
     expect(screen.queryByRole('button', { name: /clone .* into a new component/i })).toBeNull()
+  })
+
+  it('pins the Clone/actions column to the right (sticky) so it stays visible when the table scrolls', () => {
+    renderTable([makeComponent({ id: 'c1', name: 'alpha' })], vi.fn())
+    // The Clone cell and the actions header are sticky-right so the wide middle
+    // columns scroll under them instead of pushing Clone off the viewport.
+    // Assert the FULL sticky contract, not just `sticky` — the opaque bg
+    // (occludes scrolled-under cells), the left border (separator) and the
+    // z-index (paints above scrolled content) are all load-bearing; a
+    // regression dropping any of them would silently break the pinning.
+    const cloneCell = screen
+      .getByRole('button', { name: 'Clone alpha into a new component' })
+      .closest('td')
+    for (const cls of ['sticky', 'right-0', 'z-10', 'bg-background', 'border-l']) {
+      expect(cloneCell?.className).toContain(cls)
+    }
+    const headers = screen.getAllByRole('columnheader')
+    const actionsHeader = headers[headers.length - 1]!
+    for (const cls of ['sticky', 'right-0', 'z-20', 'bg-background', 'border-l']) {
+      expect(actionsHeader.className).toContain(cls)
+    }
   })
 })

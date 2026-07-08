@@ -25,6 +25,7 @@ const FIELD_LABELS: Partial<Record<keyof ComponentFilter, string>> = {
   jiraProjectKey: 'Jira key',
   parentComponentName: 'Parent',
   groupKey: 'Group key',
+  javaVersion: 'Java version',
   releaseManager: 'Release manager',
   securityChampion: 'Security champion',
   vcsPath: 'VCS path',
@@ -47,6 +48,7 @@ const ARRAY_KEYS = [
   'jiraProjectKey',
   'parentComponentName',
   'groupKey',
+  'javaVersion',
   'releaseManager',
   'securityChampion',
 ] as const satisfies readonly (keyof ComponentFilter)[]
