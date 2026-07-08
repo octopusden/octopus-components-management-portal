@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog'
 import { useOnboardingVideo } from '@/lib/onboardingVideoStore'
 import { useOnboardingVideoStatus } from '@/hooks/useInfo'
@@ -6,6 +6,24 @@ import { useOnboardingSeen } from '@/lib/onboardingSeen'
 
 const VIDEO_URL = `${import.meta.env.BASE_URL}portal/media/onboarding-video`
 const POSTER_URL = `${import.meta.env.BASE_URL}portal/media/onboarding-video/poster`
+const VIEW_URL = `${import.meta.env.BASE_URL}portal/media/onboarding-video/view`
+
+// Fire-and-forget usage ping: records an ONBOARDING_VIDEO_VIEW in the CRS journal (backend
+// resolves the username). Plain fetch (not the `api` wrapper) because the endpoint returns
+// an empty 202 and telemetry must never surface an error or trigger the 401→OIDC redirect.
+// Sends the double-submit CSRF header the BFF requires for non-safe methods.
+function reportVideoView(): void {
+  try {
+    const csrf = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]+)/)?.[1]
+    void fetch(VIEW_URL, {
+      method: 'POST',
+      credentials: 'include',
+      headers: csrf ? { 'X-XSRF-TOKEN': decodeURIComponent(csrf) } : {},
+    }).catch(() => {})
+  } catch {
+    // best-effort
+  }
+}
 
 /**
  * Globally-mounted onboarding-video player (mounted in AppShell like the shortcuts
@@ -30,12 +48,18 @@ export function OnboardingVideoDialog() {
   const hasPoster = data?.onboardingVideoHasPoster === true
   const { state: seen, markDone } = useOnboardingSeen()
   const [errored, setErrored] = useState(false)
+  // One usage ping per open: reset when the dialog closes so re-opening counts a fresh view.
+  const viewReported = useRef(false)
 
   // Mark done when the player opens. Guarded on the current status so this settles in one
   // pass (markDone flips status → effect re-runs → condition false) rather than looping.
   useEffect(() => {
     if (open && seen && seen.status !== 'done') markDone()
   }, [open, seen, markDone])
+
+  useEffect(() => {
+    if (!open) viewReported.current = false
+  }, [open])
 
   return (
     <Dialog
@@ -65,6 +89,12 @@ export function OnboardingVideoDialog() {
                 controls
                 autoPlay
                 playsInline
+                onPlay={() => {
+                  if (!viewReported.current) {
+                    viewReported.current = true
+                    reportVideoView()
+                  }
+                }}
                 onEnded={markDone}
                 onError={() => setErrored(true)}
               />

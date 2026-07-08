@@ -1048,8 +1048,10 @@ export interface DetailedComponentVersion {
  */
 export interface ServiceEvent {
   id: number
-  /** STARTUP | MIGRATION_COMPONENTS | MIGRATION_HISTORY | TEAMCITY_RESYNC | VALIDATION_SWEEP */
+  /** STARTUP | MIGRATION_COMPONENTS | MIGRATION_HISTORY | TEAMCITY_RESYNC | VALIDATION_SWEEP | ONBOARDING_VIDEO_VIEW */
   eventType: string
+  /** Derived SYSTEM | USER split (from eventType), server-provided. */
+  category?: string
   /** RUNNING | COMPLETED | FAILED */
   status: string
   /** crs | portal */

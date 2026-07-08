@@ -61,6 +61,18 @@ class ServiceEventClientTest {
     }
 
     @Test
+    fun `reports an onboarding video view as a portal user-event`() {
+        client(token = "secret").reportVideoView("alice")
+        assertTrue(latch.await(3, TimeUnit.SECONDS), "expected a POST to CRS")
+        val req = requests.single()
+        assertEquals("/rest/api/4/admin/service-events", req.path)
+        assertEquals("secret", req.token)
+        assertTrue(req.body.contains("\"ONBOARDING_VIDEO_VIEW\""))
+        assertTrue(req.body.contains("\"portal\""))
+        assertTrue(req.body.contains("\"alice\""))
+    }
+
+    @Test
     fun `does not call CRS when token is blank (fail-closed = off)`() {
         client(token = "").reportStartup("1.2.3")
         assertFalse(latch.await(1, TimeUnit.SECONDS), "must not POST without a configured token")

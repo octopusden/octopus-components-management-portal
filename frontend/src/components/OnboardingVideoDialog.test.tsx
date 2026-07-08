@@ -17,9 +17,26 @@ beforeEach(() => {
   localStorage.clear()
   useOnboardingVideo.setState({ open: true })
   mockStatus.mockReturnValue({ data: { onboardingVideoStatus: 'ready', onboardingVideoHasPoster: false } })
+  vi.restoreAllMocks()
 })
 
 describe('OnboardingVideoDialog', () => {
+  it('reports a view (POST) once per open, on first play', () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 202 }))
+    render(<OnboardingVideoDialog />)
+    const video = document.querySelector('video')!
+
+    fireEvent(video, new Event('play'))
+    fireEvent(video, new Event('play')) // pause/resume must NOT double-count
+
+    const viewCalls = fetchSpy.mock.calls.filter(([url]) =>
+      String(url).includes('portal/media/onboarding-video/view'),
+    )
+    expect(viewCalls).toHaveLength(1)
+    const init = viewCalls[0]?.[1] as RequestInit | undefined
+    expect(init?.method).toBe('POST')
+  })
+
   it('renders the video pointing at the same-origin endpoint when open', () => {
     render(<OnboardingVideoDialog />)
     const video = document.querySelector('video')

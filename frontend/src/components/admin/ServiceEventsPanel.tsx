@@ -1,11 +1,17 @@
-import { Fragment, useState } from 'react'
+import { Fragment, useState, type Dispatch, type SetStateAction } from 'react'
 import { ChevronDown, ChevronRight, Loader2, RefreshCw } from 'lucide-react'
 import { useServiceEvents, type ServiceEventFilter } from '@/hooks/useServiceEvents'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { StatusBanner } from '@/components/ui/status-banner'
+import { StatCard } from '@/components/admin/StatCard'
+import { cn } from '@/lib/utils'
 import { formatDateTimeShort } from '@/lib/system'
 import type { ServiceEvent } from '@/lib/types'
+
+// Usage view pulls a generously large page so the who/total/distinct summary reflects the
+// whole (retention-bounded, low-volume) set of product-usage events, not just the first page.
+const USAGE_PAGE_SIZE = 200
 
 const EVENT_TYPES = ['STARTUP', 'MIGRATION_COMPONENTS', 'MIGRATION_HISTORY', 'TEAMCITY_RESYNC', 'VALIDATION_SWEEP']
 const SOURCES = ['crs', 'portal']
@@ -60,14 +66,155 @@ function FilterSelect({
  * 5s while any row is RUNNING; each row expands to show the raw `detail` payload.
  */
 export function ServiceEventsPanel() {
+  const [view, setView] = useState<'system' | 'usage'>('system')
   const [filter, setFilter] = useState<ServiceEventFilter>({})
   const [expanded, setExpanded] = useState<number | null>(null)
+  const isUsage = view === 'usage'
 
-  // The hook polls itself while any row is RUNNING (see useServiceEvents).
-  const { data, isLoading, isError, error, refetch, isFetching } = useServiceEvents({ filter })
+  // System view: the operational timeline (its Type/Source/Status filters), scoped to
+  // category=SYSTEM. Usage view: product-usage events (video views), a large page for the
+  // who/total/distinct summary. The hook polls itself while any row is RUNNING.
+  const { data, isLoading, isError, error, refetch, isFetching } = useServiceEvents(
+    isUsage
+      ? { size: USAGE_PAGE_SIZE, filter: { category: 'USER' } }
+      : { filter: { ...filter, category: 'SYSTEM' } },
+  )
 
   const events: ServiceEvent[] = data?.content ?? []
+  const totalViews = data?.totalElements ?? 0
+  const distinctViewers = new Set(events.map((e) => e.triggeredBy).filter(Boolean)).size
 
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="inline-flex rounded-md border p-0.5" role="tablist" aria-label="Event category">
+          {(['system', 'usage'] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              role="tab"
+              aria-selected={view === v}
+              onClick={() => setView(v)}
+              className={cn(
+                'rounded px-3 py-1 text-xs font-medium capitalize transition-colors',
+                view === v ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+        <Button size="sm" variant="outline" className="ml-auto" onClick={() => refetch()} disabled={isFetching}>
+          {isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          Refresh
+        </Button>
+      </div>
+
+      {isError && (
+        <StatusBanner variant="destructive">
+          Failed to load service events: {error instanceof Error ? error.message : String(error)}
+        </StatusBanner>
+      )}
+
+      {isUsage ? (
+        <UsageView events={events} totalViews={totalViews} distinctViewers={distinctViewers} isLoading={isLoading} />
+      ) : (
+        <SystemView
+          events={events}
+          filter={filter}
+          setFilter={setFilter}
+          expanded={expanded}
+          setExpanded={setExpanded}
+          isLoading={isLoading}
+          total={totalViews}
+        />
+      )}
+    </div>
+  )
+}
+
+/** Product-usage summary + who/when list (onboarding video views). */
+function UsageView({
+  events,
+  totalViews,
+  distinctViewers,
+  isLoading,
+}: {
+  events: ServiceEvent[]
+  totalViews: number
+  distinctViewers: number
+  isLoading: boolean
+}) {
+  // Distinct is computed client-side from the loaded page, so once the set exceeds one page
+  // (totalViews > rows shown) it's only a lower bound over the latest N — label it honestly
+  // rather than claiming an exact distinct count that undercounts. (Total views is exact:
+  // it comes from the server's totalElements.)
+  const truncated = totalViews > events.length
+  return (
+    <div className="space-y-4" data-testid="events-usage-view">
+      <div className="grid grid-cols-2 gap-3 sm:max-w-md">
+        <StatCard label="Total views" value={totalViews} />
+        <StatCard
+          label={truncated ? `Distinct viewers (latest ${USAGE_PAGE_SIZE})` : 'Distinct viewers'}
+          value={truncated ? `${distinctViewers}+` : distinctViewers}
+        />
+      </div>
+      <div className="overflow-x-auto rounded-lg border">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
+            <tr>
+              <th className="px-3 py-2 font-medium">Viewer</th>
+              <th className="px-3 py-2 font-medium">When</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading && (
+              <tr>
+                <td colSpan={2} className="px-3 py-6 text-center text-muted-foreground">
+                  <Loader2 className="mx-auto h-4 w-4 animate-spin" />
+                </td>
+              </tr>
+            )}
+            {!isLoading && events.length === 0 && (
+              <tr>
+                <td colSpan={2} className="px-3 py-6 text-center text-muted-foreground">
+                  No one has watched the intro video yet.
+                </td>
+              </tr>
+            )}
+            {events.map((e) => (
+              <tr key={e.id} className="border-t">
+                <td className="whitespace-nowrap px-3 py-2 font-medium">{e.triggeredBy ?? '—'}</td>
+                <td className="whitespace-nowrap px-3 py-2 tabular-nums text-muted-foreground">
+                  {formatDateTimeShort(e.startedAt)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+/** Operational timeline (redeploys, migrations, resync, sweeps). */
+function SystemView({
+  events,
+  filter,
+  setFilter,
+  expanded,
+  setExpanded,
+  isLoading,
+  total,
+}: {
+  events: ServiceEvent[]
+  filter: ServiceEventFilter
+  setFilter: Dispatch<SetStateAction<ServiceEventFilter>>
+  expanded: number | null
+  setExpanded: (id: number | null) => void
+  isLoading: boolean
+  total: number
+}) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -89,17 +236,7 @@ export function ServiceEventsPanel() {
           options={STATUSES}
           onChange={(v) => setFilter((f) => ({ ...f, status: v || undefined }))}
         />
-        <Button size="sm" variant="outline" className="ml-auto" onClick={() => refetch()} disabled={isFetching}>
-          {isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          Refresh
-        </Button>
       </div>
-
-      {isError && (
-        <StatusBanner variant="destructive">
-          Failed to load service events: {error instanceof Error ? error.message : String(error)}
-        </StatusBanner>
-      )}
 
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
@@ -184,9 +321,9 @@ export function ServiceEventsPanel() {
         </table>
       </div>
 
-      {data && data.totalElements > events.length && (
+      {total > events.length && (
         <p className="text-xs text-muted-foreground">
-          Showing {events.length} of {data.totalElements}. Narrow with filters above.
+          Showing {events.length} of {total}. Narrow with filters above.
         </p>
       )}
     </div>
