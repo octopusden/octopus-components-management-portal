@@ -384,5 +384,10 @@ tasks.named<com.bmuschko.gradle.docker.tasks.image.Dockerfile>("dockerCreateDock
     // verify the image user — kubelet rejects pods whose image declares a
     // non-numeric user when that check is enabled.
     runCommand("useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin portal")
+    // The service user has no home dir (--no-create-home), so HOME is unset and JGit
+    // (onboarding-video clone) tries to write its config to /.config/jgit and logs a
+    // harmless-but-noisy IOException. Point HOME at a writable path so JGit has somewhere
+    // to put its config; /tmp is world-writable in the container.
+    environmentVariable("HOME", "/tmp")
     user("10001")
 }
