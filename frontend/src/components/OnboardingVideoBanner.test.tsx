@@ -49,9 +49,16 @@ describe('OnboardingVideoBanner', () => {
     expect(JSON.parse(localStorage.getItem(KEY)!).status).toBe('done')
   })
 
-  it('is hidden once the user has dismissed it', () => {
+  it('is hidden once the user has dismissed it (Not interested)', () => {
     ready()
-    localStorage.setItem(KEY, JSON.stringify({ status: 'dismissed', shownCount: 0 }))
+    localStorage.setItem(KEY, JSON.stringify({ status: 'dismissed' }))
+    render(<OnboardingVideoBanner />)
+    expect(screen.queryByTestId('onboarding-video-banner')).not.toBeInTheDocument()
+  })
+
+  it('is hidden once the user has watched it (done)', () => {
+    ready()
+    localStorage.setItem(KEY, JSON.stringify({ status: 'done' }))
     render(<OnboardingVideoBanner />)
     expect(screen.queryByTestId('onboarding-video-banner')).not.toBeInTheDocument()
   })
@@ -66,48 +73,28 @@ describe('OnboardingVideoBanner', () => {
     expect(screen.queryByTestId('onboarding-video-banner')).not.toBeInTheDocument()
   })
 
-  it('Later snoozes (persists later + increments) and hides for the session', async () => {
+  it('Not interested persists dismissed and removes the banner from the DOM', async () => {
     ready()
     const user = userEvent.setup()
     render(<OnboardingVideoBanner />)
-    await user.click(screen.getByRole('button', { name: /^later$/i }))
-    expect(screen.queryByTestId('onboarding-video-banner')).not.toBeInTheDocument()
-    expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({ status: 'later', shownCount: 1 })
-  })
-
-  it("Don't show again persists dismissed and removes the banner from the DOM", async () => {
-    ready()
-    const user = userEvent.setup()
-    render(<OnboardingVideoBanner />)
-    await user.click(screen.getByRole('button', { name: /don't show again/i }))
+    await user.click(screen.getByRole('button', { name: /not interested/i }))
     expect(JSON.parse(localStorage.getItem(KEY)!).status).toBe('dismissed')
     expect(screen.queryByTestId('onboarding-video-banner')).not.toBeInTheDocument()
   })
 
-  it('the × control snoozes like Later and hides the banner', async () => {
+  it('× closes for the session WITHOUT persisting, so it shows again next session', async () => {
     ready()
     const user = userEvent.setup()
     render(<OnboardingVideoBanner />)
-    await user.click(screen.getByRole('button', { name: /remind me later/i }))
+    await user.click(screen.getByRole('button', { name: /close/i }))
+    // Hidden this session via the store flag...
     expect(screen.queryByTestId('onboarding-video-banner')).not.toBeInTheDocument()
-    expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({ status: 'later', shownCount: 1 })
+    expect(useOnboardingVideo.getState().bannerDismissed).toBe(true)
+    // ...but nothing persisted, so a fresh session (store reset) still shows it.
+    expect(localStorage.getItem(KEY)).toBeNull()
   })
 
-  it('re-shows for a snoozed state below the cap', () => {
-    ready()
-    localStorage.setItem(KEY, JSON.stringify({ status: 'later', shownCount: 1 }))
-    render(<OnboardingVideoBanner />)
-    expect(screen.getByTestId('onboarding-video-banner')).toBeInTheDocument()
-  })
-
-  it('stays hidden after the Later cap is reached', () => {
-    ready()
-    localStorage.setItem(KEY, JSON.stringify({ status: 'later', shownCount: 3 }))
-    render(<OnboardingVideoBanner />)
-    expect(screen.queryByTestId('onboarding-video-banner')).not.toBeInTheDocument()
-  })
-
-  it('stays hidden across navigation once dismissed this session (store-scoped flag)', () => {
+  it('stays hidden across navigation once closed this session (store-scoped flag)', () => {
     ready()
     // Simulate a prior dismissal this session (store flag survives Layout remounts).
     useOnboardingVideo.setState({ bannerDismissed: true })

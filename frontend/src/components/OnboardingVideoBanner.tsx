@@ -21,23 +21,24 @@ export function OnboardingVideoBanner() {
   const openVideo = useOnboardingVideo((s) => s.openVideo)
   const bannerDismissed = useOnboardingVideo((s) => s.bannerDismissed)
   const dismissBanner = useOnboardingVideo((s) => s.dismissBanner)
-  const { shouldShow, markDone, snoozeLater, dismissForever } = useOnboardingSeen()
+  const { shouldShow, markDone, dismissForever } = useOnboardingSeen()
   const [posterFailed, setPosterFailed] = useState(false)
 
   if (!ready || !shouldShow || bannerDismissed) return null
 
+  // Watching or "Not interested" silence the banner for good; a plain close (×) only hides
+  // it for this session (persists nothing) so it shows again next time — matching "only the
+  // two explicit decisions stop it; ignoring it doesn't".
   const watch = () => {
-    dismissBanner()
     markDone()
     openVideo()
   }
-  const later = () => {
-    dismissBanner()
-    snoozeLater()
-  }
-  const never = () => {
+  const notInterested = () => {
     dismissBanner()
     dismissForever()
+  }
+  const closeForNow = () => {
+    dismissBanner()
   }
 
   const showPoster = hasPoster && !posterFailed
@@ -71,8 +72,8 @@ export function OnboardingVideoBanner() {
 
       <button
         type="button"
-        aria-label="Remind me later"
-        onClick={later}
+        aria-label="Close"
+        onClick={closeForNow}
         className="absolute right-2 top-2 rounded-full bg-black/40 p-1 text-white/90 hover:bg-black/60 hover:text-white"
       >
         <X className="h-4 w-4" />
@@ -88,15 +89,12 @@ export function OnboardingVideoBanner() {
             <PlayCircle className="h-4 w-4" />
             Watch intro
           </Button>
-          <Button size="sm" variant="ghost" onClick={later} className="text-muted-foreground">
-            Later
-          </Button>
           <button
             type="button"
-            onClick={never}
-            className="ml-auto text-[11px] text-muted-foreground/70 underline-offset-2 hover:text-muted-foreground hover:underline"
+            onClick={notInterested}
+            className="ml-auto text-xs text-muted-foreground/80 underline-offset-2 hover:text-muted-foreground hover:underline"
           >
-            Don&apos;t show again
+            Not interested
           </button>
         </div>
       </div>

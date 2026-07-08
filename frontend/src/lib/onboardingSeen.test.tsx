@@ -1,12 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import {
-  readSeen,
-  shouldShowCoachmark,
-  useOnboardingSeen,
-  LATER_CAP,
-  type OnboardingSeenState,
-} from './onboardingSeen'
+import { readSeen, shouldShowCoachmark, useOnboardingSeen, type OnboardingSeenState } from './onboardingSeen'
 
 const mockUser = vi.fn()
 vi.mock('@/hooks/useCurrentUser', () => ({
@@ -22,28 +16,26 @@ beforeEach(() => {
 
 describe('readSeen', () => {
   it('returns a pending default for a first-time user', () => {
-    expect(readSeen('alice')).toEqual({ status: 'pending', shownCount: 0 })
+    expect(readSeen('alice')).toEqual({ status: 'pending' })
   })
 
   it('round-trips a persisted state', () => {
-    localStorage.setItem(KEY, JSON.stringify({ status: 'later', shownCount: 2 }))
-    expect(readSeen('alice')).toEqual({ status: 'later', shownCount: 2 })
+    localStorage.setItem(KEY, JSON.stringify({ status: 'done' }))
+    expect(readSeen('alice')).toEqual({ status: 'done' })
   })
 
   it('falls back to pending on a malformed status', () => {
-    localStorage.setItem(KEY, JSON.stringify({ status: 'bogus', shownCount: 1 }))
-    expect(readSeen('alice')).toEqual({ status: 'pending', shownCount: 1 })
+    localStorage.setItem(KEY, JSON.stringify({ status: 'bogus' }))
+    expect(readSeen('alice')).toEqual({ status: 'pending' })
   })
 })
 
 describe('shouldShowCoachmark', () => {
   const cases: Array<[OnboardingSeenState | null, boolean]> = [
     [null, false], // storage unavailable / not hydrated → fail-closed
-    [{ status: 'pending', shownCount: 0 }, true],
-    [{ status: 'later', shownCount: LATER_CAP - 1 }, true],
-    [{ status: 'later', shownCount: LATER_CAP }, false], // cap reached
-    [{ status: 'done', shownCount: 0 }, false],
-    [{ status: 'dismissed', shownCount: 0 }, false],
+    [{ status: 'pending' }, true],
+    [{ status: 'done' }, false],
+    [{ status: 'dismissed' }, false],
   ]
   it.each(cases)('state %o → %s', (state, expected) => {
     expect(shouldShowCoachmark(state)).toBe(expected)
@@ -58,7 +50,7 @@ describe('useOnboardingSeen', () => {
     expect(result.current.shouldShow).toBe(false)
   })
 
-  it('markDone persists done and hides the coachmark', () => {
+  it('markDone persists done (never show again)', () => {
     const { result } = renderHook(() => useOnboardingSeen())
     act(() => result.current.markDone())
     expect(result.current.state?.status).toBe('done')
@@ -66,36 +58,11 @@ describe('useOnboardingSeen', () => {
     expect(JSON.parse(localStorage.getItem(KEY)!).status).toBe('done')
   })
 
-  it('snoozeLater increments and caps to dismissed after LATER_CAP snoozes', () => {
-    const { result } = renderHook(() => useOnboardingSeen())
-    for (let i = 1; i < LATER_CAP; i++) {
-      act(() => result.current.snoozeLater())
-      expect(result.current.state).toEqual({ status: 'later', shownCount: i })
-    }
-    act(() => result.current.snoozeLater()) // hits the cap
-    expect(result.current.state).toEqual({ status: 'dismissed', shownCount: LATER_CAP })
-    expect(result.current.shouldShow).toBe(false)
-  })
-
-  it('dismissForever persists dismissed', () => {
+  it('dismissForever persists dismissed (never show again)', () => {
     const { result } = renderHook(() => useOnboardingSeen())
     act(() => result.current.dismissForever())
     expect(result.current.state?.status).toBe('dismissed')
     expect(result.current.shouldShow).toBe(false)
-  })
-
-  it('snoozeLater does not downgrade a terminal done written by another instance', () => {
-    const { result } = renderHook(() => useOnboardingSeen())
-    // Simulate another mounted hook / tab having marked done after this instance hydrated.
-    localStorage.setItem(KEY, JSON.stringify({ status: 'done', shownCount: 0 }))
-    act(() => result.current.snoozeLater())
-    expect(JSON.parse(localStorage.getItem(KEY)!).status).toBe('done')
-  })
-
-  it('snoozeLater bases its count on the latest persisted value', () => {
-    const { result } = renderHook(() => useOnboardingSeen())
-    localStorage.setItem(KEY, JSON.stringify({ status: 'later', shownCount: 1 }))
-    act(() => result.current.snoozeLater())
-    expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({ status: 'later', shownCount: 2 })
+    expect(JSON.parse(localStorage.getItem(KEY)!).status).toBe('dismissed')
   })
 })
