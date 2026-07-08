@@ -13,6 +13,8 @@ import { Toaster } from './components/ui/toaster'
 import { TooltipProvider } from './components/ui/tooltip'
 import { CommandPalette } from './components/CommandPalette'
 import { KeyboardShortcutsDialog } from './components/KeyboardShortcutsDialog'
+import { OnboardingVideoDialog } from './components/OnboardingVideoDialog'
+import { OnboardingVideoBanner } from './components/OnboardingVideoBanner'
 import { RouteError } from './components/RouteError'
 import { useGlobalHotkeys } from './hooks/useGlobalHotkeys'
 
@@ -44,6 +46,8 @@ function AppShell() {
       <Outlet />
       <CommandPalette />
       <KeyboardShortcutsDialog />
+      <OnboardingVideoDialog />
+      <OnboardingVideoBanner />
       {/* Inside the router tree (not a sibling of RouterProvider) so a toast
           action containing a <Link>/navigate still has router context. */}
       <Toaster />

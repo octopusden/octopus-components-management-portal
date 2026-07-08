@@ -651,6 +651,11 @@ export interface PortalInfo {
 // (empty array = no component offers the toggle), but tolerate absence anyway.
 export interface PortalConfig {
   solutionKeyPatterns?: string[]
+  // Onboarding-video availability. Quad-state (not a bare boolean) so the SPA can
+  // distinguish "off forever" (disabled/failed → stop polling) from "still cloning"
+  // (loading → keep polling until ready/failed). Only `ready` shows the video button.
+  onboardingVideoStatus?: 'disabled' | 'loading' | 'ready' | 'failed'
+  onboardingVideoHasPoster?: boolean
 }
 
 export interface CrsInfo {

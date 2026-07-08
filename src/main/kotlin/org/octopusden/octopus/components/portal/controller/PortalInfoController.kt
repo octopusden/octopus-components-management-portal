@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.portal.controller
 import com.fasterxml.jackson.annotation.JsonInclude
 import org.octopusden.octopus.components.portal.configuration.PortalComponentProperties
 import org.octopusden.octopus.components.portal.configuration.PortalLinksProperties
+import org.octopusden.octopus.components.portal.onboarding.OnboardingVideoService
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.info.BuildProperties
 import org.springframework.web.bind.annotation.GetMapping
@@ -15,6 +16,7 @@ class PortalInfoController(
     private val buildProperties: BuildProperties,
     private val linksProperties: PortalLinksProperties,
     private val componentProperties: PortalComponentProperties,
+    private val onboardingVideoService: OnboardingVideoService,
     // Binds from PORTAL_ENVIRONMENT_LABEL via application.yaml. A single scalar,
     // so @Value instead of a dedicated @ConfigurationProperties class — same
     // pattern as registry-base-url in EmployeeServiceIntegrationHealthIndicator.
@@ -51,6 +53,13 @@ class PortalInfoController(
         solutionKeyPatterns = componentProperties.solutionKeyPatterns
             .map(String::trim)
             .filter(String::isNotBlank),
+        // Onboarding-video availability lives on /config (authenticated) rather than
+        // /portal/info (anonymous) so we neither leak the internal media repo's readiness
+        // to unauthenticated callers nor perturb the strict {name, version} info contract.
+        // Tri-/quad-state (not a bare boolean) so the SPA can tell "off forever" (disabled/
+        // failed → don't poll) from "still cloning" (loading → poll until ready/failed).
+        onboardingVideoStatus = onboardingVideoService.status().name.lowercase(),
+        onboardingVideoHasPoster = onboardingVideoService.hasPoster(),
     )
 
     // NON_NULL so a prod portal (no PORTAL_ENVIRONMENT_LABEL) keeps the exact
@@ -76,5 +85,8 @@ class PortalInfoController(
 
     data class ConfigResponse(
         val solutionKeyPatterns: List<String>,
+        // "disabled" | "loading" | "ready" | "failed"
+        val onboardingVideoStatus: String,
+        val onboardingVideoHasPoster: Boolean,
     )
 }
