@@ -618,6 +618,7 @@ describe('ComponentFilters extended search (items 5 / 10)', () => {
     // falls back to DEFAULT_SEARCHABILITY = 'Extended' and shows in the row.
     expect(screen.getByLabelText('Client code')).toBeDefined()
     expect(screen.getByLabelText('Jira project key')).toBeDefined()
+    expect(screen.getByLabelText('Java version')).toBeDefined()
     expect(screen.getByLabelText('VCS path')).toBeDefined()
     expect(screen.getByLabelText('Production branch')).toBeDefined()
     expect(screen.getByLabelText('Parent component')).toBeDefined()
@@ -649,6 +650,29 @@ describe('ComponentFilters extended search (items 5 / 10)', () => {
       expect.objectContaining({ vcsPath: 'repo/acme' }),
     )
     vi.useRealTimers()
+  })
+
+  it('selecting a Java version emits a javaVersion filter (extended, multi-value)', async () => {
+    mockFieldOptions('build.javaVersion', ['17', '21'])
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    await userEvent.click(screen.getByRole('button', { name: /extended search/i }))
+    // The <Label htmlFor="filter-javaVersion"> makes the picker trigger's
+    // accessible name "Java version" (label wins over the placeholder text).
+    await userEvent.click(screen.getByRole('button', { name: 'Java version' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: '17' }))
+    const lastCall = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
+    expect(lastCall.javaVersion).toEqual(['17'])
+  })
+
+  it('a preset javaVersion filter auto-opens extended search and shows the control', () => {
+    render(
+      <ComponentFilters
+        filter={{ archived: false, javaVersion: ['17'] }}
+        onFilterChange={onFilterChange}
+      />,
+    )
+    // javaVersion preset → extendedActive → panel auto-opens without a toggle click.
+    expect(screen.getByLabelText('Java version')).toBeDefined()
   })
 
   it('selecting "Yes" on the Can-be-parent tri-state emits canBeParent: true', async () => {

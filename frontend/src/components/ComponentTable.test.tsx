@@ -387,6 +387,47 @@ describe('ComponentTable', () => {
     })
   })
 
+  describe('Java Version column', () => {
+    afterEach(() => {
+      mockedUseFieldConfig.mockReturnValue({ data: undefined } as unknown as ReturnType<
+        typeof useFieldConfig
+      >)
+    })
+
+    it('renders a Java Version column header', () => {
+      renderTable([makeComponent()])
+      expect(screen.getByRole('columnheader', { name: 'Java Version' })).toBeDefined()
+    })
+
+    it('places the Java Version column immediately after Build System', () => {
+      renderTable([makeComponent()])
+      const headers = screen.getAllByRole('columnheader').map((h) => h.textContent?.trim())
+      const bsIdx = headers.findIndex((h) => h === 'Build System')
+      const jvIdx = headers.findIndex((h) => h === 'Java Version')
+      expect(bsIdx).toBeGreaterThanOrEqual(0)
+      expect(jvIdx).toBe(bsIdx + 1)
+    })
+
+    it('renders javaVersion as a Badge when set', () => {
+      renderTable([makeComponent({ javaVersion: '21' })])
+      expect(within(cellForColumn('Java Version')).getByText('21')).toBeDefined()
+    })
+
+    it('renders em-dash when javaVersion is null/absent', () => {
+      renderTable([makeComponent({ javaVersion: null })])
+      expect(cellForColumn('Java Version').textContent).toContain('—')
+    })
+
+    it('hides the Java Version column when build.javaVersion visibility is hidden', () => {
+      mockedUseFieldConfig.mockReturnValue({
+        data: { build: { javaVersion: { visibility: 'hidden' } } },
+      } as unknown as ReturnType<typeof useFieldConfig>)
+      renderTable([makeComponent({ javaVersion: '21' })])
+      expect(screen.queryByRole('columnheader', { name: 'Java Version' })).toBeNull()
+      expect(screen.queryByText('21')).toBeNull()
+    })
+  })
+
   describe('System column visibility (field-config `component.system.visibility`)', () => {
     // The list table honours the field-config visibility flag: an installation
     // that sets `component.system.visibility: hidden` in service-config expects

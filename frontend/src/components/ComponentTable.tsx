@@ -149,6 +149,7 @@ function ChipListCell({
 const LIST_VISIBILITY_GATED: Record<string, string> = {
   systems: 'component.system',
   releaseManagers: 'component.releaseManager',
+  javaVersion: 'build.javaVersion',
 }
 
 const columns = [
@@ -216,6 +217,22 @@ const columns = [
       return (
         <Badge variant="secondary" className="text-xs font-mono">
           {bs}
+        </Badge>
+      )
+    },
+    enableSorting: false,
+  }),
+  // BASE-row javaVersion, placed right after Build System (both come from the
+  // build aspect). Single scalar → mono Badge like Build System; em-dash when
+  // the BASE row carries no javaVersion.
+  columnHelper.accessor('javaVersion', {
+    header: 'Java Version',
+    cell: ({ getValue }) => {
+      const jv = getValue()
+      if (!jv) return <span className="text-muted-foreground">—</span>
+      return (
+        <Badge variant="secondary" className="text-xs font-mono">
+          {jv}
         </Badge>
       )
     },

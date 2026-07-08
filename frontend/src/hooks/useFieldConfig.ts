@@ -222,6 +222,7 @@ export const DEFAULT_SEARCHABILITY: Record<string, Searchable> = {
   'component.system': 'Main',
   buildSystem: 'Main',
   'build.buildSystem': 'Main',
+  'build.javaVersion': 'Extended',
   'component.labels': 'Main',
   'component.componentOwner': 'Main',
   'component.clientCode': 'Extended',

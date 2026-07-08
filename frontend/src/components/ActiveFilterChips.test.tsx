@@ -17,6 +17,13 @@ describe('describeFilterChips — derive chips from filter + preset', () => {
     expect(owner[0]!.label).toMatch(/owner: alice/i)
   })
 
+  it('emits one Java version chip per selected value', () => {
+    const chips = describeFilterChips({ archived: false, javaVersion: ['11', '17'] }, null)
+    const java = chips.filter((c) => c.key === 'javaVersion')
+    expect(java.map((c) => c.value)).toEqual(['11', '17'])
+    expect(java[0]!.label).toMatch(/java version: 11/i)
+  })
+
   it('emits a search chip carrying the term', () => {
     const chips = describeFilterChips({ archived: false, search: 'foo' }, null)
     expect(chips).toHaveLength(1)

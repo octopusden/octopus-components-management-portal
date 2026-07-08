@@ -71,6 +71,15 @@ describe('serializeFilterState', () => {
     expect(params.get('labels')).toBe('core')
   })
 
+  it('round-trips javaVersion through the URL (parse + serialize)', () => {
+    expect(parseFilterParams(new URLSearchParams('javaVersion=11,17')).filter.javaVersion).toEqual([
+      '11',
+      '17',
+    ])
+    const params = serializeFilterState({ filter: { archived: false, javaVersion: ['11', '17'] }, preset: null })
+    expect(params.get('javaVersion')).toBe('11,17')
+  })
+
   it('writes archived=true when archived is set', () => {
     const params = serializeFilterState({ filter: { archived: true }, preset: null })
     expect(params.get('archived')).toBe('true')

@@ -272,6 +272,28 @@ describe('useComponents — URL params', () => {
     expect(url).toContain('clientCode=ACME-PORTAL%2COTHER-CC')
   })
 
+  it('passes multi-value javaVersion as CSV', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result } = renderHook(
+      () => useComponents({ filter: { javaVersion: ['11', '17'] } }),
+      { wrapper: makeWrapper() },
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const url = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    expect(url).toContain('javaVersion=11%2C17')
+  })
+
+  it('omits javaVersion when the array is empty', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result } = renderHook(
+      () => useComponents({ filter: { javaVersion: [] } }),
+      { wrapper: makeWrapper() },
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const url = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    expect(url).not.toContain('javaVersion=')
+  })
+
   it('omits clientCode when the array is empty', async () => {
     mockApi.get.mockResolvedValue(emptyPage)
     const { result } = renderHook(

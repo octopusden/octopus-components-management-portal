@@ -1061,6 +1061,7 @@ export interface components {
             displayName?: string;
             /** Format: uuid */
             id: string;
+            javaVersion?: string;
             jiraProjectKey?: string;
             labels: string[];
             name: string;
@@ -1515,6 +1516,7 @@ export interface components {
             triggeredBy?: string;
         };
         ServiceEventResponse: {
+            category: string;
             correlationId?: string;
             detail?: {
                 [key: string]: Record<string, never>;
@@ -2952,6 +2954,7 @@ export interface operations {
         parameters: {
             query: {
                 eventType?: string;
+                category?: string;
                 source?: string;
                 status?: string;
                 from?: string;
@@ -3582,6 +3585,7 @@ export interface operations {
                 releaseManager?: string[];
                 securityChampion?: string[];
                 buildSystem?: string[];
+                javaVersion?: string[];
                 labels?: string[];
                 canBeParent?: boolean;
                 clientCode?: string[];
