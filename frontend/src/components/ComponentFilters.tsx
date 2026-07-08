@@ -129,6 +129,7 @@ export function ComponentFilters({
     !!filter.clientCode?.length ||
     filter.solution !== undefined ||
     !!filter.jiraProjectKey?.length ||
+    !!filter.javaVersion?.length ||
     filter.jiraTechnical !== undefined ||
     !!filter.vcsPath ||
     !!filter.productionBranch ||
@@ -184,6 +185,10 @@ export function ComponentFilters({
     onFilterChange({ ...filter, jiraProjectKey: next.length ? next : undefined })
   }
 
+  const handleJavaVersionChange = (next: string[]) => {
+    onFilterChange({ ...filter, javaVersion: next.length ? next : undefined })
+  }
+
   const handleParentComponentNameChange = (next: string[]) => {
     onFilterChange({ ...filter, parentComponentName: next.length ? next : undefined })
   }
@@ -217,6 +222,11 @@ export function ComponentFilters({
   const { data: jiraProjectKeyOptions = [], isLoading: jiraProjectKeysLoading } = useJiraProjectKeys({
     enabled: jiraProjectKeysActivated,
   })
+  const [javaVersionsActivated, setJavaVersionsActivated] = useState(false)
+  const { options: javaVersionOptions, isLoading: javaVersionsLoading } = useFieldOptions(
+    'build.javaVersion',
+    { enabled: javaVersionsActivated },
+  )
   const [parentNamesActivated, setParentNamesActivated] = useState(false)
   const { data: parentComponentNameOptions = [], isLoading: parentNamesLoading } = useParentComponentNames({
     enabled: parentNamesActivated,
@@ -232,6 +242,7 @@ export function ComponentFilters({
   const { entry: clientCodeEntry } = useFieldConfigEntry('component.clientCode')
   const { entry: solutionEntry } = useFieldConfigEntry('component.solution')
   const { entry: jiraProjectKeyEntry } = useFieldConfigEntry('jira.projectKey')
+  const { entry: javaVersionEntry } = useFieldConfigEntry('build.javaVersion')
   const { entry: jiraTechnicalEntry } = useFieldConfigEntry('jira.technical')
   const { entry: vcsPathEntry } = useFieldConfigEntry('vcs.vcsPath')
   const { entry: productionBranchEntry } = useFieldConfigEntry('vcs.branch')
@@ -297,6 +308,28 @@ export function ComponentFilters({
             unitLabel="Jira key"
             onOpenChange={(open) => {
               if (open) setJiraProjectKeysActivated(true)
+            }}
+          />
+        </div>
+      ),
+    },
+    {
+      place: place('build.javaVersion', javaVersionEntry),
+      node: (
+        <div key="javaVersion" className="flex flex-col gap-1">
+          <Label htmlFor="filter-javaVersion" className="text-xs text-muted-foreground">
+            Java version
+          </Label>
+          <MultiSelectFilter
+            id="filter-javaVersion"
+            value={filter.javaVersion ?? []}
+            onChange={handleJavaVersionChange}
+            options={javaVersionOptions}
+            isLoading={javaVersionsLoading}
+            placeholder="All Java versions"
+            unitLabel="Java version"
+            onOpenChange={(open) => {
+              if (open) setJavaVersionsActivated(true)
             }}
           />
         </div>

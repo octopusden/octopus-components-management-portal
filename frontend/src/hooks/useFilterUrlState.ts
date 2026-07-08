@@ -22,6 +22,7 @@ const ARRAY_KEYS = [
   'jiraProjectKey',
   'parentComponentName',
   'groupKey',
+  'javaVersion',
   'buildSystem',
   // Phase 1b: the personal RM/SC presets and the Health page's people
   // breakdowns deep-link via these CSV params (?releaseManager=…), so they

@@ -28,6 +28,8 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip'
 import { cn, safeHttpUrl } from '../lib/utils'
 import type { ComponentSummary, ComponentValidation, PortalLinks } from '../lib/types'
 import { usePortalLinks } from '../hooks/useInfo'
+import { useFieldConfig } from '../hooks/useAdminConfig'
+import { visibilityFor } from '../hooks/useFieldConfig'
 
 declare module '@tanstack/react-table' {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -141,6 +143,15 @@ function ChipListCell({
   )
 }
 
+// Table accessorKey → field-config path for columns whose presence is gated on
+// a `visibility: hidden` flag (see visibleColumns). Keep the field-config paths
+// aligned with the editor forms (e.g. GeneralTab uses `component.releaseManager`).
+const LIST_VISIBILITY_GATED: Record<string, string> = {
+  systems: 'component.system',
+  releaseManagers: 'component.releaseManager',
+  javaVersion: 'build.javaVersion',
+}
+
 const columns = [
   columnHelper.accessor('name', {
     header: ({ column }) => (
@@ -190,6 +201,14 @@ const columns = [
     cell: ({ getValue }) => <span>{getValue() ?? '—'}</span>,
     enableSorting: false,
   }),
+  // Release managers are multi-value (ordered CRS v4 child rows) — render as
+  // chips like System/Labels rather than a single-value cell. Placed right
+  // after Owner so the people columns sit together.
+  columnHelper.accessor('releaseManagers', {
+    header: 'Release Manager',
+    cell: ({ getValue }) => <ChipListCell values={getValue()} noun="release manager" />,
+    enableSorting: false,
+  }),
   columnHelper.accessor('buildSystem', {
     header: 'Build System',
     cell: ({ getValue }) => {
@@ -198,6 +217,22 @@ const columns = [
       return (
         <Badge variant="secondary" className="text-xs font-mono">
           {bs}
+        </Badge>
+      )
+    },
+    enableSorting: false,
+  }),
+  // BASE-row javaVersion, placed right after Build System (both come from the
+  // build aspect). Single scalar → mono Badge like Build System; em-dash when
+  // the BASE row carries no javaVersion.
+  columnHelper.accessor('javaVersion', {
+    header: 'Java Version',
+    cell: ({ getValue }) => {
+      const jv = getValue()
+      if (!jv) return <span className="text-muted-foreground">—</span>
+      return (
+        <Badge variant="secondary" className="text-xs font-mono">
+          {jv}
         </Badge>
       )
     },
@@ -359,12 +394,22 @@ export function ComponentTable({
 }: ComponentTableProps) {
   const [sorting, setSorting] = useState<SortingState>([])
   const { data: portalLinks } = usePortalLinks()
+  const { data: fieldConfig } = useFieldConfig()
 
   const visibleColumns = useMemo(() => {
-    const cols = [...columns]
+    // Code-as-config column gating: an installation that sets a field's
+    // `visibility: hidden` in service-config expects the matching list column
+    // gone, not just the editor form control. Map table accessorKey →
+    // field-config path; any column not listed has no list-visibility flag and
+    // always shows (default 'editable' → shown).
+    const cols = columns.filter((col) => {
+      if (!('accessorKey' in col)) return true
+      const fieldPath = LIST_VISIBILITY_GATED[col.accessorKey as string]
+      return !fieldPath || visibilityFor(fieldConfig, fieldPath) !== 'hidden'
+    })
     if (onCopy) cols.push(actionsColumn)
     return cols
-  }, [onCopy])
+  }, [onCopy, fieldConfig])
 
   const table = useReactTable({
     data,
@@ -425,7 +470,15 @@ export function ComponentTable({
               {headerGroup.headers.map((header) => (
                 <TableHead
                   key={header.id}
-                  className={cn(header.column.getCanSort() && 'cursor-pointer select-none')}
+                  className={cn(
+                    header.column.getCanSort() && 'cursor-pointer select-none',
+                    // The list grew past the viewport once System / Release
+                    // Manager / Java Version landed, so the Clone action fell off
+                    // the right edge. Pin the actions column to the right so it
+                    // stays visible while the wide middle columns scroll under it.
+                    header.column.id === 'actions' &&
+                      'sticky right-0 z-20 bg-background border-l',
+                  )}
                 >
                   {header.isPlaceholder
                     ? null
@@ -439,7 +492,15 @@ export function ComponentTable({
           {table.getRowModel().rows.map((row) => (
             <TableRow key={row.id} className={cn(row.original.archived && 'opacity-50')}>
               {row.getVisibleCells().map((cell) => (
-                <TableCell key={cell.id}>
+                <TableCell
+                  key={cell.id}
+                  className={cn(
+                    // Match the sticky-right pin on the header so the Clone
+                    // button rides the right edge; bg keeps scrolled cells from
+                    // bleeding through, border-l separates it from the scroll area.
+                    cell.column.id === 'actions' && 'sticky right-0 z-10 bg-background border-l',
+                  )}
+                >
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
                 </TableCell>
               ))}

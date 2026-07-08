@@ -53,6 +53,8 @@ export function useComponents({ filter, page = 0, size = 20, sort = 'componentKe
   if (filter?.productionBranch) params.set('productionBranch', filter.productionBranch)
   if (filter?.parentComponentName?.length) params.set('parentComponentName', filter.parentComponentName.join(','))
   if (filter?.groupKey?.length) params.set('groupKey', filter.groupKey.join(','))
+  // Java version: exact-match OR across BASE-row values (SYS meta/java-versions), CSV on the wire.
+  if (filter?.javaVersion?.length) params.set('javaVersion', filter.javaVersion.join(','))
   // Phase 1b: personal RM/SC presets + Health people deep-links. Multi-value
   // CSV, OR semantics — CRS now binds `List<String>?` for these (same wire
   // shape as owner/system/buildSystem).
