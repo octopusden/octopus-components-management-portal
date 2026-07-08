@@ -470,7 +470,15 @@ export function ComponentTable({
               {headerGroup.headers.map((header) => (
                 <TableHead
                   key={header.id}
-                  className={cn(header.column.getCanSort() && 'cursor-pointer select-none')}
+                  className={cn(
+                    header.column.getCanSort() && 'cursor-pointer select-none',
+                    // The list grew past the viewport once System / Release
+                    // Manager / Java Version landed, so the Clone action fell off
+                    // the right edge. Pin the actions column to the right so it
+                    // stays visible while the wide middle columns scroll under it.
+                    header.column.id === 'actions' &&
+                      'sticky right-0 z-20 bg-background border-l',
+                  )}
                 >
                   {header.isPlaceholder
                     ? null
@@ -484,7 +492,15 @@ export function ComponentTable({
           {table.getRowModel().rows.map((row) => (
             <TableRow key={row.id} className={cn(row.original.archived && 'opacity-50')}>
               {row.getVisibleCells().map((cell) => (
-                <TableCell key={cell.id}>
+                <TableCell
+                  key={cell.id}
+                  className={cn(
+                    // Match the sticky-right pin on the header so the Clone
+                    // button rides the right edge; bg keeps scrolled cells from
+                    // bleeding through, border-l separates it from the scroll area.
+                    cell.column.id === 'actions' && 'sticky right-0 z-10 bg-background border-l',
+                  )}
+                >
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
                 </TableCell>
               ))}

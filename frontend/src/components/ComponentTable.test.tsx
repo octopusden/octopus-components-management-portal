@@ -777,4 +777,25 @@ describe('ComponentTable — per-row Clone action', () => {
     renderTable([makeComponent({ id: 'c1', name: 'alpha' })])
     expect(screen.queryByRole('button', { name: /clone .* into a new component/i })).toBeNull()
   })
+
+  it('pins the Clone/actions column to the right (sticky) so it stays visible when the table scrolls', () => {
+    renderTable([makeComponent({ id: 'c1', name: 'alpha' })], vi.fn())
+    // The Clone cell and the actions header are sticky-right so the wide middle
+    // columns scroll under them instead of pushing Clone off the viewport.
+    // Assert the FULL sticky contract, not just `sticky` — the opaque bg
+    // (occludes scrolled-under cells), the left border (separator) and the
+    // z-index (paints above scrolled content) are all load-bearing; a
+    // regression dropping any of them would silently break the pinning.
+    const cloneCell = screen
+      .getByRole('button', { name: 'Clone alpha into a new component' })
+      .closest('td')
+    for (const cls of ['sticky', 'right-0', 'z-10', 'bg-background', 'border-l']) {
+      expect(cloneCell?.className).toContain(cls)
+    }
+    const headers = screen.getAllByRole('columnheader')
+    const actionsHeader = headers[headers.length - 1]!
+    for (const cls of ['sticky', 'right-0', 'z-20', 'bg-background', 'border-l']) {
+      expect(actionsHeader.className).toContain(cls)
+    }
+  })
 })
