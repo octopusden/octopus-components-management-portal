@@ -6,9 +6,9 @@ import { useOnboardingVideo } from '@/lib/onboardingVideoStore'
 /**
  * Permanent header entry point for the onboarding presentation video: a quiet
  * always-available "Watch intro" button, rendered only when the backend reports the
- * video `ready`. The first-login nudge lives in OnboardingVideoBanner (a page-wide strip
- * under the header) rather than a floating coachmark here, so it can't collide with the
- * command-palette coachmark and is more noticeable.
+ * video `ready`. The first-login nudge lives in OnboardingVideoBanner (a floating
+ * bottom-left poster card) rather than a coachmark here, so it can't collide with the
+ * command-palette coachmark (top) or the toast viewport (bottom-right).
  */
 export function OnboardingVideoButton() {
   const { data } = useOnboardingVideoStatus()

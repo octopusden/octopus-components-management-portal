@@ -8,11 +8,12 @@ import { useOnboardingSeen } from '@/lib/onboardingSeen'
 const POSTER_URL = `${import.meta.env.BASE_URL}portal/media/onboarding-video/poster`
 
 /**
- * First-login onboarding nudge: a floating card (bottom-right) whose hero is the video's
- * poster frame with a Play overlay — clicking it opens the player. Dismissible via Later
- * (snooze, re-shows up to the cap next session), Don't-show-again (terminal), or × (= Later).
- * Session dismissal lives in the store so it survives navigation (Layout/AppShell remounts);
- * the permanent re-watch path is the header button.
+ * First-login onboarding nudge: a floating card (bottom-LEFT — the bottom-right corner is
+ * the toast viewport, and sticky destructive toasts would otherwise cover it) whose hero is
+ * the video's poster frame with a Play overlay — clicking it opens the player. Watching or
+ * "Not interested" silence it for good; × (or ignoring it) only closes it for the session,
+ * so it shows again next time. Session dismissal lives in the store so it survives
+ * navigation (Layout/AppShell remounts); the permanent re-watch path is the header button.
  */
 export function OnboardingVideoBanner() {
   const { data } = useOnboardingVideoStatus()
@@ -48,7 +49,7 @@ export function OnboardingVideoBanner() {
       role="status"
       aria-label="Onboarding video"
       data-testid="onboarding-video-banner"
-      className="fixed bottom-4 right-4 z-50 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-border bg-card shadow-2xl animate-in fade-in slide-in-from-bottom-2 motion-reduce:animate-none"
+      className="fixed bottom-4 left-4 z-50 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-border bg-card shadow-2xl animate-in fade-in slide-in-from-bottom-2 motion-reduce:animate-none"
     >
       {/* Poster hero with a Play overlay — the whole thing opens the player. */}
       <button
