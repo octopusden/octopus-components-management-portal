@@ -145,11 +145,19 @@ function UsageView({
   distinctViewers: number
   isLoading: boolean
 }) {
+  // Distinct is computed client-side from the loaded page, so once the set exceeds one page
+  // (totalViews > rows shown) it's only a lower bound over the latest N — label it honestly
+  // rather than claiming an exact distinct count that undercounts. (Total views is exact:
+  // it comes from the server's totalElements.)
+  const truncated = totalViews > events.length
   return (
     <div className="space-y-4" data-testid="events-usage-view">
       <div className="grid grid-cols-2 gap-3 sm:max-w-md">
         <StatCard label="Total views" value={totalViews} />
-        <StatCard label="Distinct viewers" value={distinctViewers} />
+        <StatCard
+          label={truncated ? `Distinct viewers (latest ${USAGE_PAGE_SIZE})` : 'Distinct viewers'}
+          value={truncated ? `${distinctViewers}+` : distinctViewers}
+        />
       </div>
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
