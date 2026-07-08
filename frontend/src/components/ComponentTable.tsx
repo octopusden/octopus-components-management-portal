@@ -28,6 +28,8 @@ import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip'
 import { cn, safeHttpUrl } from '../lib/utils'
 import type { ComponentSummary, ComponentValidation, PortalLinks } from '../lib/types'
 import { usePortalLinks } from '../hooks/useInfo'
+import { useFieldConfig } from '../hooks/useAdminConfig'
+import { visibilityFor } from '../hooks/useFieldConfig'
 
 declare module '@tanstack/react-table' {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -141,6 +143,14 @@ function ChipListCell({
   )
 }
 
+// Table accessorKey → field-config path for columns whose presence is gated on
+// a `visibility: hidden` flag (see visibleColumns). Keep the field-config paths
+// aligned with the editor forms (e.g. GeneralTab uses `component.releaseManager`).
+const LIST_VISIBILITY_GATED: Record<string, string> = {
+  systems: 'component.system',
+  releaseManagers: 'component.releaseManager',
+}
+
 const columns = [
   columnHelper.accessor('name', {
     header: ({ column }) => (
@@ -188,6 +198,14 @@ const columns = [
   columnHelper.accessor('componentOwner', {
     header: 'Owner',
     cell: ({ getValue }) => <span>{getValue() ?? '—'}</span>,
+    enableSorting: false,
+  }),
+  // Release managers are multi-value (ordered CRS v4 child rows) — render as
+  // chips like System/Labels rather than a single-value cell. Placed right
+  // after Owner so the people columns sit together.
+  columnHelper.accessor('releaseManagers', {
+    header: 'Release Manager',
+    cell: ({ getValue }) => <ChipListCell values={getValue()} noun="release manager" />,
     enableSorting: false,
   }),
   columnHelper.accessor('buildSystem', {
@@ -359,12 +377,22 @@ export function ComponentTable({
 }: ComponentTableProps) {
   const [sorting, setSorting] = useState<SortingState>([])
   const { data: portalLinks } = usePortalLinks()
+  const { data: fieldConfig } = useFieldConfig()
 
   const visibleColumns = useMemo(() => {
-    const cols = [...columns]
+    // Code-as-config column gating: an installation that sets a field's
+    // `visibility: hidden` in service-config expects the matching list column
+    // gone, not just the editor form control. Map table accessorKey →
+    // field-config path; any column not listed has no list-visibility flag and
+    // always shows (default 'editable' → shown).
+    const cols = columns.filter((col) => {
+      if (!('accessorKey' in col)) return true
+      const fieldPath = LIST_VISIBILITY_GATED[col.accessorKey as string]
+      return !fieldPath || visibilityFor(fieldConfig, fieldPath) !== 'hidden'
+    })
     if (onCopy) cols.push(actionsColumn)
     return cols
-  }, [onCopy])
+  }, [onCopy, fieldConfig])
 
   const table = useReactTable({
     data,

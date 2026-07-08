@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
@@ -13,8 +13,20 @@ vi.mock('../hooks/useInfo', () => ({
   useCrsInfo: vi.fn(),
 }))
 
+// The System list column is gated on the `component.system` field-config
+// visibility. Mock only `useFieldConfig` (preserve the module's other exports)
+// so we can drive the visibility flag without hitting the network. The default
+// implementation returns `{ data: undefined }` → `visibilityFor` falls back to
+// 'editable', so every existing test keeps the System column visible.
+vi.mock('../hooks/useAdminConfig', async (importActual) => {
+  const actual = await importActual<typeof import('../hooks/useAdminConfig')>()
+  return { ...actual, useFieldConfig: vi.fn(() => ({ data: undefined })) }
+})
+
 import { usePortalLinks } from '../hooks/useInfo'
+import { useFieldConfig } from '../hooks/useAdminConfig'
 const mockedUsePortalLinks = vi.mocked(usePortalLinks)
+const mockedUseFieldConfig = vi.mocked(useFieldConfig)
 
 /**
  * Helper: get the body cell that lines up with a header by display name.
@@ -313,6 +325,100 @@ describe('ComponentTable', () => {
       expect(screen.getByText('+1')).toBeDefined()
       // 'SYS4' is overflow — not rendered until the +N toggle is clicked.
       expect(screen.queryByText('SYS4')).toBeNull()
+    })
+  })
+
+  describe('Release Manager column', () => {
+    afterEach(() => {
+      // Reset the shared module mock so a `hidden` set within a test cannot
+      // leak into a later one (robust to reordering / .only / shuffle).
+      mockedUseFieldConfig.mockReturnValue({ data: undefined } as unknown as ReturnType<
+        typeof useFieldConfig
+      >)
+    })
+
+    it('renders a Release Manager column header', () => {
+      renderTable([makeComponent()])
+      expect(screen.getByRole('columnheader', { name: 'Release Manager' })).toBeDefined()
+    })
+
+    it('places the Release Manager column immediately after Owner', () => {
+      renderTable([makeComponent()])
+      const headers = screen.getAllByRole('columnheader').map((h) => h.textContent?.trim())
+      const ownerIdx = headers.findIndex((h) => h === 'Owner')
+      const rmIdx = headers.findIndex((h) => h === 'Release Manager')
+      expect(ownerIdx).toBeGreaterThanOrEqual(0)
+      expect(rmIdx).toBe(ownerIdx + 1)
+    })
+
+    it('renders em-dash when releaseManagers is empty', () => {
+      renderTable([makeComponent({ releaseManagers: [] })])
+      expect(cellForColumn('Release Manager').textContent).toContain('—')
+    })
+
+    it('renders em-dash when releaseManagers is absent (optional field)', () => {
+      // makeComponent omits releaseManagers → getValue() is undefined.
+      renderTable([makeComponent()])
+      expect(cellForColumn('Release Manager').textContent).toContain('—')
+    })
+
+    it('renders a single release manager as a chip', () => {
+      renderTable([makeComponent({ releaseManagers: ['jsmith'] })])
+      expect(within(cellForColumn('Release Manager')).getByText('jsmith')).toBeDefined()
+    })
+
+    it('renders +N overflow badge when more than 3 release managers are present', () => {
+      renderTable([makeComponent({ releaseManagers: ['a', 'b', 'c', 'd'] })])
+      const cell = cellForColumn('Release Manager')
+      expect(within(cell).getByText('a')).toBeDefined()
+      expect(within(cell).getByText('+1')).toBeDefined()
+      expect(within(cell).queryByText('d')).toBeNull()
+    })
+
+    it('hides the Release Manager column when component.releaseManager visibility is hidden', () => {
+      // Same code-as-config gate as the System column — a hidden field-config
+      // entry must remove the list column, not only the editor control.
+      mockedUseFieldConfig.mockReturnValue({
+        data: { component: { releaseManager: { visibility: 'hidden' } } },
+      } as unknown as ReturnType<typeof useFieldConfig>)
+      renderTable([makeComponent({ releaseManagers: ['jsmith'] })])
+      expect(screen.queryByRole('columnheader', { name: 'Release Manager' })).toBeNull()
+      expect(screen.queryByText('jsmith')).toBeNull()
+    })
+  })
+
+  describe('System column visibility (field-config `component.system.visibility`)', () => {
+    // The list table honours the field-config visibility flag: an installation
+    // that sets `component.system.visibility: hidden` in service-config expects
+    // the System column gone from the list, not just from the editor forms.
+    afterEach(() => {
+      // Reset to the default so a `hidden` set here does not leak into the
+      // shared module mock used by every other test in the file.
+      mockedUseFieldConfig.mockReturnValue({ data: undefined } as unknown as ReturnType<typeof useFieldConfig>)
+    })
+
+    it('hides the System column when component.system visibility is hidden', () => {
+      mockedUseFieldConfig.mockReturnValue({
+        data: { component: { system: { visibility: 'hidden' } } },
+      } as unknown as ReturnType<typeof useFieldConfig>)
+      renderTable([makeComponent({ systems: ['SYS1'] })])
+      expect(screen.queryByRole('columnheader', { name: 'System' })).toBeNull()
+      // The value chip must be gone too — not just the header.
+      expect(screen.queryByText('SYS1')).toBeNull()
+    })
+
+    it('shows the System column when component.system visibility is editable', () => {
+      mockedUseFieldConfig.mockReturnValue({
+        data: { component: { system: { visibility: 'editable' } } },
+      } as unknown as ReturnType<typeof useFieldConfig>)
+      renderTable([makeComponent({ systems: ['SYS1'] })])
+      expect(screen.getByRole('columnheader', { name: 'System' })).toBeDefined()
+    })
+
+    it('shows the System column when no field-config is present (defaults to editable)', () => {
+      // Default mock → data undefined → visibilityFor falls back to 'editable'.
+      renderTable([makeComponent({ systems: ['SYS1'] })])
+      expect(screen.getByRole('columnheader', { name: 'System' })).toBeDefined()
     })
   })
 
