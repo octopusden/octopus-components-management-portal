@@ -152,6 +152,21 @@ const LIST_VISIBILITY_GATED: Record<string, string> = {
   javaVersion: 'build.javaVersion',
 }
 
+// Option A — keep the ~10-column table within the viewport instead of letting a
+// long Component Key / Owner push it past the right edge (where the sticky Clone
+// column then paints over Status/Updated). Cap the two text-heavy columns by id;
+// their cells truncate with an ellipsis inside the cap (full value on hover).
+const COMPACT_MAX_WIDTH: Record<string, string> = {
+  name: 'max-w-[280px]',
+  componentOwner: 'max-w-[140px]',
+}
+
+// Tighter than the shadcn table default (cells p-4, headers h-12 px-4) so the
+// full column set fits a normal viewport. twMerge lets these override the
+// primitive's padding cleanly.
+const COMPACT_CELL_PADDING = 'px-3 py-2.5'
+const COMPACT_HEAD_PADDING = 'h-11 px-3'
+
 const columns = [
   columnHelper.accessor('name', {
     header: ({ column }) => (
@@ -176,19 +191,30 @@ const columns = [
       // ValidationBadge renders null, so nothing extra appears before the name.
       const validation = table.options.meta?.validationByComponent?.get(row.original.name)
       return (
+        // min-w-0 lets the flex column shrink below its content width so the
+        // links/spans below can truncate inside the max-width-capped cell
+        // (Option A: keep the table within the viewport instead of overflowing).
         <div className="flex items-start gap-1.5">
           <ValidationBadge validation={validation} />
-          <div className="flex flex-col">
+          <div className="flex flex-col min-w-0">
             <Link
               to={`/components/${row.original.id}`}
-              className="font-medium text-primary hover:underline"
+              // truncate + title: the visible key is clipped with an ellipsis
+              // when long, but the full value is one hover away (native title).
+              title={row.original.name}
+              className="font-medium text-primary hover:underline truncate"
             >
               {row.original.name}
             </Link>
             {/* displayName is nullable (null when no componentDisplayName); show the secondary
                 line only when present AND distinct from the name (not a redundant echo). */}
             {row.original.displayName && row.original.displayName !== row.original.name && (
-              <span className="text-xs text-muted-foreground">{row.original.displayName}</span>
+              <span
+                title={row.original.displayName}
+                className="text-xs text-muted-foreground truncate"
+              >
+                {row.original.displayName}
+              </span>
             )}
           </div>
         </div>
@@ -198,7 +224,17 @@ const columns = [
   }),
   columnHelper.accessor('componentOwner', {
     header: 'Owner',
-    cell: ({ getValue }) => <span>{getValue() ?? '—'}</span>,
+    cell: ({ getValue }) => {
+      const owner = getValue()
+      if (!owner) return <span className="text-muted-foreground">—</span>
+      // Truncate + title, mirroring the Component Key cell: a long owner id is
+      // clipped inside the max-width-capped column, full value on hover.
+      return (
+        <span title={owner} className="block truncate">
+          {owner}
+        </span>
+      )
+    },
     enableSorting: false,
   }),
   // Release managers are multi-value (ordered CRS v4 child rows) — render as
@@ -357,8 +393,9 @@ const columns = [
 // Per-row Clone action — appended to `columns` only when the page provides an
 // `onCopy` callback (CREATE_COMPONENTS holders), so viewers never see the
 // column. The handler travels via table meta like `links` does. The action is
-// labelled "Clone" (icon + text) with a "Clone <key> into a new component"
-// tooltip; the underlying prefill (sourceId) and gating are unchanged.
+// icon-only (a CopyPlus glyph) to reclaim horizontal width — the "Clone <key>
+// into a new component" copy lives on the aria-label + tooltip, so the affordance
+// stays discoverable without a text label. Prefill (sourceId) and gating unchanged.
 const actionsColumn = columnHelper.display({
   id: 'actions',
   header: '',
@@ -371,12 +408,12 @@ const actionsColumn = columnHelper.display({
         <TooltipTrigger asChild>
           <Button
             variant="ghost"
-            size="sm"
+            size="icon"
+            className="h-8 w-8"
             aria-label={tooltip}
             onClick={() => onCopy(row.original.id)}
           >
             <CopyPlus className="h-4 w-4" />
-            Clone
           </Button>
         </TooltipTrigger>
         <TooltipContent>{tooltip}</TooltipContent>
@@ -426,7 +463,14 @@ export function ComponentTable({
     return (
       <div className="rounded-md border">
         <Table>
-          <SkeletonTable rows={8} cols={visibleColumns.length} />
+          {/* Match the populated table's compact padding so the far-more-common
+              skeleton→data transition doesn't jump in header/row height. */}
+          <SkeletonTable
+            rows={8}
+            cols={visibleColumns.length}
+            headClassName={COMPACT_HEAD_PADDING}
+            cellClassName={COMPACT_CELL_PADDING}
+          />
         </Table>
       </div>
     )
@@ -440,7 +484,9 @@ export function ComponentTable({
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
+                  // Match the populated table's compact header padding so the
+                  // empty-state header row doesn't visibly jump when rows load in.
+                  <TableHead key={header.id} className={COMPACT_HEAD_PADDING}>
                     {header.isPlaceholder
                       ? null
                       : flexRender(header.column.columnDef.header, header.getContext())}
@@ -471,11 +517,15 @@ export function ComponentTable({
                 <TableHead
                   key={header.id}
                   className={cn(
+                    COMPACT_HEAD_PADDING,
+                    COMPACT_MAX_WIDTH[header.column.id],
                     header.column.getCanSort() && 'cursor-pointer select-none',
                     // The list grew past the viewport once System / Release
                     // Manager / Java Version landed, so the Clone action fell off
                     // the right edge. Pin the actions column to the right so it
-                    // stays visible while the wide middle columns scroll under it.
+                    // stays visible while the wide middle columns scroll under it
+                    // (safety net — Option A caps the wide columns so scroll is
+                    // rarely needed, but a very narrow viewport can still trigger it).
                     header.column.id === 'actions' &&
                       'sticky right-0 z-20 bg-background border-l',
                   )}
@@ -495,6 +545,8 @@ export function ComponentTable({
                 <TableCell
                   key={cell.id}
                   className={cn(
+                    COMPACT_CELL_PADDING,
+                    COMPACT_MAX_WIDTH[cell.column.id],
                     // Match the sticky-right pin on the header so the Clone
                     // button rides the right edge; bg keeps scrolled cells from
                     // bleeding through, border-l separates it from the scroll area.

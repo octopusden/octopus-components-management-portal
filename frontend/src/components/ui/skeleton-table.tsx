@@ -1,5 +1,6 @@
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from './table'
 import { SkeletonBlock } from './skeleton-block'
+import { cn } from '../../lib/utils'
 
 export interface SkeletonTableProps {
   /** Number of body rows to render. Default: 8. */
@@ -8,6 +9,14 @@ export interface SkeletonTableProps {
   cols: number
   /** Whether to render a skeleton TableHeader row. Default: true. */
   showHeader?: boolean
+  /**
+   * Extra classes for skeleton header cells — pass the consumer's own header
+   * padding (e.g. a compact `h-11 px-3`) so the skeleton→data transition does
+   * not jump in row height. Defaults to the shadcn primitive's padding.
+   */
+  headClassName?: string
+  /** Extra classes for skeleton body cells — same rationale as headClassName. */
+  cellClassName?: string
 }
 
 /**
@@ -23,14 +32,20 @@ export interface SkeletonTableProps {
  * on it without ambiguity (multiple `skeleton-block` children would
  * otherwise need disambiguation).
  */
-export function SkeletonTable({ rows = 8, cols, showHeader = true }: SkeletonTableProps) {
+export function SkeletonTable({
+  rows = 8,
+  cols,
+  showHeader = true,
+  headClassName,
+  cellClassName,
+}: SkeletonTableProps) {
   return (
     <>
       {showHeader && (
         <TableHeader>
           <TableRow>
             {Array.from({ length: cols }).map((_, i) => (
-              <TableHead key={i}>
+              <TableHead key={i} className={cn(headClassName)}>
                 <SkeletonBlock height="h-4" width="w-24" />
               </TableHead>
             ))}
@@ -41,7 +56,7 @@ export function SkeletonTable({ rows = 8, cols, showHeader = true }: SkeletonTab
         {Array.from({ length: rows }).map((_, i) => (
           <TableRow key={i}>
             {Array.from({ length: cols }).map((_, j) => (
-              <TableCell key={j}>
+              <TableCell key={j} className={cn(cellClassName)}>
                 <SkeletonBlock
                   height="h-4"
                   width=""

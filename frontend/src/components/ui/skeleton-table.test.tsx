@@ -37,4 +37,20 @@ describe('SkeletonTable', () => {
     const tbody = screen.getByTestId('skeleton-table')
     expect(within(tbody).getAllByTestId('skeleton-block').length).toBe(3)
   })
+
+  it('applies headClassName to header cells and cellClassName to body cells', () => {
+    // Lets a consumer match its populated table's padding (e.g. ComponentTable's
+    // compact cells) so the skeleton→data transition doesn't jump.
+    render(
+      <Table>
+        <SkeletonTable rows={1} cols={2} headClassName="h-11 px-3" cellClassName="px-3 py-2.5" />
+      </Table>,
+    )
+    const ths = document.querySelectorAll('thead th')
+    expect(ths.length).toBe(2)
+    ths.forEach((th) => expect(th.className).toContain('h-11'))
+    const tds = screen.getByTestId('skeleton-table').querySelectorAll('td')
+    expect(tds.length).toBe(2)
+    tds.forEach((td) => expect(td.className).toContain('py-2.5'))
+  })
 })

@@ -738,7 +738,7 @@ describe('ComponentTable — per-row Clone action', () => {
     mockLinks(null)
   })
 
-  it('renders a Clone button per row (icon + label) and reports the row id when onCopy is provided', async () => {
+  it('renders an icon-only Clone button per row (accessible name retained) and reports the row id when onCopy is provided', async () => {
     const onCopy = vi.fn()
     renderTable(
       [
@@ -747,12 +747,13 @@ describe('ComponentTable — per-row Clone action', () => {
       ],
       onCopy,
     )
-    // The action is labelled "Clone" with a "Clone <key> into a new component"
-    // accessible name (used as both aria-label and the tooltip text).
+    // The action keeps its "Clone <key> into a new component" accessible name
+    // (aria-label + tooltip) but drops the visible "Clone" text label to reclaim
+    // horizontal width — icon-only. getByRole still resolves it by aria-label.
     const alphaClone = screen.getByRole('button', { name: 'Clone alpha into a new component' })
     expect(screen.getByRole('button', { name: 'Clone beta into a new component' })).toBeDefined()
-    // The visible label reads "Clone" (not the old "Create similar" copy).
-    expect(alphaClone.textContent).toContain('Clone')
+    // No visible "Clone" text node — the button renders the icon alone.
+    expect(alphaClone.textContent).not.toContain('Clone')
     await userEvent.click(alphaClone)
     expect(onCopy).toHaveBeenCalledWith('c1')
   })
@@ -776,6 +777,48 @@ describe('ComponentTable — per-row Clone action', () => {
   it('renders no Clone buttons or actions column when onCopy is omitted', () => {
     renderTable([makeComponent({ id: 'c1', name: 'alpha' })])
     expect(screen.queryByRole('button', { name: /clone .* into a new component/i })).toBeNull()
+  })
+
+  it('renders the Clone button as a compact square (icon-only footprint, no text label)', () => {
+    renderTable([makeComponent({ id: 'c1', name: 'alpha' })], vi.fn())
+    // Icon-only button uses the size="icon" square footprint (overridden to a
+    // tighter 8×8) rather than the label-bearing default width.
+    const btn = screen.getByRole('button', { name: 'Clone alpha into a new component' })
+    expect(btn.className).toContain('w-8')
+  })
+})
+
+describe('ComponentTable — compact fit (Option A: truncate wide text columns)', () => {
+  beforeEach(() => {
+    mockLinks(null)
+  })
+
+  it('truncates a long Component Key but exposes the full name via the title attribute', () => {
+    const longName = 'this-is-a-very-long-component-key-that-would-otherwise-widen-the-table'
+    renderTable([makeComponent({ id: 'c1', name: longName, displayName: null })])
+    const link = screen.getByRole('link', { name: longName })
+    // Full value recoverable on hover (native title) even though the visible
+    // text is clipped with an ellipsis.
+    expect(link.getAttribute('title')).toBe(longName)
+    expect(link.className).toContain('truncate')
+  })
+
+  it('bounds the Component Key cell width so a long key cannot widen the table', () => {
+    const longName = 'another-extremely-long-component-key-value-for-width-bounding-check'
+    renderTable([makeComponent({ id: 'c1', name: longName })])
+    const nameCell = cellForColumn('Component Key')
+    // A max-width utility caps the column; the inner content truncates within it.
+    expect(nameCell.className).toMatch(/max-w-/)
+  })
+
+  it('truncates a long Owner but exposes the full owner via the title attribute', () => {
+    const owner = 'a-very-long-owner-identifier-that-should-be-clipped'
+    renderTable([makeComponent({ id: 'c1', componentOwner: owner })])
+    const cell = cellForColumn('Owner')
+    expect(cell.className).toMatch(/max-w-/)
+    const inner = cell.querySelector('[title]')
+    expect(inner?.getAttribute('title')).toBe(owner)
+    expect(inner?.className).toContain('truncate')
   })
 
   it('pins the Clone/actions column to the right (sticky) so it stays visible when the table scrolls', () => {
