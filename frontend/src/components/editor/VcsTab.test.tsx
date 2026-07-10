@@ -26,8 +26,14 @@ vi.mock('./overridesDraft', () => ({
 }))
 
 // Stub the modal — its internals are covered by OverrideRowEditor.test.tsx.
+// Capture the props VcsTab opens it with so we can assert the wiring.
+type CapturedEditorProps = { open: boolean; mode: string; presetAttribute?: string; override?: FieldOverride; collapseMemberIds?: string[] }
+let lastEditorProps: CapturedEditorProps | null = null
 vi.mock('./OverrideRowEditor', () => ({
-  OverrideRowEditor: (props: { open: boolean }) => (props.open ? <div data-testid="override-row-editor" /> : null),
+  OverrideRowEditor: (props: CapturedEditorProps) => {
+    lastEditorProps = props
+    return props.open ? <div data-testid="override-row-editor" /> : null
+  },
 }))
 
 function makeBaseRow(overrides: Partial<ComponentConfiguration> = {}): ComponentConfiguration {
@@ -76,6 +82,7 @@ const mockUseFieldOptions = vi.mocked(useFieldOptions)
 beforeEach(() => {
   vi.clearAllMocks()
   mockEffective = []
+  lastEditorProps = null
   mockUseAdminFieldConfig.mockReturnValue({ data: undefined, isLoading: false, isError: false })
   mockUseCurrentUser.mockReturnValue({ data: adminUser } as unknown as ReturnType<typeof useCurrentUser>)
   mockUseFieldOptions.mockReturnValue({ options: [], isLoading: false })
@@ -226,6 +233,14 @@ describe('VcsTab — per-range overrides', () => {
     updatedAt: null,
   })
 
+  // Two contiguous overrides with the SAME (empty) entry list — coalesce into
+  // one row spanning [1.0,1.2.474) (`)` meets `[` at the join).
+  const vcsEmpty = (range: string, id: string): FieldOverride => ({
+    id, overriddenAttribute: 'vcs.settings', versionRange: range, rowType: 'MARKER',
+    value: null, markerChildren: { vcsEntries: [] }, createdAt: null, updatedAt: null,
+  })
+  const contiguousPair = () => [vcsEmpty('[1.0,1.2.471)', 'a'), vcsEmpty('[1.2.471,1.2.474)', 'b')]
+
   it('lists a per-range VCS override with its tag summary', () => {
     mockEffective = [vcsMarker('o1', '[1.0.49]', 'escrow_tag_1.0.49')]
     renderTab(makeComponent())
@@ -249,17 +264,48 @@ describe('VcsTab — per-range overrides', () => {
     expect(screen.queryAllByTestId('vcs-per-range-row')).toHaveLength(0)
   })
 
-  it('opens the override editor when Add override is clicked', () => {
+  it('opening Add passes the vcs.settings preset in create mode (no override)', () => {
     renderTab(makeComponent())
     fireEvent.click(screen.getByRole('button', { name: /add override/i }))
     expect(screen.getByTestId('override-row-editor')).toBeDefined()
+    expect(lastEditorProps).toMatchObject({ open: true, mode: 'create', presetAttribute: 'vcs.settings' })
+    expect(lastEditorProps!.override).toBeUndefined()
   })
 
-  it('queues delete for the override in a row', () => {
+  it('editing a single-member override passes that override with no collapse', () => {
+    mockEffective = [vcsMarker('o1', '[1.0.49]', 't')]
+    renderTab(makeComponent())
+    fireEvent.click(screen.getByRole('button', { name: /edit override/i }))
+    expect(lastEditorProps).toMatchObject({ open: true, mode: 'edit' })
+    expect(lastEditorProps!.override?.id).toBe('o1')
+    expect(lastEditorProps!.collapseMemberIds).toBeUndefined()
+  })
+
+  it('editing a coalesced group opens the merged range and passes the extra member ids to collapse', () => {
+    mockEffective = contiguousPair()
+    renderTab(makeComponent())
+    fireEvent.click(screen.getByRole('button', { name: /edit override \[1\.0,1\.2\.474\)/i }))
+    expect(lastEditorProps).toMatchObject({ open: true, mode: 'edit' })
+    expect(lastEditorProps!.override?.id).toBe('a') // representative = lowest range
+    expect(lastEditorProps!.override?.versionRange).toBe('[1.0,1.2.474)')
+    expect(lastEditorProps!.collapseMemberIds).toEqual(['b'])
+  })
+
+  it('queues delete for a single-member override', () => {
     mockEffective = [vcsMarker('o1', '[1.0.49]', 't')]
     renderTab(makeComponent())
     fireEvent.click(screen.getByRole('button', { name: /delete override/i }))
     expect(mockQueueDelete).toHaveBeenCalledWith('o1')
+    expect(mockQueueDelete).toHaveBeenCalledTimes(1)
+  })
+
+  it('deleting a coalesced group queues a delete for every member', () => {
+    mockEffective = contiguousPair()
+    renderTab(makeComponent())
+    fireEvent.click(screen.getByRole('button', { name: /delete override \[1\.0,1\.2\.474\)/i }))
+    expect(mockQueueDelete).toHaveBeenCalledWith('a')
+    expect(mockQueueDelete).toHaveBeenCalledWith('b')
+    expect(mockQueueDelete).toHaveBeenCalledTimes(2)
   })
 })
 

@@ -149,8 +149,8 @@ export function parseSimpleSegment(range: string): SimpleRange | null {
   if (/[\])][\s]*,[\s]*[[(]/.test(compact)) return null
   // Exact-version ("hard version") form `[X]`: no comma, square brackets only.
   // lo == hi, both inclusive — mirrors the CRS server + releng VersionRange.
-  // A non-dot-numeric bound (qualifier) yields null lo/hi so callers defer to
-  // the server, consistent with the two-bound qualifier handling below.
+  // A non-dot-numeric bound (qualifier) makes this return null (unparseable) so
+  // callers defer to the server, consistent with the two-bound handling below.
   const exact = /^\[([^,[\]()]+)]$/.exec(compact)
   if (exact) {
     const v = parseDotNumeric(exact[1]!)
