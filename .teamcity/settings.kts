@@ -14,10 +14,10 @@ project {
         param("COMPONENT_NAME", "components-management-portal")
         param("OCTOPUS_MODULE_NAME", "octopus-components-management-portal")
         param("OKD_IMAGE_NAME", "components-management-portal")
-        // Placeholder until the first real release through the chain (read by
-        // id50ReleasePostProcessingAuto as %LAST_RELEASE_VERSION%); bump it to the
-        // released value afterwards.
-        param("LAST_RELEASE_VERSION", "0.0.1")
+        // Mutable release state: the actual value lives on the parent `Octopus`
+        // project (UI-managed, REST-writable) — this project is read-only under
+        // versioned settings, so post-processing cannot write a param here.
+        param("LAST_RELEASE_VERSION", "%LAST_RELEASE_VERSION_COMPONENTS_MANAGEMENT_PORTAL%")
         // Empty so the OctopusRelease template computes the version at build time
         // (mirrors CRS, which keeps PROJECT_VERSION ""). id40 reads the computed
         // value via id10CompileUtAuto.depParamRefs["PROJECT_VERSION"].
@@ -270,11 +270,16 @@ object id50ReleasePostProcessingAuto : BuildType({
     id("50ReleasePostProcessingAuto")
     name = "[4.0] Release Post Processing [AUTO]"
     // LAST_RELEASE_VERSION is inherited from the project level; do NOT redeclare it
-    // here. A build-config param `LAST_RELEASE_VERSION = %LAST_RELEASE_VERSION%` is a
-    // self-reference (X = %X% resolves to itself), which makes TeamCity's parameter
-    // resolution circular. Step 6 "Update latest release version" then 500s when it
-    // PUTs the project param via REST (the server re-resolves the tree and hits the
-    // cycle). CRS's post-processing does not redeclare it — matching that here.
+    // here (`LAST_RELEASE_VERSION = %LAST_RELEASE_VERSION%` is a circular
+    // self-reference).
+
+    params {
+        // Redirect the template's "Update latest release version" step to the
+        // parent `Octopus` project: this project is read-only (versioned
+        // settings), so a REST PUT against it gets 500 ReadOnlyEntityException.
+        param("TEAMCITY_UPDATE_PROJECT_IDS", "Octopus")
+        param("TEAMCITY_UPDATE_PARAMETER_NAME", "LAST_RELEASE_VERSION_COMPONENTS_MANAGEMENT_PORTAL")
+    }
 })
 
 object id50DeployToOkdQaAuto : BuildType({
