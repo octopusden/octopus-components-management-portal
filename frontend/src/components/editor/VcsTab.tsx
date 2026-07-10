@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Lock, Plus, Trash2 } from 'lucide-react'
 import { Label } from '../ui/label'
 import { Input } from '../ui/input'
@@ -9,6 +10,11 @@ import { FieldLabelText } from '../ui/FieldLabelText'
 import { Separator } from '../ui/separator'
 import { isVcsHostSupported, hostOf } from '../../lib/vcsHost'
 import { ExternalRegistrySelect } from './ExternalRegistrySelect'
+import { useVcsOverrides, VCS_MARKER_PATH } from './useVcsOverrides'
+import { VcsPerRange } from './VcsPerRange'
+import { coalescePerRangeOverrides, type PerRangeGroup } from './perRangeGrouping'
+import { OverrideRowEditor } from './OverrideRowEditor'
+import type { FieldOverride } from '../../lib/types'
 import type { VcsSection } from './useVcsSection'
 
 interface VcsTabProps {
@@ -18,7 +24,9 @@ interface VcsTabProps {
   gitBaseUrl?: string | null
 }
 
-/** VCS tab — presentational. State + slice live in `useVcsSection` (page-owned). */
+/** VCS tab — presentational. State + slice live in `useVcsSection` (page-owned);
+ *  per-range VCS overrides live in the shared override draft via
+ *  `useVcsOverrides` (parity with the Distribution tab). */
 export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
   const {
     externalRegistry,
@@ -31,6 +39,26 @@ export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
     removeEntry,
   } = section
   const allowedHost = hostOf(gitBaseUrl)
+
+  // Per-range VCS overrides (the `vcs.settings` marker). Add/edit/delete queue
+  // into the same page-level draft the combined Save flushes.
+  const vcsOverrides = useVcsOverrides()
+  const [editor, setEditor] = useState<{ override?: FieldOverride; collapseMemberIds?: string[] } | null>(null)
+  const openCreate = () => setEditor({})
+  // A coalesced group edits as one override: a lone member edits itself; a
+  // multi-member group edits the merged range and collapses its extras on save.
+  const openEditGroup = (group: PerRangeGroup) => {
+    if (group.members.length === 1) {
+      setEditor({ override: group.members[0] })
+    } else {
+      setEditor({
+        override: { ...group.representative, versionRange: group.displayRange },
+        collapseMemberIds: group.members.slice(1).map((m) => m.id),
+      })
+    }
+  }
+  const deleteGroup = (group: PerRangeGroup) => group.members.forEach((m) => vcsOverrides.queueDelete(m.id))
+  const perRangeCount = coalescePerRangeOverrides(vcsOverrides.overrides).length
 
   return (
     <div className="space-y-6">
@@ -73,6 +101,9 @@ export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
           <div className="flex items-center gap-1">
             <h3 className="text-sm font-semibold"><FieldLabelText path="vcs.entries" fallback="VCS Entries" /></h3>
             <FieldInfo path="vcs.entries" label="VCS Entries" />
+            {perRangeCount > 0 && (
+              <Badge variant="secondary" className="ml-1 text-[10px]">{perRangeCount} per-range</Badge>
+            )}
           </div>
           <Button variant="outline" size="sm" onClick={addEntry} disabled={!canEdit}>
             <Plus className="h-4 w-4" />
@@ -144,7 +175,26 @@ export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
             No VCS entries. Click "Add Entry" to create one.
           </div>
         )}
+
+        {/* Per-range VCS overrides (`vcs.settings` markers) — e.g. a version-
+            specific escrow tag. Replaces the base VCS entries for its range. */}
+        <VcsPerRange
+          overrides={vcsOverrides.overrides}
+          canEdit={canEdit}
+          onAdd={openCreate}
+          onEdit={openEditGroup}
+          onDelete={deleteGroup}
+        />
       </div>
+
+      <OverrideRowEditor
+        open={editor !== null}
+        mode={editor?.override ? 'edit' : 'create'}
+        presetAttribute={editor && !editor.override ? VCS_MARKER_PATH : undefined}
+        override={editor?.override}
+        collapseMemberIds={editor?.collapseMemberIds}
+        onOpenChange={(o) => { if (!o) setEditor(null) }}
+      />
     </div>
   )
 }

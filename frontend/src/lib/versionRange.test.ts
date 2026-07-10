@@ -134,6 +134,24 @@ describe('isValidVersionRange', () => {
     expect(isValidVersionRange('(,1.0],[2.0,3.0))')).toBe(false)
     expect(isValidVersionRange('(,1.0]],[2.0,3.0)')).toBe(false)
   })
+
+  it('accepts an exact-version (hard version) range [1.0.49]', () => {
+    expect(isValidVersionRange('[1.0.49]')).toBe(true)
+  })
+
+  it('accepts a single-digit exact-version range [1]', () => {
+    expect(isValidVersionRange('[1]')).toBe(true)
+  })
+
+  it('rejects a hard version with round parens (only [X] is valid)', () => {
+    expect(isValidVersionRange('(1.0.49)')).toBe(false)
+    expect(isValidVersionRange('[1.0.49)')).toBe(false)
+    expect(isValidVersionRange('(1.0.49]')).toBe(false)
+  })
+
+  it('accepts a composite mixing an exact and a two-bound segment', () => {
+    expect(isValidVersionRange('[1.0.49],[2.0,3.0)')).toBe(true)
+  })
 })
 
 // D5: field-overrides must be closed (or historical-left-unbounded);
@@ -231,6 +249,10 @@ describe('isAllowedOverrideRange (ADR-018: open-upper allowed, all-versions reje
 
   it('allows a composite with an open-upper terminal segment', () => {
     expect(isAllowedOverrideRange('[1.0,2.0),[5.0,)')).toBe(true)
+  })
+
+  it('allows an exact-version (hard version) override range [1.0.49]', () => {
+    expect(isAllowedOverrideRange('[1.0.49]')).toBe(true)
   })
 })
 
@@ -381,6 +403,23 @@ describe('classifyRangeConflict', () => {
     expect(classifyRangeConflict('[1.0-SNAPSHOT,2.0)', '[1.5,3.0)')).toBe('unknown')
   })
 
+  it('classifies two identical exact versions as "equal"', () => {
+    expect(classifyRangeConflict('[1.0.49]', '[1.0.49]')).toBe('equal')
+  })
+
+  it('classifies two distinct exact versions as "none" (disjoint points)', () => {
+    expect(classifyRangeConflict('[1.0.49]', '[1.0.50]')).toBe('none')
+  })
+
+  it('classifies an exact version inside a wider range as "contains"', () => {
+    expect(classifyRangeConflict('[1.0.49]', '[1.0,2.0)')).toBe('contains')
+    expect(classifyRangeConflict('[1.0,2.0)', '[1.0.49]')).toBe('contains')
+  })
+
+  it('classifies an exact version disjoint from a range as "none"', () => {
+    expect(classifyRangeConflict('[1.0.49]', '[2.0,3.0)')).toBe('none')
+  })
+
   it('stays consistent with rangesOverlap', () => {
     const cases: Array<[string, string]> = [
       ['[1.0,3.0)', '[2.0,4.0)'],
@@ -466,6 +505,11 @@ describe('isEmptyVersionRange', () => {
     expect(isEmptyVersionRange('(,0),[0,)')).toBe(false)
     expect(isEmptyVersionRange('[1.0-RC,2.0]')).toBe(false)
     expect(isEmptyVersionRange('garbage')).toBe(false)
+  })
+
+  it('treats an exact-version range [X] as non-empty (it contains exactly X)', () => {
+    expect(isEmptyVersionRange('[1.0.49]')).toBe(false)
+    expect(isEmptyVersionRange('[1]')).toBe(false)
   })
 })
 
