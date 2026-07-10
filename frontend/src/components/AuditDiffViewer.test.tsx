@@ -19,11 +19,12 @@ function entry(overrides: Partial<AuditLogEntry> = {}): AuditLogEntry {
   }
 }
 
-// One changed field (build.javaVersion) among several unchanged ones — mirrors
-// the reported TransactionSwitchKernel edit.
+// One changed field (build.javaVersion) among unchanged ones, with two fields
+// before and three after, so CONTEXT=1 keeps one context row on each side and
+// collapses the rest into a 1-field gap (before) and a 2-field gap (after).
 const updateEntry = entry({
-  oldValue: { 'build.buildSystem': 'MAVEN', 'build.javaVersion': '1.8', 'build.mavenVersion': '3.6.3', 'escrow.generation': 'AUTO' },
-  newValue: { 'build.buildSystem': 'MAVEN', 'build.javaVersion': '17', 'build.mavenVersion': '3.6.3', 'escrow.generation': 'AUTO' },
+  oldValue: { a1: 'x', a2: 'y', 'build.javaVersion': '1.8', b1: 'p', b2: 'q', b3: 'r' },
+  newValue: { a1: 'x', a2: 'y', 'build.javaVersion': '17', b1: 'p', b2: 'q', b3: 'r' },
   changeDiff: { 'build.javaVersion': { old: '1.8', new: '17' } },
 })
 
@@ -41,14 +42,15 @@ describe('AuditDiffViewer', () => {
     expect(screen.getByText('1 changed field')).toBeDefined()
   })
 
-  it('collapses unchanged fields by default behind expanders', () => {
+  it('keeps one context row on each side of a change and collapses the rest', () => {
     render(<AuditDiffViewer entry={updateEntry} />)
-    // The changed field sits between unchanged ones, so the unchanged fields
-    // split into two gaps: [build.buildSystem] before, [build.mavenVersion,
-    // escrow.generation] after. All are hidden until expanded.
-    expect(screen.queryByText('escrow.generation')).toBeNull()
-    expect(screen.queryByText('build.mavenVersion')).toBeNull()
-    expect(screen.queryByText('build.buildSystem')).toBeNull()
+    // Context: a2 (one before) and b1 (one after) stay visible alongside the change.
+    expect(screen.getByText('a2')).toBeDefined()
+    expect(screen.getByText('b1')).toBeDefined()
+    // Collapsed: a1 (1-field gap before), b2 + b3 (2-field gap after).
+    expect(screen.queryByText('a1')).toBeNull()
+    expect(screen.queryByText('b2')).toBeNull()
+    expect(screen.queryByText('b3')).toBeNull()
     expect(screen.getByRole('button', { name: /show 1 unchanged field$/i })).toBeDefined()
     expect(screen.getByRole('button', { name: /show 2 unchanged fields/i })).toBeDefined()
   })
@@ -56,13 +58,13 @@ describe('AuditDiffViewer', () => {
   it('reveals a gap when its expander is clicked, and can re-collapse it', () => {
     render(<AuditDiffViewer entry={updateEntry} />)
     fireEvent.click(screen.getByRole('button', { name: /show 2 unchanged fields/i }))
-    expect(screen.getByText('escrow.generation')).toBeDefined()
-    expect(screen.getByText('build.mavenVersion')).toBeDefined()
+    expect(screen.getByText('b2')).toBeDefined()
+    expect(screen.getByText('b3')).toBeDefined()
     // The other gap stays collapsed (independent).
-    expect(screen.queryByText('build.buildSystem')).toBeNull()
+    expect(screen.queryByText('a1')).toBeNull()
     // Re-collapse.
     fireEvent.click(screen.getByRole('button', { name: /hide 2 unchanged fields/i }))
-    expect(screen.queryByText('escrow.generation')).toBeNull()
+    expect(screen.queryByText('b2')).toBeNull()
   })
 
   it('renders a single shared scroll container (aligned, synchronized old/new)', () => {
@@ -100,11 +102,45 @@ describe('AuditDiffViewer', () => {
         entry={entry({ oldValue: { x: 'a', y: 'same' }, newValue: { x: 'b', y: 'same' }, changeDiff: null })}
       />,
     )
-    // x changed → visible; y unchanged → collapsed.
+    // x is detected as changed (a → b) via the value-comparison fallback.
     expect(screen.getByText('x')).toBeDefined()
-    expect(screen.queryByText('y')).toBeNull()
+    expect(screen.getByText('1 changed field')).toBeDefined()
     const table = screen.getByRole('table')
     expect(within(table).getByText('a')).toBeDefined()
     expect(within(table).getByText('b')).toBeDefined()
+  })
+
+  it('treats a present-but-empty changeDiff as authoritative (nothing changed)', () => {
+    render(
+      <AuditDiffViewer
+        entry={entry({ oldValue: { a: '1', b: '2' }, newValue: { a: '1', b: '2' }, changeDiff: {} })}
+      />,
+    )
+    expect(screen.getByText('0 changed fields')).toBeDefined()
+    // No field is highlighted/expanded; both collapse into one gap.
+    expect(screen.getByRole('button', { name: /show 2 unchanged fields/i })).toBeDefined()
+  })
+
+  it('fallback detects a type-only change (1 vs "1") that renders identically', () => {
+    render(
+      <AuditDiffViewer
+        entry={entry({ oldValue: { n: 1 }, newValue: { n: '1' }, changeDiff: null })}
+      />,
+    )
+    // Same displayed text ("1") but different underlying type → still a change.
+    expect(screen.getByText('n')).toBeDefined()
+    expect(screen.getByText('1 changed field')).toBeDefined()
+  })
+
+  it('fallback treats a removed field (present → absent) as changed', () => {
+    render(
+      <AuditDiffViewer
+        entry={entry({ oldValue: { gone: 'v', keep: 'same' }, newValue: { keep: 'same' }, changeDiff: null })}
+      />,
+    )
+    // `gone` present only in old → change detected (old 'v', new '—').
+    expect(screen.getByText('gone')).toBeDefined()
+    expect(screen.getByText('1 changed field')).toBeDefined()
+    expect(screen.getByText('v')).toBeDefined()
   })
 })

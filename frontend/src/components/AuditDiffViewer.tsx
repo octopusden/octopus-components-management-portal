@@ -20,13 +20,46 @@ interface DiffRow {
   changed: boolean
 }
 
+// Key-order-independent, circular-safe canonical form for structural comparison.
+function canonical(value: unknown): string {
+  const seen = new WeakSet<object>()
+  return JSON.stringify(value, (_k, val) => {
+    if (val && typeof val === 'object') {
+      if (seen.has(val)) return '[circular]'
+      seen.add(val)
+      if (!Array.isArray(val)) {
+        const obj = val as Record<string, unknown>
+        return Object.keys(obj)
+          .sort()
+          .reduce<Record<string, unknown>>((acc, k) => { acc[k] = obj[k]; return acc }, {})
+      }
+    }
+    return val
+  })
+}
+
+// Value equality used only for the changeDiff-absent fallback: type-sensitive
+// for primitives (so 1 ≠ "1"), structural for objects/arrays, and it treats a
+// missing key (undefined) as distinct from a present value — comparing the raw
+// values, NOT their rendered text (which would collapse null/{}/missing all to
+// "—" and hide a real change).
+function valuesEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true
+  if (typeof a !== typeof b) return false
+  if (a && b && typeof a === 'object') return canonical(a) === canonical(b)
+  return false
+}
+
 // A run of consecutive rows shown as one block; `gap` runs are unchanged fields
-// hidden behind an expander (Bitbucket-style "show more context"). Zero context
-// rows are kept around a change — the diff shows only what changed until the
-// user asks for the surrounding fields.
+// hidden behind an expander (Bitbucket-style "show more context"). CONTEXT
+// unchanged rows on each side of a change stay visible so a change is never
+// shown without its immediate neighbours; everything further out collapses.
 type Segment =
   | { type: 'rows'; rows: DiffRow[] }
   | { type: 'gap'; id: string; rows: DiffRow[] }
+
+// Unchanged rows kept visible on each side of a changed run (1 before, 1 after).
+const CONTEXT = 1
 
 function buildRows(entry: AuditLogEntry): DiffRow[] {
   const { oldValue, newValue } = entry
@@ -38,7 +71,11 @@ function buildRows(entry: AuditLogEntry): DiffRow[] {
   for (const k of Object.keys(newValue ?? {})) if (!seen.has(k)) { seen.add(k); keys.push(k) }
   for (const k of Object.keys(oldValue ?? {})) if (!seen.has(k)) { seen.add(k); keys.push(k) }
 
-  const changedKeys = new Set<string>(entry.changeDiff ? Object.keys(entry.changeDiff) : [])
+  // A present changeDiff is authoritative — even when empty ({} = nothing
+  // changed). Only when it is absent (null, e.g. legacy pre-v2 rows) do we fall
+  // back to comparing the raw snapshot values.
+  const hasDiff = entry.changeDiff !== null
+  const changedKeys = new Set<string>(hasDiff ? Object.keys(entry.changeDiff!) : [])
   // CREATE (no old) / DELETE (no new): every field is part of the change.
   const wholeRecordChanged = !oldValue || !newValue
 
@@ -47,28 +84,28 @@ function buildRows(entry: AuditLogEntry): DiffRow[] {
     const newText = formatValue(newValue?.[key])
     const changed = wholeRecordChanged
       ? true
-      : changedKeys.size > 0
+      : hasDiff
         ? changedKeys.has(key)
-        : oldText !== newText
+        : !valuesEqual(oldValue?.[key], newValue?.[key])
     return { key, oldText, newText, changed }
   })
 }
 
-// Split rows into visible blocks and collapsible gaps: any maximal run of
-// unchanged rows becomes a gap. Changed rows always render.
+// Split rows into visible blocks and collapsible gaps. A row is visible when it
+// is changed OR within CONTEXT rows of a change; maximal runs of the remaining
+// (far-from-any-change) unchanged rows become gaps.
 function buildSegments(rows: DiffRow[]): Segment[] {
+  const visible = rows.map(
+    (_, i) => rows.some((r, j) => r.changed && Math.abs(i - j) <= CONTEXT),
+  )
   const segments: Segment[] = []
   let i = 0
   while (i < rows.length) {
-    if (rows[i]!.changed) {
-      const start = i
-      while (i < rows.length && rows[i]!.changed) i++
-      segments.push({ type: 'rows', rows: rows.slice(start, i) })
-    } else {
-      const start = i
-      while (i < rows.length && !rows[i]!.changed) i++
-      segments.push({ type: 'gap', id: `gap-${start}`, rows: rows.slice(start, i) })
-    }
+    const vis = visible[i]!
+    const start = i
+    while (i < rows.length && visible[i]! === vis) i++
+    if (vis) segments.push({ type: 'rows', rows: rows.slice(start, i) })
+    else segments.push({ type: 'gap', id: `gap-${start}`, rows: rows.slice(start, i) })
   }
   return segments
 }
