@@ -151,7 +151,7 @@ export function parseSimpleSegment(range: string): SimpleRange | null {
   // lo == hi, both inclusive — mirrors the CRS server + releng VersionRange.
   // A non-dot-numeric bound (qualifier) yields null lo/hi so callers defer to
   // the server, consistent with the two-bound qualifier handling below.
-  const exact = /^\[([^,\[\]()]+)]$/.exec(compact)
+  const exact = /^\[([^,[\]()]+)]$/.exec(compact)
   if (exact) {
     const v = parseDotNumeric(exact[1]!)
     if (v === null) return null

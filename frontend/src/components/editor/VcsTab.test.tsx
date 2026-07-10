@@ -1,12 +1,34 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, act } from '@testing-library/react'
+import { render, screen, act, fireEvent } from '@testing-library/react'
 import { VcsTab } from './VcsTab'
 import { useVcsSection } from './useVcsSection'
 import { NOT_IN_LIST_SUFFIX } from './ExternalRegistrySelect'
 import { TooltipProvider } from '../ui/tooltip'
 import { fieldDescriptions } from '../../lib/fieldDescriptions'
 import { PERMISSIONS, type User } from '../../lib/auth'
-import type { ComponentDetail, ComponentConfiguration } from '../../lib/types'
+import type { ComponentDetail, ComponentConfiguration, FieldOverride } from '../../lib/types'
+
+// Per-range VCS overrides ride the shared page-level draft. Mock it so tests can
+// seed effective overrides and spy on queued deletes without a provider.
+let mockEffective: FieldOverride[] = []
+const mockQueueDelete = vi.fn()
+vi.mock('./overridesDraft', () => ({
+  useOverridesDraft: () => ({
+    serverOverrides: mockEffective,
+    effectiveOverrides: mockEffective,
+    isLoading: false,
+    isDirty: false,
+    queueCreate: vi.fn(),
+    queueUpdate: vi.fn(),
+    queueDelete: mockQueueDelete,
+    reset: vi.fn(),
+  }),
+}))
+
+// Stub the modal — its internals are covered by OverrideRowEditor.test.tsx.
+vi.mock('./OverrideRowEditor', () => ({
+  OverrideRowEditor: (props: { open: boolean }) => (props.open ? <div data-testid="override-row-editor" /> : null),
+}))
 
 function makeBaseRow(overrides: Partial<ComponentConfiguration> = {}): ComponentConfiguration {
   return {
@@ -53,6 +75,7 @@ const mockUseFieldOptions = vi.mocked(useFieldOptions)
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockEffective = []
   mockUseAdminFieldConfig.mockReturnValue({ data: undefined, isLoading: false, isError: false })
   mockUseCurrentUser.mockReturnValue({ data: adminUser } as unknown as ReturnType<typeof useCurrentUser>)
   mockUseFieldOptions.mockReturnValue({ options: [], isLoading: false })
@@ -184,6 +207,59 @@ describe('VcsTab field descriptions (FieldInfo)', () => {
     act(() => trigger.focus())
     const tooltip = await screen.findByRole('tooltip')
     expect(tooltip).toHaveTextContent(fieldDescriptions['vcs.vcsPath']!)
+  })
+})
+
+describe('VcsTab — per-range overrides', () => {
+  const vcsMarker = (id: string, range: string, tag: string): FieldOverride => ({
+    id,
+    overriddenAttribute: 'vcs.settings',
+    versionRange: range,
+    rowType: 'MARKER',
+    value: null,
+    markerChildren: {
+      vcsEntries: [
+        { name: 'main', vcsPath: 'ssh://git@example.com/repo.git', branch: 'master', tag, hotfixBranch: null, repositoryType: 'GIT' },
+      ],
+    },
+    createdAt: null,
+    updatedAt: null,
+  })
+
+  it('lists a per-range VCS override with its tag summary', () => {
+    mockEffective = [vcsMarker('o1', '[1.0.49]', 'escrow_tag_1.0.49')]
+    renderTab(makeComponent())
+    const rows = screen.getAllByTestId('vcs-per-range-row')
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toHaveTextContent('[1.0.49]')
+    expect(rows[0]).toHaveTextContent('escrow_tag_1.0.49')
+  })
+
+  it('shows a per-range count badge', () => {
+    mockEffective = [vcsMarker('o1', '[1.0.49]', 't')]
+    renderTab(makeComponent())
+    expect(screen.getByText('1 per-range')).toBeDefined()
+  })
+
+  it('ignores overrides on other attributes', () => {
+    mockEffective = [
+      { id: 'x', overriddenAttribute: 'build.javaVersion', versionRange: '[1.0,2.0)', rowType: 'SCALAR_OVERRIDE', value: '17', markerChildren: null, createdAt: null, updatedAt: null },
+    ]
+    renderTab(makeComponent())
+    expect(screen.queryAllByTestId('vcs-per-range-row')).toHaveLength(0)
+  })
+
+  it('opens the override editor when Add override is clicked', () => {
+    renderTab(makeComponent())
+    fireEvent.click(screen.getByRole('button', { name: /add override/i }))
+    expect(screen.getByTestId('override-row-editor')).toBeDefined()
+  })
+
+  it('queues delete for the override in a row', () => {
+    mockEffective = [vcsMarker('o1', '[1.0.49]', 't')]
+    renderTab(makeComponent())
+    fireEvent.click(screen.getByRole('button', { name: /delete override/i }))
+    expect(mockQueueDelete).toHaveBeenCalledWith('o1')
   })
 })
 
