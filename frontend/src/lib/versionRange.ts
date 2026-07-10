@@ -9,10 +9,15 @@ export function formatVersionRange(range: string): string {
   return range
 }
 
-// One segment of a Maven version range: `[X,Y)` and variants. Body chars must
-// not include another bracket/paren or comma (those are structural). Trailing
-// whitespace is stripped by callers via normalize() before this matches.
-const SEGMENT_RE_SRC = '[[(][^()\\[\\],]*,[^()\\[\\],]*[\\])]'
+// One segment of a Maven version range. Body chars must not include another
+// bracket/paren or comma (those are structural). Trailing whitespace is
+// stripped by callers via normalize() before this matches. A segment is EITHER
+// the two-bound form `[X,Y)` (and variants) OR the exact-version "hard version"
+// form `[X]` — no comma, square brackets only (`(X)`, `[X)`, `(X]` are invalid
+// Maven), matching the CRS server + releng VersionRangeFactory (lo == hi, incl).
+const TWO_BOUND_SEGMENT_RE_SRC = '[[(][^()\\[\\],]*,[^()\\[\\],]*[\\])]'
+const EXACT_SEGMENT_RE_SRC = '\\[[^()\\[\\],]+]'
+const SEGMENT_RE_SRC = `(?:${TWO_BOUND_SEGMENT_RE_SRC}|${EXACT_SEGMENT_RE_SRC})`
 const FULL_RANGE_RE = new RegExp(`^${SEGMENT_RE_SRC}(,${SEGMENT_RE_SRC})*$`)
 const SEGMENT_GLOBAL = new RegExp(SEGMENT_RE_SRC, 'g')
 
@@ -142,6 +147,16 @@ export function parseSimpleSegment(range: string): SimpleRange | null {
   if (compact === '') return null
   // Reject composites — must be a single segment.
   if (/[\])][\s]*,[\s]*[[(]/.test(compact)) return null
+  // Exact-version ("hard version") form `[X]`: no comma, square brackets only.
+  // lo == hi, both inclusive — mirrors the CRS server + releng VersionRange.
+  // A non-dot-numeric bound (qualifier) yields null lo/hi so callers defer to
+  // the server, consistent with the two-bound qualifier handling below.
+  const exact = /^\[([^,\[\]()]+)]$/.exec(compact)
+  if (exact) {
+    const v = parseDotNumeric(exact[1]!)
+    if (v === null) return null
+    return { lo: v, loIncl: true, hi: v, hiIncl: true }
+  }
   const m = /^([[(])([^,]*),([^,]*)([\])])$/.exec(compact)
   if (!m) return null
   const [, openBracket, loStr, hiStr, closeBracket] = m
