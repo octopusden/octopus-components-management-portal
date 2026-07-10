@@ -6,14 +6,15 @@ import type { FieldOverride } from '../../lib/types'
 
 /** One-line human summary of a `vcs.settings` override's replacement entries —
  *  the tag / branch each entry pins, which is what a per-range VCS override
- *  typically changes (e.g. an escrow tag for a single version). */
+ *  typically changes (e.g. an escrow tag for a single version). Falls back to
+ *  the vcsPath when an entry sets neither tag nor branch (e.g. a repo moved for
+ *  one range) so a non-empty override never reads as "Not specified". */
 function summarize(o: FieldOverride): string {
   const entries = o.markerChildren?.vcsEntries
   if (!entries?.length) return ''
   return entries
     .map((e) => {
-      const bits = [e.tag, e.branch].filter((x): x is string => !!x)
-      const label = bits.join(' · ')
+      const label = [e.tag, e.branch].filter((x): x is string => !!x).join(' · ') || e.vcsPath || ''
       return e.name ? (label ? `${e.name}: ${label}` : e.name) : label
     })
     .filter((s) => s !== '')

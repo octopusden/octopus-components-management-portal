@@ -256,6 +256,21 @@ describe('VcsTab — per-range overrides', () => {
     expect(screen.getByText('1 per-range')).toBeDefined()
   })
 
+  it('summarizes a path-only override by its vcsPath, not "Not specified"', () => {
+    mockEffective = [
+      {
+        id: 'p1', overriddenAttribute: 'vcs.settings', versionRange: '[2.0.0]', rowType: 'MARKER',
+        value: null,
+        markerChildren: { vcsEntries: [{ name: null, vcsPath: 'ssh://git@example.com/moved.git', branch: null, tag: null, hotfixBranch: null, repositoryType: 'GIT' }] },
+        createdAt: null, updatedAt: null,
+      },
+    ]
+    renderTab(makeComponent())
+    const row = screen.getByTestId('vcs-per-range-row')
+    expect(row).toHaveTextContent('ssh://git@example.com/moved.git')
+    expect(row).not.toHaveTextContent('Not specified')
+  })
+
   it('ignores overrides on other attributes', () => {
     mockEffective = [
       { id: 'x', overriddenAttribute: 'build.javaVersion', versionRange: '[1.0,2.0)', rowType: 'SCALAR_OVERRIDE', value: '17', markerChildren: null, createdAt: null, updatedAt: null },
