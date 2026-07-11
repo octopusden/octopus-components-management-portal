@@ -1064,3 +1064,51 @@ export interface ServiceEvent {
   startedAt: string
   finishedAt: string | null
 }
+
+// SYS-062 — user feedback / report-a-problem. Mirrors the CRS v4 wire contract.
+export type FeedbackType = 'BUG' | 'IDEA' | 'QUESTION'
+export type FeedbackStatus = 'NEW' | 'IN_PROGRESS' | 'RESOLVED'
+
+/** One screenshot on the way in — base64 of the raw image (data-URL prefix stripped). */
+export interface FeedbackAttachmentPayload {
+  filename?: string | null
+  contentType?: string | null
+  dataBase64: string
+}
+
+export interface FeedbackCreateRequest {
+  type: FeedbackType
+  title?: string | null
+  message: string
+  pageUrl?: string | null
+  appVersion?: string | null
+  attachments?: FeedbackAttachmentPayload[] | null
+}
+
+/** Attachment metadata (no bytes); the SPA renders each via the attachment-bytes endpoint. */
+export interface FeedbackAttachmentMeta {
+  id: number
+  filename: string | null
+  contentType: string | null
+  sizeBytes: number | null
+}
+
+export interface FeedbackResponse {
+  id: number
+  type: string
+  status: string
+  title: string | null
+  message: string
+  submittedBy: string | null
+  pageUrl: string | null
+  appVersion: string | null
+  detail: Record<string, unknown> | null
+  createdAt: string
+  updatedAt: string | null
+  updatedBy: string | null
+  attachments: FeedbackAttachmentMeta[]
+}
+
+export interface FeedbackStatusUpdateRequest {
+  status: FeedbackStatus
+}

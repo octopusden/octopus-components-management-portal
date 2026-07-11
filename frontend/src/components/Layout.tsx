@@ -7,6 +7,8 @@ import { hasPermission, logout, PERMISSIONS } from '@/lib/auth'
 import { AppFooter } from './AppFooter'
 import { EmployeeIntegrationAlert } from './EmployeeIntegrationAlert'
 import { OnboardingVideoButton } from './OnboardingVideoButton'
+import { FeedbackButton } from './feedback/FeedbackButton'
+import { AnnouncementsButton } from './announcements/AnnouncementsButton'
 import { Badge } from './ui/badge'
 import { StatusBanner } from './ui/status-banner'
 import { useAdminMode } from '@/lib/adminModeStore'
@@ -106,6 +108,8 @@ export function Layout({ children }: LayoutProps) {
             })}
           </nav>
           <div className="ml-auto flex items-center gap-3 text-sm">
+            <AnnouncementsButton />
+            <FeedbackButton />
             <OnboardingVideoButton />
             {/* ADMIN badge: double-gate — adminMode Zustand state AND real IMPORT_DATA
                 permission. Without the permission check, any user could set adminMode=true
