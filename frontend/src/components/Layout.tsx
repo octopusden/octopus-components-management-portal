@@ -3,10 +3,13 @@ import { Package, History, Settings, LogOut, AlertTriangle, Activity } from 'luc
 import { cn, initials } from '../lib/utils'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { usePortalInfo } from '@/hooks/useInfo'
+import { useOpenFeedbackCount } from '@/hooks/useFeedback'
 import { hasPermission, logout, PERMISSIONS } from '@/lib/auth'
 import { AppFooter } from './AppFooter'
 import { EmployeeIntegrationAlert } from './EmployeeIntegrationAlert'
 import { OnboardingVideoButton } from './OnboardingVideoButton'
+import { FeedbackButton } from './feedback/FeedbackButton'
+import { AnnouncementsButton } from './announcements/AnnouncementsButton'
 import { Badge } from './ui/badge'
 import { StatusBanner } from './ui/status-banner'
 import { useAdminMode } from '@/lib/adminModeStore'
@@ -51,6 +54,13 @@ export function Layout({ children }: LayoutProps) {
   // never render an empty banner strip ('' is falsy, so the && below skips it).
   const { data: portalInfo } = usePortalInfo()
   const environmentLabel = portalInfo?.environmentLabel?.trim()
+
+  // Admin operators (admin mode armed + IMPORT_DATA) see a count of OPEN (not RESOLVED)
+  // feedback on the Admin nav item, so pending reports are visible from any page. Only
+  // fetched for that audience; everyone else skips the call.
+  const isAdminOperator = adminMode && hasPermission(user, PERMISSIONS.IMPORT_DATA)
+  const { data: openFeedback } = useOpenFeedbackCount(isAdminOperator)
+  const openFeedbackCount = openFeedback?.open ?? 0
 
   // When /auth/me fails with a non-401 backend error, isError is true and `user` is
   // undefined. Don't hide admin/audit in that case — the user may be a valid admin;
@@ -101,11 +111,23 @@ export function Layout({ children }: LayoutProps) {
                 >
                   <Icon className="h-4 w-4" />
                   {label}
+                  {href === '/admin' && isAdminOperator && openFeedbackCount > 0 && (
+                    <span
+                      data-testid="open-feedback-badge"
+                      aria-label={`${openFeedbackCount} open feedback requests`}
+                      title={`${openFeedbackCount} open feedback requests`}
+                      className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[11px] font-semibold leading-none text-destructive-foreground"
+                    >
+                      {openFeedbackCount > 99 ? '99+' : openFeedbackCount}
+                    </span>
+                  )}
                 </Link>
               )
             })}
           </nav>
           <div className="ml-auto flex items-center gap-3 text-sm">
+            <AnnouncementsButton />
+            <FeedbackButton />
             <OnboardingVideoButton />
             {/* ADMIN badge: double-gate — adminMode Zustand state AND real IMPORT_DATA
                 permission. Without the permission check, any user could set adminMode=true

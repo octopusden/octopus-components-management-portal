@@ -10,6 +10,7 @@ import { MigrationHistoryPanel } from '../components/admin/MigrationHistoryPanel
 import { MigrationPanel } from '../components/admin/MigrationPanel'
 import { TeamCityResyncPanel } from '../components/admin/TeamCityResyncPanel'
 import { ServiceEventsPanel } from '../components/admin/ServiceEventsPanel'
+import { FeedbackPanel } from '../components/admin/FeedbackPanel'
 import { AdminModeArmBar } from '../components/admin/AdminModeArmBar'
 import { RuntimeSection } from '../components/RuntimeSection'
 import { useReloadConfig } from '../hooks/useAdminConfig'
@@ -82,6 +83,7 @@ export function AdminSettingsPage() {
             <TabsTrigger value="component-defaults">Component Defaults</TabsTrigger>
             <TabsTrigger value="migration">Migration</TabsTrigger>
             <TabsTrigger value="events">Events</TabsTrigger>
+            <TabsTrigger value="feedback">Feedback</TabsTrigger>
             {showSystem && <TabsTrigger value="system">System</TabsTrigger>}
           </TabsList>
 
@@ -159,6 +161,19 @@ export function AdminSettingsPage() {
               </p>
               <div className="pt-2">
                 <ServiceEventsPanel />
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="feedback" className="mt-4">
+            <div className="rounded-lg border p-6 space-y-2">
+              <h2 className="text-lg font-semibold">Feedback</h2>
+              <p className="text-sm text-muted-foreground">
+                Problem reports, ideas, and questions submitted by users. Filter, read details and
+                screenshots, and advance the status.
+              </p>
+              <div className="pt-2">
+                <FeedbackPanel />
               </div>
             </div>
           </TabsContent>
