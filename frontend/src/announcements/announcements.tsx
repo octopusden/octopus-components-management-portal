@@ -34,7 +34,6 @@ export const ANNOUNCEMENTS: Announcement[] = [
     title: 'New: send feedback & report problems',
     publishedAt: '2026-07-11',
     spotlightTarget: 'feedback',
-    showIntroVideoButton: true,
     body: (
       <div className="space-y-2">
         <p>
