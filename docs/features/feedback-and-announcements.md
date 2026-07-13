@@ -26,6 +26,10 @@ owned by CRS — see CRS `docs/registry/adr/019-feedback.md` and `SYS-062` in
 - **Gateway body-size guard:** [`FeedbackRequestSizeWebFilter.kt`](../../src/main/kotlin/org/octopusden/octopus/components/portal/configuration/FeedbackRequestSizeWebFilter.kt)
   rejects an oversized feedback POST with `413` (primary limit; CRS carries a second-line
   guard). Cap: `portal.feedback.max-request-bytes` (default 12 MiB).
+- **Admin open-count badge:** for an admin operator (admin mode armed + `IMPORT_DATA`), the
+  header **Admin** nav item shows a badge with the count of OPEN (not RESOLVED) reports
+  (`useOpenFeedbackCount` → `GET /rest/api/4/admin/feedback/open-count`), so pending feedback
+  is visible from any page. Fetched only for that audience; degrades to 0 on 404.
 
 ## Announcements ("What's new")
 

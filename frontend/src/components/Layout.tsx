@@ -3,6 +3,7 @@ import { Package, History, Settings, LogOut, AlertTriangle, Activity } from 'luc
 import { cn, initials } from '../lib/utils'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { usePortalInfo } from '@/hooks/useInfo'
+import { useOpenFeedbackCount } from '@/hooks/useFeedback'
 import { hasPermission, logout, PERMISSIONS } from '@/lib/auth'
 import { AppFooter } from './AppFooter'
 import { EmployeeIntegrationAlert } from './EmployeeIntegrationAlert'
@@ -54,6 +55,13 @@ export function Layout({ children }: LayoutProps) {
   const { data: portalInfo } = usePortalInfo()
   const environmentLabel = portalInfo?.environmentLabel?.trim()
 
+  // Admin operators (admin mode armed + IMPORT_DATA) see a count of OPEN (not RESOLVED)
+  // feedback on the Admin nav item, so pending reports are visible from any page. Only
+  // fetched for that audience; everyone else skips the call.
+  const isAdminOperator = adminMode && hasPermission(user, PERMISSIONS.IMPORT_DATA)
+  const { data: openFeedback } = useOpenFeedbackCount(isAdminOperator)
+  const openFeedbackCount = openFeedback?.open ?? 0
+
   // When /auth/me fails with a non-401 backend error, isError is true and `user` is
   // undefined. Don't hide admin/audit in that case — the user may be a valid admin;
   // the nav items remain clickable and the backend will still enforce authorization.
@@ -103,6 +111,16 @@ export function Layout({ children }: LayoutProps) {
                 >
                   <Icon className="h-4 w-4" />
                   {label}
+                  {href === '/admin' && isAdminOperator && openFeedbackCount > 0 && (
+                    <span
+                      data-testid="open-feedback-badge"
+                      aria-label={`${openFeedbackCount} open feedback requests`}
+                      title={`${openFeedbackCount} open feedback requests`}
+                      className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[11px] font-semibold leading-none text-destructive-foreground"
+                    >
+                      {openFeedbackCount > 99 ? '99+' : openFeedbackCount}
+                    </span>
+                  )}
                 </Link>
               )
             })}

@@ -72,6 +72,26 @@ export function useFeedbackItem(id: number | null) {
   })
 }
 
+/**
+ * Count of open (not RESOLVED) feedback reports, for the admin header badge. Only fetched
+ * when [enabled] (admin operator), and degrades to 0 on 404 (endpoint absent in no-db).
+ */
+export function useOpenFeedbackCount(enabled: boolean) {
+  return useQuery({
+    queryKey: ['feedback', 'open-count'],
+    queryFn: async () => {
+      try {
+        return await api.get<{ open: number }>('/admin/feedback/open-count')
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) return { open: 0 }
+        throw err
+      }
+    },
+    enabled,
+    staleTime: 60_000,
+  })
+}
+
 /** Change a feedback item's status (admin). */
 export function useUpdateFeedbackStatus() {
   const queryClient = useQueryClient()
