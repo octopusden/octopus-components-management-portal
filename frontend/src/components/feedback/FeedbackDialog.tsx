@@ -167,7 +167,7 @@ export function FeedbackDialog() {
           <div className="space-y-1.5">
             <Label htmlFor="feedback-title">Title (optional)</Label>
             <Input id="feedback-title" placeholder="Short summary" {...register('title')} />
-            <InlineError message={errors.title?.message} />
+            {errors.title?.message && <InlineError message={errors.title.message} />}
           </div>
 
           <div className="space-y-1.5">
@@ -179,7 +179,7 @@ export function FeedbackDialog() {
               placeholder="What happened? What did you expect?"
               {...register('message')}
             />
-            <InlineError message={errors.message?.message} />
+            {errors.message?.message && <InlineError message={errors.message.message} />}
           </div>
 
           <div className="space-y-1.5">
@@ -228,7 +228,7 @@ export function FeedbackDialog() {
             <p className="text-xs text-muted-foreground">
               PNG or JPEG, up to 2 MB each, {MAX_ATTACHMENTS} max. You can paste an image too.
             </p>
-            <InlineError message={attachmentError ?? undefined} />
+            {attachmentError && <InlineError message={attachmentError} />}
           </div>
 
           <DialogFooter>
