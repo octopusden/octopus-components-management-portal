@@ -9,6 +9,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { StatusBanner } from '@/components/ui/status-banner'
+import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 import { formatDateTimeShort } from '@/lib/system'
 import type { FeedbackResponse, FeedbackStatus } from '@/lib/types'
@@ -65,15 +66,26 @@ function FilterSelect({
  */
 export function FeedbackPanel() {
   const [filter, setFilter] = useState<FeedbackAdminFilter>({})
+  const [page, setPage] = useState(0)
   const [expanded, setExpanded] = useState<number | null>(null)
+  const { toast } = useToast()
   const { data, isLoading, isError, error, refetch, isFetching } = useFeedbackList({
+    page,
     size: PAGE_SIZE,
     filter,
   })
   const updateStatus = useUpdateFeedbackStatus()
 
+  // Filter changes reset to the first page (a filtered set has its own pagination).
+  function changeFilter(patch: FeedbackAdminFilter) {
+    setPage(0)
+    setFilter((f) => ({ ...f, ...patch }))
+  }
+
   const items: FeedbackResponse[] = data?.content ?? []
   const total = data?.totalElements ?? 0
+  const totalPages = data?.totalPages ?? 0
+  const currentPage = data?.number ?? page
 
   return (
     <div className="space-y-4">
@@ -82,13 +94,13 @@ export function FeedbackPanel() {
           label="Type"
           value={filter.type ?? ''}
           options={TYPES}
-          onChange={(v) => setFilter((f) => ({ ...f, type: v || undefined }))}
+          onChange={(v) => changeFilter({ type: v || undefined })}
         />
         <FilterSelect
           label="Status"
           value={filter.status ?? ''}
           options={STATUSES}
-          onChange={(v) => setFilter((f) => ({ ...f, status: v || undefined }))}
+          onChange={(v) => changeFilter({ status: v || undefined })}
         />
         <Button size="sm" variant="outline" className="ml-auto" onClick={() => refetch()} disabled={isFetching}>
           {isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
@@ -164,7 +176,19 @@ export function FeedbackPanel() {
                       <td colSpan={6} className="px-3 py-3">
                         <FeedbackDetail
                           item={f}
-                          onStatus={(status) => updateStatus.mutate({ id: f.id, status })}
+                          onStatus={(status) =>
+                            updateStatus.mutate(
+                              { id: f.id, status },
+                              {
+                                onError: (e) =>
+                                  toast({
+                                    title: 'Could not update status',
+                                    description: e instanceof Error ? e.message : String(e),
+                                    variant: 'destructive',
+                                  }),
+                              },
+                            )
+                          }
                           statusPending={updateStatus.isPending}
                         />
                       </td>
@@ -177,10 +201,30 @@ export function FeedbackPanel() {
         </table>
       </div>
 
-      {total > items.length && (
-        <p className="text-xs text-muted-foreground">
-          Showing {items.length} of {total}. Narrow with filters above.
-        </p>
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-muted-foreground">
+            Page {currentPage + 1} of {totalPages} · {total} total
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={currentPage <= 0 || isFetching}
+            >
+              Previous
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setPage((p) => p + 1)}
+              disabled={currentPage >= totalPages - 1 || isFetching}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   )

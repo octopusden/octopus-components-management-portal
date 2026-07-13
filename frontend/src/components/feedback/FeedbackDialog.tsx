@@ -85,12 +85,20 @@ export function FeedbackDialog() {
 
   async function addFiles(files: FileList | File[]) {
     setAttachmentError(null)
-    const incoming = Array.from(files).filter((f) => isAcceptedImage(f.type))
+    const all = Array.from(files)
+    const incoming = all.filter((f) => isAcceptedImage(f.type))
+    // Tell the user why anything was ignored rather than silently dropping it.
+    if (incoming.length < all.length) {
+      setAttachmentError('Only PNG or JPEG images can be attached')
+    }
     if (incoming.length === 0) return
     const room = MAX_ATTACHMENTS - attachments.length
     if (room <= 0) {
       setAttachmentError(`You can attach at most ${MAX_ATTACHMENTS} screenshots`)
       return
+    }
+    if (incoming.length > room) {
+      setAttachmentError(`Only ${MAX_ATTACHMENTS} screenshots allowed; extra files were skipped`)
     }
     const accepted: PendingAttachment[] = []
     for (const file of incoming.slice(0, room)) {

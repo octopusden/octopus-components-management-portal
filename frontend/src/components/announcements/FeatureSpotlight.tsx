@@ -3,6 +3,7 @@ import { useAnnouncementsStore } from '@/lib/announcementsStore'
 import { useAnnouncementsSeen } from '@/lib/announcementsSeen'
 import { useUiOverlay } from '@/lib/uiOverlayStore'
 import { useOnboardingVideo } from '@/lib/onboardingVideoStore'
+import { useOnboardingBannerVisible } from '@/hooks/useOnboardingBannerVisible'
 import { Button } from '../ui/button'
 
 /**
@@ -24,11 +25,19 @@ export function FeatureSpotlight() {
   const shortcutsOpen = useUiOverlay((s) => s.shortcutsOpen)
   const activeModal = useUiOverlay((s) => s.activeModal)
   const onboardingVideoOpen = useOnboardingVideo((s) => s.open)
+  const onboardingBannerVisible = useOnboardingBannerVisible()
 
   const [rect, setRect] = useState<DOMRect | null>(null)
 
-  // Yield while any overlay (palette/shortcuts/modal or the onboarding player) is open.
-  const blocked = onboardingVideoOpen || paletteOpen || shortcutsOpen || activeModal !== null || anyOverlayOpen()
+  // Yield while any overlay (palette/shortcuts/modal, the onboarding player, or the
+  // first-login onboarding banner) is showing, so the coach-mark never overlaps them.
+  const blocked =
+    onboardingVideoOpen ||
+    onboardingBannerVisible ||
+    paletteOpen ||
+    shortcutsOpen ||
+    activeModal !== null ||
+    anyOverlayOpen()
   const active = spotlight !== null && !blocked
 
   const measure = useCallback(() => {

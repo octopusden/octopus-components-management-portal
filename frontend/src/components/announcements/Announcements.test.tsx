@@ -4,6 +4,7 @@ import { Announcements } from './Announcements'
 import { ANNOUNCEMENTS } from '@/announcements/announcements'
 import { useUiOverlay } from '@/lib/uiOverlayStore'
 import { useAnnouncementsStore } from '@/lib/announcementsStore'
+import { useAnnouncementsSeenStore } from '@/lib/announcementsSeen'
 import { useOnboardingVideo } from '@/lib/onboardingVideoStore'
 
 const bannerVisible = vi.fn()
@@ -25,6 +26,9 @@ beforeEach(() => {
   bannerVisible.mockReturnValue(false)
   useUiOverlay.setState({ paletteOpen: false, shortcutsOpen: false, activeModal: null })
   useAnnouncementsStore.setState({ entries: [], spotlight: null })
+  // Reset the shared (module-global) seen store so stale state from a prior test can't
+  // leak into the first render and trip the one-shot auto-open.
+  useAnnouncementsSeenStore.setState({ username: null, storageOk: false, seenAnnouncements: [], seenSpotlights: [] })
   useOnboardingVideo.setState({ open: false, bannerDismissed: false })
 })
 

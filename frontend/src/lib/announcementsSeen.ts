@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect } from 'react'
+import { create } from 'zustand'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 
 // "What's new" seen-state, persisted PER USER in localStorage — same convention as
@@ -6,8 +7,12 @@ import { useCurrentUser } from '@/hooks/useCurrentUser'
 // /auth/me; fail-closed when storage is unavailable). Two independent sets are tracked:
 //   - seen announcement ids  → suppresses the auto-open modal
 //   - seen spotlight ids     → suppresses the one-time feature coach-mark
-// A brand-new user (empty state) is NOT flooded with history: the auto-open logic
-// (useAnnouncements) only ever shows the single newest unseen entry.
+//
+// State lives in a SHARED zustand store (not per-hook useState) so all three announcement
+// components (Announcements, WhatsNewModal, FeatureSpotlight) observe the same value — a
+// spotlight dismissed in one is immediately seen by the others, so manually reopening the
+// modal can't re-arm an already-seen spotlight. A brand-new user is never flooded: the
+// auto-open logic (Announcements) shows only the newest unseen entry and seeds the rest seen.
 
 const ANNOUNCEMENTS_KEY_PREFIX = 'octopus.portal.seenAnnouncements.'
 const SPOTLIGHT_KEY_PREFIX = 'octopus.portal.seenSpotlight.'
@@ -31,55 +36,79 @@ function writeIds(key: string, ids: string[]): void {
   }
 }
 
+interface SeenStore {
+  username: string | null
+  /** false when storage is unavailable/corrupt — callers fail closed (nothing auto-opens). */
+  storageOk: boolean
+  seenAnnouncements: string[]
+  seenSpotlights: string[]
+  hydrate: (username: string | null) => void
+  markAnnouncementsSeen: (ids: string[]) => void
+  markSpotlightSeen: (id: string) => void
+}
+
+/** Exported for tests (reset between cases); app code uses the useAnnouncementsSeen hook. */
+export const useAnnouncementsSeenStore = create<SeenStore>((set, get) => ({
+  username: null,
+  storageOk: false,
+  seenAnnouncements: [],
+  seenSpotlights: [],
+  hydrate: (username) => {
+    if (!username) {
+      set({ username: null, storageOk: false, seenAnnouncements: [], seenSpotlights: [] })
+      return
+    }
+    const ann = readIds(ANNOUNCEMENTS_KEY_PREFIX + username)
+    const spot = readIds(SPOTLIGHT_KEY_PREFIX + username)
+    set({
+      username,
+      storageOk: ann !== null && spot !== null,
+      seenAnnouncements: ann ?? [],
+      seenSpotlights: spot ?? [],
+    })
+  },
+  markAnnouncementsSeen: (ids) => {
+    const { username, seenAnnouncements } = get()
+    if (!username) return
+    const merged = Array.from(new Set([...seenAnnouncements, ...ids]))
+    writeIds(ANNOUNCEMENTS_KEY_PREFIX + username, merged)
+    set({ seenAnnouncements: merged })
+  },
+  markSpotlightSeen: (id) => {
+    const { username, seenSpotlights } = get()
+    if (!username) return
+    const merged = Array.from(new Set([...seenSpotlights, id]))
+    writeIds(SPOTLIGHT_KEY_PREFIX + username, merged)
+    set({ seenSpotlights: merged })
+  },
+}))
+
 /**
- * Per-user seen-state for announcements + spotlights. `ready` is false until /auth/me
- * resolves (or when storage is unavailable) so nothing auto-opens before we know who the
- * user is — fail-closed. Marking is a union merge (never shrinks).
+ * Per-user seen-state for announcements + spotlights, shared across components. `ready`
+ * is false until /auth/me resolves (or when storage is unavailable) so nothing auto-opens
+ * before we know who the user is — fail-closed. Marking is a union merge (never shrinks).
  */
 export function useAnnouncementsSeen() {
   const { data: user } = useCurrentUser()
-  const username = user?.username
-  const [seenAnnouncements, setSeenAnnouncements] = useState<string[] | null>(null)
-  const [seenSpotlights, setSeenSpotlights] = useState<string[] | null>(null)
+  const username = user?.username ?? null
+  const hydrate = useAnnouncementsSeenStore((s) => s.hydrate)
 
   useEffect(() => {
-    if (!username) {
-      setSeenAnnouncements(null)
-      setSeenSpotlights(null)
-      return
-    }
-    setSeenAnnouncements(readIds(ANNOUNCEMENTS_KEY_PREFIX + username))
-    setSeenSpotlights(readIds(SPOTLIGHT_KEY_PREFIX + username))
-  }, [username])
+    hydrate(username)
+  }, [username, hydrate])
 
-  const markAnnouncementsSeen = useCallback(
-    (ids: string[]) => {
-      if (!username) return
-      setSeenAnnouncements((prev) => {
-        const merged = Array.from(new Set([...(prev ?? []), ...ids]))
-        writeIds(ANNOUNCEMENTS_KEY_PREFIX + username, merged)
-        return merged
-      })
-    },
-    [username],
-  )
-
-  const markSpotlightSeen = useCallback(
-    (id: string) => {
-      if (!username) return
-      setSeenSpotlights((prev) => {
-        const merged = Array.from(new Set([...(prev ?? []), id]))
-        writeIds(SPOTLIGHT_KEY_PREFIX + username, merged)
-        return merged
-      })
-    },
-    [username],
-  )
+  const hydratedUsername = useAnnouncementsSeenStore((s) => s.username)
+  const storageOk = useAnnouncementsSeenStore((s) => s.storageOk)
+  const seenAnnouncements = useAnnouncementsSeenStore((s) => s.seenAnnouncements)
+  const seenSpotlights = useAnnouncementsSeenStore((s) => s.seenSpotlights)
+  const markAnnouncementsSeen = useAnnouncementsSeenStore((s) => s.markAnnouncementsSeen)
+  const markSpotlightSeen = useAnnouncementsSeenStore((s) => s.markSpotlightSeen)
 
   return {
-    ready: seenAnnouncements !== null,
-    seenAnnouncements: seenAnnouncements ?? [],
-    seenSpotlights: seenSpotlights ?? [],
+    // Ready only once the store is hydrated for the CURRENT user and storage works.
+    ready: username !== null && hydratedUsername === username && storageOk,
+    seenAnnouncements,
+    seenSpotlights,
     markAnnouncementsSeen,
     markSpotlightSeen,
   }

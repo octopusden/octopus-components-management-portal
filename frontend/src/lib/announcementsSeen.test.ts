@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { useAnnouncementsSeen } from './announcementsSeen'
+import { useAnnouncementsSeen, useAnnouncementsSeenStore } from './announcementsSeen'
 
 const mockUser = vi.fn()
 vi.mock('@/hooks/useCurrentUser', () => ({
@@ -9,6 +9,7 @@ vi.mock('@/hooks/useCurrentUser', () => ({
 
 beforeEach(() => {
   localStorage.clear()
+  useAnnouncementsSeenStore.setState({ username: null, storageOk: false, seenAnnouncements: [], seenSpotlights: [] })
   mockUser.mockReturnValue({ data: { username: 'alice' } })
 })
 

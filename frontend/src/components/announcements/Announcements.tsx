@@ -15,7 +15,7 @@ import { FeatureSpotlight } from './FeatureSpotlight'
  * and to a pending onboarding nudge/player, so popups never stack.
  */
 export function Announcements() {
-  const { ready, seenAnnouncements } = useAnnouncementsSeen()
+  const { ready, seenAnnouncements, markAnnouncementsSeen } = useAnnouncementsSeen()
   const present = useAnnouncementsStore((s) => s.present)
   const openModal = useUiOverlay((s) => s.openModal)
   const paletteOpen = useUiOverlay((s) => s.paletteOpen)
@@ -42,10 +42,18 @@ export function Announcements() {
 
   useEffect(() => {
     if (autoOpened.current || !ready || !newestUnseen || blocked) return
+    // Also yield to any page-local dialog already open (e.g. the unsaved-changes prompt) so
+    // the auto-announcement never stacks on top of one it doesn't know about.
+    if (typeof document !== 'undefined' && document.querySelector('[role="dialog"][data-state="open"]')) return
     autoOpened.current = true
+    // Show ONLY the newest unseen entry; seed every older entry as seen so a first-time user
+    // is never walked through the whole history on successive reloads (they remain reachable
+    // via the manual "What's new" button). The newest is marked seen when the modal closes.
+    const older = ANNOUNCEMENTS.filter((a) => a.id !== newestUnseen.id).map((a) => a.id)
+    if (older.length > 0) markAnnouncementsSeen(older)
     present([newestUnseen])
     openModal('announcement')
-  }, [ready, newestUnseen, blocked, present, openModal])
+  }, [ready, newestUnseen, blocked, present, openModal, markAnnouncementsSeen])
 
   return (
     <>
