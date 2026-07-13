@@ -112,13 +112,45 @@ describe('AuditDiffViewer', () => {
 
   it('treats a present-but-empty changeDiff as authoritative (nothing changed)', () => {
     render(
+      // Values DIFFER, but the empty changeDiff says nothing changed — so this
+      // also fails if the value-comparison fallback were wrongly used here.
       <AuditDiffViewer
-        entry={entry({ oldValue: { a: '1', b: '2' }, newValue: { a: '1', b: '2' }, changeDiff: {} })}
+        entry={entry({ oldValue: { a: '1', b: '2' }, newValue: { a: 'X', b: 'Y' }, changeDiff: {} })}
       />,
     )
     expect(screen.getByText('0 changed fields')).toBeDefined()
     // No field is highlighted/expanded; both collapse into one gap.
     expect(screen.getByRole('button', { name: /show 2 unchanged fields/i })).toBeDefined()
+  })
+
+  it('does not crash when changeDiff is undefined (missing field), falls back to values', () => {
+    render(
+      <AuditDiffViewer
+        entry={entry({ oldValue: { x: 'a' }, newValue: { x: 'b' }, changeDiff: undefined as unknown as null })}
+      />,
+    )
+    // undefined must not throw (Object.keys guard); fallback detects x changed.
+    expect(screen.getByText('x')).toBeDefined()
+    expect(screen.getByText('1 changed field')).toBeDefined()
+  })
+
+  it('fallback compares nested objects structurally, key-order independent', () => {
+    render(
+      <AuditDiffViewer
+        entry={entry({
+          // `same` differs only in key order; `filler` keeps it outside the
+          // context window so it collapses (proving it's classified unchanged).
+          oldValue: { cfg: { a: 1, b: 2 }, filler: 'z', same: { p: 1, q: 2 } },
+          newValue: { cfg: { a: 1, b: 3 }, filler: 'z', same: { q: 2, p: 1 } },
+          changeDiff: null,
+        })}
+      />,
+    )
+    // Only cfg changed (b: 2→3). If canonical were order-sensitive, `same` would
+    // also count as changed → "2 changed fields".
+    expect(screen.getByText('cfg')).toBeDefined()
+    expect(screen.getByText('1 changed field')).toBeDefined()
+    expect(screen.queryByText('same')).toBeNull()
   })
 
   it('fallback detects a type-only change (1 vs "1") that renders identically', () => {

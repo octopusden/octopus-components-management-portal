@@ -72,9 +72,10 @@ function buildRows(entry: AuditLogEntry): DiffRow[] {
   for (const k of Object.keys(oldValue ?? {})) if (!seen.has(k)) { seen.add(k); keys.push(k) }
 
   // A present changeDiff is authoritative — even when empty ({} = nothing
-  // changed). Only when it is absent (null, e.g. legacy pre-v2 rows) do we fall
-  // back to comparing the raw snapshot values.
-  const hasDiff = entry.changeDiff !== null
+  // changed). Only when it is absent (null/undefined, e.g. legacy pre-v2 rows or
+  // a payload that omits the field) do we fall back to comparing the raw snapshot
+  // values. `!= null` guards both null AND undefined so Object.keys can't throw.
+  const hasDiff = entry.changeDiff != null
   const changedKeys = new Set<string>(hasDiff ? Object.keys(entry.changeDiff!) : [])
   // CREATE (no old) / DELETE (no new): every field is part of the change.
   const wholeRecordChanged = !oldValue || !newValue
