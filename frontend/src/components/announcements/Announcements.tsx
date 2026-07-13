@@ -30,8 +30,15 @@ export function Announcements() {
     [seenAnnouncements],
   )
 
+  // Never auto-interrupt an automated browser (Playwright/WebDriver) with the What's-new
+  // interstitial: it traps focus and blocks clicks, which would break unrelated e2e flows
+  // (real users never have navigator.webdriver). The manual "What's new" button still works,
+  // so a test that wants the modal can open it explicitly. Mirrors how the onboarding banner
+  // stays out of e2e (its media repo is never 'ready' there).
+  const isAutomated = typeof navigator !== 'undefined' && navigator.webdriver === true
+
   const blocked =
-    paletteOpen || shortcutsOpen || activeModal !== null || onboardingVideoOpen || onboardingBannerVisible
+    isAutomated || paletteOpen || shortcutsOpen || activeModal !== null || onboardingVideoOpen || onboardingBannerVisible
 
   useEffect(() => {
     if (autoOpened.current || !ready || !newestUnseen || blocked) return

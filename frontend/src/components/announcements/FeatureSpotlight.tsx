@@ -70,7 +70,9 @@ export function FeatureSpotlight() {
   const tooltipLeft = Math.max(12, Math.min(rect.left, window.innerWidth - 300))
 
   return (
-    <div className="fixed inset-0 z-[60]" aria-live="polite">
+    // pointer-events-none on the full-viewport layer so it never blocks clicks to the app
+    // (only the tooltip below re-enables them); the highlighted control stays fully usable.
+    <div className="pointer-events-none fixed inset-0 z-[60]" aria-live="polite">
       {/* Highlight ring — does not capture clicks, so the control stays usable. */}
       <div
         className="pointer-events-none absolute rounded-md ring-2 ring-primary ring-offset-2 ring-offset-background transition-all"
@@ -84,7 +86,7 @@ export function FeatureSpotlight() {
       <div
         role="dialog"
         aria-label="New feature"
-        className="absolute w-72 rounded-lg border bg-popover p-3 text-popover-foreground shadow-lg"
+        className="pointer-events-auto absolute w-72 rounded-lg border bg-popover p-3 text-popover-foreground shadow-lg"
         style={{ top: tooltipTop, left: tooltipLeft }}
       >
         <p className="text-sm font-medium">Here&apos;s the new Feedback button</p>

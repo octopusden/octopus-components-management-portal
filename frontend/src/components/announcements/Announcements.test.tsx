@@ -48,6 +48,18 @@ describe('Announcements auto-open', () => {
     expect(useUiOverlay.getState().activeModal).toBeNull()
   })
 
+  it('does not auto-open in an automated browser (navigator.webdriver)', () => {
+    const original = Object.getOwnPropertyDescriptor(navigator, 'webdriver')
+    Object.defineProperty(navigator, 'webdriver', { configurable: true, value: true })
+    try {
+      render(<Announcements />)
+      expect(useUiOverlay.getState().activeModal).toBeNull()
+    } finally {
+      if (original) Object.defineProperty(navigator, 'webdriver', original)
+      else Object.defineProperty(navigator, 'webdriver', { configurable: true, value: false })
+    }
+  })
+
   it('does not re-open an already-seen announcement', () => {
     localStorage.setItem('octopus.portal.seenAnnouncements.alice', JSON.stringify([SEED.id]))
     render(<Announcements />)
