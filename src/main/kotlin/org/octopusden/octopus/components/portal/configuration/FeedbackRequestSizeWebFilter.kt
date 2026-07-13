@@ -32,8 +32,14 @@ import java.util.concurrent.atomic.AtomicLong
  * Ordered ahead of Spring Cloud Gateway's routing so the check runs before the body is
  * proxied downstream.
  */
+// Run ahead of Spring Cloud Gateway's routing (and any body-caching filter) so the size
+// guard wraps the body first. HIGHEST_PRECEDENCE + a small offset leaves room for anything
+// that must genuinely precede it. File-level so the class-level @Order can resolve it.
+private const val ORDER_OFFSET = 100
+private const val FEEDBACK_SIZE_FILTER_ORDER = Ordered.HIGHEST_PRECEDENCE + ORDER_OFFSET
+
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE + 100)
+@Order(FEEDBACK_SIZE_FILTER_ORDER)
 class FeedbackRequestSizeWebFilter(
     @Value("\${portal.feedback.max-request-bytes:12582912}")
     private val maxRequestBytes: Long,
@@ -43,14 +49,19 @@ class FeedbackRequestSizeWebFilter(
         chain: WebFilterChain,
     ): Mono<Void> {
         val request = exchange.request
-        val path = request.uri.path.trimEnd('/')
-        if (request.method != HttpMethod.POST || !path.endsWith(FEEDBACK_PATH)) {
-            return chain.filter(exchange)
-        }
+        val isFeedbackPost =
+            request.method == HttpMethod.POST && request.uri.path.trimEnd('/').endsWith(FEEDBACK_PATH)
+        return if (isFeedbackPost) enforceLimit(exchange, chain) else chain.filter(exchange)
+    }
 
+    private fun enforceLimit(
+        exchange: ServerWebExchange,
+        chain: WebFilterChain,
+    ): Mono<Void> {
+        val request = exchange.request
         val declared = request.headers.contentLength
         if (declared in 0..Long.MAX_VALUE && declared > maxRequestBytes) {
-            LOG.warn("Rejected feedback submission at gateway: Content-Length {} exceeds {}", declared, maxRequestBytes)
+            LOG.warn("Rejected feedback submission: Content-Length {} exceeds cap {}", declared, maxRequestBytes)
             return Mono.error(tooLarge())
         }
 
@@ -61,7 +72,7 @@ class FeedbackRequestSizeWebFilter(
                     super.getBody().map { buffer ->
                         if (counted.addAndGet(buffer.readableByteCount().toLong()) > maxRequestBytes) {
                             DataBufferUtils.release(buffer)
-                            LOG.warn("Rejected feedback submission at gateway: streamed body exceeds {}", maxRequestBytes)
+                            LOG.warn("Rejected feedback submission: streamed body exceeds cap {}", maxRequestBytes)
                             throw tooLarge()
                         }
                         buffer
