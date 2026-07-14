@@ -15,6 +15,7 @@ import reactor.core.publisher.Mono
 import reactor.core.scheduler.Schedulers
 import reactor.util.retry.Retry
 import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicReference
@@ -54,6 +55,15 @@ class OnboardingVideoService(
 
     @Volatile
     private var posterContentTypeValue: String? = null
+
+    /**
+     * Deletes the throwaway per-attempt clone dir. A settable seam (default = real recursive
+     * delete) so a test can deterministically simulate the JGit detached-auto-GC deletion race
+     * that [deleteAttemptDirSafely] swallows — without depending on GC timing. `@Volatile`
+     * mirrors [posterContentTypeValue]: set once, but load() may run on boundedElastic.
+     */
+    @Volatile
+    internal var deleteAttemptDir: (Path) -> Unit = { FileSystemUtils.deleteRecursively(it) }
 
     fun status(): Status = status.get()
 
@@ -163,7 +173,24 @@ class OnboardingVideoService(
                 if (poster != null) " (+poster ${poster.byteArray.size} bytes)" else "",
             )
         } finally {
-            FileSystemUtils.deleteRecursively(attemptDir)
+            deleteAttemptDirSafely(attemptDir)
+        }
+    }
+
+    /**
+     * Best-effort deletion of the throwaway per-attempt clone dir. By the time this runs the
+     * video is already in memory (status READY), so a failure to delete a temp dir must NOT
+     * fail an otherwise-successful load. JGit fires a *detached* auto-GC after the clone; that
+     * background thread deletes `.git/gc.log.lock` and can race the recursive walk, throwing
+     * NoSuchFileException (TC build 1.0.4-831). A leftover dir is harmless — it's unique per
+     * attempt — so swallow-and-log rather than propagate.
+     */
+    @Suppress("TooGenericExceptionCaught") // best-effort cleanup must swallow ANY delete failure
+    private fun deleteAttemptDirSafely(attemptDir: Path) {
+        try {
+            deleteAttemptDir(attemptDir)
+        } catch (e: Exception) {
+            log.warn("Onboarding video: failed to delete temp clone dir {} (ignored)", attemptDir, e)
         }
     }
 

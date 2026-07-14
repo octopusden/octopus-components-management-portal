@@ -108,6 +108,27 @@ class OnboardingVideoServiceTest {
     }
 
     @Test
+    fun `cleanup failure after a successful read does not fail the load (JGit auto-GC delete race)`(
+        @TempDir tmp: Path,
+    ) {
+        // Regression (TC build 1.0.4-831): JGit fires a *detached* auto-GC after the clone;
+        // that background thread deletes `.git/gc.log.lock` and can race the `finally`
+        // recursive delete of the throwaway clone dir, so the file-tree walk throws
+        // NoSuchFileException. By then the video is already in memory (status READY), so a
+        // temp-dir cleanup failure must NOT flip a successful load to FAILED. We inject a
+        // throwing cleanup to reproduce that race deterministically (no timing dependence).
+        val repo = Files.createDirectory(tmp.resolve("repo"))
+        makeRepo(repo)
+        val service = OnboardingVideoService(props(tmp, root = repo.toUri().toString()))
+        service.deleteAttemptDir = { throw java.nio.file.NoSuchFileException("simulated gc.log.lock race") }
+
+        assertTrue(service.tryLoadSafely())
+
+        assertEquals(OnboardingVideoService.Status.READY, service.status())
+        assertArrayEquals(videoBytes, service.videoResource()!!.inputStream.readBytes())
+    }
+
+    @Test
     fun `poster is loaded when poster-path is set`(@TempDir tmp: Path) {
         val repo = Files.createDirectory(tmp.resolve("repo"))
         makeRepo(repo, withPoster = true)
