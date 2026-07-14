@@ -34,14 +34,12 @@ project {
     buildType(id50ReleasePostProcessingAuto)
     buildType(id50DeployToOkdQaAuto)
     buildType(id70DeployToOkdProdManual)
-    buildType(id25DeployToOkdProdManualTemp)
     buildType(WLValidation)
 
     buildTypesOrder = arrayListOf(
         id10CompileUtAuto,
         id15E2eAuto,
         id20DeployToOkdQaManual,
-        id25DeployToOkdProdManualTemp,
         id40ReleaseManual,
         id50ReleasePostProcessingAuto,
         id50DeployToOkdQaAuto,
@@ -184,6 +182,9 @@ object id15E2eAuto : BuildType({
     dependencies {
         snapshot(id10CompileUtAuto) {
             onDependencyFailure = FailureAction.FAIL_TO_START
+            // Reuse a suitable successful build rather than forcing a fresh one
+            // ("Do not run new build if there is a suitable one").
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
         }
     }
 
@@ -211,29 +212,9 @@ object id20DeployToOkdQaManual : BuildType({
     dependencies {
         snapshot(id10CompileUtAuto) {
             onDependencyFailure = FailureAction.FAIL_TO_START
-        }
-    }
-
-    disableSettings("BUILD_EXT_1740")
-})
-
-// TEMPORARY: Deploy to prod directly after QA (bypass release chain) — remove after initial prod onboarding
-object id25DeployToOkdProdManualTemp : BuildType({
-    templates(AbsoluteId("RnDProcessesAutomation_IdpComponentOkdDeploy"))
-    id("25DeployToOkdProdManualTemp")
-    name = "[2.5] Deploy to OKD PROD [MANUAL][TEMP]"
-
-    params {
-        text("OKD_SERVER_URL", "%OKD_SERVER_PROD_URL%", allowEmpty = false)
-        param("BUILD_NUMBER", "${id10CompileUtAuto.depParamRefs.buildNumber}")
-        param("DEPLOYMENT_ENVIRONMENT", "production")
-        param("HELM_EXTRA_SERVICES_SET", "--set image.name=octopusden/%OKD_IMAGE_NAME%")
-        text("OKD_SA_TOKEN", "%OKD_SA_PROD_TOKEN%", display = ParameterDisplay.HIDDEN, allowEmpty = true)
-    }
-
-    dependencies {
-        snapshot(id20DeployToOkdQaManual) {
-            onDependencyFailure = FailureAction.FAIL_TO_START
+            // Reuse a suitable successful build rather than forcing a fresh one
+            // ("Do not run new build if there is a suitable one").
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
         }
     }
 
@@ -254,6 +235,9 @@ object id40ReleaseManual : BuildType({
     dependencies {
         snapshot(id20DeployToOkdQaManual) {
             onDependencyFailure = FailureAction.FAIL_TO_START
+            // Reuse a suitable successful build rather than forcing a fresh one
+            // ("Do not run new build if there is a suitable one").
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
         }
         // E2E is a release blocker: release can only cut when [1.5] E2E passed for
         // the SAME source revision. id15 and id20 both snapshot id10, so TeamCity
@@ -261,6 +245,9 @@ object id40ReleaseManual : BuildType({
         // id15 only gates (it is not a source of release parameters).
         snapshot(id15E2eAuto) {
             onDependencyFailure = FailureAction.FAIL_TO_START
+            // Reuse a suitable successful build rather than forcing a fresh one
+            // ("Do not run new build if there is a suitable one").
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
         }
     }
 })
@@ -304,6 +291,9 @@ object id50DeployToOkdQaAuto : BuildType({
     dependencies {
         snapshot(id50ReleasePostProcessingAuto) {
             onDependencyFailure = FailureAction.FAIL_TO_START
+            // Reuse a suitable successful build rather than forcing a fresh one
+            // ("Do not run new build if there is a suitable one").
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
         }
     }
 
@@ -375,6 +365,9 @@ object id70DeployToOkdProdManual : BuildType({
     dependencies {
         snapshot(id50DeployToOkdQaAuto) {
             onDependencyFailure = FailureAction.FAIL_TO_START
+            // Reuse a suitable successful build rather than forcing a fresh one
+            // ("Do not run new build if there is a suitable one").
+            reuseBuilds = ReuseBuilds.SUCCESSFUL
         }
     }
 })
