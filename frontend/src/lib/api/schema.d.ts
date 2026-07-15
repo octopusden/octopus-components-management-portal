@@ -1130,6 +1130,7 @@ export interface components {
         };
         ComponentEditorsResponse: {
             componentOwner?: string;
+            manager?: string;
             releaseManagers: string[];
             securityChampions: string[];
         };

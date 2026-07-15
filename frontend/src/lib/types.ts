@@ -109,13 +109,15 @@ export interface ComponentDetail {
 
 /**
  * The people who may edit a component, from `GET /components/{id}/editors`. Read-only
- * informational projection (owner + ordered release managers + security champions);
- * administrators may also edit but are not enumerated here.
+ * informational projection (owner + ordered release managers + security champions +
+ * the owner's manager). Administrators may also edit any component but are, unlike the
+ * manager, not enumerated here (an open-ended realm-role, not per-component data).
  */
 export interface ComponentEditors {
   componentOwner: string | null
   releaseManagers: string[]
   securityChampions: string[]
+  manager: string | null
 }
 
 // ---------------------------------------------------------------------------

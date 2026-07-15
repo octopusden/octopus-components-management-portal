@@ -3,10 +3,10 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip'
 import { useComponentEditors } from '../../hooks/useComponentEditors'
 
 /** Tooltip copy — spells out the live `canEditComponent` gate (CANNOT_EDIT_TITLE
- *  mirror) so readers understand the list is owner + RMs + SCs, and that admins
- *  edit any component without being enumerated. */
+ *  mirror) so readers understand the list is owner + RMs + SCs + the owner's
+ *  manager, and that admins edit any component without being enumerated. */
 const WHO_CAN_EDIT_TOOLTIP =
-  'The component owner, its release managers, and its security champions can edit this component. Administrators can edit any component.'
+  "The component owner, its release managers, its security champions, and the owner's manager can edit this component. Administrators can edit any component."
 
 interface WhoCanEditPanelProps {
   componentId: string
@@ -14,9 +14,9 @@ interface WhoCanEditPanelProps {
 
 /**
  * Highlighted, read-only "who can edit" callout: the deduplicated owner + release
- * managers + security champions from `GET /components/{id}/editors`. Shared by the
- * read-only header banner (ComponentDetailPage, shown when the viewer lacks edit
- * rights) and the General tab footer (shown to editors only). The two render sites
+ * managers + security champions + the owner's manager from `GET /components/{id}/editors`.
+ * Shared by the read-only header banner (ComponentDetailPage, shown when the viewer lacks
+ * edit rights) and the General tab footer (shown to editors only). The two render sites
  * are mutually exclusive, so it never appears twice. Both sites render it outside
  * (or under a non-disabled) <fieldset>, so the tooltip trigger button stays
  * interactive. The query is deduped by react-query (shared queryKey), so the
@@ -29,6 +29,7 @@ export function WhoCanEditPanel({ componentId }: WhoCanEditPanelProps) {
     editors?.componentOwner,
     ...(editors?.releaseManagers ?? []),
     ...(editors?.securityChampions ?? []),
+    editors?.manager,
   ].filter((p): p is string => !!p)
   const unique = [...new Set(people)]
 

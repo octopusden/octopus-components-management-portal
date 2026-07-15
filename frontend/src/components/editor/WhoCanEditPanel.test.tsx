@@ -44,6 +44,34 @@ describe('WhoCanEditPanel', () => {
     expect(panel.textContent).toContain('Administrators can also edit any component.')
   })
 
+  it('includes the owner\'s manager in the list (SYS-063)', () => {
+    mockUseComponentEditors.mockReturnValue({
+      data: {
+        componentOwner: 'alice',
+        releaseManagers: ['rm-1'],
+        securityChampions: ['sc-1'],
+        manager: 'mgr-1',
+      },
+      isLoading: false,
+      isError: false,
+    })
+    renderPanel()
+
+    const panel = screen.getByTestId('who-can-edit')
+    expect(panel.textContent).toContain('alice, rm-1, sc-1, mgr-1')
+  })
+
+  it('dedupes the manager when they are already listed as owner/RM/SC', () => {
+    mockUseComponentEditors.mockReturnValue({
+      data: { componentOwner: 'alice', releaseManagers: ['rm-1'], securityChampions: [], manager: 'rm-1' },
+      isLoading: false,
+      isError: false,
+    })
+    renderPanel()
+
+    expect(screen.getByTestId('who-can-edit').textContent).toContain('alice, rm-1')
+  })
+
   it('shows a Loading… placeholder while the projection is in flight', () => {
     mockUseComponentEditors.mockReturnValue({ data: undefined, isLoading: true, isError: false })
     renderPanel()
