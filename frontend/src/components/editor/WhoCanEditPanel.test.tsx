@@ -25,11 +25,10 @@ function renderPanel() {
 
 /** One row per distinct person: `username` plus its exact, ordered role labels. */
 function entryRows(): { username: string; roles: string[] }[] {
-  return screen.getAllByTestId('editor-entry').map((row) => {
-    const badges = Array.from(row.querySelectorAll('[data-variant]')).map((b) => b.textContent)
-    const username = row.textContent!.replace(badges.join(''), '')
-    return { username, roles: badges as string[] }
-  })
+  return screen.getAllByTestId('editor-entry').map((row) => ({
+    username: row.querySelector('[data-testid="editor-username"]')!.textContent!,
+    roles: Array.from(row.querySelectorAll('[data-variant]')).map((b) => b.textContent!),
+  }))
 }
 
 beforeEach(() => {

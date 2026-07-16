@@ -117,7 +117,7 @@ export function WhoCanEditPanel({ componentId }: WhoCanEditPanelProps) {
               data-testid="editor-entry"
               className="flex flex-wrap items-center gap-1.5 text-sm text-foreground"
             >
-              <span>{entry.username}</span>
+              <span data-testid="editor-username">{entry.username}</span>
               {entry.roles.map((role) => (
                 <Badge key={role} variant="secondary" className="font-normal">
                   {role}
