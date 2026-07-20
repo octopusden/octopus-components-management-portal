@@ -1130,6 +1130,7 @@ export interface components {
         };
         ComponentEditorsResponse: {
             componentOwner?: string;
+            manager?: string;
             releaseManagers: string[];
             securityChampions: string[];
         };
@@ -1723,7 +1724,8 @@ export interface components {
             /** Format: uuid */
             id: string;
             projectId: string;
-            projectUrl?: string;
+            projectUrl?: string | null;
+            projectVersion?: string | null;
             /** Format: int32 */
             sortOrder: number;
         };
@@ -1742,6 +1744,8 @@ export interface components {
         TeamcitySyncResult: {
             /** Format: int32 */
             ambiguous_auto_resolved: number;
+            /** Format: int32 */
+            dropped_lines: number;
             errors: string[];
             /** Format: int32 */
             scanned: number;

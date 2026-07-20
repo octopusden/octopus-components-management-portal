@@ -827,12 +827,14 @@ describe('GeneralTab field descriptions (FieldInfo)', () => {
 })
 
 describe('GeneralTab — responsible-people (who can edit) panel', () => {
-  it('renders the highlighted read-only owner + RMs + SCs list from useComponentEditors', () => {
+  it('renders the highlighted read-only owner + RMs + SCs rows from useComponentEditors', () => {
     setAllEditable()
     renderWithProviders(<Harness component={baseComponent()} />)
     const panel = screen.getByTestId('who-can-edit')
     expect(panel.textContent).toContain('Who can edit this component')
-    expect(panel.textContent).toContain('alice, rm-1, sc-1')
+    expect(panel.textContent).toContain('alice')
+    expect(panel.textContent).toContain('rm-1')
+    expect(panel.textContent).toContain('sc-1')
   })
 
   it('hides the footer panel for read-only viewers (they get the header banner instead)', () => {
