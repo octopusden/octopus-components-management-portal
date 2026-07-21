@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v2.3.5
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v2.4.1
     with:
       java-version: '25'
       flow-type: 'hybrid'
@@ -19,13 +19,13 @@ jobs:
     secrets: inherit
 
   quality:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v2.3.5
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v2.4.1
     with:
       java-version: '25'
     secrets: inherit
 
   security:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v2.3.5
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v2.4.1
     with:
       java-version: '25'
       enable-codeql: false
@@ -74,6 +74,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: octopusden/octopus-base/.github/actions/merge-gate@v2.3.5
+      - uses: octopusden/octopus-base/.github/actions/merge-gate@v2.4.1
         with:
           needs: ${{ toJson(needs) }}

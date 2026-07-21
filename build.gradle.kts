@@ -58,7 +58,7 @@ jacoco {
     toolVersion = "0.8.14"
 }
 
-// SpotBugs: nothing to configure here. octopus-quality 2.3.5 only wires SpotBugs on Java
+// SpotBugs: nothing to configure here. octopus-quality 2.4.1 only wires SpotBugs on Java
 // modules without Kotlin, so this Kotlin-only portal never gets it — no force/disable needed.
 
 // detekt 2.x splits its baselines per source set (detekt-baseline-main.xml / -test.xml)
