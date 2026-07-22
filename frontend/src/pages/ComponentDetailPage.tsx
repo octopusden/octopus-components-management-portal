@@ -77,7 +77,8 @@ import { parseServerFieldErrors } from '../lib/serverErrors'
 import { usePortalLinks, usePortalConfig } from '../hooks/useInfo'
 import { useLabelsDictionary } from '../hooks/useLabelsDictionary'
 import { isSolutionCandidate } from '../lib/solutionKey'
-import { safeHttpUrl } from '../lib/utils'
+import { cn, safeHttpUrl } from '../lib/utils'
+import { Tooltip, TooltipTrigger, TooltipContent } from '../components/ui/tooltip'
 import { getTeamCityValidationStatusTone } from '../lib/teamcityValidationTypes'
 import { useValidationProblems } from '../hooks/useValidationProblems'
 import { allProblemVersions, hasValidationIssue, validationBadgeCount } from '../lib/validation'
@@ -900,9 +901,10 @@ function ComponentDetailEditor() {
             {component.teamcityProjects.map((tc) => {
               const url = safeHttpUrl(tc.projectUrl ?? null)
               const validations = tc.validations ?? []
-              const issueCount = validations.filter(
-                (v) => getTeamCityValidationStatusTone(v.status) === 'destructive',
-              ).length
+              const tones = validations.map((v) => getTeamCityValidationStatusTone(v.status))
+              const hasError = tones.includes('destructive')
+              const hasWarning = tones.includes('warning')
+              const issueCount = tones.filter((t) => t === 'destructive' || t === 'warning').length
               const allClean = issueCount === 0
               return (
                 <div key={tc.id} className="flex items-center gap-2 px-3 py-2 text-sm">
@@ -913,22 +915,34 @@ function ComponentDetailEditor() {
                     />
                   ) : (
                     <AlertTriangle
-                      className="h-4 w-4 shrink-0 text-destructive"
+                      className={cn(
+                        'h-4 w-4 shrink-0',
+                        hasError
+                          ? 'text-destructive'
+                          : hasWarning
+                            ? 'text-[color:var(--color-badge-yellow-fg)]'
+                            : 'text-muted-foreground',
+                      )}
                       aria-label={`${issueCount} validation ${issueCount === 1 ? 'issue' : 'issues'}`}
                     />
                   )}
                   {url ? (
-                    <a
-                      href={url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title={`TeamCity: ${tc.projectId}`}
-                      aria-label={`TeamCity: ${tc.projectId}`}
-                      className="inline-flex min-w-0 items-center gap-1.5 font-medium text-primary hover:underline"
-                    >
-                      <TeamCityIcon className="h-4 w-4 shrink-0" />
-                      <span className="truncate">{tc.projectId}</span>
-                    </a>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={`TeamCity: ${tc.projectId}`}
+                          aria-label={`TeamCity: ${tc.projectId}`}
+                          className="inline-flex min-w-0 items-center gap-1.5 font-medium text-primary hover:underline"
+                        >
+                          <TeamCityIcon className="h-4 w-4 shrink-0" />
+                          <span className="truncate">{tc.projectId}</span>
+                        </a>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs break-all">{url}</TooltipContent>
+                    </Tooltip>
                   ) : (
                     <span className="inline-flex min-w-0 items-center gap-1.5">
                       <TeamCityIcon className="h-4 w-4 shrink-0 text-muted-foreground" />

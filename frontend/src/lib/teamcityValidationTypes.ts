@@ -34,12 +34,16 @@ export function getTeamCityValidationTypeInfo(type: string): { label: string; de
 /**
  * Visual tone for a validation `status`. Case-insensitive substring matching
  * because the exact status vocabulary isn't finalized yet — `FAILED`/`ERROR`-
- * like strings read as destructive, `PASSED`/`OK`-like read as success,
- * anything else (including unrecognized future statuses) is neutral.
+ * like strings read as destructive (red), `WARN`-like strings read as warning
+ * (amber/yellow), `PASSED`/`OK`-like read as success, anything else
+ * (including unrecognized future statuses) is neutral.
  */
-export function getTeamCityValidationStatusTone(status: string): 'default' | 'destructive' | 'success' {
+export function getTeamCityValidationStatusTone(
+  status: string,
+): 'default' | 'destructive' | 'warning' | 'success' {
   const s = status.toUpperCase()
   if (s.includes('FAIL') || s.includes('ERROR')) return 'destructive'
+  if (s.includes('WARN')) return 'warning'
   if (s.includes('PASS') || s.includes('OK') || s.includes('SUCCESS') || s.includes('CLEAN')) return 'success'
   return 'default'
 }

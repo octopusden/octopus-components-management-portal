@@ -1,5 +1,4 @@
 import { EmptyState } from './ui/empty-state'
-import { RelativeTime } from './ui/RelativeTime'
 import { cn } from '../lib/utils'
 import type { TeamcityProject } from '../lib/types'
 import {
@@ -11,9 +10,22 @@ interface TeamCityValidationsTabProps {
   teamcityProjects: TeamcityProject[]
 }
 
-const TONE_BADGE_CLASS: Record<'default' | 'destructive' | 'success', string> = {
+type Tone = 'default' | 'destructive' | 'warning' | 'success'
+
+// Whole-card tint by tone: destructive (failed) reads red, warning reads
+// amber/yellow, success/default stay neutral so only genuine problems draw
+// the eye.
+const TONE_CARD_CLASS: Record<Tone, string> = {
+  default: 'border',
+  destructive: 'border border-destructive/40 bg-destructive/10',
+  warning: 'border border-[color:var(--color-badge-yellow-fg)]/40 bg-[color:var(--color-badge-yellow-bg)]',
+  success: 'border',
+}
+
+const TONE_BADGE_CLASS: Record<Tone, string> = {
   default: 'bg-muted text-muted-foreground',
   destructive: 'bg-destructive/15 text-destructive',
+  warning: 'bg-[color:var(--color-badge-yellow-bg)] text-[color:var(--color-badge-yellow-fg)]',
   success: 'bg-[color:var(--color-badge-green-bg)] text-[color:var(--color-badge-green-fg)]',
 }
 
@@ -44,8 +56,12 @@ export function TeamCityValidationsTab({ teamcityProjects }: TeamCityValidations
               const info = getTeamCityValidationTypeInfo(v.type)
               return (
                 // Index-prefixed key — findings have no server id on this shape.
-                <div key={`${i}-${v.type}`} className="rounded-md border p-3 space-y-1.5">
-                  <div className="flex items-center gap-2">
+                <div
+                  key={`${i}-${v.type}`}
+                  className={cn('rounded-md p-3 space-y-1.5', TONE_CARD_CLASS[tone])}
+                >
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium">{info.label}</span>
                     <span
                       className={cn(
                         'rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-wide',
@@ -54,9 +70,7 @@ export function TeamCityValidationsTab({ teamcityProjects }: TeamCityValidations
                     >
                       {v.status}
                     </span>
-                    <RelativeTime ts={v.updatedAt} className="ml-auto text-xs text-muted-foreground" />
                   </div>
-                  <div className="font-medium">{info.label}</div>
                   {v.message && <div className="text-sm">{v.message}</div>}
                   {info.description && (
                     <div className="text-xs text-muted-foreground">{info.description}</div>

@@ -81,9 +81,10 @@ function BreakdownList({ counts }: { counts: Record<string, number>; labelFor?: 
 function StatusPills({ counts }: { counts: Record<string, number> }) {
   const entries = Object.entries(counts).sort((a, b) => b[1] - a[1])
   if (entries.length === 0) return <EmptyState message="No data." className="py-8" />
-  const toneClass: Record<'default' | 'destructive' | 'success', string> = {
+  const toneClass: Record<'default' | 'destructive' | 'warning' | 'success', string> = {
     default: 'bg-muted text-muted-foreground',
     destructive: 'bg-destructive/15 text-destructive',
+    warning: 'bg-[color:var(--color-badge-yellow-bg)] text-[color:var(--color-badge-yellow-fg)]',
     success: 'bg-[color:var(--color-badge-green-bg)] text-[color:var(--color-badge-green-fg)]',
   }
   return (
@@ -108,8 +109,9 @@ function StatusPills({ counts }: { counts: Record<string, number> }) {
  * Registry-wide TeamCity validation findings — the top-level counterpart to
  * the per-component `TeamCityValidationsTab`. Sourced from the portal-side
  * validation sweep (see TeamCityValidationPanel on the Admin > Migration
- * tab, which triggers the run this page reports on). Unguarded route
- * (visible to everyone), mirroring `/components`.
+ * tab, which triggers the run this page reports on). Admin-only route
+ * (RequirePermission(IMPORT_DATA) in App.tsx, adminOnly nav item in
+ * Layout.tsx), mirroring `/health`.
  */
 export function TeamCityValidationsPage() {
   const [typeFilter, setTypeFilter] = useState('')
