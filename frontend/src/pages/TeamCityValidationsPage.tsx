@@ -16,7 +16,6 @@ import { StatusBanner } from '../components/ui/status-banner'
 import { EmptyState } from '../components/ui/empty-state'
 import { Label } from '../components/ui/label'
 import { Badge } from '../components/ui/badge'
-import { MultiSelectFilter } from '../components/ui/MultiSelectFilter'
 import { Tooltip, TooltipTrigger, TooltipContent } from '../components/ui/tooltip'
 import { TeamCityIcon } from '../components/ui/icons/brand-icons'
 import {
@@ -98,6 +97,39 @@ function BreakdownList({ counts }: { counts: Record<string, number> }) {
         </li>
       ))}
     </ul>
+  )
+}
+
+// Single-select dropdown — same native-<select> pattern as ComponentFilters.tsx's
+// TriStateFilter, sized for longer option strings (type/status/category values).
+function SingleSelectFilter({
+  id,
+  value,
+  onChange,
+  options,
+  placeholder,
+}: {
+  id: string
+  value: string
+  onChange: (v: string) => void
+  options: string[]
+  placeholder: string
+}) {
+  return (
+    <select
+      id={id}
+      aria-label={placeholder}
+      className="h-9 w-48 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      <option value="">{placeholder}</option>
+      {options.map((o) => (
+        <option key={o} value={o}>
+          {o}
+        </option>
+      ))}
+    </select>
   )
 }
 
@@ -240,17 +272,17 @@ const columns = [
  * Layout.tsx), mirroring `/health`.
  */
 export function TeamCityValidationsPage() {
-  const [typeFilter, setTypeFilter] = useState<string[]>([])
-  const [statusFilter, setStatusFilter] = useState<string[]>([])
-  const [categoryFilter, setCategoryFilter] = useState<string[]>([])
+  const [typeFilter, setTypeFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('')
   const [sorting, setSorting] = useState<SortingState>([])
 
   const summary = useTeamCityValidationSummary()
 
   const filters: TeamCityValidationFilters = useMemo(
     () => ({
-      type: typeFilter.length ? typeFilter : undefined,
-      status: statusFilter.length ? statusFilter : undefined,
+      type: typeFilter ? [typeFilter] : undefined,
+      status: statusFilter ? [statusFilter] : undefined,
     }),
     [typeFilter, statusFilter],
   )
@@ -272,8 +304,8 @@ export function TeamCityValidationsPage() {
   // row is stamped with its client-computed category, then filtered locally.
   const tableRows: ValidationRow[] = useMemo(() => {
     const withCategory = (rows.data ?? []).map((r) => ({ ...r, category: getTeamCityValidationCategory() }))
-    if (categoryFilter.length === 0) return withCategory
-    return withCategory.filter((r) => categoryFilter.includes(r.category))
+    if (!categoryFilter) return withCategory
+    return withCategory.filter((r) => r.category === categoryFilter)
   }, [rows.data, categoryFilter])
 
   const table = useReactTable({
@@ -352,44 +384,39 @@ export function TeamCityValidationsPage() {
               <Label htmlFor="filter-tc-type" className="text-xs text-muted-foreground">
                 Type
               </Label>
-              <MultiSelectFilter
+              <SingleSelectFilter
                 id="filter-tc-type"
                 value={typeFilter}
                 onChange={setTypeFilter}
                 options={typeOptions}
-                isLoading={summary.isLoading}
                 placeholder="All types"
-                unitLabel="type"
               />
             </div>
             <div className="flex flex-col gap-1">
               <Label htmlFor="filter-tc-status" className="text-xs text-muted-foreground">
                 Status
               </Label>
-              <MultiSelectFilter
+              <SingleSelectFilter
                 id="filter-tc-status"
                 value={statusFilter}
                 onChange={setStatusFilter}
                 options={statusOptions}
-                isLoading={summary.isLoading}
                 placeholder="All statuses"
-                unitLabel="status"
               />
             </div>
             <div className="flex flex-col gap-1">
               <Label htmlFor="filter-tc-category" className="text-xs text-muted-foreground">
                 Category
               </Label>
-              {/* Only one category exists today (TeamCity) — the control is
-                  still a multi-select so a second source can appear later
-                  without any UI change, just a longer TEAMCITY_VALIDATION_CATEGORIES. */}
-              <MultiSelectFilter
+              {/* Only one category exists today (TeamCity), so this control is
+                  mostly future-proofing — extend TEAMCITY_VALIDATION_CATEGORIES
+                  when a second source ships. */}
+              <SingleSelectFilter
                 id="filter-tc-category"
                 value={categoryFilter}
                 onChange={setCategoryFilter}
                 options={TEAMCITY_VALIDATION_CATEGORIES}
                 placeholder="All categories"
-                unitLabel="category"
               />
             </div>
           </div>

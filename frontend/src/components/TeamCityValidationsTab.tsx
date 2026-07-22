@@ -79,14 +79,18 @@ export function TeamCityValidationsTab({ teamcityProjects }: TeamCityValidations
                   >
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-medium">{info.label}</span>
-                      <Badge variant={tone} className="uppercase tracking-wide">
+                      <Badge variant="secondary" className="uppercase tracking-wide">
                         {v.status}
                       </Badge>
                     </div>
                     {/* Findings messages may contain literal "\n" line breaks —
                         whitespace-pre-wrap renders them instead of collapsing to
                         one line, while still wrapping long lines normally. */}
-                    {v.message && <div className="text-sm whitespace-pre-wrap">{v.message}</div>}
+                    {v.message && (
+                      <div className="text-sm whitespace-pre-wrap" style={{ lineHeight: '30px' }}>
+                        {v.message}
+                      </div>
+                    )}
                     {info.description && (
                       <div className="text-xs text-muted-foreground">{info.description}</div>
                     )}
