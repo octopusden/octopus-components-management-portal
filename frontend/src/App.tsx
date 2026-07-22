@@ -7,6 +7,7 @@ import { CreateComponentPage } from './pages/CreateComponentPage'
 import { AuditLogPage } from './pages/AuditLogPage'
 import { AdminSettingsPage } from './pages/AdminSettingsPage'
 import { RegistryHealthPage } from './pages/RegistryHealthPage'
+import { TeamCityValidationsPage } from './pages/TeamCityValidationsPage'
 import { RequirePermission } from './components/RequirePermission'
 import { PERMISSIONS, restoreContinuePath } from './lib/auth'
 import { Toaster } from './components/ui/toaster'
@@ -84,6 +85,7 @@ export const appRoutes: RouteObject[] = [
       // is never shadowed by the detail route with id="new".
       { path: '/components/new', element: <CreateComponentPage /> },
       { path: '/components/:id', element: <ComponentDetailPage /> },
+      { path: '/validations', element: <TeamCityValidationsPage /> },
       {
         path: '/audit',
         element: (

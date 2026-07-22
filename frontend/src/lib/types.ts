@@ -41,8 +41,13 @@ export interface ComponentSummary {
   javaVersion?: string | null
   jiraProjectKey?: string | null
   vcsPath?: string | null
+  // NOTE!!
   teamcityProjectId?: string | null
   teamcityProjectUrl?: string | null
+  // Replaces the legacy scalar teamcityProjectId/teamcityProjectUrl — a
+  // component may now have several TeamCity projects on the list row (mirrors
+  // the detail's teamcityProjects[]). Server emits [] for none.
+//   teamcityProjects: { projectId: string; projectUrl?: string | null }[]
 }
 
 export interface ComponentDetail {
@@ -279,6 +284,32 @@ export interface TeamcityProject {
   projectId: string
   projectUrl?: string | null
   sortOrder: number
+  projectVersion?: string | null
+  validations: TeamcityValidation[]
+}
+
+export interface TeamcityValidation {
+  type: string
+  status: string
+  message?: string | null
+  updatedAt: string
+}
+
+export interface TeamcityValidationSummary {
+  byStatus: Record<string, number>
+  byType: Record<string, number>
+  componentsWithIssues: number
+  findings: number
+}
+
+export interface TeamcityValidationRow {
+  componentId: string
+  componentName: string
+  message: string
+  projectId: string
+  status: string
+  type: string
+  updatedAt: string
 }
 
 // ---------------------------------------------------------------------------
@@ -1020,6 +1051,24 @@ export interface TeamCityResyncJobResponse {
   finishedAt: string | null
   errorMessage: string | null
   result: TeamCityResyncResult | null
+}
+
+export interface TeamCityValidationResult {
+  scanned: number
+  findings: number
+  componentsWithIssues: number
+  errors: string[]
+}
+
+export interface TeamCityValidationJobResponse {
+  /** Discriminator — always 'job' for this shape. */
+  kind?: 'job'
+  id: string
+  state: JobState
+  startedAt: string
+  finishedAt: string | null
+  errorMessage: string | null
+  result: TeamCityValidationResult | null
 }
 
 // ── CRS legacy version rendering (rest/api/2/.../detailed-version) ───────────

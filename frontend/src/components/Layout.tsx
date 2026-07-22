@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router'
-import { Package, History, Settings, LogOut, AlertTriangle, Activity } from 'lucide-react'
+import { Package, History, Settings, LogOut, AlertTriangle, Activity, ShieldCheck } from 'lucide-react'
 import { cn, initials } from '../lib/utils'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { usePortalInfo } from '@/hooks/useInfo'
@@ -31,6 +31,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { href: '/components', label: 'Components', icon: Package },
+  { href: '/validations', label: 'Validations', icon: ShieldCheck },
   { href: '/audit', label: 'Audit', icon: History, requires: PERMISSIONS.ACCESS_AUDIT },
   {
     href: '/health',

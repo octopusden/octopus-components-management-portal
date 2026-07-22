@@ -1,0 +1,72 @@
+import { EmptyState } from './ui/empty-state'
+import { RelativeTime } from './ui/RelativeTime'
+import { cn } from '../lib/utils'
+import type { TeamcityProject } from '../lib/types'
+import {
+  getTeamCityValidationStatusTone,
+  getTeamCityValidationTypeInfo,
+} from '../lib/teamcityValidationTypes'
+
+interface TeamCityValidationsTabProps {
+  teamcityProjects: TeamcityProject[]
+}
+
+const TONE_BADGE_CLASS: Record<'default' | 'destructive' | 'success', string> = {
+  default: 'bg-muted text-muted-foreground',
+  destructive: 'bg-destructive/15 text-destructive',
+  success: 'bg-[color:var(--color-badge-green-bg)] text-[color:var(--color-badge-green-fg)]',
+}
+
+/**
+ * Read-only "Validations > TeamCity" panel — the per-component surface for
+ * findings from the admin-triggered TeamCity validation sweep (see
+ * TeamCityValidationPanel / the top-level Validations page for the
+ * registry-wide view). Groups this component's `teamcityProjects[].validations`
+ * by project; each finding renders as its own card. Distinct from
+ * ValidationProblemsList, which covers the unrelated registered-version
+ * validation facility.
+ */
+export function TeamCityValidationsTab({ teamcityProjects }: TeamCityValidationsTabProps) {
+  const projectsWithFindings = teamcityProjects.filter((p) => (p.validations ?? []).length > 0)
+
+  if (projectsWithFindings.length === 0) {
+    return <EmptyState message="No TeamCity validation findings for this component." className="py-8" />
+  }
+
+  return (
+    <div className="space-y-6">
+      {projectsWithFindings.map((project) => (
+        <div key={project.id} className="space-y-2">
+          <h3 className="text-sm font-semibold font-mono text-muted-foreground">{project.projectId}</h3>
+          <div className="space-y-2">
+            {project.validations.map((v, i) => {
+              const tone = getTeamCityValidationStatusTone(v.status)
+              const info = getTeamCityValidationTypeInfo(v.type)
+              return (
+                // Index-prefixed key — findings have no server id on this shape.
+                <div key={`${i}-${v.type}`} className="rounded-md border p-3 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={cn(
+                        'rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-wide',
+                        TONE_BADGE_CLASS[tone],
+                      )}
+                    >
+                      {v.status}
+                    </span>
+                    <RelativeTime ts={v.updatedAt} className="ml-auto text-xs text-muted-foreground" />
+                  </div>
+                  <div className="font-medium">{info.label}</div>
+                  {v.message && <div className="text-sm">{v.message}</div>}
+                  {info.description && (
+                    <div className="text-xs text-muted-foreground">{info.description}</div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}

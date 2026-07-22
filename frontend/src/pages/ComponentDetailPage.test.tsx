@@ -618,17 +618,21 @@ describe('ComponentDetailPage — sidebar nav order', () => {
       'As Code',
       'Overrides',
       'History',
+      'TeamCity',
     ])
   })
 
   it('renders every group heading in the sidebar', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(baseComponent, user)
-    for (const heading of ['Overview', 'Build & Release', 'Metadata', 'Tools']) {
-      expect(screen.getByText(heading)).toBeDefined()
+    // Scoped to the tablist: 'Validations' also now names a top-level nav
+    // link (Layout.tsx), so an unscoped getByText would match both.
+    const sidebar = within(screen.getByRole('tablist'))
+    for (const heading of ['Overview', 'Build & Release', 'Metadata', 'Tools', 'Validations']) {
+      expect(sidebar.getByText(heading)).toBeDefined()
     }
     // "Distribution" is both a group heading and the lone item under it.
-    expect(screen.getAllByText('Distribution').length).toBeGreaterThanOrEqual(2)
+    expect(sidebar.getAllByText('Distribution').length).toBeGreaterThanOrEqual(2)
   })
 
   it('no Solution tab for a non-candidate key (no matching pattern)', () => {
@@ -790,6 +794,7 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
             projectId: 'MyProject_Build',
             projectUrl: 'https://teamcity.example.com/project/MyProject_Build',
             sortOrder: 0,
+            validations: [],
           },
         ],
       },
@@ -806,7 +811,7 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
     renderPage(
       {
         ...baseComponent,
-        teamcityProjects: [{ id: 'tc-1', projectId: 'X', projectUrl: null, sortOrder: 0 }],
+        teamcityProjects: [{ id: 'tc-1', projectId: 'X', projectUrl: null, sortOrder: 0, validations: [] }],
       },
       user,
     )
@@ -825,9 +830,9 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
       {
         ...baseComponent,
         teamcityProjects: [
-          { id: 'tc-1', projectId: 'Build_A', projectUrl: 'https://teamcity.example.com/project/Build_A', sortOrder: 0 },
-          { id: 'tc-2', projectId: 'Build_B', projectUrl: 'https://teamcity.example.com/project/Build_B', sortOrder: 1 },
-          { id: 'tc-3', projectId: 'NoUrl', projectUrl: null, sortOrder: 2 },
+          { id: 'tc-1', projectId: 'Build_A', projectUrl: 'https://teamcity.example.com/project/Build_A', sortOrder: 0, validations: [] },
+          { id: 'tc-2', projectId: 'Build_B', projectUrl: 'https://teamcity.example.com/project/Build_B', sortOrder: 1, validations: [] },
+          { id: 'tc-3', projectId: 'NoUrl', projectUrl: null, sortOrder: 2, validations: [] },
         ],
       },
       user,

@@ -57,6 +57,7 @@ function makeComponent(overrides: Partial<ComponentSummary> = {}): ComponentSumm
     archived: false,
     updatedAt: null,
     labels: [],
+    teamcityProjects: [],
     ...overrides,
   }
 }
@@ -512,7 +513,9 @@ describe('ComponentTable', () => {
       renderTable([
         makeComponent({
           name: 'alpha',
-          teamcityProjectUrl: 'https://teamcity.example.com/project/Alpha_Build',
+          teamcityProjects: [
+            { projectId: 'Alpha_Build', projectUrl: 'https://teamcity.example.com/project/Alpha_Build' },
+          ],
         }),
       ])
       const link = screen.getByRole('link', { name: /TeamCity: alpha/i })
@@ -533,19 +536,23 @@ describe('ComponentTable', () => {
       renderTable([
         makeComponent({
           name: 'beta',
-          teamcityProjectUrl: 'https://teamcity.example.com/project/Beta_Build',
+          teamcityProjects: [
+            { projectId: 'Beta_Build', projectUrl: 'https://teamcity.example.com/project/Beta_Build' },
+          ],
         }),
       ])
       expect(screen.getByRole('link', { name: /TeamCity: beta/i })).toBeDefined()
     })
 
-    it('does NOT render TeamCity icon when teamcityProjectUrl is null', () => {
+    it('does NOT render TeamCity icon when teamcityProjects[0].projectUrl is null', () => {
       mockLinks({ tcBaseUrl: 'https://teamcity.example.com' })
-      renderTable([makeComponent({ name: 'gamma', teamcityProjectUrl: null })])
+      renderTable([
+        makeComponent({ name: 'gamma', teamcityProjects: [{ projectId: 'Gamma_Build', projectUrl: null }] }),
+      ])
       expect(screen.queryByRole('link', { name: /TeamCity/i })).toBeNull()
     })
 
-    it('does NOT render TeamCity icon when teamcityProjectUrl is undefined', () => {
+    it('does NOT render TeamCity icon when teamcityProjects is empty', () => {
       mockLinks({ tcBaseUrl: 'https://teamcity.example.com' })
       renderTable([makeComponent({ name: 'delta' })])
       expect(screen.queryByRole('link', { name: /TeamCity/i })).toBeNull()

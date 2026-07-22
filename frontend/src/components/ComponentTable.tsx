@@ -288,15 +288,15 @@ const columns = [
     id: 'links',
     header: 'Links',
     cell: ({ row, table }) => {
-      const { name, jiraProjectKey, vcsPath, teamcityProjectUrl } = row.original
+      const { name, jiraProjectKey, vcsPath, teamcityProjects } = row.original
       const linksConfig = table.options.meta?.links
       const jiraBaseUrl = linksConfig?.jiraBaseUrl ?? undefined
       const gitBaseUrl = linksConfig?.gitBaseUrl ?? undefined
       const dmsBaseUrl = linksConfig?.dmsBaseUrl ?? undefined
       // tcBaseUrl from /portal/links is intentionally NOT used here — CRS PR-2
-      // persists the full TC webUrl per component on `teamcityProjectUrl`, so
-      // Portal renders the URL verbatim and does not template it. The runtime
-      // config still ships `tcBaseUrl` for any future cross-project link.
+      // persists the full TC webUrl per project, so Portal renders the URL
+      // verbatim and does not template it. The runtime config still ships
+      // `tcBaseUrl` for any future cross-project link.
       const links: IconLinkProps[] = []
       if (jiraBaseUrl && jiraProjectKey) {
         links.push({
@@ -320,20 +320,6 @@ const columns = [
           })
         }
       }
-      // TeamCity icon — gated only on the per-component `teamcityProjectUrl`
-      // (the persisted webUrl). Independent of `tcBaseUrl` because the URL
-      // is self-sufficient: CRS resolves projectId → webUrl during resync
-      // and stores the result; Portal does NOT template it.
-      // safeHttpUrl allowlists http/https before the URL reaches an <a href>
-      // — prevents javascript: or data: URIs from being rendered as links.
-      const safeTcUrl = safeHttpUrl(teamcityProjectUrl)
-      if (safeTcUrl) {
-        links.push({
-          href: safeTcUrl,
-          label: `TeamCity: ${name}`,
-          icon: TeamCityIcon,
-        })
-      }
       if (dmsBaseUrl) {
         // DMS uses a query-string component selector, not a path segment.
         links.push({
@@ -342,12 +328,72 @@ const columns = [
           icon: Package,
         })
       }
-      if (links.length === 0) return <span className="text-muted-foreground">—</span>
+      // TeamCity — a component may now have several projects. The first
+      // renders as today's icon link (gated on its own `projectUrl`,
+      // safeHttpUrl-allowlisted so a javascript:/data: URI never reaches an
+      // <a href>); any additional projects collapse into a "+N" pill whose
+      // tooltip lists the rest (linked where they have a projectUrl, plain
+      // text otherwise).
+      const tcProjects = teamcityProjects ?? []
+      const [firstTc, ...restTc] = tcProjects
+      const firstTcUrl = firstTc ? safeHttpUrl(firstTc.projectUrl ?? null) : null
+      if (firstTc && firstTcUrl) {
+        // Label mirrors the pre-array convention (`TeamCity: <component name>`),
+        // matching the Jira/Bitbucket/DMS icons on this row — the tooltip pill
+        // below carries per-project ids for anything beyond the first.
+        links.push({
+          href: firstTcUrl,
+          label: `TeamCity: ${name}`,
+          icon: TeamCityIcon,
+        })
+      }
+      if (links.length === 0 && restTc.length === 0) {
+        return <span className="text-muted-foreground">—</span>
+      }
       return (
         <div className="flex items-center gap-2">
           {links.map((l) => (
             <IconLink key={l.label} {...l} />
           ))}
+          {restTc.length > 0 && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  className={cn(
+                    badgeVariants({ variant: 'outline' }),
+                    'text-xs cursor-default',
+                  )}
+                  aria-label={`${restTc.length} more TeamCity project${restTc.length === 1 ? '' : 's'}`}
+                >
+                  +{restTc.length}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                <ul className="space-y-1 text-xs">
+                  {restTc.map((tc, i) => {
+                    const url = safeHttpUrl(tc.projectUrl ?? null)
+                    return (
+                      // Index-prefixed key: projectId could theoretically repeat.
+                      <li key={`${i}-${tc.projectId}`}>
+                        {url ? (
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline hover:opacity-80"
+                          >
+                            {tc.projectId}
+                          </a>
+                        ) : (
+                          tc.projectId
+                        )}
+                      </li>
+                    )
+                  })}
+                </ul>
+              </TooltipContent>
+            </Tooltip>
+          )}
         </div>
       )
     },
