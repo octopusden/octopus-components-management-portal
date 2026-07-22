@@ -302,6 +302,11 @@ export interface TeamcityValidationRow {
   componentName: string
   message: string
   projectId: string
+  // Verbatim TeamCity webUrl for this finding's project, mirroring
+  // TeamcityProject.projectUrl — lets the findings table link the project id
+  // out to TeamCity the same way the detail page does. Optional/nullable
+  // since not every finding may resolve to a live project.
+  projectUrl?: string | null
   status: string
   type: string
   updatedAt: string

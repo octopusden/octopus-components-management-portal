@@ -1,12 +1,24 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
-import { AlertTriangle, ListChecks } from 'lucide-react'
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  flexRender,
+  createColumnHelper,
+  type SortingState,
+} from '@tanstack/react-table'
+import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, ListChecks } from 'lucide-react'
 import { Layout } from '../components/Layout'
 import { InlineError } from '../components/ui/inline-error'
 import { SkeletonBlock } from '../components/ui/skeleton-block'
 import { StatusBanner } from '../components/ui/status-banner'
 import { EmptyState } from '../components/ui/empty-state'
-import { Input } from '../components/ui/input'
+import { Label } from '../components/ui/label'
+import { Badge } from '../components/ui/badge'
+import { MultiSelectFilter } from '../components/ui/MultiSelectFilter'
+import { Tooltip, TooltipTrigger, TooltipContent } from '../components/ui/tooltip'
+import { TeamCityIcon } from '../components/ui/icons/brand-icons'
 import {
   Table,
   TableBody,
@@ -20,8 +32,19 @@ import {
   useTeamCityValidations,
   type TeamCityValidationFilters,
 } from '../hooks/useTeamCityValidations'
-import { getTeamCityValidationStatusTone, getTeamCityValidationTypeInfo } from '../lib/teamcityValidationTypes'
-import { cn } from '../lib/utils'
+import {
+  getTeamCityValidationCategory,
+  getTeamCityValidationStatusTone,
+  getTeamCityValidationTypeInfo,
+  TEAMCITY_VALIDATION_CATEGORIES,
+} from '../lib/teamcityValidationTypes'
+import { cn, safeHttpUrl } from '../lib/utils'
+import type { TeamcityValidationRow } from '../lib/types'
+
+// The wire row has no `category` — it's a front-end-only concept (see
+// teamcityValidationTypes.ts) stamped onto each row after fetch, purely for
+// the Category filter/column.
+type ValidationRow = TeamcityValidationRow & { category: string }
 
 interface KpiCardProps {
   label: string
@@ -54,7 +77,7 @@ function KpiCard({ label, value, icon, tone = 'default' }: KpiCardProps) {
   )
 }
 
-function BreakdownList({ counts }: { counts: Record<string, number>; labelFor?: (key: string) => string }) {
+function BreakdownList({ counts }: { counts: Record<string, number> }) {
   const entries = Object.entries(counts).sort((a, b) => b[1] - a[1])
   const max = entries.reduce((m, [, c]) => Math.max(m, c), 0)
   if (entries.length === 0) return <EmptyState message="No data." className="py-8" />
@@ -78,32 +101,135 @@ function BreakdownList({ counts }: { counts: Record<string, number>; labelFor?: 
   )
 }
 
-function StatusPills({ counts }: { counts: Record<string, number> }) {
-  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1])
-  if (entries.length === 0) return <EmptyState message="No data." className="py-8" />
-  const toneClass: Record<'default' | 'destructive' | 'warning' | 'success', string> = {
-    default: 'bg-muted text-muted-foreground',
-    destructive: 'bg-destructive/15 text-destructive',
-    warning: 'bg-[color:var(--color-badge-yellow-bg)] text-[color:var(--color-badge-yellow-fg)]',
-    success: 'bg-[color:var(--color-badge-green-bg)] text-[color:var(--color-badge-green-fg)]',
-  }
+// Sort-toggle header button — same look/behavior as ComponentTable.tsx's
+// column headers (not exported from there, so duplicated here in minimal form).
+function SortableHeader({
+  label,
+  sorted,
+  onClick,
+}: {
+  label: string
+  sorted: false | 'asc' | 'desc'
+  onClick: () => void
+}) {
   return (
-    <div className="flex flex-wrap gap-2">
-      {entries.map(([status, count]) => (
-        <span
-          key={status}
-          className={cn(
-            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold',
-            toneClass[getTeamCityValidationStatusTone(status)],
-          )}
-        >
-          {status}
-          <span className="tabular-nums">{count}</span>
-        </span>
-      ))}
-    </div>
+    <button
+      className="flex items-center gap-1 font-medium hover:text-foreground transition-colors"
+      onClick={onClick}
+    >
+      {label}
+      {sorted === 'asc' ? (
+        <ArrowUp className="h-3.5 w-3.5" />
+      ) : sorted === 'desc' ? (
+        <ArrowDown className="h-3.5 w-3.5" />
+      ) : (
+        <ArrowUpDown className="h-3.5 w-3.5 opacity-40" />
+      )}
+    </button>
   )
 }
+
+const columnHelper = createColumnHelper<ValidationRow>()
+
+const columns = [
+  columnHelper.accessor('componentName', {
+    header: ({ column }) => (
+      <SortableHeader
+        label="Component"
+        sorted={column.getIsSorted()}
+        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+      />
+    ),
+    cell: ({ row }) => (
+      <Link
+        to={`/components/${row.original.componentId}`}
+        className="font-medium text-primary hover:underline"
+      >
+        {row.original.componentName}
+      </Link>
+    ),
+  }),
+  columnHelper.accessor('projectId', {
+    header: ({ column }) => (
+      <SortableHeader
+        label="Project"
+        sorted={column.getIsSorted()}
+        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+      />
+    ),
+    cell: ({ row }) => {
+      const { projectId, projectUrl } = row.original
+      const url = safeHttpUrl(projectUrl ?? null)
+      if (!url) {
+        return <span className="font-mono text-xs">{projectId}</span>
+      }
+      return (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`TeamCity: ${projectId}`}
+              aria-label={`TeamCity: ${projectId}`}
+              className="inline-flex items-center gap-1.5 font-mono text-xs text-primary hover:underline"
+            >
+              <TeamCityIcon className="h-3.5 w-3.5 shrink-0" />
+              {projectId}
+            </a>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-xs break-all">{url}</TooltipContent>
+        </Tooltip>
+      )
+    },
+  }),
+  columnHelper.accessor('type', {
+    header: ({ column }) => (
+      <SortableHeader
+        label="Type"
+        sorted={column.getIsSorted()}
+        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+      />
+    ),
+    cell: ({ getValue }) => <Badge variant="secondary">{getTeamCityValidationTypeInfo(getValue()).label}</Badge>,
+  }),
+  columnHelper.accessor('status', {
+    header: ({ column }) => (
+      <SortableHeader
+        label="Status"
+        sorted={column.getIsSorted()}
+        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+      />
+    ),
+    cell: ({ getValue }) => {
+      const status = getValue()
+      return (
+        <Badge variant={getTeamCityValidationStatusTone(status)} className="uppercase tracking-wide">
+          {status}
+        </Badge>
+      )
+    },
+  }),
+  columnHelper.accessor('category', {
+    header: ({ column }) => (
+      <SortableHeader
+        label="Category"
+        sorted={column.getIsSorted()}
+        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+      />
+    ),
+    cell: ({ getValue }) => <Badge variant="secondary">{getValue()}</Badge>,
+  }),
+  columnHelper.accessor('message', {
+    header: 'Message',
+    enableSorting: false,
+    // Findings messages may contain literal "\n" line breaks — whitespace-pre-wrap
+    // renders them instead of collapsing to one line, while still wrapping normally.
+    cell: ({ getValue }) => (
+      <span className="text-muted-foreground whitespace-pre-wrap">{getValue()}</span>
+    ),
+  }),
+]
 
 /**
  * Registry-wide TeamCity validation findings — the top-level counterpart to
@@ -114,21 +240,50 @@ function StatusPills({ counts }: { counts: Record<string, number> }) {
  * Layout.tsx), mirroring `/health`.
  */
 export function TeamCityValidationsPage() {
-  const [typeFilter, setTypeFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
-  const [componentFilter, setComponentFilter] = useState('')
+  const [typeFilter, setTypeFilter] = useState<string[]>([])
+  const [statusFilter, setStatusFilter] = useState<string[]>([])
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([])
+  const [sorting, setSorting] = useState<SortingState>([])
 
   const summary = useTeamCityValidationSummary()
 
   const filters: TeamCityValidationFilters = useMemo(
     () => ({
-      type: typeFilter.trim() || undefined,
-      status: statusFilter.trim() || undefined,
-      componentId: componentFilter.trim() || undefined,
+      type: typeFilter.length ? typeFilter : undefined,
+      status: statusFilter.length ? statusFilter : undefined,
     }),
-    [typeFilter, statusFilter, componentFilter],
+    [typeFilter, statusFilter],
   )
   const rows = useTeamCityValidations(filters)
+
+  // Type/status options come from the live summary breakdown (the real values
+  // the sweep has actually reported), not a guessed static list — it stays in
+  // sync automatically as new finding types/statuses appear.
+  const typeOptions = useMemo(
+    () => Object.keys(summary.data?.byType ?? {}).sort(),
+    [summary.data?.byType],
+  )
+  const statusOptions = useMemo(
+    () => Object.keys(summary.data?.byStatus ?? {}).sort(),
+    [summary.data?.byStatus],
+  )
+
+  // Category has no backend query param (see useTeamCityValidations) — every
+  // row is stamped with its client-computed category, then filtered locally.
+  const tableRows: ValidationRow[] = useMemo(() => {
+    const withCategory = (rows.data ?? []).map((r) => ({ ...r, category: getTeamCityValidationCategory() }))
+    if (categoryFilter.length === 0) return withCategory
+    return withCategory.filter((r) => categoryFilter.includes(r.category))
+  }, [rows.data, categoryFilter])
+
+  const table = useReactTable({
+    data: tableRows,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  })
 
   return (
     <Layout>
@@ -161,20 +316,20 @@ export function TeamCityValidationsPage() {
           <>
             <div className="grid gap-4 sm:grid-cols-2">
               <KpiCard
-                label="Components with issues"
+                label="Components with validation problems"
                 value={summary.data?.componentsWithIssues ?? 0}
                 icon={<AlertTriangle className="h-5 w-5" />}
                 tone="destructive"
               />
               <KpiCard
-                label="Findings"
+                label="Unique problems"
                 value={summary.data?.findings ?? 0}
                 icon={<ListChecks className="h-5 w-5" />}
                 tone="destructive"
               />
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid gap-4 lg:grid-cols-1">
               <section className="rounded-lg border p-5 space-y-4">
                 <h2 className="text-lg font-semibold">By type</h2>
                 <BreakdownList
@@ -186,35 +341,57 @@ export function TeamCityValidationsPage() {
                   )}
                 />
               </section>
-              <section className="rounded-lg border p-5 space-y-4">
-                <h2 className="text-lg font-semibold">By status</h2>
-                <StatusPills counts={summary.data?.byStatus ?? {}} />
-              </section>
             </div>
           </>
         )}
 
         <section className="rounded-lg border p-5 space-y-4">
           <h2 className="text-lg font-semibold">Findings</h2>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <Input
-              placeholder="Filter by type…"
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              aria-label="Filter by type"
-            />
-            <Input
-              placeholder="Filter by status…"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              aria-label="Filter by status"
-            />
-            <Input
-              placeholder="Filter by component…"
-              value={componentFilter}
-              onChange={(e) => setComponentFilter(e.target.value)}
-              aria-label="Filter by component"
-            />
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="filter-tc-type" className="text-xs text-muted-foreground">
+                Type
+              </Label>
+              <MultiSelectFilter
+                id="filter-tc-type"
+                value={typeFilter}
+                onChange={setTypeFilter}
+                options={typeOptions}
+                isLoading={summary.isLoading}
+                placeholder="All types"
+                unitLabel="type"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="filter-tc-status" className="text-xs text-muted-foreground">
+                Status
+              </Label>
+              <MultiSelectFilter
+                id="filter-tc-status"
+                value={statusFilter}
+                onChange={setStatusFilter}
+                options={statusOptions}
+                isLoading={summary.isLoading}
+                placeholder="All statuses"
+                unitLabel="status"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="filter-tc-category" className="text-xs text-muted-foreground">
+                Category
+              </Label>
+              {/* Only one category exists today (TeamCity) — the control is
+                  still a multi-select so a second source can appear later
+                  without any UI change, just a longer TEAMCITY_VALIDATION_CATEGORIES. */}
+              <MultiSelectFilter
+                id="filter-tc-category"
+                value={categoryFilter}
+                onChange={setCategoryFilter}
+                options={TEAMCITY_VALIDATION_CATEGORIES}
+                placeholder="All categories"
+                unitLabel="category"
+              />
+            </div>
           </div>
 
           {rows.isError ? (
@@ -231,32 +408,32 @@ export function TeamCityValidationsPage() {
                 <SkeletonBlock key={i} height="h-8" />
               ))}
             </div>
-          ) : (rows.data ?? []).length === 0 ? (
+          ) : tableRows.length === 0 ? (
             <EmptyState message="No validation findings match these filters." className="py-8" />
           ) : (
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Component</TableHead>
-                    <TableHead>Project</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Message</TableHead>
-                  </TableRow>
+                  {table.getHeaderGroups().map((headerGroup) => (
+                    <TableRow key={headerGroup.id}>
+                      {headerGroup.headers.map((header) => (
+                        <TableHead key={header.id}>
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(header.column.columnDef.header, header.getContext())}
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  ))}
                 </TableHeader>
                 <TableBody>
-                  {(rows.data ?? []).map((r, i) => (
-                    <TableRow key={`${r.componentId}-${r.projectId}-${r.type}-${i}`}>
-                      <TableCell>
-                        <Link to={`/components/${r.componentId}`} className="font-medium text-primary hover:underline">
-                          {r.componentName}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">{r.projectId}</TableCell>
-                      <TableCell>{getTeamCityValidationTypeInfo(r.type).label}</TableCell>
-                      <TableCell>{r.status}</TableCell>
-                      <TableCell className="text-muted-foreground">{r.message}</TableCell>
+                  {table.getRowModel().rows.map((row) => (
+                    <TableRow key={`${row.original.componentId}-${row.original.projectId}-${row.original.type}`}>
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell key={cell.id}>
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      ))}
                     </TableRow>
                   ))}
                 </TableBody>

@@ -32,15 +32,39 @@ export function getTeamCityValidationTypeInfo(type: string): { label: string; de
 }
 
 /**
+ * Known validation "categories" (i.e. sources) — a purely front-end concept,
+ * NOT part of the `GET /admin/teamcity-validations` wire response (that
+ * endpoint is TeamCity-only and has no `category` field). Every row shown
+ * today is stamped with `TEAMCITY_VALIDATION_CATEGORIES[0]` client-side (see
+ * `getTeamCityValidationCategory`) — this list exists so the Category
+ * filter/column has something to render now, ahead of a real multi-source
+ * backend. Add new sources here (and give getTeamCityValidationCategory real
+ * per-row logic) once a second source actually ships.
+ */
+export const TEAMCITY_VALIDATION_CATEGORIES: string[] = ['TeamCity']
+
+/**
+ * Client-computed category for a finding row. Every row is TeamCity-sourced
+ * today, so this always returns the one known category — a placeholder for
+ * when a second validation source exists and this needs real per-row logic.
+ */
+export function getTeamCityValidationCategory(): string {
+  return TEAMCITY_VALIDATION_CATEGORIES[0]!
+}
+
+/**
  * Visual tone for a validation `status`. Case-insensitive substring matching
  * because the exact status vocabulary isn't finalized yet — `FAILED`/`ERROR`-
  * like strings read as destructive (red), `WARN`-like strings read as warning
  * (amber/yellow), `PASSED`/`OK`-like read as success, anything else
  * (including unrecognized future statuses) is neutral.
  */
-export function getTeamCityValidationStatusTone(
-  status: string,
-): 'default' | 'destructive' | 'warning' | 'success' {
+export type TeamCityValidationTone = 'default' | 'destructive' | 'warning' | 'success'
+
+// Deliberately the same four names as <Badge>'s variant prop (ui/badge.tsx)
+// — every caller can pass the tone straight through as `<Badge variant={tone}>`
+// without a lookup table of its own.
+export function getTeamCityValidationStatusTone(status: string): TeamCityValidationTone {
   const s = status.toUpperCase()
   if (s.includes('FAIL') || s.includes('ERROR')) return 'destructive'
   if (s.includes('WARN')) return 'warning'

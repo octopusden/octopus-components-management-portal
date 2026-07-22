@@ -1,32 +1,26 @@
 import { EmptyState } from './ui/empty-state'
-import { cn } from '../lib/utils'
+import { Badge } from './ui/badge'
+import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip'
+import { TeamCityIcon } from './ui/icons/brand-icons'
+import { cn, safeHttpUrl } from '../lib/utils'
 import type { TeamcityProject } from '../lib/types'
 import {
   getTeamCityValidationStatusTone,
   getTeamCityValidationTypeInfo,
+  type TeamCityValidationTone,
 } from '../lib/teamcityValidationTypes'
 
 interface TeamCityValidationsTabProps {
   teamcityProjects: TeamcityProject[]
 }
 
-type Tone = 'default' | 'destructive' | 'warning' | 'success'
-
 // Whole-card tint by tone: destructive (failed) reads red, warning reads
-// amber/yellow, success/default stay neutral so only genuine problems draw
-// the eye.
-const TONE_CARD_CLASS: Record<Tone, string> = {
+// yellow, success/default stay neutral so only genuine problems draw the eye.
+const TONE_CARD_CLASS: Record<TeamCityValidationTone, string> = {
   default: 'border',
   destructive: 'border border-destructive/40 bg-destructive/10',
   warning: 'border border-[color:var(--color-badge-yellow-fg)]/40 bg-[color:var(--color-badge-yellow-bg)]',
   success: 'border',
-}
-
-const TONE_BADGE_CLASS: Record<Tone, string> = {
-  default: 'bg-muted text-muted-foreground',
-  destructive: 'bg-destructive/15 text-destructive',
-  warning: 'bg-[color:var(--color-badge-yellow-bg)] text-[color:var(--color-badge-yellow-fg)]',
-  success: 'bg-[color:var(--color-badge-green-bg)] text-[color:var(--color-badge-green-fg)]',
 }
 
 /**
@@ -47,40 +41,62 @@ export function TeamCityValidationsTab({ teamcityProjects }: TeamCityValidations
 
   return (
     <div className="space-y-6">
-      {projectsWithFindings.map((project) => (
-        <div key={project.id} className="space-y-2">
-          <h3 className="text-sm font-semibold font-mono text-muted-foreground">{project.projectId}</h3>
-          <div className="space-y-2">
-            {project.validations.map((v, i) => {
-              const tone = getTeamCityValidationStatusTone(v.status)
-              const info = getTeamCityValidationTypeInfo(v.type)
-              return (
-                // Index-prefixed key — findings have no server id on this shape.
-                <div
-                  key={`${i}-${v.type}`}
-                  className={cn('rounded-md p-3 space-y-1.5', TONE_CARD_CLASS[tone])}
-                >
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium">{info.label}</span>
-                    <span
-                      className={cn(
-                        'rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-wide',
-                        TONE_BADGE_CLASS[tone],
-                      )}
-                    >
-                      {v.status}
-                    </span>
+      {projectsWithFindings.map((project) => {
+        const url = safeHttpUrl(project.projectUrl ?? null)
+        return (
+          <div key={project.id} className="space-y-2">
+            {url ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={`TeamCity: ${project.projectId}`}
+                    aria-label={`TeamCity: ${project.projectId}`}
+                    className="inline-flex items-center gap-1.5 text-sm font-semibold font-mono text-primary hover:underline"
+                  >
+                    <TeamCityIcon className="h-4 w-4 shrink-0" />
+                    {project.projectId}
+                  </a>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs break-all">{url}</TooltipContent>
+              </Tooltip>
+            ) : (
+              <h3 className="text-sm font-semibold font-mono text-muted-foreground">
+                {project.projectId}
+              </h3>
+            )}
+            <div className="space-y-2">
+              {project.validations.map((v, i) => {
+                const tone = getTeamCityValidationStatusTone(v.status)
+                const info = getTeamCityValidationTypeInfo(v.type)
+                return (
+                  // Index-prefixed key — findings have no server id on this shape.
+                  <div
+                    key={`${i}-${v.type}`}
+                    className={cn('rounded-md p-3 space-y-1.5', TONE_CARD_CLASS[tone])}
+                  >
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium">{info.label}</span>
+                      <Badge variant={tone} className="uppercase tracking-wide">
+                        {v.status}
+                      </Badge>
+                    </div>
+                    {/* Findings messages may contain literal "\n" line breaks —
+                        whitespace-pre-wrap renders them instead of collapsing to
+                        one line, while still wrapping long lines normally. */}
+                    {v.message && <div className="text-sm whitespace-pre-wrap">{v.message}</div>}
+                    {info.description && (
+                      <div className="text-xs text-muted-foreground">{info.description}</div>
+                    )}
                   </div>
-                  {v.message && <div className="text-sm">{v.message}</div>}
-                  {info.description && (
-                    <div className="text-xs text-muted-foreground">{info.description}</div>
-                  )}
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

@@ -17,10 +17,13 @@ export function useTeamCityValidationSummary() {
   })
 }
 
+// NOTE: no `category` here — category is a purely front-end concept (see
+// teamcityValidationTypes.ts) with no backing query param on this endpoint.
+// The Validations page filters by category client-side, over the rows this
+// hook returns.
 export interface TeamCityValidationFilters {
-  type?: string
-  status?: string
-  componentId?: string
+  type?: string[]
+  status?: string[]
 }
 
 /**
@@ -28,13 +31,14 @@ export interface TeamCityValidationFilters {
  * list backing the Validations page's table. Filters are query-driven (see
  * TeamCityValidationsPage): each distinct filter combination gets its own
  * cache entry via the queryKey. Admin-only endpoint, matching the page's
- * route/nav gating.
+ * route/nav gating. Each filter is multi-select (comma-joined query param),
+ * mirroring the components list's system/buildSystem/labels filters
+ * (see useComponents.ts).
  */
 export function useTeamCityValidations(filters: TeamCityValidationFilters = {}) {
   const params = new URLSearchParams()
-  if (filters.type) params.set('type', filters.type)
-  if (filters.status) params.set('status', filters.status)
-  if (filters.componentId) params.set('componentId', filters.componentId)
+  if (filters.type?.length) params.set('type', filters.type.join(','))
+  if (filters.status?.length) params.set('status', filters.status.join(','))
   const qs = params.toString()
 
   return useQuery({
