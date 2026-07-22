@@ -2,25 +2,15 @@ import { EmptyState } from './ui/empty-state'
 import { Badge } from './ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip'
 import { TeamCityIcon } from './ui/icons/brand-icons'
-import { cn, safeHttpUrl } from '../lib/utils'
+import { safeHttpUrl } from '../lib/utils'
 import type { TeamcityProject } from '../lib/types'
 import {
   getTeamCityValidationStatusTone,
   getTeamCityValidationTypeInfo,
-  type TeamCityValidationTone,
 } from '../lib/teamcityValidationTypes'
 
 interface TeamCityValidationsTabProps {
   teamcityProjects: TeamcityProject[]
-}
-
-// Whole-card tint by tone: destructive (failed) reads red, warning reads
-// yellow, success/default stay neutral so only genuine problems draw the eye.
-const TONE_CARD_CLASS: Record<TeamCityValidationTone, string> = {
-  default: 'border',
-  destructive: 'border border-destructive/40 bg-destructive/10',
-  warning: 'border border-[color:var(--color-badge-yellow-fg)]/40 bg-[color:var(--color-amber-50)]',
-  success: 'border',
 }
 
 /**
@@ -73,13 +63,10 @@ export function TeamCityValidationsTab({ teamcityProjects }: TeamCityValidations
                 const info = getTeamCityValidationTypeInfo(v.type)
                 return (
                   // Index-prefixed key — findings have no server id on this shape.
-                  <div
-                    key={`${i}-${v.type}`}
-                    className={cn('rounded-md p-4 space-y-2.5', TONE_CARD_CLASS[tone])}
-                  >
+                  <div key={`${i}-${v.type}`} className="rounded-md border p-4 space-y-2.5">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-medium">{info.label}</span>
-                      <Badge variant="secondary" className="uppercase tracking-wide">
+                      <Badge variant={tone} className="uppercase tracking-wide">
                         {v.status}
                       </Badge>
                     </div>
