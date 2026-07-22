@@ -19,7 +19,7 @@ interface TeamCityValidationsTabProps {
 const TONE_CARD_CLASS: Record<TeamCityValidationTone, string> = {
   default: 'border',
   destructive: 'border border-destructive/40 bg-destructive/10',
-  warning: 'border border-[color:var(--color-badge-yellow-fg)]/40 bg-[color:var(--color-badge-yellow-bg)]',
+  warning: 'border border-[color:var(--color-badge-yellow-fg)]/40 bg-[color:var(--color-amber-50)]',
   success: 'border',
 }
 
@@ -44,7 +44,7 @@ export function TeamCityValidationsTab({ teamcityProjects }: TeamCityValidations
       {projectsWithFindings.map((project) => {
         const url = safeHttpUrl(project.projectUrl ?? null)
         return (
-          <div key={project.id} className="space-y-2">
+          <div key={project.id} className="space-y-6">
             {url ? (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -67,7 +67,7 @@ export function TeamCityValidationsTab({ teamcityProjects }: TeamCityValidations
                 {project.projectId}
               </h3>
             )}
-            <div className="space-y-2">
+            <div className="space-y-4">
               {project.validations.map((v, i) => {
                 const tone = getTeamCityValidationStatusTone(v.status)
                 const info = getTeamCityValidationTypeInfo(v.type)
@@ -75,10 +75,10 @@ export function TeamCityValidationsTab({ teamcityProjects }: TeamCityValidations
                   // Index-prefixed key — findings have no server id on this shape.
                   <div
                     key={`${i}-${v.type}`}
-                    className={cn('rounded-md p-3 space-y-1.5', TONE_CARD_CLASS[tone])}
+                    className={cn('rounded-md p-4 space-y-2.5', TONE_CARD_CLASS[tone])}
                   >
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium">{info.label}</span>
+                      <span className="text-sm font-medium">{info.label}</span>
                       <Badge variant={tone} className="uppercase tracking-wide">
                         {v.status}
                       </Badge>
