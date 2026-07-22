@@ -15,7 +15,6 @@ function comp(name: string, displayName: string | null = null): ComponentSummary
     archived: false,
     updatedAt: null,
     labels: [],
-    teamcityProjects: [],
   }
 }
 

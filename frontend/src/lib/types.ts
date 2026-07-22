@@ -41,13 +41,8 @@ export interface ComponentSummary {
   javaVersion?: string | null
   jiraProjectKey?: string | null
   vcsPath?: string | null
-  // NOTE!!
   teamcityProjectId?: string | null
   teamcityProjectUrl?: string | null
-  // Replaces the legacy scalar teamcityProjectId/teamcityProjectUrl — a
-  // component may now have several TeamCity projects on the list row (mirrors
-  // the detail's teamcityProjects[]). Server emits [] for none.
-//   teamcityProjects: { projectId: string; projectUrl?: string | null }[]
 }
 
 export interface ComponentDetail {

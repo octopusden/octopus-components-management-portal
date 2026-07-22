@@ -85,7 +85,14 @@ export const appRoutes: RouteObject[] = [
       // is never shadowed by the detail route with id="new".
       { path: '/components/new', element: <CreateComponentPage /> },
       { path: '/components/:id', element: <ComponentDetailPage /> },
-      { path: '/validations', element: <TeamCityValidationsPage /> },
+      {
+        path: '/validations',
+        element: (
+          <RequirePermission permission={PERMISSIONS.IMPORT_DATA}>
+            <TeamCityValidationsPage />
+          </RequirePermission>
+        ),
+      },
       {
         path: '/audit',
         element: (

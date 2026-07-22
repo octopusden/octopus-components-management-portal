@@ -45,7 +45,6 @@ function summaryFromValidationKey(componentKey: string): ComponentSummary {
     archived: false,
     updatedAt: null,
     labels: [],
-    teamcityProjects: [],
   }
 }
 

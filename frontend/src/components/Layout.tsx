@@ -31,7 +31,13 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { href: '/components', label: 'Components', icon: Package },
-  { href: '/validations', label: 'Validations', icon: ShieldCheck },
+  {
+    href: '/validations',
+    label: 'Validations',
+    icon: ShieldCheck,
+    requires: PERMISSIONS.IMPORT_DATA,
+    adminOnly: true,
+  },
   { href: '/audit', label: 'Audit', icon: History, requires: PERMISSIONS.ACCESS_AUDIT },
   {
     href: '/health',

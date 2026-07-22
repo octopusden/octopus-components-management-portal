@@ -288,7 +288,7 @@ const columns = [
     id: 'links',
     header: 'Links',
     cell: ({ row, table }) => {
-      const { name, jiraProjectKey, vcsPath, teamcityProjects } = row.original
+      const { name, jiraProjectKey, vcsPath, teamcityProjectUrl } = row.original
       const linksConfig = table.options.meta?.links
       const jiraBaseUrl = linksConfig?.jiraBaseUrl ?? undefined
       const gitBaseUrl = linksConfig?.gitBaseUrl ?? undefined
@@ -328,26 +328,15 @@ const columns = [
           icon: Package,
         })
       }
-      // TeamCity — a component may now have several projects. The first
-      // renders as today's icon link (gated on its own `projectUrl`,
-      // safeHttpUrl-allowlisted so a javascript:/data: URI never reaches an
-      // <a href>); any additional projects collapse into a "+N" pill whose
-      // tooltip lists the rest (linked where they have a projectUrl, plain
-      // text otherwise).
-      const tcProjects = teamcityProjects ?? []
-      const [firstTc, ...restTc] = tcProjects
-      const firstTcUrl = firstTc ? safeHttpUrl(firstTc.projectUrl ?? null) : null
-      if (firstTc && firstTcUrl) {
-        // Label mirrors the pre-array convention (`TeamCity: <component name>`),
-        // matching the Jira/Bitbucket/DMS icons on this row — the tooltip pill
-        // below carries per-project ids for anything beyond the first.
+      const tcUrl = safeHttpUrl(teamcityProjectUrl ?? null)
+      if (tcUrl) {
         links.push({
-          href: firstTcUrl,
+          href: tcUrl,
           label: `TeamCity: ${name}`,
           icon: TeamCityIcon,
         })
       }
-      if (links.length === 0 && restTc.length === 0) {
+      if (links.length === 0) {
         return <span className="text-muted-foreground">—</span>
       }
       return (
@@ -355,45 +344,6 @@ const columns = [
           {links.map((l) => (
             <IconLink key={l.label} {...l} />
           ))}
-          {restTc.length > 0 && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span
-                  className={cn(
-                    badgeVariants({ variant: 'outline' }),
-                    'text-xs cursor-default',
-                  )}
-                  aria-label={`${restTc.length} more TeamCity project${restTc.length === 1 ? '' : 's'}`}
-                >
-                  +{restTc.length}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent className="max-w-xs">
-                <ul className="space-y-1 text-xs">
-                  {restTc.map((tc, i) => {
-                    const url = safeHttpUrl(tc.projectUrl ?? null)
-                    return (
-                      // Index-prefixed key: projectId could theoretically repeat.
-                      <li key={`${i}-${tc.projectId}`}>
-                        {url ? (
-                          <a
-                            href={url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="underline hover:opacity-80"
-                          >
-                            {tc.projectId}
-                          </a>
-                        ) : (
-                          tc.projectId
-                        )}
-                      </li>
-                    )
-                  })}
-                </ul>
-              </TooltipContent>
-            </Tooltip>
-          )}
         </div>
       )
     },
