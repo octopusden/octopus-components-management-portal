@@ -13,21 +13,27 @@
  */
 export const TEAMCITY_VALIDATION_TYPES: Record<string, { label: string; description: string }> = {
   USES_OLD_JAVA_VERSION: {
+    label: 'USES_OLD_JAVA_VERSION',
     description: 'Please remove all references to Java versions that are soon deprecated.',
   },
   HAS_CUSTOM_BUILD_STEP: {
+    label: 'HAS_CUSTOM_BUILD_STEP',
     description: 'Please remove custom build steps from the project configuration. Move the required build logic into the appropriate build tool script.',
   },
   OVERRIDES_DEFAULT_BUILD_STEP: {
+    label: 'OVERRIDES_DEFAULT_BUILD_STEP',
     description: 'Please reset the build step configuration to its default values. If customization is required, use supported build parameters instead of overriding the complete default build step.',
   },
   MULTIPLE_MAVEN_VERSIONS: {
+    label: 'MULTIPLE_MAVEN_VERSIONS',
     description: 'Please remove conflicting Maven version definitions.',
   },
   ATTACHED_TO_BUILD_TEMPLATE: {
-      description: 'Please attach to one build configuration template only.'
+    label: 'ATTACHED_TO_BUILD_TEMPLATE',
+    description: 'Please attach to one build configuration template only.'
   },
   MULTIPLE_JAVA_VERSIONS: {
+    label: 'MULTIPLE_JAVA_VERSIONS',
     description: 'Please remove conflicting Java version definitions.',
   },
 }
