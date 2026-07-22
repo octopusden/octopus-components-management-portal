@@ -16,7 +16,6 @@ plugins {
     signing
     idea
     `maven-publish`
-    jacoco
 }
 
 octopusQuality {
@@ -50,12 +49,6 @@ java {
 kotlin {
     jvmToolchain(25)
     compilerOptions.jvmTarget = JvmTarget.JVM_25
-}
-
-jacoco {
-    // Gradle's bundled JaCoCo may still treat Java 25 (class file v69) as experimental;
-    // 0.8.14 is the first release with official Java 25 support.
-    toolVersion = "0.8.14"
 }
 
 // SpotBugs: nothing to configure here. octopus-quality 2.4.1 only wires SpotBugs on Java
@@ -212,7 +205,6 @@ tasks.test {
     useJUnitPlatform {
         excludeTags("e2e")
     }
-    finalizedBy(tasks.jacocoTestReport)
 }
 
 // Standalone task — NOT wired into `check` or `build`. Opt-in via
@@ -303,14 +295,6 @@ val e2eTest = tasks.register<Test>("e2eTest") {
         )?.takeIf { it.isNotBlank() }?.let { if (it.endsWith("/")) it else "$it/" }
     if (hubImagePrefix != null) {
         environment("TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX", hubImagePrefix)
-    }
-}
-
-tasks.jacocoTestReport {
-    dependsOn(tasks.test)
-    reports {
-        xml.required = true
-        html.required = true
     }
 }
 
