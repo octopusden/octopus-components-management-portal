@@ -32,18 +32,11 @@ import {
   type TeamCityValidationFilters,
 } from '../hooks/useTeamCityValidations'
 import {
-  getTeamCityValidationCategory,
   getTeamCityValidationStatusTone,
   getTeamCityValidationTypeInfo,
-  TEAMCITY_VALIDATION_CATEGORIES,
 } from '../lib/teamcityValidationTypes'
 import { cn, safeHttpUrl } from '../lib/utils'
 import type { TeamcityValidationRow } from '../lib/types'
-
-// The wire row has no `category` — it's a front-end-only concept (see
-// teamcityValidationTypes.ts) stamped onto each row after fetch, purely for
-// the Category filter/column.
-type ValidationRow = TeamcityValidationRow & { category: string }
 
 interface KpiCardProps {
   label: string
@@ -161,7 +154,7 @@ function SortableHeader({
   )
 }
 
-const columnHelper = createColumnHelper<ValidationRow>()
+const columnHelper = createColumnHelper<TeamcityValidationRow>()
 
 const columns = [
   columnHelper.accessor('componentName', {
@@ -242,16 +235,6 @@ const columns = [
       )
     },
   }),
-  columnHelper.accessor('category', {
-    header: ({ column }) => (
-      <SortableHeader
-        label="Category"
-        sorted={column.getIsSorted()}
-        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-      />
-    ),
-    cell: ({ getValue }) => <Badge variant="secondary">{getValue()}</Badge>,
-  }),
   columnHelper.accessor('message', {
     header: 'Message',
     enableSorting: false,
@@ -274,7 +257,6 @@ const columns = [
 export function TeamCityValidationsPage() {
   const [typeFilter, setTypeFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [categoryFilter, setCategoryFilter] = useState('')
   const [sorting, setSorting] = useState<SortingState>([])
 
   const summary = useTeamCityValidationSummary()
@@ -300,13 +282,15 @@ export function TeamCityValidationsPage() {
     [summary.data?.byStatus],
   )
 
-  // Category has no backend query param (see useTeamCityValidations) — every
-  // row is stamped with its client-computed category, then filtered locally.
-  const tableRows: ValidationRow[] = useMemo(() => {
-    const withCategory = (rows.data ?? []).map((r) => ({ ...r, category: getTeamCityValidationCategory() }))
-    if (!categoryFilter) return withCategory
-    return withCategory.filter((r) => r.category === categoryFilter)
-  }, [rows.data, categoryFilter])
+  const tableRows = useMemo(() => rows.data ?? [], [rows.data])
+
+  // Distinct component/project counts across the currently filtered rows —
+  // backs the "Found X components across Y TeamCity projects" summary line.
+  const resultCounts = useMemo(() => {
+    const components = new Set(tableRows.map((r) => r.componentId))
+    const projects = new Set(tableRows.map((r) => r.projectId))
+    return { components: components.size, projects: projects.size }
+  }, [tableRows])
 
   const table = useReactTable({
     data: tableRows,
@@ -321,7 +305,7 @@ export function TeamCityValidationsPage() {
     <Layout>
       <div className="space-y-6">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Validations</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">TeamCity validation</h1>
           <p className="text-sm text-muted-foreground">
             TeamCity validation findings across the registry.
           </p>
@@ -404,22 +388,14 @@ export function TeamCityValidationsPage() {
                 placeholder="All statuses"
               />
             </div>
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="filter-tc-category" className="text-xs text-muted-foreground">
-                Category
-              </Label>
-              {/* Only one category exists today (TeamCity), so this control is
-                  mostly future-proofing — extend TEAMCITY_VALIDATION_CATEGORIES
-                  when a second source ships. */}
-              <SingleSelectFilter
-                id="filter-tc-category"
-                value={categoryFilter}
-                onChange={setCategoryFilter}
-                options={TEAMCITY_VALIDATION_CATEGORIES}
-                placeholder="All categories"
-              />
-            </div>
           </div>
+
+          {!rows.isError && !rows.isLoading && (
+            <p className="text-sm text-muted-foreground">
+              Found {resultCounts.components} component{resultCounts.components === 1 ? '' : 's'} across{' '}
+              {resultCounts.projects} TeamCity project{resultCounts.projects === 1 ? '' : 's'}.
+            </p>
+          )}
 
           {rows.isError ? (
             <InlineError
@@ -438,9 +414,9 @@ export function TeamCityValidationsPage() {
           ) : tableRows.length === 0 ? (
             <EmptyState message="No validation findings match these filters." className="py-8" />
           ) : (
-            <div className="rounded-md border">
+            <div className="rounded-md border max-h-[28rem] overflow-y-auto">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-background">
                   {table.getHeaderGroups().map((headerGroup) => (
                     <TableRow key={headerGroup.id}>
                       {headerGroup.headers.map((header) => (

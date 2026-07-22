@@ -12,17 +12,23 @@
  * back to the raw type for anything not yet listed).
  */
 export const TEAMCITY_VALIDATION_TYPES: Record<string, { label: string; description: string }> = {
-  BUILD_CONFIG_DRIFT: {
-    label: 'Build config drift',
-    description: 'The TeamCity build configuration no longer matches the registered component settings.',
+  USES_OLD_JAVA_VERSION: {
+    description: 'Please remove all references to Java versions that are soon deprecated.',
   },
-  VERSION_MISMATCH: {
-    label: 'Version mismatch',
-    description: 'The version built by this TeamCity project does not match the expected component version.',
+  HAS_CUSTOM_BUILD_STEP: {
+    description: 'Please remove custom build steps from the project configuration. Move the required build logic into the appropriate build tool script.',
   },
-  MISSING_PROJECT: {
-    label: 'Missing project',
-    description: 'No matching TeamCity project could be found for this component.',
+  OVERRIDES_DEFAULT_BUILD_STEP: {
+    description: 'Please reset the build step configuration to its default values. If customization is required, use supported build parameters instead of overriding the complete default build step.',
+  },
+  MULTIPLE_MAVEN_VERSIONS: {
+    description: 'Please remove conflicting Maven version definitions.',
+  },
+  ATTACHED_TO_BUILD_TEMPLATE: {
+      description: 'Please attach to one build configuration template only.'
+  },
+  MULTIPLE_JAVA_VERSIONS: {
+    description: 'Please remove conflicting Java version definitions.',
   },
 }
 
