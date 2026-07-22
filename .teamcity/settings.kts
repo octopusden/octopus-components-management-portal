@@ -74,7 +74,7 @@ object id10CompileUtAuto : BuildType({
         param("env.JAVA_HOME", "%env.JDK_ZULU_25_x64%")
         param("ARTIFACT_PATH", """
             build/reports/tests/** => reports/kotlin-tests
-            build/reports/jacoco/** => reports/kotlin-coverage
+            build/reports/kover/** => reports/kotlin-coverage
             frontend/build/reports/coverage/** => reports/frontend-coverage
             frontend/build/test-results/** => test-results/frontend
         """.trimIndent())
