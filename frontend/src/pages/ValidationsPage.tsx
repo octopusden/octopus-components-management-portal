@@ -31,6 +31,7 @@ import { Label } from '../components/ui/label'
 import { Badge } from '../components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent } from '../components/ui/tooltip'
 import { TeamCityIcon } from '../components/ui/icons/brand-icons'
+import { TeamCityMessage } from '../components/TeamCityMessage'
 import {
   Table,
   TableBody,
@@ -516,10 +517,13 @@ const teamCityColumns = [
   columnHelper.accessor('message', {
     header: 'Message',
     enableSorting: false,
-    // Findings messages may contain literal "\n" line breaks — whitespace-pre-wrap
-    // renders them instead of collapsing to one line, while still wrapping normally.
-    cell: ({ getValue }) => (
-      <span className="text-muted-foreground whitespace-pre-wrap">{getValue()}</span>
+    // Findings messages may contain literal "\n" line breaks, and
+    // "- STEP_ID in BUILD_CONF_ID" / "- BUILD_CONF_ID" lines whose identifiers
+    // link into TeamCity — see TeamCityMessage.
+    cell: ({ getValue, row }) => (
+      <div className="text-muted-foreground">
+        <TeamCityMessage message={getValue()} projectUrl={row.original.projectUrl} />
+      </div>
     ),
   }),
 ]

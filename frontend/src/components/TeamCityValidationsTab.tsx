@@ -2,6 +2,7 @@ import { EmptyState } from './ui/empty-state'
 import { Badge } from './ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip'
 import { TeamCityIcon } from './ui/icons/brand-icons'
+import { TeamCityMessage } from './TeamCityMessage'
 import { safeHttpUrl } from '../lib/utils'
 import type { TeamcityProject } from '../lib/types'
 import {
@@ -70,13 +71,11 @@ export function TeamCityValidationsTab({ teamcityProjects }: TeamCityValidations
                         {v.status}
                       </Badge>
                     </div>
-                    {/* Findings messages may contain literal "\n" line breaks —
-                        whitespace-pre-wrap renders them instead of collapsing to
-                        one line, while still wrapping long lines normally. */}
+                    {/* Findings messages may contain literal "\n" line breaks, and
+                        "- STEP_ID in BUILD_CONF_ID" / "- BUILD_CONF_ID" lines whose
+                        identifiers link into TeamCity — see TeamCityMessage. */}
                     {v.message && (
-                      <div className="text-sm whitespace-pre-wrap" style={{ lineHeight: '30px' }}>
-                        {v.message}
-                      </div>
+                      <TeamCityMessage message={v.message} projectUrl={project.projectUrl} />
                     )}
                     {info.description && (
                       <div className="text-xs text-muted-foreground">{info.description}</div>

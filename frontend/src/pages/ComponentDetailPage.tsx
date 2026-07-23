@@ -58,6 +58,7 @@ import { ComponentHistoryTab } from '../components/editor/ComponentHistoryTab'
 import { EditorSidebarNav, type EditorNavSection } from '../components/editor/EditorSidebarNav'
 import { ValidationProblemsList } from '../components/ValidationProblemsList'
 import { TeamCityValidationsTab } from '../components/TeamCityValidationsTab'
+import { EmptyState } from '../components/ui/empty-state'
 import { useComponent, useUpdateComponent, useDeleteComponent, useFieldOverrides } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
 import { ApiError } from '../lib/api'
@@ -208,14 +209,11 @@ function ComponentDetailEditor() {
     : 0
 
   useEffect(() => {
-    if (activeTab === 'unregistered-release' && !hasProblems) {
-      setActiveTab('general')
-    }
     // Whole Validations section (TeamCity + Unregistered Release) is admin-only.
     if (!isAdmin && (activeTab === 'teamcity-validations' || activeTab === 'unregistered-release')) {
       setActiveTab('general')
     }
-  }, [activeTab, hasProblems, isAdmin])
+  }, [activeTab, isAdmin])
 
   const canArchive = hasPermission(user, PERMISSIONS.DELETE_COMPONENTS)
   const canUnarchive = hasPermission(user, PERMISSIONS.ARCHIVE_COMPONENTS)
@@ -1189,8 +1187,8 @@ function ComponentDetailEditor() {
               <TeamCityValidationsTab teamcityProjects={component.teamcityProjects ?? []} />
             </TabsContent>
 
-            {hasProblems && componentValidation && (
-              <TabsContent value="unregistered-release">
+            <TabsContent value="unregistered-release">
+              {hasProblems && componentValidation ? (
                 <div className="space-y-3">
                   <p className="text-sm text-muted-foreground">
                     Released versions checked against the registry. Admin-only.
@@ -1205,8 +1203,13 @@ function ComponentDetailEditor() {
                     </Button>
                   )}
                 </div>
-              </TabsContent>
-            )}
+              ) : (
+                <EmptyState
+                  message="No unregister release for this component."
+                  className="py-8"
+                />
+              )}
+            </TabsContent>
 
             {/* Single sticky save bar — governs the WHOLE component (one combined
                 PATCH), replacing the old per-tab Save buttons. Rendered for
