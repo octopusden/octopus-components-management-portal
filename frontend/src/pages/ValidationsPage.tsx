@@ -32,6 +32,7 @@ import { Badge } from '../components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent } from '../components/ui/tooltip'
 import { TeamCityIcon } from '../components/ui/icons/brand-icons'
 import { TeamCityMessage } from '../components/TeamCityMessage'
+import { MultiSelectFilter } from '../components/ui/MultiSelectFilter'
 import {
   Table,
   TableBody,
@@ -58,6 +59,7 @@ import {
 import {
   getTeamCityValidationStatusTone,
   getTeamCityValidationTypeInfo,
+  splitTeamCityValidationTypes,
 } from '../lib/teamcityValidationTypes'
 import { cn, safeHttpUrl } from '../lib/utils'
 import type { TeamcityValidationRow } from '../lib/types'
@@ -495,7 +497,17 @@ const teamCityColumns = [
         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
       />
     ),
-    cell: ({ getValue }) => <Badge variant="secondary">{getTeamCityValidationTypeInfo(getValue()).label}</Badge>,
+    // A finding's `type` is a comma-separated list (a finding can flag more
+    // than one rule) — one badge per type, not one badge for the raw CSV string.
+    cell: ({ getValue }) => (
+      <div className="flex flex-wrap gap-1">
+        {splitTeamCityValidationTypes(getValue()).map((t) => (
+          <Badge key={t} variant="secondary">
+            {getTeamCityValidationTypeInfo(t).label}
+          </Badge>
+        ))}
+      </div>
+    ),
   }),
   columnHelper.accessor('status', {
     header: ({ column }) => (
@@ -535,7 +547,10 @@ const teamCityColumns = [
  * the run this reports on). Admin-only — gated at the page level.
  */
 function TeamCitySection() {
-  const [typeFilter, setTypeFilter] = useState('')
+  // Type supports multiple selections — a finding's `type` value itself is a
+  // comma-separated list (one finding can flag more than one rule), so the
+  // filter has to be able to match against any number of individual types.
+  const [typeFilter, setTypeFilter] = useState<string[]>([])
   const [statusFilter, setStatusFilter] = useState('')
   const [sorting, setSorting] = useState<SortingState>([])
 
@@ -543,7 +558,7 @@ function TeamCitySection() {
 
   const filters: TeamCityValidationFilters = useMemo(
     () => ({
-      type: typeFilter ? [typeFilter] : undefined,
+      type: typeFilter.length ? typeFilter : undefined,
       status: statusFilter ? [statusFilter] : undefined,
     }),
     [typeFilter, statusFilter],
@@ -552,9 +567,13 @@ function TeamCitySection() {
 
   // Type/status options come from the live summary breakdown (the real values
   // the sweep has actually reported), not a guessed static list — it stays in
-  // sync automatically as new finding types/statuses appear.
+  // sync automatically as new finding types/statuses appear. byType keys are
+  // split too, since a breakdown key can itself be a comma-separated combo.
   const typeOptions = useMemo(
-    () => Object.keys(summary.data?.byType ?? {}).sort(),
+    () =>
+      Array.from(
+        new Set(Object.keys(summary.data?.byType ?? {}).flatMap(splitTeamCityValidationTypes)),
+      ).sort(),
     [summary.data?.byType],
   )
   const statusOptions = useMemo(
@@ -647,12 +666,13 @@ function TeamCitySection() {
             <Label htmlFor="filter-tc-type" className="text-xs text-muted-foreground">
               Type
             </Label>
-            <SingleSelectFilter
+            <MultiSelectFilter
               id="filter-tc-type"
               value={typeFilter}
               onChange={setTypeFilter}
               options={typeOptions}
               placeholder="All types"
+              unitLabel="type"
             />
           </div>
           <div className="flex flex-col gap-1">

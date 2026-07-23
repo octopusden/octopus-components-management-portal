@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import React from 'react'
@@ -86,7 +86,7 @@ function statsResult(overrides: Partial<ReturnType<typeof useHealthStatistics>> 
 
 const sampleTcSummary: TeamcityValidationSummary = {
   byStatus: { FAILED: 3, WARNING: 1 },
-  byType: { BUILD_CONFIG_DRIFT: 4 },
+  byType: { BUILD_CONFIG_DRIFT: 4, HAS_CUSTOM_BUILD_STEP: 1 },
   componentsWithIssues: 2,
   findings: 4,
 }
@@ -110,7 +110,9 @@ const sampleTcRows: TeamcityValidationRow[] = [
     projectId: 'Payments_Build',
     projectUrl: 'https://tc.example.com/project/Payments_Build',
     status: 'FAILED',
-    type: 'BUILD_CONFIG_DRIFT',
+    // A finding's `type` is a comma-separated list — this row flags two rules
+    // at once, exercising the multi-badge rendering.
+    type: 'BUILD_CONFIG_DRIFT,HAS_CUSTOM_BUILD_STEP',
     updatedAt: '2026-06-13T10:00:00Z',
   },
 ]
@@ -177,6 +179,42 @@ describe('ValidationsPage — TeamCity tab', () => {
     expect(within(findings).getByText('4')).toBeInTheDocument()
     expect(screen.getByText(/Found 1 component across 1 TeamCity project/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'payments-core' })).toHaveAttribute('href', '/components/c-1')
+  })
+
+  it('renders one badge per type when a finding\'s type is a comma-separated list', () => {
+    renderPage()
+    const row = screen.getByRole('link', { name: 'payments-core' }).closest('tr')!
+    // BUILD_CONFIG_DRIFT has no friendly-label entry, so it falls back to the
+    // raw type; HAS_CUSTOM_BUILD_STEP does have one ("Custom build step").
+    expect(within(row).getByText('BUILD_CONFIG_DRIFT')).toBeInTheDocument()
+    expect(within(row).getByText('Custom build step')).toBeInTheDocument()
+  })
+
+  it('the Type filter is a multi-select: options are split from byType keys (no combo entries)', async () => {
+    renderPage()
+    // The Findings-table "Type" column header is ALSO a button named "Type"
+    // (sort toggle), so the filter trigger has to be resolved via its
+    // associated <Label htmlFor>, not by accessible name alone.
+    await userEvent.click(screen.getByLabelText('Type'))
+    expect(screen.getByRole('checkbox', { name: 'BUILD_CONFIG_DRIFT' })).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'HAS_CUSTOM_BUILD_STEP' })).toBeInTheDocument()
+  })
+
+  it('selecting two types calls useTeamCityValidations with both in the type filter', async () => {
+    renderPage()
+    await userEvent.click(screen.getByLabelText('Type'))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'BUILD_CONFIG_DRIFT' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'HAS_CUSTOM_BUILD_STEP' }))
+
+    await waitFor(() =>
+      expect(mockTcRows).toHaveBeenLastCalledWith({
+        type: ['BUILD_CONFIG_DRIFT', 'HAS_CUSTOM_BUILD_STEP'],
+        status: undefined,
+      }),
+    )
+    // Trigger's visible text reflects the multi-selection (count badge, not a
+    // single value) — its accessible name stays "Type" (label-driven).
+    expect(screen.getByLabelText('Type')).toHaveTextContent('2 types')
   })
 })
 

@@ -77,9 +77,6 @@ export function TeamCityValidationsTab({ teamcityProjects }: TeamCityValidations
                     {v.message && (
                       <TeamCityMessage message={v.message} projectUrl={project.projectUrl} />
                     )}
-                    {info.description && (
-                      <div className="text-xs text-muted-foreground">{info.description}</div>
-                    )}
                   </div>
                 )
               })}

@@ -1,7 +1,7 @@
 /**
- * Label/description lookup for TeamCity validation finding `type`s, and a
- * status → visual-tone helper for `status`. Both `type` and `status` are open
- * strings on the wire (see TeamcityValidation in lib/types.ts) — the backend
+ * Label lookup for TeamCity validation finding `type`s, and a status →
+ * visual-tone helper for `status`. Both `type` and `status` are open strings
+ * on the wire (see TeamcityValidation in lib/types.ts) — the backend
  * validation sweep can introduce new kinds at any time, so every lookup here
  * falls back gracefully instead of throwing/crashing on an unrecognized value.
  *
@@ -11,36 +11,33 @@
  * nothing else needs to change (getTeamCityValidationTypeInfo already falls
  * back to the raw type for anything not yet listed).
  */
-export const TEAMCITY_VALIDATION_TYPES: Record<string, { label: string; description: string }> = {
-  USES_OLD_JAVA_VERSION: {
-    label: 'USES_OLD_JAVA_VERSION',
-    description: 'Please remove all references to Java versions that are soon deprecated.',
-  },
-  HAS_CUSTOM_BUILD_STEP: {
-    label: 'HAS_CUSTOM_BUILD_STEP',
-    description: 'Please remove custom build steps from the project configuration. Move the required build logic into the appropriate build tool script.',
-  },
-  OVERRIDES_DEFAULT_BUILD_STEP: {
-    label: 'OVERRIDES_DEFAULT_BUILD_STEP',
-    description: 'Please reset the build step configuration to its default values. If customization is required, use supported build parameters instead of overriding the complete default build step.',
-  },
-  MULTIPLE_MAVEN_VERSIONS: {
-    label: 'MULTIPLE_MAVEN_VERSIONS',
-    description: 'Please remove conflicting Maven version definitions.',
-  },
-  ATTACHED_TO_BUILD_TEMPLATE: {
-    label: 'ATTACHED_TO_BUILD_TEMPLATE',
-    description: 'Please attach to one build configuration template only.'
-  },
-  MULTIPLE_JAVA_VERSIONS: {
-    label: 'MULTIPLE_JAVA_VERSIONS',
-    description: 'Please remove conflicting Java version definitions.',
-  },
+export const TEAMCITY_VALIDATION_TYPES: Record<string, { label: string }> = {
+  USES_OLD_JAVA_VERSION: { label: 'Deprecated Java version' },
+  HAS_CUSTOM_BUILD_STEP: { label: 'Custom build step' },
+  OVERRIDES_DEFAULT_BUILD_STEP: { label: 'Modified default build step' },
+  MULTIPLE_MAVEN_VERSIONS: { label: 'Multiple Maven versions' },
+  ATTACHED_TO_BUILD_TEMPLATE: { label: 'Invalid template attachment count' },
+  MULTIPLE_JAVA_VERSIONS: { label: 'Multiple Java versions' },
+  JAVA_HOME_NOT_FROM_ENV: { label: 'Java declaration not from ENV' },
 }
 
-/** Label/description for a validation `type`, falling back to the raw type for unknown values. */
-export function getTeamCityValidationTypeInfo(type: string): { label: string; description: string } {
-  return TEAMCITY_VALIDATION_TYPES[type] ?? { label: type, description: '' }
+/** Label for a validation `type`, falling back to the raw type for unknown values. */
+export function getTeamCityValidationTypeInfo(type: string): { label: string } {
+  return TEAMCITY_VALIDATION_TYPES[type] ?? { label: type }
+}
+
+/**
+ * A finding's `type` is a comma-separated list of one or more type values
+ * (a single finding can flag more than one rule) — split it into individual
+ * types for display (one badge per type) or option-list building. Trims
+ * whitespace and drops empty segments so a stray ", " doesn't produce a
+ * blank badge.
+ */
+export function splitTeamCityValidationTypes(type: string): string[] {
+  return type
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean)
 }
 
 /**
