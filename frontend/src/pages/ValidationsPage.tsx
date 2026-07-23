@@ -435,6 +435,14 @@ function SortableHeader({
   )
 }
 
+const COLUMN_WIDTH: Record<string, string> = {
+  componentName: 'w-[16%]',
+  projectId: 'w-[16%]',
+  type: 'w-[22%]',
+  status: 'w-[10%]',
+  message: 'w-[36%]',
+}
+
 const columnHelper = createColumnHelper<TeamcityValidationRow>()
 
 const teamCityColumns = [
@@ -449,7 +457,8 @@ const teamCityColumns = [
     cell: ({ row }) => (
       <Link
         to={`/components/${row.original.componentId}`}
-        className="font-medium text-primary hover:underline"
+        className="block truncate font-medium text-primary hover:underline"
+        title={row.original.componentName}
       >
         {row.original.componentName}
       </Link>
@@ -467,7 +476,7 @@ const teamCityColumns = [
       const { projectId, projectUrl } = row.original
       const url = safeHttpUrl(projectUrl ?? null)
       if (!url) {
-        return <span className="font-mono text-xs">{projectId}</span>
+        return <span className="block truncate font-mono text-xs" title={projectId}>{projectId}</span>
       }
       return (
         <Tooltip>
@@ -478,10 +487,10 @@ const teamCityColumns = [
               rel="noopener noreferrer"
               title={`TeamCity: ${projectId}`}
               aria-label={`TeamCity: ${projectId}`}
-              className="inline-flex items-center gap-1.5 font-mono text-xs text-primary hover:underline"
+              className="flex min-w-0 items-center gap-1.5 font-mono text-xs text-primary hover:underline"
             >
               <TeamCityIcon className="h-3.5 w-3.5 shrink-0" />
-              {projectId}
+              <span className="truncate">{projectId}</span>
             </a>
           </TooltipTrigger>
           <TooltipContent className="max-w-xs break-all">{url}</TooltipContent>
@@ -671,6 +680,8 @@ function TeamCitySection() {
               options={typeOptions}
               placeholder="All types"
               unitLabel="type"
+              getOptionLabel={(type) => getTeamCityValidationTypeInfo(type).label}
+              monospaceOptions={false}
             />
           </div>
           <div className="flex flex-col gap-1">
@@ -712,12 +723,12 @@ function TeamCitySection() {
           <EmptyState message="No validation findings match these filters." className="py-8" />
         ) : (
           <div className="rounded-md border max-h-[28rem] overflow-y-auto">
-            <Table>
+            <Table className="table-fixed">
               <TableHeader className="sticky top-0 z-10 bg-background">
                 {table.getHeaderGroups().map((headerGroup) => (
                   <TableRow key={headerGroup.id}>
                     {headerGroup.headers.map((header) => (
-                      <TableHead key={header.id}>
+                      <TableHead key={header.id} className={COLUMN_WIDTH[header.column.id]}>
                         {header.isPlaceholder
                           ? null
                           : flexRender(header.column.columnDef.header, header.getContext())}
@@ -730,7 +741,7 @@ function TeamCitySection() {
                 {table.getRowModel().rows.map((row) => (
                   <TableRow key={`${row.original.componentId}-${row.original.projectId}-${row.original.type}`}>
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>
+                      <TableCell key={cell.id} className={COLUMN_WIDTH[cell.column.id]}>
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </TableCell>
                     ))}

@@ -190,21 +190,22 @@ describe('ValidationsPage — TeamCity tab', () => {
     expect(within(row).getByText('Custom build step')).toBeInTheDocument()
   })
 
-  it('the Type filter is a multi-select: options are split from byType keys (no combo entries)', async () => {
+  it('the Type filter is a multi-select showing friendly labels, not raw type ids', async () => {
     renderPage()
     // The Findings-table "Type" column header is ALSO a button named "Type"
     // (sort toggle), so the filter trigger has to be resolved via its
     // associated <Label htmlFor>, not by accessible name alone.
     await userEvent.click(screen.getByLabelText('Type'))
     expect(screen.getByRole('checkbox', { name: 'BUILD_CONFIG_DRIFT' })).toBeInTheDocument()
-    expect(screen.getByRole('checkbox', { name: 'HAS_CUSTOM_BUILD_STEP' })).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'Custom build step' })).toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: 'HAS_CUSTOM_BUILD_STEP' })).toBeNull()
   })
 
-  it('selecting two types calls useTeamCityValidations with both in the type filter', async () => {
+  it('selecting two types by their labels calls useTeamCityValidations with the underlying type ids', async () => {
     renderPage()
     await userEvent.click(screen.getByLabelText('Type'))
     await userEvent.click(screen.getByRole('checkbox', { name: 'BUILD_CONFIG_DRIFT' }))
-    await userEvent.click(screen.getByRole('checkbox', { name: 'HAS_CUSTOM_BUILD_STEP' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Custom build step' }))
 
     await waitFor(() =>
       expect(mockTcRows).toHaveBeenLastCalledWith({
