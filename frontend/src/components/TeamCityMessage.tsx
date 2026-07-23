@@ -20,13 +20,13 @@ function teamCityBaseUrl(projectUrl?: string | null): string | null {
   return idx === -1 ? null : url.slice(0, idx)
 }
 
-// A finding message can contain lines the TeamCity sweep emits in one of two
-// shapes (see TeamCityMessage's callers): a build step nested in a build
-// configuration, or a bare build configuration. Only lines matching one of
-// these exactly (after the leading "-") get turned into links — anything
-// else (including general prose starting with "-") renders as plain text.
-const STEP_IN_BUILD_CONF = /^-\s*(\S+)\s+in\s+(\S+)\s*$/
-const BUILD_CONF_ONLY = /^-\s*(\S+)\s*$/
+// A bullet line is anything starting with "-" (after trimming) — rendered as
+// a real <li> (proper bullet glyph) instead of a literal "-" character. The
+// rest of the line (after the marker) is what gets matched against the two
+// identifier shapes below.
+const BULLET_LINE = /^\s*-\s*(.*)$/
+const STEP_IN_BUILD_CONF = /^(\S+)\s+in\s+(\S+)$/
+const BUILD_CONF_ONLY = /^(\S+)$/
 
 function buildRunnersUrl(base: string, buildConfId: string): string {
   return `${base}/admin/editBuildRunners.html?id=buildType:${encodeURIComponent(buildConfId)}`
@@ -49,50 +49,93 @@ function TcLink({ href, children }: { href: string; children: string }) {
   )
 }
 
-function renderLine(line: string, base: string | null, key: number) {
-  const stepMatch = line.match(STEP_IN_BUILD_CONF)
+// Renders a bullet line's content (after the leading "-" is stripped): either
+// the two known identifier shapes (linked, when a TeamCity base URL is
+// available) or the rest of the line as plain text — never re-adds a literal
+// "-", since the <li> marker already supplies the bullet glyph.
+function renderBulletContent(rest: string, base: string | null) {
+  const stepMatch = rest.match(STEP_IN_BUILD_CONF)
   if (stepMatch) {
     const [, stepId, buildConfId] = stepMatch as unknown as [string, string, string]
-    if (!base) return <div key={key}>{line}</div>
-    return (
-      <div key={key}>
-        {'- '}
-        <TcLink href={runTypeUrl(base, buildConfId, stepId)}>{stepId}</TcLink>
-        {' in '}
-        <TcLink href={buildRunnersUrl(base, buildConfId)}>{buildConfId}</TcLink>
-      </div>
-    )
+    if (base) {
+      return (
+        <>
+          <TcLink href={runTypeUrl(base, buildConfId, stepId)}>{stepId}</TcLink>
+          {' in '}
+          <TcLink href={buildRunnersUrl(base, buildConfId)}>{buildConfId}</TcLink>
+        </>
+      )
+    }
+    return rest
   }
 
-  const confMatch = line.match(BUILD_CONF_ONLY)
+  const confMatch = rest.match(BUILD_CONF_ONLY)
   if (confMatch) {
     const [, buildConfId] = confMatch as unknown as [string, string]
-    if (!base) return <div key={key}>{line}</div>
-    return (
-      <div key={key}>
-        {'- '}
-        <TcLink href={buildRunnersUrl(base, buildConfId)}>{buildConfId}</TcLink>
-      </div>
-    )
+    if (base) {
+      return <TcLink href={buildRunnersUrl(base, buildConfId)}>{buildConfId}</TcLink>
+    }
+    return rest
   }
 
-  // Blank lines still need a rendered (non-empty) block so the gap survives
-  // — an empty <div> collapses to zero height in most browsers.
-  return <div key={key}>{line === '' ? ' ' : line}</div>
+  return rest
+}
+
+// Groups consecutive bullet lines under one <ul> (a real list, not one <ul>
+// per line) while non-bullet lines stay as their own paragraph-like block —
+// preserves the message's original line order either way.
+type Segment = { type: 'bullets'; items: string[] } | { type: 'plain'; line: string }
+
+function segmentLines(lines: string[]): Segment[] {
+  const segments: Segment[] = []
+  for (const line of lines) {
+    const bulletMatch = line.match(BULLET_LINE)
+    if (bulletMatch) {
+      const rest = bulletMatch[1] ?? ''
+      const last = segments[segments.length - 1]
+      if (last && last.type === 'bullets') {
+        last.items.push(rest)
+      } else {
+        segments.push({ type: 'bullets', items: [rest] })
+      }
+    } else {
+      segments.push({ type: 'plain', line })
+    }
+  }
+  return segments
 }
 
 /**
  * Renders a TeamCity finding's free-text `message`, split on literal "\n"
- * line breaks (one block per line, so long lines still wrap normally while
- * the sweep's line breaks are preserved). Any line of the form
- * "- STEP_ID in BUILD_CONF_ID" or "- BUILD_CONF_ID" gets its identifiers
- * linked into the TeamCity admin UI (build steps / build configuration),
- * using the base host derived from `projectUrl`. Used by both the per-
- * component TeamCityValidationsTab and the registry-wide Validations page
- * findings table, so the two surfaces stay in sync.
+ * line breaks. Any line starting with "-" renders as a real bulleted list
+ * item (consecutive bullet lines share one <ul>) instead of a literal "-"
+ * character. Within a bullet, "STEP_ID in BUILD_CONF_ID" / "BUILD_CONF_ID"
+ * gets its identifiers linked into the TeamCity admin UI (build steps /
+ * build configuration), using the base host derived from `projectUrl`.
+ * Non-link text renders in the same muted gray on every surface that uses
+ * this component (the per-component TeamCityValidationsTab and the
+ * registry-wide Validations page findings table), so the two stay in sync.
  */
 export function TeamCityMessage({ message, projectUrl }: TeamCityMessageProps) {
   const base = teamCityBaseUrl(projectUrl)
-  const lines = message.split('\n')
-  return <div className="text-sm">{lines.map((line, i) => renderLine(line, base, i))}</div>
+  const segments = segmentLines(message.split('\n'))
+
+  return (
+    <div className="text-sm text-muted-foreground" style={{ lineHeight: '30px' }}>
+      {segments.map((segment, i) => {
+        if (segment.type === 'bullets') {
+          return (
+            <ul key={i} className="list-disc pl-5">
+              {segment.items.map((rest, j) => (
+                <li key={j}>{renderBulletContent(rest, base)}</li>
+              ))}
+            </ul>
+          )
+        }
+        // Blank lines still need a rendered (non-empty) block so the gap
+        // survives — an empty <div> collapses to zero height in most browsers.
+        return <div key={i}>{segment.line === '' ? ' ' : segment.line}</div>
+      })}
+    </div>
+  )
 }

@@ -531,11 +531,9 @@ const teamCityColumns = [
     enableSorting: false,
     // Findings messages may contain literal "\n" line breaks, and
     // "- STEP_ID in BUILD_CONF_ID" / "- BUILD_CONF_ID" lines whose identifiers
-    // link into TeamCity — see TeamCityMessage.
+    // link into TeamCity — see TeamCityMessage (which owns its own text color).
     cell: ({ getValue, row }) => (
-      <div className="text-muted-foreground">
-        <TeamCityMessage message={getValue()} projectUrl={row.original.projectUrl} />
-      </div>
+      <TeamCityMessage message={getValue()} projectUrl={row.original.projectUrl} />
     ),
   }),
 ]
