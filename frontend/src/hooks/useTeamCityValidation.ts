@@ -7,14 +7,10 @@ const TC_VALIDATION_JOB_KEY = ['tc-validation', 'job'] as const
 const JOB_POLL_INTERVAL_MS = 1_000
 
 /**
- * Start (or attach to) the async TC validation job.
- *
- * Mirrors [useRunTeamCityResync] exactly — see that hook's doc comment for the
- * full rationale (202 vs 409 same-kind attach, cross-kind conflict shape,
- * why cache invalidation on success is limited to the COMPLETED-on-start
- * race). `POST /admin/teamcity-validation` returns 202 Accepted on a freshly
- * started job and 409 Conflict if a TC validation run is already RUNNING,
- * both carrying the identical `TeamCityValidationJobResponse` body.
+ * Start (or attach to) the async TC validation job. Mirrors
+ * `useRunTeamCityResync` — see that hook for the 202-vs-409 same-kind attach
+ * rationale. `POST /admin/teamcity-validation` returns 202 on a freshly
+ * started job and 409 if one is already RUNNING, both with the same body.
  */
 export function useRunTeamCityValidation() {
   const queryClient = useQueryClient()
@@ -32,9 +28,7 @@ export function useRunTeamCityValidation() {
     },
     onSuccess: (job) => {
       queryClient.setQueryData(TC_VALIDATION_JOB_KEY, job)
-      // Fast-path: executor finishes before the response is built (small
-      // registry / synchronous test executor) — mirror useRunTeamCityResync's
-      // COMPLETED-on-start fallback so caches get refreshed in that path too.
+      // Fast-path: job can finish before the response is built (small registry).
       if (job.state === 'COMPLETED' && job.result) {
         queryClient.invalidateQueries({ queryKey: ['components'] })
         queryClient.invalidateQueries({
@@ -48,8 +42,7 @@ export function useRunTeamCityValidation() {
 
 /**
  * Poll `/admin/teamcity-validation/job` for the current async TC validation
- * run state. Mirrors [useTeamCityResyncJob] exactly — see that hook for the
- * 404→null and refetchInterval rationale.
+ * run state. Mirrors `useTeamCityResyncJob` (404 → null, poll while RUNNING).
  */
 export function useTeamCityValidationJob() {
   return useQuery<TeamCityValidationJobResponse | null>({

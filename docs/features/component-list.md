@@ -62,6 +62,15 @@ Each field carries a **`searchable`** placement — one of:
 
 The effective placement is resolved by [`searchabilityFor`](../../frontend/src/hooks/useFieldConfig.ts): an explicit `searchable` wins; otherwise a legacy `filterable: false` maps to `None`; otherwise a central `DEFAULT_SEARCHABILITY` map applies; otherwise the field defaults to `Extended`. This means a fresh install (empty field-config) already places every filter correctly before an admin saves the catalog. `searchable` **supersedes** the older boolean `filterable` flag, which was never surfaced in the admin UI — `filterable: false` is still honoured (as `None`) for backward-compat. Placement is independent of the form-level `visibility` flag (a field can be editor-hidden yet searchable, or vice-versa).
 
+## Validation problem indicators (admin-only)
+
+Two independent, Portal-computed problem sources feed the same row-level indicator and the **"With problems"** preset (`ListPresetBar`), both admin-only:
+
+- **Unregistered Release** — from `useValidationProblems`/`useComponentsWithProblems` (the registered-version validation report).
+- **TeamCity** — from `useTeamCityValidations`, keyed by `componentId` (not name, unlike the report above).
+
+A row shows **at most one** warning triangle: an Unregistered-Released issue takes priority (`ValidationBadge`); a `TeamCityProblemBadge` only renders when the row has no Unregistered-Released issue. The **"With problems"** preset unions both sources into one row set (deduped by component), so a component with only a TeamCity finding still shows up. See [`docs/features/component-detail.md`](component-detail.md#validations-admin-only) for the per-component view of the same two sources.
+
 ## Routing
 
 `ComponentTable` links each row to `/components/<UUID>` (using `row.original.id`). UUIDs are stable across renames, so the URL doesn't break when 7.1.4 (Component rename) flips a name. The detail page accepts both UUID and name in the URL — see [`docs/features/component-detail.md`](component-detail.md).

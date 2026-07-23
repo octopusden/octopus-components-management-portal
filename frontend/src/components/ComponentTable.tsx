@@ -43,13 +43,10 @@ declare module '@tanstack/react-table' {
     // entry by component key (ComponentSummary.name). Absent (non-admin / empty
     // report) → no indicator anywhere.
     validationByComponent?: Map<string, ComponentValidation>
-    // TeamCity validation overlay: componentId (ComponentSummary.id, the CRS
-    // UUID — a different key than validationByComponent's name-keyed map) ->
-    // finding count. Admin-only, same absence semantics as validationByComponent.
-    // A row shows AT MOST ONE warning triangle: an Unregistered-Released issue
-    // takes priority (rendered via ValidationBadge); TeamCity findings only show
-    // their own triangle when the component has no Unregistered-Released issue,
-    // so the two problem types never stack two icons on one row.
+    // TeamCity validation overlay: componentId (a different key than
+    // validationByComponent's name-keyed map) -> finding count. Only shown
+    // when the row has no Unregistered-Released issue, so a row never
+    // stacks two warning triangles.
     teamCityIssueCountByComponent?: Map<string, number>
   }
 }
@@ -106,11 +103,9 @@ function IconLink({ href, label, icon: Icon }: IconLinkProps) {
 }
 
 /**
- * Minimal warning triangle for a row with TeamCity validation findings but NO
- * Unregistered-Released issue (see the Name cell — that case wins and renders
- * `ValidationBadge` instead, so a row never shows two warning icons). Simpler
- * than `ValidationBadge` on purpose: a hover tooltip with the count, no
- * click-through dialog — the full findings live on the Validations page.
+ * Warning triangle for a row with TeamCity findings but no Unregistered-
+ * Released issue (see the Name cell). Simpler than `ValidationBadge` on
+ * purpose: a hover tooltip, no click-through dialog.
  */
 function TeamCityProblemBadge({ count }: { count: number }) {
   if (count <= 0) return null
@@ -232,10 +227,8 @@ const columns = [
       // map is absent (non-admin / empty report) or the component is clean,
       // ValidationBadge renders null, so nothing extra appears before the name.
       const validation = table.options.meta?.validationByComponent?.get(row.original.name)
-      // TeamCity findings are keyed by componentId (the CRS UUID), a different
-      // key than validationByComponent's name-keyed map. Only consulted when
-      // the row has no Unregistered-Released issue — a row shows at most one
-      // warning triangle, never both.
+      // TeamCity findings are keyed by componentId, not name. Only consulted
+      // when there's no Unregistered-Released issue — at most one triangle per row.
       const hasUnregisteredIssue = hasValidationIssue(validation)
       const teamCityIssueCount = hasUnregisteredIssue
         ? 0

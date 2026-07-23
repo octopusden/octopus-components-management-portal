@@ -10,10 +10,8 @@ export interface EditorNavItem {
   label: string
   /** Per-section count badge (e.g. VCS entries). Rendered only when > 0. */
   count?: number
-  /** Problem-count badge (e.g. TeamCity/Unregistered Release findings). When
-   *  > 0, the item renders with the same destructive/red treatment (warning
-   *  icon + red count badge) as the pinned `problems` entry used to — but
-   *  scoped to this individual item instead of a single sidebar-wide slot. */
+  /** Problem-count badge. When > 0, the item renders with a destructive/red
+   *  treatment (warning icon + red count) instead of the muted `count` badge. */
   problemCount?: number
 }
 

@@ -197,10 +197,8 @@ function ComponentDetailEditor() {
   const hasProblems =
     isAdmin && componentValidation != null && hasValidationIssue(componentValidation)
 
-  // Same tone logic as the teamcity-projects-list block below, rolled up
-  // across all of the component's TeamCity projects — drives the
-  // "Validations > TeamCity" sidebar item's red/warning treatment. Admin-only,
-  // purely derived from data already on `component` (no extra query).
+  // Rolled up across all TeamCity projects — drives the sidebar item's
+  // red/warning treatment. Admin-only, derived from data already on `component`.
   const teamCityIssueCount = isAdmin
     ? (component?.teamcityProjects ?? []).reduce((total, tc) => {
         const tones = (tc.validations ?? []).map((v) => getTeamCityValidationStatusTone(v.status))
@@ -921,9 +919,7 @@ function ComponentDetailEditor() {
               const allClean = issueCount === 0
               return (
                 <div key={tc.id} className="flex items-center gap-2 px-3 py-2 text-sm">
-                  {/* Status icon is an admin-only affordance — TeamCity validation
-                      findings are an admin concern (see the admin-gated Validations
-                      page/sidebar tab); a regular user just sees the project links. */}
+                  {/* Status icon is admin-only; a regular user just sees the project links. */}
                   {isAdmin &&
                     (allClean ? (
                       <CircleCheck
@@ -1052,9 +1048,7 @@ function ComponentDetailEditor() {
                   { value: 'history', label: 'History' },
                 ],
               },
-              // Admin-only: TeamCity findings and Unregistered Release findings
-              // are both an admin concern (see the admin-gated Validations
-              // page), so the whole section is hidden for regular users.
+              // Validations section is admin-only, hidden for regular users.
               ...(isAdmin
                 ? [
                     {

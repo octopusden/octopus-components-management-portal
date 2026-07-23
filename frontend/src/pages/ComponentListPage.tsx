@@ -49,11 +49,9 @@ function summaryFromValidationKey(componentKey: string): ComponentSummary {
   }
 }
 
-// Same minimal-row treatment for a component that's in the "With problems"
-// preset ONLY because of a TeamCity finding (no Unregistered-Released issue).
-// Unlike the validation report, TeamCity findings carry a real componentId
-// (CRS UUID) — used here instead of the name, so the Name column's link
-// resolves correctly.
+// Same minimal-row treatment as summaryFromValidationKey, for a component
+// that's in "With problems" only because of a TeamCity finding. TeamCity
+// findings carry a real componentId, used here instead of the name.
 function summaryFromTeamCityRow(row: TeamcityValidationRow): ComponentSummary {
   return {
     id: row.componentId,
@@ -110,15 +108,11 @@ export function ComponentListPage() {
   // pay for it.
   const problems = useComponentsWithProblems(showProblemsOnly)
 
-  // TeamCity findings, admin-gated (isAdmin, not showProblemsOnly — every
-  // finding IS a problem, unlike the Unregistered-Released report, so this one
-  // fetch serves both the always-visible per-row warning badge below AND the
-  // "With problems" preset's list source, with no second query needed.
+  // Admin-gated, not showProblemsOnly — every finding IS a problem, so this
+  // one fetch serves both the per-row warning badge and the "With problems" list.
   const teamCityFindings = useTeamCityValidations({}, isAdmin)
 
-  // componentId -> finding count, for the Name cell's TeamCity warning badge
-  // (see ComponentTable.tsx — only shown when the row has no Unregistered-
-  // Released issue, so a row never carries two warning triangles).
+  // componentId -> finding count, for the Name cell's TeamCity warning badge.
   const teamCityIssueCountByComponent = useMemo(() => {
     const map = new Map<string, number>()
     for (const r of teamCityFindings.data ?? []) {
@@ -127,9 +121,8 @@ export function ComponentListPage() {
     return map
   }, [teamCityFindings.data])
 
-  // First TeamCity finding per component NAME (the field both this report and
-  // the Unregistered-Released report can key by) — used only to fold TeamCity-
-  // only components into the "With problems" preset below.
+  // First TeamCity finding per component name — used to fold TeamCity-only
+  // components into "With problems" below.
   const teamCityRowByName = useMemo(() => {
     const map = new Map<string, TeamcityValidationRow>()
     for (const r of teamCityFindings.data ?? []) {
@@ -138,13 +131,9 @@ export function ComponentListPage() {
     return map
   }, [teamCityFindings.data])
 
-  // The "with problems" set, rendered as minimal rows: every component with an
-  // Unregistered-Released issue OR a TeamCity validation finding — one merged
-  // list, not two separate ones. The backend's problems-only report also
-  // includes check-failed components (a failure must never read as clean
-  // server-side), but those are a system condition — surfaced by the banner
-  // above, not as list rows — so we keep only components with a genuine
-  // problem here.
+  // Every component with an Unregistered-Released issue OR a TeamCity
+  // finding, merged into one list. Check-failed components are excluded — a
+  // system condition surfaced by the banner below, not a per-row problem.
   const problemRows = useMemo<ComponentSummary[]>(() => {
     const unregisteredNames = new Set(
       Array.from(problems.byComponent.values())

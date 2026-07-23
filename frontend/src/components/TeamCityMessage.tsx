@@ -2,11 +2,8 @@ import { safeHttpUrl } from '../lib/utils'
 
 interface TeamCityMessageProps {
   message: string
-  /** The finding's project webUrl (TeamcityProject.projectUrl /
-   *  TeamcityValidationRow.projectUrl) — the only per-row TeamCity URL we
-   *  have. The base TC host is derived from it (stripping the trailing
-   *  "/project/<id>") so STEP_ID/BUILD_CONF_ID lines can link into the
-   *  TeamCity admin UI without a separate portal-config lookup. */
+  /** The finding's project webUrl — the TeamCity base host is derived from
+   *  it so STEP_ID/BUILD_CONF_ID lines can link into the admin UI. */
   projectUrl?: string | null
 }
 
@@ -107,14 +104,11 @@ function segmentLines(lines: string[]): Segment[] {
 
 /**
  * Renders a TeamCity finding's free-text `message`, split on literal "\n"
- * line breaks. Any line starting with "-" renders as a real bulleted list
- * item (consecutive bullet lines share one <ul>) instead of a literal "-"
- * character. Within a bullet, "STEP_ID in BUILD_CONF_ID" / "BUILD_CONF_ID"
- * gets its identifiers linked into the TeamCity admin UI (build steps /
- * build configuration), using the base host derived from `projectUrl`.
- * Non-link text renders in the same muted gray on every surface that uses
- * this component (the per-component TeamCityValidationsTab and the
- * registry-wide Validations page findings table), so the two stay in sync.
+ * line breaks. Lines starting with "-" render as real bulleted list items
+ * (consecutive bullets share one <ul>); within a bullet, "STEP_ID in
+ * BUILD_CONF_ID" / "BUILD_CONF_ID" gets linked into the TeamCity admin UI.
+ * Used by both TeamCityValidationsTab and the Validations page findings
+ * table, so text color/spacing stay identical on both surfaces.
  */
 export function TeamCityMessage({ message, projectUrl }: TeamCityMessageProps) {
   const base = teamCityBaseUrl(projectUrl)
