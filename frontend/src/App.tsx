@@ -92,6 +92,7 @@ export const appRoutes: RouteObject[] = [
           </RequirePermission>
         ),
       },
+      { path: '/health', element: <Navigate to="/validations?tab=unregistered-release" replace /> },
       {
         path: '/audit',
         element: (
