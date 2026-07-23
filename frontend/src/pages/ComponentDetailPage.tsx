@@ -1,6 +1,6 @@
 import { useParams, useNavigate, Link } from 'react-router'
 import { useForm } from 'react-hook-form'
-import { ArrowLeft, Copy, Trash2, AlertTriangle, LockKeyhole, Boxes, CircleCheck } from 'lucide-react'
+import { ArrowLeft, Copy, Trash2, AlertTriangle, LockKeyhole, Boxes, CircleCheck, CircleDashed } from 'lucide-react'
 import { JiraIcon, BitbucketIcon, TeamCityIcon } from '../components/ui/icons/brand-icons'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Layout } from '../components/Layout'
@@ -916,12 +916,18 @@ function ComponentDetailEditor() {
               const hasError = tones.includes('destructive')
               const hasWarning = tones.includes('warning')
               const issueCount = tones.filter((t) => t === 'destructive' || t === 'warning').length
-              const allClean = issueCount === 0
+              const noRecordedFindings = validations.length === 0
+              const allClean = !noRecordedFindings && issueCount === 0
               return (
                 <div key={tc.id} className="flex items-center gap-2 px-3 py-2 text-sm">
                   {/* Status icon is admin-only; a regular user just sees the project links. */}
                   {isAdmin &&
-                    (allClean ? (
+                    (noRecordedFindings ? (
+                      <CircleDashed
+                        className="h-4 w-4 shrink-0 text-muted-foreground"
+                        aria-label="No validation findings on record"
+                      />
+                    ) : allClean ? (
                       <CircleCheck
                         className="h-4 w-4 shrink-0 text-[color:var(--color-badge-green-fg)]"
                         aria-label="No validation issues"
