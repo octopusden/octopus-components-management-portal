@@ -20,9 +20,12 @@ export function getTeamCityValidationTypeInfo(type: string): { label: string } {
 }
 
 /**
- * A finding's `type` can be a comma-separated list (one finding can flag
- * more than one rule) — split it into individual types for display or
- * option-list building.
+ * CRS emits exactly one `type` per finding row (rows are stored under a
+ * `(project_id, type)` key), so a comma-separated combo is not part of the
+ * actual contract. This split is purely defensive/compatibility parsing —
+ * harmless if a value ever does arrive comma-joined (e.g. from an older
+ * backend or a hand-edited fixture) — not something callers should rely on
+ * CRS producing.
  */
 export function splitTeamCityValidationTypes(type: string): string[] {
   return type

@@ -3,62 +3,60 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 import {
-  useRunTeamCityResync,
-  useTeamCityResyncJob,
-  type TeamCityResyncResult,
-} from '@/hooks/useTeamCityResync'
-import { useHistoryMigrationJob, useMigrationJob } from '@/hooks/useMigration'
-import {
-  invalidateTeamCityValidationJob,
+  useRunTeamCityValidation,
   useTeamCityValidationJob,
 } from '@/hooks/useTeamCityValidation'
+import { useHistoryMigrationJob, useMigrationJob } from '@/hooks/useMigration'
+import { useTeamCityResyncJob } from '@/hooks/useTeamCityResync'
 import { toast } from '@/hooks/use-toast'
 import { useAdminMode } from '@/lib/adminModeStore'
-import type { TeamCityResyncJobResponse } from '@/lib/types'
-import { TeamCityResyncPanel } from './TeamCityResyncPanel'
+import type { TeamCityValidationJobResponse, TeamCityValidationResult } from '@/lib/types'
+import { TeamCityValidationPanel } from './TeamCityValidationPanel'
 
 // Hooks are mocked so the panel test focuses on panel behaviour: admin-mode
 // gate, confirm dialog, RUNNING/COMPLETED/FAILED rendering, terminal-state
 // toast, cross-kind disable. The hooks themselves are covered by
-// useTeamCityResync.test.ts and useMigration.test.ts.
+// useTeamCityValidation.test.ts.
 
-vi.mock('@/hooks/useTeamCityResync', () => ({
-  useRunTeamCityResync: vi.fn(),
-  useTeamCityResyncJob: vi.fn(),
+vi.mock('@/hooks/useTeamCityValidation', () => ({
+  useRunTeamCityValidation: vi.fn(),
+  useTeamCityValidationJob: vi.fn(),
 }))
 vi.mock('@/hooks/useMigration', () => ({
   useMigrationJob: vi.fn(),
   useHistoryMigrationJob: vi.fn(),
 }))
-vi.mock('@/hooks/useTeamCityValidation', () => ({
-  useTeamCityValidationJob: vi.fn(),
-  invalidateTeamCityValidationJob: vi.fn(),
+vi.mock('@/hooks/useTeamCityResync', () => ({
+  useTeamCityResyncJob: vi.fn(),
 }))
 vi.mock('@/hooks/use-toast', () => ({
   toast: vi.fn(),
 }))
 
-const mockUseRun = vi.mocked(useRunTeamCityResync)
-const mockUseJob = vi.mocked(useTeamCityResyncJob)
+const mockUseRun = vi.mocked(useRunTeamCityValidation)
+const mockUseJob = vi.mocked(useTeamCityValidationJob)
 const mockUseMigrationJob = vi.mocked(useMigrationJob)
 const mockUseHistoryJob = vi.mocked(useHistoryMigrationJob)
-const mockUseValidationJob = vi.mocked(useTeamCityValidationJob)
-const mockInvalidateValidationJob = vi.mocked(invalidateTeamCityValidationJob)
+const mockUseResyncJob = vi.mocked(useTeamCityResyncJob)
 const mockToast = vi.mocked(toast)
 
-const RESULT: TeamCityResyncResult = {
+// Literal shape of CRS's TeamcityValidationResult — every field required
+// there. Guards against the panel silently falling back to `undefined` for
+// fields that don't exist on the real backend response (the bug this test
+// was added to catch: the old type had `findings`/`componentsWithIssues`,
+// which CRS never sends).
+const RESULT: TeamCityValidationResult = {
   scanned: 650,
-  updated: 12,
-  unchanged: 580,
-  skipped_no_match: 50,
-  skipped_ambiguous: 8,
-  ambiguous_auto_resolved: 4,
+  succeeded: 600,
+  failed: 5,
+  projectsWithIssues: 45,
+  removed: 3,
   errors: [],
 }
 
-const RUNNING_JOB: TeamCityResyncJobResponse = {
+const RUNNING_JOB: TeamCityValidationJobResponse = {
   kind: 'job',
-  id: 'tc-1',
+  id: 'tcv-1',
   state: 'RUNNING',
   startedAt: '2026-05-06T10:00:00Z',
   finishedAt: null,
@@ -66,14 +64,14 @@ const RUNNING_JOB: TeamCityResyncJobResponse = {
   result: null,
 }
 
-const COMPLETED_JOB: TeamCityResyncJobResponse = {
+const COMPLETED_JOB: TeamCityValidationJobResponse = {
   ...RUNNING_JOB,
   state: 'COMPLETED',
   finishedAt: '2026-05-06T10:00:42Z',
   result: RESULT,
 }
 
-const FAILED_JOB: TeamCityResyncJobResponse = {
+const FAILED_JOB: TeamCityValidationJobResponse = {
   ...RUNNING_JOB,
   state: 'FAILED',
   finishedAt: '2026-05-06T10:00:05Z',
@@ -81,7 +79,7 @@ const FAILED_JOB: TeamCityResyncJobResponse = {
 }
 
 function buildMutation(
-  overrides: Partial<ReturnType<typeof useRunTeamCityResync>> = {},
+  overrides: Partial<ReturnType<typeof useRunTeamCityValidation>> = {},
 ) {
   const mutateAsync = vi.fn().mockResolvedValue(RUNNING_JOB)
   return {
@@ -102,14 +100,14 @@ function buildMutation(
       failureReason: null,
       isPaused: false,
       ...overrides,
-    } as unknown as ReturnType<typeof useRunTeamCityResync>,
+    } as unknown as ReturnType<typeof useRunTeamCityValidation>,
     mutateAsync,
   }
 }
 
 function buildJobQuery(
-  data: TeamCityResyncJobResponse | null = null,
-): ReturnType<typeof useTeamCityResyncJob> {
+  data: TeamCityValidationJobResponse | null = null,
+): ReturnType<typeof useTeamCityValidationJob> {
   return {
     data,
     isPending: false,
@@ -133,7 +131,7 @@ function buildJobQuery(
     isPlaceholderData: false,
     isRefetchError: false,
     fetchStatus: 'idle',
-  } as unknown as ReturnType<typeof useTeamCityResyncJob>
+  } as unknown as ReturnType<typeof useTeamCityValidationJob>
 }
 
 function renderPanel() {
@@ -143,7 +141,7 @@ function renderPanel() {
   return {
     client,
     ...render(
-      React.createElement(QueryClientProvider, { client }, <TeamCityResyncPanel />),
+      React.createElement(QueryClientProvider, { client }, <TeamCityValidationPanel />),
     ),
   }
 }
@@ -154,11 +152,10 @@ beforeEach(() => {
   useAdminMode.setState({ enabled: false })
   mockUseRun.mockReturnValue(buildMutation().base)
   mockUseJob.mockReturnValue(buildJobQuery(null))
-  // Default: no other migration kind running, so the cross-disable text
-  // doesn't render.
+  // Default: no other job kind running, so the cross-disable text doesn't render.
   mockUseMigrationJob.mockReturnValue(buildJobQuery(null) as never)
   mockUseHistoryJob.mockReturnValue(buildJobQuery(null) as never)
-  mockUseValidationJob.mockReturnValue(buildJobQuery(null) as never)
+  mockUseResyncJob.mockReturnValue(buildJobQuery(null) as never)
 })
 
 afterEach(() => {
@@ -167,10 +164,10 @@ afterEach(() => {
   useAdminMode.setState({ enabled: false })
 })
 
-describe('TeamCityResyncPanel — admin-mode gate', () => {
+describe('TeamCityValidationPanel — admin-mode gate', () => {
   it('disables the button when adminMode is false', () => {
     renderPanel()
-    expect(screen.getByRole('button', { name: /resync tc project ids/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /run tc validation/i })).toBeDisabled()
     expect(screen.getByText(/Arm Admin mode above/i)).toBeDefined()
   })
 
@@ -179,18 +176,18 @@ describe('TeamCityResyncPanel — admin-mode gate', () => {
     act(() => {
       useAdminMode.setState({ enabled: true })
     })
-    expect(screen.getByRole('button', { name: /resync tc project ids/i })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: /run tc validation/i })).not.toBeDisabled()
   })
 })
 
-describe('TeamCityResyncPanel — confirm + mutation', () => {
-  it('opens confirm dialog and fires useRunTeamCityResync on confirm', async () => {
+describe('TeamCityValidationPanel — confirm + mutation', () => {
+  it('opens confirm dialog and fires useRunTeamCityValidation on confirm', async () => {
     const { base, mutateAsync } = buildMutation()
     mockUseRun.mockReturnValue(base)
     useAdminMode.setState({ enabled: true })
 
     renderPanel()
-    fireEvent.click(screen.getByRole('button', { name: /resync tc project ids/i }))
+    fireEvent.click(screen.getByRole('button', { name: /run tc validation/i }))
 
     const dialog = await screen.findByRole('dialog')
     fireEvent.click(within(dialog).getByRole('button', { name: /confirm/i }))
@@ -204,7 +201,7 @@ describe('TeamCityResyncPanel — confirm + mutation', () => {
     useAdminMode.setState({ enabled: true })
 
     renderPanel()
-    fireEvent.click(screen.getByRole('button', { name: /resync tc project ids/i }))
+    fireEvent.click(screen.getByRole('button', { name: /run tc validation/i }))
 
     const dialog = await screen.findByRole('dialog')
     fireEvent.click(within(dialog).getByRole('button', { name: /cancel/i }))
@@ -213,60 +210,38 @@ describe('TeamCityResyncPanel — confirm + mutation', () => {
   })
 })
 
-describe('TeamCityResyncPanel — RUNNING / COMPLETED / FAILED rendering', () => {
+describe('TeamCityValidationPanel — RUNNING / COMPLETED / FAILED rendering', () => {
   it('renders the indeterminate progress block while the job is RUNNING', () => {
     mockUseJob.mockReturnValue(buildJobQuery(RUNNING_JOB))
     useAdminMode.setState({ enabled: true })
     renderPanel()
-    expect(screen.getByTestId('tc-resync-progress')).toBeDefined()
-    // Button shows "Resyncing…" while a RUNNING job is being polled.
-    expect(screen.getByRole('button', { name: /resyncing/i })).toBeDisabled()
+    expect(screen.getByTestId('tc-validation-progress')).toBeDefined()
+    expect(screen.getByRole('button', { name: /validating/i })).toBeDisabled()
   })
 
-  it('renders all seven counter tiles on COMPLETED', () => {
+  it('renders all six counter tiles on COMPLETED using the real CRS field names', () => {
     mockUseJob.mockReturnValue(buildJobQuery(COMPLETED_JOB))
     useAdminMode.setState({ enabled: true })
     renderPanel()
+    expect(screen.getByText('Scanned')).toBeDefined()
     expect(screen.getByText('650')).toBeDefined()
-    expect(screen.getByText('12')).toBeDefined()
-    expect(screen.getByText('580')).toBeDefined()
-    expect(screen.getByText('50')).toBeDefined()
-    expect(screen.getByText('8')).toBeDefined()
-    expect(screen.getByText('Auto-resolved')).toBeDefined()
-    // Pin the new sub-counter value to guard against tile reordering accidentally
-    // mapping a number to the wrong label.
-    expect(screen.getByText('4')).toBeDefined()
+    expect(screen.getByText('Succeeded')).toBeDefined()
+    expect(screen.getByText('600')).toBeDefined()
+    expect(screen.getByText('Failed')).toBeDefined()
+    expect(screen.getByText('5')).toBeDefined()
+    expect(screen.getByText('Projects with issues')).toBeDefined()
+    expect(screen.getByText('45')).toBeDefined()
+    expect(screen.getByText('Removed')).toBeDefined()
+    expect(screen.getByText('3')).toBeDefined()
     expect(screen.getByText('Errors')).toBeDefined()
   })
 
-  it('renders Auto-resolved as 0 when the field is absent (older CRS without ambiguous_auto_resolved)', () => {
-    const { ambiguous_auto_resolved: _omit, ...legacyResult } = RESULT
-    void _omit
-    // No cast: ambiguous_auto_resolved is optional on TeamCityResyncResult, so
-    // omitting it via destructuring still satisfies the type.
-    const legacyJob: TeamCityResyncJobResponse = {
-      ...COMPLETED_JOB,
-      result: legacyResult,
-    }
-    mockUseJob.mockReturnValue(buildJobQuery(legacyJob))
-    useAdminMode.setState({ enabled: true })
-    renderPanel()
-    // Scope the assertion to the Auto-resolved tile because the Errors tile
-    // also renders "0" with this fixture; a global getByText('0') would
-    // ambiguously match both. Walk the DOM via parentElement (the StatCard
-    // root) rather than a Tailwind class selector, so the test is stable
-    // against purely presentational refactors of StatCard.
-    const autoResolvedTile = screen.getByText('Auto-resolved').parentElement as HTMLElement
-    expect(autoResolvedTile).not.toBeNull()
-    expect(within(autoResolvedTile).getByText('0')).toBeDefined()
-  })
-
   it('expands the errors disclosure with each error string when errors are present', () => {
-    const failures: TeamCityResyncJobResponse = {
+    const failures: TeamCityValidationJobResponse = {
       ...COMPLETED_JOB,
       result: {
         ...RESULT,
-        errors: ['comp-alpha: TC 500 (timeout)', 'comp-beta: ambiguous match'],
+        errors: ['comp-alpha: TC 500 (timeout)', 'comp-beta: no matching project'],
       },
     }
     mockUseJob.mockReturnValue(buildJobQuery(failures))
@@ -274,14 +249,14 @@ describe('TeamCityResyncPanel — RUNNING / COMPLETED / FAILED rendering', () =>
     renderPanel()
     expect(screen.getByText(/Errors \(2\)/i)).toBeDefined()
     expect(screen.getByText(/comp-alpha: TC 500/)).toBeDefined()
-    expect(screen.getByText(/comp-beta: ambiguous match/)).toBeDefined()
+    expect(screen.getByText(/comp-beta: no matching project/)).toBeDefined()
   })
 
   it('renders a destructive banner with errorMessage on FAILED', () => {
     mockUseJob.mockReturnValue(buildJobQuery(FAILED_JOB))
     useAdminMode.setState({ enabled: true })
     renderPanel()
-    expect(screen.getByText(/TC resync failed: TC unreachable/i)).toBeDefined()
+    expect(screen.getByText(/TC validation failed: TC unreachable/i)).toBeDefined()
   })
 
   it('renders a destructive banner when the start mutation errors (cross-kind 409 etc.)', () => {
@@ -299,36 +274,29 @@ describe('TeamCityResyncPanel — RUNNING / COMPLETED / FAILED rendering', () =>
   })
 })
 
-describe('TeamCityResyncPanel — terminal COMPLETED side-effects', () => {
-  it('emits success toast and invalidates components + per-component caches on COMPLETED (post-restart mount path included)', async () => {
+describe('TeamCityValidationPanel — terminal COMPLETED side-effects', () => {
+  it('emits a success toast using the real CRS fields and invalidates caches on COMPLETED', async () => {
     useAdminMode.setState({ enabled: true })
 
-    // Spy BEFORE the render — the panel's effect fires invalidateQueries
-    // synchronously on mount when state is already COMPLETED, so a spy
-    // installed post-render misses the call.
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     })
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
 
-    // Mount directly into COMPLETED — covers the post-pod-restart path where
-    // the panel never observed RUNNING but the recovered job is COMPLETED.
-    // The id-based dedupe in the panel ensures the toast/invalidations fire
-    // exactly once per job id.
     mockUseJob.mockReturnValue(buildJobQuery(COMPLETED_JOB))
     render(
-      React.createElement(QueryClientProvider, { client }, <TeamCityResyncPanel />),
+      React.createElement(QueryClientProvider, { client }, <TeamCityValidationPanel />),
     )
 
     await waitFor(() => expect(mockToast).toHaveBeenCalledOnce())
     const call = mockToast.mock.calls[0]?.[0] as { title: string; description: string }
-    expect(call.title).toMatch(/TC resync completed/i)
+    expect(call.title).toMatch(/TC validation completed/i)
     expect(call.description).toContain('650 scanned')
-    expect(call.description).toContain('12 updated')
-    expect(call.description).toContain('4 auto-resolved')
+    expect(call.description).toContain('600 succeeded')
+    expect(call.description).toContain('5 failed')
+    expect(call.description).toContain('45 projects with issues')
+    expect(call.description).toContain('3 removed')
 
-    // Pin BOTH invalidation calls so a regression that drops one (the
-    // queryKey-based call OR the predicate-based call) is caught.
     const calls = invalidateSpy.mock.calls
     const queryKeyForms = calls.map(
       (c) => (c[0] as { queryKey?: readonly unknown[] } | undefined)?.queryKey,
@@ -338,12 +306,8 @@ describe('TeamCityResyncPanel — terminal COMPLETED side-effects', () => {
         typeof (c[0] as { predicate?: unknown } | undefined)?.predicate === 'function',
     )
     expect(queryKeyForms).toContainEqual(['components'])
+    expect(queryKeyForms).toContainEqual(['teamcity-validations'])
     expect(hasPredicateCall).toBe(true)
-    // CRS auto-starts a TC validation job right after a successful resync —
-    // the panel must trigger a validation-job refetch so that auto-started
-    // job is discovered (see the dedicated describe block below; the helper
-    // is mocked in this file, so it's asserted via the mock, not the spy).
-    expect(mockInvalidateValidationJob).toHaveBeenCalledOnce()
   })
 
   it('does NOT re-fire toast/invalidations on subsequent re-renders for the same job id', async () => {
@@ -354,29 +318,27 @@ describe('TeamCityResyncPanel — terminal COMPLETED side-effects', () => {
     })
     mockUseJob.mockReturnValue(buildJobQuery(COMPLETED_JOB))
     const { rerender } = render(
-      React.createElement(QueryClientProvider, { client }, <TeamCityResyncPanel />),
+      React.createElement(QueryClientProvider, { client }, <TeamCityValidationPanel />),
     )
     await waitFor(() => expect(mockToast).toHaveBeenCalledOnce())
     const initialCount = mockToast.mock.calls.length
 
-    // Re-render with the same COMPLETED job — the id-based dedupe must
-    // suppress a second toast/invalidation cycle.
     rerender(
-      React.createElement(QueryClientProvider, { client }, <TeamCityResyncPanel />),
+      React.createElement(QueryClientProvider, { client }, <TeamCityValidationPanel />),
     )
 
     expect(mockToast.mock.calls.length).toBe(initialCount)
   })
 })
 
-describe('TeamCityResyncPanel — cross-kind disable', () => {
+describe('TeamCityValidationPanel — cross-kind disable', () => {
   it('disables the button + shows hint when components migration is RUNNING', () => {
     mockUseMigrationJob.mockReturnValue(
       buildJobQuery({ state: 'RUNNING', id: 'comp-1' } as never) as never,
     )
     useAdminMode.setState({ enabled: true })
     renderPanel()
-    expect(screen.getByRole('button', { name: /resync tc project ids/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /run tc validation/i })).toBeDisabled()
     expect(screen.getByText(/Components migration is running/i)).toBeDefined()
   })
 
@@ -386,26 +348,17 @@ describe('TeamCityResyncPanel — cross-kind disable', () => {
     )
     useAdminMode.setState({ enabled: true })
     renderPanel()
-    expect(screen.getByRole('button', { name: /resync tc project ids/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /run tc validation/i })).toBeDisabled()
     expect(screen.getByText(/History migration is running/i)).toBeDefined()
   })
 
-  it('disables the button + shows hint when TC validation is RUNNING', () => {
-    mockUseValidationJob.mockReturnValue(
-      buildJobQuery({ state: 'RUNNING', id: 'validation-1' } as never) as never,
+  it('disables the button + shows hint when TC resync is RUNNING', () => {
+    mockUseResyncJob.mockReturnValue(
+      buildJobQuery({ state: 'RUNNING', id: 'resync-1' } as never) as never,
     )
     useAdminMode.setState({ enabled: true })
     renderPanel()
-    expect(screen.getByRole('button', { name: /resync tc project ids/i })).toBeDisabled()
-    expect(screen.getByText(/TC validation is running/i)).toBeDefined()
-  })
-})
-
-describe('TeamCityResyncPanel — validation-job discovery on completion', () => {
-  it('invalidates the TC validation job query on terminal COMPLETED (CRS auto-starts validation after resync)', async () => {
-    useAdminMode.setState({ enabled: true })
-    mockUseJob.mockReturnValue(buildJobQuery(COMPLETED_JOB))
-    renderPanel()
-    await waitFor(() => expect(mockInvalidateValidationJob).toHaveBeenCalledOnce())
+    expect(screen.getByRole('button', { name: /run tc validation/i })).toBeDisabled()
+    expect(screen.getByText(/TC resync is running/i)).toBeDefined()
   })
 })

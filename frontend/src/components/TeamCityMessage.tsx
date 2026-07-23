@@ -1,7 +1,9 @@
 import { safeHttpUrl } from '../lib/utils'
 
 interface TeamCityMessageProps {
-  message: string
+  /** CRS models this as optional/nullable (not every row/validation carries
+   *  a message) — render defensively rather than assuming it's always set. */
+  message?: string | null
   /** The finding's project webUrl — the TeamCity base host is derived from
    *  it so STEP_ID/BUILD_CONF_ID lines can link into the admin UI. */
   projectUrl?: string | null
@@ -111,6 +113,8 @@ function segmentLines(lines: string[]): Segment[] {
  * table, so text color/spacing stay identical on both surfaces.
  */
 export function TeamCityMessage({ message, projectUrl }: TeamCityMessageProps) {
+  if (!message) return null
+
   const base = teamCityBaseUrl(projectUrl)
   const segments = segmentLines(message.split('\n'))
 

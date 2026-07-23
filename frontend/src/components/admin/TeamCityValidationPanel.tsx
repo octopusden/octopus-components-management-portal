@@ -69,8 +69,9 @@ export function TeamCityValidationPanel() {
     toast({
       title: 'TC validation completed',
       description:
-        `${result.scanned} scanned, ${result.findings} findings, ` +
-        `${result.componentsWithIssues} components with issues, ${result.errors.length} errors`,
+        `${result.scanned} scanned, ${result.succeeded} succeeded, ${result.failed} failed, ` +
+        `${result.projectsWithIssues} projects with issues, ${result.removed} removed, ` +
+        `${result.errors.length} errors`,
     })
     queryClient.invalidateQueries({ queryKey: ['components'] })
     queryClient.invalidateQueries({
@@ -160,10 +161,12 @@ export function TeamCityValidationPanel() {
 
       {isCompleted && result && (
         <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
             <StatCard label="Scanned" value={result.scanned} />
-            <StatCard label="Findings" value={result.findings} />
-            <StatCard label="Components with issues" value={result.componentsWithIssues} />
+            <StatCard label="Succeeded" value={result.succeeded} />
+            <StatCard label="Failed" value={result.failed} />
+            <StatCard label="Projects with issues" value={result.projectsWithIssues} />
+            <StatCard label="Removed" value={result.removed} />
             <StatCard label="Errors" value={errorCount} />
           </div>
           {errorCount > 0 && (

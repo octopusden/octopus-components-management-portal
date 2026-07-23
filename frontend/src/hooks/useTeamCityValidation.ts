@@ -1,10 +1,23 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '../lib/api'
 import { parseSameKindAttach } from '../lib/migrationConflict'
 import type { TeamCityValidationJobResponse } from '../lib/types'
 
-const TC_VALIDATION_JOB_KEY = ['tc-validation', 'job'] as const
+export const TC_VALIDATION_JOB_KEY = ['tc-validation', 'job'] as const
 const JOB_POLL_INTERVAL_MS = 1_000
+
+/**
+ * CRS automatically starts a TC validation job right after a successful TC
+ * resync. `useTeamCityValidationJob` only polls while its OWN cached state is
+ * already RUNNING, so if the SPA wasn't already polling (cache null/terminal
+ * from a previous run), it can miss the auto-started job entirely and never
+ * invalidate the components/detail caches once it completes. Call this right
+ * after observing a resync's terminal COMPLETED state so the validation-job
+ * query refetches and picks up the newly (auto-)started job.
+ */
+export function invalidateTeamCityValidationJob(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: TC_VALIDATION_JOB_KEY })
+}
 
 /**
  * Start (or attach to) the async TC validation job. Mirrors

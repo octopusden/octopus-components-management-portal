@@ -128,11 +128,11 @@ function tcRowsResult(overrides: Partial<ReturnType<typeof useTeamCityValidation
   } as ReturnType<typeof useTeamCityValidations>
 }
 
-function renderPage() {
+function renderPage(initialEntries: string[] = ['/validations']) {
   return render(
     React.createElement(
       MemoryRouter,
-      null,
+      { initialEntries },
       React.createElement(TooltipProvider, null, React.createElement(ValidationsPage)),
     ),
   )
@@ -168,6 +168,17 @@ describe('ValidationsPage — tabs', () => {
       screen.getByText('Component with unregistered released version in the configuration.'),
     ).toBeInTheDocument()
   })
+
+  it('opens directly on the Unregistered Release tab when ?tab=unregistered-release is present (the retired /health redirect target)', () => {
+    renderPage(['/validations?tab=unregistered-release'])
+    expect(screen.getByText('Unregistered Released Validations')).toBeInTheDocument()
+    expect(screen.queryByText('TeamCity Validations')).not.toBeInTheDocument()
+  })
+
+  it('falls back to the TeamCity tab for an unrecognized ?tab value', () => {
+    renderPage(['/validations?tab=bogus'])
+    expect(screen.getByText('TeamCity Validations')).toBeInTheDocument()
+  })
 })
 
 describe('ValidationsPage — TeamCity tab', () => {
@@ -175,7 +186,8 @@ describe('ValidationsPage — TeamCity tab', () => {
     renderPage()
     const withIssues = screen.getByText('Components with validation problems').closest('div')!.parentElement!
     expect(within(withIssues).getByText('2')).toBeInTheDocument()
-    const findings = screen.getByText('Unique problems').closest('div')!.parentElement!
+    // "Findings" also labels the table section heading below, so scope to the KPI card.
+    const findings = screen.getAllByText('Findings')[0]!.closest('div')!.parentElement!
     expect(within(findings).getByText('4')).toBeInTheDocument()
     expect(screen.getByText(/Found 1 component across 1 TeamCity project/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'payments-core' })).toHaveAttribute('href', '/components/c-1')

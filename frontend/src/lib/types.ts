@@ -287,7 +287,7 @@ export interface TeamcityValidation {
   type: string
   status: string
   message?: string | null
-  updatedAt: string
+  updatedAt?: string | null
 }
 
 export interface TeamcityValidationSummary {
@@ -300,7 +300,7 @@ export interface TeamcityValidationSummary {
 export interface TeamcityValidationRow {
   componentId: string
   componentName: string
-  message: string
+  message?: string | null
   projectId: string
   // Verbatim TeamCity webUrl for this finding's project, mirroring
   // TeamcityProject.projectUrl — lets the findings table link the project id
@@ -994,9 +994,12 @@ export interface HistoryMigrationJobResponse {
 /**
  * 409 body returned for cross-kind conflicts — components POST while history
  * is RUNNING, history POST while TC sync is RUNNING, force-reset while
- * history is RUNNING, etc. Distinct from the same-kind attach 409 that
- * returns a full job-response body — distinguished by the `kind`
- * discriminator (always 'conflict' here).
+ * history is RUNNING, any of the above while TC validation is RUNNING (or
+ * vice versa), etc. All four async job kinds (components migration, history
+ * migration, TC resync, TC validation) share one single-flight lifecycle gate
+ * on the backend. Distinct from the same-kind attach 409 that returns a full
+ * job-response body — distinguished by the `kind` discriminator (always
+ * 'conflict' here).
  */
 export interface MigrationConflictResponse {
   /** Discriminator — always 'conflict' for this shape. Mutually exclusive with the 'job' shape. */
@@ -1006,8 +1009,9 @@ export interface MigrationConflictResponse {
     | 'history-migration-running'
     | 'history-import-likely-live-elsewhere'
     | 'tc-resync-running'
+    | 'tc-validation-running'
   message: string
-  activeKind: 'COMPONENTS' | 'HISTORY' | 'TC_RESYNC'
+  activeKind: 'COMPONENTS' | 'HISTORY' | 'TC_RESYNC' | 'TC_VALIDATION'
   activeJobId: string | null
 }
 
@@ -1055,8 +1059,10 @@ export interface TeamCityResyncJobResponse {
 
 export interface TeamCityValidationResult {
   scanned: number
-  findings: number
-  componentsWithIssues: number
+  succeeded: number
+  failed: number
+  projectsWithIssues: number
+  removed: number
   errors: string[]
 }
 
@@ -1099,7 +1105,7 @@ export interface DetailedComponentVersion {
  */
 export interface ServiceEvent {
   id: number
-  /** STARTUP | MIGRATION_COMPONENTS | MIGRATION_HISTORY | TEAMCITY_RESYNC | VALIDATION_SWEEP | ONBOARDING_VIDEO_VIEW */
+  /** STARTUP | MIGRATION_COMPONENTS | MIGRATION_HISTORY | TEAMCITY_RESYNC | TEAMCITY_VALIDATION | VALIDATION_SWEEP | ONBOARDING_VIDEO_VIEW */
   eventType: string
   /** Derived SYSTEM | USER split (from eventType), server-provided. */
   category?: string

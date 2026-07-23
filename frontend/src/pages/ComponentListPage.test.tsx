@@ -664,6 +664,36 @@ describe('ComponentListPage — Validation Problems', () => {
       // Exactly 3 rows — "both" is not duplicated for having issues in both systems.
       expect(table.getAttribute('data-row-count')).toBe('3')
     })
+
+    it('surfaces an error when the TeamCity findings query fails (badges/"With problems" may be incomplete)', () => {
+      useAdminMode.setState({ enabled: true })
+      mockUser(adminUser)
+      mockComponentsOk()
+      mockedUseTeamCityValidations.mockReturnValue({
+        data: undefined,
+        isLoading: false,
+        isError: true,
+        error: new Error('CRS unreachable'),
+      } as unknown as ReturnType<typeof useTeamCityValidations>)
+
+      renderPage()
+      expect(screen.getByText(/Could not load TeamCity validation findings/i)).toBeInTheDocument()
+      expect(screen.getByText(/CRS unreachable/)).toBeInTheDocument()
+    })
+
+    it('does NOT surface the TeamCity findings error banner for a non-admin', () => {
+      mockUser(viewerUser)
+      mockComponentsOk()
+      mockedUseTeamCityValidations.mockReturnValue({
+        data: undefined,
+        isLoading: false,
+        isError: true,
+        error: new Error('CRS unreachable'),
+      } as unknown as ReturnType<typeof useTeamCityValidations>)
+
+      renderPage()
+      expect(screen.queryByText(/Could not load TeamCity validation findings/i)).toBeNull()
+    })
   })
 
   // ── NOT admin: no filter, no inline triangle, no validation fetch. ──

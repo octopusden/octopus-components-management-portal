@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import {
   useReactTable,
   getCoreRowModel,
@@ -554,9 +554,10 @@ const teamCityColumns = [
  * the run this reports on). Admin-only — gated at the page level.
  */
 function TeamCitySection() {
-  // Type supports multiple selections — a finding's `type` value itself is a
-  // comma-separated list (one finding can flag more than one rule), so the
-  // filter has to be able to match against any number of individual types.
+  // Type supports multiple selections — the filter can match any number of
+  // types at once (sent as repeated `type` query params, one per selection).
+  // splitTeamCityValidationTypes' comma-splitting is defensive/compat parsing
+  // only; CRS itself emits exactly one type per finding row.
   const [typeFilter, setTypeFilter] = useState<string[]>([])
   const [statusFilter, setStatusFilter] = useState('')
   const [sorting, setSorting] = useState<SortingState>([])
@@ -566,7 +567,7 @@ function TeamCitySection() {
   const filters: TeamCityValidationFilters = useMemo(
     () => ({
       type: typeFilter.length ? typeFilter : undefined,
-      status: statusFilter ? [statusFilter] : undefined,
+      status: statusFilter || undefined,
     }),
     [typeFilter, statusFilter],
   )
@@ -575,7 +576,8 @@ function TeamCitySection() {
   // Type/status options come from the live summary breakdown (the real values
   // the sweep has actually reported), not a guessed static list — it stays in
   // sync automatically as new finding types/statuses appear. byType keys are
-  // split too, since a breakdown key can itself be a comma-separated combo.
+  // run through splitTeamCityValidationTypes defensively (see that function's
+  // doc comment) in case a key ever arrives comma-joined.
   const typeOptions = useMemo(
     () =>
       Array.from(
@@ -643,7 +645,7 @@ function TeamCitySection() {
               tone="destructive"
             />
             <KpiCard
-              label="Unique problems"
+              label="Findings"
               value={summary.data?.findings ?? 0}
               icon={<ListChecks className="h-5 w-5" />}
               tone="destructive"
@@ -763,12 +765,26 @@ function TeamCitySection() {
   )
 }
 
+const VALIDATIONS_TABS = ['teamcity', 'unregistered-release'] as const
+type ValidationsTab = (typeof VALIDATIONS_TABS)[number]
+
+function isValidationsTab(value: string | null): value is ValidationsTab {
+  return VALIDATIONS_TABS.includes(value as ValidationsTab)
+}
+
 /**
  * Validations — admin-only diagnostics surface (route-gated on IMPORT_DATA;
  * not re-gated here), merging the former standalone `/health` (Registry
  * Health) page and `/validations` (TeamCity) page into one tabbed surface.
+ * The active tab is addressable via `?tab=teamcity|unregistered-release` —
+ * lets the retired `/health` route (and any other external link/bookmark)
+ * redirect straight to the right tab instead of always landing on TeamCity.
  */
 export function ValidationsPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const rawTab = searchParams.get('tab')
+  const activeTab: ValidationsTab = isValidationsTab(rawTab) ? rawTab : 'teamcity'
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -776,7 +792,21 @@ export function ValidationsPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Validations</h1>
         </div>
 
-        <Tabs defaultValue="teamcity" variant="underline">
+        <Tabs
+          value={activeTab}
+          onValueChange={(next) => {
+            setSearchParams(
+              (prev) => {
+                const params = new URLSearchParams(prev)
+                if (next === 'teamcity') params.delete('tab')
+                else params.set('tab', next)
+                return params
+              },
+              { replace: true },
+            )
+          }}
+          variant="underline"
+        >
           <TabsList>
             <TabsTrigger value="teamcity">TeamCity</TabsTrigger>
             <TabsTrigger value="unregistered-release">Unregistered Release</TabsTrigger>

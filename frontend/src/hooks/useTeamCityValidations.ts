@@ -17,21 +17,22 @@ export function useTeamCityValidationSummary() {
 
 export interface TeamCityValidationFilters {
   type?: string[]
-  status?: string[]
+  status?: string
 }
 
 /**
  * `GET rest/api/4/admin/teamcity-validations` — the flat, filterable finding
  * list backing the Validations page's table and the components list's
- * per-row TeamCity warning badge. Filters are multi-select (comma-joined
- * query params). Admin-only endpoint — pass `enabled: isAdmin` from callers
+ * per-row TeamCity warning badge. `type` is repeatable (one query param per
+ * selected value, matching CRS's array-typed query parameter); `status` is a
+ * single value. Admin-only endpoint — pass `enabled: isAdmin` from callers
  * that aren't already route-gated (e.g. ComponentListPage.tsx) so a
  * non-admin's browser never issues the request.
  */
 export function useTeamCityValidations(filters: TeamCityValidationFilters = {}, enabled = true) {
   const params = new URLSearchParams()
-  if (filters.type?.length) params.set('type', filters.type.join(','))
-  if (filters.status?.length) params.set('status', filters.status.join(','))
+  for (const type of filters.type ?? []) params.append('type', type)
+  if (filters.status) params.set('status', filters.status)
   const qs = params.toString()
 
   return useQuery({
