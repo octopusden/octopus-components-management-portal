@@ -307,6 +307,27 @@ export function ComponentListPage() {
           />
         )}
 
+        {/* CRS's TeamCity findings feed the per-row warning badge AND the "With
+            problems" set below; if the request fails, `.data ?? []` would
+            otherwise silently look clean (or incomplete for "With problems") —
+            say so explicitly instead, consistent with the Unregistered Release
+            stale/failed-refresh hint above. */}
+        {isAdmin && teamCityFindings.isError && (
+          <InlineError
+            message={
+              <>
+                Could not load TeamCity validation findings —
+                {' '}
+                {teamCityFindings.error instanceof Error
+                  ? teamCityFindings.error.message
+                  : String(teamCityFindings.error)}
+                . TeamCity warning badges and the "With problems" list may be incomplete
+                until this succeeds again.
+              </>
+            }
+          />
+        )}
+
         {/* System-level (not per-component) signal: when the last sweep could
             not verify some components — a downstream service was briefly
             unreachable / returned an unexpected response — say so ONCE here
