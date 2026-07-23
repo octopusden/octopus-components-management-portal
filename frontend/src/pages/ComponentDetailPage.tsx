@@ -196,11 +196,26 @@ function ComponentDetailEditor() {
   const hasProblems =
     isAdmin && componentValidation != null && hasValidationIssue(componentValidation)
 
+  // Same tone logic as the teamcity-projects-list block below, rolled up
+  // across all of the component's TeamCity projects — drives the
+  // "Validations > TeamCity" sidebar item's red/warning treatment. Admin-only,
+  // purely derived from data already on `component` (no extra query).
+  const teamCityIssueCount = isAdmin
+    ? (component?.teamcityProjects ?? []).reduce((total, tc) => {
+        const tones = (tc.validations ?? []).map((v) => getTeamCityValidationStatusTone(v.status))
+        return total + tones.filter((t) => t === 'destructive' || t === 'warning').length
+      }, 0)
+    : 0
+
   useEffect(() => {
-    if (activeTab === 'validation-problems' && !hasProblems) {
+    if (activeTab === 'unregistered-release' && !hasProblems) {
       setActiveTab('general')
     }
-  }, [activeTab, hasProblems])
+    // Whole Validations section (TeamCity + Unregistered Release) is admin-only.
+    if (!isAdmin && (activeTab === 'teamcity-validations' || activeTab === 'unregistered-release')) {
+      setActiveTab('general')
+    }
+  }, [activeTab, hasProblems, isAdmin])
 
   const canArchive = hasPermission(user, PERMISSIONS.DELETE_COMPONENTS)
   const canUnarchive = hasPermission(user, PERMISSIONS.ARCHIVE_COMPONENTS)
@@ -908,24 +923,28 @@ function ComponentDetailEditor() {
               const allClean = issueCount === 0
               return (
                 <div key={tc.id} className="flex items-center gap-2 px-3 py-2 text-sm">
-                  {allClean ? (
-                    <CircleCheck
-                      className="h-4 w-4 shrink-0 text-[color:var(--color-badge-green-fg)]"
-                      aria-label="No validation issues"
-                    />
-                  ) : (
-                    <AlertTriangle
-                      className={cn(
-                        'h-4 w-4 shrink-0',
-                        hasError
-                          ? 'text-destructive'
-                          : hasWarning
-                            ? 'text-[color:var(--color-badge-yellow-fg)]'
-                            : 'text-muted-foreground',
-                      )}
-                      aria-label={`${issueCount} validation ${issueCount === 1 ? 'issue' : 'issues'}`}
-                    />
-                  )}
+                  {/* Status icon is an admin-only affordance — TeamCity validation
+                      findings are an admin concern (see the admin-gated Validations
+                      page/sidebar tab); a regular user just sees the project links. */}
+                  {isAdmin &&
+                    (allClean ? (
+                      <CircleCheck
+                        className="h-4 w-4 shrink-0 text-[color:var(--color-badge-green-fg)]"
+                        aria-label="No validation issues"
+                      />
+                    ) : (
+                      <AlertTriangle
+                        className={cn(
+                          'h-4 w-4 shrink-0',
+                          hasError
+                            ? 'text-destructive'
+                            : hasWarning
+                              ? 'text-[color:var(--color-badge-yellow-fg)]'
+                              : 'text-muted-foreground',
+                        )}
+                        aria-label={`${issueCount} validation ${issueCount === 1 ? 'issue' : 'issues'}`}
+                      />
+                    ))}
                   {url ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -954,9 +973,11 @@ function ComponentDetailEditor() {
                       {tc.projectVersion}
                     </Badge>
                   )}
-                  <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                    {allClean ? 'no issues' : `${issueCount} issue${issueCount === 1 ? '' : 's'}`}
-                  </span>
+                  {isAdmin && (
+                    <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                      {allClean ? 'no issues' : `${issueCount} issue${issueCount === 1 ? '' : 's'}`}
+                    </span>
+                  )}
                 </div>
               )
             })}
@@ -1033,22 +1054,33 @@ function ComponentDetailEditor() {
                   { value: 'history', label: 'History' },
                 ],
               },
-              {
-                label: 'Validations',
-                items: [{ value: 'teamcity-validations', label: 'TeamCity' }],
-              },
+              // Admin-only: TeamCity findings and Unregistered Release findings
+              // are both an admin concern (see the admin-gated Validations
+              // page), so the whole section is hidden for regular users.
+              ...(isAdmin
+                ? [
+                    {
+                      label: 'Validations',
+                      items: [
+                        {
+                          value: 'teamcity-validations',
+                          label: 'TeamCity',
+                          problemCount: teamCityIssueCount,
+                        },
+                        {
+                          value: 'unregistered-release',
+                          label: 'Unregistered Release',
+                          problemCount:
+                            hasProblems && componentValidation
+                              ? validationBadgeCount(componentValidation)
+                              : 0,
+                        },
+                      ],
+                    },
+                  ]
+                : []),
             ]
-            const problems =
-              hasProblems && componentValidation
-                ? {
-                    value: 'validation-problems',
-                    label: 'Validation Problems',
-                    count: validationBadgeCount(componentValidation),
-                  }
-                : null
-            return (
-              <EditorSidebarNav sections={sections} problems={problems} activeValue={activeTab} />
-            )
+            return <EditorSidebarNav sections={sections} activeValue={activeTab} />
           })()}
 
           <div className="min-w-0 flex-1 rounded-lg border bg-card p-4 sm:p-6">
@@ -1158,7 +1190,7 @@ function ComponentDetailEditor() {
             </TabsContent>
 
             {hasProblems && componentValidation && (
-              <TabsContent value="validation-problems">
+              <TabsContent value="unregistered-release">
                 <div className="space-y-3">
                   <p className="text-sm text-muted-foreground">
                     Released versions checked against the registry. Admin-only.

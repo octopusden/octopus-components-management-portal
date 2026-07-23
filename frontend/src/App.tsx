@@ -6,8 +6,7 @@ import { ComponentDetailPage } from './pages/ComponentDetailPage'
 import { CreateComponentPage } from './pages/CreateComponentPage'
 import { AuditLogPage } from './pages/AuditLogPage'
 import { AdminSettingsPage } from './pages/AdminSettingsPage'
-import { RegistryHealthPage } from './pages/RegistryHealthPage'
-import { TeamCityValidationsPage } from './pages/TeamCityValidationsPage'
+import { ValidationsPage } from './pages/ValidationsPage'
 import { RequirePermission } from './components/RequirePermission'
 import { PERMISSIONS, restoreContinuePath } from './lib/auth'
 import { Toaster } from './components/ui/toaster'
@@ -89,7 +88,7 @@ export const appRoutes: RouteObject[] = [
         path: '/validations',
         element: (
           <RequirePermission permission={PERMISSIONS.IMPORT_DATA}>
-            <TeamCityValidationsPage />
+            <ValidationsPage />
           </RequirePermission>
         ),
       },
@@ -98,14 +97,6 @@ export const appRoutes: RouteObject[] = [
         element: (
           <RequirePermission permission={PERMISSIONS.ACCESS_AUDIT}>
             <AuditLogPage />
-          </RequirePermission>
-        ),
-      },
-      {
-        path: '/health',
-        element: (
-          <RequirePermission permission={PERMISSIONS.IMPORT_DATA}>
-            <RegistryHealthPage />
           </RequirePermission>
         ),
       },

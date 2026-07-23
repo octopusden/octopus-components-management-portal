@@ -28,14 +28,20 @@ export interface TeamCityValidationFilters {
 
 /**
  * `GET rest/api/4/admin/teamcity-validations` — the flat, filterable finding
- * list backing the Validations page's table. Filters are query-driven (see
- * TeamCityValidationsPage): each distinct filter combination gets its own
- * cache entry via the queryKey. Admin-only endpoint, matching the page's
+ * list backing the Validations page's table (and, unfiltered, the components
+ * list's per-row TeamCity warning badge — see ComponentListPage.tsx). Filters
+ * are query-driven: each distinct filter combination gets its own cache entry
+ * via the queryKey. Admin-only endpoint, matching the Validations page's
  * route/nav gating. Each filter is multi-select (comma-joined query param),
  * mirroring the components list's system/buildSystem/labels filters
  * (see useComponents.ts).
+ *
+ * `enabled` (default `true`) is a plain react-query passthrough — pass
+ * `isAdmin` from a caller that isn't already route-gated (e.g.
+ * ComponentListPage.tsx) so a non-admin's browser never makes this request,
+ * mirroring `useValidationProblems`'s gating contract.
  */
-export function useTeamCityValidations(filters: TeamCityValidationFilters = {}) {
+export function useTeamCityValidations(filters: TeamCityValidationFilters = {}, enabled = true) {
   const params = new URLSearchParams()
   if (filters.type?.length) params.set('type', filters.type.join(','))
   if (filters.status?.length) params.set('status', filters.status.join(','))
@@ -45,5 +51,6 @@ export function useTeamCityValidations(filters: TeamCityValidationFilters = {}) 
     queryKey: ['teamcity-validations', 'list', filters],
     queryFn: () => api.get<TeamcityValidationRow[]>(`/admin/teamcity-validations${qs ? `?${qs}` : ''}`),
     staleTime: 60 * 1000,
+    enabled,
   })
 }

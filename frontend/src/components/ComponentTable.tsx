@@ -7,7 +7,7 @@ import {
   createColumnHelper,
   type SortingState,
 } from '@tanstack/react-table'
-import { ArrowUpDown, ArrowUp, ArrowDown, CopyPlus, Package } from 'lucide-react'
+import { AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown, CopyPlus, Package } from 'lucide-react'
 import { JiraIcon, BitbucketIcon, TeamCityIcon } from './ui/icons/brand-icons'
 import { useMemo, useState } from 'react'
 import {
@@ -26,6 +26,7 @@ import { ValidationBadge } from './ValidationBadge'
 import { RelativeTime } from './ui/RelativeTime'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip'
 import { cn, safeHttpUrl } from '../lib/utils'
+import { hasValidationIssue } from '../lib/validation'
 import type { ComponentSummary, ComponentValidation, PortalLinks } from '../lib/types'
 import { usePortalLinks } from '../hooks/useInfo'
 import { useFieldConfig } from '../hooks/useAdminConfig'
@@ -42,6 +43,14 @@ declare module '@tanstack/react-table' {
     // entry by component key (ComponentSummary.name). Absent (non-admin / empty
     // report) → no indicator anywhere.
     validationByComponent?: Map<string, ComponentValidation>
+    // TeamCity validation overlay: componentId (ComponentSummary.id, the CRS
+    // UUID — a different key than validationByComponent's name-keyed map) ->
+    // finding count. Admin-only, same absence semantics as validationByComponent.
+    // A row shows AT MOST ONE warning triangle: an Unregistered-Released issue
+    // takes priority (rendered via ValidationBadge); TeamCity findings only show
+    // their own triangle when the component has no Unregistered-Released issue,
+    // so the two problem types never stack two icons on one row.
+    teamCityIssueCountByComponent?: Map<string, number>
   }
 }
 
@@ -61,6 +70,12 @@ interface ComponentTableProps {
    * failed to load) no indicator is rendered at all.
    */
   validationByComponent?: Map<string, ComponentValidation>
+  /**
+   * TeamCity validation overlay: componentId -> finding count. Admin-only,
+   * same absence semantics as `validationByComponent`. Only shown when the
+   * row has no Unregistered-Released issue — see the TableMeta doc comment.
+   */
+  teamCityIssueCountByComponent?: Map<string, number>
 }
 
 const columnHelper = createColumnHelper<ComponentSummary>()
@@ -87,6 +102,33 @@ function IconLink({ href, label, icon: Icon }: IconLinkProps) {
     >
       <Icon className="h-4 w-4" />
     </a>
+  )
+}
+
+/**
+ * Minimal warning triangle for a row with TeamCity validation findings but NO
+ * Unregistered-Released issue (see the Name cell — that case wins and renders
+ * `ValidationBadge` instead, so a row never shows two warning icons). Simpler
+ * than `ValidationBadge` on purpose: a hover tooltip with the count, no
+ * click-through dialog — the full findings live on the Validations page.
+ */
+function TeamCityProblemBadge({ count }: { count: number }) {
+  if (count <= 0) return null
+  const label = `${count} TeamCity validation ${count === 1 ? 'problem' : 'problems'}`
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          role="img"
+          aria-label={label}
+          title={label}
+          className="inline-flex shrink-0 text-destructive"
+        >
+          <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -190,12 +232,24 @@ const columns = [
       // map is absent (non-admin / empty report) or the component is clean,
       // ValidationBadge renders null, so nothing extra appears before the name.
       const validation = table.options.meta?.validationByComponent?.get(row.original.name)
+      // TeamCity findings are keyed by componentId (the CRS UUID), a different
+      // key than validationByComponent's name-keyed map. Only consulted when
+      // the row has no Unregistered-Released issue — a row shows at most one
+      // warning triangle, never both.
+      const hasUnregisteredIssue = hasValidationIssue(validation)
+      const teamCityIssueCount = hasUnregisteredIssue
+        ? 0
+        : (table.options.meta?.teamCityIssueCountByComponent?.get(row.original.id) ?? 0)
       return (
         // min-w-0 lets the flex column shrink below its content width so the
         // links/spans below can truncate inside the max-width-capped cell
         // (Option A: keep the table within the viewport instead of overflowing).
         <div className="flex items-start gap-1.5">
-          <ValidationBadge validation={validation} />
+          {hasUnregisteredIssue ? (
+            <ValidationBadge validation={validation} />
+          ) : (
+            <TeamCityProblemBadge count={teamCityIssueCount} />
+          )}
           <div className="flex flex-col min-w-0">
             <Link
               to={`/components/${row.original.id}`}
@@ -424,6 +478,7 @@ export function ComponentTable({
   isLoading,
   onCopy,
   validationByComponent,
+  teamCityIssueCountByComponent,
 }: ComponentTableProps) {
   const [sorting, setSorting] = useState<SortingState>([])
   const { data: portalLinks } = usePortalLinks()
@@ -452,7 +507,7 @@ export function ComponentTable({
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     manualSorting: false,
-    meta: { links: portalLinks, onCopy, validationByComponent },
+    meta: { links: portalLinks, onCopy, validationByComponent, teamCityIssueCountByComponent },
   })
 
   if (isLoading) {

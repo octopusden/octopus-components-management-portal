@@ -15,6 +15,7 @@ import {
   useValidationProblems,
   useComponentsWithProblems,
 } from '../hooks/useValidationProblems'
+import { useTeamCityValidations } from '../hooks/useTeamCityValidations'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '@/lib/auth'
 import { useAdminMode } from '@/lib/adminModeStore'
@@ -22,7 +23,7 @@ import { useFilterUrlState } from '../hooks/useFilterUrlState'
 import { applyPreset, matchPreset, type PresetId } from '../lib/listPresets'
 import { countCheckFailed } from '../lib/validation'
 import { ApiError } from '../lib/api'
-import type { ComponentFilter, ComponentSummary } from '../lib/types'
+import type { ComponentFilter, ComponentSummary, TeamcityValidationRow } from '../lib/types'
 
 // Verbatim client-facing reason the backend sets for a whole-sweep TIMEOUT (must match
 // ValidationService.SWEEP_TIMED_OUT). A timeout means the downstream is reachable but
@@ -38,6 +39,25 @@ function summaryFromValidationKey(componentKey: string): ComponentSummary {
   return {
     id: componentKey,
     name: componentKey,
+    displayName: null,
+    componentOwner: null,
+    systems: [],
+    productType: null,
+    archived: false,
+    updatedAt: null,
+    labels: [],
+  }
+}
+
+// Same minimal-row treatment for a component that's in the "With problems"
+// preset ONLY because of a TeamCity finding (no Unregistered-Released issue).
+// Unlike the validation report, TeamCity findings carry a real componentId
+// (CRS UUID) — used here instead of the name, so the Name column's link
+// resolves correctly.
+function summaryFromTeamCityRow(row: TeamcityValidationRow): ComponentSummary {
+  return {
+    id: row.componentId,
+    name: row.componentName,
     displayName: null,
     componentOwner: null,
     systems: [],
@@ -90,20 +110,54 @@ export function ComponentListPage() {
   // pay for it.
   const problems = useComponentsWithProblems(showProblemsOnly)
 
-  // The component keys-with-problems list, rendered as minimal rows. The
-  // backend's problems-only report also includes check-failed components (a
-  // failure must never read as clean server-side), but those are a system
-  // condition — surfaced by the banner above, not as list rows — so we keep
-  // only components that carry a genuine problem here.
-  const problemRows = useMemo<ComponentSummary[]>(
-    () =>
+  // TeamCity findings, admin-gated (isAdmin, not showProblemsOnly — every
+  // finding IS a problem, unlike the Unregistered-Released report, so this one
+  // fetch serves both the always-visible per-row warning badge below AND the
+  // "With problems" preset's list source, with no second query needed.
+  const teamCityFindings = useTeamCityValidations({}, isAdmin)
+
+  // componentId -> finding count, for the Name cell's TeamCity warning badge
+  // (see ComponentTable.tsx — only shown when the row has no Unregistered-
+  // Released issue, so a row never carries two warning triangles).
+  const teamCityIssueCountByComponent = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const r of teamCityFindings.data ?? []) {
+      map.set(r.componentId, (map.get(r.componentId) ?? 0) + 1)
+    }
+    return map
+  }, [teamCityFindings.data])
+
+  // First TeamCity finding per component NAME (the field both this report and
+  // the Unregistered-Released report can key by) — used only to fold TeamCity-
+  // only components into the "With problems" preset below.
+  const teamCityRowByName = useMemo(() => {
+    const map = new Map<string, TeamcityValidationRow>()
+    for (const r of teamCityFindings.data ?? []) {
+      if (!map.has(r.componentName)) map.set(r.componentName, r)
+    }
+    return map
+  }, [teamCityFindings.data])
+
+  // The "with problems" set, rendered as minimal rows: every component with an
+  // Unregistered-Released issue OR a TeamCity validation finding — one merged
+  // list, not two separate ones. The backend's problems-only report also
+  // includes check-failed components (a failure must never read as clean
+  // server-side), but those are a system condition — surfaced by the banner
+  // above, not as list rows — so we keep only components with a genuine
+  // problem here.
+  const problemRows = useMemo<ComponentSummary[]>(() => {
+    const unregisteredNames = new Set(
       Array.from(problems.byComponent.values())
         .filter((cv) => cv.problems.length > 0)
-        .map((cv) => cv.component)
-        .sort()
-        .map(summaryFromValidationKey),
-    [problems.byComponent],
-  )
+        .map((cv) => cv.component),
+    )
+    const unregisteredRows = Array.from(unregisteredNames).sort().map(summaryFromValidationKey)
+    const teamCityOnlyRows = Array.from(teamCityRowByName.entries())
+      .filter(([name]) => !unregisteredNames.has(name))
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, row]) => summaryFromTeamCityRow(row))
+    return [...unregisteredRows, ...teamCityOnlyRows]
+  }, [problems.byComponent, teamCityRowByName])
 
   // How many components the most recent sweep could NOT verify (a downstream
   // service was briefly unreachable / returned an unexpected response). This is
@@ -325,6 +379,9 @@ export function ComponentListPage() {
                   ? validation.byComponent
                   : undefined
           }
+          // Same admin-only gating as validationByComponent — undefined for
+          // non-admins so no TeamCity warning triangle ever renders for them.
+          teamCityIssueCountByComponent={isAdmin ? teamCityIssueCountByComponent : undefined}
         />
 
         {/* Pagination only in the normal paged view. "with validation problems"

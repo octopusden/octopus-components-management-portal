@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router'
-import { Package, History, Settings, LogOut, AlertTriangle, Activity, ShieldCheck } from 'lucide-react'
+import { Package, History, Settings, LogOut, AlertTriangle, ShieldCheck } from 'lucide-react'
 import { cn, initials } from '../lib/utils'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { usePortalInfo } from '@/hooks/useInfo'
@@ -25,7 +25,7 @@ interface NavItem {
   requires?: string
   // When set, the item is gated on adminMode being on in ADDITION to `requires`,
   // mirroring the ADMIN badge's double-gate. Used for admin-tooling entries
-  // (Health) that should stay hidden until the operator opts into admin mode.
+  // (Validations) that should stay hidden until the operator opts into admin mode.
   adminOnly?: boolean
 }
 
@@ -39,13 +39,6 @@ const navItems: NavItem[] = [
     adminOnly: true,
   },
   { href: '/audit', label: 'Audit', icon: History, requires: PERMISSIONS.ACCESS_AUDIT },
-  {
-    href: '/health',
-    label: 'Health',
-    icon: Activity,
-    requires: PERMISSIONS.IMPORT_DATA,
-    adminOnly: true,
-  },
   { href: '/admin', label: 'Admin', icon: Settings, requires: PERMISSIONS.IMPORT_DATA },
 ]
 

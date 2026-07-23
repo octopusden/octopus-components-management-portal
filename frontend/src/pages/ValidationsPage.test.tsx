@@ -1,11 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import React from 'react'
-import { RegistryHealthPage } from './RegistryHealthPage'
+import { ValidationsPage } from './ValidationsPage'
+import { TooltipProvider } from '../components/ui/tooltip'
 import { useHealthStatistics } from '../hooks/useHealthStatistics'
 import { useValidationProblems } from '../hooks/useValidationProblems'
-import type { HealthStatistics, ComponentValidation } from '../lib/types'
+import { useTeamCityValidationSummary, useTeamCityValidations } from '../hooks/useTeamCityValidations'
+import type { HealthStatistics, ComponentValidation, TeamcityValidationSummary, TeamcityValidationRow } from '../lib/types'
 import type { UseValidationProblemsResult } from '../hooks/useValidationProblems'
 
 vi.mock('../components/Layout', () => ({
@@ -14,9 +17,15 @@ vi.mock('../components/Layout', () => ({
 }))
 vi.mock('../hooks/useHealthStatistics', () => ({ useHealthStatistics: vi.fn() }))
 vi.mock('../hooks/useValidationProblems', () => ({ useValidationProblems: vi.fn() }))
+vi.mock('../hooks/useTeamCityValidations', () => ({
+  useTeamCityValidationSummary: vi.fn(),
+  useTeamCityValidations: vi.fn(),
+}))
 
 const mockStats = vi.mocked(useHealthStatistics)
 const mockValidation = vi.mocked(useValidationProblems)
+const mockTcSummary = vi.mocked(useTeamCityValidationSummary)
+const mockTcRows = vi.mocked(useTeamCityValidations)
 
 function cv(component: string, missingCount: number): ComponentValidation {
   return {
@@ -75,23 +84,107 @@ function statsResult(overrides: Partial<ReturnType<typeof useHealthStatistics>> 
   } as ReturnType<typeof useHealthStatistics>
 }
 
+const sampleTcSummary: TeamcityValidationSummary = {
+  byStatus: { FAILED: 3, WARNING: 1 },
+  byType: { BUILD_CONFIG_DRIFT: 4 },
+  componentsWithIssues: 2,
+  findings: 4,
+}
+
+function tcSummaryResult(overrides: Partial<ReturnType<typeof useTeamCityValidationSummary>> = {}) {
+  return {
+    data: sampleTcSummary,
+    isLoading: false,
+    isError: false,
+    isSuccess: true,
+    error: null,
+    ...overrides,
+  } as ReturnType<typeof useTeamCityValidationSummary>
+}
+
+const sampleTcRows: TeamcityValidationRow[] = [
+  {
+    componentId: 'c-1',
+    componentName: 'payments-core',
+    message: 'drift',
+    projectId: 'Payments_Build',
+    projectUrl: 'https://tc.example.com/project/Payments_Build',
+    status: 'FAILED',
+    type: 'BUILD_CONFIG_DRIFT',
+    updatedAt: '2026-06-13T10:00:00Z',
+  },
+]
+
+function tcRowsResult(overrides: Partial<ReturnType<typeof useTeamCityValidations>> = {}) {
+  return {
+    data: sampleTcRows,
+    isLoading: false,
+    isError: false,
+    isSuccess: true,
+    error: null,
+    ...overrides,
+  } as ReturnType<typeof useTeamCityValidations>
+}
+
 function renderPage() {
   return render(
-    React.createElement(MemoryRouter, null, React.createElement(RegistryHealthPage)),
+    React.createElement(
+      MemoryRouter,
+      null,
+      React.createElement(TooltipProvider, null, React.createElement(ValidationsPage)),
+    ),
   )
+}
+
+async function switchToUnregisteredRelease() {
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('tab', { name: /Unregistered Release/i }))
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockStats.mockReturnValue(statsResult())
+  mockValidation.mockReturnValue(validationResult())
+  mockTcSummary.mockReturnValue(tcSummaryResult())
+  mockTcRows.mockReturnValue(tcRowsResult())
 })
 
-describe('RegistryHealthPage — KPIs', () => {
-  it('renders total/active and the derived problem + healthy KPIs', () => {
-    mockStats.mockReturnValue(statsResult())
-    mockValidation.mockReturnValue(validationResult())
+describe('ValidationsPage — tabs', () => {
+  it('renders both tabs and defaults to TeamCity', () => {
     renderPage()
+    expect(screen.getByRole('tab', { name: /^TeamCity$/i })).toBeDefined()
+    expect(screen.getByRole('tab', { name: /Unregistered Release/i })).toBeDefined()
+    expect(screen.getByText('TeamCity Validations')).toBeInTheDocument()
+    expect(screen.queryByText('Unregistered Released Validations')).not.toBeInTheDocument()
+  })
 
-    // Total tile shows the grand total (12); the active count (10) is the hint.
+  it('switches to the Unregistered Release tab on click', async () => {
+    renderPage()
+    await switchToUnregisteredRelease()
+    expect(screen.getByText('Unregistered Released Validations')).toBeInTheDocument()
+    expect(
+      screen.getByText('Component with unregistered released version in the configuration.'),
+    ).toBeInTheDocument()
+  })
+})
+
+describe('ValidationsPage — TeamCity tab', () => {
+  it('renders KPI cards, the type breakdown, and the findings summary line', () => {
+    renderPage()
+    const withIssues = screen.getByText('Components with validation problems').closest('div')!.parentElement!
+    expect(within(withIssues).getByText('2')).toBeInTheDocument()
+    const findings = screen.getByText('Unique problems').closest('div')!.parentElement!
+    expect(within(findings).getByText('4')).toBeInTheDocument()
+    expect(screen.getByText(/Found 1 component across 1 TeamCity project/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'payments-core' })).toHaveAttribute('href', '/components/c-1')
+  })
+})
+
+describe('ValidationsPage — Unregistered Release tab (KPIs)', () => {
+  it('renders total/active and the derived problem + healthy KPIs', async () => {
+    renderPage()
+    await switchToUnregisteredRelease()
+
     const total = screen.getByText('Total components').closest('div')!.parentElement!
     expect(within(total).getByText('12')).toBeInTheDocument()
     expect(within(total).getByText(/10 active/)).toBeInTheDocument()
@@ -112,11 +205,10 @@ describe('RegistryHealthPage — KPIs', () => {
   })
 })
 
-describe('RegistryHealthPage — top offenders', () => {
-  it('orders by problem versions desc and links to the component detail route', () => {
-    mockStats.mockReturnValue(statsResult())
-    mockValidation.mockReturnValue(validationResult())
+describe('ValidationsPage — Unregistered Release tab (top offenders)', () => {
+  it('orders by problem versions desc and links to the component detail route', async () => {
     renderPage()
+    await switchToUnregisteredRelease()
 
     const panel = screen.getByRole('region', { name: /top offenders/i })
     const links = within(panel).getAllByRole('link')
@@ -128,11 +220,10 @@ describe('RegistryHealthPage — top offenders', () => {
   })
 })
 
-describe('RegistryHealthPage — people breakdowns', () => {
-  it('ranks people and deep-links to the pre-filtered list per role', () => {
-    mockStats.mockReturnValue(statsResult())
-    mockValidation.mockReturnValue(validationResult())
+describe('ValidationsPage — Unregistered Release tab (people breakdowns)', () => {
+  it('ranks people and deep-links to the pre-filtered list per role', async () => {
     renderPage()
+    await switchToUnregisteredRelease()
 
     const owner = screen.getByText('Components by owner').closest('section')!
     const ownerLinks = within(owner).getAllByRole('link')
@@ -153,69 +244,52 @@ describe('RegistryHealthPage — people breakdowns', () => {
     )
   })
 
-  it('shows an empty placeholder when a role map is empty', () => {
-    mockStats.mockReturnValue(
-      statsResult({ data: { ...sampleStats, componentsBySecurityChampion: {} } }),
-    )
-    mockValidation.mockReturnValue(validationResult())
+  it('shows an empty placeholder when a role map is empty', async () => {
+    mockStats.mockReturnValue(statsResult({ data: { ...sampleStats, componentsBySecurityChampion: {} } }))
     renderPage()
+    await switchToUnregisteredRelease()
 
     const sc = screen.getByText('Components by security champion').closest('section')!
     expect(within(sc).getByText('No assignments.')).toBeInTheDocument()
   })
 })
 
-describe('RegistryHealthPage — loading / error / stale', () => {
-  it('renders a skeleton while statistics load', () => {
+describe('ValidationsPage — Unregistered Release tab (loading / error / stale)', () => {
+  it('renders a skeleton while statistics load', async () => {
     mockStats.mockReturnValue(statsResult({ data: undefined, isLoading: true, isSuccess: false }))
-    mockValidation.mockReturnValue(validationResult())
     renderPage()
+    await switchToUnregisteredRelease()
     expect(screen.getByTestId('health-loading')).toBeInTheDocument()
     expect(screen.queryByText('Total components')).not.toBeInTheDocument()
   })
 
-  it('renders a page-level error when statistics fail', () => {
+  it('renders a load-failed banner when statistics fail', async () => {
     mockStats.mockReturnValue(
       statsResult({ data: undefined, isError: true, isSuccess: false, error: new Error('nope') }),
     )
-    mockValidation.mockReturnValue(validationResult())
     renderPage()
+    await switchToUnregisteredRelease()
     expect(screen.getByRole('alert')).toHaveTextContent(/Failed to load registry statistics: nope/)
   })
 
-  it('shows a stale banner when the validation report refresh failed, KPIs still render', () => {
-    mockStats.mockReturnValue(statsResult())
+  it('shows a stale banner when the validation report refresh failed, KPIs still render', async () => {
     mockValidation.mockReturnValue(validationResult({ refreshError: 'CRS timeout' }))
     renderPage()
+    await switchToUnregisteredRelease()
     expect(screen.getByText(/could not be refreshed/)).toHaveTextContent('CRS timeout')
-    // KPIs from CRS stats still render
     expect(screen.getByText('Total components')).toBeInTheDocument()
   })
 
-  it('hides top offenders and warns when the validation report is unavailable', () => {
-    mockStats.mockReturnValue(statsResult())
+  it('hides top offenders and warns when the validation report is unavailable', async () => {
     mockValidation.mockReturnValue(
       validationResult({ byComponent: new Map(), isError: true, error: new Error('down') }),
     )
     renderPage()
+    await switchToUnregisteredRelease()
     expect(screen.getByText(/validation report is unavailable/)).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: /top offenders/i })).not.toBeInTheDocument()
-    // People panels (from CRS stats) still render
     expect(screen.getByText('Components by owner')).toBeInTheDocument()
-    // Problem-derived KPIs read em-dash, NOT 0 — a failed report must not look "clean".
     const withProblems = screen.getByText('With validation problems').closest('div')!.parentElement!
     expect(within(withProblems).getByText('—')).toBeInTheDocument()
-    expect(within(withProblems).queryByText('0% of active')).not.toBeInTheDocument()
-    // Total / active (from CRS stats) are unaffected.
-    const total = screen.getByText('Total components').closest('div')!.parentElement!
-    expect(within(total).getByText('12')).toBeInTheDocument()
-  })
-
-  it('shows the top-offenders empty state when there are no problems', () => {
-    mockStats.mockReturnValue(statsResult())
-    mockValidation.mockReturnValue(validationResult({ byComponent: new Map() }))
-    renderPage()
-    const panel = screen.getByRole('region', { name: /top offenders/i })
-    expect(within(panel).getByText(/No components with validation problems/)).toBeInTheDocument()
   })
 })

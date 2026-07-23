@@ -10,6 +10,11 @@ export interface EditorNavItem {
   label: string
   /** Per-section count badge (e.g. VCS entries). Rendered only when > 0. */
   count?: number
+  /** Problem-count badge (e.g. TeamCity/Unregistered Release findings). When
+   *  > 0, the item renders with the same destructive/red treatment (warning
+   *  icon + red count badge) as the pinned `problems` entry used to — but
+   *  scoped to this individual item instead of a single sidebar-wide slot. */
+  problemCount?: number
 }
 
 /** A labelled group of items in the sidebar (spec §2.1 grouping). */
@@ -95,17 +100,31 @@ export function EditorSidebarNav({
           <div className="px-3 pb-1 pt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground/70">
             {section.label}
           </div>
-          {section.items.map((item) => (
-            <TabsTrigger
-              key={item.value}
-              value={item.value}
-              aria-current={activeValue === item.value ? 'page' : undefined}
-              className={itemClass}
-            >
-              <span className="truncate">{item.label}</span>
-              <CountBadge count={item.count ?? 0} tone="muted" />
-            </TabsTrigger>
-          ))}
+          {section.items.map((item) => {
+            const hasProblem = (item.problemCount ?? 0) > 0
+            return (
+              <TabsTrigger
+                key={item.value}
+                value={item.value}
+                aria-current={activeValue === item.value ? 'page' : undefined}
+                className={cn(
+                  itemClass,
+                  hasProblem &&
+                    'text-destructive hover:text-destructive hover:bg-destructive/10 data-[state=active]:bg-destructive/10 data-[state=active]:text-destructive',
+                )}
+              >
+                {hasProblem && (
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
+                )}
+                <span className="truncate">{item.label}</span>
+                {hasProblem ? (
+                  <CountBadge count={item.problemCount ?? 0} tone="destructive" />
+                ) : (
+                  <CountBadge count={item.count ?? 0} tone="muted" />
+                )}
+              </TabsTrigger>
+            )
+          })}
         </div>
       ))}
     </TabsList>
