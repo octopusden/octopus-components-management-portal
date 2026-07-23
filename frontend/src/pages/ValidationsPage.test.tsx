@@ -171,7 +171,7 @@ describe('ValidationsPage — tabs', () => {
 })
 
 describe('ValidationsPage — TeamCity tab', () => {
-  it('renders KPI cards, the type breakdown, and the findings summary line', () => {
+  it('renders KPI tiles, the type breakdown, and the findings summary line', () => {
     renderPage()
     const withIssues = screen.getByText('Components with validation problems').closest('div')!.parentElement!
     expect(within(withIssues).getByText('2')).toBeInTheDocument()

@@ -4,7 +4,7 @@ import type { TeamcityValidationRow, TeamcityValidationSummary } from '../lib/ty
 
 /**
  * `GET rest/api/4/admin/teamcity-validations/summary` — registry-wide counters
- * backing the Validations page's KPI cards and byType/byStatus breakdowns.
+ * backing the Validations page's KPI tiles and byType/byStatus breakdowns.
  * Admin-only endpoint, matching the page's route/nav gating.
  */
 export function useTeamCityValidationSummary() {
