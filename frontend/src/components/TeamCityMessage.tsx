@@ -115,7 +115,7 @@ export function TeamCityMessage({ message, projectUrl }: TeamCityMessageProps) {
   const segments = segmentLines(message.split('\n'))
 
   return (
-    <div className="text-sm text-muted-foreground" style={{ lineHeight: '30px' }}>
+    <div className="text-sm text-muted-foreground break-words" style={{ lineHeight: '30px' }}>
       {segments.map((segment, i) => {
         if (segment.type === 'bullets') {
           return (
