@@ -3,6 +3,7 @@ import jetbrains.buildServer.configs.kotlin.buildFeatures.XmlReport
 import jetbrains.buildServer.configs.kotlin.buildFeatures.freeDiskSpace
 import jetbrains.buildServer.configs.kotlin.buildFeatures.xmlReport
 import jetbrains.buildServer.configs.kotlin.triggers.finishBuildTrigger
+import jetbrains.buildServer.configs.kotlin.triggers.vcs
 import jetbrains.buildServer.configs.kotlin.vcs.GitVcsRoot
 
 version = "2025.03"
@@ -29,6 +30,7 @@ project {
 
     buildType(id10CompileUtAuto)
     buildType(id15E2eAuto)
+    buildType(id17BuildValidationAuto)
     buildType(id20DeployToOkdQaManual)
     buildType(id40ReleaseManual)
     buildType(id50ReleasePostProcessingAuto)
@@ -40,6 +42,7 @@ project {
     buildTypesOrder = arrayListOf(
         id10CompileUtAuto,
         id15E2eAuto,
+        id17BuildValidationAuto,
         id20DeployToOkdQaManual,
         id25DeployToOkdProdManualTemp,
         id40ReleaseManual,
@@ -194,6 +197,34 @@ object id15E2eAuto : BuildType({
         // will surface a clear error early if no docker daemon is
         // reachable. Re-introduce a capability filter only if the org
         // adds non-Docker agents to the pool.
+    }
+})
+
+object id17BuildValidationAuto : BuildType({
+    templates(AbsoluteId("RDDepartment_PostGithubStatus"))
+    id("17BuildValidationAuto")
+    name = "[1.7] Build Validation [AUTO]"
+
+    // Needed so %build.vcs.number% (COMMIT_SHA) resolves to the revision built.
+    vcs {
+        root(OctopusComponentsManagementPortalVcs)
+    }
+
+    triggers {
+        vcs {
+            branchFilter = "+:*"
+        }
+    }
+
+    dependencies {
+        snapshot(id10CompileUtAuto) {
+            onDependencyFailure = FailureAction.ADD_PROBLEM
+            reuseBuilds = ReuseBuilds.ANY
+        }
+        snapshot(id15E2eAuto) {
+            onDependencyFailure = FailureAction.ADD_PROBLEM
+            reuseBuilds = ReuseBuilds.ANY
+        }
     }
 })
 
