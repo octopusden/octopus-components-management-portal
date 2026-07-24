@@ -29,6 +29,25 @@ export interface Announcement {
 
 export const ANNOUNCEMENTS: Announcement[] = [
   {
+    id: 'owner-manager-can-edit-2026-07',
+    version: '1.2',
+    title: "New: a component owner's manager can now edit it too",
+    publishedAt: '2026-07-24',
+    body: (
+      <div className="space-y-2">
+        <p>
+          A component owner's <strong>manager</strong> now always has edit rights on that
+          component, alongside the owner. The <strong>Who can edit</strong> panel on each
+          component page lists everyone with edit access, including the owner's manager.
+        </p>
+        <p className="text-muted-foreground">
+          This is in addition to the existing owner, release manager, and security champion
+          permissions.
+        </p>
+      </div>
+    ),
+  },
+  {
     id: 'feedback-and-reports-2026-07',
     version: '1.1',
     title: 'New: send feedback & report problems',
