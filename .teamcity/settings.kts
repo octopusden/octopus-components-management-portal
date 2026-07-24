@@ -63,7 +63,13 @@ object OctopusComponentsManagementPortalVcs : GitVcsRoot({
 })
 
 object id10CompileUtAuto : BuildType({
-    templates(AbsoluteId("Octopus_OctopusGradleBuild"))
+    // Gradle build template runs clean build + UT; PostGithubStatus template
+    // appends the success/failure steps that report a "Build Validation" commit
+    // status to GitHub.
+    templates(
+        AbsoluteId("Octopus_OctopusGradleBuild"),
+        AbsoluteId("RDDepartment_PostGithubStatus")
+    )
     id("10CompileUtAuto")
     name = "[1.0] Compile & UT [AUTO]"
 
