@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-release.yml@v2.5.0
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-release.yml@v2.5.1
     with:
       flow-type: hybrid
       java-version: '25'
@@ -16,7 +16,8 @@ jobs:
       # The portal is a deployable app shipped as a docker image on ghcr; nothing
       # consumes it as a Maven dependency. Skip publishing its ~67 MB Spring Boot
       # fat-jar to Sonatype Central (was the single biggest Maven Central Release
-      # Size contributor). Requires octopus-base >= v2.5.0 (publish-to-nexus input).
+      # Size contributor). publish-to-nexus landed in octopus-base v2.5.0; pinned
+      # to v2.5.1, which also carries the Central Portal API publish fix.
       publish-to-nexus: false
       # Register the release in octopus-release-log directly at the end of this
       # run. The separate check-and-register workflow polled Maven Central for the
