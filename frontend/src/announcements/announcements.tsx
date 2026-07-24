@@ -8,7 +8,7 @@ import type { ReactNode } from 'react'
  * Authoring an entry:
  *  - `id` is a STABLE, unique key. It is what per-user "seen" state is keyed on, so never
  *    reuse or renumber an existing id.
- *  - Keep the list NEWEST FIRST. Auto-open shows only the single newest unseen entry.
+ *  - Keep the list NEWEST FIRST. Auto-open shows every unseen entry (newest first).
  *  - `body` is JSX (no markdown renderer in the bundle — keep it simple/inline).
  *  - `spotlightTarget` (optional) points the one-time coach-mark at a UI element carrying
  *    `data-spotlight="<target>"` after the modal closes.

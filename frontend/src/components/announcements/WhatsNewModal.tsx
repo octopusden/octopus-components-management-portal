@@ -17,8 +17,9 @@ import { useOnboardingVideoStatus } from '@/hooks/useInfo'
 /**
  * SYS-062 "What's new" modal. Globally mounted; open state is the shared overlay
  * coordinator (`activeModal === 'announcement'`), payload is announcementsStore.entries.
- * On close it marks the shown entries seen and, if the top entry declares a
- * `spotlightTarget` not yet seen, arms the one-time feature spotlight.
+ * On close it marks the shown entries seen and, if any of them declares a
+ * `spotlightTarget` not yet seen, arms the one-time feature spotlight for the
+ * first such entry (display order, i.e. newest first).
  */
 export function WhatsNewModal() {
   const open = useUiOverlay((s) => s.activeModal === 'announcement')

@@ -10,12 +10,14 @@ import { FeatureSpotlight } from './FeatureSpotlight'
 
 /**
  * SYS-062 "What's new" orchestrator, mounted once in AppShell. Owns the auto-open
- * decision and renders the modal + spotlight. Auto-open shows ONLY the single newest
- * unseen entry (never floods a new user with history) and YIELDS to any open overlay
- * and to a pending onboarding nudge/player, so popups never stack.
+ * decision and renders the modal + spotlight. Auto-open shows every UNSEEN entry
+ * (newest first, same scrollable list as the manual button) so a user who missed
+ * several releases sees all of them at once instead of one at a time across
+ * reloads. It YIELDS to any open overlay and to a pending onboarding nudge/player,
+ * so popups never stack.
  */
 export function Announcements() {
-  const { ready, seenAnnouncements, markAnnouncementsSeen } = useAnnouncementsSeen()
+  const { ready, seenAnnouncements } = useAnnouncementsSeen()
   const present = useAnnouncementsStore((s) => s.present)
   const openModal = useUiOverlay((s) => s.openModal)
   const paletteOpen = useUiOverlay((s) => s.paletteOpen)
@@ -25,8 +27,8 @@ export function Announcements() {
   const onboardingBannerVisible = useOnboardingBannerVisible()
   const autoOpened = useRef(false)
 
-  const newestUnseen = useMemo(
-    () => ANNOUNCEMENTS.find((a) => !seenAnnouncements.includes(a.id)) ?? null,
+  const unseen = useMemo(
+    () => ANNOUNCEMENTS.filter((a) => !seenAnnouncements.includes(a.id)),
     [seenAnnouncements],
   )
 
@@ -41,19 +43,15 @@ export function Announcements() {
     isAutomated || paletteOpen || shortcutsOpen || activeModal !== null || onboardingVideoOpen || onboardingBannerVisible
 
   useEffect(() => {
-    if (autoOpened.current || !ready || !newestUnseen || blocked) return
+    if (autoOpened.current || !ready || unseen.length === 0 || blocked) return
     // Also yield to any page-local dialog already open (e.g. the unsaved-changes prompt) so
     // the auto-announcement never stacks on top of one it doesn't know about.
     if (typeof document !== 'undefined' && document.querySelector('[role="dialog"][data-state="open"]')) return
     autoOpened.current = true
-    // Show ONLY the newest unseen entry; seed every older entry as seen so a first-time user
-    // is never walked through the whole history on successive reloads (they remain reachable
-    // via the manual "What's new" button). The newest is marked seen when the modal closes.
-    const older = ANNOUNCEMENTS.filter((a) => a.id !== newestUnseen.id).map((a) => a.id)
-    if (older.length > 0) markAnnouncementsSeen(older)
-    present([newestUnseen])
+    // All unseen entries are marked seen when the modal closes (WhatsNewModal.dismiss).
+    present(unseen)
     openModal('announcement')
-  }, [ready, newestUnseen, blocked, present, openModal, markAnnouncementsSeen])
+  }, [ready, unseen, blocked, present, openModal])
 
   return (
     <>
