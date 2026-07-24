@@ -110,7 +110,13 @@ object id10CompileUtAuto : BuildType({
 // actually compiled. A failing Compile&UT also makes the e2e run moot,
 // so failing fast saves agent minutes.
 object id15E2eAuto : BuildType({
-    templates(AbsoluteId("Octopus_OctopusGradleBuild"))
+    // Gradle build template runs e2eTest; PostGithubStatus template appends the
+    // success/failure steps that report a "Build Validation" commit status to
+    // GitHub — so the E2E outcome itself becomes the PR check.
+    templates(
+        AbsoluteId("Octopus_OctopusGradleBuild"),
+        AbsoluteId("RDDepartment_PostGithubStatus")
+    )
     id("15E2eAuto")
     name = "[1.5] E2E [AUTO]"
 
