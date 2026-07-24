@@ -2,7 +2,7 @@
 
 > Target users: `ACCESS_COMPONENTS` for read; per-tab gates for writes (see "Auth gating" below).
 
-The detail page at `/components/<UUID>` is the editor surface. It renders [`pages/ComponentDetailPage.tsx`](../../frontend/src/pages/ComponentDetailPage.tsx) and decomposes into tabs (General, **Solution** (conditional), **Misc**, Build, VCS, **Documentation**, Distribution, Jira, Escrow, **Supported Versions**, Configurations, As Code, Overrides, History). The page-level form lives once and General / Solution / Documentation / Misc all share its state via `react-hook-form`. The `Tabs` are controlled so a server 400 on a field that lives on a non-active tab auto-switches to the owning tab (`sectionForField`, incl. `docs → documentation`).
+The detail page at `/components/<UUID>` is the editor surface. It renders [`pages/ComponentDetailPage.tsx`](../../frontend/src/pages/ComponentDetailPage.tsx) and decomposes into tabs (General, **Solution** (conditional), **Misc**, Build, VCS, **Documentation**, Distribution, Jira, Escrow, **Supported Versions**, Configurations, As Code, Overrides, History, and an admin-only **Validations** group — TeamCity, Unregistered Release). The page-level form lives once and General / Solution / Documentation / Misc all share its state via `react-hook-form`. The `Tabs` are controlled so a server 400 on a field that lives on a non-active tab auto-switches to the owning tab (`sectionForField`, incl. `docs → documentation`).
 
 **Labels** are edited in the page **header** (badges + a popover [`HeaderLabelsEditor`](../../frontend/src/components/editor/HeaderLabelsEditor.tsx)), not on General. A component with `solution = true` is flagged in the header (a prominent badge + an info `StatusBanner`).
 
@@ -22,6 +22,7 @@ The detail page at `/components/<UUID>` is the editor surface. It renders [`page
 | **Supported Versions** | `SupportedVersionsTab` | Coverage editor — the decoupled-version-model layer 1 (CRS [ADR-018](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/018-decoupled-version-model.md)), independent of per-attribute overrides. Reads `GET /{id}/supported-versions` → `{all, ranges, warnings}`; `all` ⇒ every version is defined, else `supported = ∪ ranges` (a version outside resolves to 404). Add-range / remove / "Set to all versions" each **declaratively PUT the full desired set** (instant save, no page-level Save bar) and the server returns the **merged** coverage (overlapping/contiguous ranges collapse; a set tiling all-versions becomes `all`) + non-blocking V1/V5 `warnings` (an override left outside supported). `useUpdateSupportedVersions` seeds the cache with the PUT response before invalidating, so back-to-back edits don't replace from stale data. Detailed below. |
 | **Overrides** | `FieldOverrides` | Per-version field overrides. **Open-upper ranges (`[2.0,)`) are now first-class** (ADR-018; `isAllowedOverrideRange` rejects only the all-versions sentinel — that is the base default). Out of scope otherwise. |
 | **History** | `ComponentHistoryTab` (B7.1.2) | New in P1; detailed below. |
+| **TeamCity / Unregistered Release** (Validations group) | `TeamCityValidationsTab`, `ValidationProblemsList` | Admin-only (`isAdmin` = adminMode + `IMPORT_DATA`); the whole group is hidden for regular users. Detailed below. |
 
 ## Supported versions (coverage) tab
 
@@ -88,11 +89,19 @@ If any of these fields is always sent, a non-admin's plain edit (only `displayNa
 
 With CRS schema v2 (`component_configurations` as the wide row), component child collections are edited from the page-level form:
 
-- **TeamCity projects** — `projectId` rows backed by the `component_teamcity_projects` child table. Sort order is preserved (server sorts by `sort_order`); the header exposes them as read-only quick links.
+- **TeamCity projects** — `projectId` rows backed by the `component_teamcity_projects` child table. Sort order is preserved (server sorts by `sort_order`); the header exposes them as read-only quick links. Below the header, a project list renders each project's TeamCity validation status (see "Validations" below).
 - **Doc links** — `{ docComponentKey: string, majorVersion?: string | null }` rows backed by `component_doc_links`. Identifies the documentation source by component key and (optionally) the major version it documents (e.g. `3.x`); the editor maps a blank input to `null` on save. **Moved to the dedicated Documentation topic** ([`DocumentationTab`](../../frontend/src/components/editor/DocumentationTab.tsx)); it still shares the page form and saves in the same PATCH.
 - **Artifact IDs** — `{ groupPattern: string, artifactPattern: string }` rows backed by `component_artifact_ids`. Order preserved; primary use is fuzzy-match by build artifact identifier in downstream Feign consumers. Edited from General via [`ArtifactOwnershipEditor`](../../frontend/src/components/editor/ArtifactOwnershipEditor.tsx).
 
 The editable collections share the page-level `react-hook-form` state; the page Save bar sends them together with scalar General fields in one PATCH.
+
+## Validations (admin-only)
+
+An admin-only, read-only sidebar group with two items — **TeamCity** and **Unregistered Release** — both hidden for regular users (`isAdmin` = adminMode + `IMPORT_DATA`; see [`admin-mode.md`](admin-mode.md)). This mirrors the registry-wide [Validations page](../../frontend/src/pages/ValidationsPage.tsx), scoped to one component.
+
+- **TeamCity findings**, per project, from the header's project status list (checkmark/warning icon + issue count, admin-only) and `TeamCityValidationsTab`. Findings render via [`TeamCityMessage`](../../frontend/src/components/TeamCityMessage.tsx) — `\n`-separated lines, with `- STEP_ID in BUILD_CONF_ID` / `- BUILD_CONF_ID` lines turned into bulleted, linked TeamCity admin URLs.
+- **Unregistered Release** findings via `ValidationProblemsList` (the pre-existing registered-version validation facility). Empty state ("No unregister release for this component.") when the component has no findings — the tab is always present for an admin, not conditionally hidden.
+- Each sidebar item shows a red/warning treatment with a count badge when it has findings (`EditorSidebarNav`'s `problemCount`), independent of the other item — a component can show a warning on one, both, or neither.
 
 ### Release Managers / Security Champions (SYS-039 — multi-value)
 

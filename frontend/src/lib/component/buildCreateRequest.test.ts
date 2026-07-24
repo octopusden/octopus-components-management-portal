@@ -90,7 +90,9 @@ function makeSource(overrides: Partial<ComponentDetail> = {}): ComponentDetail {
     docs: [{ id: 'd-1', docComponentKey: 'docs-a', majorVersion: '1.x', sortOrder: 0 }],
     artifactIds: [{ id: 'a-1', groupPattern: 'org.x', mode: 'ALL', artifactTokens: [] }],
     securityGroups: [{ id: 'sg-1', groupType: 'LAS', groupName: 'las-alpha' }],
-    teamcityProjects: [{ id: 'tc-1', projectId: 'AlphaProject', projectUrl: 'https://tc/x', sortOrder: 0 }],
+    teamcityProjects: [
+      { id: 'tc-1', projectId: 'AlphaProject', projectUrl: 'https://tc/x', sortOrder: 0, validations: [] },
+    ],
     configurations: [makeBaseRow({ build: { buildSystem: 'GRADLE', gradleVersion: '8.5' } })],
     canEdit: true,
     ...overrides,

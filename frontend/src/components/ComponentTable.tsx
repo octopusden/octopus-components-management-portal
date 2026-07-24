@@ -7,7 +7,7 @@ import {
   createColumnHelper,
   type SortingState,
 } from '@tanstack/react-table'
-import { ArrowUpDown, ArrowUp, ArrowDown, CopyPlus, Package } from 'lucide-react'
+import { AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown, CopyPlus, Package } from 'lucide-react'
 import { JiraIcon, BitbucketIcon, TeamCityIcon } from './ui/icons/brand-icons'
 import { useMemo, useState } from 'react'
 import {
@@ -26,6 +26,7 @@ import { ValidationBadge } from './ValidationBadge'
 import { RelativeTime } from './ui/RelativeTime'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip'
 import { cn, safeHttpUrl } from '../lib/utils'
+import { hasValidationIssue } from '../lib/validation'
 import type { ComponentSummary, ComponentValidation, PortalLinks } from '../lib/types'
 import { usePortalLinks } from '../hooks/useInfo'
 import { useFieldConfig } from '../hooks/useAdminConfig'
@@ -42,6 +43,11 @@ declare module '@tanstack/react-table' {
     // entry by component key (ComponentSummary.name). Absent (non-admin / empty
     // report) → no indicator anywhere.
     validationByComponent?: Map<string, ComponentValidation>
+    // TeamCity validation overlay: componentId (a different key than
+    // validationByComponent's name-keyed map) -> finding count. Only shown
+    // when the row has no Unregistered-Released issue, so a row never
+    // stacks two warning triangles.
+    teamCityIssueCountByComponent?: Map<string, number>
   }
 }
 
@@ -61,6 +67,12 @@ interface ComponentTableProps {
    * failed to load) no indicator is rendered at all.
    */
   validationByComponent?: Map<string, ComponentValidation>
+  /**
+   * TeamCity validation overlay: componentId -> finding count. Admin-only,
+   * same absence semantics as `validationByComponent`. Only shown when the
+   * row has no Unregistered-Released issue — see the TableMeta doc comment.
+   */
+  teamCityIssueCountByComponent?: Map<string, number>
 }
 
 const columnHelper = createColumnHelper<ComponentSummary>()
@@ -87,6 +99,31 @@ function IconLink({ href, label, icon: Icon }: IconLinkProps) {
     >
       <Icon className="h-4 w-4" />
     </a>
+  )
+}
+
+/**
+ * Warning triangle for a row with TeamCity findings but no Unregistered-
+ * Released issue (see the Name cell). Simpler than `ValidationBadge` on
+ * purpose: a hover tooltip, no click-through dialog.
+ */
+function TeamCityProblemBadge({ count }: { count: number }) {
+  if (count <= 0) return null
+  const label = `${count} TeamCity validation ${count === 1 ? 'problem' : 'problems'}`
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          role="img"
+          aria-label={label}
+          title={label}
+          className="inline-flex shrink-0 text-destructive"
+        >
+          <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -190,12 +227,22 @@ const columns = [
       // map is absent (non-admin / empty report) or the component is clean,
       // ValidationBadge renders null, so nothing extra appears before the name.
       const validation = table.options.meta?.validationByComponent?.get(row.original.name)
+      // TeamCity findings are keyed by componentId, not name. Only consulted
+      // when there's no Unregistered-Released issue — at most one triangle per row.
+      const hasUnregisteredIssue = hasValidationIssue(validation)
+      const teamCityIssueCount = hasUnregisteredIssue
+        ? 0
+        : (table.options.meta?.teamCityIssueCountByComponent?.get(row.original.id) ?? 0)
       return (
         // min-w-0 lets the flex column shrink below its content width so the
         // links/spans below can truncate inside the max-width-capped cell
         // (Option A: keep the table within the viewport instead of overflowing).
         <div className="flex items-start gap-1.5">
-          <ValidationBadge validation={validation} />
+          {hasUnregisteredIssue ? (
+            <ValidationBadge validation={validation} />
+          ) : (
+            <TeamCityProblemBadge count={teamCityIssueCount} />
+          )}
           <div className="flex flex-col min-w-0">
             <Link
               to={`/components/${row.original.id}`}
@@ -294,9 +341,9 @@ const columns = [
       const gitBaseUrl = linksConfig?.gitBaseUrl ?? undefined
       const dmsBaseUrl = linksConfig?.dmsBaseUrl ?? undefined
       // tcBaseUrl from /portal/links is intentionally NOT used here — CRS PR-2
-      // persists the full TC webUrl per component on `teamcityProjectUrl`, so
-      // Portal renders the URL verbatim and does not template it. The runtime
-      // config still ships `tcBaseUrl` for any future cross-project link.
+      // persists the full TC webUrl per project, so Portal renders the URL
+      // verbatim and does not template it. The runtime config still ships
+      // `tcBaseUrl` for any future cross-project link.
       const links: IconLinkProps[] = []
       if (jiraBaseUrl && jiraProjectKey) {
         links.push({
@@ -320,20 +367,6 @@ const columns = [
           })
         }
       }
-      // TeamCity icon — gated only on the per-component `teamcityProjectUrl`
-      // (the persisted webUrl). Independent of `tcBaseUrl` because the URL
-      // is self-sufficient: CRS resolves projectId → webUrl during resync
-      // and stores the result; Portal does NOT template it.
-      // safeHttpUrl allowlists http/https before the URL reaches an <a href>
-      // — prevents javascript: or data: URIs from being rendered as links.
-      const safeTcUrl = safeHttpUrl(teamcityProjectUrl)
-      if (safeTcUrl) {
-        links.push({
-          href: safeTcUrl,
-          label: `TeamCity: ${name}`,
-          icon: TeamCityIcon,
-        })
-      }
       if (dmsBaseUrl) {
         // DMS uses a query-string component selector, not a path segment.
         links.push({
@@ -342,7 +375,17 @@ const columns = [
           icon: Package,
         })
       }
-      if (links.length === 0) return <span className="text-muted-foreground">—</span>
+      const tcUrl = safeHttpUrl(teamcityProjectUrl ?? null)
+      if (tcUrl) {
+        links.push({
+          href: tcUrl,
+          label: `TeamCity: ${name}`,
+          icon: TeamCityIcon,
+        })
+      }
+      if (links.length === 0) {
+        return <span className="text-muted-foreground">—</span>
+      }
       return (
         <div className="flex items-center gap-2">
           {links.map((l) => (
@@ -428,6 +471,7 @@ export function ComponentTable({
   isLoading,
   onCopy,
   validationByComponent,
+  teamCityIssueCountByComponent,
 }: ComponentTableProps) {
   const [sorting, setSorting] = useState<SortingState>([])
   const { data: portalLinks } = usePortalLinks()
@@ -456,7 +500,7 @@ export function ComponentTable({
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     manualSorting: false,
-    meta: { links: portalLinks, onCopy, validationByComponent },
+    meta: { links: portalLinks, onCopy, validationByComponent, teamCityIssueCountByComponent },
   })
 
   if (isLoading) {

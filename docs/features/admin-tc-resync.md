@@ -71,3 +71,4 @@ Like the migration panels, the Start button is dimmed until the user enables adm
 - CRS PR #37 — auto-resolved (`CDRelease-*`) tile and report shape.
 - CRS PR #181 — backend async TC resync job (`POST /sync` + `GET /sync/job`).
 - [`admin-migration.md`](admin-migration.md) — companion async-job feature.
+- [`tc-validation.md`](tc-validation.md) — companion read-only diagnostics sweep (validation findings, not project-id repair).

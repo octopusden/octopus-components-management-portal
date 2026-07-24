@@ -154,6 +154,22 @@ describe('useRunTeamCityResync', () => {
     )
     expect(invalidatedKeys).not.toContainEqual(['components'])
   })
+
+  it('also invalidates the TC validation job query on COMPLETED-on-start (CRS auto-starts validation after resync)', async () => {
+    mockApi.post.mockResolvedValue(COMPLETED_JOB)
+    const { wrapper, queryClient } = makeWrapper()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    const { result } = renderHook(() => useRunTeamCityResync(), { wrapper })
+    await result.current.mutateAsync()
+
+    await waitFor(() => {
+      const invalidatedKeys = invalidateSpy.mock.calls.map(
+        (call) => (call[0] as { queryKey?: readonly unknown[] } | undefined)?.queryKey,
+      )
+      expect(invalidatedKeys).toContainEqual(['tc-validation', 'job'])
+    })
+  })
 })
 
 describe('useTeamCityResyncJob', () => {

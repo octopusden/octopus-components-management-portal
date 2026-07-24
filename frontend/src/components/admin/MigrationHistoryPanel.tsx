@@ -7,6 +7,8 @@ import {
   useMigrationJob,
   useRunHistoryMigration,
 } from '@/hooks/useMigration'
+import { useTeamCityResyncJob } from '@/hooks/useTeamCityResync'
+import { useTeamCityValidationJob } from '@/hooks/useTeamCityValidation'
 import { toast } from '@/hooks/use-toast'
 import { formatMigrationError } from '@/lib/migrationErrors'
 import { Button } from '@/components/ui/button'
@@ -53,11 +55,23 @@ export function MigrationHistoryPanel() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [forceResetOpen, setForceResetOpen] = useState(false)
 
-  // Cross-disable: don't let the user start a history job while components
-  // is RUNNING. Backend's MigrationLifecycleGate would 409 anyway, but the
-  // SPA hides the path so the destructive block never has to render.
+  // Cross-disable: don't let the user start a history job while any of the
+  // other three async job kinds (components migration, TC resync, TC
+  // validation) is RUNNING. Backend's MigrationLifecycleGate would 409
+  // anyway, but the SPA hides the path so the destructive block never has to
+  // render.
   const componentsJob = useMigrationJob()
   const componentsRunning = componentsJob.data?.state === 'RUNNING'
+  const resyncJob = useTeamCityResyncJob()
+  const resyncRunning = resyncJob.data?.state === 'RUNNING'
+  const validationJob = useTeamCityValidationJob()
+  const validationRunning = validationJob.data?.state === 'RUNNING'
+  const otherKindRunning = componentsRunning || resyncRunning || validationRunning
+  const runningKindLabel = componentsRunning
+    ? 'Components migration'
+    : resyncRunning
+      ? 'TC resync'
+      : 'TC validation'
 
   // P1 review fix: was matching on errorMessage.includes('marked IN_PROGRESS')
   // — a brittle string contract spread across two repos. Now branches on the
@@ -140,7 +154,7 @@ export function MigrationHistoryPanel() {
     !adminMode ||
     isRunning ||
     startHistory.isPending ||
-    componentsRunning ||
+    otherKindRunning ||
     isStuck ||
     isUnrecognisedRecovery
   const showForceReset = isStuck && adminMode
@@ -192,9 +206,9 @@ export function MigrationHistoryPanel() {
             Arm Admin mode above to run history migration.
           </span>
         )}
-        {adminMode && componentsRunning && !isRunning && (
+        {adminMode && otherKindRunning && !isRunning && (
           <span className="text-xs text-muted-foreground">
-            Components migration is running — wait for it to finish.
+            {runningKindLabel} is running — wait for it to finish.
           </span>
         )}
         {jobData?.finishedAt && !isRunning && !isStuck && !isUnrecognisedRecovery && (

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '../lib/api'
 import { parseSameKindAttach } from '../lib/migrationConflict'
+import { invalidateTeamCityValidationJob } from './useTeamCityValidation'
 import type { TeamCityResyncJobResponse } from '../lib/types'
 
 // Re-exported for back-compat with callers that imported the result-payload
@@ -62,6 +63,10 @@ export function useRunTeamCityResync() {
         queryClient.invalidateQueries({
           predicate: (query) => query.queryKey[0] === 'component',
         })
+        // CRS auto-starts a TC validation job right after a successful
+        // resync — refetch the validation-job query so the SPA discovers it
+        // even on this fast COMPLETED-on-start path.
+        invalidateTeamCityValidationJob(queryClient)
       }
     },
   })

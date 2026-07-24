@@ -49,6 +49,14 @@ describe('ServiceEventsPanel', () => {
     expect(screen.getByRole('cell', { name: 'TeamCity resync failed' })).toBeInTheDocument()
   })
 
+  it('includes TEAMCITY_VALIDATION as a selectable Type filter option', () => {
+    mockHook.mockReturnValue(hookResult(page([event])))
+    render(<ServiceEventsPanel />)
+    expect(
+      screen.getByRole('option', { name: 'TEAMCITY_VALIDATION' }),
+    ).toBeInTheDocument()
+  })
+
   it('shows an empty state when there are no events', () => {
     mockHook.mockReturnValue(hookResult(page([])))
     render(<ServiceEventsPanel />)
