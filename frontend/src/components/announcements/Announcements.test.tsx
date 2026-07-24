@@ -65,7 +65,12 @@ describe('Announcements auto-open', () => {
   })
 
   it('does not re-open an already-seen announcement', () => {
-    localStorage.setItem('octopus.portal.seenAnnouncements.alice', JSON.stringify([SEED.id]))
+    // Mark every entry seen, not just SEED — otherwise an older still-unseen entry
+    // would become the new "newest unseen" and the modal would (correctly) reopen.
+    localStorage.setItem(
+      'octopus.portal.seenAnnouncements.alice',
+      JSON.stringify(ANNOUNCEMENTS.map((a) => a.id)),
+    )
     render(<Announcements />)
     expect(useUiOverlay.getState().activeModal).toBeNull()
   })
@@ -74,10 +79,9 @@ describe('Announcements auto-open', () => {
     render(<Announcements />)
     fireEvent.click(screen.getByRole('button', { name: /got it/i }))
     expect(useUiOverlay.getState().activeModal).toBeNull()
-    expect(useAnnouncementsStore.getState().spotlight).toEqual({
-      target: SEED.spotlightTarget,
-      announcementId: SEED.id,
-    })
+    expect(useAnnouncementsStore.getState().spotlight).toEqual(
+      SEED.spotlightTarget ? { target: SEED.spotlightTarget, announcementId: SEED.id } : null,
+    )
     expect(JSON.parse(localStorage.getItem('octopus.portal.seenAnnouncements.alice')!)).toContain(SEED.id)
   })
 })
