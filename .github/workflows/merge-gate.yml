@@ -9,31 +9,51 @@ permissions:
   contents: read
   security-events: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  # None of the three reusable calls below take `secrets: inherit`: none of them
+  # declares a `secrets:` block or reads `secrets.*`, and `inherit` would hand them
+  # every secret this repo has, bypassing declaration. GITHUB_TOKEN reaches them
+  # automatically. release.yaml is the only caller that genuinely needs inherit.
   build:
     uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v2.5.1
     with:
       java-version: '25'
       flow-type: 'hybrid'
       docker-image: components-management-portal
-    secrets: inherit
 
   quality:
     uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v2.5.1
     with:
       java-version: '25'
-    secrets: inherit
 
   security:
     uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v2.5.1
     with:
       java-version: '25'
-      enable-codeql: false
+      # CodeQL runs on PRs. It used to be off here because the repo-level *default
+      # setup* covered PRs, but that setup is disabled (it blocks advanced SARIF
+      # uploads), so without this PRs would get no code scanning at all.
+      enable-codeql: true
+      # Both inputs below are mandatory, not cosmetic. The reusable workflow
+      # defaults to `java-kotlin` alone, so omitting the language list would
+      # silently drop javascript-typescript and actions coverage; and the category
+      # must match security.yml exactly, or GitHub treats PR and main analyses as
+      # different configurations and stops correlating alerts.
+      codeql-languages: java-kotlin,javascript-typescript,actions
+      codeql-category: /portal-codeql
       trivy-continue-on-error: true
-    secrets: inherit
 
   frontend:
-    name: frontend / lint-typecheck-coverage
+    # Contract-drift gates only. Deliberately does NOT run lint / typecheck /
+    # test:coverage: build.gradle.kts wires npmLint, npmTypecheck and
+    # npmTestCoverage into the `check` task, so the `build` job above already
+    # executes all three. Running them here as well made every PR do the frontend
+    # checks twice over.
+    name: frontend / contract-drift-gates
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -47,8 +67,6 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck
       # Wave 0 drift gate. Regenerates schema.d.ts from the vendored
       # v4.json and `diff`s against the committed copy — any uncommitted
       # delta between the spec and the generated types fails the PR.
@@ -65,7 +83,6 @@ jobs:
       - run: npm run vendor-spec:check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: npm run test:coverage
 
   gate-merge:
     name: gate/merge
