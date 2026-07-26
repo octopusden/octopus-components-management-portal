@@ -340,3 +340,81 @@ describe('Layout environment banner', () => {
     expect(screen.queryByTestId('environment-banner')).toBeNull()
   })
 })
+
+describe('Layout open-feedback badge — admin-operator only', () => {
+  const adminUser: User = {
+    username: 'alice',
+    roles: [{ name: 'ROLE_ADMIN', permissions: ['ACCESS_COMPONENTS', 'ACCESS_AUDIT', 'IMPORT_DATA'] }],
+    groups: [],
+  }
+  const viewerUser: User = {
+    username: 'carol',
+    roles: [{ name: 'ROLE_COMPONENTS_REGISTRY_VIEWER', permissions: ['ACCESS_COMPONENTS'] }],
+    groups: [],
+  }
+
+  // Like renderLayout, but the open-count endpoint returns { open }.
+  function renderWithOpenCount(open: number) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: RequestInfo | URL) => {
+        const u = String(url)
+        const body = u.includes('open-count') ? JSON.stringify({ open }) : '{}'
+        return Promise.resolve(new Response(body, { status: 200 }))
+      }),
+    )
+    return render(
+      React.createElement(
+        QueryClientProvider,
+        { client },
+        <MemoryRouter initialEntries={['/components']}>
+          <Layout>
+            <div>child content</div>
+          </Layout>
+        </MemoryRouter>,
+      ),
+    )
+  }
+
+  function mockUser(user: User) {
+    mockedUseCurrentUser.mockReturnValue({
+      data: user,
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useCurrentUser>)
+  }
+
+  it('shows the open-feedback count for an admin operator (adminMode + IMPORT_DATA)', async () => {
+    setAdminMode(true)
+    mockUser(adminUser)
+    renderWithOpenCount(3)
+    const badge = await screen.findByTestId('open-feedback-badge')
+    expect(badge.textContent).toBe('3')
+  })
+
+  it('does not show the badge when adminMode is off', () => {
+    setAdminMode(false)
+    mockUser(adminUser)
+    renderWithOpenCount(3)
+    expect(screen.queryByTestId('open-feedback-badge')).toBeNull()
+  })
+
+  it('does not show the badge for a non-admin even with adminMode on', () => {
+    setAdminMode(true)
+    mockUser(viewerUser)
+    renderWithOpenCount(3)
+    expect(screen.queryByTestId('open-feedback-badge')).toBeNull()
+  })
+
+  it('shows no badge when the open count is zero', async () => {
+    setAdminMode(true)
+    mockUser(adminUser)
+    renderWithOpenCount(0)
+    // The Admin link renders; the badge must not.
+    await screen.findByText('Admin')
+    expect(screen.queryByTestId('open-feedback-badge')).toBeNull()
+  })
+})

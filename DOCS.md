@@ -59,7 +59,7 @@ When you write a new doc, pick **one** repo as the owner using these rules:
 2. **Backend behavior, data, contracts** → CRS.
 3. **Cross-cutting concern** → write in the repo that has more of the implementation; link from the other repo.
 4. **Never duplicate content.** If you find yourself copy-pasting between repos, replace one side with a link.
-5. **Cross-repo links to code should target a stable ref** (a release tag or a merge commit SHA), not `blob/<branch>/...` — branches move and permalinks don't rot. Cross-repo links between **living indexes** (this `DOCS.md`, `AGENTS.md`, top-level READMEs) may use the active branch (`main` on both CRS and Portal) — they're meant to track the head, not freeze with it.
+5. **Cross-repo links.** Links into CRS **source code** should target a stable ref — a release tag or a merge-commit SHA, not `blob/<branch>/...` — since code moves and permalinks don't rot. Links into CRS **documentation** (ADRs, `requirements-*`, `DOCS.md`) may instead track the active branch (`main` for both CRS and Portal): they're meant to follow the head, not freeze with it, and CRS has no release tags to pin to yet. This is why documentation links across this repo — the living indexes (`DOCS.md`, `AGENTS.md`, top-level READMEs) **and** the ADR / architecture / feature / tech-debt pages — point at `blob/main`. Once CRS starts cutting release tags, repoint the documentation links to a tag.
 
 ## How to update this map
 

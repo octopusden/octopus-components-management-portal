@@ -109,13 +109,15 @@ export interface ComponentDetail {
 
 /**
  * The people who may edit a component, from `GET /components/{id}/editors`. Read-only
- * informational projection (owner + ordered release managers + security champions);
- * administrators may also edit but are not enumerated here.
+ * informational projection (owner + ordered release managers + security champions +
+ * the owner's manager). Administrators may also edit any component but are, unlike the
+ * manager, not enumerated here (an open-ended realm-role, not per-component data).
  */
 export interface ComponentEditors {
   componentOwner: string | null
   releaseManagers: string[]
   securityChampions: string[]
+  manager: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -1063,4 +1065,52 @@ export interface ServiceEvent {
   detail: Record<string, unknown> | null
   startedAt: string
   finishedAt: string | null
+}
+
+// SYS-062 — user feedback / report-a-problem. Mirrors the CRS v4 wire contract.
+export type FeedbackType = 'BUG' | 'IDEA' | 'QUESTION'
+export type FeedbackStatus = 'NEW' | 'IN_PROGRESS' | 'RESOLVED'
+
+/** One screenshot on the way in — base64 of the raw image (data-URL prefix stripped). */
+export interface FeedbackAttachmentPayload {
+  filename?: string | null
+  contentType?: string | null
+  dataBase64: string
+}
+
+export interface FeedbackCreateRequest {
+  type: FeedbackType
+  title?: string | null
+  message: string
+  pageUrl?: string | null
+  appVersion?: string | null
+  attachments?: FeedbackAttachmentPayload[] | null
+}
+
+/** Attachment metadata (no bytes); the SPA renders each via the attachment-bytes endpoint. */
+export interface FeedbackAttachmentMeta {
+  id: number
+  filename: string | null
+  contentType: string | null
+  sizeBytes: number | null
+}
+
+export interface FeedbackResponse {
+  id: number
+  type: string
+  status: string
+  title: string | null
+  message: string
+  submittedBy: string | null
+  pageUrl: string | null
+  appVersion: string | null
+  detail: Record<string, unknown> | null
+  createdAt: string
+  updatedAt: string | null
+  updatedBy: string | null
+  attachments: FeedbackAttachmentMeta[]
+}
+
+export interface FeedbackStatusUpdateRequest {
+  status: FeedbackStatus
 }
