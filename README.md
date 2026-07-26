@@ -92,9 +92,12 @@ git commit -m "chore(openapi): re-vendor v4.json from CRS <ref>"
 
 **Pinned CRS ref** — set in [`frontend/scripts/vendor-spec.sh`](frontend/scripts/vendor-spec.sh)
 (override per-invocation with `CRS_SPEC_REF=<ref>`). It is `main` — CRS's default
-branch, where the v4 contract now integrates (the former `v3` branch was removed).
-**Once CRS starts cutting released tags, repoint it to a released CRS tag** so
-Portal tracks released contracts — bump it in the script and in this section.
+branch, where the v4 contract integrates (the former `v3` branch was removed). It
+deliberately tracks a **moving** ref: the `vendor-spec:check` drift-gate can only
+detect contract changes against a ref that advances — pinning it to a fixed tag or
+SHA would make the check a tautology (see [`docs/tech-debt/TD-002-openapi-types.md`](docs/tech-debt/TD-002-openapi-types.md)).
+CRS does publish release tags (`v3.0.x`); repoint here only if Portal switches to
+release-only contract tracking and drops the drift-gate.
 
 ## Documentation
 
