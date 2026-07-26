@@ -6,8 +6,8 @@ The Components Registry domain is split across two repositories. This file is th
 
 | Repo | Role |
 |---|---|
-| **`octopus-components-management-portal`** (this repo, branch `develop`) | Browser-facing BFF + React SPA. Spring Cloud Gateway + OAuth2 Login. Owns the browser experience. |
-| **[`octopus-components-registry-service`](https://github.com/octopusden/octopus-components-registry-service)** (branch `v3`) | Backend service — REST API, data model, migrations, resolvers, audit. Owns the data and business logic. |
+| **`octopus-components-management-portal`** (this repo, branch `main`) | Browser-facing BFF + React SPA. Spring Cloud Gateway + OAuth2 Login. Owns the browser experience. |
+| **[`octopus-components-registry-service`](https://github.com/octopusden/octopus-components-registry-service)** (branch `main`) | Backend service — REST API, data model, migrations, resolvers, audit. Owns the data and business logic. |
 
 ## What lives where
 
@@ -18,9 +18,9 @@ The Components Registry domain is split across two repositories. This file is th
 | **Repo overview + local dev loop** | [`README.md`](README.md) | Vite proxy setup, npm/Gradle build commands, dev → prod flow. |
 | **Portal architecture (BFF, CSRF, SPA fallback)** | [`docs/architecture.md`](docs/architecture.md) | Implementation details with file pointers (`SecurityConfig.kt`, `SpaFallbackFilter.kt`, `PortalInfoController.kt`). Canonical decision lives in CRS ADR-012; this doc is the *implementation* guide. |
 | **Portal-side ADR summary** | [`docs/adr/001-spring-cloud-gateway-bff.md`](docs/adr/001-spring-cloud-gateway-bff.md) | Short Portal-side summary linking to canonical CRS ADR-012. Captures only what's specific to this repo. |
-| **Frontend feature docs** | [`docs/features/`](docs/features/) | UX flows for admin-migration, admin-mode, app-footer. |
+| **Frontend feature docs** | [`docs/features/`](docs/features/) | UX flows for component-list, component-detail, audit-log, admin-migration, admin-mode, admin-tc-resync, app-footer. |
 | **OKD onboarding checklist** | [`docs/onboarding/components-management-portal.md`](docs/onboarding/components-management-portal.md) | Vault, Spring Cloud Config, OKD secrets, TeamCity wiring. |
-| **Portal-side tech-debt (frontend + ops)** | [`docs/tech-debt/`](docs/tech-debt/) (`TD-NNN`) | Playwright Keycloak fixture (frontend), OpenAPI types (frontend), persisted session store (BFF), TLS Ingress migration (ops/infra). |
+| **Portal-side tech-debt (frontend + ops)** | [`docs/tech-debt/`](docs/tech-debt/) (`TD-NNN`) | Playwright Keycloak fixture (frontend), OpenAPI types (frontend), persisted session store (BFF), TLS Ingress migration (ops/infra), schema-v2 migration follow-ups (frontend). |
 | **Agent / build commands** | [`AGENTS.md`](AGENTS.md) | Build, test, quality gates. Read before touching code. |
 
 ### CRS repo owns
@@ -59,10 +59,10 @@ When you write a new doc, pick **one** repo as the owner using these rules:
 2. **Backend behavior, data, contracts** → CRS.
 3. **Cross-cutting concern** → write in the repo that has more of the implementation; link from the other repo.
 4. **Never duplicate content.** If you find yourself copy-pasting between repos, replace one side with a link.
-5. **Cross-repo links to code should target a stable ref** (a release tag or a merge commit SHA), not `blob/<branch>/...` — branches move and permalinks don't rot. Cross-repo links between **living indexes** (this `DOCS.md`, `AGENTS.md`, top-level READMEs) may use the active branch (`v3` for CRS, `develop` for Portal) — they're meant to track the head, not freeze with it.
+5. **Cross-repo links to code should target a stable ref** (a release tag or a merge commit SHA), not `blob/<branch>/...` — branches move and permalinks don't rot. Cross-repo links between **living indexes** (this `DOCS.md`, `AGENTS.md`, top-level READMEs) may use the active branch (`main` on both CRS and Portal) — they're meant to track the head, not freeze with it.
 
 ## How to update this map
 
 Add a row when you create a new top-level doc. Move/reword a row when ownership shifts. Don't list every individual ADR or requirement — point at the index.
 
-Mirror file: [`octopus-components-registry-service/DOCS.md`](https://github.com/octopusden/octopus-components-registry-service/blob/v3/DOCS.md). Both files describe the same map from their own perspective; either can be the entry point.
+Mirror file: [`octopus-components-registry-service/DOCS.md`](https://github.com/octopusden/octopus-components-registry-service/blob/main/DOCS.md). Both files describe the same map from their own perspective; either can be the entry point.
