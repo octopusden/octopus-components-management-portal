@@ -4,6 +4,12 @@ Guidance for AI agents and developers working on this repository.
 
 **Start with [`DOCS.md`](DOCS.md)** — the wayfinding map showing what lives in this repo vs the CRS repo, with the "owns vs delegates" rules.
 
+## Documentation hygiene
+
+- Keep only **living** docs in the tree: architecture, ADRs, feature docs, tech-debt, onboarding, and the `README`/`AGENTS`/`DOCS` indexes — things that describe **how the system works now**.
+- Do **not** commit **historical working artifacts** — design briefs, implementation/redesign plans, prep analyses, iteration change-logs, mockups, or one-off PR-review records. Once the work ships, that context already lives in the **PR and git history**; a completed plan left in the tree only rots, drifts, and misleads. Delete it as part of landing the feature.
+- Rule of thumb: if a doc describes *how a specific change was made* (a plan, a prep pass, a review record — usually past tense or a dated title) rather than *how the system behaves*, it doesn't belong in `docs/`. When in doubt, it goes in the PR description, not the repo.
+
 ## Search & Context Efficiency
 
 - Backend Kotlin lives in `src/`, the SPA in `frontend/src/`. Scope searches to one of those — don't sweep the whole tree.
@@ -14,7 +20,7 @@ Guidance for AI agents and developers working on this repository.
 ## Architecture
 
 - Portal-side summary with file paths: [`docs/architecture.md`](docs/architecture.md) and Portal ADR [`docs/adr/001-spring-cloud-gateway-bff.md`](docs/adr/001-spring-cloud-gateway-bff.md).
-- Canonical decision (rationale, trade-offs, separate-repo decision): CRS [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/012-portal-architecture.md).
+- Canonical decision (rationale, trade-offs, separate-repo decision): CRS [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/main/docs/registry/adr/012-portal-architecture.md).
 
 **In brief:** Spring Cloud Gateway (WebFlux) BFF + React 19 SPA bundled into the same JAR. Browser JS calls `/rest/**` on the same origin — the portal proxies to `components-registry-service` with TokenRelay. Browser auth is OAuth2 Login (cookie session); CSRF is plain double-submit; SPA fallback serves `index.html` for non-API GETs.
 
@@ -25,11 +31,12 @@ Guidance for AI agents and developers working on this repository.
 - [`docs/features/audit-log.md`](docs/features/audit-log.md) — global feed filters (B7.1.3) + per-component History tab (B7.1.2).
 - [`docs/features/admin-migration.md`](docs/features/admin-migration.md) — async `/admin/migrate` flow.
 - [`docs/features/admin-mode.md`](docs/features/admin-mode.md) — UX-only switch gating destructive actions.
+- [`docs/features/admin-tc-resync.md`](docs/features/admin-tc-resync.md) — admin TeamCity resync flow (`IMPORT_DATA` permission).
 - [`docs/features/app-footer.md`](docs/features/app-footer.md) — anonymous build-info on both Portal and CRS sides.
 
 ## Tech debt
 
-[`docs/tech-debt/`](docs/tech-debt/): TD-001 Playwright Keycloak fixture, TD-002 OpenAPI types, TD-003 persisted session store, TD-004 TLS Ingress migration (done).
+[`docs/tech-debt/`](docs/tech-debt/): TD-001 Playwright Keycloak fixture, TD-002 OpenAPI types, TD-003 persisted session store, TD-004 TLS Ingress migration (done), TD-005 schema-v2 migration follow-ups.
 
 ## Local dev stack
 

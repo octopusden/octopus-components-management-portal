@@ -10,7 +10,7 @@ A Spring Cloud Gateway (WebFlux) BFF that:
 - Hosts a React 19 + Vite SPA built into the same JAR (`/static/` resources) and serves it via `SpaFallbackFilter`.
 - Exposes its own anonymous build-info endpoint at `/portal/info`. The complementary CRS endpoint at `/rest/api/4/info` is proxied via `/rest/**` and is also anonymous on both sides — both feed the footer.
 
-The architectural rationale (why this lives in a separate repo from CRS, what each side owns) is in CRS [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/012-portal-architecture.md). A short Portal-side summary lives at [`docs/adr/001-spring-cloud-gateway-bff.md`](docs/adr/001-spring-cloud-gateway-bff.md).
+The architectural rationale (why this lives in a separate repo from CRS, what each side owns) is in CRS [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/main/docs/registry/adr/012-portal-architecture.md). A short Portal-side summary lives at [`docs/adr/001-spring-cloud-gateway-bff.md`](docs/adr/001-spring-cloud-gateway-bff.md).
 
 ## Key features
 
@@ -91,18 +91,21 @@ git commit -m "chore(openapi): re-vendor v4.json from CRS <ref>"
 ```
 
 **Pinned CRS ref** — set in [`frontend/scripts/vendor-spec.sh`](frontend/scripts/vendor-spec.sh)
-(override per-invocation with `CRS_SPEC_REF=<ref>`). It is `v3` pre-cutover (the
-integration line the v4 contract currently lives on). **Post-cutover, repoint it
-to the default branch or a released CRS tag** so Portal tracks released contracts
-— bump it in the script and in this section.
+(override per-invocation with `CRS_SPEC_REF=<ref>`). It is `main` — CRS's default
+branch, where the v4 contract integrates (the former `v3` branch was removed). It
+deliberately tracks a **moving** ref: the `vendor-spec:check` drift-gate can only
+detect contract changes against a ref that advances — pinning it to a fixed tag or
+SHA would make the check a tautology (see [`docs/tech-debt/TD-002-openapi-types.md`](docs/tech-debt/TD-002-openapi-types.md)).
+CRS does publish release tags (`v3.0.x`); repoint here only if Portal switches to
+release-only contract tracking and drops the drift-gate.
 
 ## Documentation
 
 - [`docs/architecture.md`](docs/architecture.md) — request flow, BFF pattern, CSRF policy, SPA fallback.
-- [`docs/adr/`](docs/adr/) — Portal-specific ADRs (canonical decision is in CRS [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/012-portal-architecture.md)).
-- [`docs/features/`](docs/features/) — feature docs (admin-migration, admin-mode, app-footer).
+- [`docs/adr/`](docs/adr/) — Portal-specific ADRs (canonical decision is in CRS [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/main/docs/registry/adr/012-portal-architecture.md)).
+- [`docs/features/`](docs/features/) — feature docs (component-list, component-detail, audit-log, admin-migration, admin-mode, admin-tc-resync, app-footer).
 - [`docs/onboarding/components-management-portal.md`](docs/onboarding/components-management-portal.md) — OKD/Vault/TeamCity deployment checklist.
-- [`docs/tech-debt/`](docs/tech-debt/) — tech-debt items (TD-001 e2e fixture, TD-002 OpenAPI types, TD-003 session store; TD-004 TLS migration — done).
+- [`docs/tech-debt/`](docs/tech-debt/) — tech-debt items (TD-001 e2e fixture, TD-002 OpenAPI types, TD-003 session store; TD-004 TLS migration — done; TD-005 schema-v2 follow-ups).
 - [`AGENTS.md`](AGENTS.md) — agent / developer build commands and testing notes.
 
 ## License
