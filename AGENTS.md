@@ -4,6 +4,12 @@ Guidance for AI agents and developers working on this repository.
 
 **Start with [`DOCS.md`](DOCS.md)** — the wayfinding map showing what lives in this repo vs the CRS repo, with the "owns vs delegates" rules.
 
+## Documentation hygiene
+
+- Keep only **living** docs in the tree: architecture, ADRs, feature docs, tech-debt, onboarding, and the `README`/`AGENTS`/`DOCS` indexes — things that describe **how the system works now**.
+- Do **not** commit **historical working artifacts** — design briefs, implementation/redesign plans, prep analyses, iteration change-logs, mockups, or one-off PR-review records. Once the work ships, that context already lives in the **PR and git history**; a completed plan left in the tree only rots, drifts, and misleads. Delete it as part of landing the feature.
+- Rule of thumb: if a doc describes *how a specific change was made* (a plan, a prep pass, a review record — usually past tense or a dated title) rather than *how the system behaves*, it doesn't belong in `docs/`. When in doubt, it goes in the PR description, not the repo.
+
 ## Search & Context Efficiency
 
 - Backend Kotlin lives in `src/`, the SPA in `frontend/src/`. Scope searches to one of those — don't sweep the whole tree.
