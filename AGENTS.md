@@ -26,20 +26,20 @@ Guidance for AI agents and developers working on this repository.
 
 ## Change discipline
 
-Generic agent craft — investigate first, keep changes focused, verify honestly — lives in the personal engineering baseline, not here. This section is only what's **Portal-specific** or worth pinning to a concrete gate.
+Generic agent craft — investigate first, keep changes focused, verify honestly — belongs in a personal engineering baseline, not here. This section is only what's **Portal-specific** or worth pinning to a concrete gate.
 
 - **CRS owns business behavior and the REST contract** — don't guess or re-derive it in Portal. Treat [`DOCS.md`](DOCS.md), CRS docs, and the vendored OpenAPI spec (`frontend/src/lib/api/v4.json`) as the source of truth. Enforced formatter/linter/typechecker rules outrank incidental local style.
 - **Don't silently swallow unexpected failures.** At the outbound-service, polling/background, and BFF **transport** boundaries, any intentional fail-soft must leave an observable result or log and be covered by a focused test. A local `value ?? fallback` doesn't need the ceremony.
-- **Verify the affected behavior first, then run the relevant gate** — `./gradlew qualityStatic` / `qualityCoverage` (see [Build Commands](#build-commands)). Report skipped or environment-blocked checks explicitly.
+- **Verify the affected behavior first, then run the gate relevant to what you changed** — `./gradlew qualityStatic` / `qualityCoverage` for the SPA, `./gradlew test` / `build` for backend Kotlin (see [Build Commands](#build-commands)). Report skipped or environment-blocked checks explicitly.
 
 ## Portal invariants
 
 Load-bearing rules; preserve them. The tag shows **how each is actually enforced** — prose-only ones are review-critical because nothing catches a violation automatically.
 
 - **OpenAPI types are generated — never hand-edit `frontend/src/lib/api/schema.d.ts` or `frontend/src/lib/api/v4.json`.** Refresh through the documented workflow (`npm run vendor-spec`) and keep the two in sync with CRS. *[gate: `generate-types:check` + `vendor-spec:check` in `merge-gate.yml`]*
-- **Browser code must never receive or persist OAuth access tokens.** Preserve same-origin `/rest/**`, server-side TokenRelay, and the double-submit CSRF model (see [`docs/architecture.md`](docs/architecture.md)). *[prose-only — review-critical]*
-- **Admin mode is a UX gate only** — real authorization is server-side in CRS (`@PreAuthorize`). Never treat it as a security boundary. *[server-enforced; prose here]*
-- **External calls and polling stay bounded** by explicit timeout / concurrency; add retries or caching only where the failure and staleness semantics are understood. *[config: `application.yaml` gateway timeouts + React Query `staleTime`/retry]*
+- **Browser code must never receive or persist OAuth access tokens.** Preserve same-origin `/rest/**`, server-side TokenRelay, and the double-submit CSRF model (see [`docs/architecture.md`](docs/architecture.md)). *[BFF routing + CSRF are partly covered by config and WebFlux tests; the no-token-in-the-browser guarantee itself has no automated check — review-critical]*
+- **Admin mode is a UX gate only** — real authorization lives in CRS (`@PreAuthorize`), a **separate repo**; Portal only gates the UX (a client-side double-check). Never treat it as a security boundary. *[enforced in CRS, not here — confirm the server-side check exists rather than relying on the UX gate]*
+- **External calls and polling stay bounded** by explicit timeout / concurrency; add retries or caching only where the failure and staleness semantics are understood. *[partly config — feature-specific validation budgets in `application.yaml`, React Query `staleTime`/retry per hook; there is no blanket enforcement of all outbound calls, so new call paths are review-critical]*
 - **Living-docs discipline** — when behavior, config, or architecture changes, update the owning document in the same change; don't add plans or historical records (see [Documentation hygiene](#documentation-hygiene)). *[prose-only]*
 
 ## Features
