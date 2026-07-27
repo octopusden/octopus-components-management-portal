@@ -159,6 +159,9 @@ const LIST_VISIBILITY_GATED: Record<string, string> = {
 const COMPACT_MAX_WIDTH: Record<string, string> = {
   name: 'max-w-[280px]',
   componentOwner: 'max-w-[140px]',
+  // Same treatment as Owner — the cell holds a comma-joined people list, so it
+  // needs a cap for the truncate + title-on-hover to kick in.
+  releaseManagers: 'max-w-[160px]',
 }
 
 // Tighter than the shadcn table default (cells p-4, headers h-12 px-4) so the
@@ -237,12 +240,28 @@ const columns = [
     },
     enableSorting: false,
   }),
-  // Release managers are multi-value (ordered CRS v4 child rows) — render as
-  // chips like System/Labels rather than a single-value cell. Placed right
-  // after Owner so the people columns sit together.
+  // Release managers are multi-value (ordered CRS v4 child rows), but they are
+  // people ids like Owner — not taxonomy tags like System/Labels — so they read
+  // as plain text (chips made the column look like a label strip). Joined with
+  // commas, truncated + title like the Owner cell. Placed right after Owner so
+  // the people columns sit together.
   columnHelper.accessor('releaseManagers', {
     header: 'Release Manager',
-    cell: ({ getValue }) => <ChipListCell values={getValue()} noun="release manager" />,
+    cell: ({ getValue }) => {
+      // Blank entries are filtered before joining — a stray '' would otherwise
+      // read as a dangling ", " separator (CRS trims child rows, but the cell
+      // must not depend on that to look right).
+      const managers = getValue()?.filter((m) => m.trim() !== '')
+      if (!managers || managers.length === 0) {
+        return <span className="text-muted-foreground">—</span>
+      }
+      const joined = managers.join(', ')
+      return (
+        <span title={joined} className="block truncate">
+          {joined}
+        </span>
+      )
+    },
     enableSorting: false,
   }),
   columnHelper.accessor('buildSystem', {

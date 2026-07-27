@@ -362,17 +362,40 @@ describe('ComponentTable', () => {
       expect(cellForColumn('Release Manager').textContent).toContain('—')
     })
 
-    it('renders a single release manager as a chip', () => {
+    it('renders a single release manager as plain text, not a chip', () => {
       renderTable([makeComponent({ releaseManagers: ['jsmith'] })])
-      expect(within(cellForColumn('Release Manager')).getByText('jsmith')).toBeDefined()
+      const cell = cellForColumn('Release Manager')
+      expect(within(cell).getByText('jsmith')).toBeDefined()
+      // Owner-style formatting: no Badge chip wrapper in the cell.
+      expect(cell.querySelector('[data-variant]')).toBeNull()
     })
 
-    it('renders +N overflow badge when more than 3 release managers are present', () => {
+    it('renders multiple release managers as one comma-separated plain-text run', () => {
+      renderTable([makeComponent({ releaseManagers: ['jsmith', 'adoe'] })])
+      const cell = cellForColumn('Release Manager')
+      expect(cell.textContent).toContain('jsmith, adoe')
+      expect(cell.querySelector('[data-variant]')).toBeNull()
+    })
+
+    it('drops blank entries instead of rendering a dangling separator', () => {
+      // Defensive: CRS child rows are trimmed non-empty by contract, but a blank
+      // slipping through must not surface as ", adoe" / a lone comma.
+      renderTable([makeComponent({ releaseManagers: ['', 'adoe'] })])
+      expect(cellForColumn('Release Manager').textContent).toBe('adoe')
+    })
+
+    it('renders em-dash when every release-manager entry is blank', () => {
+      renderTable([makeComponent({ releaseManagers: ['', '  '] })])
+      expect(cellForColumn('Release Manager').textContent).toContain('—')
+    })
+
+    it('keeps the full release-manager list in the title for the truncated cell', () => {
       renderTable([makeComponent({ releaseManagers: ['a', 'b', 'c', 'd'] })])
       const cell = cellForColumn('Release Manager')
-      expect(within(cell).getByText('a')).toBeDefined()
-      expect(within(cell).getByText('+1')).toBeDefined()
-      expect(within(cell).queryByText('d')).toBeNull()
+      const text = within(cell).getByTitle('a, b, c, d')
+      expect(text.className).toContain('truncate')
+      // No expand/collapse toggle — the cell is static text like Owner.
+      expect(within(cell).queryByRole('button')).toBeNull()
     })
 
     it('hides the Release Manager column when component.releaseManager visibility is hidden', () => {
@@ -818,6 +841,18 @@ describe('ComponentTable — compact fit (Option A: truncate wide text columns)'
     expect(cell.className).toMatch(/max-w-/)
     const inner = cell.querySelector('[title]')
     expect(inner?.getAttribute('title')).toBe(owner)
+    expect(inner?.className).toContain('truncate')
+  })
+
+  it('bounds the Release Manager cell width so a long people list cannot widen the table', () => {
+    // Same compact-fit contract as Owner: the column is capped and the joined
+    // list truncates inside it, full value one hover away.
+    const managers = ['a-very-long-release-manager-id', 'another-long-release-manager-id']
+    renderTable([makeComponent({ releaseManagers: managers })])
+    const cell = cellForColumn('Release Manager')
+    expect(cell.className).toMatch(/max-w-/)
+    const inner = cell.querySelector('[title]')
+    expect(inner?.getAttribute('title')).toBe(managers.join(', '))
     expect(inner?.className).toContain('truncate')
   })
 
