@@ -30,7 +30,7 @@ Generic agent craft — investigate first, keep changes focused, verify honestly
 
 - **CRS owns business behavior and the REST contract** — don't guess or re-derive it in Portal. Treat [`DOCS.md`](DOCS.md), CRS docs, and the vendored OpenAPI spec (`frontend/src/lib/api/v4.json`) as the source of truth. Enforced formatter/linter/typechecker rules outrank incidental local style.
 - **Don't silently swallow unexpected failures.** At the outbound-service, polling/background, and BFF **transport** boundaries, any intentional fail-soft must leave an observable result or log and be covered by a focused test. A local `value ?? fallback` doesn't need the ceremony.
-- **Verify the affected behavior first, then run the gate relevant to what you changed** — `./gradlew qualityStatic` / `qualityCoverage` for the SPA, `./gradlew test` / `build` for backend Kotlin (see [Build Commands](#build-commands)). Report skipped or environment-blocked checks explicitly.
+- **Verify the affected behavior first, then run the gate relevant to what you changed** — for the SPA, from `frontend/`: `npm run lint` / `npm run typecheck` / `npm run test:coverage` (add `npm run generate-types:check` and `npm run vendor-spec:check` if you touched the vendored OpenAPI spec or generated types); for backend Kotlin: `./gradlew test` / `build`, plus `./gradlew qualityStatic` (detekt + ktlint) / `qualityCoverage` (Kover) — these Gradle quality tasks are JVM-only and do **not** cover the frontend (see [Build Commands](#build-commands)). Report skipped or environment-blocked checks explicitly.
 
 ## Portal invariants
 
@@ -73,14 +73,24 @@ Default credentials (substituted into the realm from `.env`): `e2e-admin` / `$E2
 # Backend only (skip frontend)
 ./gradlew build -x npmCi -x npmBuild -x copyFrontendDist
 
-# Run tests
+# Run backend tests
 ./gradlew test
 
-# Frontend lint + typecheck
+# Backend (Kotlin) static analysis — detekt + ktlint
 ./gradlew qualityStatic
 
-# Frontend test coverage
+# Backend (Kotlin) test coverage — Kover
 ./gradlew qualityCoverage
+```
+
+Frontend lint, typecheck, and coverage are **not** part of the Gradle quality tasks
+above — they run as npm scripts (this is exactly what `merge-gate.yml` executes). From
+`frontend/`:
+
+```bash
+npm run lint          # eslint, --max-warnings 0
+npm run typecheck     # tsc --noEmit
+npm run test:coverage # vitest run --coverage
 ```
 
 ## Testing
