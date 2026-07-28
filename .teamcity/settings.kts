@@ -115,7 +115,7 @@ object id10CompileUtAuto : BuildType({
 object id15E2eAuto : BuildType({
     templates(AbsoluteId("Octopus_OctopusGradleBuild"))
     id("15E2eAuto")
-    name = "[1.5] E2E [AUTO]"
+    name = "[2.0] E2E [AUTO]"
 
     // Pattern follows id20ftAuto in other Octopus projects: BUILD_VERSION
     // pulls the upstream Compile&UT number, buildNumberPattern renders
@@ -203,7 +203,7 @@ object id15E2eAuto : BuildType({
 object id17BuildValidationAuto : BuildType({
     templates(AbsoluteId("RDDepartment_PostGithubStatus"))
     id("17BuildValidationAuto")
-    name = "[1.7] Build Validation [AUTO]"
+    name = "[3.0] Build Validation [AUTO]"
 
     // Needed so %build.vcs.number% (COMMIT_SHA) resolves to the revision built.
     vcs {
@@ -231,7 +231,7 @@ object id17BuildValidationAuto : BuildType({
 object id20DeployToOkdQaManual : BuildType({
     templates(AbsoluteId("RnDProcessesAutomation_IdpComponentOkdDeploy"))
     id("20DeployToOkdQaManual")
-    name = "[2.0] Deploy to OKD QA [MANUAL]"
+    name = "[4.0] Deploy to OKD QA [MANUAL]"
 
     params {
         text("OKD_SERVER_URL", "%OKD_SERVER_DEV_URL%", allowEmpty = false)
@@ -252,7 +252,7 @@ object id20DeployToOkdQaManual : BuildType({
 object id25DeployToOkdProdManualTemp : BuildType({
     templates(AbsoluteId("RnDProcessesAutomation_IdpComponentOkdDeploy"))
     id("25DeployToOkdProdManualTemp")
-    name = "[2.5] Deploy to OKD PROD [MANUAL][TEMP]"
+    name = "[5.0] Deploy to OKD PROD [MANUAL][TEMP]"
 
     params {
         text("OKD_SERVER_URL", "%OKD_SERVER_PROD_URL%", allowEmpty = false)
@@ -274,7 +274,7 @@ object id25DeployToOkdProdManualTemp : BuildType({
 object id40ReleaseManual : BuildType({
     templates(AbsoluteId("Octopus_OctopusComponents_OctopusRelease"))
     id("40ReleaseManual")
-    name = "[3.0] Release [MANUAL]"
+    name = "[6.0] Release [MANUAL]"
 
     params {
         param("PROJECT_VERSION", "${id10CompileUtAuto.depParamRefs["PROJECT_VERSION"]}")
@@ -299,7 +299,7 @@ object id40ReleaseManual : BuildType({
 object id50ReleasePostProcessingAuto : BuildType({
     templates(AbsoluteId("Octopus_OctopusComponents_HOctopusTest_OctopusReleasePostProcessing"))
     id("50ReleasePostProcessingAuto")
-    name = "[4.0] Release Post Processing [AUTO]"
+    name = "[7.0] Release Post Processing [AUTO]"
     // LAST_RELEASE_VERSION is inherited from the project level; do NOT redeclare it
     // here (`LAST_RELEASE_VERSION = %LAST_RELEASE_VERSION%` is a circular
     // self-reference).
@@ -316,7 +316,7 @@ object id50ReleasePostProcessingAuto : BuildType({
 object id50DeployToOkdQaAuto : BuildType({
     templates(AbsoluteId("RnDProcessesAutomation_IdpComponentOkdDeploy"))
     id("50DeployToOkdQaAuto")
-    name = "[5.0] Deploy to OKD QA [AUTO]"
+    name = "[8.0] Deploy to OKD QA [AUTO]"
 
     params {
         text("OKD_SERVER_URL", "%OKD_SERVER_DEV_URL%", allowEmpty = false)
@@ -345,7 +345,7 @@ object id50DeployToOkdQaAuto : BuildType({
 object id70DeployToOkdProdManual : BuildType({
     templates(AbsoluteId("RnDProcessesAutomation_IdpComponentOkdDeploy"))
     id("70DeployToOkdProdManual")
-    name = "[6.0] Deploy to OKD PROD [MANUAL]"
+    name = "[9.0] Deploy to OKD PROD [MANUAL]"
 
     params {
         param("TEAMCITY_UPDATE_PROJECT_IDS", "RDDepartment")
