@@ -13,7 +13,14 @@ import type { ServiceEvent } from '@/lib/types'
 // whole (retention-bounded, low-volume) set of product-usage events, not just the first page.
 const USAGE_PAGE_SIZE = 200
 
-const EVENT_TYPES = ['STARTUP', 'MIGRATION_COMPONENTS', 'MIGRATION_HISTORY', 'TEAMCITY_RESYNC', 'VALIDATION_SWEEP']
+const EVENT_TYPES = [
+  'STARTUP',
+  'MIGRATION_COMPONENTS',
+  'MIGRATION_HISTORY',
+  'TEAMCITY_RESYNC',
+  'TEAMCITY_VALIDATION',
+  'VALIDATION_SWEEP',
+]
 const SOURCES = ['crs', 'portal']
 const STATUSES = ['RUNNING', 'COMPLETED', 'FAILED']
 

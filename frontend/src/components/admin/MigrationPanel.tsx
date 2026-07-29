@@ -8,6 +8,8 @@ import {
   useMigrationStatus,
   useRunMigration,
 } from '@/hooks/useMigration'
+import { useTeamCityResyncJob } from '@/hooks/useTeamCityResync'
+import { useTeamCityValidationJob } from '@/hooks/useTeamCityValidation'
 import { toast } from '@/hooks/use-toast'
 import { ApiError } from '@/lib/api'
 import { formatMigrationError } from '@/lib/migrationErrors'
@@ -82,13 +84,25 @@ export function MigrationPanel() {
   const queryClient = useQueryClient()
   const [confirmOpen, setConfirmOpen] = useState(false)
 
-  // Cross-disable against the history-migration card. The backend's
-  // MigrationLifecycleGate would 409 a cross-kind start anyway, but the SPA
-  // also disables the button so the user never sees that error path. React
-  // Query dedupes the GET, so calling the hook here doesn't cost an extra
-  // request — it's reading the same cache entry the history panel uses.
+  // Cross-disable against the other three async job kinds (history migration,
+  // TC resync, TC validation) — they all share one single-flight
+  // MigrationLifecycleGate on the backend, which would 409 a cross-kind start
+  // anyway, but the SPA also disables the button so the user never sees that
+  // error path. React Query dedupes each GET, so calling these hooks here
+  // doesn't cost extra requests — they read the same cache entries their own
+  // panels use.
   const historyJob = useHistoryMigrationJob()
   const historyRunning = historyJob.data?.state === 'RUNNING'
+  const resyncJob = useTeamCityResyncJob()
+  const resyncRunning = resyncJob.data?.state === 'RUNNING'
+  const validationJob = useTeamCityValidationJob()
+  const validationRunning = validationJob.data?.state === 'RUNNING'
+  const otherKindRunning = historyRunning || resyncRunning || validationRunning
+  const runningKindLabel = historyRunning
+    ? 'History migration'
+    : resyncRunning
+      ? 'TC resync'
+      : 'TC validation'
 
   const isFailed = jobData?.state === 'FAILED'
   const isCompleted = jobData?.state === 'COMPLETED'
@@ -128,7 +142,7 @@ export function MigrationPanel() {
   // the operator can't kick a pointless re-run. `undefined` while status loads → not disabled.
   const migrationComplete = status.data?.git === 0
   const buttonDisabled =
-    !adminMode || isRunning || startMigration.isPending || historyRunning || migrationComplete
+    !adminMode || isRunning || startMigration.isPending || otherKindRunning || migrationComplete
 
   return (
     <div className="space-y-4">
@@ -154,12 +168,12 @@ export function MigrationPanel() {
             Arm Admin mode above to run migration.
           </span>
         )}
-        {adminMode && historyRunning && !isRunning && (
+        {adminMode && otherKindRunning && !isRunning && (
           <span className="text-xs text-muted-foreground">
-            History migration is running — wait for it to finish.
+            {runningKindLabel} is running — wait for it to finish.
           </span>
         )}
-        {adminMode && migrationComplete && !isRunning && !historyRunning && (
+        {adminMode && migrationComplete && !isRunning && !otherKindRunning && (
           <span className="text-xs text-muted-foreground">
             Migration complete — nothing left in Git to migrate.
           </span>

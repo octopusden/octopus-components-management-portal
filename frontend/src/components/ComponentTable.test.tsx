@@ -620,7 +620,7 @@ describe('ComponentTable', () => {
       expect(screen.queryByRole('link', { name: /TeamCity/i })).toBeNull()
     })
 
-    it('does NOT render TeamCity icon when teamcityProjectUrl is undefined', () => {
+    it('does NOT render TeamCity icon when teamcityProjectUrl is unset', () => {
       mockLinks({ tcBaseUrl: 'https://teamcity.example.com' })
       renderTable([makeComponent({ name: 'delta' })])
       expect(screen.queryByRole('link', { name: /TeamCity/i })).toBeNull()

@@ -6,7 +6,7 @@ import { ComponentDetailPage } from './pages/ComponentDetailPage'
 import { CreateComponentPage } from './pages/CreateComponentPage'
 import { AuditLogPage } from './pages/AuditLogPage'
 import { AdminSettingsPage } from './pages/AdminSettingsPage'
-import { RegistryHealthPage } from './pages/RegistryHealthPage'
+import { ValidationsPage } from './pages/ValidationsPage'
 import { RequirePermission } from './components/RequirePermission'
 import { PERMISSIONS, restoreContinuePath } from './lib/auth'
 import { Toaster } from './components/ui/toaster'
@@ -85,18 +85,19 @@ export const appRoutes: RouteObject[] = [
       { path: '/components/new', element: <CreateComponentPage /> },
       { path: '/components/:id', element: <ComponentDetailPage /> },
       {
+        path: '/validations',
+        element: (
+          <RequirePermission permission={PERMISSIONS.IMPORT_DATA}>
+            <ValidationsPage />
+          </RequirePermission>
+        ),
+      },
+      { path: '/health', element: <Navigate to="/validations?tab=unregistered-release" replace /> },
+      {
         path: '/audit',
         element: (
           <RequirePermission permission={PERMISSIONS.ACCESS_AUDIT}>
             <AuditLogPage />
-          </RequirePermission>
-        ),
-      },
-      {
-        path: '/health',
-        element: (
-          <RequirePermission permission={PERMISSIONS.IMPORT_DATA}>
-            <RegistryHealthPage />
           </RequirePermission>
         ),
       },

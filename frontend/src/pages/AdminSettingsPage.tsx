@@ -9,6 +9,7 @@ import { ComponentDefaultsForm } from '../components/admin/ComponentDefaultsForm
 import { MigrationHistoryPanel } from '../components/admin/MigrationHistoryPanel'
 import { MigrationPanel } from '../components/admin/MigrationPanel'
 import { TeamCityResyncPanel } from '../components/admin/TeamCityResyncPanel'
+import { TeamCityValidationPanel } from '../components/admin/TeamCityValidationPanel'
 import { ServiceEventsPanel } from '../components/admin/ServiceEventsPanel'
 import { FeedbackPanel } from '../components/admin/FeedbackPanel'
 import { AdminModeArmBar } from '../components/admin/AdminModeArmBar'
@@ -147,6 +148,18 @@ export function AdminSettingsPage() {
                 </p>
                 <div className="pt-2">
                   <TeamCityResyncPanel />
+                </div>
+              </div>
+
+              <div className="border-t pt-6 space-y-2">
+                <h2 className="text-lg font-semibold">TeamCity Validation</h2>
+                <p className="text-sm text-muted-foreground">
+                  Scans every component's TeamCity project(s) and records
+                  validation findings. See the Validations page for the
+                  results. Arm Admin mode above to enable the button.
+                </p>
+                <div className="pt-2">
+                  <TeamCityValidationPanel />
                 </div>
               </div>
             </div>

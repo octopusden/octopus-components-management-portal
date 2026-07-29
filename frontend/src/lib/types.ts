@@ -279,6 +279,37 @@ export interface TeamcityProject {
   projectId: string
   projectUrl?: string | null
   sortOrder: number
+  projectVersion?: string | null
+  validations: TeamcityValidation[]
+}
+
+export interface TeamcityValidation {
+  type: string
+  status: string
+  message?: string | null
+  updatedAt?: string | null
+}
+
+export interface TeamcityValidationSummary {
+  byStatus: Record<string, number>
+  byType: Record<string, number>
+  componentsWithIssues: number
+  findings: number
+}
+
+export interface TeamcityValidationRow {
+  componentId: string
+  componentName: string
+  message?: string | null
+  projectId: string
+  // Verbatim TeamCity webUrl for this finding's project, mirroring
+  // TeamcityProject.projectUrl — lets the findings table link the project id
+  // out to TeamCity the same way the detail page does. Optional/nullable
+  // since not every finding may resolve to a live project.
+  projectUrl?: string | null
+  status: string
+  type: string
+  updatedAt: string
 }
 
 // ---------------------------------------------------------------------------
@@ -963,9 +994,12 @@ export interface HistoryMigrationJobResponse {
 /**
  * 409 body returned for cross-kind conflicts — components POST while history
  * is RUNNING, history POST while TC sync is RUNNING, force-reset while
- * history is RUNNING, etc. Distinct from the same-kind attach 409 that
- * returns a full job-response body — distinguished by the `kind`
- * discriminator (always 'conflict' here).
+ * history is RUNNING, any of the above while TC validation is RUNNING (or
+ * vice versa), etc. All four async job kinds (components migration, history
+ * migration, TC resync, TC validation) share one single-flight lifecycle gate
+ * on the backend. Distinct from the same-kind attach 409 that returns a full
+ * job-response body — distinguished by the `kind` discriminator (always
+ * 'conflict' here).
  */
 export interface MigrationConflictResponse {
   /** Discriminator — always 'conflict' for this shape. Mutually exclusive with the 'job' shape. */
@@ -975,8 +1009,9 @@ export interface MigrationConflictResponse {
     | 'history-migration-running'
     | 'history-import-likely-live-elsewhere'
     | 'tc-resync-running'
+    | 'tc-validation-running'
   message: string
-  activeKind: 'COMPONENTS' | 'HISTORY' | 'TC_RESYNC'
+  activeKind: 'COMPONENTS' | 'HISTORY' | 'TC_RESYNC' | 'TC_VALIDATION'
   activeJobId: string | null
 }
 
@@ -1022,6 +1057,26 @@ export interface TeamCityResyncJobResponse {
   result: TeamCityResyncResult | null
 }
 
+export interface TeamCityValidationResult {
+  scanned: number
+  succeeded: number
+  failed: number
+  projectsWithIssues: number
+  removed: number
+  errors: string[]
+}
+
+export interface TeamCityValidationJobResponse {
+  /** Discriminator — always 'job' for this shape. */
+  kind?: 'job'
+  id: string
+  state: JobState
+  startedAt: string
+  finishedAt: string | null
+  errorMessage: string | null
+  result: TeamCityValidationResult | null
+}
+
 // ── CRS legacy version rendering (rest/api/2/.../detailed-version) ───────────
 // One rendered version in its bare (CI/build) and Jira-facing (prefixed) forms.
 export interface ComponentRegistryVersion {
@@ -1050,7 +1105,7 @@ export interface DetailedComponentVersion {
  */
 export interface ServiceEvent {
   id: number
-  /** STARTUP | MIGRATION_COMPONENTS | MIGRATION_HISTORY | TEAMCITY_RESYNC | VALIDATION_SWEEP | ONBOARDING_VIDEO_VIEW */
+  /** STARTUP | MIGRATION_COMPONENTS | MIGRATION_HISTORY | TEAMCITY_RESYNC | TEAMCITY_VALIDATION | VALIDATION_SWEEP | ONBOARDING_VIDEO_VIEW */
   eventType: string
   /** Derived SYSTEM | USER split (from eventType), server-provided. */
   category?: string

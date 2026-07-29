@@ -1,6 +1,6 @@
 import { Fragment, type ReactNode, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { Package, History, Activity, Plus, ListFilter } from 'lucide-react'
+import { Package, History, ShieldCheck, Plus, ListFilter } from 'lucide-react'
 import {
   CommandDialog,
   CommandInput,
@@ -99,7 +99,14 @@ export function CommandPalette() {
       ? [{ value: 'goto audit', label: 'Audit', icon: <History />, onSelect: () => go('/audit') }]
       : []),
     ...(isAdmin
-      ? [{ value: 'goto health', label: 'Health', icon: <Activity />, onSelect: () => go('/health') }]
+      ? [
+          {
+            value: 'goto validations',
+            label: 'Validations',
+            icon: <ShieldCheck />,
+            onSelect: () => go('/validations'),
+          },
+        ]
       : []),
   ]
   const actionItems: PaletteItem[] = canCreate
