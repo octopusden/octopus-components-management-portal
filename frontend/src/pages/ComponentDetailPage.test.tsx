@@ -866,6 +866,31 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
       'https://teamcity.example.com/project/Build_B',
     )
   })
+
+  it('(g) an empty validations list renders neutral "no recorded findings" for an admin — NOT "0 issues" or a green checkmark', () => {
+    useAdminMode.setState({ enabled: true })
+    const user = makeUser(['ACCESS_COMPONENTS', 'IMPORT_DATA'])
+    renderPage(
+      {
+        ...baseComponent,
+        teamcityProjects: [
+          {
+            id: 'tc-1',
+            projectId: 'MyProject_Build',
+            projectUrl: 'https://teamcity.example.com/project/MyProject_Build',
+            sortOrder: 0,
+            validations: [],
+          },
+        ],
+      },
+      user,
+    )
+    const row = screen.getByTestId('teamcity-projects-list')
+    expect(within(row).getByText('no recorded findings')).toBeDefined()
+    expect(within(row).queryByText(/issue/i)).toBeNull()
+    expect(within(row).queryByLabelText('No validation issues')).toBeNull()
+    expect(within(row).getByLabelText('No validation findings on record')).toBeDefined()
+  })
 })
 
 describe('ComponentDetailPage — solution flag dirty-gate', () => {

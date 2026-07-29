@@ -975,7 +975,11 @@ function ComponentDetailEditor() {
                   )}
                   {isAdmin && (
                     <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                      {allClean ? 'no issues' : `${issueCount} issue${issueCount === 1 ? '' : 's'}`}
+                      {noRecordedFindings
+                        ? 'no recorded findings'
+                        : allClean
+                          ? 'no issues'
+                          : `${issueCount} issue${issueCount === 1 ? '' : 's'}`}
                     </span>
                   )}
                 </div>
