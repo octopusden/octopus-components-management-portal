@@ -50,7 +50,7 @@ kotlin {
     compilerOptions.jvmTarget = JvmTarget.JVM_25
 }
 
-// SpotBugs: nothing to configure here. octopus-quality 2.4.1 only wires SpotBugs on Java
+// SpotBugs: nothing to configure here. octopus-quality only wires SpotBugs on Java
 // modules without Kotlin, so this Kotlin-only portal never gets it — no force/disable needed.
 
 // detekt 2.x splits its baselines per source set (detekt-baseline-main.xml / -test.xml)
@@ -391,6 +391,12 @@ val verifyCentralPublicationPolicy =
 // Hook the task TYPE, so a concrete task such as publishMavenPublicationToMavenLocal cannot
 // bypass the guard; the aggregates are matched by name as well because `publish` is per-project
 // and `publishToSonatype` only exists with -Pnexus, so neither can be forced into existence.
+// `check` — so the ordinary PR gate covers this. Without it the guard only ran on the publish
+// path, which no pull-request check executes: drift could be merged and would surface at the next
+// release instead of in review. Verified: `./gradlew check --dry-run` scheduled the task 0 times
+// before this line and 1 after.
+tasks.named("check") { dependsOn(verifyCentralPublicationPolicy) }
+
 gradle.projectsEvaluated {
     allprojects {
         tasks.withType(AbstractPublishToMaven::class.java).configureEach {
