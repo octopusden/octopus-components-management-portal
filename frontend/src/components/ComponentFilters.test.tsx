@@ -23,7 +23,7 @@ vi.mock('../hooks/useLabels', () => ({
 import { useLabels } from '../hooks/useLabels'
 const mockUseLabels = vi.mocked(useLabels)
 
-// Stub the four in-use meta hooks (SYS-046) backing the extended-search
+// Stub the in-use meta hooks (SYS-046) backing the extended-search
 // multi-selects. Default to an empty vocabulary; `metaState` is hoisted so the
 // vi.mock factories can read it, and a test can seed options for a pick
 // interaction by assigning to it. Plain factories (not vi.fn) so they survive
@@ -33,6 +33,8 @@ const metaState = vi.hoisted(() => ({
   jiraProjectKeys: [] as string[],
   parentComponentNames: [] as string[],
   groupKeys: [] as string[],
+  releaseManagers: [] as string[],
+  securityChampions: [] as string[],
 }))
 vi.mock('../hooks/useClientCodes', () => ({
   useClientCodes: () => ({ data: metaState.clientCodes, isLoading: false }),
@@ -45,6 +47,12 @@ vi.mock('../hooks/useParentComponentNames', () => ({
 }))
 vi.mock('../hooks/useGroupKeys', () => ({
   useGroupKeys: () => ({ data: metaState.groupKeys, isLoading: false }),
+}))
+vi.mock('../hooks/useReleaseManagers', () => ({
+  useReleaseManagers: () => ({ data: metaState.releaseManagers, isLoading: false }),
+}))
+vi.mock('../hooks/useSecurityChampions', () => ({
+  useSecurityChampions: () => ({ data: metaState.securityChampions, isLoading: false }),
 }))
 
 function mockLabels(
@@ -628,6 +636,8 @@ describe('ComponentFilters extended search (items 5 / 10)', () => {
     expect(screen.getByLabelText('Can be parent')).toBeDefined()
     expect(screen.getByLabelText('Distribution explicit')).toBeDefined()
     expect(screen.getByLabelText('Distribution external')).toBeDefined()
+    expect(screen.getByLabelText('Release manager')).toBeDefined()
+    expect(screen.getByLabelText('Security champion')).toBeDefined()
   })
 
   it('typing in an extended text filter calls onFilterChange after debounce', () => {
@@ -822,6 +832,8 @@ describe('ComponentFilters multi-value extended filters + distribution (SYS-045/
     metaState.jiraProjectKeys = []
     metaState.parentComponentNames = []
     metaState.groupKeys = []
+    metaState.releaseManagers = []
+    metaState.securityChampions = []
   })
 
   it('renders clientCode as a multi-select dropdown (button, not a text input) in the extended row', async () => {
@@ -839,6 +851,49 @@ describe('ComponentFilters multi-value extended filters + distribution (SYS-045/
     await userEvent.click(screen.getByRole('checkbox', { name: 'ACME-PORTAL' }))
     const lastCall = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
     expect(lastCall.clientCode).toEqual(['ACME-PORTAL'])
+  })
+
+  it('picking a release manager emits a single-element releaseManager array', async () => {
+    metaState.releaseManagers = ['alice', 'bob']
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    await userEvent.click(screen.getByRole('button', { name: /extended search/i }))
+    await userEvent.click(screen.getByLabelText('Release manager'))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'bob' }))
+    const lastCall = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
+    expect(lastCall.releaseManager).toEqual(['bob'])
+  })
+
+  it('picking a security champion emits a single-element securityChampion array', async () => {
+    metaState.securityChampions = ['carol', 'dave']
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    await userEvent.click(screen.getByRole('button', { name: /extended search/i }))
+    await userEvent.click(screen.getByLabelText('Security champion'))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'carol' }))
+    const lastCall = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
+    expect(lastCall.securityChampion).toEqual(['carol'])
+  })
+
+  it('clearing the last release manager drops the field rather than sending an empty array', async () => {
+    // The wire contract is "omit when empty" — buildComponentListParams only
+    // emits ?releaseManager= for a non-empty array, so the filter must go back
+    // to undefined, not [].
+    metaState.releaseManagers = ['alice']
+    render(
+      <ComponentFilters filter={{ archived: false, releaseManager: ['alice'] }} onFilterChange={onFilterChange} />,
+    )
+    await userEvent.click(screen.getByLabelText('Release manager'))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'alice' }))
+    const lastCall = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
+    expect(lastCall.releaseManager).toBeUndefined()
+  })
+
+  it('auto-opens extended search when a people filter is active (Health deep-link / RM preset)', () => {
+    // A `?releaseManager=` deep-link from Registry Health — or the "I am Release
+    // Manager" preset — must not leave its own control hidden behind the toggle.
+    render(
+      <ComponentFilters filter={{ archived: false, releaseManager: ['carol'] }} onFilterChange={onFilterChange} />,
+    )
+    expect(screen.getByLabelText('Release manager')).toBeDefined()
   })
 
   it('auto-opens extended search when a multi-value extended filter is active', () => {

@@ -225,6 +225,11 @@ export const DEFAULT_SEARCHABILITY: Record<string, Searchable> = {
   'build.javaVersion': 'Extended',
   'component.labels': 'Main',
   'component.componentOwner': 'Main',
+  // The people pair defaults to Extended, not Main: the top bar already carries
+  // search + four multi-selects, and the common "components I am RM for" case is
+  // served by the personal preset. An admin can promote either to Main.
+  'component.releaseManager': 'Extended',
+  'component.securityChampion': 'Extended',
   'component.clientCode': 'Extended',
   'component.solution': 'Extended',
   'component.parentComponentName': 'Extended',
