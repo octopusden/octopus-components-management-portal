@@ -1,4 +1,5 @@
-# INTERNAL — triggered on push to main, nightly, and manually; never on pull_request.
+# INTERNAL — triggered on push to main, weekly on Mondays, and manually; never on
+# pull_request. PR-time scanning lives in merge-gate.yml.
 name: Security Reports
 
 on:
@@ -12,13 +13,27 @@ permissions:
   contents: read
   security-events: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   security:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v2.4.1
+    # No `secrets: inherit`: common-java-gradle-security-reports.yml declares no
+    # secrets and reads none — GITHUB_TOKEN reaches it automatically.
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v2.5.1
     with:
       java-version: '25'
-      codeql-languages: java-kotlin,javascript-typescript
-      codeql-category: /language:java-kotlin
-      codeql-continue-on-error: true
+      # `actions` is analysed here because this repo runs CodeQL as an *advanced*
+      # configuration; the default setup that used to cover actions and
+      # javascript-typescript is disabled, since GitHub refuses advanced SARIF
+      # uploads while it is on ("CodeQL analyses from advanced configurations
+      # cannot be processed when the default setup is enabled").
+      codeql-languages: java-kotlin,javascript-typescript,actions
+      # Must stay identical to the category in merge-gate.yml. The category
+      # identifies the result set, so two different values would make GitHub treat
+      # PR and main analyses as separate configurations and stop correlating
+      # alerts between them. An empty value would do exactly that, because the
+      # auto-derived category includes the workflow path and job name.
+      codeql-category: /portal-codeql
       trivy-continue-on-error: true
-    secrets: inherit

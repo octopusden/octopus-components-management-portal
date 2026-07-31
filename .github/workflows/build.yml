@@ -1,10 +1,23 @@
 name: Gradle Compile & UT
 
-on: [push, pull_request, workflow_dispatch]
+# INTERNAL — post-merge verification of main, plus manual runs. Deliberately NOT
+# on pull_request: merge-gate.yml calls the same reusable workflow as its `build`
+# job, so a `pull_request` trigger here ran the identical build a second time, and
+# the bare `push` trigger a third time on the PR branch. Only the merge-gate copy
+# feeds gate/merge. Keeping this workflow for main gives the one thing quality.yml
+# and security.yml do not do: assemble the app and build its docker image.
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   run-build-and-deploy:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v2.4.1
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v2.5.1
     with:
       flow-type: hybrid
       java-version: '25'

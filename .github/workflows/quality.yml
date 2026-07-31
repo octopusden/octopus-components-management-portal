@@ -1,19 +1,25 @@
 # INTERNAL — triggered on push to main and manually; never on pull_request.
+# PR-time quality gating lives in merge-gate.yml, which calls the reusable
+# workflow directly rather than calling this one.
 name: Quality Gates
 
 on:
   push:
     branches: [ main ]
-  workflow_call:
   workflow_dispatch:
 
 permissions:
   contents: read
   security-events: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   quality:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v2.4.1
+    # No `secrets: inherit`: common-java-gradle-quality-gates.yml declares no
+    # secrets and reads none — GITHUB_TOKEN reaches it automatically.
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v2.5.1
     with:
       java-version: '25'
-    secrets: inherit
