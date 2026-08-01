@@ -18,6 +18,22 @@ plugins {
 }
 
 octopusQuality {
+    // This repository must publish NOTHING to Maven Central. `release.yaml` sets
+    // `publish-to-nexus: false` and this branch removed the MavenPublication itself, because a
+    // workflow flag alone does not stop a manual `publishToSonatype` with real credentials.
+    //
+    // The declared set is therefore deliberately EMPTY — a statement that the build enforces,
+    // not an omission. The local task that did this until now is deleted in the same commit as
+    // the version bump: octopus-base v2.7.0 registers a task of exactly that name, and two tasks
+    // of one name fail configuration.
+    //
+    // Verification differs from the non-empty case and is easy to misread: with an empty set
+    // GREEN prints NOTHING, so a passing run is not by itself evidence the task executed, and
+    // RED can only be shown by temporarily ADDING a publication.
+    publication {
+        enforceCentralPublications.set(true)
+        centralPublications.set(emptySet())
+    }
     coverage {
         minimumLineCoverage.set(BigDecimal("0.00"))
         overallMinimum.set(BigDecimal("0.00"))
@@ -341,69 +357,4 @@ tasks.named<com.bmuschko.gradle.docker.tasks.image.Dockerfile>("dockerCreateDock
     // to put its config; /tmp is world-writable in the container.
     environmentVariable("HOME", "/tmp")
     user("10001")
-}
-
-// Regression guard: this repository must publish NOTHING to Maven Central, so the allowlist is
-// deliberately empty. Adding a publication anywhere — including to the root project — fails this
-// task rather than quietly reappearing on Central at the next release. Without it, the pairing of
-// publish-to-nexus: false and a removed publication is only a convention.
-//
-// allprojects, not subprojects: the root is a publishable project like any other, and its path is
-// unambiguously ":" while its name is a repository-level string.
-val centralPublishedProjects = emptySet<String>()
-
-fun centralPublicationPolicyProblems(): List<String> {
-    // Reading `publishing` throws on a project without maven-publish, so check the plugin first.
-    val publishingProjects = allprojects.filter { candidate ->
-        candidate.plugins.hasPlugin("maven-publish") &&
-            candidate.extensions
-                .getByType(PublishingExtension::class.java)
-                .publications
-                .isNotEmpty()
-    }
-    val actual = publishingProjects.map { it.path }.toSet()
-    return if (actual != centralPublishedProjects) {
-        listOf(
-            "Maven Central publication set drifted. This repository is not consumed as a Maven\n" +
-                "dependency and must publish nothing.\n" +
-                "  allowlisted: ${centralPublishedProjects.sorted()}\n" +
-                "  publishing:  ${actual.sorted()}",
-        )
-    } else {
-        emptyList()
-    }
-}
-
-// A policy violation must fail its own gate, not every Gradle invocation: throwing at
-// configuration time would break build, test, dependencies and IDE sync as well.
-val verifyCentralPublicationPolicy =
-    tasks.register("verifyCentralPublicationPolicy") {
-        group = "verification"
-        description = "Fails if anything in this repository would publish to Maven Central."
-        doLast {
-            val problems = centralPublicationPolicyProblems()
-            if (problems.isNotEmpty()) {
-                throw GradleException(problems.joinToString("\n\n"))
-            }
-        }
-    }
-
-// Hook the task TYPE, so a concrete task such as publishMavenPublicationToMavenLocal cannot
-// bypass the guard; the aggregates are matched by name as well because `publish` is per-project
-// and `publishToSonatype` only exists with -Pnexus, so neither can be forced into existence.
-// `check` — so the ordinary PR gate covers this. Without it the guard only ran on the publish
-// path, which no pull-request check executes: drift could be merged and would surface at the next
-// release instead of in review. Verified: `./gradlew check --dry-run` scheduled the task 0 times
-// before this line and 1 after.
-tasks.named("check") { dependsOn(verifyCentralPublicationPolicy) }
-
-gradle.projectsEvaluated {
-    allprojects {
-        tasks.withType(AbstractPublishToMaven::class.java).configureEach {
-            dependsOn(verifyCentralPublicationPolicy)
-        }
-        tasks
-            .matching { it.name in setOf("publishToSonatype", "publish", "publishToMavenLocal") }
-            .configureEach { dependsOn(verifyCentralPublicationPolicy) }
-    }
 }
