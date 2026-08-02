@@ -26,6 +26,16 @@ Practical consequence: commit the spec on its own, get it agreed, then implement
 If you squash locally, re-split before pushing — GitHub's squash-on-merge is fine,
 the gate reads branch commits, not the merge result.
 
+**Spec and implementation belong in the same PR.** The spec goes in first as its
+own commit and is reviewed before the code is written; the code then lands on
+the same branch. Merging a spec-only PR and implementing in the next one walks
+into the gate: that second PR changes behaviour and touches no spec, so it is
+blocked, and reaching for `no-spec-impact` there would be a lie. If a spec
+genuinely has to merge on its own — a proposal nobody is building yet — then the
+implementing PR must open with the commit that folds the delta into
+`openspec/specs/` and archives the change, so a spec commit still precedes the
+first behaviour commit.
+
 **Escape hatch:** apply the `no-spec-impact` label for changes with no
 observable behaviour (refactor, tests, build/CI, dependency bumps). It skips
 both checks. Nothing in the PR body opts out — a label is structured, visible on
