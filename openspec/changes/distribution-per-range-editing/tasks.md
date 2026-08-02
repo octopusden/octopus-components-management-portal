@@ -1,3 +1,8 @@
+> Blocked on one decision. These tasks build option 1 from design.md —
+> dot-numeric versions only. If the answer is the registry-side endpoint
+> (option 3), groups 1 and 2 are replaced by a CRS change that merges first,
+> and groups 3 to 5 largely survive. Do not start group 1 before that call.
+
 ## 1. Range containment predicate
 
 - [ ] 1.1 Failing tests in `lib/versionRange.test.ts` for `rangeContainsVersion`:
@@ -29,9 +34,11 @@
 - [ ] 3.1 Failing tests in `DistributionTab.test.tsx`: entering a version leaves
       Save disabled and issues no request; the control is usable without edit
       rights while add/edit/delete stay disabled; an invalid version reports
-      itself and shows no result; blank and whitespace-only input show neither
-      result nor error; clearing the control restores the unfiltered view;
-      navigating to another component and back leaves the control empty
+      itself and shows no result; a qualified version (`1.2-0003`, `2.1.0-RC1`)
+      is declined as not evaluable rather than reported malformed; blank and
+      whitespace-only input show neither result nor error; clearing the control
+      restores the unfiltered view; navigating to another component and back
+      leaves the control empty
 - [ ] 3.2 Add the version input to `DistributionTab.tsx`, wired to the shared
       override draft rather than the saved component, and reset it when the
       component id changes
