@@ -117,6 +117,18 @@ The preview SHALL NOT present a result it cannot justify.
 - **THEN** the control reports the input as invalid and no resolution result is
   shown
 
+#### Scenario: A qualified version is declined, not guessed
+
+- **WHEN** the entered version carries a qualifier the preview cannot order,
+  such as `1.2-0003`, `3.0.0-0` or `2.1.0-RC1`
+- **THEN** the control states that it cannot evaluate that version here, rather
+  than reporting it as malformed or resolving it approximately
+
+The registry accepts these versions and this preview does not. That is a real
+limit on who the feature serves, not an edge case — see design.md, which puts
+the choice between narrowing the contract and moving resolution to the registry
+in front of the reviewer.
+
 #### Scenario: Blank input is not an error
 
 - **WHEN** the control contains nothing, or only whitespace

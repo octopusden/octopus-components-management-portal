@@ -107,8 +107,31 @@ This is mitigation, not elimination. If the preview later grows load-bearing
 uses, the honest fix is a registry endpoint that resolves a hypothetical
 override set, and this module retires.
 
-**Client-side version parsing is narrower than the registry's.** The existing
-`parseSimpleSegment` handles the common numeric shapes, not every form the
-registry's version factory accepts. Rather than silently mis-resolving an exotic
-version, unparseable input is reported as invalid — the failure is visible and
-cheap, and the set of affected versions is small.
+**Client-side version parsing is much narrower than the registry's, and this is
+the open question in this design.** `parseSimpleSegment` reduces every bound
+through a dot-numeric test, `^\d+(\.\d+)*$`. Anything carrying a qualifier fails
+it: `1.2-0003`, `3.0.0-0`, `2.1.0-RC1`, `1.0.0-SNAPSHOT`. Those are ordinary
+shapes in this registry, not exotic ones, and the same limit applies to a range
+whose bounds are qualified.
+
+An earlier draft of this document claimed the affected set was small. It is not.
+Built as specified, the preview would decline a large share of real components —
+and a preview that answers "cannot evaluate" for the versions a team actually
+ships is not worth the code. Three ways out, and the choice belongs to the
+reviewer rather than to this document:
+
+1. **Ship dot-numeric only, and say so on the control.** Cheapest, honest,
+   useless for qualified-version components.
+2. **Widen the client parser** to order qualified versions the way the registry
+   does. This doubles down on the duplication the section above already names as
+   the main risk, and version ordering is precisely where a subtly different
+   second implementation does damage.
+3. **Ask the registry to resolve it.** A stateless endpoint taking a version and
+   a candidate override set would remove the duplicated semantics rather than
+   extending them, and would handle every version shape by construction. It is
+   the retirement path this design already describes for the mirror; this
+   finding is an argument for taking it now instead of later.
+
+Option 3 needs a CRS change and would make this a cross-repo piece of work, with
+CRS merging first. Until the call is made, the requirements below describe
+option 1, and `tasks.md` builds it.
