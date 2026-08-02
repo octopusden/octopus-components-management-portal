@@ -1,0 +1,47 @@
+schema: spec-driven
+
+context: |
+  Components Management Portal — Spring Cloud Gateway (WebFlux) BFF plus a
+  React 19 SPA, bundled into one JAR. The browser calls /rest/** on the same
+  origin; the BFF proxies to the components-registry-service (CRS) with
+  TokenRelay. CRS owns the data model and business rules; this repo owns the
+  browser experience.
+
+  UI stack: React 19 + Vite + shadcn/ui (Radix + Tailwind 4 + CVA), React Hook
+  Form + Zod, TanStack Table, Zustand, react-router 7.
+
+  Read AGENTS.md and DOCS.md before proposing. DOCS.md decides which repo owns
+  a concern — backend behaviour and contracts belong to CRS, not here; if a
+  change needs both, say so explicitly and note that CRS merges first.
+
+  Status: MVP in active development. Prefer shipping the feature over
+  refactoring around it.
+
+rules:
+  proposal:
+    - Written in English.
+    - State what changes for the person using the Portal, not which files move.
+    - Name the CRS-side dependency explicitly when one exists, including
+      whether CRS must merge first.
+    - Never include product-classification or customer/organisation names; CI
+      Content Validation fails the build on them.
+  specs:
+    - Describe observable behaviour, not implementation. A reader must be able
+      to tell whether the system conforms without opening the source.
+    - Include the permission that governs the behaviour when it is gated.
+  tasks:
+    - "This repo is test-first: each task that changes behaviour starts with a
+      failing test, then the production code. Do not group tests into a final
+      task."
+    - Keep frontend and backend tasks separate; they run under different
+      commands (npm vs gradle).
+
+operations:
+  apply:
+    guidance:
+      - Run ./gradlew qualityStatic and the relevant vitest suite before
+        reporting a task done.
+  archive:
+    guidance:
+      - Fold the delta into openspec/specs/, then check whether docs/features/
+        still tells the same story; the two must not contradict each other.

@@ -1,4 +1,8 @@
 {
+  "env": {
+    "OPENSPEC_TELEMETRY": "0",
+    "DO_NOT_TRACK": "1"
+  },
   "permissions": {
     "deny": [
       "Read(./**/_wt/**)",
