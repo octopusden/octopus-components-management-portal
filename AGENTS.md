@@ -26,10 +26,12 @@ Practical consequence: commit the spec on its own, get it agreed, then implement
 If you squash locally, re-split before pushing — GitHub's squash-on-merge is fine,
 the gate reads branch commits, not the merge result.
 
-**Escape hatch:** tick `no-spec-impact` in the PR template, or apply the
-`no-spec-impact` label, for changes with no observable behaviour (refactor,
-tests, build/CI, dependency bumps). It skips both checks. Use it honestly — it
-is the only thing standing between this gate and the drift it exists to stop.
+**Escape hatch:** apply the `no-spec-impact` label for changes with no
+observable behaviour (refactor, tests, build/CI, dependency bumps). It skips
+both checks. Nothing in the PR body opts out — a label is structured, visible on
+the PR, recorded in the timeline, and can be applied by a reviewer rather than
+only self-declared. Use it honestly; it is the only thing standing between this
+gate and the drift it exists to stop.
 
 The gate script is [`.github/scripts/spec-gate.sh`](.github/scripts/spec-gate.sh),
 configured entirely by environment so it stays byte-identical with the CRS copy;

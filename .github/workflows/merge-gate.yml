@@ -64,7 +64,6 @@ jobs:
           BEHAVIOR_RE: '^(src/main/(kotlin|resources)/|frontend/(src/|vite\.config\.ts$|index\.html$))'
           BEHAVIOR_EXCLUDE_RE: '(\.test\.(ts|tsx)$|^frontend/src/lib/api/(schema\.d\.ts|v4\.json)$|^frontend/src/test(-fixtures)?/)'
           SPEC_RE: '^(docs/features/|docs/architecture\.md$|docs/adr/|openspec/)'
-          PR_BODY: ${{ github.event.pull_request.body }}
           PR_LABELS: ${{ toJson(github.event.pull_request.labels.*.name) }}
 
   frontend:
