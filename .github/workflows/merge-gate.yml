@@ -32,6 +32,41 @@ jobs:
       trivy-continue-on-error: true
     secrets: inherit
 
+  # Spec discipline gate. Two checks: a behaviour change must carry a spec
+  # delta, and the spec must have been committed before the implementation.
+  # Rationale and the escape hatch are documented in AGENTS.md § Spec-first.
+  spec-gate:
+    name: spec / gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The gate reads commit ordering on the branch, not just the diff,
+          # so the default shallow clone is not enough.
+          fetch-depth: 0
+      # The gate has its own suite; run it here so a broken gate fails loudly
+      # instead of silently waving every PR through.
+      - run: bash .github/scripts/spec-gate.test.sh
+      - run: git fetch --no-tags origin "+refs/heads/${GITHUB_BASE_REF}:refs/remotes/origin/${GITHUB_BASE_REF}"
+      - run: .github/scripts/spec-gate.sh
+        env:
+          BASE_REF: origin/${{ github.base_ref }}
+          # Behaviour = shipped Kotlin, SPA source, BFF configuration, and the
+          # SPA build shell. src/main/resources carries gateway routes, CSRF
+          # and security; vite.config.ts carries the production base path and
+          # the deliberate absence of sourcemaps; index.html ships on every
+          # load. Excluded: tests, test scaffolding and fixtures, and the
+          # generated API surface (schema.d.ts, vendored v4.json) — those
+          # follow a behaviour change rather than being one.
+          #
+          # Keep in exact parity with the constants in spec-gate.test.sh; the
+          # suite fails if these drift.
+          BEHAVIOR_RE: '^(src/main/(kotlin|resources)/|frontend/(src/|vite\.config\.ts$|index\.html$))'
+          BEHAVIOR_EXCLUDE_RE: '(\.test\.(ts|tsx)$|^frontend/src/lib/api/(schema\.d\.ts|v4\.json)$|^frontend/src/test(-fixtures)?/)'
+          SPEC_RE: '^(docs/features/|docs/architecture\.md$|docs/adr/|openspec/)'
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_LABELS: ${{ toJson(github.event.pull_request.labels.*.name) }}
+
   frontend:
     name: frontend / lint-typecheck-coverage
     runs-on: ubuntu-latest
@@ -69,7 +104,7 @@ jobs:
 
   gate-merge:
     name: gate/merge
-    needs: [ build, quality, security, frontend ]
+    needs: [ build, quality, security, frontend, spec-gate ]
     if: always()
     runs-on: ubuntu-latest
     steps:

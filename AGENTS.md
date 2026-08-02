@@ -4,11 +4,43 @@ Guidance for AI agents and developers working on this repository.
 
 **Start with [`DOCS.md`](DOCS.md)** — the wayfinding map showing what lives in this repo vs the CRS repo, with the "owns vs delegates" rules.
 
+## Spec-first
+
+Behaviour is agreed in writing **before** it is implemented. The `spec / gate`
+check in [`merge-gate.yml`](.github/workflows/merge-gate.yml) enforces two things
+on every PR:
+
+- **spec-delta** — a PR touching shipped behaviour must also touch a spec.
+  Behaviour is `src/main/{kotlin,resources}/**` (the BFF, including the gateway
+  routes and security config), `frontend/src/**`, `frontend/vite.config.ts` and
+  `frontend/index.html`. Excluded: `*.test.*`, `frontend/src/test/**` and
+  `frontend/src/test-fixtures/**`, and the generated
+  `frontend/src/lib/api/{schema.d.ts,v4.json}`. A spec is `docs/features/**`,
+  `docs/architecture.md`, `docs/adr/**`, or `openspec/**`.
+- **spec-first** — the first commit touching a spec must come **strictly before**
+  the first commit touching behaviour. A spec written in the same commit as the
+  code, or after it, is a record of what got built rather than an agreement about
+  what to build, and fails the gate.
+
+Practical consequence: commit the spec on its own, get it agreed, then implement.
+If you squash locally, re-split before pushing — GitHub's squash-on-merge is fine,
+the gate reads branch commits, not the merge result.
+
+**Escape hatch:** tick `no-spec-impact` in the PR template, or apply the
+`no-spec-impact` label, for changes with no observable behaviour (refactor,
+tests, build/CI, dependency bumps). It skips both checks. Use it honestly — it
+is the only thing standing between this gate and the drift it exists to stop.
+
+The gate script is [`.github/scripts/spec-gate.sh`](.github/scripts/spec-gate.sh),
+configured entirely by environment so it stays byte-identical with the CRS copy;
+its suite (`spec-gate.test.sh`) runs in the same job.
+
 ## Documentation hygiene
 
 - Keep only **living** docs in the tree: architecture, ADRs, feature docs, tech-debt, onboarding, and the `README`/`AGENTS`/`DOCS` indexes — things that describe **how the system works now**.
-- Do **not** commit **historical working artifacts** — design briefs, implementation/redesign plans, prep analyses, iteration change-logs, mockups, or one-off PR-review records. Once the work ships, that context already lives in the **PR and git history**; a completed plan left in the tree only rots, drifts, and misleads. Delete it as part of landing the feature.
-- Rule of thumb: if a doc describes *how a specific change was made* (a plan, a prep pass, a review record — usually past tense or a dated title) rather than *how the system behaves*, it doesn't belong in `docs/`. When in doubt, it goes in the PR description, not the repo.
+- **`openspec/` is the one exception, and it is structured.** In-flight change proposals live in `openspec/changes/<id>/`; on completion the delta is applied to `openspec/specs/` and the change folder moves to `openspec/archive/`. The archive is kept deliberately: it is the decision record for *why* a behaviour is the way it is, which the specs themselves do not carry.
+- Do **not** commit **ad-hoc working artifacts** anywhere else — design briefs, implementation/redesign plans, prep analyses, iteration change-logs, mockups, or one-off PR-review records dropped into `docs/`. A loose plan in `docs/` has no lifecycle: nothing applies it, nothing retires it, so it rots and misleads. If a change is worth planning in the tree, plan it in `openspec/changes/`, where the lifecycle is enforced; otherwise it goes in the PR description.
+- Rule of thumb: `docs/` and `openspec/specs/` describe *how the system behaves*; `openspec/changes/` describes *what we are about to change*; `openspec/archive/` describes *what we changed and why*. A doc that fits none of those three does not belong in the repo.
 
 ## Search & Context Efficiency
 
