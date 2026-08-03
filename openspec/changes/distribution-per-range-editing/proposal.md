@@ -18,10 +18,16 @@ issue #146 that was deferred when the rest of per-range editing shipped.
 - With a concrete version entered, each of the four subsections shows which
   children the registry would resolve for that version, and **where they came
   from** — a specific range override, or the component-level base list.
-- The preview reproduces the registry's resolution rules exactly, including the
-  cases that are easy to get wrong: a version covered by no override falls back
-  to base; a version outside the component's supported set resolves to nothing
-  at all rather than to base; an unparseable override range never matches.
+- The preview reproduces the registry's resolution rules for the cases that are
+  easy to get wrong: a version covered by no override falls back to base; a
+  version outside the component's supported set resolves to nothing at all
+  rather than to base; an unparseable override range never matches.
+- **It does not reproduce them for every version the registry accepts, and that
+  is the open question.** Client-side ordering only handles dot-numeric
+  versions, so `1.2-0003`, `3.0.0-0` and `2.1.0-RC1` — ordinary shapes here —
+  are declined rather than resolved. Whether that is an acceptable contract, or
+  whether resolution belongs on the registry side instead, is the decision this
+  proposal is waiting on; see design.md.
 - Nothing about saving changes. The preview is read-only and does not
   participate in dirty tracking or the combined Save.
 
@@ -39,14 +45,19 @@ issue #146 that was deferred when the rest of per-range editing shipped.
 
 ## Impact
 
-**Portal only. No CRS change is required, and nothing needs to merge first** —
-the preview reads data the API already returns and applies rules the registry
-already implements.
+**Portal only if the narrow contract is accepted; cross-repo if it is not.** As
+written the preview reads data the API already returns and applies rules the
+registry already implements, so no CRS change is required and nothing has to
+merge first. If instead resolution moves to a registry endpoint — the option
+design.md recommends considering, because it removes rather than extends the
+duplication — this becomes a CRS change that merges first, with the Portal work
+following.
 
-That is also the main risk this change takes on: the Portal will hold a second
-implementation of resolution semantics that the registry owns. The two can
-drift silently, and the preview would then confidently show the wrong answer —
-worse than showing none. The design must state how that drift is contained.
+Either way the main risk is the same one: as specified, the Portal holds a
+second implementation of resolution semantics that the registry owns. The two
+can drift silently, and the preview would then confidently show the wrong
+answer — worse than showing none. design.md names the requirements it mirrors
+so the drift has something to be checked against.
 
 Affected:
 
