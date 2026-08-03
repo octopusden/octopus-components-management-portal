@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-release.yml@v2.7.0
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-release.yml@v2.7.1
     with:
       flow-type: hybrid
       java-version: '25'
@@ -17,7 +17,7 @@ jobs:
       # consumer of it as a Maven dependency is known. Skipping the publication of its
       # ~67 MB Spring Boot fat jar, which was the single biggest contributor to the
       # organisation's Maven Central Release Size. publish-to-nexus landed in
-      # octopus-base v2.5.0; every reference here is now on v2.7.0, which also carries
+      # octopus-base v2.5.0; every reference here is now on v2.7.1, which also carries
       # the shared publication policy this repository configures in build.gradle.kts.
       publish-to-nexus: false
       # Register the release in octopus-release-log directly at the end of this
