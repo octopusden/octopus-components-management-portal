@@ -38,7 +38,9 @@ that the registry would resolve for that version, and SHALL identify their
 source as either a specific version range or the component-level base list.
 
 Resolution SHALL be performed per marker path independently: an override on one
-path SHALL NOT affect the outcome of another path.
+path SHALL NOT affect the outcome of another path. A covering override SHALL
+replace that path's children outright rather than merging with the base list
+(CRS **MIG-036**, **ADR-018**).
 
 #### Scenario: A covering override replaces the base list
 
@@ -80,8 +82,10 @@ falling back to the base list.
 ### Requirement: Versions outside the supported set resolve to nothing
 
 A component may declare which versions it supports. The registry does not
-resolve a configuration at all for a version outside that set. The preview
-SHALL reproduce this rather than falling back to the base list.
+resolve a configuration at all for a version outside that set (CRS **MIG-042**;
+`version-model-spec.md` §3 returns 404 when `v ∉ supported`). The preview SHALL
+reproduce this rather than falling back to the base list — the base fallback is
+the specific defect MIG-042 records and corrects.
 
 #### Scenario: Unsupported version
 

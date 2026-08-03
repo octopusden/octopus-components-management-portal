@@ -96,8 +96,20 @@ resolution rules now exist in two repositories, and a change to the registry's
 resolver will not fail anything here. Containment, in descending order of value:
 
 1. The behaviour this mirrors is pinned by numbered requirements on the registry
-   side; this spec cites them, so a deliberate change there has a written
-   counterpart to update here.
+   side, named here so that a deliberate change there has a written counterpart
+   to update:
+   - **ADR-018** — decoupled version model: coverage and per-attribute overrides
+     are two independent layers. The decision this preview reads.
+   - **`version-model-spec.md` §3 Algorithms** — the `resolve(component, v)`
+     pseudocode: 404 when `v ∉ supported`, otherwise per attribute the override
+     whose range *contains* `v`, else the base. Every requirement below is a
+     restatement of those three lines.
+   - **MIG-036** — per-attribute version-range overrides: an override replaces
+     the corresponding child collection outright rather than merging into it.
+   - **MIG-042** — resolution is gated on the union of configured ranges, and
+     resolves *nothing* outside it. This is the requirement behind "a version
+     outside the supported set resolves to nothing, not to base"; the v3 path
+     over-resolved such versions to base, which MIG-042 exists to have fixed.
 2. The resolution module carries a single comment naming the registry function
    it mirrors, so a reader finds the other copy.
 3. The preview is advisory and labelled as such. It never gates a write, so
