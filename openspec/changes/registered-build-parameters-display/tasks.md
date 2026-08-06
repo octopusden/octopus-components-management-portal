@@ -51,14 +51,15 @@
 
 ## 5. 503 — RMS unavailable
 
-- [ ] 5.1 Failing test: a save to `build.javaVersion`/`build.mavenVersion` that fails with HTTP 503 shows distinguishable "RMS is currently unavailable" messaging
+- [ ] 5.1 Failing test: a save to `build.javaVersion`/`build.mavenVersion` that fails with HTTP 503 and body `errorCode: 'RMS_UNAVAILABLE'` shows distinguishable "RMS is currently unavailable" messaging
 - [ ] 5.2 Failing test: that messaging is distinct from the generic destructive "Save failed" toast
-- [ ] 5.3 Failing test: a 503 on a save that does NOT touch `build.javaVersion`/`build.mavenVersion` falls through to the existing generic error handling, unchanged
-- [ ] 5.4 Failing test: the Save control is enabled when a component's `javaVersion` carries a disagreement warning, same as when it doesn't
-- [ ] 5.5 Failing test: saving an unrelated field succeeds even when the component's `javaVersion` currently carries a disagreement warning, with no client-side check performed against the warning
-- [ ] 5.6 Implement: add an explicit 503 check in the save-error chain (`ComponentDetailPage.tsx`), scoped to a `build.javaVersion`/`build.mavenVersion` write
-- [ ] 5.7 Confirm 5.4/5.5 pass without needing new code — i.e. confirm no existing or newly-added logic reads `javaWarnings`/`mavenWarnings` for Save-gating
-- [ ] 5.8 Confirm tests pass
+- [ ] 5.3 Failing test: a 503 with no `errorCode`, or a different `errorCode`, falls through to the existing generic "Save failed" toast
+- [ ] 5.4 Failing test: a 503 on a save that does NOT touch `build.javaVersion`/`build.mavenVersion` falls through to the existing generic error handling, unchanged
+- [ ] 5.5 Failing test: the Save control is enabled when a component's `javaVersion` carries a disagreement warning, same as when it doesn't
+- [ ] 5.6 Failing test: saving an unrelated field succeeds even when the component's `javaVersion` currently carries a disagreement warning, with no client-side check performed against the warning
+- [ ] 5.7 Implement: add an explicit 503 check in the save-error chain (`ComponentDetailPage.tsx`), scoped to a `build.javaVersion`/`build.mavenVersion` write, parsing the body with the existing `classifyConflictBody` (`lib/conflict.ts`) and dispatching on `errorCode === 'RMS_UNAVAILABLE'`
+- [ ] 5.8 Confirm 5.5/5.6 pass without needing new code — i.e. confirm no existing or newly-added logic reads `javaWarnings`/`mavenWarnings` for Save-gating
+- [ ] 5.9 Confirm tests pass
 
 ## 6. Docs and finalization
 

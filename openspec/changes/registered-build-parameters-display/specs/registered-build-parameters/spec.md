@@ -71,12 +71,17 @@ A `409` response with `errorCode: "RMS_REGISTERED_VALUE_CONFLICT"` on a `build.j
 
 ### Requirement: An RMS-unavailable write failure is reported distinctly from a generic save failure
 
-A `503` response from a `build.javaVersion`/`build.mavenVersion` write SHALL be shown to the editor with messaging that identifies the cause as RMS being temporarily unreachable, distinct from the generic destructive "Save failed" toast used for unclassified errors.
+A `503` response with `errorCode: "RMS_UNAVAILABLE"` on a `build.javaVersion`/`build.mavenVersion` write SHALL be shown to the editor with messaging that identifies the cause as RMS being temporarily unreachable, distinct from the generic destructive "Save failed" toast used for unclassified errors. A `503` without this `errorCode` SHALL be treated as an unclassified error, not as RMS-unavailable.
 
 #### Scenario: RMS is unreachable at write time
 
-- **WHEN** a save attempt to `build.javaVersion` or `build.mavenVersion` returns `503`
+- **WHEN** a save attempt to `build.javaVersion` or `build.mavenVersion` returns `503` with `errorCode: "RMS_UNAVAILABLE"`
 - **THEN** the editor sees messaging identifying RMS as temporarily unavailable, rather than the generic "Save failed" toast
+
+#### Scenario: An unrelated 503 is not misattributed to RMS
+
+- **WHEN** a save attempt returns `503` without `errorCode: "RMS_UNAVAILABLE"` (or with no `errorCode` at all)
+- **THEN** the editor sees the generic destructive "Save failed" toast, not the RMS-unavailable message
 
 #### Scenario: A 503 on an unrelated field save is unaffected
 

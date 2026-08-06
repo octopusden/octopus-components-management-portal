@@ -19,11 +19,11 @@ RegisteredBuildParametersDetail {
   - when RMS integration is disabled (CRS's requirement: "ACTUAL applies only to non-archived Maven and Gradle components"; CRS's requirement: "A disabled RMS integration turns the whole feature off"). 
 - `actualDataUnavailable = true` is a distinct third state from `null` and from a clean/warned row — it means "this component is eligible but CRS has never successfully swept it," and must render differently from both.
 
-CRS's write endpoints for `build.javaVersion`/`build.mavenVersion` (base-config `PATCH`, field-override create/update, bulk apply-plan) now return, only when the write actually changes one of those two fields:
-- `409` with body `{ errorCode: "RMS_REGISTERED_VALUE_CONFLICT", errorMessage }` — the new value disagrees with a non-null, intersecting ACTUAL value.
-- `503` — the live RMS check was unreachable, timed out, or was ambiguous, so CRS failed closed.
+CRS's write endpoints for `build.javaVersion`/`build.mavenVersion` (base-config `PATCH`, field-override create/update, bulk apply-plan) now return, only when the write actually changes one of those two fields, the same `ErrorResponse { errorMessage, errorCode }` body shape Portal already parses for 409s (`ErrorResponse.kt`, `ControllerExceptionHandler.kt`):
+- `409` with `errorCode: "RMS_REGISTERED_VALUE_CONFLICT"` — the new value disagrees with a non-null, intersecting ACTUAL value. `errorMessage` names the conflicting range and ACTUAL value(s) (`RMSOverrideGate.check`).
+- `503` with `errorCode: "RMS_UNAVAILABLE"` — the live RMS check was unreachable, timed out, or was ambiguous, so CRS failed closed. Today `503` is returned by CRS exclusively for this case (confirmed: no other handler in `ControllerExceptionHandler.kt` maps to `SERVICE_UNAVAILABLE`), but the response still carries `errorCode` — Portal dispatches on it rather than assuming "any 503 means RMS."
 
-Portal already has a generic 409-dispatch mechanism (`useOptimisticConflict.ts`) and a TeamCity-validation display precedent (`docs/features/tc-validation.md`) for "warning attached to otherwise-editable data" — both are reused rather than reinvented here.
+Portal already has a generic 409-dispatch mechanism (`useOptimisticConflict.ts`) and a status-agnostic body parser (`classifyConflictBody` in `lib/conflict.ts`, which parses `{ errorCode, errorMessage }` regardless of HTTP status) — both are reused rather than reinvented here. Portal also has a TeamCity-validation display precedent (`docs/features/tc-validation.md`) for "warning attached to otherwise-editable data."
 
 ## Goals / Non-Goals
 
@@ -59,7 +59,8 @@ Portal already has a generic 409-dispatch mechanism (`useOptimisticConflict.ts`)
 ### 4. 409/503 handling extends existing dispatch points
 
 - `useOptimisticConflict.ts` already dispatches on `errorCode` for any 409 — add an `errorCode === 'RMS_REGISTERED_VALUE_CONFLICT'` branch there.
-- `503` has no existing status-code branch below 409 anywhere in the save-error chain today — add it as its own explicit check in `ComponentDetailPage.tsx`, not folded into the 409 dispatcher (a 503 carries no `errorCode` body to dispatch on).
+- `503` has no existing status-code branch anywhere in the save-error chain today — add it as its own explicit check in `ComponentDetailPage.tsx`, ahead of the generic destructive-toast fallback, not folded into `useOptimisticConflict` (that hook is gated to `err.status !== 409` and returns `null` for anything else).
+- The 503 body is parsed with the same `classifyConflictBody` helper already used for 409s (it is status-agnostic), checking for `errorCode === 'RMS_UNAVAILABLE'` rather than treating every 503 as RMS-related — CRS returns 503 only for this case today, but dispatching on the code (not the bare status) stays correct if that ever changes.
 
 ### 5. No Save-button gating tied to `javaWarnings`/`mavenWarnings`
 
