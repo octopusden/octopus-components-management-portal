@@ -183,10 +183,17 @@ interface ParsedRange {
   hi: number
 }
 
-/** Parse a numeric maven range for the coverage timeline. Unbounded ⇒ 0 / Infinity. */
-export function parseRange(range: string | null): ParsedRange {
-  if (!range) return { lo: Number.NEGATIVE_INFINITY, hi: Number.POSITIVE_INFINITY }
-  const m = range.match(/[[(]\s*([\d.]*)\s*,\s*([\d.]*)\s*[\])]/)
+// Splits a composite range ("[a,b),(b,c)") into its segments.
+const SEGMENT_SPLIT_RE = /(?<=[)\]])\s*,\s*(?=[[(])/
+
+/** Parses one range segment, including the no-comma exact-version form `[X]`. */
+function parseSegment(segment: string): ParsedRange {
+  const exact = segment.match(/^\[\s*([\d.]+)\s*]$/)
+  if (exact) {
+    const v = parseFloat(exact[1]!)
+    return { lo: v, hi: v }
+  }
+  const m = segment.match(/[[(]\s*([\d.]*)\s*,\s*([\d.]*)\s*[\])]/)
   if (!m) return { lo: Number.NEGATIVE_INFINITY, hi: Number.POSITIVE_INFINITY }
   const lo = m[1] ?? ''
   const hi = m[2] ?? ''
@@ -196,11 +203,17 @@ export function parseRange(range: string | null): ParsedRange {
   }
 }
 
-/** Do two override ranges overlap? Per-range ownership ranges must be disjoint. */
+/** Parse a numeric maven range for the coverage timeline, composite-aware. */
+export function parseRange(range: string | null): ParsedRange[] {
+  if (!range) return [{ lo: Number.NEGATIVE_INFINITY, hi: Number.POSITIVE_INFINITY }]
+  return range.split(SEGMENT_SPLIT_RE).map(parseSegment)
+}
+
+/** Do two override ranges overlap (any segment of `a` against any segment of `b`)? */
 export function rangesOverlap(a: string | null, b: string | null): boolean {
-  const ra = parseRange(a)
-  const rb = parseRange(b)
-  return ra.lo < rb.hi && rb.lo < ra.hi
+  const ras = parseRange(a)
+  const rbs = parseRange(b)
+  return ras.some((ra) => rbs.some((rb) => ra.lo < rb.hi && rb.lo < ra.hi))
 }
 
 /** Are any of the override (non-base) mappings' ranges overlapping? */
