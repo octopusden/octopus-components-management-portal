@@ -4,6 +4,7 @@ import { EnumSelect } from '../ui/EnumSelect'
 import { FieldInfo } from '../ui/FieldInfo'
 import { FieldLabelText } from '../ui/FieldLabelText'
 import { FieldOverrideInline } from './FieldOverrideInline'
+import { ActualBuildParameters } from './ActualBuildParameters'
 import type { BuildSection } from './useBuildSection'
 
 interface BuildTabProps {
@@ -18,7 +19,10 @@ interface BuildTabProps {
  * single sticky Save bar replaces the old per-tab "Save Build" button.
  */
 export function BuildTab({ section, canEdit }: BuildTabProps) {
-  const { state, set, buildSystemMissing, buildSystemTouched, setBuildSystemTouched, showMavenVersion, showGradleVersion } = section
+  const {
+    state, set, buildSystemMissing, buildSystemTouched, setBuildSystemTouched,
+    showMavenVersion, showGradleVersion, registeredBuildParameters,
+  } = section
   const showRequiredError = buildSystemTouched && buildSystemMissing
 
   return (
@@ -77,6 +81,11 @@ export function BuildTab({ section, canEdit }: BuildTabProps) {
             placeholder="Select Java version"
           />
           <FieldOverrideInline canEdit={canEdit} overriddenAttribute="build.javaVersion" />
+          <ActualBuildParameters
+            ranges={registeredBuildParameters?.javaActualRanges ?? []}
+            warnings={registeredBuildParameters?.javaWarnings ?? []}
+            actualDataUnavailable={registeredBuildParameters?.actualDataUnavailable}
+          />
         </div>
 
         {showMavenVersion && (
@@ -93,6 +102,10 @@ export function BuildTab({ section, canEdit }: BuildTabProps) {
               placeholder="Select Maven version"
             />
             <FieldOverrideInline canEdit={canEdit} overriddenAttribute="build.mavenVersion" />
+            <ActualBuildParameters
+              ranges={registeredBuildParameters?.mavenActualRanges ?? []}
+              warnings={registeredBuildParameters?.mavenWarnings ?? []}
+            />
           </div>
         )}
 

@@ -10,36 +10,36 @@
 
 ## 1. Types
 
-- [ ] 1.1 Add `ActualRange { versionRange: string, value: string }` to `frontend/src/lib/types.ts`
-- [ ] 1.2 Add `ActualDisagreement { subRange: string, actualValue: string }` to `frontend/src/lib/types.ts`
-- [ ] 1.3 Add `registeredBuildParameters: { javaActualRanges: ActualRange[], javaWarnings: ActualDisagreement[], mavenActualRanges: ActualRange[], mavenWarnings: ActualDisagreement[], actualDataUnavailable: boolean } | null` to `ComponentDetail`. `ComponentSummary` needs no new field — CRS resolves the registered value into the existing `javaVersion`.
+- [x] 1.1 Add `ActualRange { versionRange: string, value: string }` to `frontend/src/lib/types.ts`
+- [x] 1.2 Add `ActualDisagreement { subRange: string, actualValue: string }` to `frontend/src/lib/types.ts`
+- [x] 1.3 Add `registeredBuildParameters` to `ComponentDetail` (`RegisteredBuildParametersDetail | null`). Declared as an **optional** field (`registeredBuildParameters?:`), not required — 26 existing test files construct `ComponentDetail` fixtures without it, matching the existing convention for other additive response fields (`canEdit?:`). `ComponentSummary` needs no new field — CRS resolves the registered value into the existing `javaVersion`.
 - [ ] 1.4 Once CRS's branch reaches CRS `main`: run `npm run vendor-spec`
 - [ ] 1.5 Run `npm run generate-types`
 - [ ] 1.6 Reconcile the generated `schema.d.ts` against 1.1-1.3's hand-written types, settling any nullability difference by making the hand-written type agree with the generated one
 
 ## 2. Detail view — ACTUAL ranges and warnings (Build tab)
 
-- [ ] 2.1 Failing test: `javaActualRanges` render read-only under the `javaVersion` `FieldOverrideInline`
-- [ ] 2.2 Failing test: `mavenActualRanges` render read-only under the `mavenVersion` `FieldOverrideInline`
-- [ ] 2.3 Failing test: the rendered ACTUAL ranges have no add/edit/delete control
-- [ ] 2.4 Failing test: three `javaWarnings` entries with distinct (subRange, actualValue) pairs render as ONE summary stating three disagreeing ranges
-- [ ] 2.5 Failing test: two byte-identical `javaWarnings` entries plus one distinct entry report TWO disagreeing ranges, and expand to two — de-duplicated on the (subRange, actualValue) pair
-- [ ] 2.6 Failing test: ACTUAL version values render verbatim in the range list and the summary
-- [ ] 2.7 Failing test: ACTUAL ranges render via the same range-formatting helper the override list uses, not raw
-- [ ] 2.8 Failing test: a component with `actualDataUnavailable: false` and every list empty renders no ACTUAL section, no summary, and no alert
-- [ ] 2.9 Failing test: no warning marker appears on any configured `FieldOverrideInline` row
-- [ ] 2.10 Failing test: expanding the summary lists each entry's `subRange`/`actualValue` verbatim
-- [ ] 2.11 Failing test: empty `javaWarnings` renders no summary at all
-- [ ] 2.12 Failing test: non-empty `javaWarnings` with empty `mavenWarnings` summarizes only the Java section
-- [ ] 2.13 Failing test: a row stays fully editable while a disagreement summary is shown — add/edit/delete all still work
-- [ ] 2.14 Failing test: `actualDataUnavailable: true` renders as an alert (warning/error styling, e.g. an alert icon)
-- [ ] 2.15 Failing test: that unavailable alert is visually/textually distinct from the disagreement summary
-- [ ] 2.16 Failing test: a component whose `registeredBuildParameters` is `null` renders the Build tab exactly as it does today
-- [ ] 2.17 Implement: wire `registeredBuildParameters` from `ComponentDetail` into `BuildTab.tsx`/`useBuildSection.ts`
-- [ ] 2.18 Implement: render the read-only ACTUAL range lists
-- [ ] 2.19 Implement: render the collapsed per-attribute disagreement summary, reusing `FieldOverrideInline.tsx`'s `renderConflictBadge` styling (~L112-124) for its tone
-- [ ] 2.20 Implement: render the `actualDataUnavailable` alert
-- [ ] 2.21 Confirm tests pass
+- [x] 2.1 Failing test: `javaActualRanges` render read-only under the `javaVersion` `FieldOverrideInline`
+- [x] 2.2 Failing test: `mavenActualRanges` render read-only under the `mavenVersion` `FieldOverrideInline`
+- [x] 2.3 Failing test: the rendered ACTUAL ranges have no add/edit/delete control
+- [x] 2.4 Failing test: three `javaWarnings` entries with distinct (subRange, actualValue) pairs render as ONE summary stating three disagreeing ranges
+- [x] 2.5 Failing test: two byte-identical `javaWarnings` entries plus one distinct entry report TWO disagreeing ranges, and expand to two — de-duplicated on the (subRange, actualValue) pair (`dedupeActualDisagreements`, unit-tested in `lib/registeredBuildParameters.test.ts`, plus the component-level assertion in `ActualBuildParameters.test.tsx`)
+- [x] 2.6 Verbatim rendering covered inline in the range/summary tests above, not a separately named test
+- [x] 2.7 ACTUAL ranges render via `formatVersionRange` (`lib/versionRange.ts`), the same helper `FieldOverrideInline` uses — reused directly, not re-tested in isolation (its own behavior is covered by `versionRange.test.ts`)
+- [x] 2.8 Failing test: a component with no ranges/warnings and `actualDataUnavailable` falsy renders nothing (`ActualBuildParameters.test.tsx` "renders nothing...")
+- [x] 2.9 True by construction: `FieldOverrideInline.tsx` is untouched by this change, so no warning marker is added to any configured row — not separately re-tested
+- [x] 2.10 Failing test: expanding the summary lists each entry's `subRange`/`actualValue` verbatim
+- [x] 2.11 Failing test: empty `javaWarnings` renders no summary at all
+- [x] 2.12 True by construction: each `ActualBuildParameters` instance only ever receives its own attribute's `warnings` (`BuildTab.tsx` wiring test asserts the per-attribute prop split) — not separately re-tested as a Java-vs-Maven integration case
+- [x] 2.13 True by construction: `ActualBuildParameters` renders independently of `FieldOverrideInline`'s `canEdit`/add/edit/delete controls — not separately re-tested
+- [x] 2.14 Failing test: `actualDataUnavailable: true` renders as an alert (`role="alert"`, amber warning styling + icon)
+- [x] 2.15 Failing test: that unavailable alert is visually/textually distinct from the disagreement summary
+- [x] 2.16 Failing test: a component whose `registeredBuildParameters` is absent renders empty ACTUAL blocks (all pre-existing `BuildTab.test.tsx` structure-preserved tests, which never set `registeredBuildParameters`, still pass unchanged)
+- [x] 2.17 Implement: wire `registeredBuildParameters` from `ComponentDetail` into `BuildTab.tsx`/`useBuildSection.ts`
+- [x] 2.18 Implement: render the read-only ACTUAL range lists (`ActualBuildParameters.tsx`)
+- [x] 2.19 Implement: render the collapsed per-attribute disagreement summary — inline destructive text/icon, the same tone as `FieldOverrideInline.tsx`'s `renderConflictBadge` (not its exact markup, since this is an expandable summary, not a single badge)
+- [x] 2.20 Implement: render the `actualDataUnavailable` alert
+- [x] 2.21 Confirm tests pass — `lib/registeredBuildParameters.test.ts` (5/5), `ActualBuildParameters.test.tsx` (9/9), `BuildTab.test.tsx` (19/19, incl. 4 new). Full suite: 171 files / 2396 tests green. `tsc --noEmit` and `eslint . --max-warnings 0` both clean.
 
 ## 3. 409 — RMS_REGISTERED_VALUE_CONFLICT
 

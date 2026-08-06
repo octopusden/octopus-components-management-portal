@@ -14,6 +14,23 @@ vi.mock('./FieldOverrideInline', () => ({
   ),
 }))
 
+// Visible stub exposing the props BuildTab passes, for placement/wiring assertions.
+// Real rendering behaviour is covered by ActualBuildParameters.test.tsx.
+vi.mock('./ActualBuildParameters', () => ({
+  ActualBuildParameters: ({
+    ranges, warnings, actualDataUnavailable,
+  }: {
+    ranges: unknown[]; warnings: unknown[]; actualDataUnavailable?: boolean
+  }) => (
+    <div
+      data-testid="actual-build-parameters"
+      data-ranges={ranges.length}
+      data-warnings={warnings.length}
+      data-unavailable={String(actualDataUnavailable ?? false)}
+    />
+  ),
+}))
+
 // EnumSelect stub mirrors the real prop surface (id / aria-* / onBlur).
 vi.mock('../ui/EnumSelect', () => ({
   EnumSelect: ({
@@ -202,5 +219,59 @@ describe('BuildTab field descriptions (FieldInfo)', () => {
     expect(fieldDescriptions['build.buildSystem']).toBeDefined()
     renderTab(makeComponent({ configurations: [makeBaseRow({ build: { buildSystem: 'GRADLE' } })] }))
     expect(screen.getAllByRole('button').length).toBeGreaterThan(0)
+  })
+})
+
+describe('BuildTab — registered build parameters (ACTUAL)', () => {
+  it('passes javaActualRanges/javaWarnings to the Java ActualBuildParameters', () => {
+    renderTab(makeComponent({
+      configurations: [makeBaseRow({ build: { buildSystem: 'GRADLE', javaVersion: '17' } })],
+      registeredBuildParameters: {
+        javaActualRanges: [{ versionRange: '[1.0,2.0)', value: '17' }],
+        javaWarnings: [{ subRange: '[1.0,1.5)', actualValue: '17' }],
+        mavenActualRanges: [],
+        mavenWarnings: [],
+        actualDataUnavailable: false,
+      },
+    }))
+    const java = screen.getAllByTestId('actual-build-parameters')[0]
+    expect(java?.dataset.ranges).toBe('1')
+    expect(java?.dataset.warnings).toBe('1')
+  })
+
+  it('passes mavenActualRanges/mavenWarnings to the Maven ActualBuildParameters', () => {
+    renderTab(makeComponent({
+      configurations: [makeBaseRow({ build: { buildSystem: 'MAVEN', mavenVersion: '3.6.3' } })],
+      registeredBuildParameters: {
+        javaActualRanges: [],
+        javaWarnings: [],
+        mavenActualRanges: [{ versionRange: '[1.0,)', value: '3.6.3' }],
+        mavenWarnings: [],
+        actualDataUnavailable: false,
+      },
+    }))
+    const maven = screen.getAllByTestId('actual-build-parameters')[1]
+    expect(maven?.dataset.ranges).toBe('1')
+  })
+
+  it('passes actualDataUnavailable to the Java block only, never duplicated on Maven', () => {
+    renderTab(makeComponent({
+      configurations: [makeBaseRow({ build: { buildSystem: 'MAVEN' } })],
+      registeredBuildParameters: {
+        javaActualRanges: [], javaWarnings: [], mavenActualRanges: [], mavenWarnings: [],
+        actualDataUnavailable: true,
+      },
+    }))
+    const rendered = screen.getAllByTestId('actual-build-parameters')
+    expect(rendered[0]?.dataset.unavailable).toBe('true')
+    expect(rendered[1]?.dataset.unavailable).toBe('false')
+  })
+
+  it('renders with empty ranges/warnings when registeredBuildParameters is absent', () => {
+    renderTab(makeComponent({ configurations: [makeBaseRow({ build: { buildSystem: 'GRADLE' } })] }))
+    const java = screen.getAllByTestId('actual-build-parameters')[0]
+    expect(java?.dataset.ranges).toBe('0')
+    expect(java?.dataset.warnings).toBe('0')
+    expect(java?.dataset.unavailable).toBe('false')
   })
 })

@@ -105,6 +105,30 @@ export interface ComponentDetail {
   // admin). Optional — absent against an older backend, in which case the UI
   // falls back to the global CREATE_COMPONENTS permission check.
   canEdit?: boolean
+  // RMS-registered ("ACTUAL") build.javaVersion/mavenVersion data, per CRS's
+  // registered-build-parameters spec. Absent/null for a component CRS doesn't
+  // track this for (archived, non-Maven/Gradle, or RMS integration disabled).
+  registeredBuildParameters?: RegisteredBuildParametersDetail | null
+}
+
+/** One RMS-registered ("ACTUAL") version range for a single build attribute. */
+export interface ActualRange {
+  versionRange: string
+  value: string
+}
+
+/** A stored DEFAULT/OVERRIDDEN sub-range that disagrees with ACTUAL there. */
+export interface ActualDisagreement {
+  subRange: string
+  actualValue: string
+}
+
+export interface RegisteredBuildParametersDetail {
+  javaActualRanges: ActualRange[]
+  javaWarnings: ActualDisagreement[]
+  mavenActualRanges: ActualRange[]
+  mavenWarnings: ActualDisagreement[]
+  actualDataUnavailable: boolean
 }
 
 /**
