@@ -13,11 +13,11 @@
 
 ### New Capabilities
 
-- `registered-build-parameters`: how Portal displays RMS's registered Java/Maven data (ACTUAL) alongside a component's configured build values, and how it surfaces the two new save-time error responses this data source introduces.
+- `registered-build-parameters`: how the component detail view displays RMS's registered Java/Maven data (ACTUAL) alongside a component's configured build values, and how it surfaces the two new save-time error responses this data source introduces.
 
 ### Modified Capabilities
 
-<!-- None. This is additive display + error-handling on top of the existing component-list and component-detail capabilities; neither capability's existing contract changes. -->
+<!-- None. This is additive display + error-handling on top of the existing component-detail capability; its existing contract does not change. -->
 
 ## Out of scope
 
