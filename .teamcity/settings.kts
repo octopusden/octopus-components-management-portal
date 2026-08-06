@@ -3,7 +3,6 @@ import jetbrains.buildServer.configs.kotlin.buildFeatures.XmlReport
 import jetbrains.buildServer.configs.kotlin.buildFeatures.freeDiskSpace
 import jetbrains.buildServer.configs.kotlin.buildFeatures.xmlReport
 import jetbrains.buildServer.configs.kotlin.triggers.finishBuildTrigger
-import jetbrains.buildServer.configs.kotlin.triggers.vcs
 import jetbrains.buildServer.configs.kotlin.vcs.GitVcsRoot
 
 version = "2025.03"
@@ -206,17 +205,34 @@ object id17BuildValidationAuto : BuildType({
     name = "[3.0] Build Validation [AUTO]"
 
     // Needed so %build.vcs.number% (COMMIT_SHA) resolves to the revision built.
+    // Snapshot deps pin this to the same revision as id10/id15.
     vcs {
         root(OctopusComponentsManagementPortalVcs)
     }
 
     triggers {
-        vcs {
+        // Do NOT add a VCS trigger here. id10 already gets a per-commit VCS
+        // trigger from the Octopus_OctopusGradleBuild template and id15 runs off
+        // id10's finish trigger, so the Compile & UT → E2E chain already runs
+        // automatically on every push. A second VCS trigger on this aggregate
+        // would queue that whole chain a second time — the transitive
+        // id15 → id10 edge keeps snapshot reuse from collapsing the two, so
+        // Compile & UT and E2E would run twice per push.
+        //
+        // Instead run once E2E finishes and reuse that completed chain.
+        // successfulOnly = false so a red E2E still triggers this build and the
+        // template's failure step reports a failure status to GitHub.
+        finishBuildTrigger {
+            id = "TRIGGER_BUILD_VALIDATION_AFTER_E2E"
+            buildType = "${id15E2eAuto.id}"
+            successfulOnly = false
             branchFilter = "+:*"
         }
     }
 
     dependencies {
+        // reuseBuilds = ANY: reuse the id10/id15 builds from the chain that just
+        // finished — regardless of status — instead of starting fresh ones.
         snapshot(id10CompileUtAuto) {
             onDependencyFailure = FailureAction.ADD_PROBLEM
             reuseBuilds = ReuseBuilds.ANY
@@ -286,7 +302,7 @@ object id40ReleaseManual : BuildType({
         snapshot(id20DeployToOkdQaManual) {
             onDependencyFailure = FailureAction.FAIL_TO_START
         }
-        // E2E is a release blocker: release can only cut when [1.5] E2E passed for
+        // E2E is a release blocker: release can only cut when [2.0] E2E passed for
         // the SAME source revision. id15 and id20 both snapshot id10, so TeamCity
         // pins all three to one id10 build — release params still come from id10,
         // id15 only gates (it is not a source of release parameters).
