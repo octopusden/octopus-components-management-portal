@@ -35,7 +35,7 @@ describe('ActualBuildParameters — disagreement summary', () => {
         warnings={[disagreement('[2.0,3.0)', '17'), disagreement('[3.0,4.0)', '21'), disagreement('[4.0,5.0)', '11')]}
       />,
     )
-    expect(screen.getByText(/3 disagreeing ranges/i)).toBeDefined()
+    expect(screen.getByText(/3 ranges differ from the registered version/i)).toBeDefined()
     expect(screen.queryByText('[2.0,3.0)')).toBeNull()
   })
 
@@ -46,23 +46,36 @@ describe('ActualBuildParameters — disagreement summary', () => {
         warnings={[disagreement('[2.0,3.0)', '17'), disagreement('[2.0,3.0)', '17'), disagreement('[3.0,4.0)', '21')]}
       />,
     )
-    expect(screen.getByText(/2 disagreeing ranges/i)).toBeDefined()
+    expect(screen.getByText(/2 ranges differ from the registered version/i)).toBeDefined()
   })
 
   it('expanding the summary lists each disagreement verbatim', async () => {
     render(
       <ActualBuildParameters ranges={[]} warnings={[disagreement('[2.0,3.0)', '17'), disagreement('[3.0,4.0)', '21')]} />,
     )
-    await userEvent.click(screen.getByRole('button', { name: /disagreeing ranges/i }))
+    await userEvent.click(screen.getByRole('button', { name: /ranges differ from the registered version/i }))
     expect(screen.getByText('[2.0,3.0)')).toBeDefined()
     expect(screen.getByText('17')).toBeDefined()
     expect(screen.getByText('[3.0,4.0)')).toBeDefined()
     expect(screen.getByText('21')).toBeDefined()
   })
 
+  it('reads as singular for a single disagreement', () => {
+    render(<ActualBuildParameters ranges={[]} warnings={[disagreement('[2.0,3.0)', '17')]} />)
+    expect(screen.getByText(/1 range differs from the registered version/i)).toBeDefined()
+  })
+
+  it('reports its expanded state to assistive technology', async () => {
+    render(<ActualBuildParameters ranges={[]} warnings={[disagreement('[2.0,3.0)', '17')]} />)
+    const toggle = screen.getByRole('button', { name: /range differs from the registered version/i })
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    await userEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+  })
+
   it('shows no summary at all when there are no warnings', () => {
     render(<ActualBuildParameters ranges={[range('[2.0,3.0)', '17')]} warnings={[]} />)
-    expect(screen.queryByText(/disagreeing ranges/i)).toBeNull()
+    expect(screen.queryByText(/ranges differ from the registered version/i)).toBeNull()
   })
 })
 
@@ -70,11 +83,11 @@ describe('ActualBuildParameters — unavailable', () => {
   it('renders a distinct alert when data is unavailable', () => {
     render(<ActualBuildParameters ranges={[]} warnings={[]} actualDataUnavailable />)
     expect(screen.getByRole('alert')).toBeDefined()
-    expect(screen.getByText(/ACTUAL data unavailable/i)).toBeDefined()
+    expect(screen.getByText(/Registered build data unavailable/i)).toBeDefined()
   })
 
   it('the unavailable alert is not the disagreement summary', () => {
     render(<ActualBuildParameters ranges={[]} warnings={[]} actualDataUnavailable />)
-    expect(screen.queryByText(/disagreeing ranges/i)).toBeNull()
+    expect(screen.queryByText(/ranges differ from the registered version/i)).toBeNull()
   })
 })
