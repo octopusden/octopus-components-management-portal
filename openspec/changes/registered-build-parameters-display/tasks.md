@@ -47,23 +47,24 @@
 - [ ] 4.2 Failing test: that conflict's title/description is distinct from the generic "Save failed" branch, and uses the server's `errorMessage`
 - [ ] 4.3 Implement: add a dedicated `errorCode === 'RMS_REGISTERED_VALUE_CONFLICT'` branch in `useOptimisticConflict.ts`, ahead of the generic fallback
 - [ ] 4.4 Failing test: the conflict message states that no changes were saved
-- [ ] 4.5 Failing test: the editor's unsaved form changes survive the rejection, so the conflicting value can be corrected and resubmitted
-- [ ] 4.6 Failing test: a save that fails with this conflict routes focus to the Build tab (mirroring the existing Jira-conflict routing, ~L604-615)
-- [ ] 4.7 Implement the routing and the message
+- [ ] 4.5 Failing test: a save that fails with this conflict closes the review dialog and shows the Build tab with the message inline (mirroring the existing Jira-conflict routing, ~L604-615)
+- [ ] 4.6 Failing test: routing is decided by `errorCode` before the `/jira|project\s*key/i` message heuristic — a component whose name matches that pattern, saved alongside a Jira-pair edit, still routes to the Build tab
+- [ ] 4.7 Implement the routing and the message, placing the RMS branch ahead of the Jira heuristic
 - [ ] 4.8 Failing test: this conflict refetches the component, and the refetched ACTUAL ranges/summary appear on the Build tab
 - [ ] 4.9 Failing test: a `UNIQUENESS_VIOLATION` 409 still does NOT refetch — the new refetch is scoped to this error code only
-- [ ] 4.10 Failing test: unsaved edits across tabs — including queued field-override rows — all survive the refetch untouched. This pins the existing re-hydration guards (id-keyed form reset, dirty/touched guard, section-snapshot clean guard, overrides-draft reconciliation) that this requirement depends on; see design.md 4a
-- [ ] 4.11 Failing test: a refetch that itself fails still shows the conflict message and leaves the previous ACTUAL data on screen
-- [ ] 4.12 Implement the refetch in the `RMS_REGISTERED_VALUE_CONFLICT` branch
-- [ ] 4.13 Confirm ACTUAL data is read directly from the fetched component, never copied into form or draft state
-- [ ] 4.14 Confirm tests pass
+- [ ] 4.10 Failing test: the conflict message is shown before the refetch resolves — a slow refetch does not delay it
+- [ ] 4.11 Failing test: unsaved edits across tabs — including queued field-override rows — survive the rejection and the refetch untouched, so the conflicting value can be corrected and resubmitted. This pins the existing re-hydration guards (id-keyed form reset, dirty/touched guard, section-snapshot clean guard, overrides-draft reconciliation) that this requirement depends on; see design.md 4a
+- [ ] 4.12 Failing test: a refetch that itself fails still shows the conflict message and leaves the previous ACTUAL data on screen
+- [ ] 4.13 Implement the refetch, fired after the message rather than awaited before it
+- [ ] 4.14 Confirm ACTUAL data is read directly from the fetched component, never copied into form or draft state
+- [ ] 4.15 Confirm tests pass
 
 ## 5. 503 — RMS unavailable
 
 - [ ] 5.1 Failing test: a save to `build.javaVersion`/`build.mavenVersion` that fails with HTTP 503 and body `errorCode: 'RMS_UNAVAILABLE'` shows distinguishable "RMS is currently unavailable" messaging
 - [ ] 5.2 Failing test: that messaging is distinct from the generic destructive "Save failed" toast
 - [ ] 5.3 Failing test: a 503 with no `errorCode`, or a different `errorCode`, falls through to the existing generic "Save failed" toast
-- [ ] 5.4 Implement: add an explicit 503 check in the save-error chain (`ComponentDetailPage.tsx`), scoped to a `build.javaVersion`/`build.mavenVersion` write, parsing the body with the existing `classifyConflictBody` (`lib/conflict.ts`) and dispatching on `errorCode === 'RMS_UNAVAILABLE'`
+- [ ] 5.4 Implement: add an explicit 503 check in the save-error chain (`ComponentDetailPage.tsx`), after the 409/400 branches and ahead of the generic fallback, parsing the body with the existing `classifyConflictBody` (`lib/conflict.ts`) and dispatching on `errorCode === 'RMS_UNAVAILABLE'` alone — no additional check of which fields the save touched
 - [ ] 5.5 Confirm the app's `QueryClient` still sets no mutation-level `retry` (`App.tsx`), so a 503 save is not silently retried; note the dependency in the test if a retry default is ever added
 - [ ] 5.6 Verify the `build.javaVersion`/`build.mavenVersion` option values (`useFieldOptions`) round-trip byte-identically with stored values — a spelling difference (stored `1.8` vs option `8`) makes every save count as a change, which trips CRS's gate and turns an RMS outage into a 503 on a field the user never edited
 - [ ] 5.7 Confirm tests pass

@@ -95,6 +95,15 @@ A `409` response with `errorCode: "RMS_REGISTERED_VALUE_CONFLICT"` on a `build.j
 
 Because CRS applies the whole component `PATCH` — every tab's changes and the full field-override desired set — in one transaction, this rejection discards **all** of them, not only the conflicting field. The message SHALL say so, so an editor does not assume the rest of their edits were saved.
 
+The conflicting value is edited on the Build tab, so this rejection SHALL surface there: the save-review dialog closes and the Build tab is shown with the message inline, the same treatment an existing Jira-pair conflict already gets.
+
+This SHALL be decided by the `errorCode`, **before** any message-text heuristic runs. Portal's existing routing guesses which field a conflict concerns by pattern-matching the server's message; CRS's message here embeds the component's own key, so a component whose name contains a word that heuristic looks for would otherwise be misrouted to an unrelated tab.
+
+#### Scenario: The conflict is routed by error code, not by message text
+
+- **WHEN** a save is rejected with `errorCode: "RMS_REGISTERED_VALUE_CONFLICT"` for a component whose name happens to contain a term another routing rule matches on, and that other field was edited in the same save
+- **THEN** the rejection is still routed to the Build tab as an RMS conflict — the error code decides, and no message-text rule is consulted
+
 #### Scenario: Saving a disagreeing Java version is reported specifically
 
 - **WHEN** a save attempt returns `409` with `errorCode: "RMS_REGISTERED_VALUE_CONFLICT"`
@@ -111,7 +120,14 @@ CRS refreshes its cached ACTUAL data for a component at the moment it rejects a 
 
 This is deliberately different from Portal's handling of other value-conflict `409`s (e.g. a uniqueness violation), where refetching cannot help and is intentionally skipped.
 
+The refetch SHALL NOT delay the conflict message. The editor learns the save failed first; the displayed ACTUAL data catches up when the refetch returns. The message's own text comes from the response, not from the refetched data, so nothing about it needs to wait.
+
 The refetch SHALL NOT disturb the editor's unsaved work. This is possible because ACTUAL data is read straight from the fetched component and never mirrored into form or draft state — so refreshing it updates the displayed ranges and summary without touching any edited field. The refetch is best-effort: if it fails, the conflict message SHALL still be shown, and its failure SHALL NOT replace or obscure that message.
+
+#### Scenario: The message appears before the refetch completes
+
+- **WHEN** a save is rejected with this conflict and the follow-up refetch is slow
+- **THEN** the conflict message is already shown — the editor does not wait on the refetch to learn the save failed
 
 #### Scenario: The display catches up after a rejection
 
@@ -132,22 +148,19 @@ The refetch SHALL NOT disturb the editor's unsaved work. This is possible becaus
 
 A `503` response with `errorCode: "RMS_UNAVAILABLE"` from the component `PATCH` SHALL be shown to the editor with messaging that identifies the cause as RMS being temporarily unreachable, distinct from the generic destructive "Save failed" toast used for unclassified errors. A `503` without this `errorCode` SHALL be treated as an unclassified error, not as RMS-unavailable.
 
+The `errorCode` alone decides this — Portal SHALL NOT additionally check whether the save touched `javaVersion`/`mavenVersion`. CRS raises this error only from its write-time gate, and that gate only runs when one of those fields actually changes, so the code already implies the condition. Inspecting the submitted request to re-derive it would duplicate a rule the server has already applied.
+
 This applies to the component `PATCH` error path — the only request Portal makes that CRS gates against RMS. (CRS also gates its single-field-override endpoints, which Portal does not call; if Portal ever starts calling them, they need the same handling.) The separate supported-versions request issued after a successful `PATCH` has its own "Partly saved" failure path, which this requirement does not change.
 
 #### Scenario: RMS is unreachable at write time
 
-- **WHEN** a save attempt to `build.javaVersion` or `build.mavenVersion` returns `503` with `errorCode: "RMS_UNAVAILABLE"`
+- **WHEN** a save attempt returns `503` with `errorCode: "RMS_UNAVAILABLE"`
 - **THEN** the editor sees messaging identifying RMS as temporarily unavailable, rather than the generic "Save failed" toast
 
 #### Scenario: An unrelated 503 is not misattributed to RMS
 
 - **WHEN** a save attempt returns `503` without `errorCode: "RMS_UNAVAILABLE"` (or with no `errorCode` at all)
 - **THEN** the editor sees the generic destructive "Save failed" toast, not the RMS-unavailable message
-
-#### Scenario: A 503 on an unrelated field save is unaffected
-
-- **WHEN** a save attempt that does not touch `build.javaVersion`/`build.mavenVersion` fails for any reason
-- **THEN** it is handled by the existing generic error path, unchanged by this requirement
 
 ### Requirement: An ACTUAL disagreement warning introduces no client-side Save gating
 
