@@ -142,6 +142,21 @@ describe('artifactOwnership helpers', () => {
     ).toBe(false)
   })
 
+  it('hasOverlappingOverrides compares full 3-part versions, not just the first two components', () => {
+    expect(
+      hasOverlappingOverrides([
+        m({ id: 'a', base: false, range: '[2.8.100,2.8.600)' }),
+        m({ id: 'b', base: false, range: '[2.8.200,2.8.300)' }),
+      ]),
+    ).toBe(true)
+    expect(
+      hasOverlappingOverrides([
+        m({ id: 'a', base: false, range: '[2.8.100,2.8.200)' }),
+        m({ id: 'b', base: false, range: '[2.8.300,2.8.600)' }),
+      ]),
+    ).toBe(false)
+  })
+
   it('toArtifactIdRequests: splits a (grandfathered) comma group-list into ONE request per groupId, same mode/tokens/range', () => {
     // Canonicalization: one groupId per request. A row that still carries "a,b" (legacy /
     // pre-split) fans out to two per-group requests — matching the create form and CRS storage.

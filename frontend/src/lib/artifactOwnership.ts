@@ -4,7 +4,7 @@
 // EXPLICIT) at a version range (base = all versions; override REPLACES base).
 import type { ArtifactId, ArtifactIdMode, ArtifactIdRequest } from './types'
 import { findUnsupportedGroupId } from './groupValidation'
-import { formatVersionRange } from './versionRange'
+import { compareVersionArrays, formatVersionRange, parseDotNumeric } from './versionRange'
 
 export const OWNERSHIP_ALL_VERSIONS = '(,0),[0,)'
 
@@ -179,8 +179,8 @@ export function detectIntraComponentConflicts(
 }
 
 interface ParsedRange {
-  lo: number
-  hi: number
+  lo: number[] | null
+  hi: number[] | null
 }
 
 // Splits a composite range ("[a,b),(b,c)") into its segments.
@@ -190,30 +190,36 @@ const SEGMENT_SPLIT_RE = /(?<=[)\]])\s*,\s*(?=[[(])/
 function parseSegment(segment: string): ParsedRange {
   const exact = segment.match(/^\[\s*([\d.]+)\s*]$/)
   if (exact) {
-    const v = parseFloat(exact[1]!)
-    return { lo: v, hi: v }
+    const v = parseDotNumeric(exact[1]!)
+    if (v) return { lo: v, hi: v }
   }
   const m = segment.match(/[[(]\s*([\d.]*)\s*,\s*([\d.]*)\s*[\])]/)
-  if (!m) return { lo: Number.NEGATIVE_INFINITY, hi: Number.POSITIVE_INFINITY }
+  if (!m) return { lo: null, hi: null }
   const lo = m[1] ?? ''
   const hi = m[2] ?? ''
   return {
-    lo: lo === '' ? Number.NEGATIVE_INFINITY : parseFloat(lo),
-    hi: hi === '' ? Number.POSITIVE_INFINITY : parseFloat(hi),
+    lo: lo === '' ? null : parseDotNumeric(lo),
+    hi: hi === '' ? null : parseDotNumeric(hi),
   }
 }
 
 /** Parse a numeric maven range for the coverage timeline, composite-aware. */
 export function parseRange(range: string | null): ParsedRange[] {
-  if (!range) return [{ lo: Number.NEGATIVE_INFINITY, hi: Number.POSITIVE_INFINITY }]
+  if (!range) return [{ lo: null, hi: null }]
   return range.split(SEGMENT_SPLIT_RE).map(parseSegment)
+}
+
+// lo < hi, where a null bound is unbounded on that side.
+function boundedLess(lo: number[] | null, hi: number[] | null): boolean {
+  if (lo === null || hi === null) return true
+  return compareVersionArrays(lo, hi) < 0
 }
 
 /** Do two override ranges overlap (any segment of `a` against any segment of `b`)? */
 export function rangesOverlap(a: string | null, b: string | null): boolean {
   const ras = parseRange(a)
   const rbs = parseRange(b)
-  return ras.some((ra) => rbs.some((rb) => ra.lo < rb.hi && rb.lo < ra.hi))
+  return ras.some((ra) => rbs.some((rb) => boundedLess(ra.lo, rb.hi) && boundedLess(rb.lo, ra.hi)))
 }
 
 /** Are any of the override (non-base) mappings' ranges overlapping? */
