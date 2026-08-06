@@ -12,10 +12,17 @@ The components list is out of scope: CRS resolves the registered value into the 
 
 The Build tab SHALL display, for each of `javaVersion` and `mavenVersion`, the ACTUAL range list (`javaActualRanges`/`mavenActualRanges`) from `ComponentDetailResponse.registeredBuildParameters` when present. This range list is **display-only**: it SHALL carry no add, edit, or delete control of its own, and SHALL NOT alter, clear, or prevent editing of the underlying stored `javaVersion`/`mavenVersion` value.
 
+Version values SHALL be shown verbatim as CRS reported them — their format is guaranteed by the upstream service that records them, so Portal neither trims nor normalizes them. Range notation is the one exception, formatted to match the configured override list.
+
 #### Scenario: ACTUAL ranges are shown alongside the configured value
 
 - **WHEN** a component's `registeredBuildParameters.javaActualRanges` is non-empty
 - **THEN** the Build tab's Java section shows each range and its value
+
+#### Scenario: Version values are not reformatted
+
+- **WHEN** the Build tab renders an ACTUAL version value
+- **THEN** it appears exactly as CRS reported it, neither trimmed nor normalized
 
 #### Scenario: The ACTUAL range list has no edit controls
 
@@ -116,7 +123,9 @@ This SHALL be decided by the `errorCode`, **before** any message-text heuristic 
 
 ### Requirement: A conflict rejection refreshes the component's displayed ACTUAL data
 
-CRS refreshes its cached ACTUAL data for a component at the moment it rejects a write with `RMS_REGISTERED_VALUE_CONFLICT`, using the live data that caused the rejection. Portal SHALL refetch that component after such a rejection, so the ranges and warnings on screen reflect the data the rejection cited.
+CRS refreshes its cached ACTUAL data for a component at the moment it rejects a write with `RMS_REGISTERED_VALUE_CONFLICT`, using the live data that caused the rejection. Portal SHALL refetch that component after such a rejection, so the ranges and warnings on screen can reflect the data the rejection cited.
+
+Whether they do is not guaranteed: CRS caches this data per instance, so when it runs more than one replica the refresh lands on the replica that rejected the write while the refetch may be served by another, whose cache is unchanged. Portal cannot influence which replica answers. The refetch is therefore the best available correction, not a promise that the display is now current.
 
 This is deliberately different from Portal's handling of other value-conflict `409`s (e.g. a uniqueness violation), where refetching cannot help and is intentionally skipped.
 
@@ -131,8 +140,13 @@ The refetch SHALL NOT disturb the editor's unsaved work. This is possible becaus
 
 #### Scenario: The display catches up after a rejection
 
-- **WHEN** a save is rejected with `errorCode: "RMS_REGISTERED_VALUE_CONFLICT"` citing an ACTUAL value the displayed ranges did not show
-- **THEN** Portal refetches the component, and the Build tab then shows the ACTUAL range and warning that caused the rejection
+- **WHEN** a save is rejected with `errorCode: "RMS_REGISTERED_VALUE_CONFLICT"` citing an ACTUAL value the displayed ranges did not show, and the refetch is served data that includes it
+- **THEN** the Build tab then shows the ACTUAL range and warning that caused the rejection
+
+#### Scenario: A refetch that returns unchanged data is not an error
+
+- **WHEN** the refetch is served by a CRS replica whose cache still predates the rejection, so the returned data is unchanged
+- **THEN** the conflict message stands on its own and the display is left as it is — Portal neither retries nor reports a second failure
 
 #### Scenario: The refetch preserves unsaved edits
 

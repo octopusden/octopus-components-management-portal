@@ -55,13 +55,14 @@
 - [ ] 3.10 Failing test: the conflict message is shown before the refetch resolves — a slow refetch does not delay it
 - [ ] 3.11 Failing test: unsaved edits across tabs — including queued field-override rows — survive the rejection and the refetch untouched, so the conflicting value can be corrected and resubmitted. This pins the existing re-hydration guards (id-keyed form reset, dirty/touched guard, section-snapshot clean guard, overrides-draft reconciliation) that this requirement depends on; see design.md Decision 6
 - [ ] 3.12 Failing test: a refetch that itself fails still shows the conflict message and leaves the previous ACTUAL data on screen
-- [ ] 3.13 Implement the refetch, fired after the message rather than awaited before it
-- [ ] 3.14 Confirm ACTUAL data is read directly from the fetched component, never copied into form or draft state
-- [ ] 3.15 Confirm tests pass
+- [ ] 3.13 Failing test: a refetch returning unchanged data (a CRS replica whose cache predates the rejection) is not treated as an error — no retry, no second failure message
+- [ ] 3.14 Implement the refetch in the caller, after the message is shown — NOT inside `useOptimisticConflict`, which is awaited before the toast and would delay it (design.md Decision 6)
+- [ ] 3.15 Confirm ACTUAL data is read directly from the fetched component, never copied into form or draft state
+- [ ] 3.16 Confirm tests pass
 
 ## 4. 503 — RMS unavailable
 
-- [ ] 4.1 Failing test: a save to `build.javaVersion`/`build.mavenVersion` that fails with HTTP 503 and body `errorCode: 'RMS_UNAVAILABLE'` shows distinguishable "RMS is currently unavailable" messaging
+- [ ] 4.1 Failing test: a save that fails with HTTP 503 and body `errorCode: 'RMS_UNAVAILABLE'` shows distinguishable "RMS is currently unavailable" messaging
 - [ ] 4.2 Failing test: that messaging is distinct from the generic destructive "Save failed" toast
 - [ ] 4.3 Failing test: a 503 with no `errorCode`, or a different `errorCode`, falls through to the existing generic "Save failed" toast
 - [ ] 4.4 Implement: add an explicit 503 check in the save-error chain (`ComponentDetailPage.tsx`), after the 409/400 branches and ahead of the generic fallback, parsing the body with the existing `classifyConflictBody` (`lib/conflict.ts`) and dispatching on `errorCode === 'RMS_UNAVAILABLE'` alone — no additional check of which fields the save touched
