@@ -1,58 +1,14 @@
 ## Purpose
 
-Defines how Portal displays CRS's RMS-registered ("ACTUAL") Java/Maven build data alongside a component's configured `javaVersion`/`mavenVersion` values, and how Portal surfaces the two save-time error responses CRS's write-time ACTUAL gate introduces. 
+Defines how the component detail view displays CRS's RMS-registered ("ACTUAL") Java/Maven build data alongside a component's configured `javaVersion`/`mavenVersion` values, and how Portal surfaces the two save-time error responses CRS's write-time ACTUAL gate introduces.
 
-This spec applies to the `registeredBuildParameters` data CRS attaches to `ComponentSummaryResponse`/`ComponentDetailResponse`, and to `build.javaVersion`/`build.mavenVersion` write responses.
+This spec applies to the `registeredBuildParameters` data CRS attaches to `ComponentDetailResponse`, and to `build.javaVersion`/`build.mavenVersion` write responses.
+
+The components list is out of scope: CRS resolves the registered value into the existing `javaVersion` field it already returns, so the list's column and its filter keep working unchanged and Portal needs no list-side change.
 
 ## ADDED Requirements
 
-### Requirement: The list view's Java column prefers the ACTUAL rollup over the configured value
-
-The existing Java Version column SHALL show `registeredBuildParameters.java` when it is a non-null string. When it is absent (`registeredBuildParameters` is `null`, or `java` is `null`), the column SHALL show the configured `javaVersion` value as it does today — a Badge if set, an em-dash if not.
-
-The value is shown as one plain value, with no marker distinguishing an ACTUAL-sourced value from a configured one.
-
-CRS reports the version string exactly as RMS recorded it, which can carry detail no other version in the UI shows (e.g. `17.0.9`). The column SHALL trim it for display:
-
-| Recorded | Shown | Rule |
-|---|---|---|
-| `17` | `17` | unchanged |
-| `17.0.9` | `17` | trim to the leading version number |
-| `1.8` | `1.8` | legacy `1.X` spelling is preserved, never rewritten to `8` |
-| `1.8.0_292` | `1.8` | trim to the legacy `1.X` spelling |
-| anything unparseable | verbatim | never hide a value Portal cannot interpret |
-
-#### Scenario: A recorded ACTUAL value takes over the column
-
-- **WHEN** a component's `registeredBuildParameters.java` is a non-null string
-- **THEN** the Java Version column shows that value, regardless of the component's configured `javaVersion`
-
-#### Scenario: A patch-level version is trimmed
-
-- **WHEN** a component's `registeredBuildParameters.java` is `17.0.9`
-- **THEN** the Java Version column shows `17`
-
-#### Scenario: A legacy 1.X spelling is preserved
-
-- **WHEN** a component's `registeredBuildParameters.java` is `1.8`
-- **THEN** the Java Version column shows `1.8`, not `8`
-
-#### Scenario: An uninterpretable value is shown as-is
-
-- **WHEN** a component's `registeredBuildParameters.java` cannot be read as a version number
-- **THEN** the Java Version column shows it verbatim rather than hiding it or showing an em-dash
-
-#### Scenario: No ACTUAL value falls back to the configured value
-
-- **WHEN** a component's `registeredBuildParameters` is `null`, or is present with `java: null`
-- **THEN** the Java Version column shows the configured `javaVersion` value, exactly as it does today
-
-#### Scenario: A recently-archived component may still show a rollup in the list
-
-- **WHEN** a component was archived after CRS's last ACTUAL refresh, so its summary response still carries a rollup while its detail response carries none
-- **THEN** the list shows the rollup and the detail view shows no ACTUAL data — Portal renders each response as given and SHALL NOT attempt to reconcile the two
-
-### Requirement: The detail view shows ACTUAL ranges and warnings per attribute, display-only
+### Requirement: The detail view shows the ACTUAL range list per attribute, display-only
 
 The Build tab SHALL display, for each of `javaVersion` and `mavenVersion`, the ACTUAL range list (`javaActualRanges`/`mavenActualRanges`) from `ComponentDetailResponse.registeredBuildParameters` when present. This range list is **display-only**: it SHALL carry no add, edit, or delete control of its own, and SHALL NOT alter, clear, or prevent editing of the underlying stored `javaVersion`/`mavenVersion` value.
 
@@ -71,6 +27,16 @@ The Build tab SHALL display, for each of `javaVersion` and `mavenVersion`, the A
 - **WHEN** a component's `registeredBuildParameters.javaActualRanges` is non-empty
 - **THEN** the configured `javaVersion` field and its overrides remain exactly as editable as they are today
 
+#### Scenario: Ranges are rendered in the same notation as configured ranges
+
+- **WHEN** the Build tab renders an ACTUAL range
+- **THEN** it uses the same range formatting the configured override list uses, so the two read consistently in one tab
+
+#### Scenario: An eligible component with nothing recorded shows no ACTUAL section
+
+- **WHEN** `registeredBuildParameters` is present with `actualDataUnavailable: false` and every range and warning list empty — an eligible component CRS checked successfully, for which RMS has recorded nothing
+- **THEN** the Build tab shows no ACTUAL ranges, no disagreement summary, and no unavailable alert — it renders as it does for a component with no ACTUAL data at all
+
 #### Scenario: Unavailable data is shown as its own alert, distinct from a disagreement warning
 
 - **WHEN** `registeredBuildParameters.actualDataUnavailable` is `true`
@@ -80,22 +46,29 @@ The Build tab SHALL display, for each of `javaVersion` and `mavenVersion`, the A
 
 `javaWarnings`/`mavenWarnings` SHALL be shown as a single summary for their attribute, stating how many ranges disagree, and expanding on demand to list each disagreement's sub-range and ACTUAL value. Warnings SHALL NOT be attached to individual DEFAULT/OVERRIDDEN rows.
 
+Entries SHALL be de-duplicated on their (sub-range, ACTUAL value) pair before being counted or listed. CRS reports one entry per (configured row × ACTUAL range) pair, and two different configured rows can produce byte-identical entries — most commonly the DEFAULT row and an override covering the same territory, both disagreeing with the same ACTUAL range. Counting raw entries would report more disagreeing ranges than exist.
+
 Two reasons this is a per-attribute summary rather than a per-row badge:
 
 - A warning identifies only the sub-range and ACTUAL value; it does not identify which configured row produced it, and two different rows can produce identical entries. Attributing one to a row is not possible from the response alone.
 - Because the DEFAULT row spans all versions, it is compared against every ACTUAL range. Any component that has built on more than one Java version therefore carries warnings permanently, and no edit can clear them. A collapsed summary keeps that from dominating the tab.
 
-Warnings SHALL be shown verbatim from the response — Portal does not recompute, re-derive, or reformat which ranges disagree.
+Portal SHALL NOT recompute or re-derive *which* ranges disagree — the set of disagreements is taken from the response as given, and their version values are shown verbatim. Only the range notation is formatted, matching the configured override list (see the range-notation scenario above).
 
 #### Scenario: Several disagreements collapse into one summary
 
-- **WHEN** `registeredBuildParameters.javaWarnings` contains three entries
+- **WHEN** `registeredBuildParameters.javaWarnings` contains three entries with distinct (sub-range, ACTUAL value) pairs
 - **THEN** the Build tab's Java section shows one summary indicating three disagreeing ranges, not three separate warnings, and no warning marker appears on any configured row
+
+#### Scenario: Identical entries are counted once
+
+- **WHEN** `javaWarnings` contains two entries with the same sub-range and the same ACTUAL value, and one other distinct entry
+- **THEN** the summary reports two disagreeing ranges, and expanding it lists two, not three
 
 #### Scenario: Expanding the summary lists each disagreement
 
 - **WHEN** an editor expands the Java disagreement summary
-- **THEN** each entry is listed with its sub-range and ACTUAL value, exactly as the response reported them
+- **THEN** each entry is listed with its sub-range and ACTUAL value — the same entries the response reported, with no disagreement added, dropped, or re-derived
 
 #### Scenario: No disagreements shows no summary
 
@@ -109,12 +82,12 @@ Warnings SHALL be shown verbatim from the response — Portal does not recompute
 
 ### Requirement: No client-side edit restriction is introduced by ACTUAL data
 
-Displaying ACTUAL data, including a disagreement warning, SHALL NOT disable, hide, or otherwise restrict the `javaVersion`/`mavenVersion` DEFAULT or OVERRIDDEN edit controls.
+Displaying ACTUAL data, including a disagreement summary, SHALL NOT disable, hide, or otherwise restrict the `javaVersion`/`mavenVersion` DEFAULT or OVERRIDDEN edit controls.
 
-#### Scenario: A warned field stays editable
+#### Scenario: Rows stay editable while a disagreement summary is shown
 
-- **WHEN** a component's stored `javaVersion` override is shown with a disagreement warning
-- **THEN** the override's edit control remains as usable as any other field override — add, edit, and delete are all still available
+- **WHEN** a component's `javaWarnings` is non-empty, so the Java section shows a disagreement summary
+- **THEN** every `javaVersion` override row remains as usable as any other field override — add, edit, and delete are all still available
 
 ### Requirement: A conflicting write is reported with a specific message
 
@@ -138,16 +111,28 @@ CRS refreshes its cached ACTUAL data for a component at the moment it rejects a 
 
 This is deliberately different from Portal's handling of other value-conflict `409`s (e.g. a uniqueness violation), where refetching cannot help and is intentionally skipped.
 
+The refetch SHALL NOT disturb the editor's unsaved work. This is possible because ACTUAL data is read straight from the fetched component and never mirrored into form or draft state — so refreshing it updates the displayed ranges and summary without touching any edited field. The refetch is best-effort: if it fails, the conflict message SHALL still be shown, and its failure SHALL NOT replace or obscure that message.
+
 #### Scenario: The display catches up after a rejection
 
 - **WHEN** a save is rejected with `errorCode: "RMS_REGISTERED_VALUE_CONFLICT"` citing an ACTUAL value the displayed ranges did not show
 - **THEN** Portal refetches the component, and the Build tab then shows the ACTUAL range and warning that caused the rejection
 
+#### Scenario: The refetch preserves unsaved edits
+
+- **WHEN** an editor has unsaved changes on several tabs, including queued field-override rows, and the save is rejected with this conflict
+- **THEN** the refetch updates the displayed ACTUAL data while every unsaved change remains exactly as the editor left it
+
+#### Scenario: A failed refetch does not mask the conflict
+
+- **WHEN** the post-rejection refetch itself fails
+- **THEN** the editor still sees the conflict message, and the stale ACTUAL data is left on screen rather than cleared
+
 ### Requirement: An RMS-unavailable write failure is reported distinctly from a generic save failure
 
 A `503` response with `errorCode: "RMS_UNAVAILABLE"` from the component `PATCH` SHALL be shown to the editor with messaging that identifies the cause as RMS being temporarily unreachable, distinct from the generic destructive "Save failed" toast used for unclassified errors. A `503` without this `errorCode` SHALL be treated as an unclassified error, not as RMS-unavailable.
 
-This applies to the component `PATCH` error path only — the sole path on which CRS can return this error. The separate supported-versions request issued after a successful `PATCH` has its own "Partly saved" failure path, which this requirement does not change.
+This applies to the component `PATCH` error path — the only request Portal makes that CRS gates against RMS. (CRS also gates its single-field-override endpoints, which Portal does not call; if Portal ever starts calling them, they need the same handling.) The separate supported-versions request issued after a successful `PATCH` has its own "Partly saved" failure path, which this requirement does not change.
 
 #### Scenario: RMS is unreachable at write time
 
@@ -168,12 +153,12 @@ This applies to the component `PATCH` error path only — the sole path on which
 
 CRS already permits a save that does not change `javaVersion`/`mavenVersion` regardless of any existing ACTUAL disagreement. Portal SHALL NOT add any client-side gating on top of that — the Save control SHALL NOT be disabled, and no client-side validation error SHALL be raised, because of an existing `javaWarnings`/`mavenWarnings` entry.
 
-#### Scenario: The Save control stays enabled despite an existing warning
+#### Scenario: The Save control stays enabled despite an existing disagreement
 
-- **WHEN** a component's `javaVersion` is shown with a disagreement warning
-- **THEN** the Save control is enabled exactly as it would be with no warning present — its enabled state does not depend on `javaWarnings`/`mavenWarnings`
+- **WHEN** a component's `javaWarnings` is non-empty
+- **THEN** the Save control is enabled exactly as it would be with an empty list — its enabled state does not depend on `javaWarnings`/`mavenWarnings`
 
 #### Scenario: Saving an unrelated field is not intercepted client-side
 
-- **WHEN** a component's `javaVersion` is shown with a disagreement warning, and an editor saves a change to a different field without touching `javaVersion`/`mavenVersion`
-- **THEN** Portal submits the save without any client-side check against the warning, and the save succeeds
+- **WHEN** a component's `javaWarnings` is non-empty and an editor saves a change to a different field without touching `javaVersion`/`mavenVersion`
+- **THEN** Portal submits the save without any client-side check against the warnings, and the save succeeds

@@ -38,11 +38,9 @@ Portal already has a generic 409-dispatch mechanism (`useOptimisticConflict.ts`)
 
 ## Decisions
 
-### 1. List-view: ACTUAL replaces the configured value in the Java column
+### 1. The components list needs no Portal change
 
-- The existing Java Version column shows `registeredBuildParameters.java` when present; otherwise it falls back to the configured `javaVersion`, unchanged from today. It is one value, not a configured-vs-actual pair, and carries no marker distinguishing the two sources.
-- Maven is out of scope for the list view — `mavenVersion` isn't shown in the list today and this change doesn't add it there. Maven's ACTUAL data is a detail-view-only concern (Decision 2).
-- **Display trimming, not normalization.** CRS returns RMS's raw string, which can be more precise than anything else in the UI (`17.0.9`). Portal trims it to the leading version number for display — but preserves the legacy `1.X` spelling rather than rewriting `1.8` to `8`, since `1.8` is a spelling users read and select elsewhere in the UI, not noise. This is a formatting rule over a single string; it does not reimplement CRS's comparison or range logic.
+CRS resolves the registered value into the `javaVersion` field it already returns on the summary, rather than exposing a separate rollup for Portal to merge. The list's column and its server-side "Java version" filter therefore stay consistent by construction, with no Portal-side coalescing and no risk of the filter selecting on one value while the column displays another. This change is detail-view and save-error handling only.
 
 ### 2. Detail-view: ACTUAL renders inline in the Build tab, not a new tab
 
@@ -78,6 +76,17 @@ So: one summary per attribute, stating the count, expanding to the verbatim list
 - Portal's existing `kind: 'value'` 409 path deliberately does **not** refetch, on the reasoning that reloading cannot fix a value conflict. That reasoning does not hold here: the rejection is caused by *server-side data the display is behind on*, and a refetch is exactly what resolves the mismatch.
 - So this conflict code refetches the component, while `UNIQUENESS_VIOLATION` continues not to.
 
+**Why refetching does not destroy the editor's unsaved work.** This was checked rather than assumed, because "refetch" and "keep unsaved edits" look contradictory. They coexist only because every re-hydration path in this page is already guarded — a same-id refetch re-seeds nothing that is dirty:
+
+- The page-level form reset is keyed on the component **id**, not the object, and returns early when the id is unchanged.
+- The General tab's hydration effect does run on a new data object, but returns early if any field is dirty or touched.
+- The shared section-snapshot hook re-seeds only when the id changed or the section is clean.
+- The overrides draft is cleared only on an id change; a refetch reconciles it, pruning only queued ops the server has made redundant — queued creates are never dropped.
+
+These guards exist because background refetches already happen routinely (`refetchOnWindowFocus` is on, `staleTime` 30s). This feature depends on them rather than adding its own protection, so a test must pin the behaviour: if a future refactor re-seeds a section on every data change, this requirement breaks silently and the user loses work on a rejected save.
+
+**This also fixes what would otherwise be a gap regardless of the conflict path:** ACTUAL data is read straight from the fetched component and never copied into form or draft state, so it refreshes on any ordinary background refetch too, without ever interacting with unsaved edits.
+
 ### 5. No Save-button gating tied to `javaWarnings`/`mavenWarnings`
 
 - CRS already permits an unrelated-field save regardless of an existing disagreement warning.
@@ -95,5 +104,4 @@ So: one summary per attribute, stating the count, expanding to the verbatim list
 - **A rejected save discards every change in the request, across all tabs.** Portal sends one combined `PATCH` carrying every tab's edits plus the full field-override desired set, and CRS applies it in a single transaction. So one disagreeing Java override rejects an otherwise-unrelated batch of edits. Portal cannot make this partial — splitting the save into per-field requests would be a much larger change to how the detail page saves, and would trade atomicity for it. Handled by telling the user plainly (spec.md), not by changing the save shape.
 - **Can't verify end-to-end until CRS merges.** `v4.json`/`schema.d.ts` don't carry `registeredBuildParameters` yet, and the `409`/`503` responses don't exist on any real CRS instance until CRS's `rms-registered-build-params` branch reaches `main`. Implementation proceeds against hand-written fixtures/mocks; a true integration check needs a CRS instance built from that branch.
 - **Two separate "build warning" surfaces will coexist**: TeamCity's validation findings and this feature's ACTUAL-disagreement warnings — different wire shapes, different visual treatment, different owners. Accepted, not unified: they answer different questions (build-step misconfiguration vs. registered-value drift).
-- **A component recorded under two spellings of the same version can render either one.** CRS's rollup takes the maximum, and its Java comparison treats `8` and `1.8` as equal — so which spelling wins is decided by the order of the underlying ranges, not by anything the user can see. Display trimming (Decision 1) deliberately preserves both spellings rather than collapsing them, so this residual remains: the same component can read `8` or `1.8` with no visible cause. Accepted — rewriting `1.8` to `8` to remove it would mean showing users a spelling their own configuration never used.
-- **The list-view rollup can show a numerically-higher-but-superseded value** (max ever recorded, not "what the component currently builds on") — a limitation CRS documents and Portal inherits as-is, since showing something more current would require fetching detail-shaped data for every list row.
+- **Version values are shown verbatim.** Portal does not trim or normalize what CRS reports — the recorded value's format is guaranteed by the upstream service that records it. A value malformed enough to look wrong is a data problem to fix upstream, not to paper over in the UI.
