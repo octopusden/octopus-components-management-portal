@@ -8,8 +8,8 @@
 ## What Changes
 
 - **List view**: the existing Java Version column shows the ACTUAL rollup (max Java version RMS has ever registered for that component) when one exists, read from `ComponentSummaryResponse.registeredBuildParameters`, falling back to today's configured value otherwise.
-- **Detail view**: the Build tab gains, next to the existing `javaVersion`/`mavenVersion` fields and their `FieldOverrideInline` range editors, a display-only view of `ComponentDetailResponse.registeredBuildParameters` — the ACTUAL range list per attribute, a named warning wherever a stored DEFAULT/OVERRIDDEN row disagrees with an intersecting ACTUAL range, and a distinct "ACTUAL data unavailable" indicator for a component CRS has never successfully swept.
-- **Save-error handling**: a `409` with `errorCode: RMS_REGISTERED_VALUE_CONFLICT` gets a dedicated, specific toast (naming the conflicting range/value) instead of falling into the generic non-lock-conflict bucket; a `503` from the same write path gets its own distinguishable "RMS is currently unavailable" treatment instead of the generic destructive "Save failed" fallback.
+- **Detail view**: the Build tab gains, next to the existing `javaVersion`/`mavenVersion` fields and their `FieldOverrideInline` range editors, a display-only view of `ComponentDetailResponse.registeredBuildParameters` — the ACTUAL range list per attribute, a collapsed per-attribute summary of the ranges that disagree with what was actually built, and a distinct "ACTUAL data unavailable" indicator for a component CRS has never successfully swept.
+- **Save-error handling**: a `409` with `errorCode: RMS_REGISTERED_VALUE_CONFLICT` gets a dedicated toast naming the conflicting range/value, states that nothing was saved (CRS rejects the whole request, not just that field), and refetches the component so the display reflects the data that caused the rejection; a `503` with `errorCode: RMS_UNAVAILABLE` gets its own distinguishable "RMS is currently unavailable" treatment instead of the generic destructive "Save failed" fallback.
 
 ## Capabilities
 
