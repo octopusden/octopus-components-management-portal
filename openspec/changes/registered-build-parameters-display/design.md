@@ -47,21 +47,26 @@ Portal already has a generic 409-dispatch mechanism (`useOptimisticConflict.ts`)
 
 - Reuses `FieldOverrideInline`'s existing conflict-badge pattern (`renderConflictBadge`) rather than a separate tab.
 - TeamCity validations get their own tab because they're a registry-wide, multi-component concern; ACTUAL is scoped to the one field it annotates, so it stays inline.
-- ACTUAL ranges render as a small read-only list under each of `javaVersion`/`mavenVersion`'s `FieldOverrideInline`.
+- ACTUAL ranges render as a read-only list under each of `javaVersion`/`mavenVersion`'s `FieldOverrideInline` — no add/edit/delete control of its own, unlike `FieldOverrideInline`'s own configured-range list.
 - A warning renders as an `AlertTriangle` badge on the specific row it names (the OVERRIDDEN row, or the BASE row for a DEFAULT disagreement), using CRS's `subRange`/`actualValue` text verbatim — no reformatting client-side.
 
-### 3. `actualDataUnavailable` is its own visual state, never styled as a warning
+### 3. `actualDataUnavailable` is its own alert, styled distinctly from a disagreement warning
 
-- A disagreement warning means "checked, and it disagrees."
-- `actualDataUnavailable` means "we couldn't check."
-- These render with different styling so the two are never confused.
+- A disagreement warning means "checked, and it disagrees" — still an alert, not neutral.
+- `actualDataUnavailable` means "we couldn't check" — also an alert (warning/error styling, e.g. an alert icon), not a plain neutral note.
+- Both use alert styling; they use different wording/treatment from each other so they are never mistaken for one another.
 
 ### 4. 409/503 handling extends existing dispatch points
 
 - `useOptimisticConflict.ts` already dispatches on `errorCode` for any 409 — add an `errorCode === 'RMS_REGISTERED_VALUE_CONFLICT'` branch there.
 - `503` has no existing status-code branch below 409 anywhere in the save-error chain today — add it as its own explicit check in `ComponentDetailPage.tsx`, not folded into the 409 dispatcher (a 503 carries no `errorCode` body to dispatch on).
 
-### 5. Types are extended by hand in `types.ts`
+### 5. No Save-button gating tied to `javaWarnings`/`mavenWarnings`
+
+- CRS already permits an unrelated-field save regardless of an existing disagreement warning.
+- Portal's Save control's enabled/disabled state and its client-side (RHF/Zod) validation SHALL NOT read `javaWarnings`/`mavenWarnings` at all — there is no new wiring to add here, only a rule to avoid introducing one.
+
+### 6. Types are extended by hand in `types.ts`
 
 - Per this repo's open TD-002 tech debt, `schema.d.ts` (generated from vendored `v4.json`) is not yet what application code imports — `types.ts` still is.
 - This change follows that existing convention rather than pre-empting TD-002.

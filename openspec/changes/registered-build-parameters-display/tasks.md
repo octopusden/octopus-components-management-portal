@@ -27,16 +27,18 @@
 
 - [ ] 3.1 Failing test: `javaActualRanges` render read-only under the `javaVersion` `FieldOverrideInline`
 - [ ] 3.2 Failing test: `mavenActualRanges` render read-only under the `mavenVersion` `FieldOverrideInline`
-- [ ] 3.3 Failing test: a `javaWarnings` entry renders as a warning badge naming its `subRange`/`actualValue`, on the OVERRIDDEN row it concerns
-- [ ] 3.4 Failing test: a `javaWarnings` entry against the BASE row (DEFAULT disagreement) renders on the BASE row
-- [ ] 3.5 Failing test: a row carrying a warning stays fully editable — add/edit/delete all still work
-- [ ] 3.6 Failing test: `actualDataUnavailable: true` renders a distinct "unavailable" indicator, not styled as a warning
-- [ ] 3.7 Failing test: a component whose `registeredBuildParameters` is `null` renders the Build tab exactly as it does today
-- [ ] 3.8 Implement: wire `registeredBuildParameters` from `ComponentDetail` into `BuildTab.tsx`/`useBuildSection.ts`
-- [ ] 3.9 Implement: render the ACTUAL range lists
-- [ ] 3.10 Implement: render the warning badge, reusing `FieldOverrideInline.tsx`'s `renderConflictBadge` styling (~L112-124)
-- [ ] 3.11 Implement: render the `actualDataUnavailable` indicator
-- [ ] 3.12 Confirm tests pass
+- [ ] 3.3 Failing test: the rendered ACTUAL ranges have no add/edit/delete control
+- [ ] 3.4 Failing test: a `javaWarnings` entry renders as a warning badge naming its `subRange`/`actualValue`, on the OVERRIDDEN row it concerns
+- [ ] 3.5 Failing test: a `javaWarnings` entry against the BASE row (DEFAULT disagreement) renders on the BASE row
+- [ ] 3.6 Failing test: a row carrying a warning stays fully editable — add/edit/delete all still work
+- [ ] 3.7 Failing test: `actualDataUnavailable: true` renders as an alert (warning/error styling, e.g. an alert icon)
+- [ ] 3.8 Failing test: that unavailable alert is visually/textually distinct from a `javaWarnings`/`mavenWarnings` disagreement warning
+- [ ] 3.9 Failing test: a component whose `registeredBuildParameters` is `null` renders the Build tab exactly as it does today
+- [ ] 3.10 Implement: wire `registeredBuildParameters` from `ComponentDetail` into `BuildTab.tsx`/`useBuildSection.ts`
+- [ ] 3.11 Implement: render the read-only ACTUAL range lists
+- [ ] 3.12 Implement: render the warning badge, reusing `FieldOverrideInline.tsx`'s `renderConflictBadge` styling (~L112-124)
+- [ ] 3.13 Implement: render the `actualDataUnavailable` alert
+- [ ] 3.14 Confirm tests pass
 
 ## 4. 409 — RMS_REGISTERED_VALUE_CONFLICT
 
@@ -52,9 +54,11 @@
 - [ ] 5.1 Failing test: a save to `build.javaVersion`/`build.mavenVersion` that fails with HTTP 503 shows distinguishable "RMS is currently unavailable" messaging
 - [ ] 5.2 Failing test: that messaging is distinct from the generic destructive "Save failed" toast
 - [ ] 5.3 Failing test: a 503 on a save that does NOT touch `build.javaVersion`/`build.mavenVersion` falls through to the existing generic error handling, unchanged
-- [ ] 5.4 Failing test: saving an unrelated field succeeds even when the component's `javaVersion` currently carries a disagreement warning
-- [ ] 5.5 Implement: add an explicit 503 check in the save-error chain (`ComponentDetailPage.tsx`), scoped to a `build.javaVersion`/`build.mavenVersion` write
-- [ ] 5.6 Confirm tests pass
+- [ ] 5.4 Failing test: the Save control is enabled when a component's `javaVersion` carries a disagreement warning, same as when it doesn't
+- [ ] 5.5 Failing test: saving an unrelated field succeeds even when the component's `javaVersion` currently carries a disagreement warning, with no client-side check performed against the warning
+- [ ] 5.6 Implement: add an explicit 503 check in the save-error chain (`ComponentDetailPage.tsx`), scoped to a `build.javaVersion`/`build.mavenVersion` write
+- [ ] 5.7 Confirm 5.4/5.5 pass without needing new code — i.e. confirm no existing or newly-added logic reads `javaWarnings`/`mavenWarnings` for Save-gating
+- [ ] 5.8 Confirm tests pass
 
 ## 6. Docs and finalization
 
