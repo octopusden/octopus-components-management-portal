@@ -178,9 +178,12 @@ export function detectIntraComponentConflicts(
   return byId
 }
 
+// null bound = unbounded; loIncl/hiIncl are meaningless when that side is null.
 interface ParsedRange {
   lo: number[] | null
+  loIncl: boolean
   hi: number[] | null
+  hiIncl: boolean
 }
 
 // Splits a composite range ("[a,b),(b,c)") into its segments.
@@ -191,35 +194,45 @@ function parseSegment(segment: string): ParsedRange {
   const exact = segment.match(/^\[\s*([\d.]+)\s*]$/)
   if (exact) {
     const v = parseDotNumeric(exact[1]!)
-    if (v) return { lo: v, hi: v }
+    if (v) return { lo: v, loIncl: true, hi: v, hiIncl: true }
   }
-  const m = segment.match(/[[(]\s*([\d.]*)\s*,\s*([\d.]*)\s*[\])]/)
-  if (!m) return { lo: null, hi: null }
-  const lo = m[1] ?? ''
-  const hi = m[2] ?? ''
+  const m = segment.match(/([[(])\s*([\d.]*)\s*,\s*([\d.]*)\s*([\])])/)
+  if (!m) return { lo: null, loIncl: false, hi: null, hiIncl: false }
+  const [, open, lo, hi, close] = m
   return {
-    lo: lo === '' ? null : parseDotNumeric(lo),
-    hi: hi === '' ? null : parseDotNumeric(hi),
+    lo: lo === '' ? null : parseDotNumeric(lo!),
+    loIncl: open === '[',
+    hi: hi === '' ? null : parseDotNumeric(hi!),
+    hiIncl: close === ']',
   }
 }
 
 /** Parse a numeric maven range for the coverage timeline, composite-aware. */
 export function parseRange(range: string | null): ParsedRange[] {
-  if (!range) return [{ lo: null, hi: null }]
+  if (!range) return [{ lo: null, loIncl: false, hi: null, hiIncl: false }]
   return range.split(SEGMENT_SPLIT_RE).map(parseSegment)
 }
 
-// lo < hi, where a null bound is unbounded on that side.
-function boundedLess(lo: number[] | null, hi: number[] | null): boolean {
-  if (lo === null || hi === null) return true
-  return compareVersionArrays(lo, hi) < 0
+// Same disjoint check as versionRange.ts's classifyRangeConflict: `a` is entirely before/after `b`,
+// with a shared boundary disjoint only when it isn't inclusive on BOTH sides (else the shared
+// version belongs to both ranges, which is an overlap).
+function segmentsDisjoint(a: ParsedRange, b: ParsedRange): boolean {
+  if (a.lo !== null && b.hi !== null) {
+    const cmp = compareVersionArrays(a.lo, b.hi)
+    if (cmp > 0 || (cmp === 0 && !(a.loIncl && b.hiIncl))) return true
+  }
+  if (b.lo !== null && a.hi !== null) {
+    const cmp = compareVersionArrays(b.lo, a.hi)
+    if (cmp > 0 || (cmp === 0 && !(b.loIncl && a.hiIncl))) return true
+  }
+  return false
 }
 
 /** Do two override ranges overlap (any segment of `a` against any segment of `b`)? */
 export function rangesOverlap(a: string | null, b: string | null): boolean {
   const ras = parseRange(a)
   const rbs = parseRange(b)
-  return ras.some((ra) => rbs.some((rb) => boundedLess(ra.lo, rb.hi) && boundedLess(rb.lo, ra.hi)))
+  return ras.some((ra) => rbs.some((rb) => !segmentsDisjoint(ra, rb)))
 }
 
 /** Are any of the override (non-base) mappings' ranges overlapping? */

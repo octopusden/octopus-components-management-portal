@@ -157,6 +157,23 @@ describe('artifactOwnership helpers', () => {
     ).toBe(false)
   })
 
+  it('hasOverlappingOverrides treats a shared closed endpoint as overlapping', () => {
+    // Both inclusive at 2.0 — that version is claimed by both ranges.
+    expect(
+      hasOverlappingOverrides([
+        m({ id: 'a', base: false, range: '[1.0,2.0]' }),
+        m({ id: 'b', base: false, range: '[2.0,3.0]' }),
+      ]),
+    ).toBe(true)
+    // Same boundary, but one side excludes it — genuinely disjoint.
+    expect(
+      hasOverlappingOverrides([
+        m({ id: 'a', base: false, range: '[1.0,2.0)' }),
+        m({ id: 'b', base: false, range: '[2.0,3.0)' }),
+      ]),
+    ).toBe(false)
+  })
+
   it('toArtifactIdRequests: splits a (grandfathered) comma group-list into ONE request per groupId, same mode/tokens/range', () => {
     // Canonicalization: one groupId per request. A row that still carries "a,b" (legacy /
     // pre-split) fans out to two per-group requests — matching the create form and CRS storage.
