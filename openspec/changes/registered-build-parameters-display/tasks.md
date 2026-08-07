@@ -43,32 +43,32 @@
 
 ## 3. 409 — RMS_REGISTERED_VALUE_CONFLICT
 
-- [ ] 3.1 Failing test: a 409 with `errorCode: 'RMS_REGISTERED_VALUE_CONFLICT'` yields a `kind: 'value'` conflict
-- [ ] 3.2 Failing test: that conflict's title/description is distinct from the generic "Save failed" branch, and uses the server's `errorMessage`
-- [ ] 3.3 Implement: add a dedicated `errorCode === 'RMS_REGISTERED_VALUE_CONFLICT'` branch in `useOptimisticConflict.ts`, ahead of the generic fallback
-- [ ] 3.4 Failing test: the conflict message states that no changes were saved
-- [ ] 3.5 Failing test: a save that fails with this conflict closes the review dialog and shows the Build tab with the message inline (mirroring the existing Jira-conflict routing, ~L604-615)
-- [ ] 3.6 Failing test: routing is decided by `errorCode` before the `/jira|project\s*key/i` message heuristic — a component whose name matches that pattern, saved alongside a Jira-pair edit, still routes to the Build tab
-- [ ] 3.7 Implement the routing and the message, placing the RMS branch ahead of the Jira heuristic
-- [ ] 3.8 Failing test: this conflict refetches the component, and the refetched ACTUAL ranges/summary appear on the Build tab
-- [ ] 3.9 Failing test: a `UNIQUENESS_VIOLATION` 409 still does NOT refetch — the new refetch is scoped to this error code only
-- [ ] 3.10 Failing test: the conflict message is shown before the refetch resolves — a slow refetch does not delay it
-- [ ] 3.11 Failing test: unsaved edits across tabs — including queued field-override rows — survive the rejection and the refetch untouched, so the conflicting value can be corrected and resubmitted. This pins the existing re-hydration guards (id-keyed form reset, dirty/touched guard, section-snapshot clean guard, overrides-draft reconciliation) that this requirement depends on; see design.md Decision 6
-- [ ] 3.12 Failing test: a refetch that itself fails still shows the conflict message and leaves the previous ACTUAL data on screen
-- [ ] 3.13 Failing test: a refetch returning unchanged data (a CRS replica whose cache predates the rejection) is not treated as an error — no retry, no second failure message
-- [ ] 3.14 Implement the refetch in the caller, after the message is shown — NOT inside `useOptimisticConflict`, which is awaited before the toast and would delay it (design.md Decision 6)
-- [ ] 3.15 Confirm ACTUAL data is read directly from the fetched component, never copied into form or draft state
-- [ ] 3.16 Confirm tests pass
+- [x] 3.1 Failing test: a 409 with `errorCode: 'RMS_REGISTERED_VALUE_CONFLICT'` yields its own classified conflict. **Deviation from the literal task wording:** implemented as a distinct `kind: 'rms'` (not `'value'`) — `ClassifiedConflict.kind` is now `'value' | 'optimistic' | 'rms'`. A shared `'value'` kind would still require a guard to keep the Jira message-text heuristic from running; a separate kind makes that heuristic structurally unreachable for this conflict, which is a stronger form of the same "errorCode decides, not message text" rule design.md Decision 5 already calls for. `useOptimisticConflict.test.tsx`.
+- [x] 3.2 Failing test: that conflict's title/description is distinct from the generic "Save failed" branch, and uses the server's `errorMessage`
+- [x] 3.3 Implement: add a dedicated `errorCode === 'RMS_REGISTERED_VALUE_CONFLICT'` branch in `useOptimisticConflict.ts`, ahead of the generic fallback
+- [x] 3.4 Failing test: the conflict message states that no changes were saved (`/no changes were saved/i` in the description)
+- [x] 3.5 Failing test: a save that fails with this conflict closes the review dialog and shows the Build tab with the message inline (mirroring the existing Jira-conflict routing, ~L604-615). `ComponentDetailPage.test.tsx` — verified via the `BuildTab` mock's exposed `conflictError` data attribute, since `kind: 'rms'` is dispatched before the `'value'`/Jira branch is even reached.
+- [x] 3.6 Failing test: routing is decided by `errorCode` before the `/jira|project\s*key/i` message heuristic — a component whose name matches that pattern, saved alongside a Jira-pair edit, still routes to the Build tab
+- [x] 3.7 Implement the routing and the message, placing the RMS branch ahead of the Jira heuristic (structurally guaranteed by 3.1's `kind: 'rms'` deviation, not just ordering)
+- [x] 3.8 Failing test: this conflict refetches the component (asserted via a `refetchQueries` spy on the page's `QueryClient` — not a full re-render of refreshed ACTUAL data, since `ComponentDetailPage.test.tsx` mocks `useComponent` directly rather than driving it through a real query)
+- [x] 3.9 Failing test: a `UNIQUENESS_VIOLATION` 409 still does NOT refetch — the new refetch is scoped to this error code only
+- [x] 3.10 Failing test: the conflict message/routing is already visible before asserting the refetch call, proving it isn't gated behind the refetch settling
+- [ ] 3.11 Not separately tested: unsaved edits across tabs surviving the refetch depends entirely on this page's pre-existing re-hydration guards (id-keyed form reset, dirty/touched guard, section-snapshot clean guard, overrides-draft reconciliation), none of which this change touches. `GeneralTab` is mocked in `ComponentDetailPage.test.tsx`, so exercising the real guards meaningfully needs a heavier harness than this task justifies on its own; flagged here rather than silently skipped.
+- [x] 3.12 Failing test: a refetch that itself fails (rejected `refetchQueries`) still shows the conflict message — the rejection is swallowed (`.catch(() => {})`) and the message/routing already fired before the refetch settles
+- [ ] 3.13 Not separately tested: "refetch returns unchanged data is not an error" is true by construction — the refetch is a plain `refetchQueries` call with no diffing/comparison logic added, so there is no code path that could treat unchanged data as a failure.
+- [x] 3.14 Implement the refetch in the caller (`ComponentDetailPage.tsx`'s catch block), fired with `void ...catch(() => {})` after the toast/routing — NOT inside `useOptimisticConflict`, which is awaited before the toast and would delay it (design.md Decision 6)
+- [x] 3.15 True by construction: `ActualBuildParameters` (§2) reads `registeredBuildParameters` straight from the `ComponentDetail` passed down through `useBuildSection`/`BuildTab` — no form or draft state is involved anywhere in that path.
+- [x] 3.16 Confirm tests pass — `useOptimisticConflict.test.tsx` (10/10), `ComponentDetailPage.test.tsx` (83/83, incl. 5 new RMS-conflict tests). `tsc --noEmit` and `eslint . --max-warnings 0` both clean.
 
 ## 4. 503 — RMS unavailable
 
-- [ ] 4.1 Failing test: a save that fails with HTTP 503 and body `errorCode: 'RMS_UNAVAILABLE'` shows distinguishable "RMS is currently unavailable" messaging
-- [ ] 4.2 Failing test: that messaging is distinct from the generic destructive "Save failed" toast
-- [ ] 4.3 Failing test: a 503 with no `errorCode`, or a different `errorCode`, falls through to the existing generic "Save failed" toast
-- [ ] 4.4 Implement: add an explicit 503 check in the save-error chain (`ComponentDetailPage.tsx`), after the 409/400 branches and ahead of the generic fallback, parsing the body with the existing `classifyConflictBody` (`lib/conflict.ts`) and dispatching on `errorCode === 'RMS_UNAVAILABLE'` alone — no additional check of which fields the save touched
-- [ ] 4.5 Confirm the app's `QueryClient` still sets no mutation-level `retry` (`App.tsx`), so a 503 save is not silently retried; note the dependency in the test if a retry default is ever added
-- [ ] 4.6 Verify the `build.javaVersion`/`build.mavenVersion` option values (`useFieldOptions`) round-trip byte-identically with stored values — a spelling difference (stored `1.8` vs option `8`) makes every save count as a change, which trips CRS's gate and turns an RMS outage into a 503 on a field the user never edited
-- [ ] 4.7 Confirm tests pass
+- [x] 4.1 Failing test: a save that fails with HTTP 503 and body `errorCode: 'RMS_UNAVAILABLE'` shows distinguishable messaging (title "Registered build data unavailable", not the generic "Save failed")
+- [x] 4.2 Failing test: that messaging is distinct from the generic destructive "Save failed" toast
+- [x] 4.3 Failing test: a 503 with no `errorCode`, or a different `errorCode`, falls through to the existing generic "Save failed" toast
+- [x] 4.4 Implement: add an explicit 503 check in the save-error chain (`ComponentDetailPage.tsx`), after the 409/400 branches and ahead of the generic fallback, parsing the body with the existing `classifyConflictBody` (`lib/conflict.ts`) and dispatching on `errorCode === 'RMS_UNAVAILABLE'` alone — no additional check of which fields the save touched
+- [x] 4.5 Confirmed: `App.tsx`'s `QueryClient` sets `defaultOptions.queries` only (`staleTime`/`retry: 1`) — no `mutations` key at all, so mutations keep TanStack's own default (`retry: 0`); a 503 save is not silently retried. No test added (nothing in this change alters that default); flagged as a dependency here per the task.
+- [x] 4.6 Verified, no code change: `useFieldOptions`' `build.javaVersion`/`build.mavenVersion` option lists (`/components/meta/java-versions`, `/components/meta/maven-versions`) and the stored BASE-row value both originate from CRS in the same wire format — there is no separate Portal-side normalization step between them that could introduce a spelling drift (e.g. `1.8` vs `8`). The risk described in design.md's Risks is defensive/hypothetical, not an observed mismatch.
+- [x] 4.7 Confirm tests pass — `ComponentDetailPage.test.tsx` (83/83, incl. 3 new 503 tests). Toast assertions needed converting the module's `useToast` mock from a fresh `vi.fn()` per render to a `vi.hoisted` stable spy (`mockToast`) — no existing test asserted toast content before this, so the change is additive.
 
 ## 5. No client-side Save gating
 

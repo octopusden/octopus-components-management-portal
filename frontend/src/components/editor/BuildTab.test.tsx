@@ -81,18 +81,20 @@ function makeComponent(over: Partial<ComponentDetail> = {}): ComponentDetail {
 // Harness: render the presentational BuildTab driven by a real useBuildSection;
 // capture the live section so tests can inspect its slice after interactions.
 const captured: { section?: ReturnType<typeof useBuildSection> } = {}
-function Harness({ component, canEdit = true }: { component: ComponentDetail; canEdit?: boolean }) {
+function Harness({
+  component, canEdit = true, conflictError,
+}: { component: ComponentDetail; canEdit?: boolean; conflictError?: string | null }) {
   const section = useBuildSection(component)
   captured.section = section
   return (
     <TooltipProvider>
-      <BuildTab section={section} canEdit={canEdit} />
+      <BuildTab section={section} canEdit={canEdit} conflictError={conflictError} />
     </TooltipProvider>
   )
 }
-function renderTab(component: ComponentDetail, canEdit = true) {
+function renderTab(component: ComponentDetail, canEdit = true, conflictError?: string | null) {
   captured.section = undefined
-  return render(<Harness component={component} canEdit={canEdit} />)
+  return render(<Harness component={component} canEdit={canEdit} conflictError={conflictError} />)
 }
 
 describe('BuildTab — slice (combined save)', () => {
@@ -273,5 +275,22 @@ describe('BuildTab — registered build parameters (ACTUAL)', () => {
     expect(java?.dataset.ranges).toBe('0')
     expect(java?.dataset.warnings).toBe('0')
     expect(java?.dataset.unavailable).toBe('false')
+  })
+})
+
+describe('BuildTab — RMS registered-value conflict banner', () => {
+  it('shows no banner when there is no conflict', () => {
+    renderTab(makeComponent({ configurations: [makeBaseRow({ build: { buildSystem: 'GRADLE' } })] }))
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('shows the conflict message as an alert banner at the top of the tab', () => {
+    const msg = "javaVersion '21' disagrees with the registered value '17' for range [2.0,3.0). No changes were saved."
+    renderTab(
+      makeComponent({ configurations: [makeBaseRow({ build: { buildSystem: 'GRADLE' } })] }),
+      true,
+      msg,
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent(msg)
   })
 })
