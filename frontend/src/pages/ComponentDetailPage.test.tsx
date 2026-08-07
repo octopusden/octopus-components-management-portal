@@ -1816,6 +1816,62 @@ describe('ComponentDetailPage — RMS unavailable (503)', () => {
   })
 })
 
+describe('ComponentDetailPage — an ACTUAL disagreement introduces no client-side Save gating', () => {
+  function stubDirtyGeneralTab() {
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('systems', component.systems ?? [])
+        form.setValue('displayName', component.displayName ?? '')
+      }, [component, form])
+      return React.createElement(
+        'button',
+        { 'data-testid': 'edit', onClick: () => form.setValue('displayName', 'X', { shouldDirty: true }) },
+        'edit',
+      )
+    })
+  }
+
+  function withJavaWarning(): ComponentDetail {
+    return {
+      ...baseComponent,
+      canEdit: true,
+      registeredBuildParameters: {
+        javaActualRanges: [{ versionRange: '[1.0,2.0)', value: '17' }],
+        javaWarnings: [{ subRange: '[1.0,1.5)', actualValue: '17' }],
+        mavenActualRanges: [],
+        mavenWarnings: [],
+        actualDataUnavailable: false,
+      },
+    }
+  }
+
+  it('the Save control enables on an unrelated edit exactly as it would with no disagreement', async () => {
+    stubDirtyGeneralTab()
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage(withJavaWarning(), user)
+
+    expect((screen.getByRole('button', { name: /save changes/i }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(screen.getByTestId('edit'))
+    await waitFor(() => {
+      expect((screen.getByRole('button', { name: /save changes/i }) as HTMLButtonElement).disabled).toBe(false)
+    })
+  })
+
+  it('saving an unrelated field succeeds, with no client-side check against the warning', async () => {
+    stubDirtyGeneralTab()
+    const mutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage(withJavaWarning(), user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce())
+    // Confirms this save was never intercepted by any RMS-conflict/unavailable path.
+    expect(mockToast).not.toHaveBeenCalledWith(expect.objectContaining({ title: 'Save failed' }))
+  })
+})
+
 describe('ComponentDetailPage — Unregistered Release tab (admin gate + lookup by name)', () => {
   // A problem-bearing validation keyed by the COMPONENT NAME (`my-component`),
   // NOT the id (`comp-1`). The detail tab must look it up by name — the same

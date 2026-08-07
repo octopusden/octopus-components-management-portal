@@ -73,18 +73,18 @@
 
 ## 5. No client-side Save gating
 
-- [ ] 5.1 Failing test: the Save control is enabled when a component's `javaWarnings` is non-empty, same as when it is empty
-- [ ] 5.2 Failing test: saving an unrelated field succeeds with a non-empty `javaWarnings`, with no client-side check performed against it
-- [ ] 5.3 Confirm 5.1/5.2 pass without needing new code — i.e. no existing or newly-added logic reads `javaWarnings`/`mavenWarnings` for Save-gating
+- [x] 5.1 Test: the Save control enables on an unrelated edit exactly as it would with no disagreement, for a component whose `javaWarnings` is non-empty
+- [x] 5.2 Test: saving that unrelated field succeeds, with no client-side check performed against the warning
+- [x] 5.3 Confirmed 5.1/5.2 pass without any new code: `dirty` (`ComponentDetailPage.tsx`) is computed purely from each section's own diff (`anyDirty(slices)` + `supportedVersionsSection.isDirty`); `useBuildSection`'s `BuildState`/snapshot deep-compare never includes `registeredBuildParameters`. `SaveBar`'s `blockedReason` chain (fieldConfigLoading / ownerValidating / ownershipIssues / mavenPrefixIssues / vcsHostIssues) has no branch referencing `javaWarnings`/`mavenWarnings` either. Both tests passed on the first run — no red-green cycle, since there was nothing to make green. `ComponentDetailPage.test.tsx` (2 new tests, 86/86 total).
 
 ## 6. Docs and finalization
 
-- [ ] 6.1 Extend `docs/features/component-detail.md` (Build tab section) describing the new ACTUAL range/warning display
-- [ ] 6.2 Cross-reference CRS's `registered-build-parameters` spec by name
-- [ ] 6.3 Run `./gradlew qualityStatic`
-- [ ] 6.4 Run the full frontend vitest suite
-- [ ] 6.5 Once CRS's branch is on `main` and this is implemented against a real CRS instance: manual check — a Maven/Gradle component with recorded RC/RELEASE builds shows its full range/warning detail on the Build tab
-- [ ] 6.6 Manual check: attempt a disagreeing save, confirm the 409 message
-- [ ] 6.7 Manual check: if feasible, simulate RMS unavailability, confirm the 503 message
-- [ ] 6.8 Fold this change's delta into `openspec/specs/registered-build-parameters/`
-- [ ] 6.9 Move the change folder to `openspec/archive/`, per `openspec/config.yaml`'s archive operation
+- [x] 6.1 Extended `docs/features/component-detail.md`: new "Build tab — registered build parameters (ACTUAL)" section + a "Save-time RMS conflict / unavailable" subsection (mirroring the existing "Optimistic-locking conflict UX" doc pattern), plus a one-line pointer added to the Tabs summary table.
+- [x] 6.2 Cross-referenced CRS's `registered-build-parameters` spec by name in the new doc section.
+- [x] 6.3 **Task name doesn't match reality** — no `qualityStatic` Gradle task exists in this repo (checked `build.gradle.kts` and all `.kts`/`.gradle` files). Ran the actual static-check tasks instead: `./gradlew ktlintCheck detekt` — `BUILD SUCCESSFUL`. No backend/Kotlin file was touched by this change, so this simply confirms no pre-existing drift; the printed ktlint findings are all in files this change never touched (`OnboardingVideoServiceTest.kt`, `ServiceEventClientTest.kt`, `ValidationServiceTest.kt`), pre-existing and out of scope.
+- [x] 6.4 Full frontend vitest suite: 171 files / 2412 tests green. `tsc --noEmit` and `eslint . --max-warnings 0` both clean (re-confirmed after the docs pass, which touched no source).
+- [ ] 6.5 **Blocked, needs a human + a real CRS instance.** Manual check — a Maven/Gradle component with recorded RC/RELEASE builds shows its full range/warning detail on the Build tab. Cannot be done from here: needs CRS's `rms-registered-build-params` branch merged to CRS `main`, then a running CRS + Portal pair with real RMS-backed data.
+- [ ] 6.6 **Blocked, same as 6.5.** Manual check: attempt a disagreeing save, confirm the 409 message.
+- [ ] 6.7 **Blocked, same as 6.5.** Manual check: if feasible, simulate RMS unavailability, confirm the 503 message.
+- [ ] 6.8 **Deliberately held.** Folding the delta into `openspec/specs/registered-build-parameters/` reads as "this shipped and was verified" — doing that before 6.5-6.7 pass would misrepresent the change's status. Do this once those manual checks are done.
+- [ ] 6.9 **Deliberately held**, same reasoning as 6.8 — archiving is the last step, after 6.8.
