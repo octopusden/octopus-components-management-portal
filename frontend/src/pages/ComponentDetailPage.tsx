@@ -690,7 +690,8 @@ function ComponentDetailEditor() {
           setReviewOpen(false)
           toast({
             title: 'Registered build data unavailable',
-            description: 'RMS is currently unreachable, so this save could not be checked against it. Try again shortly.',
+            description:
+              'The registered build data could not be reached, so this save could not be checked against it. Try again shortly.',
             variant: 'destructive',
           })
           return

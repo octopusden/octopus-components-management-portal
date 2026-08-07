@@ -1590,6 +1590,13 @@ describe('ComponentDetailPage — 409 conflict handling in the Review dialog', (
 })
 
 describe('ComponentDetailPage — RMS registered-value conflict (409)', () => {
+  // Mirrors CRS's real message (RMSOverrideGate): ends with a joined
+  // "range=value" list and NO terminating punctuation. Fixtures that end in a
+  // period hide whether the appended "No changes were saved." runs together
+  // with it.
+  const RMS_CONFLICT_MSG =
+    "Component 'comp-1': writing '11' for [3.0,4.0) disagrees with RMS's registered value(s): [3.0,4.0)=21"
+
   function stubDirtyGeneralTab() {
     vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
       useEffect(() => {
@@ -1606,13 +1613,12 @@ describe('ComponentDetailPage — RMS registered-value conflict (409)', () => {
 
   it('closes the dialog, routes to the Build tab, and shows the conflict message', async () => {
     stubDirtyGeneralTab()
-    const serverMsg = "javaVersion '21' disagrees with the registered value '17' for range [2.0,3.0)."
     const mutateAsync = vi.fn(() =>
       Promise.reject(
         new ApiError(
           409,
-          serverMsg,
-          JSON.stringify({ errorMessage: serverMsg, errorCode: 'RMS_REGISTERED_VALUE_CONFLICT' }),
+          RMS_CONFLICT_MSG,
+          JSON.stringify({ errorMessage: RMS_CONFLICT_MSG, errorCode: 'RMS_REGISTERED_VALUE_CONFLICT' }),
         ),
       ),
     )
@@ -1624,8 +1630,10 @@ describe('ComponentDetailPage — RMS registered-value conflict (409)', () => {
 
     await waitFor(() => expect(screen.queryByRole('button', { name: /^confirm$/i })).toBeNull())
     const buildTab = await screen.findByTestId('build-tab')
-    expect(buildTab.dataset.conflictError).toContain(serverMsg)
+    expect(buildTab.dataset.conflictError).toContain(RMS_CONFLICT_MSG)
     expect(buildTab.dataset.conflictError).toMatch(/no changes were saved/i)
+    // The server text and the appended sentence must not run together.
+    expect(buildTab.dataset.conflictError).toContain('[3.0,4.0)=21. No changes were saved.')
   })
 
   it('routes to the Build tab by error code, not by the jira message-text heuristic', async () => {
@@ -1655,15 +1663,14 @@ describe('ComponentDetailPage — RMS registered-value conflict (409)', () => {
     expect(screen.queryByTestId('jira-tab')).toBeNull()
   })
 
-  it('refetches the component after the rejection, without delaying the toast/routing', async () => {
+  it('refetches the component after the rejection', async () => {
     stubDirtyGeneralTab()
-    const serverMsg = "javaVersion '21' disagrees with the registered value '17' for range [2.0,3.0)."
     const mutateAsync = vi.fn(() =>
       Promise.reject(
         new ApiError(
           409,
-          serverMsg,
-          JSON.stringify({ errorMessage: serverMsg, errorCode: 'RMS_REGISTERED_VALUE_CONFLICT' }),
+          RMS_CONFLICT_MSG,
+          JSON.stringify({ errorMessage: RMS_CONFLICT_MSG, errorCode: 'RMS_REGISTERED_VALUE_CONFLICT' }),
         ),
       ),
     )
@@ -1674,23 +1681,43 @@ describe('ComponentDetailPage — RMS registered-value conflict (409)', () => {
     fireEvent.click(screen.getByTestId('edit'))
     await clickSaveAndConfirm()
 
-    // The message/routing is already visible before asserting the refetch, proving it
-    // wasn't gated on the refetch settling first.
-    await screen.findByTestId('build-tab')
     await waitFor(() =>
       expect(refetchSpy).toHaveBeenCalledWith({ queryKey: ['component', 'comp-1'], type: 'active' }),
     )
   })
 
-  it('a failed refetch does not mask the conflict message', async () => {
+  it('shows the conflict message without waiting for the refetch to settle', async () => {
     stubDirtyGeneralTab()
-    const serverMsg = "javaVersion '21' disagrees with the registered value '17' for range [2.0,3.0)."
     const mutateAsync = vi.fn(() =>
       Promise.reject(
         new ApiError(
           409,
-          serverMsg,
-          JSON.stringify({ errorMessage: serverMsg, errorCode: 'RMS_REGISTERED_VALUE_CONFLICT' }),
+          RMS_CONFLICT_MSG,
+          JSON.stringify({ errorMessage: RMS_CONFLICT_MSG, errorCode: 'RMS_REGISTERED_VALUE_CONFLICT' }),
+        ),
+      ),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    const { client } = renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+    // Never settles. If the handler awaited this, the banner below would never render,
+    // so this is what distinguishes "fired after the message" from "awaited before it".
+    vi.spyOn(client, 'refetchQueries').mockReturnValue(new Promise<void>(() => {}))
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    const buildTab = await screen.findByTestId('build-tab')
+    expect(buildTab.dataset.conflictError).toContain(RMS_CONFLICT_MSG)
+  })
+
+  it('a failed refetch does not mask the conflict message', async () => {
+    stubDirtyGeneralTab()
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(
+        new ApiError(
+          409,
+          RMS_CONFLICT_MSG,
+          JSON.stringify({ errorMessage: RMS_CONFLICT_MSG, errorCode: 'RMS_REGISTERED_VALUE_CONFLICT' }),
         ),
       ),
     )
@@ -1703,7 +1730,7 @@ describe('ComponentDetailPage — RMS registered-value conflict (409)', () => {
 
     // The rejected refetch promise is swallowed — the routing/message stand regardless.
     const buildTab = await screen.findByTestId('build-tab')
-    expect(buildTab.dataset.conflictError).toContain(serverMsg)
+    expect(buildTab.dataset.conflictError).toContain(RMS_CONFLICT_MSG)
   })
 
   it('a UNIQUENESS_VIOLATION 409 still does not refetch — the new refetch is scoped to the RMS conflict only', async () => {

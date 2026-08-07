@@ -56,10 +56,15 @@ export function useOptimisticConflict(componentId: string | undefined) {
       }
     }
     if (errorCode === 'RMS_REGISTERED_VALUE_CONFLICT') {
+      // CRS's message ends with a joined "range=value" list and no terminating
+      // punctuation, so it needs a sentence break before the sentence appended
+      // here — otherwise the two run together as "...[3.0,4.0)=21 No changes...".
+      const serverText = (errorMessage ?? err.message).trimEnd()
+      const punctuated = /[.!?]$/.test(serverText) ? serverText : `${serverText}.`
       return {
         kind: 'rms',
         title: 'Registered build version conflict',
-        description: `${errorMessage ?? err.message} No changes were saved.`,
+        description: `${punctuated} No changes were saved.`,
       }
     }
     if (errorCode !== null && errorCode !== 'OPTIMISTIC_LOCK') {
