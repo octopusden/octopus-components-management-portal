@@ -211,18 +211,7 @@ object id17BuildValidationAuto : BuildType({
     }
 
     triggers {
-        // Do NOT add a VCS trigger here. id10 already gets a per-commit VCS
-        // trigger from the Octopus_OctopusGradleBuild template and id15 runs off
-        // id10's finish trigger, so the Compile & UT → E2E chain already runs
-        // automatically on every push. A second VCS trigger on this aggregate
-        // would queue that whole chain a second time — the transitive
-        // id15 → id10 edge keeps snapshot reuse from collapsing the two, so
-        // Compile & UT and E2E would run twice per push.
-        //
-        // Instead run once E2E finishes and reuse that completed chain.
-        // successfulOnly = false so a red E2E still triggers this build and the
-        // template's failure step reports a failure status to GitHub.
-        finishBuildTrigger {
+         finishBuildTrigger {
             id = "TRIGGER_BUILD_VALIDATION_AFTER_E2E"
             buildType = "${id15E2eAuto.id}"
             successfulOnly = false
