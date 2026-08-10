@@ -137,12 +137,14 @@ An admin-only, read-only sidebar group with two items — **TeamCity** and **Unr
 
 ### Optimistic-locking conflict UX (B7.1.6)
 
-On `409 Conflict`:
-1. `queryClient.refetchQueries({ queryKey: ['component', id], type: 'active' })` is awaited so the cache lands the post-conflict state. Note: `refetchQueries`, **not** `invalidateQueries` — the latter resolves once the cache marker is set, not after the network round-trip, so `getQueryData` would still see the user's stale snapshot. See the inline comment at `ComponentDetailPage.tsx:110-121` for the rationale; future "simplifications" back to `invalidate` are wrong.
+On `409 Conflict`, this flow now lives in [`useOptimisticConflict.ts`](../../frontend/src/hooks/useOptimisticConflict.ts) (extracted from the page so both the RMS-conflict and 400 paths share the same 409 classification — see "Save-time RMS conflict / unavailable" above):
+1. `queryClient.refetchQueries({ queryKey: ['component', id], type: 'active' })` is awaited so the cache lands the post-conflict state. Note: `refetchQueries`, **not** `invalidateQueries` — the latter resolves once the cache marker is set, not after the network round-trip, so `getQueryData` would still see the user's stale snapshot. See the inline comment at the top of `useOptimisticConflict.ts` for the rationale; future "simplifications" back to `invalidate` are wrong.
 2. The post-refetch `ComponentDetail` is fed to [`describeOptimisticConflict`](../../frontend/src/lib/conflict.ts), which builds a toast that names *what* and *when* (using the freshly-loaded `updatedAt`). When the cache fetch hasn't landed yet (rare in practice), the helper degrades to a "updated by another user" message rather than inventing data.
 3. Toast is `variant: 'destructive'` — colour matches the prior failure UX so the user sees something went wrong without reading the title.
 
 This is the lighter path Plan §7.1.6 explicitly allowed. The full ConflictResolutionDialog with field-level diff and merge actions is deferred to B7.2.
+
+All three persistent conflict banners (the Review-dialog `reviewError`, the Jira-tab `jiraConflict`, and the Build-tab `buildConflict`) are cleared not only at the start of the next save but also when the page navigates to a different component without remounting — the same id-change effect that re-hydrates the General/Misc form (`ComponentDetailPage.tsx`). Without this, a conflict raised on one component could otherwise still be showing after navigating to another.
 
 ## Auth gating
 

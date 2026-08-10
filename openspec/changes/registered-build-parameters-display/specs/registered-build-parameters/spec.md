@@ -47,7 +47,7 @@ Version values SHALL be shown verbatim as CRS reported them — their format is 
 #### Scenario: Unavailable data is shown as its own alert, distinct from a disagreement warning
 
 - **WHEN** `registeredBuildParameters.actualDataUnavailable` is `true`
-- **THEN** the Build tab shows an "ACTUAL data unavailable" alert — using warning/error styling (e.g. an alert icon), not a plain neutral note — with wording and styling distinguishable from a disagreement warning, so the two are never mistaken for each other
+- **THEN** the Build tab shows a "Registered build data unavailable" alert — using warning/error styling (e.g. an alert icon), not a plain neutral note — with wording and styling distinguishable from a disagreement warning, so the two are never mistaken for each other. Shown once, under the Java section only — `actualDataUnavailable` is one flag per component, not per attribute, so duplicating it under Maven too would just repeat the same fact.
 
 ### Requirement: Disagreement warnings are shown per attribute as one collapsed summary, not per configured row
 

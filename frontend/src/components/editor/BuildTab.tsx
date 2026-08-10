@@ -16,7 +16,7 @@ interface BuildTabProps {
    * (page-level 409 classification). Unlike a Jira-pair conflict, CRS's
    * message doesn't say whether Java or Maven conflicted, so this renders as
    * a tab-level banner rather than attached to one field. Cleared by the page
-   * at the start of the next save.
+   * at the start of the next save, or on navigating to a different component.
    */
   conflictError?: string | null
 }

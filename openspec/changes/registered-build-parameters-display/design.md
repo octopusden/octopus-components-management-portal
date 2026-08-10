@@ -66,7 +66,8 @@ Reuses `FieldOverrideInline`'s `renderConflictBadge` tone so the summary reads a
 
 - A disagreement warning means "checked, and it disagrees" — still an alert, not neutral.
 - `actualDataUnavailable` means "we couldn't check" — also an alert (warning/error styling, e.g. an alert icon), not a plain neutral note.
-- Both use alert styling; they use different wording/treatment from each other so they are never mistaken for one another.
+- Both use alert styling; they use different wording/treatment from each other so they are never mistaken for one another. Implemented text: "Registered build data unavailable" (amber) vs. the destructive "N ranges differ from the registered version" summary — visually and textually distinct.
+- `actualDataUnavailable` is one flag per component (`RegisteredBuildParametersDetail`), not per attribute — `ActualBuildParameters` is passed it only for the Java block (`BuildTab.tsx`); passing it to the Maven block too would render the identical alert twice for one fact.
 
 ### 5. 409/503 handling extends existing dispatch points
 
@@ -75,6 +76,7 @@ Reuses `FieldOverrideInline`'s `renderConflictBadge` tone so the summary reads a
 - **Dispatch on the error code before any message-text heuristic.** The existing `kind: 'value'` branch guesses which field a 409 concerns by pattern-matching the server's message (`/jira|project\s*key/i`). CRS's RMS conflict message embeds the component's own key, so a component whose name contains a matched term — with that other field edited in the same save — would be routed to the wrong tab with the wrong banner. Handling the RMS code first makes the heuristic unreachable for it.
 - **The refetch must not gate the message.** The 409 handler is `await`ed before the toast fires, so putting the refetch inside it would make the editor wait a round trip to learn the save failed. The message text comes from the response, never from refetched data, so the toast goes first and the refetch follows.
 - The 503 body is parsed with the same `classifyConflictBody` helper already used for 409s (it is status-agnostic), checking for `errorCode === 'RMS_UNAVAILABLE'` rather than treating every 503 as RMS-related — CRS returns 503 only for this case today, but dispatching on the code (not the bare status) stays correct if that ever changes.
+- **CRS's `RMS_REGISTERED_VALUE_CONFLICT` message has no terminating punctuation** — it ends with a joined `range=value` list. Appending "No changes were saved." straight onto that runs the two together (`...[3.0,4.0)=21 No changes...`). `useOptimisticConflict.ts` normalizes this: trims the server text, and appends a period only if it doesn't already end in `.`/`!`/`?`, before appending the fixed sentence.
 - **Depended-upon behaviour:** the app's `QueryClient` sets no mutation defaults, so mutations inherit TanStack's `retry: false`. A 503 save is therefore never silently retried. If mutation retries are ever turned on globally, this feature needs an explicit opt-out — a retried write is a second live RMS gate check, and a retry that succeeds after a transient outage hides the failure the user should have seen.
 
 ### 6. A conflict rejection triggers a refetch — unlike Portal's other value conflicts
@@ -95,6 +97,12 @@ Reuses `FieldOverrideInline`'s `renderConflictBadge` tone so the summary reads a
 These guards exist because background refetches already happen routinely (`refetchOnWindowFocus` is on, `staleTime` 30s). This feature depends on them rather than adding its own protection, so a test must pin the behaviour: if a future refactor re-seeds a section on every data change, this requirement breaks silently and the user loses work on a rejected save.
 
 **This also fixes what would otherwise be a gap regardless of the conflict path:** ACTUAL data is read straight from the fetched component and never copied into form or draft state, so it refreshes on any ordinary background refetch too, without ever interacting with unsaved edits.
+
+### 6a. A conflict banner is cleared on same-instance navigation to a different component, not just on the next save (found in review)
+
+`ComponentDetailEditor` is reused across a same-instance A→B component navigation (the route id changes, but the component doesn't remount) — the existing P1-1 id-change effect already re-hydrates the RHF form for exactly this reason. `reviewError`/`jiraConflict`/`buildConflict`, however, are plain `useState` and were not covered by that effect, so a conflict banner raised on component A stayed on screen after navigating to component B. Not unique to `buildConflict` — the same gap existed for `reviewError`/`jiraConflict` before this fix, from unrelated prior work.
+
+Fixed in the same id-change effect (`ComponentDetailPage.tsx`) that resets the form: on an id change to a genuinely different id (not the first load), all three are reset to `null` alongside the form reset.
 
 ### 7. No Save-button gating tied to `javaWarnings`/`mavenWarnings`
 
