@@ -155,8 +155,7 @@ describe('useOptimisticConflict', () => {
     expect(out).not.toBeNull()
     expect(out!.kind).toBe('rms')
     expect(out!.title).not.toBe('Save failed')
-    expect(out!.description).toContain(serverMsg)
-    expect(out!.description).toMatch(/no changes were saved/i)
+    expect(out!.description).toBe(`${serverMsg}. No changes were saved.`)
     expect(refetchSpy).not.toHaveBeenCalled()
   })
 

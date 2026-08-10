@@ -248,12 +248,13 @@ describe('BuildTab — registered build parameters (ACTUAL)', () => {
         javaActualRanges: [],
         javaWarnings: [],
         mavenActualRanges: [{ versionRange: '[1.0,)', value: '3.6.3' }],
-        mavenWarnings: [],
+        mavenWarnings: [{ subRange: '[1.0,2.0)', actualValue: '3.6.3' }],
         actualDataUnavailable: false,
       },
     }))
     const maven = screen.getAllByTestId('actual-build-parameters')[1]
     expect(maven?.dataset.ranges).toBe('1')
+    expect(maven?.dataset.warnings).toBe('1')
   })
 
   it('passes actualDataUnavailable to the Java block only, never duplicated on Maven', () => {

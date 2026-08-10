@@ -316,6 +316,7 @@ function renderPage(component: ComponentDetail, user: User | null, opts: RenderP
   )
   return {
     client,
+    router,
     ...render(
       React.createElement(
         QueryClientProvider,
@@ -1750,6 +1751,63 @@ describe('ComponentDetailPage — RMS registered-value conflict (409)', () => {
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(serverMsg))
     expect(refetchSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe('ComponentDetailPage — stale conflict banners cleared on same-instance navigation', () => {
+  // This page reuses the SAME ComponentDetailEditor instance when the route id
+  // changes without a full remount (P1-1's id-change effect exists for exactly
+  // this reason, to re-hydrate the RHF form). reviewError/jiraConflict/
+  // buildConflict must clear the same way, or a conflict banner from component A
+  // renders on component B after an in-place A→B navigation.
+  function stubDirtyGeneralTab() {
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('systems', component.systems ?? [])
+        form.setValue('displayName', component.displayName ?? '')
+      }, [component, form])
+      return React.createElement(
+        'button',
+        { 'data-testid': 'edit', onClick: () => form.setValue('displayName', 'X', { shouldDirty: true }) },
+        'edit',
+      )
+    })
+  }
+
+  it("a Build-tab RMS conflict from component A does not leak into component B's Build tab", async () => {
+    stubDirtyGeneralTab()
+    const serverMsg = "javaVersion '21' disagrees with the registered value '17' for range [2.0,3.0)"
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(
+        new ApiError(
+          409,
+          serverMsg,
+          JSON.stringify({ errorMessage: serverMsg, errorCode: 'RMS_REGISTERED_VALUE_CONFLICT' }),
+        ),
+      ),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    const { router } = renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+    const buildTabOnA = await screen.findByTestId('build-tab')
+    expect(buildTabOnA.dataset.conflictError).toContain(serverMsg)
+
+    // Same-instance navigation to a different component — no remount, only the
+    // route param and the query's returned data change.
+    const componentB: ComponentDetail = { ...baseComponent, id: 'comp-2', name: 'other-component' }
+    mockedUseComponent.mockReturnValue({
+      data: componentB,
+      isLoading: false,
+      error: null,
+    } as unknown as ReturnType<typeof useComponent>)
+    await act(async () => {
+      await router.navigate('/components/comp-2')
+    })
+
+    const buildTabOnB = await screen.findByTestId('build-tab')
+    expect(buildTabOnB.dataset.conflictError).toBe('')
   })
 })
 

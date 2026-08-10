@@ -332,6 +332,12 @@ function ComponentDetailEditor() {
     if (prevId === null) return // first load — GeneralTab hydrates on mount
     form.reset(mapComponentToForm(component))
     form.clearErrors()
+    // A conflict banner belongs to the component that was being saved when it
+    // fired — carrying it across a same-instance A→B navigation would render
+    // component A's error on component B's page.
+    setReviewError(null)
+    setJiraConflict(null)
+    setBuildConflict(null)
     // `form` is a stable RHF ref (never changes identity); listed for
     // exhaustive-deps lint only — the id ref-compare is the real gate.
   }, [component, form])

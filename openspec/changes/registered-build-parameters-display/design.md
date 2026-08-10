@@ -2,7 +2,7 @@
 
 See proposal.md — Why. CRS exposes one response shape this change reads, plus two new write-time error responses, all already implemented on CRS's `rms-registered-build-params` branch (`openspec/changes/consume-rms-registered-build-version/` in that repo):
 
-```
+```text
 ComponentDetailResponse.registeredBuildParameters:
 RegisteredBuildParametersDetail {
   javaActualRanges:  [{ versionRange: string, value: string }]
