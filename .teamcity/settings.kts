@@ -3,13 +3,10 @@ import jetbrains.buildServer.configs.kotlin.buildFeatures.XmlReport
 import jetbrains.buildServer.configs.kotlin.buildFeatures.freeDiskSpace
 import jetbrains.buildServer.configs.kotlin.buildFeatures.xmlReport
 import jetbrains.buildServer.configs.kotlin.triggers.finishBuildTrigger
-import jetbrains.buildServer.configs.kotlin.vcs.GitVcsRoot
 
 version = "2025.03"
 
 project {
-    vcsRoot(OctopusComponentsManagementPortalVcs)
-
     params {
         param("COMPONENT_NAME", "components-management-portal")
         param("OCTOPUS_MODULE_NAME", "octopus-components-management-portal")
@@ -51,18 +48,6 @@ project {
         WLValidation
     )
 }
-
-object OctopusComponentsManagementPortalVcs : GitVcsRoot({
-    id("OctopusComponentsManagementPortalVcs")
-    name = "octopus-components-management-portal"
-    url = "https://github.com/octopusden/octopus-components-management-portal.git"
-    branch = "refs/heads/main"
-    branchSpec = "+:refs/heads/*"
-    authMethod = password {
-        userName = "%github.user%"
-        password = "%github.token%"
-    }
-})
 
 object id10CompileUtAuto : BuildType({
     templates(AbsoluteId("Octopus_OctopusGradleBuild"))
@@ -203,12 +188,6 @@ object id17BuildValidationAuto : BuildType({
     templates(AbsoluteId("RDDepartment_PostGithubStatus"))
     id("17BuildValidationAuto")
     name = "[3.0] Build Validation [AUTO]"
-
-    // Needed so %build.vcs.number% (COMMIT_SHA) resolves to the revision built.
-    // Snapshot deps pin this to the same revision as id10/id15.
-    vcs {
-        root(OctopusComponentsManagementPortalVcs)
-    }
 
     triggers {
          finishBuildTrigger {
