@@ -125,7 +125,7 @@ interface SimpleRange {
   hiIncl: boolean
 }
 
-function compareVersionArrays(a: number[], b: number[]): number {
+export function compareVersionArrays(a: number[], b: number[]): number {
   const n = Math.max(a.length, b.length)
   for (let i = 0; i < n; i++) {
     const av = a[i] ?? 0
@@ -135,7 +135,7 @@ function compareVersionArrays(a: number[], b: number[]): number {
   return 0
 }
 
-function parseDotNumeric(s: string): number[] | null {
+export function parseDotNumeric(s: string): number[] | null {
   const trimmed = s.trim()
   if (trimmed === '') return null
   if (!/^\d+(\.\d+)*$/.test(trimmed)) return null
