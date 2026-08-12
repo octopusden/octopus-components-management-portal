@@ -137,7 +137,7 @@ An admin-only, read-only sidebar group with two items — **TeamCity** and **Unr
 
 ### Optimistic-locking conflict UX (B7.1.6)
 
-On `409 Conflict`, this flow now lives in [`useOptimisticConflict.ts`](../../frontend/src/hooks/useOptimisticConflict.ts) (extracted from the page so both the RMS-conflict and 400 paths share the same 409 classification — see "Save-time RMS conflict / unavailable" above):
+For an optimistic-lock `409 Conflict`, this flow now lives in [`useOptimisticConflict.ts`](../../frontend/src/hooks/useOptimisticConflict.ts)
 1. `queryClient.refetchQueries({ queryKey: ['component', id], type: 'active' })` is awaited so the cache lands the post-conflict state. Note: `refetchQueries`, **not** `invalidateQueries` — the latter resolves once the cache marker is set, not after the network round-trip, so `getQueryData` would still see the user's stale snapshot. See the inline comment at the top of `useOptimisticConflict.ts` for the rationale; future "simplifications" back to `invalidate` are wrong.
 2. The post-refetch `ComponentDetail` is fed to [`describeOptimisticConflict`](../../frontend/src/lib/conflict.ts), which builds a toast that names *what* and *when* (using the freshly-loaded `updatedAt`). When the cache fetch hasn't landed yet (rare in practice), the helper degrades to a "updated by another user" message rather than inventing data.
 3. Toast is `variant: 'destructive'` — colour matches the prior failure UX so the user sees something went wrong without reading the title.
