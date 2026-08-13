@@ -1,4 +1,5 @@
 import { useParams, useNavigate, Link } from 'react-router'
+import { useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { ArrowLeft, Copy, Trash2, AlertTriangle, LockKeyhole, Boxes, CircleCheck, CircleDashed } from 'lucide-react'
 import { JiraIcon, BitbucketIcon, TeamCityIcon } from '../components/ui/icons/brand-icons'
@@ -63,6 +64,7 @@ import { useComponent, useUpdateComponent, useDeleteComponent, useFieldOverrides
 import { useToast } from '../hooks/use-toast'
 import { ApiError } from '../lib/api'
 import { useOptimisticConflict } from '../hooks/useOptimisticConflict'
+import { classifyConflictBody } from '../lib/conflict'
 import type { ComponentDetail } from '../lib/types'
 import { countOwnershipIssues, fromArtifactId } from '../lib/artifactOwnership'
 import { findUnsupportedGroupId } from '../lib/groupValidation'
@@ -169,6 +171,7 @@ function ComponentDetailEditor() {
   const navigate = useNavigate()
   const { toast } = useToast()
   const handleConflict = useOptimisticConflict(id)
+  const queryClient = useQueryClient()
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
   // Persistent save-time conflict message shown in the Review dialog (value 409s
@@ -177,6 +180,10 @@ function ComponentDetailEditor() {
   // Inline (projectKey, versionPrefix) uniqueness-conflict shown under the Jira
   // Project Key field after a value-409 on a save that changed the jira pair.
   const [jiraConflict, setJiraConflict] = useState<string | null>(null)
+  // Inline RMS_REGISTERED_VALUE_CONFLICT banner shown at the top of the Build
+  // tab — CRS's message doesn't say which field (Java/Maven) conflicted, so
+  // this isn't attached to one field the way jiraConflict is.
+  const [buildConflict, setBuildConflict] = useState<string | null>(null)
   // Controlled tab so a server 400 on a field that lives on a non-active tab can
   // auto-switch to the owning tab (otherwise the inline error renders on a hidden tab).
   const [activeTab, setActiveTab] = useState('general')
@@ -325,6 +332,12 @@ function ComponentDetailEditor() {
     if (prevId === null) return // first load — GeneralTab hydrates on mount
     form.reset(mapComponentToForm(component))
     form.clearErrors()
+    // A conflict banner belongs to the component that was being saved when it
+    // fired — carrying it across a same-instance A→B navigation would render
+    // component A's error on component B's page.
+    setReviewError(null)
+    setJiraConflict(null)
+    setBuildConflict(null)
     // `form` is a stable RHF ref (never changes identity); listed for
     // exhaustive-deps lint only — the id ref-compare is the real gate.
   }, [component, form])
@@ -502,6 +515,7 @@ function ComponentDetailEditor() {
     // Clear any prior conflict banner / inline jira conflict so a retry starts clean.
     setReviewError(null)
     setJiraConflict(null)
+    setBuildConflict(null)
 
     // Build System is REQUIRED (P1-3). Clearing it would PATCH null = a CRS
     // no-op, so block and surface the Build section's inline required error.
@@ -592,6 +606,19 @@ function ComponentDetailEditor() {
       const conflict = await handleConflict(err)
       if (conflict) {
         toast({ title: conflict.title, description: conflict.description, variant: 'destructive' })
+        if (conflict.kind === 'rms') {
+          // The conflicting field (Java or Maven) isn't named in CRS's message, but both
+          // live on the Build tab, so route there unconditionally (design.md Decision 5).
+          setBuildConflict(conflict.description)
+          setActiveTab('build')
+          setReviewOpen(false)
+          // CRS refreshed its cached ACTUAL data for this component at the moment it
+          // rejected the write; refetch so the display can catch up. Fired after the
+          // toast, never awaited — a slow or failed refetch must not delay or mask the
+          // conflict message (design.md Decision 6). Best-effort: swallow a rejection.
+          void queryClient.refetchQueries({ queryKey: ['component', id ?? ''], type: 'active' }).catch(() => {})
+          return
+        }
         if (conflict.kind === 'value') {
           // Attribute a value-409 to the Jira (projectKey, versionPrefix) pair
           // ONLY when this save changed either AND the server message is about
@@ -658,6 +685,22 @@ function ComponentDetailEditor() {
           // we switch to the owning section AND fall through to the toast below
           // — the toast is their only error surface.
           if (anyFieldMapped) return
+        }
+      }
+      // CRS's write-time RMS gate fails closed with a 503 when it can't reach RMS.
+      // Decided by errorCode alone — never by re-checking which field the save
+      // touched (CRS's gate already implies that; see design.md Decision 5).
+      if (err instanceof ApiError && err.status === 503) {
+        const { errorCode } = classifyConflictBody(err.rawBody)
+        if (errorCode === 'RMS_UNAVAILABLE') {
+          setReviewOpen(false)
+          toast({
+            title: 'Registered build data unavailable',
+            description:
+              'The registered build data could not be reached, so this save could not be checked against it. Try again shortly.',
+            variant: 'destructive',
+          })
+          return
         }
       }
       setReviewOpen(false)
@@ -1115,7 +1158,7 @@ function ComponentDetailEditor() {
             <TabsContent value="build">
               <EditSurface canEdit={canEdit} label="Build">
                 <div className="space-y-6">
-                  <BuildTab section={buildSection} canEdit={canEdit} />
+                  <BuildTab section={buildSection} canEdit={canEdit} conflictError={buildConflict} />
                   <ProducedArtifactsSection form={form} component={component} canEdit={canEdit} />
                 </div>
               </EditSurface>

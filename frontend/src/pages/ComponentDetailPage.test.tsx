@@ -21,8 +21,12 @@ vi.mock('../hooks/useComponent', () => ({
   useSupportedVersions: () => ({ data: undefined, isLoading: false }),
   useUpdateSupportedVersions: () => ({ mutateAsync: vi.fn(() => Promise.resolve()), isPending: false }),
 }))
+// Stable across renders (vi.hoisted) so tests can assert on toast content —
+// most existing tests never do (a fresh vi.fn() per render was fine for them),
+// but the 503/RMS-unavailable messaging needs to be distinguishable by content.
+const mockToast = vi.hoisted(() => vi.fn())
 vi.mock('../hooks/use-toast', () => ({
-  useToast: () => ({ toast: vi.fn() }),
+  useToast: () => ({ toast: mockToast }),
 }))
 // AppFooter uses its own queries; stub fetch globally.
 vi.mock('../components/AppFooter', () => ({
@@ -92,7 +96,8 @@ vi.mock('../components/editor/MiscTab', async () => {
   return { ...actual, MiscTab: () => React.createElement('div', { 'data-testid': 'misc-tab' }) }
 })
 vi.mock('../components/editor/BuildTab', () => ({
-  BuildTab: () => React.createElement('div', { 'data-testid': 'build-tab' }),
+  BuildTab: ({ conflictError }: { conflictError?: string | null }) =>
+    React.createElement('div', { 'data-testid': 'build-tab', 'data-conflict-error': conflictError ?? '' }),
 }))
 vi.mock('../components/editor/VcsTab', () => ({
   VcsTab: () => React.createElement('div', { 'data-testid': 'vcs-tab' }),
@@ -309,15 +314,19 @@ function renderPage(component: ComponentDetail, user: User | null, opts: RenderP
     ],
     { initialEntries: ['/components/comp-1'] },
   )
-  return render(
-    React.createElement(
-      QueryClientProvider,
-      { client },
-      <TooltipProvider>
-        <RouterProvider router={router} />
-      </TooltipProvider>,
+  return {
+    client,
+    router,
+    ...render(
+      React.createElement(
+        QueryClientProvider,
+        { client },
+        <TooltipProvider>
+          <RouterProvider router={router} />
+        </TooltipProvider>,
+      ),
     ),
-  )
+  }
 }
 
 // ── tests ─────────────────────────────────────────────────────────────────────
@@ -1578,6 +1587,346 @@ describe('ComponentDetailPage — 409 conflict handling in the Review dialog', (
 
     await waitFor(() => expect(screen.queryByRole('button', { name: /^confirm$/i })).toBeNull())
     expect(screen.queryByRole('alert')).toBeNull()
+  })
+})
+
+describe('ComponentDetailPage — RMS registered-value conflict (409)', () => {
+  // Mirrors CRS's real message (RMSOverrideGate): ends with a joined
+  // "range=value" list and NO terminating punctuation. Fixtures that end in a
+  // period hide whether the appended "No changes were saved." runs together
+  // with it.
+  const RMS_CONFLICT_MSG =
+    "Component 'comp-1': writing '11' for [3.0,4.0) disagrees with RMS's registered value(s): [3.0,4.0)=21"
+
+  function stubDirtyGeneralTab() {
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('systems', component.systems ?? [])
+        form.setValue('displayName', component.displayName ?? '')
+      }, [component, form])
+      return React.createElement(
+        'button',
+        { 'data-testid': 'edit', onClick: () => form.setValue('displayName', 'X', { shouldDirty: true }) },
+        'edit',
+      )
+    })
+  }
+
+  it('closes the dialog, routes to the Build tab, and shows the conflict message', async () => {
+    stubDirtyGeneralTab()
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(
+        new ApiError(
+          409,
+          RMS_CONFLICT_MSG,
+          JSON.stringify({ errorMessage: RMS_CONFLICT_MSG, errorCode: 'RMS_REGISTERED_VALUE_CONFLICT' }),
+        ),
+      ),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^confirm$/i })).toBeNull())
+    const buildTab = await screen.findByTestId('build-tab')
+    expect(buildTab.dataset.conflictError).toContain(RMS_CONFLICT_MSG)
+    expect(buildTab.dataset.conflictError).toMatch(/no changes were saved/i)
+    // The server text and the appended sentence must not run together.
+    expect(buildTab.dataset.conflictError).toContain('[3.0,4.0)=21. No changes were saved.')
+  })
+
+  it('routes to the Build tab by error code, not by the jira message-text heuristic', async () => {
+    // A message that would otherwise match the /jira|project\s*key/i heuristic used for
+    // UNIQUENESS_VIOLATION routing — the RMS conflict must never reach that heuristic
+    // (design.md Decision 5: dispatched on errorCode, not on message text).
+    stubDirtyGeneralTab()
+    const serverMsg = "javaVersion conflict on component 'jira-service' for range [2.0,3.0)."
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(
+        new ApiError(
+          409,
+          serverMsg,
+          JSON.stringify({ errorMessage: serverMsg, errorCode: 'RMS_REGISTERED_VALUE_CONFLICT' }),
+        ),
+      ),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    // Routed to Build, never to Jira.
+    const buildTab = await screen.findByTestId('build-tab')
+    expect(buildTab.dataset.conflictError).toContain(serverMsg)
+    expect(screen.queryByTestId('jira-tab')).toBeNull()
+  })
+
+  it('refetches the component after the rejection', async () => {
+    stubDirtyGeneralTab()
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(
+        new ApiError(
+          409,
+          RMS_CONFLICT_MSG,
+          JSON.stringify({ errorMessage: RMS_CONFLICT_MSG, errorCode: 'RMS_REGISTERED_VALUE_CONFLICT' }),
+        ),
+      ),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    const { client } = renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+    const refetchSpy = vi.spyOn(client, 'refetchQueries')
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    await waitFor(() =>
+      expect(refetchSpy).toHaveBeenCalledWith({ queryKey: ['component', 'comp-1'], type: 'active' }),
+    )
+  })
+
+  it('shows the conflict message without waiting for the refetch to settle', async () => {
+    stubDirtyGeneralTab()
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(
+        new ApiError(
+          409,
+          RMS_CONFLICT_MSG,
+          JSON.stringify({ errorMessage: RMS_CONFLICT_MSG, errorCode: 'RMS_REGISTERED_VALUE_CONFLICT' }),
+        ),
+      ),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    const { client } = renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+    // Never settles. If the handler awaited this, the banner below would never render,
+    // so this is what distinguishes "fired after the message" from "awaited before it".
+    vi.spyOn(client, 'refetchQueries').mockReturnValue(new Promise<void>(() => {}))
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    const buildTab = await screen.findByTestId('build-tab')
+    expect(buildTab.dataset.conflictError).toContain(RMS_CONFLICT_MSG)
+  })
+
+  it('a failed refetch does not mask the conflict message', async () => {
+    stubDirtyGeneralTab()
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(
+        new ApiError(
+          409,
+          RMS_CONFLICT_MSG,
+          JSON.stringify({ errorMessage: RMS_CONFLICT_MSG, errorCode: 'RMS_REGISTERED_VALUE_CONFLICT' }),
+        ),
+      ),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    const { client } = renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+    vi.spyOn(client, 'refetchQueries').mockRejectedValue(new Error('network down'))
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    // The rejected refetch promise is swallowed — the routing/message stand regardless.
+    const buildTab = await screen.findByTestId('build-tab')
+    expect(buildTab.dataset.conflictError).toContain(RMS_CONFLICT_MSG)
+  })
+
+  it('a UNIQUENESS_VIOLATION 409 still does not refetch — the new refetch is scoped to the RMS conflict only', async () => {
+    stubDirtyGeneralTab()
+    const serverMsg = 'Overlaps with existing override [1.4,1.5)'
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(
+        new ApiError(409, serverMsg, JSON.stringify({ errorMessage: serverMsg, errorCode: 'UNIQUENESS_VIOLATION' })),
+      ),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    const { client } = renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+    const refetchSpy = vi.spyOn(client, 'refetchQueries')
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(serverMsg))
+    expect(refetchSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe('ComponentDetailPage — stale conflict banners cleared on same-instance navigation', () => {
+  // This page reuses the SAME ComponentDetailEditor instance when the route id
+  // changes without a full remount (P1-1's id-change effect exists for exactly
+  // this reason, to re-hydrate the RHF form). reviewError/jiraConflict/
+  // buildConflict must clear the same way, or a conflict banner from component A
+  // renders on component B after an in-place A→B navigation.
+  function stubDirtyGeneralTab() {
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('systems', component.systems ?? [])
+        form.setValue('displayName', component.displayName ?? '')
+      }, [component, form])
+      return React.createElement(
+        'button',
+        { 'data-testid': 'edit', onClick: () => form.setValue('displayName', 'X', { shouldDirty: true }) },
+        'edit',
+      )
+    })
+  }
+
+  it("a Build-tab RMS conflict from component A does not leak into component B's Build tab", async () => {
+    stubDirtyGeneralTab()
+    const serverMsg = "javaVersion '21' disagrees with the registered value '17' for range [2.0,3.0)"
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(
+        new ApiError(
+          409,
+          serverMsg,
+          JSON.stringify({ errorMessage: serverMsg, errorCode: 'RMS_REGISTERED_VALUE_CONFLICT' }),
+        ),
+      ),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    const { router } = renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+    const buildTabOnA = await screen.findByTestId('build-tab')
+    expect(buildTabOnA.dataset.conflictError).toContain(serverMsg)
+
+    // Same-instance navigation to a different component — no remount, only the
+    // route param and the query's returned data change.
+    const componentB: ComponentDetail = { ...baseComponent, id: 'comp-2', name: 'other-component' }
+    mockedUseComponent.mockReturnValue({
+      data: componentB,
+      isLoading: false,
+      error: null,
+    } as unknown as ReturnType<typeof useComponent>)
+    await act(async () => {
+      await router.navigate('/components/comp-2')
+    })
+
+    const buildTabOnB = await screen.findByTestId('build-tab')
+    expect(buildTabOnB.dataset.conflictError).toBe('')
+  })
+})
+
+describe('ComponentDetailPage — RMS unavailable (503)', () => {
+  function stubDirtyGeneralTab() {
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('systems', component.systems ?? [])
+        form.setValue('displayName', component.displayName ?? '')
+      }, [component, form])
+      return React.createElement(
+        'button',
+        { 'data-testid': 'edit', onClick: () => form.setValue('displayName', 'X', { shouldDirty: true }) },
+        'edit',
+      )
+    })
+  }
+
+  it("503 with errorCode 'RMS_UNAVAILABLE' shows a distinct toast, not the generic 'Save failed'", async () => {
+    stubDirtyGeneralTab()
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(new ApiError(503, 'Service Unavailable', JSON.stringify({ errorCode: 'RMS_UNAVAILABLE' }))),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    await waitFor(() => expect(mockToast).toHaveBeenCalledOnce())
+    const call = mockToast.mock.calls[0]?.[0] as { title?: string; description?: string }
+    expect(call.title).not.toBe('Save failed')
+    expect(`${call.title} ${call.description}`).toMatch(/unavailable/i)
+  })
+
+  it('a 503 without RMS_UNAVAILABLE falls through to the generic "Save failed" toast', async () => {
+    stubDirtyGeneralTab()
+    const mutateAsync = vi.fn(() => Promise.reject(new ApiError(503, 'Service Unavailable', '{}')))
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    await waitFor(() => expect(mockToast).toHaveBeenCalledOnce())
+    const call = mockToast.mock.calls[0]?.[0] as { title?: string }
+    expect(call.title).toBe('Save failed')
+  })
+
+  it('a 503 with a different errorCode falls through to the generic "Save failed" toast', async () => {
+    stubDirtyGeneralTab()
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(new ApiError(503, 'Service Unavailable', JSON.stringify({ errorCode: 'SOME_OTHER_CODE' }))),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    await waitFor(() => expect(mockToast).toHaveBeenCalledOnce())
+    const call = mockToast.mock.calls[0]?.[0] as { title?: string }
+    expect(call.title).toBe('Save failed')
+  })
+})
+
+describe('ComponentDetailPage — an ACTUAL disagreement introduces no client-side Save gating', () => {
+  function stubDirtyGeneralTab() {
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('systems', component.systems ?? [])
+        form.setValue('displayName', component.displayName ?? '')
+      }, [component, form])
+      return React.createElement(
+        'button',
+        { 'data-testid': 'edit', onClick: () => form.setValue('displayName', 'X', { shouldDirty: true }) },
+        'edit',
+      )
+    })
+  }
+
+  function withJavaWarning(): ComponentDetail {
+    return {
+      ...baseComponent,
+      canEdit: true,
+      registeredBuildParameters: {
+        javaActualRanges: [{ versionRange: '[1.0,2.0)', value: '17' }],
+        javaWarnings: [{ subRange: '[1.0,1.5)', actualValue: '17' }],
+        mavenActualRanges: [],
+        mavenWarnings: [],
+        actualDataUnavailable: false,
+      },
+    }
+  }
+
+  it('the Save control enables on an unrelated edit exactly as it would with no disagreement', async () => {
+    stubDirtyGeneralTab()
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage(withJavaWarning(), user)
+
+    expect((screen.getByRole('button', { name: /save changes/i }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(screen.getByTestId('edit'))
+    await waitFor(() => {
+      expect((screen.getByRole('button', { name: /save changes/i }) as HTMLButtonElement).disabled).toBe(false)
+    })
+  })
+
+  it('saving an unrelated field succeeds, with no client-side check against the warning', async () => {
+    stubDirtyGeneralTab()
+    const mutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage(withJavaWarning(), user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce())
+    // Confirms this save was never intercepted by any RMS-conflict/unavailable path.
+    expect(mockToast).not.toHaveBeenCalledWith(expect.objectContaining({ title: 'Save failed' }))
   })
 })
 

@@ -14,6 +14,23 @@ vi.mock('./FieldOverrideInline', () => ({
   ),
 }))
 
+// Visible stub exposing the props BuildTab passes, for placement/wiring assertions.
+// Real rendering behaviour is covered by ActualBuildParameters.test.tsx.
+vi.mock('./ActualBuildParameters', () => ({
+  ActualBuildParameters: ({
+    ranges, warnings, actualDataUnavailable,
+  }: {
+    ranges: unknown[]; warnings: unknown[]; actualDataUnavailable?: boolean
+  }) => (
+    <div
+      data-testid="actual-build-parameters"
+      data-ranges={ranges.length}
+      data-warnings={warnings.length}
+      data-unavailable={String(actualDataUnavailable ?? false)}
+    />
+  ),
+}))
+
 // EnumSelect stub mirrors the real prop surface (id / aria-* / onBlur).
 vi.mock('../ui/EnumSelect', () => ({
   EnumSelect: ({
@@ -64,18 +81,20 @@ function makeComponent(over: Partial<ComponentDetail> = {}): ComponentDetail {
 // Harness: render the presentational BuildTab driven by a real useBuildSection;
 // capture the live section so tests can inspect its slice after interactions.
 const captured: { section?: ReturnType<typeof useBuildSection> } = {}
-function Harness({ component, canEdit = true }: { component: ComponentDetail; canEdit?: boolean }) {
+function Harness({
+  component, canEdit = true, conflictError,
+}: { component: ComponentDetail; canEdit?: boolean; conflictError?: string | null }) {
   const section = useBuildSection(component)
   captured.section = section
   return (
     <TooltipProvider>
-      <BuildTab section={section} canEdit={canEdit} />
+      <BuildTab section={section} canEdit={canEdit} conflictError={conflictError} />
     </TooltipProvider>
   )
 }
-function renderTab(component: ComponentDetail, canEdit = true) {
+function renderTab(component: ComponentDetail, canEdit = true, conflictError?: string | null) {
   captured.section = undefined
-  return render(<Harness component={component} canEdit={canEdit} />)
+  return render(<Harness component={component} canEdit={canEdit} conflictError={conflictError} />)
 }
 
 describe('BuildTab — slice (combined save)', () => {
@@ -202,5 +221,77 @@ describe('BuildTab field descriptions (FieldInfo)', () => {
     expect(fieldDescriptions['build.buildSystem']).toBeDefined()
     renderTab(makeComponent({ configurations: [makeBaseRow({ build: { buildSystem: 'GRADLE' } })] }))
     expect(screen.getAllByRole('button').length).toBeGreaterThan(0)
+  })
+})
+
+describe('BuildTab — registered build parameters (ACTUAL)', () => {
+  it('passes javaActualRanges/javaWarnings to the Java ActualBuildParameters', () => {
+    renderTab(makeComponent({
+      configurations: [makeBaseRow({ build: { buildSystem: 'GRADLE', javaVersion: '17' } })],
+      registeredBuildParameters: {
+        javaActualRanges: [{ versionRange: '[1.0,2.0)', value: '17' }],
+        javaWarnings: [{ subRange: '[1.0,1.5)', actualValue: '17' }],
+        mavenActualRanges: [],
+        mavenWarnings: [],
+        actualDataUnavailable: false,
+      },
+    }))
+    const java = screen.getAllByTestId('actual-build-parameters')[0]
+    expect(java?.dataset.ranges).toBe('1')
+    expect(java?.dataset.warnings).toBe('1')
+  })
+
+  it('passes mavenActualRanges/mavenWarnings to the Maven ActualBuildParameters', () => {
+    renderTab(makeComponent({
+      configurations: [makeBaseRow({ build: { buildSystem: 'MAVEN', mavenVersion: '3.6.3' } })],
+      registeredBuildParameters: {
+        javaActualRanges: [],
+        javaWarnings: [],
+        mavenActualRanges: [{ versionRange: '[1.0,)', value: '3.6.3' }],
+        mavenWarnings: [{ subRange: '[1.0,2.0)', actualValue: '3.6.3' }],
+        actualDataUnavailable: false,
+      },
+    }))
+    const maven = screen.getAllByTestId('actual-build-parameters')[1]
+    expect(maven?.dataset.ranges).toBe('1')
+    expect(maven?.dataset.warnings).toBe('1')
+  })
+
+  it('passes actualDataUnavailable to the Java block only, never duplicated on Maven', () => {
+    renderTab(makeComponent({
+      configurations: [makeBaseRow({ build: { buildSystem: 'MAVEN' } })],
+      registeredBuildParameters: {
+        javaActualRanges: [], javaWarnings: [], mavenActualRanges: [], mavenWarnings: [],
+        actualDataUnavailable: true,
+      },
+    }))
+    const rendered = screen.getAllByTestId('actual-build-parameters')
+    expect(rendered[0]?.dataset.unavailable).toBe('true')
+    expect(rendered[1]?.dataset.unavailable).toBe('false')
+  })
+
+  it('renders with empty ranges/warnings when registeredBuildParameters is absent', () => {
+    renderTab(makeComponent({ configurations: [makeBaseRow({ build: { buildSystem: 'GRADLE' } })] }))
+    const java = screen.getAllByTestId('actual-build-parameters')[0]
+    expect(java?.dataset.ranges).toBe('0')
+    expect(java?.dataset.warnings).toBe('0')
+    expect(java?.dataset.unavailable).toBe('false')
+  })
+})
+
+describe('BuildTab — RMS registered-value conflict banner', () => {
+  it('shows no banner when there is no conflict', () => {
+    renderTab(makeComponent({ configurations: [makeBaseRow({ build: { buildSystem: 'GRADLE' } })] }))
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('shows the conflict message as an alert banner at the top of the tab', () => {
+    const msg = "javaVersion '21' disagrees with the registered value '17' for range [2.0,3.0). No changes were saved."
+    renderTab(
+      makeComponent({ configurations: [makeBaseRow({ build: { buildSystem: 'GRADLE' } })] }),
+      true,
+      msg,
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent(msg)
   })
 })

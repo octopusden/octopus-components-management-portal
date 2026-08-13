@@ -31,9 +31,14 @@ import type { ComponentDetail } from '../lib/types'
  *  - `'optimistic'`— stale `version`; the hook has already refetched the latest
  *                    snapshot, so the caller should close the (now-stale) diff and
  *                    tell the user to re-apply.
+ *  - `'rms'`       — the write disagrees with CRS's RMS-registered ("ACTUAL")
+ *                    value (`RMS_REGISTERED_VALUE_CONFLICT`). Routed to the
+ *                    Build tab by the caller — see design.md Decision 5 for why
+ *                    this is its own kind rather than falling into `'value'`'s
+ *                    message-text routing heuristic.
  */
 export interface ClassifiedConflict {
-  kind: 'value' | 'optimistic'
+  kind: 'value' | 'optimistic' | 'rms'
   title: string
   description: string
 }
@@ -48,6 +53,18 @@ export function useOptimisticConflict(componentId: string | undefined) {
         kind: 'value',
         title: 'Uniqueness violation',
         description: errorMessage ?? err.message,
+      }
+    }
+    if (errorCode === 'RMS_REGISTERED_VALUE_CONFLICT') {
+      // CRS's message ends with a joined "range=value" list and no terminating
+      // punctuation, so it needs a sentence break before the sentence appended
+      // here — otherwise the two run together as "...[3.0,4.0)=21 No changes...".
+      const serverText = (errorMessage ?? err.message).trimEnd()
+      const punctuated = /[.!?]$/.test(serverText) ? serverText : `${serverText}.`
+      return {
+        kind: 'rms',
+        title: 'Registered build version conflict',
+        description: `${punctuated} No changes were saved.`,
       }
     }
     if (errorCode !== null && errorCode !== 'OPTIMISTIC_LOCK') {
