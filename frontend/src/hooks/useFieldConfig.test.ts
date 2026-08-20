@@ -8,6 +8,7 @@ import {
   useFieldLabel,
   useFieldEditable,
   isFieldEditableFor,
+  resolveFieldEntry,
   labelFor,
   searchabilityFor,
   DEFAULT_SEARCHABILITY,
@@ -383,6 +384,43 @@ describe('isFieldEditableFor', () => {
 
   it('an unconfigured path defaults to editable', () => {
     expect(isFieldEditableFor(data, 'jira.nope', regularUser)).toBe(true)
+  })
+
+  // CRS stores the axis LOWERCASED (ConfigSyncService.serializeFieldEntry
+  // `.trim().lowercase()`), so the real wire shape of an admin-only field is
+  // `{"editable": "adminonly"}` — never the camelCase token this module compares.
+  // A strict comparison read every adminOnly field as editable-by-all, which kept
+  // `jira.technical` in a non-admin's PATCH and earned a 403 from CRS.
+  it('matches the axis case-insensitively (CRS serves it lowercased)', () => {
+    const wire = {
+      jira: {
+        technical: { visibility: 'editable', editable: 'adminonly' },
+        versionFormat: { editable: 'NONE' },
+        projectKey: { editable: ' All ' },
+        displayName: { visibility: 'READONLY' },
+      },
+    }
+    expect(isFieldEditableFor(wire, 'jira.technical', regularUser)).toBe(false)
+    expect(isFieldEditableFor(wire, 'jira.technical', adminUser)).toBe(true)
+    expect(isFieldEditableFor(wire, 'jira.versionFormat', adminUser)).toBe(false)
+    expect(isFieldEditableFor(wire, 'jira.projectKey', regularUser)).toBe(true)
+    expect(isFieldEditableFor(wire, 'jira.displayName', adminUser)).toBe(false)
+  })
+
+  it('an unrecognized axis token degrades to editable, as CRS does', () => {
+    const typo = { jira: { technical: { editable: 'admins-only' } } }
+    expect(isFieldEditableFor(typo, 'jira.technical', regularUser)).toBe(true)
+  })
+
+  // The resolver hands back the CANONICAL camelCase token, so consumers that read
+  // the axis directly (JiraTab's "admin only" pill) keep working on the wire shape.
+  it('resolveFieldEntry canonicalizes the axis it returns', () => {
+    const wire = { jira: { technical: { visibility: 'EDITABLE', editable: 'adminonly' } } }
+    expect(resolveFieldEntry(wire, 'jira.technical')).toMatchObject({
+      visibility: 'editable',
+      editable: 'adminOnly',
+    })
+    expect(resolveFieldEntry({ jira: { technical: { editable: 'huh' } } }, 'jira.technical').editable).toBeUndefined()
   })
 })
 
