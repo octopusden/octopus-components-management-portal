@@ -21,8 +21,12 @@ vi.mock('../hooks/useComponent', () => ({
   useSupportedVersions: () => ({ data: undefined, isLoading: false }),
   useUpdateSupportedVersions: () => ({ mutateAsync: vi.fn(() => Promise.resolve()), isPending: false }),
 }))
+// Stable across renders (vi.hoisted) so tests can assert on toast content —
+// most existing tests never do (a fresh vi.fn() per render was fine for them),
+// but the 503/RMS-unavailable messaging needs to be distinguishable by content.
+const mockToast = vi.hoisted(() => vi.fn())
 vi.mock('../hooks/use-toast', () => ({
-  useToast: () => ({ toast: vi.fn() }),
+  useToast: () => ({ toast: mockToast }),
 }))
 // AppFooter uses its own queries; stub fetch globally.
 vi.mock('../components/AppFooter', () => ({
@@ -92,7 +96,8 @@ vi.mock('../components/editor/MiscTab', async () => {
   return { ...actual, MiscTab: () => React.createElement('div', { 'data-testid': 'misc-tab' }) }
 })
 vi.mock('../components/editor/BuildTab', () => ({
-  BuildTab: () => React.createElement('div', { 'data-testid': 'build-tab' }),
+  BuildTab: ({ conflictError }: { conflictError?: string | null }) =>
+    React.createElement('div', { 'data-testid': 'build-tab', 'data-conflict-error': conflictError ?? '' }),
 }))
 vi.mock('../components/editor/VcsTab', () => ({
   VcsTab: () => React.createElement('div', { 'data-testid': 'vcs-tab' }),
@@ -309,15 +314,19 @@ function renderPage(component: ComponentDetail, user: User | null, opts: RenderP
     ],
     { initialEntries: ['/components/comp-1'] },
   )
-  return render(
-    React.createElement(
-      QueryClientProvider,
-      { client },
-      <TooltipProvider>
-        <RouterProvider router={router} />
-      </TooltipProvider>,
+  return {
+    client,
+    router,
+    ...render(
+      React.createElement(
+        QueryClientProvider,
+        { client },
+        <TooltipProvider>
+          <RouterProvider router={router} />
+        </TooltipProvider>,
+      ),
     ),
-  )
+  }
 }
 
 // ── tests ─────────────────────────────────────────────────────────────────────
@@ -595,14 +604,16 @@ describe('ComponentDetailPage — breadcrumb badges', () => {
 })
 
 describe('ComponentDetailPage — sidebar nav order', () => {
-  it('renders the grouped sidebar order (Overview → Build & Release → Distribution → Metadata → Tools)', () => {
+  it('renders the grouped sidebar order (Overview → Build & Release → Distribution → Metadata → Tools) — no Validations section for a non-admin', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(baseComponent, user)
     const tabs = within(screen.getByRole('tablist')).getAllByRole('tab')
     // Strip count badges ("Build1" → "Build") so the assertion only pins order.
     // The grouping (spec §2.1) puts Jira/Escrow under Build & Release before the
     // Distribution group (Distribution + Docker), then Metadata (Misc,
-    // Configurations), then Tools (As Code, Overrides, History).
+    // Configurations), then Tools (As Code, Overrides, History). The
+    // Validations section (TeamCity, Unregistered Release) is admin-only, so
+    // a plain ACCESS_COMPONENTS user sees none of it.
     expect(tabs.map((t) => (t.textContent ?? '').replace(/\d+$/, ''))).toEqual([
       'General',
       'Build',
@@ -621,14 +632,36 @@ describe('ComponentDetailPage — sidebar nav order', () => {
     ])
   })
 
-  it('renders every group heading in the sidebar', () => {
-    const user = makeUser(['ACCESS_COMPONENTS'])
+  it('appends the admin-only Validations section (TeamCity, Unregistered Release) at the end for an admin', () => {
+    useAdminMode.setState({ enabled: true })
+    const user = makeUser(['ACCESS_COMPONENTS', 'IMPORT_DATA'])
     renderPage(baseComponent, user)
-    for (const heading of ['Overview', 'Build & Release', 'Metadata', 'Tools']) {
-      expect(screen.getByText(heading)).toBeDefined()
+    const tabs = within(screen.getByRole('tablist')).getAllByRole('tab')
+    expect(tabs.map((t) => (t.textContent ?? '').replace(/\d+$/, '')).slice(-2)).toEqual([
+      'TeamCity',
+      'Unregistered Release',
+    ])
+  })
+
+  it('renders every group heading in the sidebar, including the admin-only Validations heading', () => {
+    useAdminMode.setState({ enabled: true })
+    const user = makeUser(['ACCESS_COMPONENTS', 'IMPORT_DATA'])
+    renderPage(baseComponent, user)
+    // Scoped to the tablist: 'Validations' also now names a top-level nav
+    // link (Layout.tsx), so an unscoped getByText would match both.
+    const sidebar = within(screen.getByRole('tablist'))
+    for (const heading of ['Overview', 'Build & Release', 'Metadata', 'Tools', 'Validations']) {
+      expect(sidebar.getByText(heading)).toBeDefined()
     }
     // "Distribution" is both a group heading and the lone item under it.
-    expect(screen.getAllByText('Distribution').length).toBeGreaterThanOrEqual(2)
+    expect(sidebar.getAllByText('Distribution').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('does NOT render the Validations heading in the sidebar for a non-admin', () => {
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    renderPage(baseComponent, user)
+    const sidebar = within(screen.getByRole('tablist'))
+    expect(sidebar.queryByText('Validations')).toBeNull()
   })
 
   it('no Solution tab for a non-candidate key (no matching pattern)', () => {
@@ -790,6 +823,7 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
             projectId: 'MyProject_Build',
             projectUrl: 'https://teamcity.example.com/project/MyProject_Build',
             sortOrder: 0,
+            validations: [],
           },
         ],
       },
@@ -806,7 +840,7 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
     renderPage(
       {
         ...baseComponent,
-        teamcityProjects: [{ id: 'tc-1', projectId: 'X', projectUrl: null, sortOrder: 0 }],
+        teamcityProjects: [{ id: 'tc-1', projectId: 'X', projectUrl: null, sortOrder: 0, validations: [] }],
       },
       user,
     )
@@ -825,9 +859,9 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
       {
         ...baseComponent,
         teamcityProjects: [
-          { id: 'tc-1', projectId: 'Build_A', projectUrl: 'https://teamcity.example.com/project/Build_A', sortOrder: 0 },
-          { id: 'tc-2', projectId: 'Build_B', projectUrl: 'https://teamcity.example.com/project/Build_B', sortOrder: 1 },
-          { id: 'tc-3', projectId: 'NoUrl', projectUrl: null, sortOrder: 2 },
+          { id: 'tc-1', projectId: 'Build_A', projectUrl: 'https://teamcity.example.com/project/Build_A', sortOrder: 0, validations: [] },
+          { id: 'tc-2', projectId: 'Build_B', projectUrl: 'https://teamcity.example.com/project/Build_B', sortOrder: 1, validations: [] },
+          { id: 'tc-3', projectId: 'NoUrl', projectUrl: null, sortOrder: 2, validations: [] },
         ],
       },
       user,
@@ -840,6 +874,31 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
     expect((screen.getByTitle('TeamCity: Build_B') as HTMLAnchorElement).href).toBe(
       'https://teamcity.example.com/project/Build_B',
     )
+  })
+
+  it('(g) an empty validations list renders neutral "no recorded findings" for an admin — NOT "0 issues" or a green checkmark', () => {
+    useAdminMode.setState({ enabled: true })
+    const user = makeUser(['ACCESS_COMPONENTS', 'IMPORT_DATA'])
+    renderPage(
+      {
+        ...baseComponent,
+        teamcityProjects: [
+          {
+            id: 'tc-1',
+            projectId: 'MyProject_Build',
+            projectUrl: 'https://teamcity.example.com/project/MyProject_Build',
+            sortOrder: 0,
+            validations: [],
+          },
+        ],
+      },
+      user,
+    )
+    const row = screen.getByTestId('teamcity-projects-list')
+    expect(within(row).getByText('no recorded findings')).toBeDefined()
+    expect(within(row).queryByText(/issue/i)).toBeNull()
+    expect(within(row).queryByLabelText('No validation issues')).toBeNull()
+    expect(within(row).getByLabelText('No validation findings on record')).toBeDefined()
   })
 })
 
@@ -1531,7 +1590,347 @@ describe('ComponentDetailPage — 409 conflict handling in the Review dialog', (
   })
 })
 
-describe('ComponentDetailPage — Validation Problems tab (admin gate + lookup by name)', () => {
+describe('ComponentDetailPage — RMS registered-value conflict (409)', () => {
+  // Mirrors CRS's real message (RMSOverrideGate): ends with a joined
+  // "range=value" list and NO terminating punctuation. Fixtures that end in a
+  // period hide whether the appended "No changes were saved." runs together
+  // with it.
+  const RMS_CONFLICT_MSG =
+    "Component 'comp-1': writing '11' for [3.0,4.0) disagrees with RMS's registered value(s): [3.0,4.0)=21"
+
+  function stubDirtyGeneralTab() {
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('systems', component.systems ?? [])
+        form.setValue('displayName', component.displayName ?? '')
+      }, [component, form])
+      return React.createElement(
+        'button',
+        { 'data-testid': 'edit', onClick: () => form.setValue('displayName', 'X', { shouldDirty: true }) },
+        'edit',
+      )
+    })
+  }
+
+  it('closes the dialog, routes to the Build tab, and shows the conflict message', async () => {
+    stubDirtyGeneralTab()
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(
+        new ApiError(
+          409,
+          RMS_CONFLICT_MSG,
+          JSON.stringify({ errorMessage: RMS_CONFLICT_MSG, errorCode: 'RMS_REGISTERED_VALUE_CONFLICT' }),
+        ),
+      ),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^confirm$/i })).toBeNull())
+    const buildTab = await screen.findByTestId('build-tab')
+    expect(buildTab.dataset.conflictError).toContain(RMS_CONFLICT_MSG)
+    expect(buildTab.dataset.conflictError).toMatch(/no changes were saved/i)
+    // The server text and the appended sentence must not run together.
+    expect(buildTab.dataset.conflictError).toContain('[3.0,4.0)=21. No changes were saved.')
+  })
+
+  it('routes to the Build tab by error code, not by the jira message-text heuristic', async () => {
+    // A message that would otherwise match the /jira|project\s*key/i heuristic used for
+    // UNIQUENESS_VIOLATION routing — the RMS conflict must never reach that heuristic
+    // (design.md Decision 5: dispatched on errorCode, not on message text).
+    stubDirtyGeneralTab()
+    const serverMsg = "javaVersion conflict on component 'jira-service' for range [2.0,3.0)."
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(
+        new ApiError(
+          409,
+          serverMsg,
+          JSON.stringify({ errorMessage: serverMsg, errorCode: 'RMS_REGISTERED_VALUE_CONFLICT' }),
+        ),
+      ),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    // Routed to Build, never to Jira.
+    const buildTab = await screen.findByTestId('build-tab')
+    expect(buildTab.dataset.conflictError).toContain(serverMsg)
+    expect(screen.queryByTestId('jira-tab')).toBeNull()
+  })
+
+  it('refetches the component after the rejection', async () => {
+    stubDirtyGeneralTab()
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(
+        new ApiError(
+          409,
+          RMS_CONFLICT_MSG,
+          JSON.stringify({ errorMessage: RMS_CONFLICT_MSG, errorCode: 'RMS_REGISTERED_VALUE_CONFLICT' }),
+        ),
+      ),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    const { client } = renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+    const refetchSpy = vi.spyOn(client, 'refetchQueries')
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    await waitFor(() =>
+      expect(refetchSpy).toHaveBeenCalledWith({ queryKey: ['component', 'comp-1'], type: 'active' }),
+    )
+  })
+
+  it('shows the conflict message without waiting for the refetch to settle', async () => {
+    stubDirtyGeneralTab()
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(
+        new ApiError(
+          409,
+          RMS_CONFLICT_MSG,
+          JSON.stringify({ errorMessage: RMS_CONFLICT_MSG, errorCode: 'RMS_REGISTERED_VALUE_CONFLICT' }),
+        ),
+      ),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    const { client } = renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+    // Never settles. If the handler awaited this, the banner below would never render,
+    // so this is what distinguishes "fired after the message" from "awaited before it".
+    vi.spyOn(client, 'refetchQueries').mockReturnValue(new Promise<void>(() => {}))
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    const buildTab = await screen.findByTestId('build-tab')
+    expect(buildTab.dataset.conflictError).toContain(RMS_CONFLICT_MSG)
+  })
+
+  it('a failed refetch does not mask the conflict message', async () => {
+    stubDirtyGeneralTab()
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(
+        new ApiError(
+          409,
+          RMS_CONFLICT_MSG,
+          JSON.stringify({ errorMessage: RMS_CONFLICT_MSG, errorCode: 'RMS_REGISTERED_VALUE_CONFLICT' }),
+        ),
+      ),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    const { client } = renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+    vi.spyOn(client, 'refetchQueries').mockRejectedValue(new Error('network down'))
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    // The rejected refetch promise is swallowed — the routing/message stand regardless.
+    const buildTab = await screen.findByTestId('build-tab')
+    expect(buildTab.dataset.conflictError).toContain(RMS_CONFLICT_MSG)
+  })
+
+  it('a UNIQUENESS_VIOLATION 409 still does not refetch — the new refetch is scoped to the RMS conflict only', async () => {
+    stubDirtyGeneralTab()
+    const serverMsg = 'Overlaps with existing override [1.4,1.5)'
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(
+        new ApiError(409, serverMsg, JSON.stringify({ errorMessage: serverMsg, errorCode: 'UNIQUENESS_VIOLATION' })),
+      ),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    const { client } = renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+    const refetchSpy = vi.spyOn(client, 'refetchQueries')
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(serverMsg))
+    expect(refetchSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe('ComponentDetailPage — stale conflict banners cleared on same-instance navigation', () => {
+  // This page reuses the SAME ComponentDetailEditor instance when the route id
+  // changes without a full remount (P1-1's id-change effect exists for exactly
+  // this reason, to re-hydrate the RHF form). reviewError/jiraConflict/
+  // buildConflict must clear the same way, or a conflict banner from component A
+  // renders on component B after an in-place A→B navigation.
+  function stubDirtyGeneralTab() {
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('systems', component.systems ?? [])
+        form.setValue('displayName', component.displayName ?? '')
+      }, [component, form])
+      return React.createElement(
+        'button',
+        { 'data-testid': 'edit', onClick: () => form.setValue('displayName', 'X', { shouldDirty: true }) },
+        'edit',
+      )
+    })
+  }
+
+  it("a Build-tab RMS conflict from component A does not leak into component B's Build tab", async () => {
+    stubDirtyGeneralTab()
+    const serverMsg = "javaVersion '21' disagrees with the registered value '17' for range [2.0,3.0)"
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(
+        new ApiError(
+          409,
+          serverMsg,
+          JSON.stringify({ errorMessage: serverMsg, errorCode: 'RMS_REGISTERED_VALUE_CONFLICT' }),
+        ),
+      ),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    const { router } = renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+    const buildTabOnA = await screen.findByTestId('build-tab')
+    expect(buildTabOnA.dataset.conflictError).toContain(serverMsg)
+
+    // Same-instance navigation to a different component — no remount, only the
+    // route param and the query's returned data change.
+    const componentB: ComponentDetail = { ...baseComponent, id: 'comp-2', name: 'other-component' }
+    mockedUseComponent.mockReturnValue({
+      data: componentB,
+      isLoading: false,
+      error: null,
+    } as unknown as ReturnType<typeof useComponent>)
+    await act(async () => {
+      await router.navigate('/components/comp-2')
+    })
+
+    const buildTabOnB = await screen.findByTestId('build-tab')
+    expect(buildTabOnB.dataset.conflictError).toBe('')
+  })
+})
+
+describe('ComponentDetailPage — RMS unavailable (503)', () => {
+  function stubDirtyGeneralTab() {
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('systems', component.systems ?? [])
+        form.setValue('displayName', component.displayName ?? '')
+      }, [component, form])
+      return React.createElement(
+        'button',
+        { 'data-testid': 'edit', onClick: () => form.setValue('displayName', 'X', { shouldDirty: true }) },
+        'edit',
+      )
+    })
+  }
+
+  it("503 with errorCode 'RMS_UNAVAILABLE' shows a distinct toast, not the generic 'Save failed'", async () => {
+    stubDirtyGeneralTab()
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(new ApiError(503, 'Service Unavailable', JSON.stringify({ errorCode: 'RMS_UNAVAILABLE' }))),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    await waitFor(() => expect(mockToast).toHaveBeenCalledOnce())
+    const call = mockToast.mock.calls[0]?.[0] as { title?: string; description?: string }
+    expect(call.title).not.toBe('Save failed')
+    expect(`${call.title} ${call.description}`).toMatch(/unavailable/i)
+  })
+
+  it('a 503 without RMS_UNAVAILABLE falls through to the generic "Save failed" toast', async () => {
+    stubDirtyGeneralTab()
+    const mutateAsync = vi.fn(() => Promise.reject(new ApiError(503, 'Service Unavailable', '{}')))
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    await waitFor(() => expect(mockToast).toHaveBeenCalledOnce())
+    const call = mockToast.mock.calls[0]?.[0] as { title?: string }
+    expect(call.title).toBe('Save failed')
+  })
+
+  it('a 503 with a different errorCode falls through to the generic "Save failed" toast', async () => {
+    stubDirtyGeneralTab()
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(new ApiError(503, 'Service Unavailable', JSON.stringify({ errorCode: 'SOME_OTHER_CODE' }))),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    await waitFor(() => expect(mockToast).toHaveBeenCalledOnce())
+    const call = mockToast.mock.calls[0]?.[0] as { title?: string }
+    expect(call.title).toBe('Save failed')
+  })
+})
+
+describe('ComponentDetailPage — an ACTUAL disagreement introduces no client-side Save gating', () => {
+  function stubDirtyGeneralTab() {
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('systems', component.systems ?? [])
+        form.setValue('displayName', component.displayName ?? '')
+      }, [component, form])
+      return React.createElement(
+        'button',
+        { 'data-testid': 'edit', onClick: () => form.setValue('displayName', 'X', { shouldDirty: true }) },
+        'edit',
+      )
+    })
+  }
+
+  function withJavaWarning(): ComponentDetail {
+    return {
+      ...baseComponent,
+      canEdit: true,
+      registeredBuildParameters: {
+        javaActualRanges: [{ versionRange: '[1.0,2.0)', value: '17' }],
+        javaWarnings: [{ subRange: '[1.0,1.5)', actualValue: '17' }],
+        mavenActualRanges: [],
+        mavenWarnings: [],
+        actualDataUnavailable: false,
+      },
+    }
+  }
+
+  it('the Save control enables on an unrelated edit exactly as it would with no disagreement', async () => {
+    stubDirtyGeneralTab()
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage(withJavaWarning(), user)
+
+    expect((screen.getByRole('button', { name: /save changes/i }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(screen.getByTestId('edit'))
+    await waitFor(() => {
+      expect((screen.getByRole('button', { name: /save changes/i }) as HTMLButtonElement).disabled).toBe(false)
+    })
+  })
+
+  it('saving an unrelated field succeeds, with no client-side check against the warning', async () => {
+    stubDirtyGeneralTab()
+    const mutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage(withJavaWarning(), user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce())
+    // Confirms this save was never intercepted by any RMS-conflict/unavailable path.
+    expect(mockToast).not.toHaveBeenCalledWith(expect.objectContaining({ title: 'Save failed' }))
+  })
+})
+
+describe('ComponentDetailPage — Unregistered Release tab (admin gate + lookup by name)', () => {
   // A problem-bearing validation keyed by the COMPONENT NAME (`my-component`),
   // NOT the id (`comp-1`). The detail tab must look it up by name — the same
   // field the list overlay matches on — so an id != name component still shows
@@ -1554,8 +1953,8 @@ describe('ComponentDetailPage — Validation Problems tab (admin gate + lookup b
 
   // A check-failed validation (no problems) keyed by the component NAME. A
   // failed check is a SYSTEM condition (we could not verify), not a problem
-  // with the component — it must NOT open a per-component Validation Problems
-  // tab. It is surfaced once at report level on the list page instead.
+  // with the component — it must NOT open a per-component Unregistered
+  // Release tab. It is surfaced once at report level on the list page instead.
   const checkFailedCv: ComponentValidation = {
     component: 'my-component',
     problems: [],
@@ -1563,7 +1962,7 @@ describe('ComponentDetailPage — Validation Problems tab (admin gate + lookup b
     checkError: 'RM returned 500',
   }
 
-  it('renders a RED Validation Problems item (pinned at the top) for an admin when the component has problems, and shows the full versions list when selected', async () => {
+  it('renders a RED Unregistered Release item inside the Validations section for an admin when the component has problems, and shows the full versions list when selected', async () => {
     useAdminMode.setState({ enabled: true })
     const versions = ['v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7']
     mockedUseValidationProblems.mockReturnValue(validationResult([withProblems(versions)]))
@@ -1573,13 +1972,12 @@ describe('ComponentDetailPage — Validation Problems tab (admin gate + lookup b
     // The hook is enabled for an admin.
     expect(mockedUseValidationProblems).toHaveBeenCalledWith(true)
 
-    const tab = screen.getByRole('tab', { name: /validation problems/i })
+    const tab = screen.getByRole('tab', { name: /unregistered release/i })
     expect(tab).toBeDefined()
     // Red styling applied to the trigger.
     expect(tab.className).toContain('text-destructive')
-    // Pinned at the TOP of the sidebar (spec §2.1), i.e. the first tab.
-    const tabs = within(screen.getByRole('tablist')).getAllByRole('tab')
-    expect((tabs[0]!.textContent ?? '')).toMatch(/validation problems/i)
+    // Lives inside the (admin-only) Validations section, alongside TeamCity.
+    expect(screen.getByRole('tab', { name: /^TeamCity$/i })).toBeDefined()
 
     // Selecting it shows the full versions list (untruncated). Radix Tabs ignore
     // plain fireEvent.click in jsdom (the trigger uses pointer-down/keyboard
@@ -1598,34 +1996,37 @@ describe('ComponentDetailPage — Validation Problems tab (admin gate + lookup b
     renderPage(baseComponent, user)
 
     const ue = userEvent.setup()
-    await ue.click(screen.getByRole('tab', { name: /validation problems/i }))
+    await ue.click(screen.getByRole('tab', { name: /unregistered release/i }))
     const copyBtn = await screen.findByRole('button', { name: /copy versions/i })
     await ue.click(copyBtn)
 
     await waitFor(() => expect(mockedCopyToClipboard).toHaveBeenCalledWith(versions.join('\n')))
   })
 
-  it('check-failed (no problems): does NOT render a Validation Problems tab (system failure is not a per-component problem)', () => {
+  it('check-failed (no problems): renders the Unregistered Release item WITHOUT red/problem styling (system failure is not a per-component problem)', () => {
     useAdminMode.setState({ enabled: true })
     mockedUseValidationProblems.mockReturnValue(validationResult([checkFailedCv]))
     const user = makeUser(['ACCESS_COMPONENTS', 'IMPORT_DATA'])
     renderPage(baseComponent, user)
 
-    // No tab at all — and the raw exception text never reaches the UI.
-    expect(screen.queryByRole('tab', { name: /validation problems/i })).toBeNull()
+    // Item still exists (always present for admins), but not flagged as a problem —
+    // and the raw exception text never reaches the UI.
+    const tab = screen.getByRole('tab', { name: /unregistered release/i })
+    expect(tab.className).not.toContain('text-destructive')
     expect(screen.queryByText('Check failed')).toBeNull()
     expect(screen.queryByText('RM returned 500')).toBeNull()
   })
 
-  it('does NOT render the tab for an admin when the component is clean (not in report)', () => {
+  it('renders the item without red/problem styling for an admin when the component is clean (not in report)', () => {
     useAdminMode.setState({ enabled: true })
-    // Empty report (default in beforeEach) → component absent → no tab.
+    // Empty report (default in beforeEach) → component absent → no problem styling.
     const user = makeUser(['ACCESS_COMPONENTS', 'IMPORT_DATA'])
     renderPage(baseComponent, user)
-    expect(screen.queryByRole('tab', { name: /validation problems/i })).toBeNull()
+    const tab = screen.getByRole('tab', { name: /unregistered release/i })
+    expect(tab.className).not.toContain('text-destructive')
   })
 
-  it('does NOT render the tab for an admin when the report entry has no issues', () => {
+  it('renders the item without red/problem styling for an admin when the report entry has no issues', () => {
     useAdminMode.setState({ enabled: true })
     const cleanCv = {
       component: 'my-component',
@@ -1636,31 +2037,34 @@ describe('ComponentDetailPage — Validation Problems tab (admin gate + lookup b
     mockedUseValidationProblems.mockReturnValue(validationResult([cleanCv]))
     const user = makeUser(['ACCESS_COMPONENTS', 'IMPORT_DATA'])
     renderPage(baseComponent, user)
-    expect(screen.queryByRole('tab', { name: /validation problems/i })).toBeNull()
+    const tab = screen.getByRole('tab', { name: /unregistered release/i })
+    expect(tab.className).not.toContain('text-destructive')
   })
 
-  it('does NOT render the tab when adminMode is off (even with IMPORT_DATA), and disables the fetch', () => {
+  it('does NOT render the Validations section (TeamCity or Unregistered Release) when adminMode is off (even with IMPORT_DATA), and disables the fetch', () => {
     // adminMode defaults OFF (beforeEach). Provide a problem-bearing report to
     // prove the gate is admin, not data.
     mockedUseValidationProblems.mockReturnValue(validationResult([withProblems(['v1'])]))
     const user = makeUser(['ACCESS_COMPONENTS', 'IMPORT_DATA'])
     renderPage(baseComponent, user)
-    expect(screen.queryByRole('tab', { name: /validation problems/i })).toBeNull()
+    expect(screen.queryByRole('tab', { name: /unregistered release/i })).toBeNull()
+    expect(screen.queryByRole('tab', { name: /^TeamCity$/i })).toBeNull()
     // Non-admin → hook gated disabled (no /portal/validation request).
     expect(mockedUseValidationProblems).toHaveBeenCalledWith(false)
   })
 
-  it('does NOT render the tab for a non-IMPORT_DATA user even with adminMode on, and disables the fetch', () => {
+  it('does NOT render the Validations section for a non-IMPORT_DATA user even with adminMode on, and disables the fetch', () => {
     useAdminMode.setState({ enabled: true })
     mockedUseValidationProblems.mockReturnValue(validationResult([withProblems(['v1'])]))
     const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
     renderPage(baseComponent, user)
-    expect(screen.queryByRole('tab', { name: /validation problems/i })).toBeNull()
+    expect(screen.queryByRole('tab', { name: /unregistered release/i })).toBeNull()
+    expect(screen.queryByRole('tab', { name: /^TeamCity$/i })).toBeNull()
     expect(mockedUseValidationProblems).toHaveBeenCalledWith(false)
   })
 
-  it('falls back to the General tab (no blank panel) when the selected Validation Problems tab disappears', async () => {
-    // Regression (independent review P2): the Validation Problems tab is
+  it('falls back to the General tab (no blank panel) when the selected Unregistered Release tab disappears', async () => {
+    // Regression (independent review P2): the Unregistered Release tab is
     // conditional on hasProblems. If the admin selects it and hasProblems then
     // flips false (admin mode off / IMPORT_DATA lost / report refreshes clean),
     // the controlled Tabs `activeTab` still points at the now-removed tab and
@@ -1677,8 +2081,8 @@ describe('ComponentDetailPage — Validation Problems tab (admin gate + lookup b
     const user = makeUser(['ACCESS_COMPONENTS', 'IMPORT_DATA'])
     renderPage(baseComponent, user)
 
-    // Select the conditional Validation Problems tab and confirm its content shows.
-    const tab = screen.getByRole('tab', { name: /validation problems/i })
+    // Select the conditional Unregistered Release tab and confirm its content shows.
+    const tab = screen.getByRole('tab', { name: /unregistered release/i })
     await userEvent.setup().click(tab)
     await waitFor(() => expect(screen.getByText('v1')).toBeDefined())
 
@@ -1690,7 +2094,7 @@ describe('ComponentDetailPage — Validation Problems tab (admin gate + lookup b
 
     // The tab is gone …
     await waitFor(() =>
-      expect(screen.queryByRole('tab', { name: /validation problems/i })).toBeNull(),
+      expect(screen.queryByRole('tab', { name: /unregistered release/i })).toBeNull(),
     )
     // … and the view falls back to General content — not a blank panel. The
     // General tab's content (the mocked GeneralTab) is visible, and the General
@@ -1700,7 +2104,7 @@ describe('ComponentDetailPage — Validation Problems tab (admin gate + lookup b
       'aria-selected',
       'true',
     )
-    // No stale Validation-Problems content lingering.
+    // No stale Unregistered-Release content lingering.
     expect(screen.queryByText('v1')).toBeNull()
   })
 })

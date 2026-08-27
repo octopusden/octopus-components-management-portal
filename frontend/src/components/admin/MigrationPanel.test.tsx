@@ -8,6 +8,8 @@ import {
   useMigrationStatus,
   useRunMigration,
 } from '@/hooks/useMigration'
+import { useTeamCityResyncJob } from '@/hooks/useTeamCityResync'
+import { useTeamCityValidationJob } from '@/hooks/useTeamCityValidation'
 import { toast } from '@/hooks/use-toast'
 import { useAdminMode } from '@/lib/adminModeStore'
 import { ApiError } from '@/lib/api'
@@ -36,6 +38,12 @@ vi.mock('@/hooks/useMigration', () => ({
   // null/idle so existing tests behave as before.
   useHistoryMigrationJob: vi.fn(),
 }))
+vi.mock('@/hooks/useTeamCityResync', () => ({
+  useTeamCityResyncJob: vi.fn(),
+}))
+vi.mock('@/hooks/useTeamCityValidation', () => ({
+  useTeamCityValidationJob: vi.fn(),
+}))
 vi.mock('@/hooks/use-toast', () => ({
   toast: vi.fn(),
 }))
@@ -44,6 +52,8 @@ const mockUseMigrationStatus = vi.mocked(useMigrationStatus)
 const mockUseMigrationJob = vi.mocked(useMigrationJob)
 const mockUseRunMigration = vi.mocked(useRunMigration)
 const mockUseHistoryMigrationJob = vi.mocked(useHistoryMigrationJob)
+const mockUseTeamCityResyncJob = vi.mocked(useTeamCityResyncJob)
+const mockUseTeamCityValidationJob = vi.mocked(useTeamCityValidationJob)
 const mockToast = vi.mocked(toast)
 
 const STATUS: MigrationStatus = { git: 12, db: 3, total: 15 }
@@ -169,6 +179,24 @@ beforeEach(() => {
     error: null,
     refetch: vi.fn(),
   } as unknown as ReturnType<typeof useHistoryMigrationJob>)
+  // TC resync / TC validation idle by default; cross-disable tests override
+  // with a RUNNING fixture to assert the components button gets blocked.
+  mockUseTeamCityResyncJob.mockReturnValue({
+    data: null,
+    isLoading: false,
+    isError: false,
+    isSuccess: true,
+    error: null,
+    refetch: vi.fn(),
+  } as unknown as ReturnType<typeof useTeamCityResyncJob>)
+  mockUseTeamCityValidationJob.mockReturnValue({
+    data: null,
+    isLoading: false,
+    isError: false,
+    isSuccess: true,
+    error: null,
+    refetch: vi.fn(),
+  } as unknown as ReturnType<typeof useTeamCityValidationJob>)
 })
 
 afterEach(() => {
@@ -417,6 +445,40 @@ describe('MigrationPanel — cross-disable when history migration is RUNNING', (
 
     expect(screen.getByRole('button', { name: /run migration/i })).toBeDisabled()
     expect(screen.getByText(/History migration is running/i)).toBeDefined()
+  })
+
+  it('disables Run migration when TC resync is RUNNING and shows a helper hint', () => {
+    useAdminMode.setState({ enabled: true })
+    mockUseTeamCityResyncJob.mockReturnValue({
+      data: { id: 'resync-1', state: 'RUNNING' },
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useTeamCityResyncJob>)
+
+    renderPanel()
+
+    expect(screen.getByRole('button', { name: /run migration/i })).toBeDisabled()
+    expect(screen.getByText(/TC resync is running/i)).toBeDefined()
+  })
+
+  it('disables Run migration when TC validation is RUNNING and shows a helper hint', () => {
+    useAdminMode.setState({ enabled: true })
+    mockUseTeamCityValidationJob.mockReturnValue({
+      data: { id: 'validation-1', state: 'RUNNING' },
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useTeamCityValidationJob>)
+
+    renderPanel()
+
+    expect(screen.getByRole('button', { name: /run migration/i })).toBeDisabled()
+    expect(screen.getByText(/TC validation is running/i)).toBeDefined()
   })
 })
 

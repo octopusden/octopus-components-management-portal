@@ -3,13 +3,10 @@ import jetbrains.buildServer.configs.kotlin.buildFeatures.XmlReport
 import jetbrains.buildServer.configs.kotlin.buildFeatures.freeDiskSpace
 import jetbrains.buildServer.configs.kotlin.buildFeatures.xmlReport
 import jetbrains.buildServer.configs.kotlin.triggers.finishBuildTrigger
-import jetbrains.buildServer.configs.kotlin.vcs.GitVcsRoot
 
 version = "2025.03"
 
 project {
-    vcsRoot(OctopusComponentsManagementPortalVcs)
-
     params {
         param("COMPONENT_NAME", "components-management-portal")
         param("OCTOPUS_MODULE_NAME", "octopus-components-management-portal")
@@ -29,6 +26,7 @@ project {
 
     buildType(id10CompileUtAuto)
     buildType(id15E2eAuto)
+    buildType(id17BuildValidationAuto)
     buildType(id20DeployToOkdQaManual)
     buildType(id40ReleaseManual)
     buildType(id50ReleasePostProcessingAuto)
@@ -40,6 +38,7 @@ project {
     buildTypesOrder = arrayListOf(
         id10CompileUtAuto,
         id15E2eAuto,
+        id17BuildValidationAuto,
         id20DeployToOkdQaManual,
         id25DeployToOkdProdManualTemp,
         id40ReleaseManual,
@@ -49,18 +48,6 @@ project {
         WLValidation
     )
 }
-
-object OctopusComponentsManagementPortalVcs : GitVcsRoot({
-    id("OctopusComponentsManagementPortalVcs")
-    name = "octopus-components-management-portal"
-    url = "https://github.com/octopusden/octopus-components-management-portal.git"
-    branch = "refs/heads/main"
-    branchSpec = "+:refs/heads/*"
-    authMethod = password {
-        userName = "%github.user%"
-        password = "%github.token%"
-    }
-})
 
 object id10CompileUtAuto : BuildType({
     templates(AbsoluteId("Octopus_OctopusGradleBuild"))
@@ -112,7 +99,7 @@ object id10CompileUtAuto : BuildType({
 object id15E2eAuto : BuildType({
     templates(AbsoluteId("Octopus_OctopusGradleBuild"))
     id("15E2eAuto")
-    name = "[1.5] E2E [AUTO]"
+    name = "[2.0] E2E [AUTO]"
 
     // Pattern follows id20ftAuto in other Octopus projects: BUILD_VERSION
     // pulls the upstream Compile&UT number, buildNumberPattern renders
@@ -197,10 +184,38 @@ object id15E2eAuto : BuildType({
     }
 })
 
+object id17BuildValidationAuto : BuildType({
+    templates(AbsoluteId("RDDepartment_PostGithubStatus"))
+    id("17BuildValidationAuto")
+    name = "[3.0] Build Validation [AUTO]"
+
+    triggers {
+         finishBuildTrigger {
+            id = "TRIGGER_BUILD_VALIDATION_AFTER_E2E"
+            buildType = "${id15E2eAuto.id}"
+            successfulOnly = false
+            branchFilter = "+:*"
+        }
+    }
+
+    dependencies {
+        // reuseBuilds = ANY: reuse the id10/id15 builds from the chain that just
+        // finished — regardless of status — instead of starting fresh ones.
+        snapshot(id10CompileUtAuto) {
+            onDependencyFailure = FailureAction.ADD_PROBLEM
+            reuseBuilds = ReuseBuilds.ANY
+        }
+        snapshot(id15E2eAuto) {
+            onDependencyFailure = FailureAction.ADD_PROBLEM
+            reuseBuilds = ReuseBuilds.ANY
+        }
+    }
+})
+
 object id20DeployToOkdQaManual : BuildType({
     templates(AbsoluteId("RnDProcessesAutomation_IdpComponentOkdDeploy"))
     id("20DeployToOkdQaManual")
-    name = "[2.0] Deploy to OKD QA [MANUAL]"
+    name = "[4.0] Deploy to OKD QA [MANUAL]"
 
     params {
         text("OKD_SERVER_URL", "%OKD_SERVER_DEV_URL%", allowEmpty = false)
@@ -221,7 +236,7 @@ object id20DeployToOkdQaManual : BuildType({
 object id25DeployToOkdProdManualTemp : BuildType({
     templates(AbsoluteId("RnDProcessesAutomation_IdpComponentOkdDeploy"))
     id("25DeployToOkdProdManualTemp")
-    name = "[2.5] Deploy to OKD PROD [MANUAL][TEMP]"
+    name = "[5.0] Deploy to OKD PROD [MANUAL][TEMP]"
 
     params {
         text("OKD_SERVER_URL", "%OKD_SERVER_PROD_URL%", allowEmpty = false)
@@ -243,7 +258,7 @@ object id25DeployToOkdProdManualTemp : BuildType({
 object id40ReleaseManual : BuildType({
     templates(AbsoluteId("Octopus_OctopusComponents_OctopusRelease"))
     id("40ReleaseManual")
-    name = "[3.0] Release [MANUAL]"
+    name = "[6.0] Release [MANUAL]"
 
     params {
         param("PROJECT_VERSION", "${id10CompileUtAuto.depParamRefs["PROJECT_VERSION"]}")
@@ -255,7 +270,7 @@ object id40ReleaseManual : BuildType({
         snapshot(id20DeployToOkdQaManual) {
             onDependencyFailure = FailureAction.FAIL_TO_START
         }
-        // E2E is a release blocker: release can only cut when [1.5] E2E passed for
+        // E2E is a release blocker: release can only cut when [2.0] E2E passed for
         // the SAME source revision. id15 and id20 both snapshot id10, so TeamCity
         // pins all three to one id10 build — release params still come from id10,
         // id15 only gates (it is not a source of release parameters).
@@ -268,7 +283,7 @@ object id40ReleaseManual : BuildType({
 object id50ReleasePostProcessingAuto : BuildType({
     templates(AbsoluteId("Octopus_OctopusComponents_HOctopusTest_OctopusReleasePostProcessing"))
     id("50ReleasePostProcessingAuto")
-    name = "[4.0] Release Post Processing [AUTO]"
+    name = "[7.0] Release Post Processing [AUTO]"
     // LAST_RELEASE_VERSION is inherited from the project level; do NOT redeclare it
     // here (`LAST_RELEASE_VERSION = %LAST_RELEASE_VERSION%` is a circular
     // self-reference).
@@ -285,7 +300,7 @@ object id50ReleasePostProcessingAuto : BuildType({
 object id50DeployToOkdQaAuto : BuildType({
     templates(AbsoluteId("RnDProcessesAutomation_IdpComponentOkdDeploy"))
     id("50DeployToOkdQaAuto")
-    name = "[5.0] Deploy to OKD QA [AUTO]"
+    name = "[8.0] Deploy to OKD QA [AUTO]"
 
     params {
         text("OKD_SERVER_URL", "%OKD_SERVER_DEV_URL%", allowEmpty = false)
@@ -314,7 +329,7 @@ object id50DeployToOkdQaAuto : BuildType({
 object id70DeployToOkdProdManual : BuildType({
     templates(AbsoluteId("RnDProcessesAutomation_IdpComponentOkdDeploy"))
     id("70DeployToOkdProdManual")
-    name = "[6.0] Deploy to OKD PROD [MANUAL]"
+    name = "[9.0] Deploy to OKD PROD [MANUAL]"
 
     params {
         param("TEAMCITY_UPDATE_PROJECT_IDS", "RDDepartment")

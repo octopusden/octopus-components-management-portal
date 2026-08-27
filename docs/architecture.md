@@ -1,10 +1,10 @@
 # Portal Architecture
 
-> **Canonical decision:** CRS [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/012-portal-architecture.md). This document describes how Portal implements its side of that contract — what files and which choices, with pointers into the source.
+> **Canonical decision:** CRS [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/main/docs/registry/adr/012-portal-architecture.md). This document describes how Portal implements its side of that contract — what files and which choices, with pointers into the source.
 
 ## Why this repo exists
 
-The Portal lives in its own repository because the UI was extracted from CRS in April 2026. Previously the React/Vite SPA lived as the `components-registry-ui/` Gradle module inside the CRS repo; in PR #147 (commit `26278f29`) the module was deleted from CRS and the UI moved here, with a Spring Cloud Gateway BFF in front. The reversal of the earlier "single-repo, embedded JAR" recommendation is explained in CRS [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/012-portal-architecture.md), which is the canonical decision record; CRS [ADR-009](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/009-ui-repository-strategy.md) (Superseded) carries the pre-reversal analysis.
+The Portal lives in its own repository because the UI was extracted from CRS in April 2026. Previously the React/Vite SPA lived as the `components-registry-ui/` Gradle module inside the CRS repo; in PR #147 (commit `26278f29`) the module was deleted from CRS and the UI moved here, with a Spring Cloud Gateway BFF in front. The reversal of the earlier "single-repo, embedded JAR" recommendation is explained in CRS [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/main/docs/registry/adr/012-portal-architecture.md), which is the canonical decision record; CRS [ADR-009](https://github.com/octopusden/octopus-components-registry-service/blob/main/docs/registry/adr/009-ui-repository-strategy.md) (Superseded) carries the pre-reversal analysis.
 
 ## Request flow
 
@@ -140,7 +140,7 @@ The P1 UI features rely on these CRS endpoints (all behind the `/rest/**` proxy 
 | `GET /audit/recent?changedBy=&source=&action=&from=&to=` | Audit-log filter sidebar (B7.1.3) | `SYS-036` |
 | `GET /rest/api/2/common/supported-groups` | Create Component dialog: allowed groupId prefixes (auto-suggest + validation gate) | existing CRS v2 endpoint; lives outside `/rest/api/4`, reached via `apiAbsolute` helper |
 
-When a new endpoint is consumed, **add a row here** so the boundary stays reviewable. Cross-repo links between living indexes (this `architecture.md` and CRS docs) may use the active branch (`v3` for CRS, `develop` for Portal) per [`DOCS.md`](../DOCS.md) authoring rule #5.
+When a new endpoint is consumed, **add a row here** so the boundary stays reviewable. Cross-repo links between living indexes (this `architecture.md` and CRS docs) may use the active branch (`main` on both CRS and Portal) per [`DOCS.md`](../DOCS.md) authoring rule #5.
 
 ## Limits and known gaps
 
@@ -152,6 +152,6 @@ Resolved: prod TLS now terminates at an OKD Ingress with a shared wildcard Secre
 
 ## See also
 
-- CRS [ADR-012 — Portal architecture](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/012-portal-architecture.md) — canonical decision.
-- CRS [ADR-004 — Keycloak auth](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/004-auth-keycloak.md) — role/permission matrix on the resource-server side.
+- CRS [ADR-012 — Portal architecture](https://github.com/octopusden/octopus-components-registry-service/blob/main/docs/registry/adr/012-portal-architecture.md) — canonical decision.
+- CRS [ADR-004 — Keycloak auth](https://github.com/octopusden/octopus-components-registry-service/blob/main/docs/registry/adr/004-auth-keycloak.md) — role/permission matrix on the resource-server side.
 - [`docs/features/admin-migration.md`](features/admin-migration.md) — async migration UX, the most coupled feature.

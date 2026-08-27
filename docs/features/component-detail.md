@@ -2,7 +2,7 @@
 
 > Target users: `ACCESS_COMPONENTS` for read; per-tab gates for writes (see "Auth gating" below).
 
-The detail page at `/components/<UUID>` is the editor surface. It renders [`pages/ComponentDetailPage.tsx`](../../frontend/src/pages/ComponentDetailPage.tsx) and decomposes into tabs (General, **Solution** (conditional), **Misc**, Build, VCS, **Documentation**, Distribution, Jira, Escrow, **Supported Versions**, Configurations, As Code, Overrides, History). The page-level form lives once and General / Solution / Documentation / Misc all share its state via `react-hook-form`. The `Tabs` are controlled so a server 400 on a field that lives on a non-active tab auto-switches to the owning tab (`sectionForField`, incl. `docs → documentation`).
+The detail page at `/components/<UUID>` is the editor surface. It renders [`pages/ComponentDetailPage.tsx`](../../frontend/src/pages/ComponentDetailPage.tsx) and decomposes into tabs (General, **Solution** (conditional), **Misc**, Build, VCS, **Documentation**, Distribution, Jira, Escrow, **Supported Versions**, Configurations, As Code, Overrides, History, and an admin-only **Validations** group — TeamCity, Unregistered Release). The page-level form lives once and General / Solution / Documentation / Misc all share its state via `react-hook-form`. The `Tabs` are controlled so a server 400 on a field that lives on a non-active tab auto-switches to the owning tab (`sectionForField`, incl. `docs → documentation`).
 
 **Labels** are edited in the page **header** (badges + a popover [`HeaderLabelsEditor`](../../frontend/src/components/editor/HeaderLabelsEditor.tsx)), not on General. A component with `solution = true` is flagged in the header (a prominent badge + an info `StatusBanner`).
 
@@ -18,20 +18,38 @@ The detail page at `/components/<UUID>` is the editor surface. It renders [`page
 | **Solution** | `SolutionTab` | Conditional topic (Overview group) — rendered **only** when the component key matches a service-config solution pattern (`isSolutionCandidate`, `/portal/config`) **and** `component.solution` field-config isn't `hidden`. A single `solution` toggle; `readonly` field-config disables it, and `buildUpdateRequest` omits `solution` when hidden/readonly (defense-in-depth). Shares the page form. |
 | **Documentation** | `DocumentationTab` | Doc-links editor moved off General (Build & Release group). `{ docComponentKey, majorVersion? }` rows backed by `component_doc_links`; a CRS `docs` 400 auto-switches here. Shares the page form. |
 | **Misc** | `MiscTab` | Parent Component, Can-be-parent, and the read-only Group Key / synthetic-group display — moved off General. Shares the page form; the header Save covers it. `MISC_TAB_FIELDS` lets the 400 handler auto-switch here when a parent/canBeParent error returns. |
-| **Build / VCS / Distribution / Jira / Escrow** | `BuildTab` etc. | Per-tab Save buttons; each tab handles its own mutation slice via the page-level `updateMutation`. Build's **Java / Maven Version** are dropdowns sourced from `GET /meta/{java,maven}-versions` (CRS `application.yml`, per-install overridable). Jira's **Display Name** is shown only when it diverges from the component display name. Mostly out of scope for this doc. |
-| **Supported Versions** | `SupportedVersionsTab` | Coverage editor — the decoupled-version-model layer 1 (CRS [ADR-018](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/018-decoupled-version-model.md)), independent of per-attribute overrides. Reads `GET /{id}/supported-versions` → `{all, ranges, warnings}`; `all` ⇒ every version is defined, else `supported = ∪ ranges` (a version outside resolves to 404). Add-range / remove / "Set to all versions" each **declaratively PUT the full desired set** (instant save, no page-level Save bar) and the server returns the **merged** coverage (overlapping/contiguous ranges collapse; a set tiling all-versions becomes `all`) + non-blocking V1/V5 `warnings` (an override left outside supported). `useUpdateSupportedVersions` seeds the cache with the PUT response before invalidating, so back-to-back edits don't replace from stale data. Detailed below. |
+| **Build / VCS / Distribution / Jira / Escrow** | `BuildTab` etc. | Per-tab Save buttons; each tab handles its own mutation slice via the page-level `updateMutation`. Build's **Java / Maven Version** are dropdowns sourced from `GET /meta/{java,maven}-versions` (CRS `application.yml`, per-install overridable), alongside RMS's read-only registered ("ACTUAL") value per range — detailed below. Jira's **Display Name** is shown only when it diverges from the component display name. Mostly out of scope for this doc otherwise. |
+| **Supported Versions** | `SupportedVersionsTab` | Coverage editor — the decoupled-version-model layer 1 (CRS [ADR-018](https://github.com/octopusden/octopus-components-registry-service/blob/main/docs/registry/adr/018-decoupled-version-model.md)), independent of per-attribute overrides. Reads `GET /{id}/supported-versions` → `{all, ranges, warnings}`; `all` ⇒ every version is defined, else `supported = ∪ ranges` (a version outside resolves to 404). Add-range / remove / "Set to all versions" each **declaratively PUT the full desired set** (instant save, no page-level Save bar) and the server returns the **merged** coverage (overlapping/contiguous ranges collapse; a set tiling all-versions becomes `all`) + non-blocking V1/V5 `warnings` (an override left outside supported). `useUpdateSupportedVersions` seeds the cache with the PUT response before invalidating, so back-to-back edits don't replace from stale data. Detailed below. |
 | **Overrides** | `FieldOverrides` | Per-version field overrides. **Open-upper ranges (`[2.0,)`) are now first-class** (ADR-018; `isAllowedOverrideRange` rejects only the all-versions sentinel — that is the base default). Out of scope otherwise. |
 | **History** | `ComponentHistoryTab` (B7.1.2) | New in P1; detailed below. |
+| **TeamCity / Unregistered Release** (Validations group) | `TeamCityValidationsTab`, `ValidationProblemsList` | Admin-only (`isAdmin` = adminMode + `IMPORT_DATA`); the whole group is hidden for regular users. Detailed below. |
 
 ## Supported versions (coverage) tab
 
-The decoupled version model (CRS [ADR-018](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/018-decoupled-version-model.md)) splits a component's config into two independent layers: **coverage** ("supported versions") and **per-attribute overrides**. This tab edits layer 1; the Overrides tab + inline editors edit layer 2.
+The decoupled version model (CRS [ADR-018](https://github.com/octopusden/octopus-components-registry-service/blob/main/docs/registry/adr/018-decoupled-version-model.md)) splits a component's config into two independent layers: **coverage** ("supported versions") and **per-attribute overrides**. This tab edits layer 1; the Overrides tab + inline editors edit layer 2.
 
 - **Read:** `useSupportedVersions` → `GET /{id}/supported-versions` → `{ all, ranges, warnings }`. `all = true` renders "All versions" (no bounded coverage rows); otherwise the bounded `ranges` are listed in numeric order (`compareVersionRanges`).
 - **Write (declarative, instant):** there is **no page-level Save** — add-range, remove, and "Set to all versions" each compute the full desired set and `PUT` it via `useUpdateSupportedVersions`. The server stores the set **merged** (overlapping/contiguous ranges collapse into maximal segments; a set tiling all-versions becomes `all`) and returns that merged coverage plus non-blocking `warnings` (V1/V5 — an override left entirely outside supported never resolves). Coverage is **decoupled** from overrides — it never reshapes them (no write-time auto-split) — but it does change which enumerated range **views** resolve (the read-time partition), so the mutation seeds the cache with the response before invalidating and also invalidates `field-overrides` + `component`.
 - **Client validation:** the add input gates on `isAllowedOverrideRange` (valid syntax, not an all-versions shape incl. a `(,)` segment inside a composite). Overlapping/adjacent ranges are **allowed** — the server merges them (no disjoint requirement); only the all-versions sentinel is rejected (use "Set to all versions"). Editing is gated by component ownership (`canEdit`); read-only otherwise.
 - **Relation to Overrides:** open-upper override ranges (`[2.0,)`) are now first-class on the Overrides tab; "extend coverage to ≥2 and default it to value X" is two edits — extend supported here, add an open-upper override there.
-- **Version lifecycle (future teaser).** A read-only, non-interactive "coming soon" block sits at the bottom of the tab showing the planned lifecycle states (Active development / On maintenance / Archived). It is the structural home for the deferred lifecycle layer (CRS [ADR-018](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/018-decoupled-version-model.md)); not yet wired to any state.
+- **Version lifecycle (future teaser).** A read-only, non-interactive "coming soon" block sits at the bottom of the tab showing the planned lifecycle states (Active development / On maintenance / Archived). It is the structural home for the deferred lifecycle layer (CRS [ADR-018](https://github.com/octopusden/octopus-components-registry-service/blob/main/docs/registry/adr/018-decoupled-version-model.md)); not yet wired to any state.
+
+## Build tab — registered build parameters (ACTUAL)
+
+CRS's `registered-build-parameters` spec (`openspec/specs/registered-build-parameters/spec.md` once archived, currently `openspec/changes/registered-build-parameters-display/`) records what Java/Maven version RMS actually saw a component build with, per version range — the **ACTUAL** value — read-only alongside the configured `javaVersion`/`mavenVersion` (DEFAULT/OVERRIDDEN) fields already on this tab.
+
+- **Read:** `ComponentDetail.registeredBuildParameters` (`{ javaActualRanges, javaWarnings, mavenActualRanges, mavenWarnings, actualDataUnavailable }`), attached to the same detail response — no separate fetch. `null` for a component CRS doesn't track this for (archived, not Maven/Gradle, or RMS integration disabled server-side); Portal renders nothing extra in that case.
+- **Ranges** ([`ActualBuildParameters.tsx`](../../frontend/src/components/editor/ActualBuildParameters.tsx)) render read-only under each of `javaVersion`/`mavenVersion`'s `FieldOverrideInline` — no add/edit/delete control, and no effect on the editability of the configured value.
+- **Disagreements** (`javaWarnings`/`mavenWarnings`) collapse into **one summary per attribute** ("N ranges differ from the registered version"), expandable on demand, rather than a badge per configured row. CRS pairs every configured row against every ACTUAL range, so the DEFAULT row is compared against all of them — a per-row badge would mark most long-lived, multi-Java-version components as permanently broken. Entries are de-duplicated on `(subRange, actualValue)` before counting (`dedupeActualDisagreements`, `lib/registeredBuildParameters.ts`) since CRS can report the same disagreement from two different configured rows.
+- **`actualDataUnavailable`** renders as its own alert (amber, `role="alert"`) — "we couldn't check", distinct in wording and styling from a disagreement (destructive, "we checked and it disagrees"). Never both at once.
+- **No client-side edit lock.** Displaying ACTUAL — including a disagreement — never disables the configured `javaVersion`/`mavenVersion` controls, and never gates the page Save button. CRS's write-time gate (below) is the only enforcement point.
+
+### Save-time RMS conflict / unavailable
+
+Saving `build.javaVersion`/`build.mavenVersion` goes through CRS's write-time ACTUAL gate, which can reject the whole combined `PATCH`:
+
+- **`409 RMS_REGISTERED_VALUE_CONFLICT`** — the new value disagrees with a non-null ACTUAL value. Classified as its own `kind: 'rms'` in [`useOptimisticConflict.ts`](../../frontend/src/hooks/useOptimisticConflict.ts) — deliberately not `'value'`, so this never risks being misrouted by the Jira-pair message-text heuristic that `'value'` conflicts go through. The Review dialog closes, the Build tab shows the message inline (`BuildTab`'s `conflictError` → `StatusBanner`), and the toast states plainly that nothing was saved (CRS applies the whole PATCH in one transaction). Portal then fires a best-effort `refetchQueries(['component', id])` *after* the message is shown — never awaited, so a slow or failed refetch can't delay or mask it — since CRS refreshed its own cached ACTUAL data for this component at the moment it rejected the write.
+- **`503` with `errorCode: 'RMS_UNAVAILABLE'`** — the live RMS check was unreachable, timed out, or was ambiguous, so CRS failed closed. Shown as a distinct "Registered build data unavailable" toast rather than the generic "Save failed"; any other `503` (or one with a different/no `errorCode`) falls through to that generic path unchanged.
 
 ## General tab
 
@@ -88,11 +106,19 @@ If any of these fields is always sent, a non-admin's plain edit (only `displayNa
 
 With CRS schema v2 (`component_configurations` as the wide row), component child collections are edited from the page-level form:
 
-- **TeamCity projects** — `projectId` rows backed by the `component_teamcity_projects` child table. Sort order is preserved (server sorts by `sort_order`); the header exposes them as read-only quick links.
+- **TeamCity projects** — `projectId` rows backed by the `component_teamcity_projects` child table. Sort order is preserved (server sorts by `sort_order`); the header exposes them as read-only quick links. Below the header, a project list renders each project's TeamCity validation status (see "Validations" below).
 - **Doc links** — `{ docComponentKey: string, majorVersion?: string | null }` rows backed by `component_doc_links`. Identifies the documentation source by component key and (optionally) the major version it documents (e.g. `3.x`); the editor maps a blank input to `null` on save. **Moved to the dedicated Documentation topic** ([`DocumentationTab`](../../frontend/src/components/editor/DocumentationTab.tsx)); it still shares the page form and saves in the same PATCH.
 - **Artifact IDs** — `{ groupPattern: string, artifactPattern: string }` rows backed by `component_artifact_ids`. Order preserved; primary use is fuzzy-match by build artifact identifier in downstream Feign consumers. Edited from General via [`ArtifactOwnershipEditor`](../../frontend/src/components/editor/ArtifactOwnershipEditor.tsx).
 
 The editable collections share the page-level `react-hook-form` state; the page Save bar sends them together with scalar General fields in one PATCH.
+
+## Validations (admin-only)
+
+An admin-only, read-only sidebar group with two items — **TeamCity** and **Unregistered Release** — both hidden for regular users (`isAdmin` = adminMode + `IMPORT_DATA`; see [`admin-mode.md`](admin-mode.md)). This mirrors the registry-wide [Validations page](../../frontend/src/pages/ValidationsPage.tsx), scoped to one component.
+
+- **TeamCity findings**, per project, from the header's project status list (checkmark/warning icon + issue count, admin-only) and `TeamCityValidationsTab`. Findings render via [`TeamCityMessage`](../../frontend/src/components/TeamCityMessage.tsx) — `\n`-separated lines, with `- STEP_ID in BUILD_CONF_ID` / `- BUILD_CONF_ID` lines turned into bulleted, linked TeamCity admin URLs.
+- **Unregistered Release** findings via `ValidationProblemsList` (the pre-existing registered-version validation facility). Empty state ("No unregister release for this component.") when the component has no findings — the tab is always present for an admin, not conditionally hidden.
+- Each sidebar item shows a red/warning treatment with a count badge when it has findings (`EditorSidebarNav`'s `problemCount`), independent of the other item — a component can show a warning on one, both, or neither.
 
 ### Release Managers / Security Champions (SYS-039 — multi-value)
 
@@ -111,12 +137,14 @@ The editable collections share the page-level `react-hook-form` state; the page 
 
 ### Optimistic-locking conflict UX (B7.1.6)
 
-On `409 Conflict`:
-1. `queryClient.refetchQueries({ queryKey: ['component', id], type: 'active' })` is awaited so the cache lands the post-conflict state. Note: `refetchQueries`, **not** `invalidateQueries` — the latter resolves once the cache marker is set, not after the network round-trip, so `getQueryData` would still see the user's stale snapshot. See the inline comment at `ComponentDetailPage.tsx:110-121` for the rationale; future "simplifications" back to `invalidate` are wrong.
+For an optimistic-lock `409 Conflict`, this flow now lives in [`useOptimisticConflict.ts`](../../frontend/src/hooks/useOptimisticConflict.ts)
+1. `queryClient.refetchQueries({ queryKey: ['component', id], type: 'active' })` is awaited so the cache lands the post-conflict state. Note: `refetchQueries`, **not** `invalidateQueries` — the latter resolves once the cache marker is set, not after the network round-trip, so `getQueryData` would still see the user's stale snapshot. See the inline comment at the top of `useOptimisticConflict.ts` for the rationale; future "simplifications" back to `invalidate` are wrong.
 2. The post-refetch `ComponentDetail` is fed to [`describeOptimisticConflict`](../../frontend/src/lib/conflict.ts), which builds a toast that names *what* and *when* (using the freshly-loaded `updatedAt`). When the cache fetch hasn't landed yet (rare in practice), the helper degrades to a "updated by another user" message rather than inventing data.
 3. Toast is `variant: 'destructive'` — colour matches the prior failure UX so the user sees something went wrong without reading the title.
 
 This is the lighter path Plan §7.1.6 explicitly allowed. The full ConflictResolutionDialog with field-level diff and merge actions is deferred to B7.2.
+
+All three persistent conflict banners (the Review-dialog `reviewError`, the Jira-tab `jiraConflict`, and the Build-tab `buildConflict`) are cleared not only at the start of the next save but also when the page navigates to a different component without remounting — the same id-change effect that re-hydrates the General/Misc form (`ComponentDetailPage.tsx`). Without this, a conflict raised on one component could otherwise still be showing after navigating to another.
 
 ## Auth gating
 
@@ -146,6 +174,6 @@ When the user navigates `/components/A → /components/B`, React Router can reus
 
 ## Related
 
-- CRS [`ADR-004`](https://github.com/octopusden/octopus-components-registry-service/blob/v3/docs/registry/adr/004-auth-keycloak.md) — role / permission matrix.
+- CRS [`ADR-004`](https://github.com/octopusden/octopus-components-registry-service/blob/main/docs/registry/adr/004-auth-keycloak.md) — role / permission matrix.
 - CRS technical-design `§6.3` `PermissionEvaluator` — method → permission table.
 - [`docs/features/audit-log.md`](audit-log.md) — what's behind the History tab.

@@ -1,6 +1,7 @@
 import { useParams, useNavigate, Link } from 'react-router'
+import { useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
-import { ArrowLeft, Copy, Trash2, AlertTriangle, LockKeyhole, Boxes } from 'lucide-react'
+import { ArrowLeft, Copy, Trash2, AlertTriangle, LockKeyhole, Boxes, CircleCheck, CircleDashed } from 'lucide-react'
 import { JiraIcon, BitbucketIcon, TeamCityIcon } from '../components/ui/icons/brand-icons'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Layout } from '../components/Layout'
@@ -57,10 +58,13 @@ import { AsCodeTab } from '../components/editor/AsCodeTab'
 import { ComponentHistoryTab } from '../components/editor/ComponentHistoryTab'
 import { EditorSidebarNav, type EditorNavSection } from '../components/editor/EditorSidebarNav'
 import { ValidationProblemsList } from '../components/ValidationProblemsList'
+import { TeamCityValidationsTab } from '../components/TeamCityValidationsTab'
+import { EmptyState } from '../components/ui/empty-state'
 import { useComponent, useUpdateComponent, useDeleteComponent, useFieldOverrides } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
 import { ApiError } from '../lib/api'
 import { useOptimisticConflict } from '../hooks/useOptimisticConflict'
+import { classifyConflictBody } from '../lib/conflict'
 import type { ComponentDetail } from '../lib/types'
 import { countOwnershipIssues, fromArtifactId } from '../lib/artifactOwnership'
 import { findUnsupportedGroupId } from '../lib/groupValidation'
@@ -76,7 +80,9 @@ import { parseServerFieldErrors } from '../lib/serverErrors'
 import { usePortalLinks, usePortalConfig } from '../hooks/useInfo'
 import { useLabelsDictionary } from '../hooks/useLabelsDictionary'
 import { isSolutionCandidate } from '../lib/solutionKey'
-import { safeHttpUrl } from '../lib/utils'
+import { cn, safeHttpUrl } from '../lib/utils'
+import { Tooltip, TooltipTrigger, TooltipContent } from '../components/ui/tooltip'
+import { getTeamCityValidationStatusTone } from '../lib/teamcityValidationTypes'
 import { useValidationProblems } from '../hooks/useValidationProblems'
 import { allProblemVersions, hasValidationIssue, validationBadgeCount } from '../lib/validation'
 import { copyToClipboard } from '../lib/clipboard'
@@ -165,6 +171,7 @@ function ComponentDetailEditor() {
   const navigate = useNavigate()
   const { toast } = useToast()
   const handleConflict = useOptimisticConflict(id)
+  const queryClient = useQueryClient()
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
   // Persistent save-time conflict message shown in the Review dialog (value 409s
@@ -173,6 +180,10 @@ function ComponentDetailEditor() {
   // Inline (projectKey, versionPrefix) uniqueness-conflict shown under the Jira
   // Project Key field after a value-409 on a save that changed the jira pair.
   const [jiraConflict, setJiraConflict] = useState<string | null>(null)
+  // Inline RMS_REGISTERED_VALUE_CONFLICT banner shown at the top of the Build
+  // tab — CRS's message doesn't say which field (Java/Maven) conflicted, so
+  // this isn't attached to one field the way jiraConflict is.
+  const [buildConflict, setBuildConflict] = useState<string | null>(null)
   // Controlled tab so a server 400 on a field that lives on a non-active tab can
   // auto-switch to the owning tab (otherwise the inline error renders on a hidden tab).
   const [activeTab, setActiveTab] = useState('general')
@@ -193,11 +204,21 @@ function ComponentDetailEditor() {
   const hasProblems =
     isAdmin && componentValidation != null && hasValidationIssue(componentValidation)
 
+  // Rolled up across all TeamCity projects — drives the sidebar item's
+  // red/warning treatment. Admin-only, derived from data already on `component`.
+  const teamCityIssueCount = isAdmin
+    ? (component?.teamcityProjects ?? []).reduce((total, tc) => {
+        const tones = (tc.validations ?? []).map((v) => getTeamCityValidationStatusTone(v.status))
+        return total + tones.filter((t) => t === 'destructive' || t === 'warning').length
+      }, 0)
+    : 0
+
   useEffect(() => {
-    if (activeTab === 'validation-problems' && !hasProblems) {
+    // Whole Validations section (TeamCity + Unregistered Release) is admin-only.
+    if (!isAdmin && (activeTab === 'teamcity-validations' || activeTab === 'unregistered-release')) {
       setActiveTab('general')
     }
-  }, [activeTab, hasProblems])
+  }, [activeTab, isAdmin])
 
   const canArchive = hasPermission(user, PERMISSIONS.DELETE_COMPONENTS)
   const canUnarchive = hasPermission(user, PERMISSIONS.ARCHIVE_COMPONENTS)
@@ -311,6 +332,12 @@ function ComponentDetailEditor() {
     if (prevId === null) return // first load — GeneralTab hydrates on mount
     form.reset(mapComponentToForm(component))
     form.clearErrors()
+    // A conflict banner belongs to the component that was being saved when it
+    // fired — carrying it across a same-instance A→B navigation would render
+    // component A's error on component B's page.
+    setReviewError(null)
+    setJiraConflict(null)
+    setBuildConflict(null)
     // `form` is a stable RHF ref (never changes identity); listed for
     // exhaustive-deps lint only — the id ref-compare is the real gate.
   }, [component, form])
@@ -488,6 +515,7 @@ function ComponentDetailEditor() {
     // Clear any prior conflict banner / inline jira conflict so a retry starts clean.
     setReviewError(null)
     setJiraConflict(null)
+    setBuildConflict(null)
 
     // Build System is REQUIRED (P1-3). Clearing it would PATCH null = a CRS
     // no-op, so block and surface the Build section's inline required error.
@@ -578,6 +606,19 @@ function ComponentDetailEditor() {
       const conflict = await handleConflict(err)
       if (conflict) {
         toast({ title: conflict.title, description: conflict.description, variant: 'destructive' })
+        if (conflict.kind === 'rms') {
+          // The conflicting field (Java or Maven) isn't named in CRS's message, but both
+          // live on the Build tab, so route there unconditionally (design.md Decision 5).
+          setBuildConflict(conflict.description)
+          setActiveTab('build')
+          setReviewOpen(false)
+          // CRS refreshed its cached ACTUAL data for this component at the moment it
+          // rejected the write; refetch so the display can catch up. Fired after the
+          // toast, never awaited — a slow or failed refetch must not delay or mask the
+          // conflict message (design.md Decision 6). Best-effort: swallow a rejection.
+          void queryClient.refetchQueries({ queryKey: ['component', id ?? ''], type: 'active' }).catch(() => {})
+          return
+        }
         if (conflict.kind === 'value') {
           // Attribute a value-409 to the Jira (projectKey, versionPrefix) pair
           // ONLY when this save changed either AND the server message is about
@@ -644,6 +685,22 @@ function ComponentDetailEditor() {
           // we switch to the owning section AND fall through to the toast below
           // — the toast is their only error surface.
           if (anyFieldMapped) return
+        }
+      }
+      // CRS's write-time RMS gate fails closed with a 503 when it can't reach RMS.
+      // Decided by errorCode alone — never by re-checking which field the save
+      // touched (CRS's gate already implies that; see design.md Decision 5).
+      if (err instanceof ApiError && err.status === 503) {
+        const { errorCode } = classifyConflictBody(err.rawBody)
+        if (errorCode === 'RMS_UNAVAILABLE') {
+          setReviewOpen(false)
+          toast({
+            title: 'Registered build data unavailable',
+            description:
+              'The registered build data could not be reached, so this save could not be checked against it. Try again shortly.',
+            variant: 'destructive',
+          })
+          return
         }
       }
       setReviewOpen(false)
@@ -821,22 +878,6 @@ function ComponentDetailEditor() {
                   </a>
                 )
               })()}
-              {(component.teamcityProjects ?? [])
-                .map((tc) => ({ tc, url: safeHttpUrl(tc.projectUrl ?? null) }))
-                .filter((x) => x.url)
-                .map(({ tc, url }) => (
-                  <a
-                    key={tc.id}
-                    href={url!}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-sm hover:opacity-80 transition-opacity"
-                    title={`TeamCity: ${tc.projectId}`}
-                    aria-label={`TeamCity: ${tc.projectId}`}
-                  >
-                    <TeamCityIcon className="h-4 w-4" />
-                  </a>
-                ))}
             </div>
             {/* Subline (spec §2.3/§2.5): Owner · Version · Updated <date> [by <user>] · Profile N% */}
             <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm text-muted-foreground">
@@ -909,6 +950,87 @@ function ComponentDetailEditor() {
           </div>
         </div>
 
+        {(component.teamcityProjects ?? []).length > 0 && (
+          <div className="rounded-md border divide-y" data-testid="teamcity-projects-list">
+            {component.teamcityProjects.map((tc) => {
+              const url = safeHttpUrl(tc.projectUrl ?? null)
+              const validations = tc.validations ?? []
+              const tones = validations.map((v) => getTeamCityValidationStatusTone(v.status))
+              const hasError = tones.includes('destructive')
+              const hasWarning = tones.includes('warning')
+              const issueCount = tones.filter((t) => t === 'destructive' || t === 'warning').length
+              const noRecordedFindings = validations.length === 0
+              const allClean = !noRecordedFindings && issueCount === 0
+              return (
+                <div key={tc.id} className="flex items-center gap-2 px-3 py-2 text-sm">
+                  {/* Status icon is admin-only; a regular user just sees the project links. */}
+                  {isAdmin &&
+                    (noRecordedFindings ? (
+                      <CircleDashed
+                        className="h-4 w-4 shrink-0 text-muted-foreground"
+                        aria-label="No validation findings on record"
+                      />
+                    ) : allClean ? (
+                      <CircleCheck
+                        className="h-4 w-4 shrink-0 text-[color:var(--color-badge-green-fg)]"
+                        aria-label="No validation issues"
+                      />
+                    ) : (
+                      <AlertTriangle
+                        className={cn(
+                          'h-4 w-4 shrink-0',
+                          hasError
+                            ? 'text-destructive'
+                            : hasWarning
+                              ? 'text-[color:var(--color-badge-yellow-fg)]'
+                              : 'text-muted-foreground',
+                        )}
+                        aria-label={`${issueCount} validation ${issueCount === 1 ? 'issue' : 'issues'}`}
+                      />
+                    ))}
+                  {url ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={`TeamCity: ${tc.projectId}`}
+                          aria-label={`TeamCity: ${tc.projectId}`}
+                          className="inline-flex min-w-0 items-center gap-1.5 font-medium text-primary hover:underline"
+                        >
+                          <TeamCityIcon className="h-4 w-4 shrink-0" />
+                          <span className="truncate">{tc.projectId}</span>
+                        </a>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs break-all">{url}</TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    <span className="inline-flex min-w-0 items-center gap-1.5">
+                      <TeamCityIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="font-medium truncate">{tc.projectId}</span>
+                    </span>
+                  )}
+                  {tc.projectVersion && (
+                    <Badge variant="secondary" className="text-xs font-mono shrink-0">
+                      {tc.projectVersion}
+                    </Badge>
+                  )}
+                  {isAdmin && (
+                    <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                      {noRecordedFindings
+                        ? 'no recorded findings'
+                        : allClean
+                          ? 'no issues'
+                          : `${issueCount} issue${issueCount === 1 ? '' : 's'}`}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+
         {component.solution && (
           <StatusBanner variant="info" className="flex items-center gap-2" data-testid="solution-banner">
             <Boxes className="h-4 w-4 shrink-0" aria-hidden />
@@ -979,18 +1101,31 @@ function ComponentDetailEditor() {
                   { value: 'history', label: 'History' },
                 ],
               },
+              // Validations section is admin-only, hidden for regular users.
+              ...(isAdmin
+                ? [
+                    {
+                      label: 'Validations',
+                      items: [
+                        {
+                          value: 'teamcity-validations',
+                          label: 'TeamCity',
+                          problemCount: teamCityIssueCount,
+                        },
+                        {
+                          value: 'unregistered-release',
+                          label: 'Unregistered Release',
+                          problemCount:
+                            hasProblems && componentValidation
+                              ? validationBadgeCount(componentValidation)
+                              : 0,
+                        },
+                      ],
+                    },
+                  ]
+                : []),
             ]
-            const problems =
-              hasProblems && componentValidation
-                ? {
-                    value: 'validation-problems',
-                    label: 'Validation Problems',
-                    count: validationBadgeCount(componentValidation),
-                  }
-                : null
-            return (
-              <EditorSidebarNav sections={sections} problems={problems} activeValue={activeTab} />
-            )
+            return <EditorSidebarNav sections={sections} activeValue={activeTab} />
           })()}
 
           <div className="min-w-0 flex-1 rounded-lg border bg-card p-4 sm:p-6">
@@ -1023,7 +1158,7 @@ function ComponentDetailEditor() {
             <TabsContent value="build">
               <EditSurface canEdit={canEdit} label="Build">
                 <div className="space-y-6">
-                  <BuildTab section={buildSection} canEdit={canEdit} />
+                  <BuildTab section={buildSection} canEdit={canEdit} conflictError={buildConflict} />
                   <ProducedArtifactsSection form={form} component={component} canEdit={canEdit} />
                 </div>
               </EditSurface>
@@ -1095,8 +1230,12 @@ function ComponentDetailEditor() {
               <ComponentHistoryTab componentId={component.id} />
             </TabsContent>
 
-            {hasProblems && componentValidation && (
-              <TabsContent value="validation-problems">
+            <TabsContent value="teamcity-validations">
+              <TeamCityValidationsTab teamcityProjects={component.teamcityProjects ?? []} />
+            </TabsContent>
+
+            <TabsContent value="unregistered-release">
+              {hasProblems && componentValidation ? (
                 <div className="space-y-3">
                   <p className="text-sm text-muted-foreground">
                     Released versions checked against the registry. Admin-only.
@@ -1111,8 +1250,13 @@ function ComponentDetailEditor() {
                     </Button>
                   )}
                 </div>
-              </TabsContent>
-            )}
+              ) : (
+                <EmptyState
+                  message="No unregister release for this component."
+                  className="py-8"
+                />
+              )}
+            </TabsContent>
 
             {/* Single sticky save bar — governs the WHOLE component (one combined
                 PATCH), replacing the old per-tab Save buttons. Rendered for

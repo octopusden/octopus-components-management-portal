@@ -4,7 +4,7 @@
 // EXPLICIT) at a version range (base = all versions; override REPLACES base).
 import type { ArtifactId, ArtifactIdMode, ArtifactIdRequest } from './types'
 import { findUnsupportedGroupId } from './groupValidation'
-import { formatVersionRange } from './versionRange'
+import { compareVersionArrays, formatVersionRange, parseDotNumeric } from './versionRange'
 
 export const OWNERSHIP_ALL_VERSIONS = '(,0),[0,)'
 
@@ -178,29 +178,61 @@ export function detectIntraComponentConflicts(
   return byId
 }
 
+// null bound = unbounded; loIncl/hiIncl are meaningless when that side is null.
 interface ParsedRange {
-  lo: number
-  hi: number
+  lo: number[] | null
+  loIncl: boolean
+  hi: number[] | null
+  hiIncl: boolean
 }
 
-/** Parse a numeric maven range for the coverage timeline. Unbounded ⇒ 0 / Infinity. */
-export function parseRange(range: string | null): ParsedRange {
-  if (!range) return { lo: Number.NEGATIVE_INFINITY, hi: Number.POSITIVE_INFINITY }
-  const m = range.match(/[[(]\s*([\d.]*)\s*,\s*([\d.]*)\s*[\])]/)
-  if (!m) return { lo: Number.NEGATIVE_INFINITY, hi: Number.POSITIVE_INFINITY }
-  const lo = m[1] ?? ''
-  const hi = m[2] ?? ''
+// Splits a composite range ("[a,b),(b,c)") into its segments.
+const SEGMENT_SPLIT_RE = /(?<=[)\]])\s*,\s*(?=[[(])/
+
+/** Parses one range segment, including the no-comma exact-version form `[X]`. */
+function parseSegment(segment: string): ParsedRange {
+  const exact = segment.match(/^\[\s*([\d.]+)\s*]$/)
+  if (exact) {
+    const v = parseDotNumeric(exact[1]!)
+    if (v) return { lo: v, loIncl: true, hi: v, hiIncl: true }
+  }
+  const m = segment.match(/([[(])\s*([\d.]*)\s*,\s*([\d.]*)\s*([\])])/)
+  if (!m) return { lo: null, loIncl: false, hi: null, hiIncl: false }
+  const [, open, lo, hi, close] = m
   return {
-    lo: lo === '' ? Number.NEGATIVE_INFINITY : parseFloat(lo),
-    hi: hi === '' ? Number.POSITIVE_INFINITY : parseFloat(hi),
+    lo: lo === '' ? null : parseDotNumeric(lo!),
+    loIncl: open === '[',
+    hi: hi === '' ? null : parseDotNumeric(hi!),
+    hiIncl: close === ']',
   }
 }
 
-/** Do two override ranges overlap? Per-range ownership ranges must be disjoint. */
+/** Parse a numeric maven range for the coverage timeline, composite-aware. */
+export function parseRange(range: string | null): ParsedRange[] {
+  if (!range) return [{ lo: null, loIncl: false, hi: null, hiIncl: false }]
+  return range.split(SEGMENT_SPLIT_RE).map(parseSegment)
+}
+
+// Same disjoint check as versionRange.ts's classifyRangeConflict: `a` is entirely before/after `b`,
+// with a shared boundary disjoint only when it isn't inclusive on BOTH sides (else the shared
+// version belongs to both ranges, which is an overlap).
+function segmentsDisjoint(a: ParsedRange, b: ParsedRange): boolean {
+  if (a.lo !== null && b.hi !== null) {
+    const cmp = compareVersionArrays(a.lo, b.hi)
+    if (cmp > 0 || (cmp === 0 && !(a.loIncl && b.hiIncl))) return true
+  }
+  if (b.lo !== null && a.hi !== null) {
+    const cmp = compareVersionArrays(b.lo, a.hi)
+    if (cmp > 0 || (cmp === 0 && !(b.loIncl && a.hiIncl))) return true
+  }
+  return false
+}
+
+/** Do two override ranges overlap (any segment of `a` against any segment of `b`)? */
 export function rangesOverlap(a: string | null, b: string | null): boolean {
-  const ra = parseRange(a)
-  const rb = parseRange(b)
-  return ra.lo < rb.hi && rb.lo < ra.hi
+  const ras = parseRange(a)
+  const rbs = parseRange(b)
+  return ras.some((ra) => rbs.some((rb) => !segmentsDisjoint(ra, rb)))
 }
 
 /** Are any of the override (non-base) mappings' ranges overlapping? */

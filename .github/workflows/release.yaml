@@ -6,11 +6,26 @@ on:
 
 jobs:
   build:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-release.yml@v2.4.1
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-release.yml@v2.7.1
     with:
       flow-type: hybrid
       java-version: '25'
       commit-hash: ${{ github.event.client_payload.commit }}
       build-version: ${{ github.event.client_payload.project_version }}
       docker-image: components-management-portal
+      # The portal is a deployable app shipped as a docker image on ghcr, and no
+      # consumer of it as a Maven dependency is known. Skipping the publication of its
+      # ~67 MB Spring Boot fat jar, which was the single biggest contributor to the
+      # organisation's Maven Central Release Size. publish-to-nexus landed in
+      # octopus-base v2.5.0; every reference here is now on v2.7.1, which also carries
+      # the shared publication policy this repository configures in build.gradle.kts.
+      publish-to-nexus: false
+      # Register the release in octopus-release-log directly at the end of this
+      # run. The separate check-and-register workflow polled Maven Central for the
+      # published jar — with publish-to-nexus=false that jar never appears, so that
+      # path is removed (see deleted check-and-register.yml). Registration cannot
+      # outrun the deliverable: register-release-in-log is a separate job that needs
+      # both the build job, which pushes the image, and tag-and-release, so a failed
+      # push stops it from running at all.
+      register-release-immediately: true
     secrets: inherit

@@ -10,6 +10,10 @@ import {
   useRunTeamCityResync,
   useTeamCityResyncJob,
 } from '@/hooks/useTeamCityResync'
+import {
+  invalidateTeamCityValidationJob,
+  useTeamCityValidationJob,
+} from '@/hooks/useTeamCityValidation'
 import { toast } from '@/hooks/use-toast'
 import { formatMigrationError } from '@/lib/migrationErrors'
 import { Button } from '@/components/ui/button'
@@ -57,13 +61,15 @@ export function TeamCityResyncPanel() {
   const queryClient = useQueryClient()
   const [confirmOpen, setConfirmOpen] = useState(false)
 
-  // Cross-disable against the other two async kinds. React Query dedupes
+  // Cross-disable against the other three async kinds. React Query dedupes
   // these GETs, so calling these hooks here does not cost extra requests —
-  // they share the cache entry the migration panels read.
+  // they share the cache entries the migration/validation panels read.
   const componentsJob = useMigrationJob()
   const componentsRunning = componentsJob.data?.state === 'RUNNING'
   const historyJob = useHistoryMigrationJob()
   const historyRunning = historyJob.data?.state === 'RUNNING'
+  const validationJob = useTeamCityValidationJob()
+  const validationRunning = validationJob.data?.state === 'RUNNING'
 
   // Toast + cache invalidation on terminal COMPLETED state. The async POST
   // returning success only means "job started", so cache invalidation cannot
@@ -96,6 +102,10 @@ export function TeamCityResyncPanel() {
     queryClient.invalidateQueries({
       predicate: (query) => query.queryKey[0] === 'component',
     })
+    // CRS auto-starts a TC validation job right after a successful resync —
+    // refetch the validation-job query so TeamCityValidationPanel discovers
+    // it and its own terminal-COMPLETED effect fires once that job finishes.
+    invalidateTeamCityValidationJob(queryClient)
     // `result` is in the dep array because the backend can serialize a
     // COMPLETED state in a single tick where `state` and `result` arrive
     // together; both must be readable when the effect fires. The id-based
@@ -111,7 +121,12 @@ export function TeamCityResyncPanel() {
   }
 
   const buttonDisabled =
-    !adminMode || isRunning || startResync.isPending || componentsRunning || historyRunning
+    !adminMode ||
+    isRunning ||
+    startResync.isPending ||
+    componentsRunning ||
+    historyRunning ||
+    validationRunning
 
   return (
     <div className="space-y-4">
@@ -135,9 +150,14 @@ export function TeamCityResyncPanel() {
             Arm Admin mode above to run resync.
           </span>
         )}
-        {adminMode && (componentsRunning || historyRunning) && !isRunning && (
+        {adminMode && (componentsRunning || historyRunning || validationRunning) && !isRunning && (
           <span className="text-xs text-muted-foreground">
-            {componentsRunning ? 'Components migration' : 'History migration'} is running — wait for it to finish.
+            {componentsRunning
+              ? 'Components migration'
+              : historyRunning
+                ? 'History migration'
+                : 'TC validation'}{' '}
+            is running — wait for it to finish.
           </span>
         )}
         {jobData?.finishedAt && !isRunning && (

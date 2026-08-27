@@ -7,7 +7,7 @@ import {
   createColumnHelper,
   type SortingState,
 } from '@tanstack/react-table'
-import { ArrowUpDown, ArrowUp, ArrowDown, CopyPlus, Package } from 'lucide-react'
+import { AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown, CopyPlus, Package } from 'lucide-react'
 import { JiraIcon, BitbucketIcon, TeamCityIcon } from './ui/icons/brand-icons'
 import { useMemo, useState } from 'react'
 import {
@@ -26,6 +26,7 @@ import { ValidationBadge } from './ValidationBadge'
 import { RelativeTime } from './ui/RelativeTime'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip'
 import { cn, safeHttpUrl } from '../lib/utils'
+import { hasValidationIssue } from '../lib/validation'
 import type { ComponentSummary, ComponentValidation, PortalLinks } from '../lib/types'
 import { usePortalLinks } from '../hooks/useInfo'
 import { useFieldConfig } from '../hooks/useAdminConfig'
@@ -42,6 +43,11 @@ declare module '@tanstack/react-table' {
     // entry by component key (ComponentSummary.name). Absent (non-admin / empty
     // report) → no indicator anywhere.
     validationByComponent?: Map<string, ComponentValidation>
+    // TeamCity validation overlay: componentId (a different key than
+    // validationByComponent's name-keyed map) -> finding count. Only shown
+    // when the row has no Unregistered-Released issue, so a row never
+    // stacks two warning triangles.
+    teamCityIssueCountByComponent?: Map<string, number>
   }
 }
 
@@ -61,6 +67,12 @@ interface ComponentTableProps {
    * failed to load) no indicator is rendered at all.
    */
   validationByComponent?: Map<string, ComponentValidation>
+  /**
+   * TeamCity validation overlay: componentId -> finding count. Admin-only,
+   * same absence semantics as `validationByComponent`. Only shown when the
+   * row has no Unregistered-Released issue — see the TableMeta doc comment.
+   */
+  teamCityIssueCountByComponent?: Map<string, number>
 }
 
 const columnHelper = createColumnHelper<ComponentSummary>()
@@ -87,6 +99,31 @@ function IconLink({ href, label, icon: Icon }: IconLinkProps) {
     >
       <Icon className="h-4 w-4" />
     </a>
+  )
+}
+
+/**
+ * Warning triangle for a row with TeamCity findings but no Unregistered-
+ * Released issue (see the Name cell). Simpler than `ValidationBadge` on
+ * purpose: a hover tooltip, no click-through dialog.
+ */
+function TeamCityProblemBadge({ count }: { count: number }) {
+  if (count <= 0) return null
+  const label = `${count} TeamCity validation ${count === 1 ? 'problem' : 'problems'}`
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          role="img"
+          aria-label={label}
+          title={label}
+          className="inline-flex shrink-0 text-destructive"
+        >
+          <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -143,6 +180,65 @@ function ChipListCell({
   )
 }
 
+/**
+ * Multi-value people cell: one id per line, plain text like the single-value
+ * Owner cell (people are not taxonomy tags, so chips read wrong here). Values
+ * are trimmed and blanks dropped, so a stray '' cannot surface as an empty row.
+ *
+ * Stacked rather than comma-joined: a comma run of five ids would hit the
+ * column's width cap and leave everything past the first hidden behind an
+ * ellipsis. Two lines stay within the row rhythm the Component Key cell already
+ * sets (key + displayName); the rest sit behind a +N toggle that expands in
+ * place, mirroring ChipListCell's interaction and aria contract.
+ */
+function PeopleListCell({
+  values,
+  noun = 'value',
+  visibleLimit = 2,
+}: {
+  values: string[] | null | undefined
+  noun?: string
+  visibleLimit?: number
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const people = values?.map((v) => v.trim()).filter((v) => v !== '')
+  if (!people || people.length === 0) return <span className="text-muted-foreground">—</span>
+
+  const overflowCount = people.length - visibleLimit
+  const showToggle = overflowCount > 0
+  const visible = expanded ? people : people.slice(0, visibleLimit)
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      {visible.map((person, i) => (
+        // Index-prefixed key — ids can legally repeat (CRS dedup is a soft
+        // contract). Per-line title: each line truncates inside the capped
+        // column on its own, so hover reveals the one that is clipped.
+        <span key={`${i}-${person}`} title={person} className="block truncate">
+          {person}
+        </span>
+      ))}
+      {showToggle && (
+        // Real <button> so Enter/Space activate it across AT; styled as muted
+        // text (not a chip) to stay in the plain-text idiom of the cell.
+        <button
+          type="button"
+          onClick={() => setExpanded((e) => !e)}
+          className="text-xs text-muted-foreground hover:text-foreground text-left cursor-pointer"
+          aria-expanded={expanded}
+          aria-label={
+            expanded
+              ? `Show fewer ${noun}s (collapse to first ${visibleLimit} of ${people.length})`
+              : `Show all ${people.length} ${noun}s`
+          }
+        >
+          {expanded ? 'show less' : `+${overflowCount} more`}
+        </button>
+      )}
+    </div>
+  )
+}
+
 // Table accessorKey → field-config path for columns whose presence is gated on
 // a `visibility: hidden` flag (see visibleColumns). Keep the field-config paths
 // aligned with the editor forms (e.g. GeneralTab uses `component.releaseManager`).
@@ -159,6 +255,9 @@ const LIST_VISIBILITY_GATED: Record<string, string> = {
 const COMPACT_MAX_WIDTH: Record<string, string> = {
   name: 'max-w-[280px]',
   componentOwner: 'max-w-[140px]',
+  // Same treatment as Owner — the cell holds a comma-joined people list, so it
+  // needs a cap for the truncate + title-on-hover to kick in.
+  releaseManagers: 'max-w-[160px]',
 }
 
 // Tighter than the shadcn table default (cells p-4, headers h-12 px-4) so the
@@ -190,12 +289,22 @@ const columns = [
       // map is absent (non-admin / empty report) or the component is clean,
       // ValidationBadge renders null, so nothing extra appears before the name.
       const validation = table.options.meta?.validationByComponent?.get(row.original.name)
+      // TeamCity findings are keyed by componentId, not name. Only consulted
+      // when there's no Unregistered-Released issue — at most one triangle per row.
+      const hasUnregisteredIssue = hasValidationIssue(validation)
+      const teamCityIssueCount = hasUnregisteredIssue
+        ? 0
+        : (table.options.meta?.teamCityIssueCountByComponent?.get(row.original.id) ?? 0)
       return (
         // min-w-0 lets the flex column shrink below its content width so the
         // links/spans below can truncate inside the max-width-capped cell
         // (Option A: keep the table within the viewport instead of overflowing).
         <div className="flex items-start gap-1.5">
-          <ValidationBadge validation={validation} />
+          {hasUnregisteredIssue ? (
+            <ValidationBadge validation={validation} />
+          ) : (
+            <TeamCityProblemBadge count={teamCityIssueCount} />
+          )}
           <div className="flex flex-col min-w-0">
             <Link
               to={`/components/${row.original.id}`}
@@ -237,12 +346,13 @@ const columns = [
     },
     enableSorting: false,
   }),
-  // Release managers are multi-value (ordered CRS v4 child rows) — render as
-  // chips like System/Labels rather than a single-value cell. Placed right
+  // Release managers are multi-value (ordered CRS v4 child rows), but they are
+  // people ids like Owner — not taxonomy tags like System/Labels — so they read
+  // as plain text (chips made the column look like a label strip). Placed right
   // after Owner so the people columns sit together.
   columnHelper.accessor('releaseManagers', {
     header: 'Release Manager',
-    cell: ({ getValue }) => <ChipListCell values={getValue()} noun="release manager" />,
+    cell: ({ getValue }) => <PeopleListCell values={getValue()} noun="release manager" />,
     enableSorting: false,
   }),
   columnHelper.accessor('buildSystem', {
@@ -294,9 +404,9 @@ const columns = [
       const gitBaseUrl = linksConfig?.gitBaseUrl ?? undefined
       const dmsBaseUrl = linksConfig?.dmsBaseUrl ?? undefined
       // tcBaseUrl from /portal/links is intentionally NOT used here — CRS PR-2
-      // persists the full TC webUrl per component on `teamcityProjectUrl`, so
-      // Portal renders the URL verbatim and does not template it. The runtime
-      // config still ships `tcBaseUrl` for any future cross-project link.
+      // persists the full TC webUrl per project, so Portal renders the URL
+      // verbatim and does not template it. The runtime config still ships
+      // `tcBaseUrl` for any future cross-project link.
       const links: IconLinkProps[] = []
       if (jiraBaseUrl && jiraProjectKey) {
         links.push({
@@ -320,20 +430,6 @@ const columns = [
           })
         }
       }
-      // TeamCity icon — gated only on the per-component `teamcityProjectUrl`
-      // (the persisted webUrl). Independent of `tcBaseUrl` because the URL
-      // is self-sufficient: CRS resolves projectId → webUrl during resync
-      // and stores the result; Portal does NOT template it.
-      // safeHttpUrl allowlists http/https before the URL reaches an <a href>
-      // — prevents javascript: or data: URIs from being rendered as links.
-      const safeTcUrl = safeHttpUrl(teamcityProjectUrl)
-      if (safeTcUrl) {
-        links.push({
-          href: safeTcUrl,
-          label: `TeamCity: ${name}`,
-          icon: TeamCityIcon,
-        })
-      }
       if (dmsBaseUrl) {
         // DMS uses a query-string component selector, not a path segment.
         links.push({
@@ -342,7 +438,17 @@ const columns = [
           icon: Package,
         })
       }
-      if (links.length === 0) return <span className="text-muted-foreground">—</span>
+      const tcUrl = safeHttpUrl(teamcityProjectUrl ?? null)
+      if (tcUrl) {
+        links.push({
+          href: tcUrl,
+          label: `TeamCity: ${name}`,
+          icon: TeamCityIcon,
+        })
+      }
+      if (links.length === 0) {
+        return <span className="text-muted-foreground">—</span>
+      }
       return (
         <div className="flex items-center gap-2">
           {links.map((l) => (
@@ -428,6 +534,7 @@ export function ComponentTable({
   isLoading,
   onCopy,
   validationByComponent,
+  teamCityIssueCountByComponent,
 }: ComponentTableProps) {
   const [sorting, setSorting] = useState<SortingState>([])
   const { data: portalLinks } = usePortalLinks()
@@ -456,7 +563,7 @@ export function ComponentTable({
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     manualSorting: false,
-    meta: { links: portalLinks, onCopy, validationByComponent },
+    meta: { links: portalLinks, onCopy, validationByComponent, teamCityIssueCountByComponent },
   })
 
   if (isLoading) {

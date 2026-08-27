@@ -8,6 +8,10 @@ import {
   type TeamCityResyncResult,
 } from '@/hooks/useTeamCityResync'
 import { useHistoryMigrationJob, useMigrationJob } from '@/hooks/useMigration'
+import {
+  invalidateTeamCityValidationJob,
+  useTeamCityValidationJob,
+} from '@/hooks/useTeamCityValidation'
 import { toast } from '@/hooks/use-toast'
 import { useAdminMode } from '@/lib/adminModeStore'
 import type { TeamCityResyncJobResponse } from '@/lib/types'
@@ -26,6 +30,10 @@ vi.mock('@/hooks/useMigration', () => ({
   useMigrationJob: vi.fn(),
   useHistoryMigrationJob: vi.fn(),
 }))
+vi.mock('@/hooks/useTeamCityValidation', () => ({
+  useTeamCityValidationJob: vi.fn(),
+  invalidateTeamCityValidationJob: vi.fn(),
+}))
 vi.mock('@/hooks/use-toast', () => ({
   toast: vi.fn(),
 }))
@@ -34,6 +42,8 @@ const mockUseRun = vi.mocked(useRunTeamCityResync)
 const mockUseJob = vi.mocked(useTeamCityResyncJob)
 const mockUseMigrationJob = vi.mocked(useMigrationJob)
 const mockUseHistoryJob = vi.mocked(useHistoryMigrationJob)
+const mockUseValidationJob = vi.mocked(useTeamCityValidationJob)
+const mockInvalidateValidationJob = vi.mocked(invalidateTeamCityValidationJob)
 const mockToast = vi.mocked(toast)
 
 const RESULT: TeamCityResyncResult = {
@@ -148,6 +158,7 @@ beforeEach(() => {
   // doesn't render.
   mockUseMigrationJob.mockReturnValue(buildJobQuery(null) as never)
   mockUseHistoryJob.mockReturnValue(buildJobQuery(null) as never)
+  mockUseValidationJob.mockReturnValue(buildJobQuery(null) as never)
 })
 
 afterEach(() => {
@@ -328,6 +339,11 @@ describe('TeamCityResyncPanel — terminal COMPLETED side-effects', () => {
     )
     expect(queryKeyForms).toContainEqual(['components'])
     expect(hasPredicateCall).toBe(true)
+    // CRS auto-starts a TC validation job right after a successful resync —
+    // the panel must trigger a validation-job refetch so that auto-started
+    // job is discovered (see the dedicated describe block below; the helper
+    // is mocked in this file, so it's asserted via the mock, not the spy).
+    expect(mockInvalidateValidationJob).toHaveBeenCalledOnce()
   })
 
   it('does NOT re-fire toast/invalidations on subsequent re-renders for the same job id', async () => {
@@ -372,5 +388,24 @@ describe('TeamCityResyncPanel — cross-kind disable', () => {
     renderPanel()
     expect(screen.getByRole('button', { name: /resync tc project ids/i })).toBeDisabled()
     expect(screen.getByText(/History migration is running/i)).toBeDefined()
+  })
+
+  it('disables the button + shows hint when TC validation is RUNNING', () => {
+    mockUseValidationJob.mockReturnValue(
+      buildJobQuery({ state: 'RUNNING', id: 'validation-1' } as never) as never,
+    )
+    useAdminMode.setState({ enabled: true })
+    renderPanel()
+    expect(screen.getByRole('button', { name: /resync tc project ids/i })).toBeDisabled()
+    expect(screen.getByText(/TC validation is running/i)).toBeDefined()
+  })
+})
+
+describe('TeamCityResyncPanel — validation-job discovery on completion', () => {
+  it('invalidates the TC validation job query on terminal COMPLETED (CRS auto-starts validation after resync)', async () => {
+    useAdminMode.setState({ enabled: true })
+    mockUseJob.mockReturnValue(buildJobQuery(COMPLETED_JOB))
+    renderPanel()
+    await waitFor(() => expect(mockInvalidateValidationJob).toHaveBeenCalledOnce())
   })
 })
