@@ -5,6 +5,8 @@ import { useDistributionSection } from './useDistributionSection'
 import { useJiraSection } from './useJiraSection'
 import { useEscrowSection } from './useEscrowSection'
 import type { ComponentDetail, ComponentConfiguration } from '../../lib/types'
+import { isFieldEditableFor } from '../../hooks/useFieldConfig'
+import { PERMISSIONS, type User } from '../../lib/auth'
 
 vi.mock('../../hooks/useAdminConfig', () => ({
   useFieldConfig: () => ({ data: undefined, isLoading: false, isError: false }),
@@ -343,6 +345,51 @@ describe('useJiraSection', () => {
     // ...and the flag is neutralized (effective false), so it is neither dirty nor
     // shown as a diff row from skip alone.
     expect(result.current.slice.diff.some((d) => /skip commit check/i.test(d.label))).toBe(false)
+  })
+
+  // ── Payload-gating through the REAL resolver (regression) ────────────────
+  // The gating tests below inject `isFieldEditable` by hand, which is exactly how
+  // an axis-parsing bug reached production: no test composed the resolver with a
+  // real field-config blob. This one wires it the way ComponentDetailPage does —
+  // `isFieldEditableFor(blob, path, user)` — using the shape CRS ACTUALLY serves:
+  // ConfigSyncService.serializeFieldEntry lowercases the axis, so an admin-only
+  // field arrives as `editable: "adminonly"`, never the camelCase token.
+  describe('payload-gating composed with the real field-config resolver', () => {
+    const WIRE_BLOB = { jira: { technical: { visibility: 'editable', editable: 'adminonly' } } }
+    const regularUser: User = {
+      username: 'bob', groups: [], roles: [{ name: 'USER', permissions: [PERMISSIONS.ACCESS_COMPONENTS] }],
+    }
+    const adminUser: User = {
+      username: 'root', groups: [], roles: [{ name: 'ADMIN', permissions: [PERMISSIONS.EDIT_ANY_COMPONENT] }],
+    }
+    const gateFor = (user: User) => (path: string) => isFieldEditableFor(WIRE_BLOB, path, user)
+
+    // The production failure: a non-admin edits an unrelated Jira field, the slice
+    // carries `technical: false` against a NULL base column, and CRS rejects the
+    // whole save with 403 "Field 'jira.technical' is editable by administrators only".
+    it('drops adminOnly technical from a non-admin PATCH (lowercase wire axis)', () => {
+      const { result } = renderHook(() =>
+        useJiraSection(makeComponent({}, { jira: { releaseVersionFormat: 'R' } }), {
+          ...vis,
+          isFieldEditable: gateFor(regularUser),
+        }),
+      )
+      act(() => result.current.set('releaseVersionFormat', 'R2'))
+      const jira = result.current.slice.request.baseConfiguration?.jira
+      expect('technical' in (jira ?? {})).toBe(false)
+      expect(jira?.releaseVersionFormat).toBe('R2')
+    })
+
+    it('keeps technical for an admin (same blob)', () => {
+      const { result } = renderHook(() =>
+        useJiraSection(makeComponent({}, { jira: { releaseVersionFormat: 'R' } }), {
+          ...vis,
+          isFieldEditable: gateFor(adminUser),
+        }),
+      )
+      act(() => result.current.set('releaseVersionFormat', 'R2'))
+      expect(result.current.slice.request.baseConfiguration?.jira?.technical).toBe(false)
+    })
   })
 
   // ── Payload-gating (P-1 omitNonEditable) ─────────────────────────────────
