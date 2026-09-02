@@ -786,6 +786,41 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
     expect(within(link).getByTestId('brand-icon-bitbucket')).toBeDefined()
   })
 
+  it('(f) Git link parses a full ssh clone URL into projectKey + repoName', () => {
+    mockedUsePortalLinks.mockReturnValue({
+      data: { jiraBaseUrl: null, gitBaseUrl: 'https://git.example.com', tcBaseUrl: null, dmsBaseUrl: null },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof usePortalLinks>)
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    renderPage(
+      {
+        ...baseComponent,
+        configurations: [
+          {
+            ...baseComponent.configurations![0]!,
+            vcsEntries: [
+              {
+                id: 'e-1',
+                name: 'main',
+                vcsPath: 'ssh://git@bitbucket.example.com:7999/PROJ/components-registry.git',
+                sortOrder: 0,
+              },
+            ],
+          },
+        ],
+      },
+      user,
+    )
+    const link = screen.getByTitle('Bitbucket: PROJ/components-registry') as HTMLAnchorElement
+    // The project key + repo name are extracted from the URL path, and the
+    // ".git" suffix is stripped.
+    expect(link.href).toBe(
+      'https://git.example.com/projects/PROJ/repos/components-registry',
+    )
+  })
+
   it('(f) Bitbucket link does NOT render when gitBaseUrl is null', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(baseComponent, user)

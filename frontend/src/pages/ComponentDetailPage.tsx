@@ -858,12 +858,26 @@ function ComponentDetailEditor() {
                 )
               })()}
               {(() => {
+                // VcsEntry.vcsPath is canonically a full clone URL (e.g.
+                // ssh://git@bitbucket.example.com/PROJ/repo.git), NOT the
+                // slash-joined `projectKey/repo` summary field the table uses.
+                // Parse it with `new URL` — the same parser `lib/vcsHost.ts`
+                // uses for the VCS-host check — and take the path segments.
+                // Fall back to a plain slash split for any legacy path-shaped
+                // values so the link still renders.
                 const vcsPath = selectBaseRow(component)?.vcsEntries[0]?.vcsPath
                 if (!gitBaseUrl || !vcsPath) return null
-                const slashIdx = vcsPath.indexOf('/')
-                if (slashIdx <= 0 || slashIdx >= vcsPath.length - 1) return null
-                const projectKey = vcsPath.slice(0, slashIdx)
-                const repoName = vcsPath.slice(slashIdx + 1)
+                let segments: string[]
+                try {
+                  segments = new URL(vcsPath.trim()).pathname.split('/').filter(Boolean)
+                } catch {
+                  segments = vcsPath.split('/').filter(Boolean)
+                }
+                // Path looks like ["PROJ", "repo.git"]; take the first and last
+                // segments, and strip a trailing ".git" from the repo name.
+                if (segments.length < 2) return null
+                const projectKey = segments[0]!
+                const repoName = segments[segments.length - 1]!.replace(/\.git$/, '')
                 const href = `${gitBaseUrl}/projects/${encodeURIComponent(projectKey)}/repos/${encodeURIComponent(repoName)}`
                 return (
                   <a
@@ -871,8 +885,8 @@ function ComponentDetailEditor() {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 text-sm hover:opacity-80 transition-opacity"
-                    title={`Bitbucket: ${vcsPath}`}
-                    aria-label={`Bitbucket: ${vcsPath}`}
+                    title={`Bitbucket: ${projectKey}/${repoName}`}
+                    aria-label={`Bitbucket: ${projectKey}/${repoName}`}
                   >
                     <BitbucketIcon className="h-4 w-4" />
                   </a>
