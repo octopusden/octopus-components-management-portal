@@ -1,8 +1,13 @@
-// VCS-host allowlist check: a component's VCS URL must point at the ecosystem's
-// Bitbucket host (service-config `portal.external-links.git-base-url` =
-// `${bitbucket.host}`, surfaced to the SPA via /portal/links → gitBaseUrl).
-// vcs-facade.yml's canonical base is `ssh://git@bitbucket${domain.sub}.${domain.main}`.
-// This is a friendly pre-flight check; the URL itself is otherwise free-form.
+// VCS-host helpers shared across the portal:
+//
+// 1. Allowlist check — a component's VCS URL must point at the ecosystem's
+//    Bitbucket host (service-config `portal.external-links.git-base-url` =
+//    `${bitbucket.host}`, surfaced to the SPA via /portal/links → gitBaseUrl).
+//    vcs-facade.yml's canonical base is `ssh://git@bitbucket${domain.sub}.${domain.main}`.
+//    This is a friendly pre-flight check; the URL itself is otherwise free-form.
+// 2. Browse-URL derivation — turn a VcsEntry clone URL into the Bitbucket
+//    Server /projects/<key>/repos/<repo> browser URL used for quick-links on
+//    the component table and detail pages.
 
 export interface BitbucketBrowseTarget {
   /** `${gitBaseUrl}/projects/PROJ/repos/repo` */

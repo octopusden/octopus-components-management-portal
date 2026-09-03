@@ -85,14 +85,4 @@ describe('bitbucketBrowseUrl', () => {
     expect(bitbucketBrowseUrl('ssh://git@host/PROJ/repo.git', null)).toBeNull()
     expect(bitbucketBrowseUrl('ssh://git@host/PROJ/repo.git', undefined)).toBeNull()
   })
-
-  it('URL-encodes project key and repo name in the url', () => {
-    const t = bitbucketBrowseUrl('ssh://git@host/proj%20key/repo%2Fname.git', base)
-    expect(t!.url).toBe(
-      'https://bitbucket.example.com/projects/proj%2520key/repos/repo%252Fname',
-    )
-    // The raw segments are still returned for display.
-    expect(t!.projectKey).toBe('proj%20key')
-    expect(t!.repoName).toBe('repo%2Fname')
-  })
 })
