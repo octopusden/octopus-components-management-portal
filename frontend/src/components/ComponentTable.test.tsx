@@ -560,7 +560,7 @@ describe('ComponentTable', () => {
       expect(screen.queryByRole('link', { name: /Jira/i })).toBeNull()
     })
 
-    it('renders Bitbucket icon + browser URL (vcsPath split on first slash)', () => {
+    it('renders Bitbucket icon + browse URL from a legacy bare PROJ/repo vcsPath (fallback branch)', () => {
       mockLinks({ gitBaseUrl: 'https://git.example.com' })
       renderTable([makeComponent({ vcsPath: 'CREG/components-registry' })])
       const link = screen.getByRole('link', { name: /Bitbucket: CREG\/components-registry/i })
@@ -570,6 +570,17 @@ describe('ComponentTable', () => {
       )
       // Pin the brand icon — without this assertion the visual mockup match
       // could regress to a generic glyph without a test failure.
+      expect(within(link).getByTestId('brand-icon-bitbucket')).toBeDefined()
+    })
+
+    it('renders Bitbucket icon + browse URL from a clone-URL vcsPath', () => {
+      mockLinks({ gitBaseUrl: 'https://git.example.com' })
+      renderTable([makeComponent({ vcsPath: 'ssh://git@bitbucket.example.com:7999/CREG/components-registry.git' })])
+      const link = screen.getByRole('link', { name: /Bitbucket: CREG\/components-registry/i })
+      expect(link).toBeDefined()
+      expect((link as HTMLAnchorElement).href).toBe(
+        'https://git.example.com/projects/CREG/repos/components-registry',
+      )
       expect(within(link).getByTestId('brand-icon-bitbucket')).toBeDefined()
     })
 

@@ -68,7 +68,7 @@ import { classifyConflictBody } from '../lib/conflict'
 import type { ComponentDetail } from '../lib/types'
 import { countOwnershipIssues, fromArtifactId } from '../lib/artifactOwnership'
 import { findUnsupportedGroupId } from '../lib/groupValidation'
-import { isVcsHostSupported } from '../lib/vcsHost'
+import { isVcsHostSupported, bitbucketBrowseUrl } from '../lib/vcsHost'
 import { useSupportedGroups } from '../hooks/useSupportedGroups'
 import { selectBaseRow } from '../lib/api/baseRow'
 import { useCurrentUser } from '../hooks/useCurrentUser'
@@ -859,20 +859,17 @@ function ComponentDetailEditor() {
               })()}
               {(() => {
                 const vcsPath = selectBaseRow(component)?.vcsEntries[0]?.vcsPath
-                if (!gitBaseUrl || !vcsPath) return null
-                const slashIdx = vcsPath.indexOf('/')
-                if (slashIdx <= 0 || slashIdx >= vcsPath.length - 1) return null
-                const projectKey = vcsPath.slice(0, slashIdx)
-                const repoName = vcsPath.slice(slashIdx + 1)
-                const href = `${gitBaseUrl}/projects/${encodeURIComponent(projectKey)}/repos/${encodeURIComponent(repoName)}`
+                const target = bitbucketBrowseUrl(vcsPath, gitBaseUrl)
+                if (!target) return null
+                const label = `Bitbucket: ${target.projectKey}/${target.repoName}`
                 return (
                   <a
-                    href={href}
+                    href={target.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 text-sm hover:opacity-80 transition-opacity"
-                    title={`Bitbucket: ${vcsPath}`}
-                    aria-label={`Bitbucket: ${vcsPath}`}
+                    title={label}
+                    aria-label={label}
                   >
                     <BitbucketIcon className="h-4 w-4" />
                   </a>

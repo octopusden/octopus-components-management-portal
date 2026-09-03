@@ -786,6 +786,101 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
     expect(within(link).getByTestId('brand-icon-bitbucket')).toBeDefined()
   })
 
+  it('(f) Git link parses a full ssh clone URL into projectKey + repoName', () => {
+    mockedUsePortalLinks.mockReturnValue({
+      data: { jiraBaseUrl: null, gitBaseUrl: 'https://git.example.com', tcBaseUrl: null, dmsBaseUrl: null },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof usePortalLinks>)
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    renderPage(
+      {
+        ...baseComponent,
+        configurations: [
+          {
+            ...baseComponent.configurations![0]!,
+            vcsEntries: [
+              {
+                id: 'e-1',
+                name: 'main',
+                vcsPath: 'ssh://git@bitbucket.example.com:7999/PROJ/components-registry.git',
+                sortOrder: 0,
+              },
+            ],
+          },
+        ],
+      },
+      user,
+    )
+    // Title/aria-label show the normalized project/repo — same label shape
+    // as the table page, regardless of the raw clone-URL form of vcsPath.
+    const link = screen.getByTitle('Bitbucket: PROJ/components-registry') as HTMLAnchorElement
+    expect(link).toBeDefined()
+    expect(link).toHaveAttribute('aria-label', 'Bitbucket: PROJ/components-registry')
+    // The project key + repo name are extracted from the URL path, and the
+    // ".git" suffix is stripped.
+    expect(link.href).toBe(
+      'https://git.example.com/projects/PROJ/repos/components-registry',
+    )
+  })
+
+  it('(f) Git link parses a Bitbucket https clone URL with /scm/ prefix', () => {
+    mockedUsePortalLinks.mockReturnValue({
+      data: { jiraBaseUrl: null, gitBaseUrl: 'https://git.example.com', tcBaseUrl: null, dmsBaseUrl: null },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof usePortalLinks>)
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    renderPage(
+      {
+        ...baseComponent,
+        configurations: [
+          {
+            ...baseComponent.configurations![0]!,
+            vcsEntries: [
+              {
+                id: 'e-1',
+                name: 'main',
+                vcsPath: 'https://bitbucket.example.com/scm/PROJ/repo.git',
+                sortOrder: 0,
+              },
+            ],
+          },
+        ],
+      },
+      user,
+    )
+    const link = screen.getByTitle('Bitbucket: PROJ/repo') as HTMLAnchorElement
+    expect(link.href).toBe('https://git.example.com/projects/PROJ/repos/repo')
+  })
+
+  it('(f) Git link does NOT render when the clone URL has fewer than two path segments', () => {
+    mockedUsePortalLinks.mockReturnValue({
+      data: { jiraBaseUrl: null, gitBaseUrl: 'https://git.example.com', tcBaseUrl: null, dmsBaseUrl: null },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof usePortalLinks>)
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    renderPage(
+      {
+        ...baseComponent,
+        configurations: [
+          {
+            ...baseComponent.configurations![0]!,
+            // Only "PROJ" — the URL has a single path segment, so the link
+            // can't derive project key + repo and stays hidden.
+            vcsEntries: [{ id: 'e-1', name: 'main', vcsPath: 'ssh://git@bitbucket.example.com/PROJ', sortOrder: 0 }],
+          },
+        ],
+      },
+      user,
+    )
+    expect(screen.queryByTitle(/bitbucket:/i)).toBeNull()
+  })
+
   it('(f) Bitbucket link does NOT render when gitBaseUrl is null', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(baseComponent, user)

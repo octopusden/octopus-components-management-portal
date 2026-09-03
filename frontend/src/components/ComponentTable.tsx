@@ -27,6 +27,7 @@ import { RelativeTime } from './ui/RelativeTime'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip'
 import { cn, safeHttpUrl } from '../lib/utils'
 import { hasValidationIssue } from '../lib/validation'
+import { bitbucketBrowseUrl } from '../lib/vcsHost'
 import type { ComponentSummary, ComponentValidation, PortalLinks } from '../lib/types'
 import { usePortalLinks } from '../hooks/useInfo'
 import { useFieldConfig } from '../hooks/useAdminConfig'
@@ -416,16 +417,11 @@ const columns = [
         })
       }
       if (gitBaseUrl && vcsPath) {
-        // vcsPath is the slash-joined Bitbucket project key + repo slug
-        // (e.g. "creg/components-registry"). Bitbucket Server's browser-
-        // friendly URL is /projects/<key>/repos/<repo>, not /<key>/<repo>.
-        const slashIdx = vcsPath.indexOf('/')
-        if (slashIdx > 0 && slashIdx < vcsPath.length - 1) {
-          const projectKey = vcsPath.slice(0, slashIdx)
-          const repoName = vcsPath.slice(slashIdx + 1)
+        const target = bitbucketBrowseUrl(vcsPath, gitBaseUrl)
+        if (target) {
           links.push({
-            href: `${gitBaseUrl}/projects/${encodeURIComponent(projectKey)}/repos/${encodeURIComponent(repoName)}`,
-            label: `Bitbucket: ${vcsPath}`,
+            href: target.url,
+            label: `Bitbucket: ${target.projectKey}/${target.repoName}`,
             icon: BitbucketIcon,
           })
         }
