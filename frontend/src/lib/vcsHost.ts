@@ -4,6 +4,54 @@
 // vcs-facade.yml's canonical base is `ssh://git@bitbucket${domain.sub}.${domain.main}`.
 // This is a friendly pre-flight check; the URL itself is otherwise free-form.
 
+export interface BitbucketBrowseTarget {
+  /** `${gitBaseUrl}/projects/PROJ/repos/repo` */
+  url: string
+  /** The project key extracted from the VCS path. */
+  projectKey: string
+  /** The repo slug extracted from the VCS path, `.git` suffix stripped. */
+  repoName: string
+}
+
+/**
+ * Build the Bitbucket Server browse URL for a VCS path.
+ *
+ * `vcsPath` is canonically a clone URL (ssh://git@host/PROJ/repo.git or
+ * https://host/scm/PROJ/repo.git). Bitbucket's browse URL is
+ * `${gitBaseUrl}/projects/PROJ/repos/repo`, so the key and slug are pulled
+ * back out of the URL path.
+ *
+ * The last two path segments are used (not first + last) so that
+ * context-path / `/scm/`-prefixed URLs also parse correctly. A trailing
+ * `.git` suffix is stripped from the repo slug.
+ *
+ * Falls back to a plain slash split for legacy rows holding a bare
+ * `PROJ/repo` — only rows created through CreateComponentPage are
+ * guaranteed ssh:// (SSH_VCS_URL_REGEX); the edit form is free-form.
+ *
+ * Returns null when fewer than two path segments can be derived.
+ */
+export function bitbucketBrowseUrl(
+  vcsPath: string | null | undefined,
+  gitBaseUrl: string | null | undefined,
+): BitbucketBrowseTarget | null {
+  if (!vcsPath || !gitBaseUrl) return null
+  let segments: string[]
+  try {
+    segments = new URL(vcsPath.trim()).pathname.split('/').filter(Boolean)
+  } catch {
+    segments = vcsPath.split('/').filter(Boolean)
+  }
+  if (segments.length < 2) return null
+  const [projectKey, repo] = segments.slice(-2)
+  const repoName = repo!.replace(/\.git$/, '')
+  return {
+    url: `${gitBaseUrl}/projects/${encodeURIComponent(projectKey!)}/repos/${encodeURIComponent(repoName)}`,
+    projectKey: projectKey!,
+    repoName,
+  }
+}
+
 /**
  * Extract the lowercased host from an ssh:// or https:// URL, ignoring userinfo
  * and port. Returns null when the value can't be parsed as a URL with a host.

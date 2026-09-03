@@ -813,15 +813,47 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
       },
       user,
     )
+    // Title/aria-label show the normalized project/repo — same label shape
+    // as the table page, regardless of the raw clone-URL form of vcsPath.
     const link = screen.getByTitle('Bitbucket: PROJ/components-registry') as HTMLAnchorElement
     expect(link).toBeDefined()
-    // aria-label mirrors the normalized project/repo shown in the title.
     expect(link).toHaveAttribute('aria-label', 'Bitbucket: PROJ/components-registry')
     // The project key + repo name are extracted from the URL path, and the
     // ".git" suffix is stripped.
     expect(link.href).toBe(
       'https://git.example.com/projects/PROJ/repos/components-registry',
     )
+  })
+
+  it('(f) Git link parses a Bitbucket https clone URL with /scm/ prefix', () => {
+    mockedUsePortalLinks.mockReturnValue({
+      data: { jiraBaseUrl: null, gitBaseUrl: 'https://git.example.com', tcBaseUrl: null, dmsBaseUrl: null },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof usePortalLinks>)
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    renderPage(
+      {
+        ...baseComponent,
+        configurations: [
+          {
+            ...baseComponent.configurations![0]!,
+            vcsEntries: [
+              {
+                id: 'e-1',
+                name: 'main',
+                vcsPath: 'https://bitbucket.example.com/scm/PROJ/repo.git',
+                sortOrder: 0,
+              },
+            ],
+          },
+        ],
+      },
+      user,
+    )
+    const link = screen.getByTitle('Bitbucket: PROJ/repo') as HTMLAnchorElement
+    expect(link.href).toBe('https://git.example.com/projects/PROJ/repos/repo')
   })
 
   it('(f) Git link does NOT render when the clone URL has fewer than two path segments', () => {

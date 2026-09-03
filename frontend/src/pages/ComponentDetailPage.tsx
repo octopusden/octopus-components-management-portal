@@ -68,7 +68,7 @@ import { classifyConflictBody } from '../lib/conflict'
 import type { ComponentDetail } from '../lib/types'
 import { countOwnershipIssues, fromArtifactId } from '../lib/artifactOwnership'
 import { findUnsupportedGroupId } from '../lib/groupValidation'
-import { isVcsHostSupported } from '../lib/vcsHost'
+import { isVcsHostSupported, bitbucketBrowseUrl } from '../lib/vcsHost'
 import { useSupportedGroups } from '../hooks/useSupportedGroups'
 import { selectBaseRow } from '../lib/api/baseRow'
 import { useCurrentUser } from '../hooks/useCurrentUser'
@@ -858,35 +858,18 @@ function ComponentDetailEditor() {
                 )
               })()}
               {(() => {
-                // VcsEntry.vcsPath is canonically a full clone URL (e.g.
-                // ssh://git@bitbucket.example.com/PROJ/repo.git), NOT the
-                // slash-joined `projectKey/repo` summary field the table uses.
-                // Parse it with `new URL` — the same parser `lib/vcsHost.ts`
-                // uses for the VCS-host check — and take the path segments.
-                // Fall back to a plain slash split for any legacy path-shaped
-                // values so the link still renders.
                 const vcsPath = selectBaseRow(component)?.vcsEntries[0]?.vcsPath
-                if (!gitBaseUrl || !vcsPath) return null
-                let segments: string[]
-                try {
-                  segments = new URL(vcsPath.trim()).pathname.split('/').filter(Boolean)
-                } catch {
-                  segments = vcsPath.split('/').filter(Boolean)
-                }
-                // Path looks like ["PROJ", "repo.git"]; take the first and last
-                // segments, and strip a trailing ".git" from the repo name.
-                if (segments.length < 2) return null
-                const projectKey = segments[0]!
-                const repoName = segments[segments.length - 1]!.replace(/\.git$/, '')
-                const href = `${gitBaseUrl}/projects/${encodeURIComponent(projectKey)}/repos/${encodeURIComponent(repoName)}`
+                const target = bitbucketBrowseUrl(vcsPath, gitBaseUrl)
+                if (!target) return null
+                const label = `Bitbucket: ${target.projectKey}/${target.repoName}`
                 return (
                   <a
-                    href={href}
+                    href={target.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 text-sm hover:opacity-80 transition-opacity"
-                    title={`Bitbucket: ${projectKey}/${repoName}`}
-                    aria-label={`Bitbucket: ${projectKey}/${repoName}`}
+                    title={label}
+                    aria-label={label}
                   >
                     <BitbucketIcon className="h-4 w-4" />
                   </a>
