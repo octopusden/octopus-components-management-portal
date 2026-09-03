@@ -12,6 +12,7 @@ import type { ComponentDetail } from '@/lib/types'
 
 vi.mock('@/hooks/useCurrentUser', () => ({ useCurrentUser: vi.fn() }))
 vi.mock('../hooks/useCurrentUser', () => ({ useCurrentUser: vi.fn() }))
+vi.mock('../hooks/useArchiveReadiness', () => ({ useArchiveReadiness: vi.fn() }))
 vi.mock('../hooks/useComponent', () => ({
   useComponent: vi.fn(),
   useUpdateComponent: vi.fn(),
@@ -140,6 +141,7 @@ vi.mock('../lib/clipboard', () => ({ copyToClipboard: vi.fn() }))
 import { ApiError } from '../lib/api'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useComponent, useUpdateComponent, useDeleteComponent } from '../hooks/useComponent'
+import { useArchiveReadiness } from '../hooks/useArchiveReadiness'
 import { usePortalLinks, usePortalConfig } from '../hooks/useInfo'
 import { useSupportedGroups } from '../hooks/useSupportedGroups'
 import { useFieldConfigEntry } from '../hooks/useFieldConfig'
@@ -178,6 +180,7 @@ const mockedUseCurrentUser = vi.mocked(useCurrentUser)
 const mockedUseComponent = vi.mocked(useComponent)
 const mockedUseUpdateComponent = vi.mocked(useUpdateComponent)
 const mockedUseDeleteComponent = vi.mocked(useDeleteComponent)
+const mockedUseArchiveReadiness = vi.mocked(useArchiveReadiness)
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
@@ -265,6 +268,20 @@ async function clickSaveAndConfirm() {
 interface RenderPageOptions {
   updateMutation?: Partial<typeof idleMutation>
   deleteMutation?: Partial<typeof idleMutation>
+  archiveReadiness?: Partial<ReturnType<typeof useArchiveReadiness>>
+}
+
+// Default: a ready verdict with no entries — matches "nothing configured on
+// this CRS covers it" rather than an in-flight or failed check, so a test
+// that opens the Archive dialog without caring about readiness still sees a
+// confirmable dialog. Tests that DO care override via renderPage's
+// `archiveReadiness` option.
+const defaultArchiveReadiness = {
+  data: { ready: true, entries: [] },
+  isLoading: false,
+  isError: false,
+  isFetching: false,
+  refetch: vi.fn(),
 }
 
 function CreateWizardProbe() {
@@ -299,6 +316,11 @@ function renderPage(component: ComponentDetail, user: User | null, opts: RenderP
     ...idleMutation,
     ...(opts.deleteMutation ?? {}),
   } as unknown as ReturnType<typeof useDeleteComponent>)
+
+  mockedUseArchiveReadiness.mockReturnValue({
+    ...defaultArchiveReadiness,
+    ...(opts.archiveReadiness ?? {}),
+  } as unknown as ReturnType<typeof useArchiveReadiness>)
 
   // A data router (createMemoryRouter) is required because the page's
   // UnsavedChangesGuard uses react-router's useBlocker, which throws outside a
@@ -552,6 +574,235 @@ describe('ComponentDetailPage — Archive / Unarchive buttons', () => {
         expect.objectContaining({ archived: false })
       )
     })
+  })
+})
+
+describe('ComponentDetailPage — Archive readiness gate', () => {
+  it('6.1/6.2 no readiness request is made on load; choosing Archive requests it', () => {
+    const user = makeUser(['ACCESS_COMPONENTS', 'DELETE_COMPONENTS'])
+    renderPage(baseComponent, user)
+
+    // useArchiveReadiness is always called (rules of hooks), but the hook itself is
+    // mocked here — what we can assert at this layer is the `enabled` argument it
+    // was called with: false before Archive is chosen, true once the dialog is open.
+    expect(mockedUseArchiveReadiness).toHaveBeenLastCalledWith(baseComponent.id, false)
+
+    fireEvent.click(screen.getByRole('button', { name: /^archive$/i }))
+
+    expect(mockedUseArchiveReadiness).toHaveBeenLastCalledWith(baseComponent.id, true)
+  })
+
+  it('6.3 a not-ready verdict offers no control that archives', async () => {
+    const deleteMutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'DELETE_COMPONENTS'])
+    renderPage(baseComponent, user, {
+      deleteMutation: { mutateAsync: deleteMutateAsync },
+      archiveReadiness: {
+        data: {
+          ready: false,
+          entries: [
+            {
+              targetKind: 'REPOSITORY',
+              targetId: 'repo1',
+              targetUrl: null,
+              outcome: 'FAILED',
+              reason: null,
+              reasonKind: null,
+              sharedWith: [],
+              openIssues: [],
+            },
+          ],
+        },
+      },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /^archive$/i }))
+    await waitFor(() => expect(screen.getByText(/repository is not archived/i)).toBeDefined())
+
+    // The dialog's confirm Archive control is disabled, not merely present —
+    // there is no way to submit the archive from here.
+    const archiveBtns = screen.getAllByRole('button', { name: /^archive$/i })
+    const confirmBtn = archiveBtns[archiveBtns.length - 1] as HTMLElement
+    expect(confirmBtn).toBeDisabled()
+
+    fireEvent.click(confirmBtn)
+    expect(deleteMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('6.5 an unrecognised outcome does not unblock — the gate reads `ready`, not the entries', async () => {
+    const deleteMutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'DELETE_COMPONENTS'])
+    renderPage(baseComponent, user, {
+      deleteMutation: { mutateAsync: deleteMutateAsync },
+      archiveReadiness: {
+        data: {
+          ready: false,
+          entries: [
+            {
+              targetKind: 'REPOSITORY',
+              targetId: 'repo1',
+              targetUrl: null,
+              // Cast past the union on purpose: proves the gate trusts `ready`
+              // over deriving a verdict from an outcome it doesn't recognise.
+              outcome: 'SOMETHING_NEW' as unknown as 'PASSED',
+              reason: null,
+              reasonKind: null,
+              sharedWith: [],
+              openIssues: [],
+            },
+          ],
+        },
+      },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /^archive$/i }))
+    const archiveBtns = await screen.findAllByRole('button', { name: /^archive$/i })
+    const confirmBtn = archiveBtns[archiveBtns.length - 1] as HTMLElement
+    expect(confirmBtn).toBeDisabled()
+    fireEvent.click(confirmBtn)
+    expect(deleteMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('6.6 ready:true with only shared-target entries archives', async () => {
+    const deleteMutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'DELETE_COMPONENTS'])
+    renderPage(baseComponent, user, {
+      deleteMutation: { mutateAsync: deleteMutateAsync },
+      archiveReadiness: {
+        data: {
+          ready: true,
+          entries: [
+            {
+              targetKind: 'TEAMCITY_PROJECT',
+              targetId: 'tc1',
+              targetUrl: null,
+              outcome: 'PASSED',
+              reason: null,
+              reasonKind: null,
+              sharedWith: ['other-component'],
+              openIssues: [],
+            },
+          ],
+        },
+      },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /^archive$/i }))
+    const archiveBtns = await screen.findAllByRole('button', { name: /^archive$/i })
+    const confirmBtn = archiveBtns[archiveBtns.length - 1] as HTMLElement
+    expect(confirmBtn).not.toBeDisabled()
+    fireEvent.click(confirmBtn)
+    await waitFor(() => expect(deleteMutateAsync).toHaveBeenCalledOnce())
+  })
+
+  it('6.7 an empty answer with ready:true states nothing was checked and still allows archiving', async () => {
+    const deleteMutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'DELETE_COMPONENTS'])
+    renderPage(baseComponent, user, {
+      deleteMutation: { mutateAsync: deleteMutateAsync },
+      archiveReadiness: { data: { ready: true, entries: [] } },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /^archive$/i }))
+    await waitFor(() => expect(screen.getByTestId('archive-readiness-no-checks')).toBeDefined())
+    expect(screen.queryAllByTestId('archive-readiness-entry')).toHaveLength(0)
+
+    const archiveBtns = screen.getAllByRole('button', { name: /^archive$/i })
+    const confirmBtn = archiveBtns[archiveBtns.length - 1] as HTMLElement
+    expect(confirmBtn).not.toBeDisabled()
+    fireEvent.click(confirmBtn)
+    await waitFor(() => expect(deleteMutateAsync).toHaveBeenCalledOnce())
+  })
+
+  it('a failed readiness request disables the confirm control', async () => {
+    const deleteMutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'DELETE_COMPONENTS'])
+    renderPage(baseComponent, user, {
+      deleteMutation: { mutateAsync: deleteMutateAsync },
+      archiveReadiness: { data: undefined, isError: true },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /^archive$/i }))
+    await waitFor(() => expect(screen.getByTestId('archive-readiness-request-error')).toBeDefined())
+
+    const archiveBtns = screen.getAllByRole('button', { name: /^archive$/i })
+    const confirmBtn = archiveBtns[archiveBtns.length - 1] as HTMLElement
+    expect(confirmBtn).toBeDisabled()
+  })
+
+  it('a loading readiness check disables the confirm control', async () => {
+    const user = makeUser(['ACCESS_COMPONENTS', 'DELETE_COMPONENTS'])
+    renderPage(baseComponent, user, {
+      archiveReadiness: { data: undefined, isLoading: true },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /^archive$/i }))
+    await waitFor(() => expect(screen.getByTestId('archive-readiness-loading')).toBeDefined())
+
+    const archiveBtns = screen.getAllByRole('button', { name: /^archive$/i })
+    const confirmBtn = archiveBtns[archiveBtns.length - 1] as HTMLElement
+    expect(confirmBtn).toBeDisabled()
+  })
+
+  it('the retry control on an UNKNOWN entry requests readiness again without closing the view', async () => {
+    const refetch = vi.fn()
+    const user = makeUser(['ACCESS_COMPONENTS', 'DELETE_COMPONENTS'])
+    renderPage(baseComponent, user, {
+      archiveReadiness: {
+        refetch,
+        data: {
+          ready: false,
+          entries: [
+            {
+              targetKind: 'REPOSITORY',
+              targetId: 'repo1',
+              targetUrl: null,
+              outcome: 'UNKNOWN',
+              reason: null,
+              reasonKind: 'SYSTEM_UNAVAILABLE',
+              sharedWith: [],
+              openIssues: [],
+            },
+          ],
+        },
+      },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /^archive$/i }))
+    const retryBtn = await screen.findByRole('button', { name: /retry/i })
+    fireEvent.click(retryBtn)
+
+    expect(refetch).toHaveBeenCalledOnce()
+    // The dialog itself is still open — retry does not close the view.
+    expect(screen.getByText(/archive component/i)).toBeDefined()
+  })
+
+  it('6.8 (regression) a user without DELETE_COMPONENTS is offered no Archive affordance', () => {
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    renderPage(baseComponent, user)
+    expect(screen.queryByRole('button', { name: /^archive$/i })).toBeNull()
+  })
+
+  it('6.9 (regression) an archived component is offered no Archive affordance and no readiness view', () => {
+    const user = makeUser(['ACCESS_COMPONENTS', 'DELETE_COMPONENTS', 'ARCHIVE_COMPONENTS'])
+    renderPage(archivedComponent, user)
+    expect(screen.queryByRole('button', { name: /^archive$/i })).toBeNull()
+    expect(screen.queryByText(/archive component/i)).toBeNull()
+  })
+
+  it('6.10 (regression) un-archiving makes no readiness request and still restores the component', async () => {
+    const updateMutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'ARCHIVE_COMPONENTS'])
+    renderPage(archivedComponent, user, { updateMutation: { mutateAsync: updateMutateAsync } })
+
+    fireEvent.click(screen.getByRole('button', { name: /unarchive/i }))
+
+    await waitFor(() => {
+      expect(updateMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ archived: false }))
+    })
+    // useArchiveReadiness was never enabled for this flow — there is no Archive
+    // dialog to open on an archived component, so `enabled` was never true.
+    expect(mockedUseArchiveReadiness).not.toHaveBeenCalledWith(archivedComponent.id, true)
   })
 })
 

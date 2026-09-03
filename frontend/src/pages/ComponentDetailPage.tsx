@@ -21,6 +21,8 @@ import {
   DialogFooter,
 } from '../components/ui/dialog'
 import { GeneralTab, type GeneralFormValues, GENERAL_TAB_FIELDS } from '../components/editor/GeneralTab'
+import { useArchiveReadiness } from '../hooks/useArchiveReadiness'
+import { ArchiveReadinessView } from '../components/ArchiveReadinessView'
 import { DocumentationTab } from '../components/editor/DocumentationTab'
 import { SolutionTab } from '../components/editor/SolutionTab'
 import { HeaderLabelsEditor } from '../components/editor/HeaderLabelsEditor'
@@ -194,6 +196,13 @@ function ComponentDetailEditor() {
   const { data: component, isLoading, error } = useComponent(id ?? '')
   const updateMutation = useUpdateComponent(id ?? '')
   const deleteMutation = useDeleteComponent(id ?? '')
+  // Enabled only while the Archive dialog is open (design.md decision 1) — the
+  // answer requires live calls to three external systems, so it is never
+  // requested on component load, only when someone actually chooses Archive.
+  const archiveReadiness = useArchiveReadiness(id ?? '', deleteDialogOpen)
+  const isArchiveReady = archiveReadiness.data?.ready === true
+  const canConfirmArchive =
+    isArchiveReady && !archiveReadiness.isLoading && !archiveReadiness.isFetching && !archiveReadiness.isError
   const { data: user } = useCurrentUser()
 
   const adminMode = useAdminMode((s) => s.enabled)
@@ -1310,6 +1319,15 @@ function ComponentDetailEditor() {
             Are you sure you want to archive <span className="font-semibold text-foreground">{component.name}</span>?
             This will archive the component. You can restore it later.
           </p>
+          <div className="max-h-[50vh] overflow-auto">
+            <ArchiveReadinessView
+              isLoading={archiveReadiness.isLoading}
+              isError={archiveReadiness.isError}
+              data={archiveReadiness.data}
+              onRetry={() => archiveReadiness.refetch()}
+              jiraBaseUrl={jiraBaseUrl}
+            />
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
               Cancel
@@ -1317,7 +1335,7 @@ function ComponentDetailEditor() {
             <Button
               variant="destructive"
               onClick={handleArchive}
-              disabled={deleteMutation.isPending}
+              disabled={deleteMutation.isPending || !canConfirmArchive}
             >
               {deleteMutation.isPending ? 'Archiving…' : 'Archive'}
             </Button>
