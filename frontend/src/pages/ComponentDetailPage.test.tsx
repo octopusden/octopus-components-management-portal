@@ -605,7 +605,7 @@ describe('ComponentDetailPage — Archive readiness gate', () => {
               targetKind: 'REPOSITORY',
               targetId: 'repo1',
               targetUrl: null,
-              outcome: 'FAILED',
+              outcome: 'NOT_COMPLETED',
               reason: null,
               reasonKind: null,
               sharedWith: [],
@@ -644,7 +644,7 @@ describe('ComponentDetailPage — Archive readiness gate', () => {
               targetUrl: null,
               // Cast past the union on purpose: proves the gate trusts `ready`
               // over deriving a verdict from an outcome it doesn't recognise.
-              outcome: 'SOMETHING_NEW' as unknown as 'PASSED',
+              outcome: 'SOMETHING_NEW' as unknown as 'COMPLETED',
               reason: null,
               reasonKind: null,
               sharedWith: [],
@@ -676,7 +676,7 @@ describe('ComponentDetailPage — Archive readiness gate', () => {
               targetKind: 'TEAMCITY_PROJECT',
               targetId: 'tc1',
               targetUrl: null,
-              outcome: 'PASSED',
+              outcome: 'COMPLETED',
               reason: null,
               reasonKind: null,
               sharedWith: ['other-component'],

@@ -19,7 +19,7 @@ export function targetKindLabel(kind: ArchiveReadinessTargetKind): string {
 }
 
 /**
- * Portal-authored wording for a FAILED entry. CRS gives outcome + targetKind
+ * Portal-authored wording for a NOT_COMPLETED entry. CRS gives outcome + targetKind
  * with no prose for outstanding work (design.md decision 3) — this is the
  * only place that sentence is written.
  */
@@ -68,9 +68,9 @@ export function unknownWordingFor(reasonKind: ArchiveReadinessReasonKind | null)
   }
 }
 
-/** Number of PASSED entries whose target was not required to be archived because a live component shares it. */
+/** Number of COMPLETED entries whose target was not required to be archived because a live component shares it. */
 export function sharedTargetCount(entries: ArchiveReadinessEntry[]): number {
-  return entries.filter((e) => e.outcome === 'PASSED' && e.sharedWith.length > 0).length
+  return entries.filter((e) => e.outcome === 'COMPLETED' && e.sharedWith.length > 0).length
 }
 
 /**

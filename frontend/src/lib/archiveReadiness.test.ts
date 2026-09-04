@@ -13,7 +13,7 @@ function entry(overrides: Partial<ArchiveReadinessEntry>): ArchiveReadinessEntry
     targetKind: 'REPOSITORY',
     targetId: 'https://example.com/repo.git',
     targetUrl: null,
-    outcome: 'PASSED',
+    outcome: 'COMPLETED',
     reason: null,
     reasonKind: null,
     sharedWith: [],
@@ -55,18 +55,18 @@ describe('unknownWordingFor', () => {
 })
 
 describe('sharedTargetCount', () => {
-  it('counts only PASSED entries with a non-empty sharedWith', () => {
+  it('counts only COMPLETED entries with a non-empty sharedWith', () => {
     const entries = [
-      entry({ outcome: 'PASSED', sharedWith: ['other-a'] }),
-      entry({ outcome: 'PASSED', sharedWith: [] }),
-      entry({ outcome: 'FAILED', sharedWith: [] }),
-      entry({ outcome: 'PASSED', sharedWith: ['other-b'] }),
+      entry({ outcome: 'COMPLETED', sharedWith: ['other-a'] }),
+      entry({ outcome: 'COMPLETED', sharedWith: [] }),
+      entry({ outcome: 'NOT_COMPLETED', sharedWith: [] }),
+      entry({ outcome: 'COMPLETED', sharedWith: ['other-b'] }),
     ]
     expect(sharedTargetCount(entries)).toBe(2)
   })
 
   it('is zero when nothing was shared', () => {
-    expect(sharedTargetCount([entry({ outcome: 'PASSED', sharedWith: [] })])).toBe(0)
+    expect(sharedTargetCount([entry({ outcome: 'COMPLETED', sharedWith: [] })])).toBe(0)
   })
 })
 

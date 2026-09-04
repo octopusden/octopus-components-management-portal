@@ -91,7 +91,7 @@ export function ArchiveReadinessView({ isLoading, isError, data, onRetry, jiraBa
 }
 
 function outcomeTone(entry: ArchiveReadinessEntry): 'success' | 'destructive' | 'warning' {
-  if (entry.outcome === 'PASSED') return 'success'
+  if (entry.outcome === 'COMPLETED') return 'success'
   if (entry.outcome === 'UNKNOWN') return 'warning'
   return 'destructive'
 }
@@ -105,7 +105,7 @@ function ArchiveReadinessEntryRow({
   jiraBaseUrl?: string
   onRetry: () => void
 }) {
-  const shared = entry.outcome === 'PASSED' && entry.sharedWith.length > 0
+  const shared = entry.outcome === 'COMPLETED' && entry.sharedWith.length > 0
   const unknown = entry.outcome === 'UNKNOWN' ? unknownWordingFor(entry.reasonKind) : null
 
   return (
@@ -122,7 +122,7 @@ function ArchiveReadinessEntryRow({
         </Badge>
       </div>
 
-      {entry.outcome === 'PASSED' && !shared && entry.reason && (
+      {entry.outcome === 'COMPLETED' && !shared && entry.reason && (
         <p className="text-sm text-muted-foreground">{entry.reason}</p>
       )}
 
@@ -132,7 +132,7 @@ function ArchiveReadinessEntryRow({
         </p>
       )}
 
-      {entry.outcome === 'FAILED' && (
+      {entry.outcome === 'NOT_COMPLETED' && (
         <p className="text-sm text-destructive">{entry.reason ?? failedReasonFor(entry.targetKind)}</p>
       )}
 

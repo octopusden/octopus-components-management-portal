@@ -20,21 +20,23 @@ CRS branch `feat/archive-readiness-gate`, not yet on `main`. Recorded here becau
 
 | Field | Shape | Notes |
 |---|---|---|
-| `ready` | `boolean` | CRS's verdict. False iff some entry is `FAILED` or `UNKNOWN`. |
+| `ready` | `boolean` | CRS's verdict. False iff some entry is `NOT_COMPLETED` or `UNKNOWN`. |
 | `targetKind` | `JIRA_ISSUES` \| `JIRA_PROJECT` \| `TEAMCITY_PROJECT` \| `REPOSITORY` | |
 | `targetId` | `string` | Project key (`KEY` or `KEY:prefix` for `JIRA_ISSUES`), TC project id, or the raw recorded repository URL. |
 | `targetUrl` | `string \| null` | Declared as a deep link, but **CRS sends `null` in every path today**. Portal builds its own links. |
-| `outcome` | `PASSED` \| `FAILED` \| `UNKNOWN` | Three, not four. Sharing is not a fourth state. |
-| `reason` | `string \| null` | **`null` on every `FAILED` entry.** Populated on `UNKNOWN`, and on the `PASSED` entries for a target that no longer exists. |
+| `outcome` | `COMPLETED` \| `NOT_COMPLETED` \| `UNKNOWN` | Three, not four. Sharing is not a fourth state. |
+| `reason` | `string \| null` | **`null` on every `NOT_COMPLETED` entry.** Populated on `UNKNOWN`, and on the `COMPLETED` entries for a target that no longer exists. |
 | `reasonKind` | `SYSTEM_UNAVAILABLE` \| `REGISTRY_DATA` \| `NOT_CONFIGURED` \| `null` | Non-null only on `UNKNOWN`. |
-| `sharedWith` | `string[]` | Live component names sharing the target. Non-empty only on `PASSED`; always empty for `JIRA_ISSUES`. |
-| `openIssues` | `{ key, summary }[]` | Non-empty only on a `JIRA_ISSUES` `FAILED` entry. **No URL field.** |
+| `sharedWith` | `string[]` | Live component names sharing the target. Non-empty only on `COMPLETED`; always empty for `JIRA_ISSUES`. |
+| `responsibility` | `COMPONENT_OWNER` \| `F1_TEAM` \| `null` | Who owns the remaining work. `COMPONENT_OWNER` on `JIRA_ISSUES` — only the component's own people can close its issues. `F1_TEAM` on every other kind, and on any `UNKNOWN`, since archiving infrastructure and fixing integrations are the platform team's. `null` on `COMPLETED`, where nothing is owed. |
+| `openIssues` | `{ key, summary }[]` | Non-empty only on a `JIRA_ISSUES` `NOT_COMPLETED` entry. **No URL field.** |
 
 Three consequences that are not obvious from the field list:
 
 - **An unconfigured system produces no entries, not an entry saying so.** CRS returns early per target kind when the integration is not configured. With nothing configured, the response is `ready: true` with an empty `entries` — the verdict says yes because nothing said no.
-- **`sharedWith` is checked before "is it archived".** For every sharing-aware kind, CRS returns `PASSED` with `sharedWith` as soon as sharing is found, without reporting whether the target also happens to be archived. So a non-empty `sharedWith` means *other live components still use this target, and it was not required to be archived* — it does not assert that the target is still running.
-- **A blocking entry carries no prose.** Every `FAILED` result is constructed without a reason. Portal is the only place the sentence can come from.
+- **`sharedWith` is checked before "is it archived".** For every sharing-aware kind, CRS returns `COMPLETED` with `sharedWith` as soon as sharing is found, without reporting whether the target also happens to be archived. So a non-empty `sharedWith` means *other live components still use this target, and it was not required to be archived* — it does not assert that the target is still running.
+- **A blocking entry carries no prose.** Every `NOT_COMPLETED` result is constructed without a reason. Portal is the only place the sentence can come from — and since Portal is writing it anyway, it writes an instruction rather than a diagnosis: not *"the repository is not archived"* but *"Archive the repository"*. A person who opens this view is deciding what to do next, and a row that only names a state leaves them to work out the verb.
+- **`responsibility` decides who is told, not what is said.** The instruction comes from the target kind; the badge beside it comes from `responsibility`. Splitting them means the two can be read separately — someone scanning for their own work looks at badges, someone doing the work reads instructions.
 
 ## Goals / Non-Goals
 
@@ -68,17 +70,17 @@ The outcome union is still declared exhaustively in the types, so an unhandled v
 
 ### 3. Portal owns the wording for a blocking target
 
-CRS gives outcome plus target kind and no prose on `FAILED`. Portal maps the pair to a sentence — a repository that is not archived, a TeamCity project that is not archived, an issue-tracker project that is not retired, open issues that are still open. This is presentation, not judgement: Portal is not deciding anything CRS did not already decide, it is naming what CRS's answer means.
+CRS gives outcome plus target kind and no prose on `NOT_COMPLETED`. Portal maps the pair to a sentence — a repository that is not archived, a TeamCity project that is not archived, an issue-tracker project that is not retired, open issues that are still open. This is presentation, not judgement: Portal is not deciding anything CRS did not already decide, it is naming what CRS's answer means.
 
-Where CRS *does* supply a reason — every `UNKNOWN`, and a `PASSED` target that no longer exists — Portal shows CRS's text rather than inventing its own.
+Where CRS *does* supply a reason — every `UNKNOWN`, and a `COMPLETED` target that no longer exists — Portal shows CRS's text rather than inventing its own.
 
 ### 4. Three blocking presentations, because there are three different remedies
 
-`FAILED` and `UNKNOWN` both block, and `UNKNOWN` splits further by `reasonKind`:
+`NOT_COMPLETED` and `UNKNOWN` both block, and `UNKNOWN` splits further by `reasonKind`:
 
 | Outcome | What the reader must do |
 |---|---|
-| `FAILED` | Go and do the outstanding work in that system |
+| `NOT_COMPLETED` | Go and do the outstanding work in that system |
 | `UNKNOWN` + `SYSTEM_UNAVAILABLE` | Wait and retry — the check itself failed |
 | `UNKNOWN` + `REGISTRY_DATA` | Correct the component's recorded data; retrying will never help |
 | `UNKNOWN` + `NOT_CONFIGURED` | Someone must fix CRS's configuration; retrying will never help |
@@ -119,6 +121,6 @@ Portal does not consult the external systems, does not compute shared usage, and
 
 **The readiness view is slow the first time.** Three systems behind one request. It appears as a loading state after a deliberate action, which is the best place for it, but it is not instant.
 
-**Portal-authored blocking wording can drift from CRS's logic.** Because `FAILED` carries no reason, the sentence lives in Portal while the condition lives in CRS. If CRS changes what makes a repository fail, Portal's sentence silently becomes wrong. The mitigation is that the sentence stays generic — "not archived" — and says nothing CRS's checker does not already imply from the target kind.
+**Portal-authored blocking wording can drift from CRS's logic.** Because `NOT_COMPLETED` carries no reason, the sentence lives in Portal while the condition lives in CRS. If CRS changes what makes a repository fail, Portal's sentence silently becomes wrong. The mitigation is that the sentence stays generic — "not archived" — and says nothing CRS's checker does not already imply from the target kind.
 
 **CRS merges first.** Nothing here can be verified end-to-end until the readiness endpoint is on CRS `main` and the v4 spec is re-vendored. Frontend work proceeds against the contract recorded above, and the manual checks in tasks.md need a running CRS.

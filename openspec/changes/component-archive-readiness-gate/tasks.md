@@ -20,8 +20,8 @@
 ## 1. Types and client
 
 - [x] 1.1 Add the readiness response types to `frontend/src/lib/types.ts` per design.md's contract table: the envelope (`ready` + `entries`) and the entry (`targetKind`, `targetId`, `targetUrl`, `outcome`, `reason`, `reasonKind`, `sharedWith`, `openIssues`)
-- [x] 1.2 Declare `outcome` as a union of the three values CRS reports (`PASSED` / `FAILED` / `UNKNOWN`) and `reasonKind` as a union of its three, not bare `string`, so an unhandled value is a type error rather than a blank cell
-- [x] 1.3 Type `targetUrl`, `reason` and `reasonKind` as nullable, and note at the declaration that `reason` is null on every `FAILED` entry and `targetUrl` on every entry today — the render code must not assume either is present
+- [x] 1.2 Declare `outcome` as a union of the three values CRS reports (`COMPLETED` / `NOT_COMPLETED` / `UNKNOWN`) and `reasonKind` as a union of its three, not bare `string`, so an unhandled value is a type error rather than a blank cell
+- [x] 1.3 Type `targetUrl`, `reason` and `reasonKind` as nullable, and note at the declaration that `reason` is null on every `NOT_COMPLETED` entry and `targetUrl` on every entry today — the render code must not assume either is present
 - [x] 1.4 The hook calls `api.get<ArchiveReadinessResponse>(...)` directly, matching the existing convention (`useComponent`, `useTeamCityValidations`) — there is no per-endpoint wrapper function in `api.ts` for anything else either, so none was added here.
 - [ ] 1.5 Run `npm run vendor-spec` and `npm run generate-types` once CRS's endpoint is on `main`; reconcile the hand-written types against the generated ones and record any deliberate difference here
 
@@ -38,8 +38,8 @@
 - [x] 3.1 Failing test: every entry in the response is rendered, one row per entry, each naming its target kind and identity
 - [x] 3.2 Failing test: an answer covering an issue-tracker project, its open issues, two TeamCity projects and one repository renders five rows
 - [x] 3.3 Failing test: a passing entry is rendered, not omitted, when another entry blocks
-- [x] 3.4 Failing test: a `FAILED` repository entry with `reason: null` states that the repository is not archived
-- [x] 3.5 Failing test: a `FAILED` TeamCity entry and a `FAILED` repository entry each state what is outstanding for their own kind
+- [x] 3.4 Failing test: a `NOT_COMPLETED` repository entry with `reason: null` states that the repository is not archived
+- [x] 3.5 Failing test: a `NOT_COMPLETED` TeamCity entry and a `NOT_COMPLETED` repository entry each state what is outstanding for their own kind
 - [x] 3.6 Failing test: an entry carrying a `reason` shows CRS's text rather than Portal's derived wording
 - [x] 3.7 Failing test: reported open issues are listed and each links to the issue tracker when the base URL is configured
 - [x] 3.8 Failing test: reported open issues are still listed, without links, when no base URL is configured
@@ -61,13 +61,27 @@
 ## 5. Readiness view — unreadable targets and their remedies
 
 - [x] 5.1 Failing test: an `UNKNOWN` entry says the check could not be completed and does not state that the target is not archived
-- [x] 5.2 Failing test: an `UNKNOWN` entry and a `FAILED` entry are distinguishable from each other
+- [x] 5.2 Failing test: an `UNKNOWN` entry and a `NOT_COMPLETED` entry are distinguishable from each other
 - [x] 5.3 Failing test: `SYSTEM_UNAVAILABLE` is worded as retryable and offers a retry control
 - [x] 5.4 Failing test: the retry control requests readiness again without closing the view
 - [x] 5.5 Failing test: `REGISTRY_DATA` states the component's recorded data needs correcting and offers no retry
 - [x] 5.6 Failing test: `NOT_CONFIGURED` states the CRS configuration needs fixing and offers no retry
 - [x] 5.7 Failing test: the three classifications are distinguishable from each other
 - [x] 5.8 Implement the unreadable treatment, keyed on `reasonKind`
+
+## 5b. Action wording and responsibility badges
+
+- [ ] 5b.1 Declare `responsibility` as `'COMPONENT_OWNER' | 'F1_TEAM' | null` in `types.ts`, alongside the other readiness fields
+- [ ] 5b.2 Failing test: a `NOT_COMPLETED` repository row instructs the reader to archive that repository, rather than only reporting it is not archived
+- [ ] 5b.3 Failing test: a `NOT_COMPLETED` TeamCity row instructs the reader to archive that project
+- [ ] 5b.4 Failing test: a `NOT_COMPLETED` issue-tracker project row instructs the reader to move the project into the retired category
+- [ ] 5b.5 Failing test: a `NOT_COMPLETED` open-issues row instructs the reader to close the listed issues
+- [ ] 5b.6 Failing test: an entry carrying a CRS reason shows both that reason and the instruction
+- [ ] 5b.7 Failing test: a `COMPLETED` row carries no instruction and no badge
+- [ ] 5b.8 Failing test: an open-issues row badges the component owner; a repository row badges the platform team
+- [ ] 5b.9 Failing test: the badge is distinguishable from the outcome, and two rows owed by different parties have different badges
+- [ ] 5b.10 Failing test: an unrecognised responsibility value is shown as reported rather than dropped
+- [ ] 5b.11 Implement the per-kind instructions and the badge, taking the party from the response rather than deriving it from the kind
 
 ## 6. The gate
 

@@ -1204,15 +1204,15 @@ export interface FeedbackStatusUpdateRequest {
 export type ArchiveReadinessTargetKind = 'JIRA_ISSUES' | 'JIRA_PROJECT' | 'TEAMCITY_PROJECT' | 'REPOSITORY'
 
 /**
- * PASSED / FAILED / UNKNOWN — three, not four. A target shared with a live
- * component is PASSED with a non-empty `sharedWith`; there is no separate
+ * COMPLETED / NOT_COMPLETED / UNKNOWN — three, not four. A target shared with a live
+ * component is COMPLETED with a non-empty `sharedWith`; there is no separate
  * "skipped" outcome.
  */
-export type ArchiveReadinessOutcome = 'PASSED' | 'FAILED' | 'UNKNOWN'
+export type ArchiveReadinessOutcome = 'COMPLETED' | 'NOT_COMPLETED' | 'UNKNOWN'
 
 /**
  * Classifies the remedy an UNKNOWN entry needs, because `reason` is prose a
- * caller cannot branch on. Always null on PASSED and FAILED. Only
+ * caller cannot branch on. Always null on COMPLETED and NOT_COMPLETED. Only
  * SYSTEM_UNAVAILABLE is worth retrying — REGISTRY_DATA and NOT_CONFIGURED
  * never resolve by retrying.
  */
@@ -1227,15 +1227,15 @@ export interface ArchiveReadinessOpenIssue {
 /**
  * Per-target result in an ArchiveReadinessResponse.
  *
- * `reason` is null on every FAILED entry today — CRS gives outcome + targetKind
+ * `reason` is null on every NOT_COMPLETED entry today — CRS gives outcome + targetKind
  * with no prose for outstanding work, so Portal authors that wording itself
- * (design.md decision 3). `reason` IS populated on UNKNOWN and on a PASSED
+ * (design.md decision 3). `reason` IS populated on UNKNOWN and on a COMPLETED
  * entry for a target that no longer exists.
  *
  * `targetUrl` is declared as a deep link but CRS sends null in every path
  * today — Portal builds its own links from `jiraBaseUrl` where relevant.
  *
- * `sharedWith` is non-empty only on PASSED, and CRS checks sharing BEFORE
+ * `sharedWith` is non-empty only on COMPLETED, and CRS checks sharing BEFORE
  * archived state — a non-empty list means the target was not required to be
  * archived, not that the target is confirmed still live.
  */
@@ -1253,7 +1253,7 @@ export interface ArchiveReadinessEntry {
 /**
  * `ready` is CRS's verdict — gate on this, never on a derived read of
  * `entries`, so an outcome value Portal does not recognise can never unblock
- * archiving (design.md decision 2). False iff some entry is FAILED or UNKNOWN.
+ * archiving (design.md decision 2). False iff some entry is NOT_COMPLETED or UNKNOWN.
  * An unconfigured integration contributes no entries at all, so `entries` can
  * be empty with `ready: true` meaning "nothing was checked", not "all passed".
  */

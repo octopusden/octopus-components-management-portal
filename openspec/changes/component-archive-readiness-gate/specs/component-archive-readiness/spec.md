@@ -97,6 +97,82 @@ Where CRS reports open issues on an entry, they SHALL be listed and SHALL link t
 - **WHEN** an entry reports open issues and no issue-tracker base URL is configured
 - **THEN** each issue is listed without a link
 
+### Requirement: A row that owes work states the action, not the state
+
+For every entry that does not report `COMPLETED`, Portal SHALL state what someone has to do, phrased as an instruction. It SHALL NOT stop at naming the state the target is in.
+
+A person opening this view is deciding what to do next. A row reading *"the repository is not archived"* names a fact and leaves them to work out the verb, the system and the step; a row reading *"Archive the repository"* is the same information already turned into work. CRS supplies no prose on these entries, so Portal is writing the sentence either way — this requires that it write the useful one.
+
+The instruction SHALL be specific to the target's kind and SHALL name the target it applies to. Where CRS supplies its own reason, that reason SHALL still be shown; the instruction SHALL accompany it rather than replace it.
+
+#### Scenario: A repository row says what to do
+
+- **WHEN** a repository entry reports `NOT_COMPLETED`
+- **THEN** the row instructs the reader to archive that repository, rather than only reporting that it is not archived
+
+#### Scenario: A build project row says what to do
+
+- **WHEN** a TeamCity project entry reports `NOT_COMPLETED`
+- **THEN** the row instructs the reader to archive that project
+
+#### Scenario: An issue-tracker project row says what to do
+
+- **WHEN** an issue-tracker project entry reports `NOT_COMPLETED`
+- **THEN** the row instructs the reader to move that project into the retired category
+
+#### Scenario: An open-issues row says what to do
+
+- **WHEN** an open-issues entry reports `NOT_COMPLETED`
+- **THEN** the row instructs the reader to close the listed issues
+
+#### Scenario: A supplied reason is kept alongside the instruction
+
+- **WHEN** an entry carries a reason from CRS and still owes work
+- **THEN** both the reason and the instruction are shown
+
+#### Scenario: A completed row carries no instruction
+
+- **WHEN** an entry reports `COMPLETED`
+- **THEN** the row carries no instruction to act
+
+### Requirement: A row that owes work is badged with who owes it
+
+Portal SHALL show, on every entry that does not report `COMPLETED`, a badge naming the responsible party CRS reported. An entry reporting `COMPLETED` SHALL carry no such badge.
+
+The badge SHALL be visually distinct from the outcome, so the two are read separately: the outcome says whether this step is done, the badge says whose step it is. Someone scanning the view for their own work reads badges; someone doing the work reads instructions.
+
+Portal SHALL take the party from the response rather than deriving it from the target kind, so the two sides cannot drift apart. A party Portal does not recognise SHALL be shown as reported rather than omitted or guessed at.
+
+#### Scenario: An open-issues row is badged to the component owner
+
+- **WHEN** an open-issues entry reports `NOT_COMPLETED` with the component owner responsible
+- **THEN** the row carries a badge naming the component owner
+
+#### Scenario: An infrastructure row is badged to the platform team
+
+- **WHEN** a repository entry reports `NOT_COMPLETED` with the platform team responsible
+- **THEN** the row carries a badge naming the platform team
+
+#### Scenario: The badge is separate from the outcome
+
+- **WHEN** a row shows both an outcome and a responsibility badge
+- **THEN** the two are distinguishable from each other
+
+#### Scenario: Two rows owed by different parties are distinguishable
+
+- **WHEN** one row is owed by the component owner and another by the platform team
+- **THEN** their badges differ, so a reader can tell which work is theirs
+
+#### Scenario: A completed row carries no badge
+
+- **WHEN** an entry reports `COMPLETED`
+- **THEN** the row carries no responsibility badge
+
+#### Scenario: An unrecognised party is shown as reported
+
+- **WHEN** an entry names a responsible party Portal does not recognise
+- **THEN** the badge shows what was reported, and the row is not left unbadged
+
 ### Requirement: Targets that passed because live components share them are named
 
 An entry that passed carrying a non-empty list of components sharing its target SHALL say that the target was not required to be archived, and SHALL name those components. When more than one such entry is present, the view SHALL open with a summary line stating how many targets were not required to be archived.

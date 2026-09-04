@@ -9,7 +9,7 @@ function entry(overrides: Partial<ArchiveReadinessEntry>): ArchiveReadinessEntry
     targetKind: 'REPOSITORY',
     targetId: 'https://example.com/repo.git',
     targetUrl: null,
-    outcome: 'PASSED',
+    outcome: 'COMPLETED',
     reason: null,
     reasonKind: null,
     sharedWith: [],
@@ -50,11 +50,11 @@ describe('ArchiveReadinessView — entries', () => {
     const data: ArchiveReadinessResponse = {
       ready: false,
       entries: [
-        entry({ targetKind: 'JIRA_PROJECT', targetId: 'PROJ', outcome: 'PASSED' }),
-        entry({ targetKind: 'JIRA_ISSUES', targetId: 'PROJ', outcome: 'PASSED' }),
-        entry({ targetKind: 'TEAMCITY_PROJECT', targetId: 'tc1', outcome: 'PASSED' }),
-        entry({ targetKind: 'TEAMCITY_PROJECT', targetId: 'tc2', outcome: 'FAILED' }),
-        entry({ targetKind: 'REPOSITORY', targetId: 'repo1', outcome: 'PASSED' }),
+        entry({ targetKind: 'JIRA_PROJECT', targetId: 'PROJ', outcome: 'COMPLETED' }),
+        entry({ targetKind: 'JIRA_ISSUES', targetId: 'PROJ', outcome: 'COMPLETED' }),
+        entry({ targetKind: 'TEAMCITY_PROJECT', targetId: 'tc1', outcome: 'COMPLETED' }),
+        entry({ targetKind: 'TEAMCITY_PROJECT', targetId: 'tc2', outcome: 'NOT_COMPLETED' }),
+        entry({ targetKind: 'REPOSITORY', targetId: 'repo1', outcome: 'COMPLETED' }),
       ],
     }
     renderView({ data })
@@ -69,8 +69,8 @@ describe('ArchiveReadinessView — entries', () => {
     const data: ArchiveReadinessResponse = {
       ready: false,
       entries: [
-        entry({ targetKind: 'REPOSITORY', targetId: 'repo-ok', outcome: 'PASSED' }),
-        entry({ targetKind: 'REPOSITORY', targetId: 'repo-bad', outcome: 'FAILED' }),
+        entry({ targetKind: 'REPOSITORY', targetId: 'repo-ok', outcome: 'COMPLETED' }),
+        entry({ targetKind: 'REPOSITORY', targetId: 'repo-bad', outcome: 'NOT_COMPLETED' }),
       ],
     }
     renderView({ data })
@@ -78,21 +78,21 @@ describe('ArchiveReadinessView — entries', () => {
     expect(screen.getByText('repo-bad')).toBeInTheDocument()
   })
 
-  it('a FAILED repository entry with no reason states it is not archived', () => {
+  it('a NOT_COMPLETED repository entry with no reason states it is not archived', () => {
     const data: ArchiveReadinessResponse = {
       ready: false,
-      entries: [entry({ targetKind: 'REPOSITORY', targetId: 'repo-bad', outcome: 'FAILED', reason: null })],
+      entries: [entry({ targetKind: 'REPOSITORY', targetId: 'repo-bad', outcome: 'NOT_COMPLETED', reason: null })],
     }
     renderView({ data })
     expect(screen.getByText(/repository is not archived/i)).toBeInTheDocument()
   })
 
-  it('a FAILED TeamCity entry and a FAILED repository entry each state their own kind', () => {
+  it('a NOT_COMPLETED TeamCity entry and a NOT_COMPLETED repository entry each state their own kind', () => {
     const data: ArchiveReadinessResponse = {
       ready: false,
       entries: [
-        entry({ targetKind: 'TEAMCITY_PROJECT', targetId: 'tc1', outcome: 'FAILED', reason: null }),
-        entry({ targetKind: 'REPOSITORY', targetId: 'repo1', outcome: 'FAILED', reason: null }),
+        entry({ targetKind: 'TEAMCITY_PROJECT', targetId: 'tc1', outcome: 'NOT_COMPLETED', reason: null }),
+        entry({ targetKind: 'REPOSITORY', targetId: 'repo1', outcome: 'NOT_COMPLETED', reason: null }),
       ],
     }
     renderView({ data })
@@ -124,7 +124,7 @@ describe('ArchiveReadinessView — entries', () => {
         entry({
           targetKind: 'JIRA_ISSUES',
           targetId: 'PROJ',
-          outcome: 'FAILED',
+          outcome: 'NOT_COMPLETED',
           openIssues: [{ key: 'PROJ-1', summary: 'Still open' }],
         }),
       ],
@@ -142,7 +142,7 @@ describe('ArchiveReadinessView — entries', () => {
         entry({
           targetKind: 'JIRA_ISSUES',
           targetId: 'PROJ',
-          outcome: 'FAILED',
+          outcome: 'NOT_COMPLETED',
           openIssues: [{ key: 'PROJ-1', summary: 'Still open' }],
         }),
       ],
@@ -158,7 +158,7 @@ describe('ArchiveReadinessView — shared targets', () => {
     const data: ArchiveReadinessResponse = {
       ready: true,
       entries: [
-        entry({ targetKind: 'TEAMCITY_PROJECT', targetId: 'tc1', outcome: 'PASSED', sharedWith: ['comp-a', 'comp-b'] }),
+        entry({ targetKind: 'TEAMCITY_PROJECT', targetId: 'tc1', outcome: 'COMPLETED', sharedWith: ['comp-a', 'comp-b'] }),
       ],
     }
     renderView({ data })
@@ -171,7 +171,7 @@ describe('ArchiveReadinessView — shared targets', () => {
     const data: ArchiveReadinessResponse = {
       ready: true,
       entries: [
-        entry({ targetKind: 'TEAMCITY_PROJECT', targetId: 'tc1', outcome: 'PASSED', sharedWith: ['comp-a'] }),
+        entry({ targetKind: 'TEAMCITY_PROJECT', targetId: 'tc1', outcome: 'COMPLETED', sharedWith: ['comp-a'] }),
       ],
     }
     renderView({ data })
@@ -183,8 +183,8 @@ describe('ArchiveReadinessView — shared targets', () => {
     const data: ArchiveReadinessResponse = {
       ready: true,
       entries: [
-        entry({ targetKind: 'TEAMCITY_PROJECT', targetId: 'tc1', outcome: 'PASSED', sharedWith: ['comp-a'] }),
-        entry({ targetKind: 'REPOSITORY', targetId: 'repo1', outcome: 'PASSED', sharedWith: ['comp-b'] }),
+        entry({ targetKind: 'TEAMCITY_PROJECT', targetId: 'tc1', outcome: 'COMPLETED', sharedWith: ['comp-a'] }),
+        entry({ targetKind: 'REPOSITORY', targetId: 'repo1', outcome: 'COMPLETED', sharedWith: ['comp-b'] }),
       ],
     }
     renderView({ data })
@@ -194,7 +194,7 @@ describe('ArchiveReadinessView — shared targets', () => {
   it('shows no summary line for exactly one shared target', () => {
     const data: ArchiveReadinessResponse = {
       ready: true,
-      entries: [entry({ targetKind: 'TEAMCITY_PROJECT', targetId: 'tc1', outcome: 'PASSED', sharedWith: ['comp-a'] })],
+      entries: [entry({ targetKind: 'TEAMCITY_PROJECT', targetId: 'tc1', outcome: 'COMPLETED', sharedWith: ['comp-a'] })],
     }
     renderView({ data })
     expect(screen.queryByTestId('archive-readiness-shared-summary')).toBeNull()
@@ -203,7 +203,7 @@ describe('ArchiveReadinessView — shared targets', () => {
   it('shows no summary line when nothing was shared', () => {
     const data: ArchiveReadinessResponse = {
       ready: true,
-      entries: [entry({ targetKind: 'TEAMCITY_PROJECT', targetId: 'tc1', outcome: 'PASSED', sharedWith: [] })],
+      entries: [entry({ targetKind: 'TEAMCITY_PROJECT', targetId: 'tc1', outcome: 'COMPLETED', sharedWith: [] })],
     }
     renderView({ data })
     expect(screen.queryByTestId('archive-readiness-shared-summary')).toBeNull()
@@ -213,8 +213,8 @@ describe('ArchiveReadinessView — shared targets', () => {
     const data: ArchiveReadinessResponse = {
       ready: true,
       entries: [
-        entry({ targetKind: 'TEAMCITY_PROJECT', targetId: 'tc1', outcome: 'PASSED', sharedWith: ['comp-a'] }),
-        entry({ targetKind: 'REPOSITORY', targetId: 'repo1', outcome: 'PASSED', sharedWith: [] }),
+        entry({ targetKind: 'TEAMCITY_PROJECT', targetId: 'tc1', outcome: 'COMPLETED', sharedWith: ['comp-a'] }),
+        entry({ targetKind: 'REPOSITORY', targetId: 'repo1', outcome: 'COMPLETED', sharedWith: [] }),
       ],
     }
     renderView({ data })
@@ -225,8 +225,8 @@ describe('ArchiveReadinessView — shared targets', () => {
     const data: ArchiveReadinessResponse = {
       ready: true,
       entries: [
-        entry({ targetKind: 'TEAMCITY_PROJECT', targetId: 'tc-shared', outcome: 'PASSED', sharedWith: ['comp-a'] }),
-        entry({ targetKind: 'REPOSITORY', targetId: 'repo-archived', outcome: 'PASSED', sharedWith: [] }),
+        entry({ targetKind: 'TEAMCITY_PROJECT', targetId: 'tc-shared', outcome: 'COMPLETED', sharedWith: ['comp-a'] }),
+        entry({ targetKind: 'REPOSITORY', targetId: 'repo-archived', outcome: 'COMPLETED', sharedWith: [] }),
       ],
     }
     renderView({ data })
@@ -249,11 +249,11 @@ describe('ArchiveReadinessView — unreadable targets', () => {
     expect(screen.queryByText(/repository is not archived/i)).toBeNull()
   })
 
-  it('an UNKNOWN entry and a FAILED entry are distinguishable', () => {
+  it('an UNKNOWN entry and a NOT_COMPLETED entry are distinguishable', () => {
     const data: ArchiveReadinessResponse = {
       ready: false,
       entries: [
-        entry({ targetKind: 'REPOSITORY', targetId: 'repo-failed', outcome: 'FAILED' }),
+        entry({ targetKind: 'REPOSITORY', targetId: 'repo-failed', outcome: 'NOT_COMPLETED' }),
         entry({ targetKind: 'REPOSITORY', targetId: 'repo-unknown', outcome: 'UNKNOWN', reasonKind: 'SYSTEM_UNAVAILABLE' }),
       ],
     }
