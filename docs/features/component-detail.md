@@ -98,7 +98,7 @@ autocomplete (`frontend/src/components/ui/ComponentSelect.tsx`) drives the paren
 |---|---|---|
 | `name` | `string` (rename) | Only when `trimmedName !== '' && trimmedName !== component.name`. |
 | `parentComponentName` | `string \| null \| undefined` | Three states: `unchanged → undefined`, `'' → null` (clear), `value → string` (set). |
-| `archived` | `boolean` | Only when `values.archived !== component.archived`. ARCHIVE_COMPONENTS gate. |
+| `archived` | `boolean` | Only when `values.archived !== component.archived` — dead in practice: no control in the UI ever changes `values.archived` off its server-hydrated value, so this never fires. See "Archiving (readiness gate)" below for how archiving actually happens. |
 
 If any of these fields is always sent, a non-admin's plain edit (only `displayName` or owner) would 403 because the server's PATCH SpEL guards `(#request.archived == null or canArchiveComponent(...))` etc.
 
@@ -146,13 +146,28 @@ This is the lighter path Plan §7.1.6 explicitly allowed. The full ConflictResol
 
 All three persistent conflict banners (the Review-dialog `reviewError`, the Jira-tab `jiraConflict`, and the Build-tab `buildConflict`) are cleared not only at the start of the next save but also when the page navigates to a different component without remounting — the same id-change effect that re-hydrates the General/Misc form (`ComponentDetailPage.tsx`). Without this, a conflict raised on one component could otherwise still be showing after navigating to another.
 
+## Archiving (readiness gate)
+
+Choosing **Archive** in the header (requires `DELETE_COMPONENTS`) opens a dialog that no longer archives immediately. It requests CRS's archive-readiness verdict — `GET /{id}/archive-readiness`, fetched only once the dialog opens (never on page load) via [`useArchiveReadiness`](../../frontend/src/hooks/useArchiveReadiness.ts) — and presents the answer through [`ArchiveReadinessView`](../../frontend/src/components/ArchiveReadinessView.tsx) before the confirm control is enabled.
+
+- **The gate reads CRS's `ready` verdict, not a Portal-derived one.** The confirm Archive button inside the dialog is disabled unless `ready === true`, the request is neither loading nor in-flight, and it did not error. There is no override.
+- **Every reported target is listed** — issue-tracker project, open issues, TeamCity projects, repositories — each with its own outcome. A blocking entry states what is wrong: Portal authors that wording per target kind, since CRS sends no reason on a `FAILED` entry. An `UNKNOWN` entry is worded and offered a retry (or not) based on CRS's `reasonKind` — only `SYSTEM_UNAVAILABLE` is retryable; `REGISTRY_DATA` and `NOT_CONFIGURED` never resolve by retrying.
+- **A target shared with another live component** (non-empty `sharedWith`) is named as "not required to be archived" rather than hidden or read as a failure, and the view opens with a summary line once more than one such target is present.
+- **An answer with no entries** (nothing configured on the CRS side for this component) is stated as "no checks ran" rather than rendered as an empty, clean-looking list — but the `ready` verdict CRS returns still governs whether archiving proceeds.
+- **CRS does not enforce this at write time.** The readiness answer is advisory by CRS's own design — `deleteComponent` (the same soft-delete the Archive button calls) is unchanged and never consults readiness. Portal's gate is the only gate; there is no write-time refusal to handle.
+- **The General tab's `archived` field is not a live control.** There is no `archived` Switch on `GeneralTab` — it was removed well before this gate existed (only the RHF form value + a dead `buildUpdateRequest` compare survive; nothing renders it). Archiving happens exclusively through the header's Archive button.
+- **Un-archiving is unchanged**: the header's Unarchive button (`ARCHIVE_COMPONENTS`), no readiness check, no dialog beyond the existing confirm.
+
+See `openspec/specs/component-archive-readiness/spec.md` (or, pre-archive, `openspec/changes/component-archive-readiness-gate/`) for the full behavioural contract, and that change's `design.md` for the CRS response shape.
+
 ## Auth gating
 
 | Action | UX gate | Server gate |
 |---|---|---|
 | Read everything | none (public per CRS Phase 1 backward compat) | `permitAll` filter chain on GET |
 | Plain edit | Save and inline override controls follow the detail response `canEdit` flag | `canEditComponent(#id.toString())` |
-| Archive / unarchive | none (Switch is always interactive) | `canArchiveComponent(...)` (ROLE_ADMIN today) |
+| Archive | header Archive button requires `DELETE_COMPONENTS`; confirm is disabled until CRS reports the component ready (see "Archiving (readiness gate)" above) | `canDeleteComponent(...)` on both `DELETE` and `GET /{id}/archive-readiness` |
+| Unarchive | header Unarchive button requires `ARCHIVE_COMPONENTS`, no readiness check | `canArchiveComponent(...)` (ROLE_ADMIN today) |
 | Rename | `disabled` input with hint when missing `RENAME_COMPONENTS` | `canRenameComponent(...)` (ROLE_ADMIN today) |
 | Delete | `RequirePermission` around the page (the route is gated up-front)<sup>†</sup> | `canDeleteComponent(...)` |
 
