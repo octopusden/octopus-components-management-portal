@@ -604,7 +604,6 @@ describe('ComponentDetailPage — Archive readiness gate', () => {
             {
               targetKind: 'REPOSITORY',
               targetId: 'repo1',
-              targetUrl: null,
               outcome: 'NOT_COMPLETED',
               reason: null,
               reasonKind: null,
@@ -617,7 +616,7 @@ describe('ComponentDetailPage — Archive readiness gate', () => {
     })
 
     fireEvent.click(screen.getByRole('button', { name: /^archive$/i }))
-    await waitFor(() => expect(screen.getByText(/repository is not archived/i)).toBeDefined())
+    await waitFor(() => expect(screen.getByText(/archive this repository/i)).toBeDefined())
 
     // The dialog's confirm Archive control is disabled, not merely present —
     // there is no way to submit the archive from here.
@@ -641,7 +640,6 @@ describe('ComponentDetailPage — Archive readiness gate', () => {
             {
               targetKind: 'REPOSITORY',
               targetId: 'repo1',
-              targetUrl: null,
               // Cast past the union on purpose: proves the gate trusts `ready`
               // over deriving a verdict from an outcome it doesn't recognise.
               outcome: 'SOMETHING_NEW' as unknown as 'COMPLETED',
@@ -675,7 +673,6 @@ describe('ComponentDetailPage — Archive readiness gate', () => {
             {
               targetKind: 'TEAMCITY_PROJECT',
               targetId: 'tc1',
-              targetUrl: null,
               outcome: 'COMPLETED',
               reason: null,
               reasonKind: null,
@@ -756,7 +753,6 @@ describe('ComponentDetailPage — Archive readiness gate', () => {
             {
               targetKind: 'REPOSITORY',
               targetId: 'repo1',
-              targetUrl: null,
               outcome: 'UNKNOWN',
               reason: null,
               reasonKind: 'SYSTEM_UNAVAILABLE',

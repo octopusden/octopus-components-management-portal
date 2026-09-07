@@ -1211,6 +1211,17 @@ export type ArchiveReadinessTargetKind = 'JIRA_ISSUES' | 'JIRA_PROJECT' | 'TEAMC
 export type ArchiveReadinessOutcome = 'COMPLETED' | 'NOT_COMPLETED' | 'UNKNOWN'
 
 /**
+ * Who owns the work a blocking entry leaves outstanding.
+ *
+ * NOT sent by CRS — its `ArchiveReadinessEntry` carries no such field today, so
+ * Portal derives this from `targetKind` (see `responsibilityFor`). Closing an
+ * issue can only be judged by the component's own people; every other target is
+ * infrastructure the platform team administers, as is anything unreadable.
+ * If CRS ever reports it, prefer the reported value over the derived one.
+ */
+export type ArchiveReadinessResponsibility = 'COMPONENT_OWNER' | 'F1_TEAM'
+
+/**
  * Classifies the remedy an UNKNOWN entry needs, because `reason` is prose a
  * caller cannot branch on. Always null on COMPLETED and NOT_COMPLETED. Only
  * SYSTEM_UNAVAILABLE is worth retrying — REGISTRY_DATA and NOT_CONFIGURED
@@ -1232,8 +1243,8 @@ export interface ArchiveReadinessOpenIssue {
  * (design.md decision 3). `reason` IS populated on UNKNOWN and on a COMPLETED
  * entry for a target that no longer exists.
  *
- * `targetUrl` is declared as a deep link but CRS sends null in every path
- * today — Portal builds its own links from `jiraBaseUrl` where relevant.
+ * There is no `targetUrl`: CRS carries no deep link on an entry, so Portal
+ * builds its own links from `jiraBaseUrl` where relevant.
  *
  * `sharedWith` is non-empty only on COMPLETED, and CRS checks sharing BEFORE
  * archived state — a non-empty list means the target was not required to be
@@ -1242,7 +1253,6 @@ export interface ArchiveReadinessOpenIssue {
 export interface ArchiveReadinessEntry {
   targetKind: ArchiveReadinessTargetKind
   targetId: string
-  targetUrl: string | null
   outcome: ArchiveReadinessOutcome
   reason: string | null
   reasonKind: ArchiveReadinessReasonKind | null

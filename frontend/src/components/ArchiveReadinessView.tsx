@@ -6,11 +6,11 @@ import { InlineError } from './ui/inline-error'
 import { SkeletonBlock } from './ui/skeleton-block'
 import {
   targetKindLabel,
-  failedReasonFor,
   unknownWordingFor,
   sharedTargetCount,
   issueTrackerUrl,
 } from '../lib/archiveReadiness'
+import { actionFor, responsibilityFor, responsibilityLabel } from '../lib/archiveReadinessOwnership'
 import type { ArchiveReadinessEntry, ArchiveReadinessResponse } from '../lib/types'
 
 export interface ArchiveReadinessViewProps {
@@ -107,6 +107,7 @@ function ArchiveReadinessEntryRow({
 }) {
   const shared = entry.outcome === 'COMPLETED' && entry.sharedWith.length > 0
   const unknown = entry.outcome === 'UNKNOWN' ? unknownWordingFor(entry.reasonKind) : null
+  const responsibility = responsibilityFor(entry)
 
   return (
     <div
@@ -120,6 +121,17 @@ function ArchiveReadinessEntryRow({
         <Badge variant={outcomeTone(entry)} className="uppercase tracking-wide">
           {entry.outcome}
         </Badge>
+        {/* Separate from the outcome badge on purpose: the outcome says whether this step is
+            done, this says whose step it is. Someone scanning for their own work reads these. */}
+        {responsibility && (
+          <Badge
+            variant="outline"
+            data-testid="archive-readiness-responsibility"
+            data-responsibility={responsibility}
+          >
+            {responsibilityLabel(responsibility)}
+          </Badge>
+        )}
       </div>
 
       {entry.outcome === 'COMPLETED' && !shared && entry.reason && (
@@ -133,7 +145,14 @@ function ArchiveReadinessEntryRow({
       )}
 
       {entry.outcome === 'NOT_COMPLETED' && (
-        <p className="text-sm text-destructive">{entry.reason ?? failedReasonFor(entry.targetKind)}</p>
+        <div className="space-y-1">
+          {/* CRS sends no reason here today, but if it ever does it is kept — the
+              instruction accompanies it rather than replacing it. */}
+          {entry.reason && <p className="text-sm text-muted-foreground">{entry.reason}</p>}
+          <p className="text-sm text-destructive" data-testid="archive-readiness-action">
+            {actionFor(entry.targetKind)}
+          </p>
+        </div>
       )}
 
       {unknown && (

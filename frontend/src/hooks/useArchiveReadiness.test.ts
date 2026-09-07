@@ -28,7 +28,6 @@ const readyAnswer: ArchiveReadinessResponse = {
     {
       targetKind: 'REPOSITORY',
       targetId: 'https://bitbucket.example.com/scm/proj/repo.git',
-      targetUrl: null,
       outcome: 'COMPLETED',
       reason: null,
       reasonKind: null,

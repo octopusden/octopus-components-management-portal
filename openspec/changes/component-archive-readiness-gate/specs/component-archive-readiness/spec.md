@@ -58,7 +58,7 @@ Readiness SHALL be requested when someone asks to archive, not when the componen
 
 The readiness view SHALL list every entry CRS reported as its own row carrying that target's kind and identity. Entries SHALL NOT be collapsed into a single aggregate verdict, and a passing entry SHALL NOT be omitted.
 
-CRS supplies no reason on a blocking entry that reports outstanding work. For such an entry Portal SHALL state what is wrong, derived from the target's kind. Where CRS does supply a reason, Portal SHALL present CRS's reason rather than substituting its own.
+CRS supplies no reason on a blocking entry that reports outstanding work. Portal therefore authors that wording itself, as an instruction — see the requirement on stating the action. Where CRS does supply a reason, Portal SHALL present CRS's reason rather than substituting its own.
 
 Where CRS reports open issues on an entry, they SHALL be listed and SHALL link to the issue tracker. CRS supplies no URL for an issue or for a target, so Portal SHALL construct the link; when the issue-tracker base URL is not configured, the issues SHALL still be listed, without links.
 
@@ -67,15 +67,10 @@ Where CRS reports open issues on an entry, they SHALL be listed and SHALL link t
 - **WHEN** the readiness answer contains entries for an issue-tracker project, its open issues, two TeamCity projects and one repository
 - **THEN** the view shows five rows, each naming its target
 
-#### Scenario: A blocking entry says what is wrong
+#### Scenario: A blocking entry is not left silent
 
 - **WHEN** a repository entry blocks and CRS supplies no reason for it
-- **THEN** that entry states the repository is not archived
-
-#### Scenario: Blocking wording follows the target's kind
-
-- **WHEN** a TeamCity project entry and a repository entry both block with no reason supplied
-- **THEN** each states what is outstanding for its own kind of target
+- **THEN** that entry still carries wording of Portal's own
 
 #### Scenario: A supplied reason is preferred over Portal's wording
 
@@ -141,7 +136,7 @@ Portal SHALL show, on every entry that does not report `COMPLETED`, a badge nami
 
 The badge SHALL be visually distinct from the outcome, so the two are read separately: the outcome says whether this step is done, the badge says whose step it is. Someone scanning the view for their own work reads badges; someone doing the work reads instructions.
 
-Portal SHALL take the party from the response rather than deriving it from the target kind, so the two sides cannot drift apart. A party Portal does not recognise SHALL be shown as reported rather than omitted or guessed at.
+CRS reports no responsible party today, so Portal SHALL derive it from the target's kind: open issues belong to the component owner, and every other kind — as does any unreadable entry, whatever kind it sits on — belongs to the platform team. Should CRS begin reporting it, the reported value SHALL be preferred over the derived one, and a party Portal does not recognise SHALL be shown as reported rather than omitted or guessed at.
 
 #### Scenario: An open-issues row is badged to the component owner
 
@@ -170,7 +165,7 @@ Portal SHALL take the party from the response rather than deriving it from the t
 
 #### Scenario: An unrecognised party is shown as reported
 
-- **WHEN** an entry names a responsible party Portal does not recognise
+- **WHEN** a responsible party Portal does not recognise reaches the badge
 - **THEN** the badge shows what was reported, and the row is not left unbadged
 
 ### Requirement: Targets that passed because live components share them are named

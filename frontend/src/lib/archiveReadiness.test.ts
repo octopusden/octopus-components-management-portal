@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
   targetKindLabel,
-  failedReasonFor,
   unknownWordingFor,
   sharedTargetCount,
   issueTrackerUrl,
@@ -12,7 +11,6 @@ function entry(overrides: Partial<ArchiveReadinessEntry>): ArchiveReadinessEntry
   return {
     targetKind: 'REPOSITORY',
     targetId: 'https://example.com/repo.git',
-    targetUrl: null,
     outcome: 'COMPLETED',
     reason: null,
     reasonKind: null,
@@ -22,13 +20,10 @@ function entry(overrides: Partial<ArchiveReadinessEntry>): ArchiveReadinessEntry
   }
 }
 
-describe('targetKindLabel / failedReasonFor', () => {
+describe('targetKindLabel', () => {
   it('covers all four target kinds distinctly', () => {
     const kinds = ['REPOSITORY', 'TEAMCITY_PROJECT', 'JIRA_PROJECT', 'JIRA_ISSUES'] as const
-    const labels = kinds.map(targetKindLabel)
-    const reasons = kinds.map(failedReasonFor)
-    expect(new Set(labels).size).toBe(4)
-    expect(new Set(reasons).size).toBe(4)
+    expect(new Set(kinds.map(targetKindLabel)).size).toBe(4)
   })
 })
 

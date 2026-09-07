@@ -18,24 +18,6 @@ export function targetKindLabel(kind: ArchiveReadinessTargetKind): string {
   }
 }
 
-/**
- * Portal-authored wording for a NOT_COMPLETED entry. CRS gives outcome + targetKind
- * with no prose for outstanding work (design.md decision 3) — this is the
- * only place that sentence is written.
- */
-export function failedReasonFor(kind: ArchiveReadinessTargetKind): string {
-  switch (kind) {
-    case 'REPOSITORY':
-      return 'This repository is not archived.'
-    case 'TEAMCITY_PROJECT':
-      return 'This TeamCity project is not archived.'
-    case 'JIRA_PROJECT':
-      return 'This issue-tracker project is not retired.'
-    case 'JIRA_ISSUES':
-      return 'This component has open issues against it.'
-  }
-}
-
 export interface UnknownWording {
   message: string
   /** Whether retrying the check can change the answer (design.md decision 4). */

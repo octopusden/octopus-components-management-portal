@@ -8,7 +8,6 @@ function entry(overrides: Partial<ArchiveReadinessEntry>): ArchiveReadinessEntry
   return {
     targetKind: 'REPOSITORY',
     targetId: 'https://example.com/repo.git',
-    targetUrl: null,
     outcome: 'COMPLETED',
     reason: null,
     reasonKind: null,
@@ -78,16 +77,16 @@ describe('ArchiveReadinessView — entries', () => {
     expect(screen.getByText('repo-bad')).toBeInTheDocument()
   })
 
-  it('a NOT_COMPLETED repository entry with no reason states it is not archived', () => {
+  it('a NOT_COMPLETED repository entry with no reason instructs the reader to archive it', () => {
     const data: ArchiveReadinessResponse = {
       ready: false,
       entries: [entry({ targetKind: 'REPOSITORY', targetId: 'repo-bad', outcome: 'NOT_COMPLETED', reason: null })],
     }
     renderView({ data })
-    expect(screen.getByText(/repository is not archived/i)).toBeInTheDocument()
+    expect(screen.getByText(/archive this repository/i)).toBeInTheDocument()
   })
 
-  it('a NOT_COMPLETED TeamCity entry and a NOT_COMPLETED repository entry each state their own kind', () => {
+  it('a NOT_COMPLETED TeamCity entry and a NOT_COMPLETED repository entry each instruct for their own kind', () => {
     const data: ArchiveReadinessResponse = {
       ready: false,
       entries: [
@@ -96,8 +95,8 @@ describe('ArchiveReadinessView — entries', () => {
       ],
     }
     renderView({ data })
-    expect(screen.getByText(/teamcity project is not archived/i)).toBeInTheDocument()
-    expect(screen.getByText(/repository is not archived/i)).toBeInTheDocument()
+    expect(screen.getByText(/archive this project in teamcity/i)).toBeInTheDocument()
+    expect(screen.getByText(/archive this repository/i)).toBeInTheDocument()
   })
 
   it('shows a supplied reason instead of the derived wording', () => {
@@ -246,7 +245,7 @@ describe('ArchiveReadinessView — unreadable targets', () => {
     }
     renderView({ data })
     expect(screen.getByText(/could not be completed/i)).toBeInTheDocument()
-    expect(screen.queryByText(/repository is not archived/i)).toBeNull()
+    expect(screen.queryByText(/archive this repository/i)).toBeNull()
   })
 
   it('an UNKNOWN entry and a NOT_COMPLETED entry are distinguishable', () => {
@@ -325,5 +324,46 @@ describe('ArchiveReadinessView — empty answer', () => {
     renderView({ data: { ready: true, entries: [] } })
     expect(screen.queryAllByTestId('archive-readiness-entry')).toHaveLength(0)
     expect(screen.queryByText(/passed/i)).toBeNull()
+  })
+})
+
+describe('responsibility badges', () => {
+  it('badges an open-issues row to the component owner and a repository row to the platform team', () => {
+    renderView({
+      data: {
+        ready: false,
+        entries: [
+          entry({ targetKind: 'JIRA_ISSUES', targetId: 'KEY', outcome: 'NOT_COMPLETED' }),
+          entry({ targetKind: 'REPOSITORY', outcome: 'NOT_COMPLETED' }),
+        ],
+      },
+    })
+    const badges = screen.getAllByTestId('archive-readiness-responsibility')
+    expect(badges.map((b) => b.getAttribute('data-responsibility'))).toEqual(['COMPONENT_OWNER', 'F1_TEAM'])
+  })
+
+  it('renders the badge separately from the outcome badge', () => {
+    renderView({ data: { ready: false, entries: [entry({ outcome: 'NOT_COMPLETED' })] } })
+    const row = screen.getByTestId('archive-readiness-entry')
+    const badge = screen.getByTestId('archive-readiness-responsibility')
+    expect(row).toContainElement(badge)
+    // The outcome is still its own element, not folded into the responsibility badge.
+    expect(badge.textContent).not.toMatch(/NOT_COMPLETED/)
+  })
+
+  it('carries no badge and no instruction on a completed row', () => {
+    renderView({ data: { ready: true, entries: [entry({ outcome: 'COMPLETED' })] } })
+    expect(screen.queryByTestId('archive-readiness-responsibility')).toBeNull()
+    expect(screen.queryByTestId('archive-readiness-action')).toBeNull()
+  })
+
+  it('badges an unreadable row to the platform team whatever kind it sits on', () => {
+    renderView({
+      data: {
+        ready: false,
+        entries: [entry({ targetKind: 'JIRA_ISSUES', outcome: 'UNKNOWN', reasonKind: 'SYSTEM_UNAVAILABLE' })],
+      },
+    })
+    expect(screen.getByTestId('archive-readiness-responsibility').getAttribute('data-responsibility')).toBe('F1_TEAM')
   })
 })
