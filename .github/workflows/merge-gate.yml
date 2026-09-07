@@ -19,19 +19,19 @@ jobs:
   # every secret this repo has, bypassing declaration. GITHUB_TOKEN reaches them
   # automatically. release.yaml is the only caller that genuinely needs inherit.
   build:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v2.7.1
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v2.8.0
     with:
       java-version: '25'
       flow-type: 'hybrid'
       docker-image: components-management-portal
 
   quality:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v2.7.1
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-quality-gates.yml@v2.8.0
     with:
       java-version: '25'
 
   security:
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v2.7.1
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v2.8.0
     with:
       java-version: '25'
       # CodeQL runs on PRs. It used to be off here because the repo-level *default
@@ -91,6 +91,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: octopusden/octopus-base/.github/actions/merge-gate@v2.7.1
+      - uses: octopusden/octopus-base/.github/actions/merge-gate@v2.8.0
         with:
           needs: ${{ toJson(needs) }}

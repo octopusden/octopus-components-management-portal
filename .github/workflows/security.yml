@@ -21,7 +21,7 @@ jobs:
   security:
     # No `secrets: inherit`: common-java-gradle-security-reports.yml declares no
     # secrets and reads none — GITHUB_TOKEN reaches it automatically.
-    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v2.7.1
+    uses: octopusden/octopus-base/.github/workflows/common-java-gradle-security-reports.yml@v2.8.0
     with:
       java-version: '25'
       # `actions` is analysed here because this repo runs CodeQL as an *advanced*
