@@ -35,7 +35,7 @@ Three consequences that are not obvious from the field list:
 - **An unconfigured system produces no entries, not an entry saying so.** CRS returns early per target kind when the integration is not configured. With nothing configured, the response is `ready: true` with an empty `entries` — the verdict says yes because nothing said no.
 - **`sharedWith` is checked before "is it archived".** For every sharing-aware kind, CRS returns `COMPLETED` with `sharedWith` as soon as sharing is found, without reporting whether the target also happens to be archived. So a non-empty `sharedWith` means *other live components still use this target, and it was not required to be archived* — it does not assert that the target is still running.
 - **A blocking entry carries no prose.** Every `NOT_COMPLETED` result is constructed without a reason. Portal is the only place the sentence can come from — and since Portal is writing it anyway, it writes an instruction rather than a diagnosis: not *"the repository is not archived"* but *"Archive the repository"*. A person who opens this view is deciding what to do next, and a row that only names a state leaves them to work out the verb.
-- **Ownership is derived here, not reported.** CRS's entry carries no responsibility field, so Portal maps it from `targetKind` (decision 9). The instruction and the badge stay separate concerns even so: the instruction says what to do, the badge says whose it is, and someone scanning for their own work reads only the second.
+- **Ownership is derived here, not reported.** CRS's entry carries no responsibility field, so Portal maps it from `targetKind` (decision 9). The instruction and the assignment stay separate concerns even so: the instruction says what to do, the assignment says whose it is.
 
 ## Goals / Non-Goals
 
@@ -117,6 +117,16 @@ The rule is fixed and short: only a component's own people can judge whether one
 Deriving it is a compromise, not the preference. Ideally CRS reports it, so the two sides cannot drift; it does not, and adding the field there would break five checkers that do not yet populate it. So Portal derives it now, and `responsibilityFor` is the single place to change if CRS starts reporting it — at which point the reported value should win.
 
 The risk this accepts: if CRS's own view of ownership ever differs from this mapping, nothing detects the disagreement. Small today, because the mapping is stated identically in both repos' specs.
+
+### 10. The responsible party is named, not labelled
+
+A chip reading "Component owner" is a category. It does not tell the reader whether the row is theirs, which is the only question they have when a blocking list is in front of them. So the row states it as an assignment — "Responsible: <person>" — and names the owner the component records.
+
+Named as a person for the component owner, collectively for the platform team. That asymmetry is deliberate rather than an inconsistency: one specific person has to close those issues, whereas no individual owns archiving a repository, and naming one would invent an assignment the registry does not hold.
+
+When the reader *is* the owner, the row says the work is theirs and is emphasised. That is the case the whole treatment exists for — the difference between a list someone skims and a list someone acts on.
+
+The owner comes from the component, not from CRS's readiness answer: the readiness endpoint has no notion of people, and the component detail response already carries `componentOwner`. Matching is case-insensitive against the signed-in username, and a reader who is not signed in never sees a row claimed as theirs.
 
 ## Risks / Trade-offs
 

@@ -1326,6 +1326,8 @@ function ComponentDetailEditor() {
               data={archiveReadiness.data}
               onRetry={() => archiveReadiness.refetch()}
               jiraBaseUrl={jiraBaseUrl}
+              componentOwner={component.componentOwner}
+              currentUsername={user?.username}
             />
           </div>
           <DialogFooter>

@@ -130,43 +130,64 @@ The instruction SHALL be specific to the target's kind and SHALL name the target
 - **WHEN** an entry reports `COMPLETED`
 - **THEN** the row carries no instruction to act
 
-### Requirement: A row that owes work is badged with who owes it
+### Requirement: A row that owes work names who is responsible for it
 
-Portal SHALL show, on every entry that does not report `COMPLETED`, a badge naming the responsible party CRS reported. An entry reporting `COMPLETED` SHALL carry no such badge.
+Portal SHALL show, on every entry that does not report `COMPLETED`, an explicit statement of who is responsible for the work. It SHALL read as an assignment rather than a category tag — a label naming the party, not a bare role chip a reader has to interpret.
 
-The badge SHALL be visually distinct from the outcome, so the two are read separately: the outcome says whether this step is done, the badge says whose step it is. Someone scanning the view for their own work reads badges; someone doing the work reads instructions.
+For work belonging to the component owner, that party SHALL be named as a **person**, using the owner the component records. A role label alone does not tell a reader whether the row is theirs. When the component records no owner, the role SHALL be named instead.
 
-CRS reports no responsible party today, so Portal SHALL derive it from the target's kind: open issues belong to the component owner, and every other kind — as does any unreadable entry, whatever kind it sits on — belongs to the platform team. Should CRS begin reporting it, the reported value SHALL be preferred over the derived one, and a party Portal does not recognise SHALL be shown as reported rather than omitted or guessed at.
+For work belonging to the platform team, the party SHALL be named **collectively**. No individual owns archiving infrastructure, so naming one would be wrong.
 
-#### Scenario: An open-issues row is badged to the component owner
+Where the reader is the person responsible, the row SHALL say so rather than naming them back to themselves, and SHALL be visually emphasised over rows that are somebody else's. A reader who is not signed in, or who is not the owner, SHALL NOT see a row marked as theirs.
 
-- **WHEN** an open-issues entry reports `NOT_COMPLETED` with the component owner responsible
-- **THEN** the row carries a badge naming the component owner
+The statement SHALL be distinguishable from the outcome: the outcome says whether the step is done, this says whose step it is. An entry reporting `COMPLETED` SHALL carry no such statement.
 
-#### Scenario: An infrastructure row is badged to the platform team
+A party Portal does not recognise SHALL be named as reported rather than omitted, so a row never loses its owner.
 
-- **WHEN** a repository entry reports `NOT_COMPLETED` with the platform team responsible
-- **THEN** the row carries a badge naming the platform team
+#### Scenario: Each blocking row is assigned to a party
 
-#### Scenario: The badge is separate from the outcome
+- **WHEN** an open-issues entry and a repository entry both report `NOT_COMPLETED`
+- **THEN** the first is assigned to the component owner and the second to the platform team
 
-- **WHEN** a row shows both an outcome and a responsibility badge
+#### Scenario: The statement reads as an assignment and names the person
+
+- **WHEN** an open-issues entry reports `NOT_COMPLETED` and the component records an owner
+- **THEN** the row states that someone is responsible and names that owner
+
+#### Scenario: Infrastructure work names the team, not a person
+
+- **WHEN** a repository entry reports `NOT_COMPLETED`
+- **THEN** the row names the platform team, and does not name the component's owner
+
+#### Scenario: A reader is told when the work is their own
+
+- **WHEN** the reader is the component's owner and an open-issues entry reports `NOT_COMPLETED`
+- **THEN** the row says the work is theirs, rather than naming them, and is emphasised over rows owed by others
+
+#### Scenario: A row owed by someone else is not marked as the reader's
+
+- **WHEN** the reader is not the component's owner and an open-issues entry reports `NOT_COMPLETED`
+- **THEN** the row is not marked as the reader's own work
+
+#### Scenario: A component with no recorded owner names the role
+
+- **WHEN** an open-issues entry reports `NOT_COMPLETED` and the component records no owner
+- **THEN** the row names the component-owner role rather than a person
+
+#### Scenario: The assignment is separate from the outcome
+
+- **WHEN** a blocking row shows both an outcome and an assignment
 - **THEN** the two are distinguishable from each other
 
-#### Scenario: Two rows owed by different parties are distinguishable
-
-- **WHEN** one row is owed by the component owner and another by the platform team
-- **THEN** their badges differ, so a reader can tell which work is theirs
-
-#### Scenario: A completed row carries no badge
+#### Scenario: A completed row assigns nobody
 
 - **WHEN** an entry reports `COMPLETED`
-- **THEN** the row carries no responsibility badge
+- **THEN** the row carries no assignment
 
-#### Scenario: An unrecognised party is shown as reported
+#### Scenario: An unrecognised party is named as reported
 
-- **WHEN** a responsible party Portal does not recognise reaches the badge
-- **THEN** the badge shows what was reported, and the row is not left unbadged
+- **WHEN** a responsible party Portal does not recognise reaches the row
+- **THEN** it is named as reported, and the row is not left unassigned
 
 ### Requirement: Targets that passed because live components share them are named
 

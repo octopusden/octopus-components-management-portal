@@ -38,14 +38,38 @@ export function responsibilityFor(entry: ArchiveReadinessEntry): ArchiveReadines
   return entry.targetKind === 'JIRA_ISSUES' ? 'COMPONENT_OWNER' : 'F1_TEAM'
 }
 
-/** Label for the responsibility badge. Unrecognised values are shown as reported rather than dropped. */
-export function responsibilityLabel(r: ArchiveReadinessResponsibility): string {
-  switch (r) {
-    case 'COMPONENT_OWNER':
-      return 'Component owner'
-    case 'F1_TEAM':
-      return 'F1 team'
-    default:
-      return r
+export interface ResponsibleParty {
+  /** Who to name, already resolved for display. */
+  name: string
+  /** True when the reader is the person named — the row is their own work. */
+  isViewer: boolean
+}
+
+/**
+ * Who to name as responsible, resolved for display.
+ *
+ * The component owner is named as a person, because the row is one specific
+ * person's work and a category label ("Component owner") does not tell a reader
+ * whether it is theirs. The F1 team is named collectively — no individual owns
+ * archiving infrastructure, so naming one would be wrong.
+ *
+ * When the reader is the owner, the row says so instead of repeating their own
+ * name back at them.
+ */
+export function responsibleParty(
+  r: ArchiveReadinessResponsibility,
+  opts: { componentOwner?: string | null; currentUsername?: string | null } = {},
+): ResponsibleParty {
+  if (r === 'F1_TEAM') return { name: 'F1 team', isViewer: false }
+
+  if (r === 'COMPONENT_OWNER') {
+    const owner = opts.componentOwner?.trim()
+    if (!owner) return { name: 'the component owner', isViewer: false }
+    const viewer = opts.currentUsername?.trim()
+    const isViewer = !!viewer && viewer.toLowerCase() === owner.toLowerCase()
+    return { name: isViewer ? `you (${owner})` : owner, isViewer }
   }
+
+  // A party this build predates — name it as reported rather than dropping the row's owner.
+  return { name: r, isViewer: false }
 }

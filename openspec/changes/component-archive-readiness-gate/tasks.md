@@ -82,12 +82,17 @@ Built against CRS as it stands: its entry carries neither `targetUrl` nor
 - [x] 5b.6 Failing test: any `UNKNOWN` goes to `F1_TEAM`, whatever kind it sits on
 - [x] 5b.7 Failing test: a `COMPLETED` entry owes nobody
 - [x] 5b.8 Failing test: an unrecognised party is labelled as reported rather than dropped — guards CRS starting to report a value Portal predates
-- [x] 5b.9 Failing test: an open-issues row badges the component owner and a repository row the platform team, in that order
-- [x] 5b.10 Failing test: the badge sits in the row but is distinct from the outcome badge
-- [x] 5b.11 Failing test: a `COMPLETED` row carries neither badge nor instruction
-- [x] 5b.12 Implement `actionFor` / `responsibilityFor` / `responsibilityLabel` in `lib/archiveReadinessOwnership.ts`, and wire both into `ArchiveReadinessView`
-- [x] 5b.13 Removed `failedReasonFor` — the instruction replaces it, and leaving it would have been dead code with a test guarding it. Its three call-site assertions now assert the instruction instead
-- [ ] 5b.14 If CRS ever reports `responsibility`, prefer it over the derived value — `responsibilityFor` is the single place to change
+- [x] 5b.9 Failing test: an open-issues row is assigned to the component owner and a repository row to the platform team
+- [x] 5b.10 Failing test: the assignment reads as one ("Responsible:") and names the recorded owner as a person
+- [x] 5b.11 Failing test: infrastructure work names the team collectively and does not name the owner
+- [x] 5b.12 Failing test: a reader who is the owner is told the work is theirs, matched case-insensitively, and the row is emphasised
+- [x] 5b.13 Failing test: a reader who is not the owner, or is not signed in, sees no row claimed as theirs
+- [x] 5b.14 Failing test: a component with no recorded owner names the role instead of a person
+- [x] 5b.15 Failing test: the assignment is distinct from the outcome, and a `COMPLETED` row carries neither assignment nor instruction
+- [x] 5b.16 Implement `actionFor` / `responsibilityFor` / `responsibleParty` in `lib/archiveReadinessOwnership.ts`; thread `componentOwner` and the signed-in username from `ComponentDetailPage` into `ArchiveReadinessView`
+- [x] 5b.17 Removed `failedReasonFor` — the instruction replaces it, and leaving it would have been dead code with a test guarding it. Its three call-site assertions now assert the instruction instead
+- [ ] 5b.18 If CRS ever reports `responsibility`, prefer it over the derived value — `responsibilityFor` is the single place to change
+- [ ] 5b.19 Deep links, not done here: `targetId` renders as plain text on repository and TeamCity rows, so an instruction to archive something gives no route to it. `/portal/links` already exposes `gitBaseUrl` and `tcBaseUrl`, and `ComponentTable.tsx` already builds a Bitbucket browse URL from a `vcsPath` — this is wiring, not new capability. It is what CRS's removed `targetUrl` was originally for
 
 ## 6. The gate
 

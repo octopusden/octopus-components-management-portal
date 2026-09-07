@@ -1,4 +1,4 @@
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, UserRound, Users } from 'lucide-react'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import { StatusBanner } from './ui/status-banner'
@@ -10,7 +10,7 @@ import {
   sharedTargetCount,
   issueTrackerUrl,
 } from '../lib/archiveReadiness'
-import { actionFor, responsibilityFor, responsibilityLabel } from '../lib/archiveReadinessOwnership'
+import { actionFor, responsibilityFor, responsibleParty } from '../lib/archiveReadinessOwnership'
 import type { ArchiveReadinessEntry, ArchiveReadinessResponse } from '../lib/types'
 
 export interface ArchiveReadinessViewProps {
@@ -20,6 +20,10 @@ export interface ArchiveReadinessViewProps {
   onRetry: () => void
   /** Base URL for the issue tracker; undefined/empty when unconfigured — open issues still list, without links. */
   jiraBaseUrl?: string
+  /** The component's owner, named on the rows that are their work. Falls back to "the component owner". */
+  componentOwner?: string | null
+  /** The reader, so a row that is their own work can say so instead of naming them. */
+  currentUsername?: string | null
 }
 
 /**
@@ -31,7 +35,15 @@ export interface ArchiveReadinessViewProps {
  *
  * Modelled on TeamCityValidationsTab's per-finding card layout.
  */
-export function ArchiveReadinessView({ isLoading, isError, data, onRetry, jiraBaseUrl }: ArchiveReadinessViewProps) {
+export function ArchiveReadinessView({
+  isLoading,
+  isError,
+  data,
+  onRetry,
+  jiraBaseUrl,
+  componentOwner,
+  currentUsername,
+}: ArchiveReadinessViewProps) {
   if (isLoading) {
     return (
       <div data-testid="archive-readiness-loading" className="space-y-3">
@@ -83,6 +95,8 @@ export function ArchiveReadinessView({ isLoading, isError, data, onRetry, jiraBa
             entry={entry}
             jiraBaseUrl={jiraBaseUrl}
             onRetry={onRetry}
+            componentOwner={componentOwner}
+            currentUsername={currentUsername}
           />
         ))}
       </div>
@@ -100,14 +114,19 @@ function ArchiveReadinessEntryRow({
   entry,
   jiraBaseUrl,
   onRetry,
+  componentOwner,
+  currentUsername,
 }: {
   entry: ArchiveReadinessEntry
   jiraBaseUrl?: string
   onRetry: () => void
+  componentOwner?: string | null
+  currentUsername?: string | null
 }) {
   const shared = entry.outcome === 'COMPLETED' && entry.sharedWith.length > 0
   const unknown = entry.outcome === 'UNKNOWN' ? unknownWordingFor(entry.reasonKind) : null
   const responsibility = responsibilityFor(entry)
+  const party = responsibility ? responsibleParty(responsibility, { componentOwner, currentUsername }) : null
 
   return (
     <div
@@ -121,17 +140,6 @@ function ArchiveReadinessEntryRow({
         <Badge variant={outcomeTone(entry)} className="uppercase tracking-wide">
           {entry.outcome}
         </Badge>
-        {/* Separate from the outcome badge on purpose: the outcome says whether this step is
-            done, this says whose step it is. Someone scanning for their own work reads these. */}
-        {responsibility && (
-          <Badge
-            variant="outline"
-            data-testid="archive-readiness-responsibility"
-            data-responsibility={responsibility}
-          >
-            {responsibilityLabel(responsibility)}
-          </Badge>
-        )}
       </div>
 
       {entry.outcome === 'COMPLETED' && !shared && entry.reason && (
@@ -165,6 +173,30 @@ function ArchiveReadinessEntryRow({
             </Button>
           )}
         </div>
+      )}
+
+      {/* An explicit assignment, not a category tag: "Responsible" plus a person (or the
+          team) reads as someone's work, where a bare label left the reader guessing whether
+          it was theirs. Highlighted when the reader is the person named. */}
+      {responsibility && party && (
+        <p
+          data-testid="archive-readiness-responsibility"
+          data-responsibility={responsibility}
+          data-viewer={party.isViewer ? 'true' : undefined}
+          className={
+            party.isViewer
+              ? 'flex items-center gap-1.5 text-sm font-medium text-foreground'
+              : 'flex items-center gap-1.5 text-sm text-muted-foreground'
+          }
+        >
+          {responsibility === 'COMPONENT_OWNER' ? (
+            <UserRound className="h-3.5 w-3.5 shrink-0" />
+          ) : (
+            <Users className="h-3.5 w-3.5 shrink-0" />
+          )}
+          <span className="text-muted-foreground">Responsible:</span>
+          <span className={party.isViewer ? 'text-foreground' : 'text-foreground/80'}>{party.name}</span>
+        </p>
       )}
 
       {entry.openIssues.length > 0 && (

@@ -327,9 +327,10 @@ describe('ArchiveReadinessView — empty answer', () => {
   })
 })
 
-describe('responsibility badges', () => {
-  it('badges an open-issues row to the component owner and a repository row to the platform team', () => {
+describe('responsibility — who owes the work', () => {
+  it('assigns each row to a party, open issues to the owner and infrastructure to the team', () => {
     renderView({
+      componentOwner: 'jdoe',
       data: {
         ready: false,
         entries: [
@@ -338,32 +339,81 @@ describe('responsibility badges', () => {
         ],
       },
     })
-    const badges = screen.getAllByTestId('archive-readiness-responsibility')
-    expect(badges.map((b) => b.getAttribute('data-responsibility'))).toEqual(['COMPONENT_OWNER', 'F1_TEAM'])
+    const rows = screen.getAllByTestId('archive-readiness-responsibility')
+    expect(rows.map((r) => r.getAttribute('data-responsibility'))).toEqual(['COMPONENT_OWNER', 'F1_TEAM'])
   })
 
-  it('renders the badge separately from the outcome badge', () => {
+  it('reads as an assignment, naming the person responsible', () => {
+    renderView({
+      componentOwner: 'jdoe',
+      data: { ready: false, entries: [entry({ targetKind: 'JIRA_ISSUES', outcome: 'NOT_COMPLETED' })] },
+    })
+    const line = screen.getByTestId('archive-readiness-responsibility')
+    expect(line.textContent).toMatch(/Responsible:/)
+    expect(line.textContent).toMatch(/jdoe/)
+  })
+
+  it('names the team, not a person, for infrastructure work', () => {
+    renderView({
+      componentOwner: 'jdoe',
+      data: { ready: false, entries: [entry({ targetKind: 'REPOSITORY', outcome: 'NOT_COMPLETED' })] },
+    })
+    const line = screen.getByTestId('archive-readiness-responsibility')
+    expect(line.textContent).toMatch(/F1 team/)
+    expect(line.textContent).not.toMatch(/jdoe/)
+  })
+
+  it('tells the reader when the work is their own', () => {
+    renderView({
+      componentOwner: 'jdoe',
+      currentUsername: 'jdoe',
+      data: { ready: false, entries: [entry({ targetKind: 'JIRA_ISSUES', outcome: 'NOT_COMPLETED' })] },
+    })
+    const line = screen.getByTestId('archive-readiness-responsibility')
+    expect(line.getAttribute('data-viewer')).toBe('true')
+    expect(line.textContent).toMatch(/you/i)
+  })
+
+  it('does not mark the row as the reader\'s when someone else owns the component', () => {
+    renderView({
+      componentOwner: 'jdoe',
+      currentUsername: 'someone-else',
+      data: { ready: false, entries: [entry({ targetKind: 'JIRA_ISSUES', outcome: 'NOT_COMPLETED' })] },
+    })
+    expect(screen.getByTestId('archive-readiness-responsibility').getAttribute('data-viewer')).toBeNull()
+  })
+
+  it('falls back to the role when the component records no owner', () => {
+    renderView({
+      componentOwner: null,
+      data: { ready: false, entries: [entry({ targetKind: 'JIRA_ISSUES', outcome: 'NOT_COMPLETED' })] },
+    })
+    expect(screen.getByTestId('archive-readiness-responsibility').textContent).toMatch(/the component owner/)
+  })
+
+  it('stays separate from the outcome, which says whether the step is done', () => {
     renderView({ data: { ready: false, entries: [entry({ outcome: 'NOT_COMPLETED' })] } })
-    const row = screen.getByTestId('archive-readiness-entry')
-    const badge = screen.getByTestId('archive-readiness-responsibility')
-    expect(row).toContainElement(badge)
-    // The outcome is still its own element, not folded into the responsibility badge.
-    expect(badge.textContent).not.toMatch(/NOT_COMPLETED/)
+    const line = screen.getByTestId('archive-readiness-responsibility')
+    expect(screen.getByTestId('archive-readiness-entry')).toContainElement(line)
+    expect(line.textContent).not.toMatch(/NOT_COMPLETED/)
   })
 
-  it('carries no badge and no instruction on a completed row', () => {
+  it('assigns nobody, and instructs nothing, on a completed row', () => {
     renderView({ data: { ready: true, entries: [entry({ outcome: 'COMPLETED' })] } })
     expect(screen.queryByTestId('archive-readiness-responsibility')).toBeNull()
     expect(screen.queryByTestId('archive-readiness-action')).toBeNull()
   })
 
-  it('badges an unreadable row to the platform team whatever kind it sits on', () => {
+  it('assigns an unreadable row to the team whatever kind it sits on', () => {
     renderView({
+      componentOwner: 'jdoe',
       data: {
         ready: false,
         entries: [entry({ targetKind: 'JIRA_ISSUES', outcome: 'UNKNOWN', reasonKind: 'SYSTEM_UNAVAILABLE' })],
       },
     })
-    expect(screen.getByTestId('archive-readiness-responsibility').getAttribute('data-responsibility')).toBe('F1_TEAM')
+    const line = screen.getByTestId('archive-readiness-responsibility')
+    expect(line.getAttribute('data-responsibility')).toBe('F1_TEAM')
+    expect(line.textContent).toMatch(/F1 team/)
   })
 })
