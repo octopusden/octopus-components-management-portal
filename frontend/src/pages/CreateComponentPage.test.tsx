@@ -980,3 +980,32 @@ describe('CreateComponentPage — clone mode', () => {
     expect((screen.getByPlaceholderText('AD userkey') as HTMLInputElement).value).toBe('alice')
   })
 })
+
+// SYS-095: '_' is legal in the Component Key only inside the client-code prefix.
+describe('CreateComponentPage — component key with a client-code prefix', () => {
+  async function externalGeneralStep() {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular external component/i }))
+    await clickNext() // → General
+  }
+
+  it('accepts an underscore inside the Client Code prefix', async () => {
+    await externalGeneralStep()
+    await userEvent.type(screen.getByLabelText('Client Code'), 'AB_CD')
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'ab_cd-payments')
+    await waitFor(() =>
+      expect(screen.queryByText(/must be lowercase letters, digits/i)).toBeNull(),
+    )
+  })
+
+  it('flags a previously legal key as soon as the Client Code is cleared', async () => {
+    await externalGeneralStep()
+    const clientCode = screen.getByLabelText('Client Code')
+    await userEvent.type(clientCode, 'AB_CD')
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'ab_cd-payments')
+    await userEvent.clear(clientCode)
+    await waitFor(() =>
+      expect(screen.getByText(/must be lowercase letters, digits/i)).toBeDefined(),
+    )
+  })
+})

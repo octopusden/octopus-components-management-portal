@@ -67,6 +67,33 @@ The UX gate is a hint, not a security boundary. Server-side `@PreAuthorize canRe
 
 The save handler in `ComponentDetailPage.handleSave` only sends `name` on a real change (`trimmedName !== '' && trimmedName !== component.name`). Defence in depth — even if the UI gate were bypassed, an unchanged form value never trips the server's gate.
 
+#### Key format on rename (SYS-095)
+
+A rename target follows the same rule as a newly created key: lowercase letters, digits and
+`-`, starting with a letter — **or** the component's own Client Code, lowercased, as a
+leading prefix, followed by the end of the key or `-` and the usual tail. That prefix is the
+only place a `_` may appear, so a component with no Client Code can carry none, and a Client
+Code without an underscore grants none. Uppercase in a key stays rejected either way, and
+so is a key that doesn't start with a lowercase letter — a Client Code may begin with a
+digit or an underscore, a key may not.
+
+The check is **change-based**: an untouched key is never re-validated, mirroring CRS's own
+`isRename` gate. That matters — 214 existing components have keys that predate the
+convention (uppercase, dots, underscores with no Client Code behind them), and re-validating
+those would leave their editors permanently invalid for no reason.
+
+A Client Code hidden by field-config still grants the underscore when it is populated: the
+form holds the stored value even when the input isn't rendered, matching CRS's use of the
+effective persisted value. Editing the Client Code re-checks the key immediately, without
+touching the key field.
+
+The message names the prefix that would legalise the underscore when a Client Code exists,
+and falls back to the plain charset rule when it doesn't. CRS is the enforcing side —
+[SYS-095](https://github.com/octopusden/octopus-components-registry-service/blob/main/docs/registry/requirements-common.md)
+and [ADR-020](https://github.com/octopusden/octopus-components-registry-service/blob/main/docs/registry/adr/020-component-key-format.md);
+the Portal check is a pre-submit mirror of it. See [`CONTEXT.md`](../../CONTEXT.md) for the
+**client-code prefix** term.
+
 ### Display Name (nullable + unique; required for explicit+external)
 
 `displayName` is **nullable** + UNIQUE server-side, stored verbatim from the DSL — it is NOT

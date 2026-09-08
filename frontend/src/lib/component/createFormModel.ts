@@ -111,16 +111,37 @@ export function profileFromSource(
 // Profile-dependent Component-Key requirement message, or null when the key is
 // acceptable for the profile. Base-regex failure is reported first; then the
 // per-profile substring rule.
+// SYS-095 / CRS ADR-020: an underscore is legal in a Component Key only inside its
+// client-code prefix — the lowercased Client Code of the same component, leading the key
+// and followed by the end of the key or '-' and the usual kebab tail. No Client Code
+// therefore means no underscore, and an uppercase key stays rejected either way.
+const KEY_TAIL_REGEX = /^(-[a-z0-9-]*)?$/
+
+export function componentKeyCharsetError(key: string, clientCode?: string): string | null {
+  const trimmed = key.trim()
+  if (BASE_KEY_REGEX.test(trimmed)) return null
+
+  // The prefix relaxes the charset, never the letter start: a Client Code may begin with
+  // a digit or an underscore (`[A-Z_0-9]+`), and a Component Key may not.
+  const prefix = clientCode?.trim().toLowerCase()
+  if (prefix && trimmed.startsWith(prefix) && /^[a-z]/.test(trimmed)) {
+    if (KEY_TAIL_REGEX.test(trimmed.slice(prefix.length))) return null
+  }
+  return prefix
+    ? `Component Key must be lowercase letters, digits and "-", starting with a letter; "_" is allowed only inside the Client Code prefix "${prefix}" (e.g. ${prefix}-payments)`
+    : 'Component Key must be lowercase letters, digits and "-", starting with a letter'
+}
+
 export function componentKeyError(
   key: string,
   profile: ComponentProfile,
   patterns: readonly string[] | undefined,
+  clientCode?: string,
 ): string | null {
   const trimmed = key.trim()
   if (!trimmed) return null
-  if (!BASE_KEY_REGEX.test(trimmed)) {
-    return 'Component Key must be lowercase letters, digits and "-", starting with a letter'
-  }
+  const charsetError = componentKeyCharsetError(trimmed, clientCode)
+  if (charsetError) return charsetError
   const solutionPattern = patterns?.[0] ?? '-solution'
   const bundlePattern = patterns?.[1] ?? 'dmp-bundle'
   if (profile === 'solution' && !trimmed.includes(solutionPattern)) {
@@ -203,7 +224,7 @@ export function makeCreateSchema(
     })
     .superRefine((v, ctx) => {
       // Profile-dependent Component-Key rule (strict for new components).
-      const keyError = componentKeyError(v.name, profile, solutionPatterns)
+      const keyError = componentKeyError(v.name, profile, solutionPatterns, v.clientCode)
       if (keyError) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['name'], message: keyError })
       }
