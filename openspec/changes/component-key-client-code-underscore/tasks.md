@@ -57,3 +57,13 @@
 - [x] 5.1 `npm run lint` + `npx vitest run` on the touched suites
 - [x] 5.2 `./gradlew qualityStatic` (Portal) — no Kotlin touched, frontend gates are npm
 - [x] 5.3 `/ponytail-review` pass over the diff before the PR
+
+## 6. Archive (after merge)
+
+- [ ] 6.1 Fold this delta into `openspec/specs/` and drop the change artifact, per
+      `openspec/config.yaml`'s archive guidance and the living-document rule in `AGENTS.md`.
+      Deliberately left for after merge, not before: the proposal and spec are what
+      reviewers are reading on this PR, and the repo's precedent (`registered-build-parameters-display`)
+      keeps a merged change directory until its archive pass.
+- [ ] 6.2 While archiving, re-check that `docs/features/component-detail.md` still tells the
+      same story as the folded spec — the two must not contradict each other.

@@ -21,6 +21,7 @@ The Components Registry domain is split across two repositories. This file is th
 | **Frontend feature docs** | [`docs/features/`](docs/features/) | UX flows for component-list, component-detail, audit-log, admin-migration, admin-mode, admin-tc-resync, app-footer. |
 | **OKD onboarding checklist** | [`docs/onboarding/components-management-portal.md`](docs/onboarding/components-management-portal.md) | Vault, Spring Cloud Config, OKD secrets, TeamCity wiring. |
 | **Portal-side tech-debt (frontend + ops)** | [`docs/tech-debt/`](docs/tech-debt/) (`TD-NNN`) | Playwright Keycloak fixture (frontend), OpenAPI types (frontend), persisted session store (BFF), TLS Ingress migration (ops/infra), schema-v2 migration follow-ups (frontend). |
+| **Domain glossary** | [`CONTEXT.md`](CONTEXT.md) | The canonical term for each concept this repo keeps naming three ways — Component Key vs `name` vs `component_key`, Display Name, Client Code, client-code prefix, Rename. Glossary only, no implementation detail. |
 | **Agent / build commands** | [`AGENTS.md`](AGENTS.md) | Build, test, quality gates. Read before touching code. |
 
 ### CRS repo owns
