@@ -102,6 +102,32 @@ component editor — without the user touching the key field.
 - **WHEN** the user clears the Client Code
 - **THEN** the key is flagged
 
+### Requirement: On create, the key is validated against the Client Code that is actually sent
+
+The Client Code a create request carries is not always the form field: a Client Code the
+field-config makes non-editable is stripped from the payload, and when the component is not
+external the form value is ignored in favour of a cloned source's code. The Portal SHALL
+validate the Component Key against that effective value, so a key it accepts is never one
+CRS rejects for a Client Code that never arrived.
+
+#### Scenario: A non-editable Client Code grants nothing
+
+- **GIVEN** a create flow whose `component.clientCode` is not editable
+- **WHEN** the user's key is `ab_cd-copy` and the form holds the Client Code `AB_CD`
+- **THEN** the key is rejected, because the payload will not carry that code
+
+#### Scenario: Switching away from an external profile withdraws the Client Code
+
+- **GIVEN** a from-scratch create where the user entered the Client Code `AB_CD` while external
+- **WHEN** the profile is switched to a non-external one and the key is `ab_cd-copy`
+- **THEN** the key is rejected, because a non-external create does not send the form's code
+
+#### Scenario: A clone that is not external keeps its source's Client Code
+
+- **GIVEN** a clone of a component whose stored Client Code is `AB_CD`, on a non-external profile
+- **WHEN** the key is `ab_cd-copy`
+- **THEN** the key is accepted, because the payload preserves the source's code
+
 ### Requirement: A hidden Client Code still counts when it is populated
 
 A Client Code hidden by field-config SHALL still grant the underscore when it is populated

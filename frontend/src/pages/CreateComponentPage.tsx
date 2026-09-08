@@ -259,8 +259,9 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
   const effectiveProfile: ComponentProfile = profile ?? 'regular-external'
 
   const schema = useMemo(
-    () => makeCreateSchema(editable, supportedGroups, gitBaseUrl, effectiveProfile, solutionPatterns),
-    [editable, supportedGroups, gitBaseUrl, effectiveProfile, solutionPatterns],
+    () =>
+      makeCreateSchema(editable, supportedGroups, gitBaseUrl, effectiveProfile, solutionPatterns, source ?? undefined),
+    [editable, supportedGroups, gitBaseUrl, effectiveProfile, solutionPatterns, source],
   )
 
   const {

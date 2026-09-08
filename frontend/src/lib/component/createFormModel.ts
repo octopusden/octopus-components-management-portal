@@ -6,6 +6,7 @@ import { isSolutionCandidate } from '../solutionKey'
 import { selectBaseRow } from '../api/baseRow'
 import type { ComponentDetail, EscrowAspect } from '../types'
 import {
+  effectiveCreateClientCode,
   vcsBlockApplies,
   DEPRECATED_BUILD_SYSTEMS,
   FALLBACK_VCS_BRANCH,
@@ -173,6 +174,9 @@ export function makeCreateSchema(
   gitBaseUrl: string | null | undefined,
   profile: ComponentProfile,
   solutionPatterns: readonly string[] | undefined,
+  // Needed for the Component-Key rule: a clone that is not external keeps its source's
+  // clientCode in the payload, so the key may legally lean on it.
+  source?: ComponentDetail,
 ) {
   return z
     .object({
@@ -224,7 +228,12 @@ export function makeCreateSchema(
     })
     .superRefine((v, ctx) => {
       // Profile-dependent Component-Key rule (strict for new components).
-      const keyError = componentKeyError(v.name, profile, solutionPatterns, v.clientCode)
+      const keyError = componentKeyError(
+        v.name,
+        profile,
+        solutionPatterns,
+        effectiveCreateClientCode(v, source, editable),
+      )
       if (keyError) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['name'], message: keyError })
       }

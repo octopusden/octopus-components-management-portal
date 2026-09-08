@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { componentKeyCharsetError, initialValues, type ComponentDefaults } from './createFormModel'
+import {
+  componentKeyCharsetError,
+  initialValues,
+  makeCreateSchema,
+  type ComponentDefaults,
+} from './createFormModel'
+import type { CreateFormValues } from './buildCreateRequest'
 import type { ComponentConfiguration, ComponentDetail } from '../types'
 
 function makeBaseRow(overrides: Partial<ComponentConfiguration> = {}): ComponentConfiguration {
@@ -159,5 +165,45 @@ describe('componentKeyCharsetError — client-code prefix', () => {
     expect(componentKeyCharsetError('payments_1', 'AB_CD')).toBe(
       'Component Key must be lowercase letters, digits and "-", starting with a letter; "_" is allowed only inside the Client Code prefix "ab_cd" (e.g. ab_cd-payments)',
     )
+  })
+})
+
+// The create schema must validate the Component Key against the Client Code that
+// buildCreateRequest will actually SEND, not the raw form value: the payload strips a
+// non-editable clientCode and ignores the form value when the component is not external.
+// A key accepted here but sent without its client code earns a 400 from CRS.
+describe('makeCreateSchema — key validated against the client code that is sent', () => {
+  function form(overrides: Partial<CreateFormValues> = {}): CreateFormValues {
+    return {
+      ...initialValues(null, {}),
+      name: 'ab_cd-copy',
+      componentOwner: 'alice',
+      buildSystem: 'PROVIDED',
+      jiraProjectKey: 'ABCD',
+      versionFormat: '$major.$minor',
+      distributionExplicit: false,
+      distributionExternal: true,
+      clientCode: 'AB_CD',
+      ...overrides,
+    }
+  }
+  const keyIssues = (schema: ReturnType<typeof makeCreateSchema>, values: CreateFormValues) => {
+    const result = schema.safeParse(values)
+    return result.success ? [] : result.error.issues.filter((i) => i.path[0] === 'name')
+  }
+  const allEditable = () => true
+
+  it('accepts the key when the form client code is the one that gets sent', () => {
+    expect(keyIssues(makeCreateSchema(allEditable, [], null, 'regular-external', undefined), form())).toHaveLength(0)
+  })
+
+  it('rejects the key when clientCode is not editable, because the payload strips it', () => {
+    const schema = makeCreateSchema((f) => f !== 'clientCode', [], null, 'regular-external', undefined)
+    expect(keyIssues(schema, form())).toHaveLength(1)
+  })
+
+  it('rejects the key when the component is not external, because the form value is ignored', () => {
+    const schema = makeCreateSchema(allEditable, [], null, 'regular-internal', undefined)
+    expect(keyIssues(schema, form({ distributionExternal: false }))).toHaveLength(1)
   })
 })
