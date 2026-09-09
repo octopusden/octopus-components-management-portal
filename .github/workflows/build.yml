@@ -15,6 +15,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+permissions:
+  contents: read
+
 jobs:
   run-build-and-deploy:
     uses: octopusden/octopus-base/.github/workflows/common-java-gradle-build.yml@v3.0.0
