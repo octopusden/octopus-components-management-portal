@@ -233,6 +233,20 @@ const VISIBILITY_GATED_CREATE_FIELDS = [
   'vcsExternalRegistry',
 ] as const
 
+// The clientCode a create request will actually CARRY, which is not always the form
+// field: a non-editable field is stripped from the payload, and when the component is
+// not external the form value is ignored in favour of a cloned source's code. SYS-095
+// makes the Component Key's legal charset depend on this value, so the form must
+// validate against it — validating the raw form field accepts keys that CRS then 400s.
+export function effectiveCreateClientCode(
+  form: Pick<CreateFormValues, 'distributionExternal' | 'clientCode'>,
+  source?: ComponentDetail,
+  isFieldEditable: (field: string) => boolean = () => true,
+): string | undefined {
+  if (!isFieldEditable('clientCode')) return undefined
+  return form.distributionExternal ? form.clientCode || undefined : (source?.clientCode ?? undefined)
+}
+
 export function buildCreateRequest(
   form: CreateFormValues,
   source?: ComponentDetail,
@@ -262,9 +276,7 @@ export function buildCreateRequest(
     // clientCode is a General-step field for external components: the form wins
     // when external, otherwise the source value is preserved (non-external clone
     // semantics unchanged). A hidden/readonly field is stripped below regardless.
-    clientCode: form.distributionExternal
-      ? form.clientCode || undefined
-      : (source?.clientCode ?? undefined),
+    clientCode: effectiveCreateClientCode(form, source, isFieldEditable),
     solution: source?.solution ?? undefined,
     parentComponentName: source?.parentComponentName ?? undefined,
     archived: false,

@@ -919,3 +919,62 @@ describe('GeneralTab — Classification', () => {
     expect(screen.queryByTestId('section-classification')).toBeNull()
   })
 })
+
+// SYS-095: a rename target follows the same key rule as a create — '_' only inside
+// the client-code prefix. An untouched existing key is never re-validated.
+describe('GeneralTab — rename target key format', () => {
+  const KEY_MESSAGE = /must be lowercase letters, digits/i
+
+  it('accepts an underscore backed by the stored Client Code', async () => {
+    renderWithProviders(<Harness component={baseComponent({ clientCode: 'AB_CD' })} />)
+    const key = screen.getByLabelText(/^component key$/i)
+    await userEvent.clear(key)
+    await userEvent.type(key, 'ab_cd-payments')
+    await waitFor(() => expect(screen.queryByText(KEY_MESSAGE)).toBeNull())
+  })
+
+  it('rejects an underscore on a component with no Client Code', async () => {
+    renderWithProviders(<Harness component={baseComponent({ clientCode: null })} />)
+    const key = screen.getByLabelText(/^component key$/i)
+    await userEvent.clear(key)
+    await userEvent.type(key, 'ab_cd-payments')
+    await waitFor(() => expect(screen.getByText(KEY_MESSAGE)).toBeDefined())
+  })
+
+  it('accepts the underscore when the stored Client Code is populated but hidden', async () => {
+    mockUseFieldConfigEntry.mockImplementation((path: string) => {
+      if (path === 'component.clientCode') return makeEntry('hidden')
+      return makeEntry('editable')
+    })
+    renderWithProviders(<Harness component={baseComponent({ clientCode: 'AB_CD' })} />)
+    const key = screen.getByLabelText(/^component key$/i)
+    await userEvent.clear(key)
+    await userEvent.type(key, 'ab_cd-payments')
+    await waitFor(() => expect(screen.queryByText(KEY_MESSAGE)).toBeNull())
+  })
+
+  it('does not flag a legacy key that differs only by surrounding whitespace', async () => {
+    renderWithProviders(
+      <Harness component={baseComponent({ name: 'Legacy.Key_1', clientCode: null })} />,
+    )
+    // CRS trims before deciding whether this is a rename at all, so a stray space
+    // must not turn an untouched legacy key into a validated rename target.
+    await userEvent.type(screen.getByLabelText(/^component key$/i), ' ')
+    await waitFor(() => expect(screen.queryByText(KEY_MESSAGE)).toBeNull())
+  })
+
+  it('says nothing while the field is cleared mid-retype', async () => {
+    // A blank key is omitted from the PATCH by buildUpdateRequest's nameChanged gate,
+    // so it is not-yet-attempted rather than a charset violation.
+    renderWithProviders(<Harness component={baseComponent({ clientCode: null })} />)
+    await userEvent.clear(screen.getByLabelText(/^component key$/i))
+    await waitFor(() => expect(screen.queryByText(KEY_MESSAGE)).toBeNull())
+  })
+
+  it('never re-validates an untouched legacy key', () => {
+    renderWithProviders(
+      <Harness component={baseComponent({ name: 'Legacy.Key_1', clientCode: null })} />,
+    )
+    expect(screen.queryByText(KEY_MESSAGE)).toBeNull()
+  })
+})

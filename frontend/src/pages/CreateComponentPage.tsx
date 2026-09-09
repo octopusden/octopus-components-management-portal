@@ -259,8 +259,9 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
   const effectiveProfile: ComponentProfile = profile ?? 'regular-external'
 
   const schema = useMemo(
-    () => makeCreateSchema(editable, supportedGroups, gitBaseUrl, effectiveProfile, solutionPatterns),
-    [editable, supportedGroups, gitBaseUrl, effectiveProfile, solutionPatterns],
+    () =>
+      makeCreateSchema(editable, supportedGroups, gitBaseUrl, effectiveProfile, solutionPatterns, source ?? undefined),
+    [editable, supportedGroups, gitBaseUrl, effectiveProfile, solutionPatterns, source],
   )
 
   const {
@@ -836,7 +837,13 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
       </p>
       {external && editable('clientCode') && (
         <Field label="Client Code" htmlFor="create-clientCode" path="component.clientCode">
-          <Input id="create-clientCode" placeholder="CLIENT_CODE" {...register('clientCode')} />
+          {/* SYS-095: the Component Key's legal charset depends on this value, so a change
+              here must re-validate the key even though nobody touched the key field. */}
+          <Input
+            id="create-clientCode"
+            placeholder="CLIENT_CODE"
+            {...register('clientCode', { onChange: () => void trigger('name') })}
+          />
           <FieldError message={errors.clientCode?.message} />
         </Field>
       )}

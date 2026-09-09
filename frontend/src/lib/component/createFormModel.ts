@@ -6,6 +6,7 @@ import { isSolutionCandidate } from '../solutionKey'
 import { selectBaseRow } from '../api/baseRow'
 import type { ComponentDetail, EscrowAspect } from '../types'
 import {
+  effectiveCreateClientCode,
   vcsBlockApplies,
   DEPRECATED_BUILD_SYSTEMS,
   FALLBACK_VCS_BRANCH,
@@ -111,16 +112,55 @@ export function profileFromSource(
 // Profile-dependent Component-Key requirement message, or null when the key is
 // acceptable for the profile. Base-regex failure is reported first; then the
 // per-profile substring rule.
+// SYS-095 / CRS ADR-020: an underscore is legal in a Component Key only inside its
+// client-code prefix — the lowercased Client Code of the same component, leading the key
+// and followed by the end of the key or '-' and the usual kebab tail. No Client Code
+// therefore means no underscore, and an uppercase key stays rejected either way.
+const KEY_TAIL_REGEX = /^(-[a-z0-9-]*)?$/
+
+export function componentKeyCharsetError(key: string, clientCode?: string): string | null {
+  const trimmed = key.trim()
+  if (BASE_KEY_REGEX.test(trimmed)) return null
+
+  // The prefix relaxes the charset, never the letter start: a Client Code may begin with
+  // a digit or an underscore (`[A-Z_0-9]+`), and a Component Key may not.
+  const prefix = clientCode?.trim().toLowerCase()
+  if (prefix && trimmed.startsWith(prefix) && /^[a-z]/.test(trimmed)) {
+    if (KEY_TAIL_REGEX.test(trimmed.slice(prefix.length))) return null
+  }
+  return prefix
+    ? `Component Key must be lowercase letters, digits and "-", starting with a letter; "_" is allowed only inside the Client Code prefix "${prefix}" (e.g. ${prefix}-payments)`
+    : 'Component Key must be lowercase letters, digits and "-", starting with a letter'
+}
+
+/**
+ * Rename-target charset check, shared by the editor's inline error and its Save gate.
+ *
+ * Change-based like CRS's `isRename`: an untouched key is never re-validated, so legacy
+ * keys that predate the convention don't render their own editor invalid. Blank-tolerant
+ * because `buildUpdateRequest`'s `nameChanged` gate treats a blank name as "not a rename"
+ * and omits it from the PATCH — a cleared field is not-yet-attempted, not a violation.
+ */
+export function renameKeyCharsetError(
+  key: string | undefined,
+  currentName: string,
+  clientCode?: string,
+): string | null {
+  const trimmed = (key ?? '').trim()
+  if (!trimmed || trimmed === currentName) return null
+  return componentKeyCharsetError(trimmed, clientCode)
+}
+
 export function componentKeyError(
   key: string,
   profile: ComponentProfile,
   patterns: readonly string[] | undefined,
+  clientCode?: string,
 ): string | null {
   const trimmed = key.trim()
   if (!trimmed) return null
-  if (!BASE_KEY_REGEX.test(trimmed)) {
-    return 'Component Key must be lowercase letters, digits and "-", starting with a letter'
-  }
+  const charsetError = componentKeyCharsetError(trimmed, clientCode)
+  if (charsetError) return charsetError
   const solutionPattern = patterns?.[0] ?? '-solution'
   const bundlePattern = patterns?.[1] ?? 'dmp-bundle'
   if (profile === 'solution' && !trimmed.includes(solutionPattern)) {
@@ -152,6 +192,9 @@ export function makeCreateSchema(
   gitBaseUrl: string | null | undefined,
   profile: ComponentProfile,
   solutionPatterns: readonly string[] | undefined,
+  // Needed for the Component-Key rule: a clone that is not external keeps its source's
+  // clientCode in the payload, so the key may legally lean on it.
+  source?: ComponentDetail,
 ) {
   return z
     .object({
@@ -203,7 +246,12 @@ export function makeCreateSchema(
     })
     .superRefine((v, ctx) => {
       // Profile-dependent Component-Key rule (strict for new components).
-      const keyError = componentKeyError(v.name, profile, solutionPatterns)
+      const keyError = componentKeyError(
+        v.name,
+        profile,
+        solutionPatterns,
+        effectiveCreateClientCode(v, source, editable),
+      )
       if (keyError) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['name'], message: keyError })
       }

@@ -27,6 +27,7 @@ import { HeaderLabelsEditor } from '../components/editor/HeaderLabelsEditor'
 import { MiscTab, MISC_TAB_FIELDS } from '../components/editor/MiscTab'
 import { ProducedArtifactsSection } from '../components/editor/ProducedArtifactsSection'
 import { buildUpdateRequest } from '../lib/component/buildUpdateRequest'
+import { renameKeyCharsetError } from '../lib/component/createFormModel'
 import { BuildTab } from '../components/editor/BuildTab'
 import { VcsTab } from '../components/editor/VcsTab'
 import { DistributionTab } from '../components/editor/DistributionTab'
@@ -489,6 +490,12 @@ function ComponentDetailEditor() {
   const vcsHostIssues = vcsSection.entries.filter(
     (e) => e.vcsPath.trim() !== '' && !isVcsHostSupported(e.vcsPath, gitBaseUrl),
   ).length
+  // SYS-095 rename gate. Client-detectable like the three above, so it blocks Save
+  // instead of letting the PATCH round-trip to a CRS 400 — the same helper GeneralTab
+  // renders inline, so the blocked Save and the field error always agree.
+  const renameKeyBlocked =
+    component !== undefined &&
+    renameKeyCharsetError(form.watch('name'), component.name, form.watch('clientCode')) !== null
 
   function discardAll() {
     // Reset the RHF form to the COMPONENT's values (not the empty form
@@ -1274,7 +1281,9 @@ function ComponentDetailEditor() {
                         ? `Fix ${mavenPrefixIssues} distribution Group ID ${mavenPrefixIssues === 1 ? 'prefix' : 'prefixes'} before saving`
                         : vcsHostIssues > 0
                           ? `Fix ${vcsHostIssues} VCS ${vcsHostIssues === 1 ? 'host' : 'hosts'} before saving`
-                          : null
+                          : renameKeyBlocked
+                            ? 'Fix the Component Key before saving'
+                            : null
               }
               onDiscard={discardAll}
               onSave={handleOpenReview}

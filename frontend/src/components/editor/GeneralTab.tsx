@@ -8,6 +8,7 @@ import { ChipsInput } from '../ui/ChipsInput'
 import { FieldInfo } from '../ui/FieldInfo'
 import { FieldLabelText } from '../ui/FieldLabelText'
 import { fromArtifactId, type OwnershipMappingValue } from '../../lib/artifactOwnership'
+import { renameKeyCharsetError } from '../../lib/component/createFormModel'
 import type { ComponentDetail } from '../../lib/types'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../../lib/auth'
@@ -135,6 +136,19 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
     watch,
     formState: { errors },
   } = form
+
+  // SYS-095 / CRS ADR-020: a rename target follows the create rule — '_' only inside the
+  // client-code prefix. Change-based, exactly like CRS's `isRename` gate: an untouched key
+  // is never re-validated, so the 214 legacy keys that predate the convention (uppercase,
+  // dots, unbacked underscores) don't render their own editor permanently invalid.
+  // Derived from watched values rather than an RHF validator: the editor's form is
+  // default-mode (validation only runs on submit, and Save is a custom handler), and
+  // watching clientCode is also what re-validates the key when the code changes.
+  const watchedKey = watch('name')
+  const watchedClientCode = watch('clientCode')
+  // Shared with ComponentDetailPage's Save gate, so the inline error and the blocked
+  // Save can never disagree; the helper owns the trim/blank/unchanged short-circuits.
+  const renameKeyError = renameKeyCharsetError(watchedKey, component.name, watchedClientCode)
 
   const componentOwner = watch('componentOwner')
   // parentComponentName / canBeParent moved to the Misc tab (MiscTab.tsx).
@@ -270,16 +284,16 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
               className={!isNew && !canRename ? 'bg-muted' : undefined}
               {...register('name')}
             />
-            {errors.name && (
-              <p className="text-xs text-destructive">{errors.name.message}</p>
+            {(errors.name || renameKeyError) && (
+              <p className="text-xs text-destructive">{errors.name?.message ?? renameKeyError}</p>
             )}
-            {!errors.name && !isNew && !canRename && (
+            {!errors.name && !renameKeyError && !isNew && !canRename && (
               <p className="text-xs text-muted-foreground">
                 Renaming requires the RENAME_COMPONENTS permission (typically ROLE_ADMIN).
                 Ask an admin to rename this component or request the permission.
               </p>
             )}
-            {!errors.name && !isNew && canRename && (
+            {!errors.name && !renameKeyError && !isNew && canRename && (
               <p className="text-xs text-muted-foreground">
                 Renaming changes the canonical identifier — every legacy v1/v2/v3 lookup
                 by old key will resolve to the renamed component.

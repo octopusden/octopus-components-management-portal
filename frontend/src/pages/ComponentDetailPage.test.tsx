@@ -2241,6 +2241,52 @@ describe('ComponentDetailPage — groupId/VCS-host Save gate', () => {
     expect(save.parentElement).toHaveAttribute('title', 'No changes to save')
   })
 
+  // SYS-095: a rename target must satisfy the key rule client-side, the same way the
+  // create wizard disables submit — otherwise the PATCH round-trips to a CRS 400.
+  it('blocks Save when the rename target key breaks the client-code rule', async () => {
+    vi.mocked(GeneralTab).mockImplementation(({ form }) =>
+      React.createElement(
+        'button',
+        {
+          'data-testid': 'rename-bad',
+          onClick: () => form.setValue('name', 'ab_cd-payments', { shouldDirty: true }),
+        },
+        'rename',
+      ),
+    )
+    renderPage({ ...editable, clientCode: null }, user)
+    fireEvent.click(screen.getByTestId('rename-bad'))
+    await waitFor(() => {
+      const save = screen.getByRole('button', SAVE)
+      expect(save).toBeDisabled()
+      expect(save.parentElement).toHaveAttribute('title', 'Fix the Component Key before saving')
+    })
+  })
+
+  it('does NOT block a rename whose underscore is backed by the Client Code', async () => {
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      // Hydrate like the real GeneralTab does, so the gate sees the stored Client Code.
+      useEffect(() => {
+        form.setValue('clientCode', component.clientCode ?? '')
+      }, [component, form])
+      return React.createElement(
+        'button',
+        {
+          'data-testid': 'rename-ok',
+          onClick: () => form.setValue('name', 'ab_cd-payments', { shouldDirty: true }),
+        },
+        'rename',
+      )
+    })
+    renderPage({ ...editable, clientCode: 'AB_CD' }, user)
+    fireEvent.click(screen.getByTestId('rename-ok'))
+    await waitFor(() => {
+      const save = screen.getByRole('button', SAVE)
+      expect(save.parentElement).not.toHaveAttribute('title', 'Fix the Component Key before saving')
+      expect(save).not.toBeDisabled()
+    })
+  })
+
   it('blocks Save when a VCS entry host is not the ecosystem Bitbucket', () => {
     mockedUsePortalLinks.mockReturnValue({
       data: { jiraBaseUrl: null, gitBaseUrl: 'https://bitbucket.example.com', tcBaseUrl: null, dmsBaseUrl: null },
