@@ -1238,10 +1238,15 @@ export interface ArchiveReadinessOpenIssue {
 /**
  * Per-target result in an ArchiveReadinessResponse.
  *
- * `reason` is null on every NOT_COMPLETED entry today — CRS gives outcome + targetKind
- * with no prose for outstanding work, so Portal authors that wording itself
- * (design.md decision 3). `reason` IS populated on UNKNOWN and on a COMPLETED
- * entry for a target that no longer exists.
+ * `reason` is populated on every outcome CRS can report a reason for: UNKNOWN,
+ * a COMPLETED target that no longer exists, and — since CRS's checkers were
+ * completed — every NOT_COMPLETED entry too. It is still typed nullable, and
+ * the render path must still cope with null: CRS's own DTO permits it, and a
+ * future check need not supply one.
+ *
+ * A reason is a diagnosis, not an instruction. Portal renders it *and* its own
+ * per-kind instruction (design.md decision 3) — the two answer different
+ * questions, so neither replaces the other.
  *
  * There is no `targetUrl`: CRS carries no deep link on an entry, so Portal
  * builds its own links from `jiraBaseUrl` where relevant.

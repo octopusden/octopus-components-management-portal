@@ -3,10 +3,10 @@ import type { ArchiveReadinessEntry, ArchiveReadinessResponsibility, ArchiveRead
 /**
  * The instruction shown on an entry that still owes work.
  *
- * CRS sends no prose on a NOT_COMPLETED entry, so Portal writes the sentence
- * either way — this writes the useful one. A row naming only the state ("this
- * repository is not archived") leaves the reader to work out the verb, the
- * system and the step; a row naming the work does not.
+ * CRS's own reason diagnoses the state ("Repository is not archived: <id>").
+ * This is the other half: the step that follows from it. Both are rendered,
+ * because a row naming only the state leaves the reader to work out the verb,
+ * the system and the step.
  */
 export function actionFor(kind: ArchiveReadinessTargetKind): string {
   switch (kind) {

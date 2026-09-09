@@ -24,7 +24,7 @@ CRS branch `feat/archive-readiness-gate`, not yet on `main`. Recorded here becau
 | `targetKind` | `JIRA_ISSUES` \| `JIRA_PROJECT` \| `TEAMCITY_PROJECT` \| `REPOSITORY` | |
 | `targetId` | `string` | Project key (`KEY` or `KEY:prefix` for `JIRA_ISSUES`), TC project id, or the raw recorded repository URL. |
 | `outcome` | `COMPLETED` \| `NOT_COMPLETED` \| `UNKNOWN` | Three, not four. Sharing is not a fourth state. |
-| `reason` | `string \| null` | **`null` on every `NOT_COMPLETED` entry.** Populated on `UNKNOWN`, and on the `COMPLETED` entries for a target that no longer exists. |
+| `reason` | `string \| null` | Populated on `UNKNOWN`, on a `COMPLETED` target that no longer exists, and — since CRS's checkers were completed — on every `NOT_COMPLETED` entry too (e.g. `"Repository is not archived: <id>"`). Still nullable in CRS's DTO, so the render path still guards it. |
 | `reasonKind` | `SYSTEM_UNAVAILABLE` \| `REGISTRY_DATA` \| `NOT_CONFIGURED` \| `null` | Non-null only on `UNKNOWN`. |
 | `sharedWith` | `string[]` | Live component names sharing the target. Non-empty only on `COMPLETED`; always empty for `JIRA_ISSUES`. |
 | — | — | **CRS sends no `targetUrl` and no `responsibility`.** Portal builds its own links, and derives responsibility from `targetKind` — see decision 9. |
@@ -34,7 +34,7 @@ Three consequences that are not obvious from the field list:
 
 - **An unconfigured system produces no entries, not an entry saying so.** CRS returns early per target kind when the integration is not configured. With nothing configured, the response is `ready: true` with an empty `entries` — the verdict says yes because nothing said no.
 - **`sharedWith` is checked before "is it archived".** For every sharing-aware kind, CRS returns `COMPLETED` with `sharedWith` as soon as sharing is found, without reporting whether the target also happens to be archived. So a non-empty `sharedWith` means *other live components still use this target, and it was not required to be archived* — it does not assert that the target is still running.
-- **A blocking entry carries no prose.** Every `NOT_COMPLETED` result is constructed without a reason. Portal is the only place the sentence can come from — and since Portal is writing it anyway, it writes an instruction rather than a diagnosis: not *"the repository is not archived"* but *"Archive the repository"*. A person who opens this view is deciding what to do next, and a row that only names a state leaves them to work out the verb.
+- **A blocking entry's reason is a diagnosis, not an instruction.** CRS now names the state — *"Repository is not archived: <id>"* — which is useful but is not the next step. Portal shows that reason **and** its own instruction, *"Archive this repository in the VCS"*, because a person who opens this view is deciding what to do and a row that only names a state leaves them to work out the verb. An earlier draft of this change assumed CRS sent no prose at all and had Portal supply the only sentence; that is no longer true, and both are now rendered.
 - **Ownership is derived here, not reported.** CRS's entry carries no responsibility field, so Portal maps it from `targetKind` (decision 9). The instruction and the assignment stay separate concerns even so: the instruction says what to do, the assignment says whose it is.
 
 ## Goals / Non-Goals
@@ -69,7 +69,7 @@ The outcome union is still declared exhaustively in the types, so an unhandled v
 
 ### 3. Portal owns the wording for a blocking target
 
-CRS gives outcome plus target kind and no prose on `NOT_COMPLETED`. Portal maps the pair to a sentence — a repository that is not archived, a TeamCity project that is not archived, an issue-tracker project that is not retired, open issues that are still open. This is presentation, not judgement: Portal is not deciding anything CRS did not already decide, it is naming what CRS's answer means.
+CRS reports the state; Portal reports the step. Its reason on a blocking entry diagnoses (*"TeamCity project X is not archived"*), and Portal maps outcome plus target kind to the corresponding instruction (*"Archive this project in TeamCity"*). Both are shown. This is presentation, not judgement: Portal decides nothing CRS did not already decide, it says what CRS's answer means someone has to do.
 
 Where CRS *does* supply a reason — every `UNKNOWN`, and a `COMPLETED` target that no longer exists — Portal shows CRS's text rather than inventing its own.
 
@@ -110,13 +110,15 @@ The regulation is the point of the gate, and Portal's gate is now the only one. 
 
 Portal does not consult the external systems, does not compute shared usage, and does not decide that an outcome should have been different. If the answer is wrong, the fix is in CRS.
 
-### 9. Ownership is derived from the target kind, because CRS does not report it
+### 9. Ownership is Portal's policy, deliberately — not a field CRS should have sent
 
-The rule is fixed and short: only a component's own people can judge whether one of its issues may be closed, so `JIRA_ISSUES` is the component owner's; every other target is infrastructure the platform team administers, and so is anything `UNKNOWN`, whatever kind it sits on. Nothing is owed on `COMPLETED`.
+CRS's readiness answer names no responsible party, and should not. It reports the state of each target; who has to act on that state is a statement about how this organisation divides the retirement steps, and it has no notion of people at all — no owner, no team, no signed-in user. CRS's living spec now records that omission as intentional rather than leaving it to be inferred.
 
-Deriving it is a compromise, not the preference. Ideally CRS reports it, so the two sides cannot drift; it does not, and adding the field there would break five checkers that do not yet populate it. So Portal derives it now, and `responsibilityFor` is the single place to change if CRS starts reporting it — at which point the reported value should win.
+So the mapping is Portal's, and it is short: only a component's own people can judge whether one of its issues may be closed, so `JIRA_ISSUES` is the component owner's; every other target is infrastructure the platform team administers, and so is anything `UNKNOWN`, whatever kind it sits on. Nothing is owed on `COMPLETED`.
 
-The risk this accepts: if CRS's own view of ownership ever differs from this mapping, nothing detects the disagreement. Small today, because the mapping is stated identically in both repos' specs.
+Portal is also the only side that *can* resolve it usefully. Naming a party is half the job — the other half is naming the person and recognising when that person is the reader, which needs `componentOwner` from the component detail response and the signed-in username. Neither reaches the readiness endpoint.
+
+The cost of owning it here: if the organisation's division of labour changes, this mapping changes with it, and nothing outside Portal enforces the rule. `responsibilityFor` is the single function to change, and the rule is stated in this repo's spec so the intent survives the code.
 
 ### 10. The responsible party is named, not labelled
 

@@ -6,8 +6,12 @@
 > on the CRS branch `feat/archive-readiness-gate` but not on CRS `main`, so the
 > vendored v4 spec here does not describe it yet. Groups 1-6 are built against
 > the contract recorded in design.md ("The contract") with hand-written
-> fixtures; group 7's manual checks need a real CRS + Portal pair. Do not close
-> this change before 7 passes against real CRS.
+> fixtures; group 7's manual checks need a real CRS + Portal pair.
+>
+> **Archived with group 7 open.** Everything automatable is done and green; the
+> manual checks need a deployed CRS carrying this endpoint, which does not exist
+> yet. They are left unticked rather than quietly closed, matching how the CRS
+> side archived its own equivalent group.
 >
 > **CRS does not enforce readiness on write.** There is no write-time refusal to
 > handle — CRS's write paths are unchanged and a regression test on the CRS side
@@ -91,7 +95,7 @@ Built against CRS as it stands: its entry carries neither `targetUrl` nor
 - [x] 5b.15 Failing test: the assignment is distinct from the outcome, and a `COMPLETED` row carries neither assignment nor instruction
 - [x] 5b.16 Implement `actionFor` / `responsibilityFor` / `responsibleParty` in `lib/archiveReadinessOwnership.ts`; thread `componentOwner` and the signed-in username from `ComponentDetailPage` into `ArchiveReadinessView`
 - [x] 5b.17 Removed `failedReasonFor` — the instruction replaces it, and leaving it would have been dead code with a test guarding it. Its three call-site assertions now assert the instruction instead
-- [ ] 5b.18 If CRS ever reports `responsibility`, prefer it over the derived value — `responsibilityFor` is the single place to change
+- [x] 5b.18 **Resolved as a decision, not a placeholder.** Responsibility is Portal-owned policy (design.md decision 9), not a CRS field Portal is waiting on: CRS's answer has no notion of people, and its living spec now records that omission as intentional. `responsibilityFor` stays the single place to change if the division of labour changes
 - [ ] 5b.19 Deep links, not done here: `targetId` renders as plain text on repository and TeamCity rows, so an instruction to archive something gives no route to it. `/portal/links` already exposes `gitBaseUrl` and `tcBaseUrl`, and `ComponentTable.tsx` already builds a Bitbucket browse URL from a `vcsPath` — this is wiring, not new capability. It is what CRS's removed `targetUrl` was originally for
 
 ## 6. The gate

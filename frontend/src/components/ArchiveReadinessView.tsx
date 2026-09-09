@@ -154,8 +154,9 @@ function ArchiveReadinessEntryRow({
 
       {entry.outcome === 'NOT_COMPLETED' && (
         <div className="space-y-1">
-          {/* CRS sends no reason here today, but if it ever does it is kept — the
-              instruction accompanies it rather than replacing it. */}
+          {/* CRS's reason is a diagnosis ("Repository is not archived: <id>"); the
+              instruction below says what to do about it. Both are shown — neither
+              answers the other's question. Still guarded: the field is nullable. */}
           {entry.reason && <p className="text-sm text-muted-foreground">{entry.reason}</p>}
           <p className="text-sm text-destructive" data-testid="archive-readiness-action">
             {actionFor(entry.targetKind)}

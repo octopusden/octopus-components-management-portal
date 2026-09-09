@@ -8,7 +8,7 @@ Portal never decides readiness. It does not consult the external systems, does n
 
 CRS does not enforce readiness when the flag is written — the answer is advisory by CRS's own decision, and every CRS write path is unchanged. Portal's gate is therefore the only gate, and it constrains Portal's own UI, not the API.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Archiving a live component requires CRS's readiness verdict
 
@@ -58,7 +58,7 @@ Readiness SHALL be requested when someone asks to archive, not when the componen
 
 The readiness view SHALL list every entry CRS reported as its own row carrying that target's kind and identity. Entries SHALL NOT be collapsed into a single aggregate verdict, and a passing entry SHALL NOT be omitted.
 
-CRS supplies no reason on a blocking entry that reports outstanding work. Portal therefore authors that wording itself, as an instruction — see the requirement on stating the action. Where CRS does supply a reason, Portal SHALL present CRS's reason rather than substituting its own.
+CRS's reason on an entry diagnoses the state. Portal SHALL present that reason where one is supplied, and SHALL additionally state the step it implies — see the requirement on stating the action. Neither replaces the other. Where no reason is supplied, the entry SHALL still carry Portal's own wording, because `reason` remains nullable in the contract.
 
 Where CRS reports open issues on an entry, they SHALL be listed and SHALL link to the issue tracker. CRS supplies no URL for an issue or for a target, so Portal SHALL construct the link; when the issue-tracker base URL is not configured, the issues SHALL still be listed, without links.
 
@@ -67,9 +67,14 @@ Where CRS reports open issues on an entry, they SHALL be listed and SHALL link t
 - **WHEN** the readiness answer contains entries for an issue-tracker project, its open issues, two TeamCity projects and one repository
 - **THEN** the view shows five rows, each naming its target
 
-#### Scenario: A blocking entry is not left silent
+#### Scenario: A blocking entry shows both the diagnosis and the step
 
-- **WHEN** a repository entry blocks and CRS supplies no reason for it
+- **WHEN** a repository entry blocks carrying a reason from CRS
+- **THEN** the row shows that reason and, separately, the instruction it implies
+
+#### Scenario: A blocking entry with no reason is not left silent
+
+- **WHEN** a repository entry blocks and no reason is supplied
 - **THEN** that entry still carries wording of Portal's own
 
 #### Scenario: A supplied reason is preferred over Portal's wording
@@ -96,7 +101,7 @@ Where CRS reports open issues on an entry, they SHALL be listed and SHALL link t
 
 For every entry that does not report `COMPLETED`, Portal SHALL state what someone has to do, phrased as an instruction. It SHALL NOT stop at naming the state the target is in.
 
-A person opening this view is deciding what to do next. A row reading *"the repository is not archived"* names a fact and leaves them to work out the verb, the system and the step; a row reading *"Archive the repository"* is the same information already turned into work. CRS supplies no prose on these entries, so Portal is writing the sentence either way — this requires that it write the useful one.
+A person opening this view is deciding what to do next. A row reading *"the repository is not archived"* names a fact and leaves them to work out the verb, the system and the step; a row reading *"Archive the repository"* is the same information already turned into work. CRS's reason supplies the first; this requirement supplies the second, and both appear.
 
 The instruction SHALL be specific to the target's kind and SHALL name the target it applies to. Where CRS supplies its own reason, that reason SHALL still be shown; the instruction SHALL accompany it rather than replace it.
 

@@ -156,9 +156,11 @@ Choosing **Archive** in the header (requires `DELETE_COMPONENTS`) opens a dialog
 - **An answer with no entries** (nothing configured on the CRS side for this component) is stated as "no checks ran" rather than rendered as an empty, clean-looking list — but the `ready` verdict CRS returns still governs whether archiving proceeds.
 - **CRS does not enforce this at write time.** The readiness answer is advisory by CRS's own design — `deleteComponent` (the same soft-delete the Archive button calls) is unchanged and never consults readiness. Portal's gate is the only gate; there is no write-time refusal to handle.
 - **The General tab's `archived` field is not a live control.** There is no `archived` Switch on `GeneralTab` — it was removed well before this gate existed (only the RHF form value + a dead `buildUpdateRequest` compare survive; nothing renders it). Archiving happens exclusively through the header's Archive button.
+- **A blocking row says what to do, not just what is wrong.** CRS's `reason` diagnoses the state ("Repository is not archived: <id>"); Portal renders that *and* the step it implies ("Archive this repository in the VCS"), from [`actionFor`](../../frontend/src/lib/archiveReadinessOwnership.ts). Both appear — neither answers the other's question.
+- **Each blocking row names who is responsible.** An explicit "Responsible:" line, not a role chip. Open issues go to the component owner, **named as the person** the component records, because only that component's people can judge whether an issue may be closed; every other target, and anything `UNKNOWN`, goes to the F1 team, named collectively. When the reader is the owner the row says the work is theirs and is emphasised. This mapping is Portal policy — CRS's answer has no notion of people — see the change's `design.md` decision 9.
 - **Un-archiving is unchanged**: the header's Unarchive button (`ARCHIVE_COMPONENTS`), no readiness check, no dialog beyond the existing confirm.
 
-See `openspec/specs/component-archive-readiness/spec.md` (or, pre-archive, `openspec/changes/component-archive-readiness-gate/`) for the full behavioural contract, and that change's `design.md` for the CRS response shape.
+See `openspec/specs/component-archive-readiness/spec.md` for the full behavioural contract, and `openspec/changes/archive/2026-08-31-component-archive-readiness-gate/design.md` for the CRS response shape and the decisions behind it.
 
 ## Auth gating
 
