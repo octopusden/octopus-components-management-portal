@@ -963,6 +963,14 @@ describe('GeneralTab — rename target key format', () => {
     await waitFor(() => expect(screen.queryByText(KEY_MESSAGE)).toBeNull())
   })
 
+  it('says nothing while the field is cleared mid-retype', async () => {
+    // A blank key is omitted from the PATCH by buildUpdateRequest's nameChanged gate,
+    // so it is not-yet-attempted rather than a charset violation.
+    renderWithProviders(<Harness component={baseComponent({ clientCode: null })} />)
+    await userEvent.clear(screen.getByLabelText(/^component key$/i))
+    await waitFor(() => expect(screen.queryByText(KEY_MESSAGE)).toBeNull())
+  })
+
   it('never re-validates an untouched legacy key', () => {
     renderWithProviders(
       <Harness component={baseComponent({ name: 'Legacy.Key_1', clientCode: null })} />,

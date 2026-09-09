@@ -8,7 +8,7 @@ import { ChipsInput } from '../ui/ChipsInput'
 import { FieldInfo } from '../ui/FieldInfo'
 import { FieldLabelText } from '../ui/FieldLabelText'
 import { fromArtifactId, type OwnershipMappingValue } from '../../lib/artifactOwnership'
-import { componentKeyCharsetError } from '../../lib/component/createFormModel'
+import { renameKeyCharsetError } from '../../lib/component/createFormModel'
 import type { ComponentDetail } from '../../lib/types'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../../lib/auth'
@@ -146,12 +146,9 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
   // watching clientCode is also what re-validates the key when the code changes.
   const watchedKey = watch('name')
   const watchedClientCode = watch('clientCode')
-  // Compared trimmed, the way CRS decides `isRename` — otherwise a stray trailing space
-  // on a legacy key would flag a rename CRS does not even see.
-  const renameKeyError =
-    (watchedKey ?? '').trim() !== component.name
-      ? componentKeyCharsetError(watchedKey ?? '', watchedClientCode)
-      : null
+  // Shared with ComponentDetailPage's Save gate, so the inline error and the blocked
+  // Save can never disagree; the helper owns the trim/blank/unchanged short-circuits.
+  const renameKeyError = renameKeyCharsetError(watchedKey, component.name, watchedClientCode)
 
   const componentOwner = watch('componentOwner')
   // parentComponentName / canBeParent moved to the Misc tab (MiscTab.tsx).

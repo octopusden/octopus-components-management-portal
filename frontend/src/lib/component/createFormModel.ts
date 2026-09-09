@@ -133,6 +133,24 @@ export function componentKeyCharsetError(key: string, clientCode?: string): stri
     : 'Component Key must be lowercase letters, digits and "-", starting with a letter'
 }
 
+/**
+ * Rename-target charset check, shared by the editor's inline error and its Save gate.
+ *
+ * Change-based like CRS's `isRename`: an untouched key is never re-validated, so legacy
+ * keys that predate the convention don't render their own editor invalid. Blank-tolerant
+ * because `buildUpdateRequest`'s `nameChanged` gate treats a blank name as "not a rename"
+ * and omits it from the PATCH — a cleared field is not-yet-attempted, not a violation.
+ */
+export function renameKeyCharsetError(
+  key: string | undefined,
+  currentName: string,
+  clientCode?: string,
+): string | null {
+  const trimmed = (key ?? '').trim()
+  if (!trimmed || trimmed === currentName) return null
+  return componentKeyCharsetError(trimmed, clientCode)
+}
+
 export function componentKeyError(
   key: string,
   profile: ComponentProfile,

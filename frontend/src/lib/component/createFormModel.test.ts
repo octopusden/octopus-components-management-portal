@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   componentKeyCharsetError,
+  renameKeyCharsetError,
   initialValues,
   makeCreateSchema,
   type ComponentDefaults,
@@ -205,5 +206,31 @@ describe('makeCreateSchema — key validated against the client code that is sen
   it('rejects the key when the component is not external, because the form value is ignored', () => {
     const schema = makeCreateSchema(allEditable, [], null, 'regular-internal', undefined)
     expect(keyIssues(schema, form({ distributionExternal: false }))).toHaveLength(1)
+  })
+})
+
+describe('renameKeyCharsetError — the editor rename gate', () => {
+  it('passes a changed key that satisfies the client-code prefix', () => {
+    expect(renameKeyCharsetError('ab_cd-payments', 'ab_cd-billing', 'AB_CD')).toBeNull()
+  })
+
+  it('rejects a changed key whose underscore has no client code behind it', () => {
+    expect(renameKeyCharsetError('ab_cd-payments', 'legacy-key')).toMatch(/Component Key must be/)
+  })
+
+  it('never re-validates an untouched legacy key', () => {
+    expect(renameKeyCharsetError('LEGACY_KEY.v1', 'LEGACY_KEY.v1')).toBeNull()
+  })
+
+  it('ignores surrounding whitespace, the way CRS decides isRename', () => {
+    expect(renameKeyCharsetError('  LEGACY_KEY.v1  ', 'LEGACY_KEY.v1')).toBeNull()
+  })
+
+  it('treats a cleared field as not-yet-a-rename, not a charset violation', () => {
+    // buildUpdateRequest's `nameChanged` gate omits a blank name from the PATCH entirely,
+    // so a blank field must not surface an error — same guard componentKeyError has.
+    expect(renameKeyCharsetError('', 'legacy-key')).toBeNull()
+    expect(renameKeyCharsetError('   ', 'legacy-key')).toBeNull()
+    expect(renameKeyCharsetError(undefined, 'legacy-key')).toBeNull()
   })
 })

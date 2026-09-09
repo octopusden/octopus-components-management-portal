@@ -87,6 +87,12 @@ form holds the stored value even when the input isn't rendered, matching CRS's u
 effective persisted value. Editing the Client Code re-checks the key immediately, without
 touching the key field.
 
+An illegal rename target also **blocks Save**, alongside the other client-detectable
+problems (artifact ownership, Group ID prefixes, VCS hosts) — the inline error and the
+blocked Save come from the same check, so they cannot disagree. A blank key is not a
+violation: `buildUpdateRequest` omits a blank name from the PATCH, so a cleared field is
+simply a rename not yet attempted.
+
 The message names the prefix that would legalise the underscore when a Client Code exists,
 and falls back to the plain charset rule when it doesn't. CRS is the enforcing side —
 [SYS-095](https://github.com/octopusden/octopus-components-registry-service/blob/main/docs/registry/requirements-common.md)

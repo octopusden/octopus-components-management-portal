@@ -146,3 +146,31 @@ be persisted.
 - **GIVEN** a create flow that does not collect a Client Code
 - **WHEN** the user types `ab_cd-payments`
 - **THEN** the key is rejected
+
+### Requirement: An illegal rename target blocks Save, and a cleared key is not a violation
+
+The editor SHALL block Save while the rename target is illegal, the way it already blocks
+on the other client-detectable problems (artifact ownership, Group ID prefixes, VCS hosts),
+so the PATCH is never sent to be rejected with a 400 the user could have been shown first.
+The blocked Save and the inline field error SHALL be derived from the same check, so they
+cannot disagree.
+
+A blank Component Key SHALL NOT be reported as a format violation: the update request omits
+a blank name entirely, so a cleared field is a rename not yet attempted.
+
+#### Scenario: Save is blocked while the rename target is illegal
+
+- **GIVEN** a component with no Client Code
+- **WHEN** the user renames it to `ab_cd-payments`
+- **THEN** Save is disabled and names the Component Key as the reason
+
+#### Scenario: Save stays available for a legal rename
+
+- **GIVEN** a component whose stored Client Code is `AB_CD`
+- **WHEN** the user renames it to `ab_cd-payments`
+- **THEN** Save is not blocked by the key
+
+#### Scenario: Clearing the key mid-retype reports nothing
+
+- **WHEN** the user clears the Component Key field
+- **THEN** no format error is shown, because a blank name is omitted from the request
