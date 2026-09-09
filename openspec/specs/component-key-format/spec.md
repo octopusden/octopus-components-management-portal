@@ -7,7 +7,7 @@ The Portal's check is a pre-submit mirror of CRS SYS-095 — CRS is the enforcin
 two must agree: a key the Portal accepts and CRS rejects is a 400 the user cannot explain,
 and a key the Portal rejects and CRS accepts is a rule only Portal users are held to.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: A Component Key may carry an underscore only inside its client-code prefix
 
