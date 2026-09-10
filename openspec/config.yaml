@@ -45,3 +45,11 @@ operations:
     guidance:
       - Fold the delta into openspec/specs/, then check whether docs/features/
         still tells the same story; the two must not contradict each other.
+      - Move the change directory to openspec/changes/archive/<created>-<name>/
+        rather than deleting it — what the OpenSpec CLI's archive does. <created>
+        is the change's own created date, the one in its .openspec.yaml, so the
+        directory name stays stable no matter when the archive pass happens. The
+        spec records only what the system does; the proposal records why it does
+        it, and that reasoning stays discoverable next to the spec it produced.
+      - "Archive after the change merges, not before: the proposal and the spec
+        delta are what reviewers read on the PR."
