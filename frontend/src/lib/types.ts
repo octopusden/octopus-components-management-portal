@@ -1193,3 +1193,86 @@ export interface FeedbackResponse {
 export interface FeedbackStatusUpdateRequest {
   status: FeedbackStatus
 }
+
+// Archive-readiness gate (component-archive-readiness-gate). Mirrors CRS's
+// `GET rest/api/4/components/{id}/archive-readiness` response — advisory, not
+// enforced on write (see openspec/changes/component-archive-readiness-gate/design.md
+// "The contract"). CRS's endpoint is on branch `feat/archive-readiness-gate`,
+// not yet on `main`, so this is hand-written pending `npm run generate-types`.
+
+/** Which external system a single ArchiveReadinessEntry addresses. */
+export type ArchiveReadinessTargetKind = 'JIRA_ISSUES' | 'JIRA_PROJECT' | 'TEAMCITY_PROJECT' | 'REPOSITORY'
+
+/**
+ * COMPLETED / NOT_COMPLETED / UNKNOWN — three, not four. A target shared with a live
+ * component is COMPLETED with a non-empty `sharedWith`; there is no separate
+ * "skipped" outcome.
+ */
+export type ArchiveReadinessOutcome = 'COMPLETED' | 'NOT_COMPLETED' | 'UNKNOWN'
+
+/**
+ * Who owns the work a blocking entry leaves outstanding.
+ *
+ * NOT sent by CRS — its `ArchiveReadinessEntry` carries no such field today, so
+ * Portal derives this from `targetKind` (see `responsibilityFor`). Closing an
+ * issue can only be judged by the component's own people; every other target is
+ * infrastructure the platform team administers, as is anything unreadable.
+ * If CRS ever reports it, prefer the reported value over the derived one.
+ */
+export type ArchiveReadinessResponsibility = 'COMPONENT_OWNER' | 'F1_TEAM'
+
+/**
+ * Classifies the remedy an UNKNOWN entry needs, because `reason` is prose a
+ * caller cannot branch on. Always null on COMPLETED and NOT_COMPLETED. Only
+ * SYSTEM_UNAVAILABLE is worth retrying — REGISTRY_DATA and NOT_CONFIGURED
+ * never resolve by retrying.
+ */
+export type ArchiveReadinessReasonKind = 'SYSTEM_UNAVAILABLE' | 'REGISTRY_DATA' | 'NOT_CONFIGURED'
+
+/** An open Jira issue reported inside a JIRA_ISSUES entry. CRS supplies no URL. */
+export interface ArchiveReadinessOpenIssue {
+  key: string
+  summary: string
+}
+
+/**
+ * Per-target result in an ArchiveReadinessResponse.
+ *
+ * `reason` is populated on every outcome CRS can report a reason for: UNKNOWN,
+ * a COMPLETED target that no longer exists, and — since CRS's checkers were
+ * completed — every NOT_COMPLETED entry too. It is still typed nullable, and
+ * the render path must still cope with null: CRS's own DTO permits it, and a
+ * future check need not supply one.
+ *
+ * A reason is a diagnosis, not an instruction. Portal renders it *and* its own
+ * per-kind instruction (design.md decision 3) — the two answer different
+ * questions, so neither replaces the other.
+ *
+ * There is no `targetUrl`: CRS carries no deep link on an entry, so Portal
+ * builds its own links from `jiraBaseUrl` where relevant.
+ *
+ * `sharedWith` is non-empty only on COMPLETED, and CRS checks sharing BEFORE
+ * archived state — a non-empty list means the target was not required to be
+ * archived, not that the target is confirmed still live.
+ */
+export interface ArchiveReadinessEntry {
+  targetKind: ArchiveReadinessTargetKind
+  targetId: string
+  outcome: ArchiveReadinessOutcome
+  reason: string | null
+  reasonKind: ArchiveReadinessReasonKind | null
+  sharedWith: string[]
+  openIssues: ArchiveReadinessOpenIssue[]
+}
+
+/**
+ * `ready` is CRS's verdict — gate on this, never on a derived read of
+ * `entries`, so an outcome value Portal does not recognise can never unblock
+ * archiving (design.md decision 2). False iff some entry is NOT_COMPLETED or UNKNOWN.
+ * An unconfigured integration contributes no entries at all, so `entries` can
+ * be empty with `ready: true` meaning "nothing was checked", not "all passed".
+ */
+export interface ArchiveReadinessResponse {
+  ready: boolean
+  entries: ArchiveReadinessEntry[]
+}
