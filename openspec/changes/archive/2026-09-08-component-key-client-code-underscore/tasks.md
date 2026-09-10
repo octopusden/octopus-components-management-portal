@@ -61,7 +61,7 @@
 ## 6. Archive (after merge)
 
 - [x] 6.1 Fold this delta into `openspec/specs/` and move the change under
-      `openspec/changes/archive/<date>-<name>/`, per `openspec/config.yaml`'s archive
+      `openspec/changes/archive/<created>-<name>/`, per `openspec/config.yaml`'s archive
       guidance. Deliberately left for after merge, not before: the proposal and spec are
       what reviewers are reading on the PR. (Done in #230 + #231. #230 folded the spec but
       deleted the change directory; #231 restored it, matching #227 and the OpenSpec CLI.)
