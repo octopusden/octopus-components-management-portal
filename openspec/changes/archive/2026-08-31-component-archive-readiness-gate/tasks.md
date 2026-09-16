@@ -27,7 +27,8 @@
 - [x] 1.2 Declare `outcome` as a union of the three values CRS reports (`COMPLETED` / `NOT_COMPLETED` / `UNKNOWN`) and `reasonKind` as a union of its three, not bare `string`, so an unhandled value is a type error rather than a blank cell
 - [x] 1.3 Type `reason` and `reasonKind` as nullable, and note at the declaration that `reason` is null on every `NOT_COMPLETED` entry — the render code must not assume it is present
 - [x] 1.4 The hook calls `api.get<ArchiveReadinessResponse>(...)` directly, matching the existing convention (`useComponent`, `useTeamCityValidations`) — there is no per-endpoint wrapper function in `api.ts` for anything else either, so none was added here.
-- [ ] 1.5 Run `npm run vendor-spec` and `npm run generate-types` once CRS's endpoint is on `main`; reconcile the hand-written types against the generated ones and record any deliberate difference here
+- [x] 1.5 Run `npm run vendor-spec` and `npm run generate-types` once CRS's endpoint is on `main`; reconcile the hand-written types against the generated ones and record any deliberate difference here
+  - Done in the re-vendor that unblocked `contract-drift-gates`. The shapes agree field for field and enum for enum. One deliberate difference, recorded at the type definitions in `src/lib/types.ts`: `reason` / `reasonKind` are `T | null` by hand and `T | undefined` when generated, because springdoc emits no `nullable: true` while CRS serialises a completed entry as `"reason": null`. Removing the duplication belongs to TD-002.
 
 ## 2. Readiness hook
 

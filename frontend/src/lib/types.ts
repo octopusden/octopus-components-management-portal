@@ -1197,8 +1197,14 @@ export interface FeedbackStatusUpdateRequest {
 // Archive-readiness gate (component-archive-readiness-gate). Mirrors CRS's
 // `GET rest/api/4/components/{id}/archive-readiness` response — advisory, not
 // enforced on write (see openspec/changes/component-archive-readiness-gate/design.md
-// "The contract"). CRS's endpoint is on branch `feat/archive-readiness-gate`,
-// not yet on `main`, so this is hand-written pending `npm run generate-types`.
+// "The contract"). CRS's endpoint is now on `main` and the vendored spec carries it, so
+// `ArchiveReadinessEntry` / `ArchiveReadinessResponse` also exist as generated types in
+// `src/lib/api/schema.d.ts`. These hand-written ones are kept for now and agree with the
+// generated shapes field for field, with one DELIBERATE difference: `reason` and
+// `reasonKind` are `T | null` here, while the generated types say `T | undefined` because
+// springdoc emits no `nullable: true` and CRS serialises a completed entry as
+// `"reason": null`. `null` is what arrives on the wire, so read through these types, not
+// the generated ones, until TD-002 removes the duplication.
 
 /** Which external system a single ArchiveReadinessEntry addresses. */
 export type ArchiveReadinessTargetKind = 'JIRA_ISSUES' | 'JIRA_PROJECT' | 'TEAMCITY_PROJECT' | 'REPOSITORY'
