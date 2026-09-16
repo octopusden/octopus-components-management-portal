@@ -145,7 +145,11 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        # RELENG-3562: `prometheus` is here so idpmonitoring can scrape HTTP error counts.
+        # This list overrides the shared config-server application.yml, so adding it there
+        # alone would leave the endpoint a 404 here. SecurityConfig permits the matching
+        # path; everything else in this list stays behind auth.
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       probes:

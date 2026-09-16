@@ -94,13 +94,18 @@ open class SecurityConfig(
                         "/assets/**",
                         "/favicon.ico",
                         "/vite.svg",
-                        // Only health probes are anonymous. application.yaml exposes
-                        // health,info,metrics and sets health.show-details: always —
-                        // anything beyond /actuator/health would leak operational
-                        // details (jvm metrics, info bean contents) to anyone who can
-                        // reach the route. Keep richer endpoints behind auth.
+                        // Only health probes and the Prometheus scrape are anonymous.
+                        // application.yaml exposes health,info,metrics,prometheus and sets
+                        // health.show-details: always — anything else under /actuator would
+                        // leak operational details (jvm metrics, info bean contents) to
+                        // anyone who can reach the route. Keep richer endpoints behind auth.
                         "/actuator/health",
                         "/actuator/health/**",
+                        // RELENG-3562: idpmonitoring Prometheus scrapes this in-cluster with
+                        // no token. Counters and timers only — no config, no memory contents.
+                        // An exact path on purpose: a wildcard here would open whatever the
+                        // exposure list grows to. ActuatorPrometheusAccessTest guards that.
+                        "/actuator/prometheus",
                         "/logout/connect/back-channel/**",
                         // Footer build-info: portal version (served by PortalInfoController)
                         // and CRS service version (proxied to /rest/api/4/info, which is
