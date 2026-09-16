@@ -820,6 +820,22 @@ export interface paths {
         patch: operations["updateComponent"];
         trace?: never;
     };
+    "/rest/api/4/components/{id}/archive-readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getArchiveReadiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rest/api/4/components/{id}/as-code": {
         parameters: {
             query?: never;
@@ -1011,6 +1027,22 @@ export interface components {
         ActualRange: {
             value: string;
             versionRange: string;
+        };
+        ArchiveReadinessEntry: {
+            openIssues: components["schemas"]["JiraIssueRef"][];
+            /** @enum {string} */
+            outcome: "COMPLETED" | "NOT_COMPLETED" | "UNKNOWN";
+            reason?: string;
+            /** @enum {string} */
+            reasonKind?: "SYSTEM_UNAVAILABLE" | "REGISTRY_DATA" | "NOT_CONFIGURED";
+            sharedWith: string[];
+            targetId: string;
+            /** @enum {string} */
+            targetKind: "JIRA_ISSUES" | "JIRA_PROJECT" | "TEAMCITY_PROJECT" | "REPOSITORY";
+        };
+        ArchiveReadinessResponse: {
+            entries: components["schemas"]["ArchiveReadinessEntry"][];
+            ready: boolean;
         };
         ArtifactIdRequest: {
             artifactTokens: string[];
@@ -1581,6 +1613,10 @@ export interface components {
             technical?: boolean;
             versionFormat?: string;
             versionPrefix?: string;
+        };
+        JiraIssueRef: {
+            key: string;
+            summary: string;
         };
         MarkerChildrenPayload: {
             buildToolBeans?: components["schemas"]["BuildToolBeanRequest"][];
@@ -7623,6 +7659,109 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ComponentDetailResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Early */
+            425: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getArchiveReadiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ArchiveReadinessResponse"];
                 };
             };
             /** @description Bad Request */
