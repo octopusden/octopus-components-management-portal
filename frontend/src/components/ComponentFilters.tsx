@@ -12,6 +12,8 @@ import { useClientCodes } from '../hooks/useClientCodes'
 import { useJiraProjectKeys } from '../hooks/useJiraProjectKeys'
 import { useParentComponentNames } from '../hooks/useParentComponentNames'
 import { useGroupKeys } from '../hooks/useGroupKeys'
+import { useReleaseManagers } from '../hooks/useReleaseManagers'
+import { useSecurityChampions } from '../hooks/useSecurityChampions'
 import { useFieldOptions } from '../hooks/useFieldOptions'
 import {
   useFieldConfigEntry,
@@ -136,6 +138,8 @@ export function ComponentFilters({
     !!filter.parentComponentName?.length ||
     filter.canBeParent !== undefined ||
     !!filter.groupKey?.length ||
+    !!filter.releaseManager?.length ||
+    !!filter.securityChampion?.length ||
     filter.distributionExplicit !== undefined ||
     filter.distributionExternal !== undefined
   const [extendedOpen, setExtendedOpen] = useState(extendedActive)
@@ -197,6 +201,14 @@ export function ComponentFilters({
     onFilterChange({ ...filter, groupKey: next.length ? next : undefined })
   }
 
+  const handleReleaseManagerChange = (next: string[]) => {
+    onFilterChange({ ...filter, releaseManager: next.length ? next : undefined })
+  }
+
+  const handleSecurityChampionChange = (next: string[]) => {
+    onFilterChange({ ...filter, securityChampion: next.length ? next : undefined })
+  }
+
   const { data: owners = [], isLoading: ownersLoading } = useOwners()
   const { options: buildSystemOptions, isLoading: buildSystemLoading } =
     useFieldOptions('buildSystem')
@@ -235,6 +247,17 @@ export function ComponentFilters({
   const { data: groupKeyOptions = [], isLoading: groupKeysLoading } = useGroupKeys({
     enabled: groupKeysActivated,
   })
+  // The people pair ships against a CRS release that may not carry
+  // /meta/release-managers yet; the same lazy gate + useMetaInUse 404→[] contract
+  // keeps the picker openable (and silent in the console) until it does.
+  const [releaseManagersActivated, setReleaseManagersActivated] = useState(false)
+  const { data: releaseManagerOptions = [], isLoading: releaseManagersLoading } = useReleaseManagers({
+    enabled: releaseManagersActivated,
+  })
+  const [securityChampionsActivated, setSecurityChampionsActivated] = useState(false)
+  const { data: securityChampionOptions = [], isLoading: securityChampionsLoading } = useSecurityChampions({
+    enabled: securityChampionsActivated,
+  })
 
   // Field-config entries for the extended filters — `searchabilityFor` resolves
   // the effective placement (Main / Extended / None) per field, falling back to
@@ -249,6 +272,8 @@ export function ComponentFilters({
   const { entry: parentEntry } = useFieldConfigEntry('component.parentComponentName')
   const { entry: canBeParentEntry } = useFieldConfigEntry('component.canBeParent')
   const { entry: groupKeyEntry } = useFieldConfigEntry('component.groupKey')
+  const { entry: releaseManagerEntry } = useFieldConfigEntry('component.releaseManager')
+  const { entry: securityChampionEntry } = useFieldConfigEntry('component.securityChampion')
   const { entry: distributionExplicitEntry } = useFieldConfigEntry('component.distributionExplicit')
   const { entry: distributionExternalEntry } = useFieldConfigEntry('component.distributionExternal')
   // The classic multi-select filters are placed by the SAME resolver, so an
@@ -396,6 +421,54 @@ export function ComponentFilters({
             unitLabel="group"
             onOpenChange={(open) => {
               if (open) setGroupKeysActivated(true)
+            }}
+          />
+        </div>
+      ),
+    },
+    {
+      // The people filters (`?releaseManager=` / `?securityChampion=`) already
+      // backed the personal presets and the Registry Health deep-links; these are
+      // the pickers that let anyone filter by SOMEONE ELSE, not just themselves.
+      // Options are the in-use sets, so every entry resolves to a non-empty page.
+      place: place('component.releaseManager', releaseManagerEntry),
+      node: (
+        <div key="releaseManager" className="flex flex-col gap-1">
+          <Label htmlFor="filter-releaseManager" className="text-xs text-muted-foreground">
+            Release manager
+          </Label>
+          <MultiSelectFilter
+            id="filter-releaseManager"
+            value={filter.releaseManager ?? []}
+            onChange={handleReleaseManagerChange}
+            options={releaseManagerOptions}
+            isLoading={releaseManagersLoading}
+            placeholder="All release managers"
+            unitLabel="release manager"
+            onOpenChange={(open) => {
+              if (open) setReleaseManagersActivated(true)
+            }}
+          />
+        </div>
+      ),
+    },
+    {
+      place: place('component.securityChampion', securityChampionEntry),
+      node: (
+        <div key="securityChampion" className="flex flex-col gap-1">
+          <Label htmlFor="filter-securityChampion" className="text-xs text-muted-foreground">
+            Security champion
+          </Label>
+          <MultiSelectFilter
+            id="filter-securityChampion"
+            value={filter.securityChampion ?? []}
+            onChange={handleSecurityChampionChange}
+            options={securityChampionOptions}
+            isLoading={securityChampionsLoading}
+            placeholder="All security champions"
+            unitLabel="security champion"
+            onOpenChange={(open) => {
+              if (open) setSecurityChampionsActivated(true)
             }}
           />
         </div>
