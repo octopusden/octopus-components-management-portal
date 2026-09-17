@@ -9,8 +9,8 @@ import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.reactive.server.WebTestClient
 
 /**
- * RELENG-3562: `idpmonitoring` Prometheus scrapes `/actuator/prometheus` in-cluster with no
- * token, so that one endpoint must be anonymous. It exposes counters and timers only — no
+ * The monitoring Prometheus scrapes `/actuator/prometheus` in-cluster with no token, so that
+ * one endpoint must be anonymous. It exposes counters and timers only — no
  * configuration, no memory contents.
  *
  * Two things had to change for this to pass, and both are load-bearing. The service-local

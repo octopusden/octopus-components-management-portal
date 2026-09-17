@@ -101,10 +101,6 @@ open class SecurityConfig(
                         // anyone who can reach the route. Keep richer endpoints behind auth.
                         "/actuator/health",
                         "/actuator/health/**",
-                        // RELENG-3562: idpmonitoring Prometheus scrapes this in-cluster with
-                        // no token. Counters and timers only — no config, no memory contents.
-                        // An exact path on purpose: a wildcard here would open whatever the
-                        // exposure list grows to. ActuatorPrometheusAccessTest guards that.
                         "/actuator/prometheus",
                         "/logout/connect/back-channel/**",
                         // Footer build-info: portal version (served by PortalInfoController)
