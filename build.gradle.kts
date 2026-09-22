@@ -13,6 +13,7 @@ plugins {
     id("org.jlleitschuh.gradle.ktlint")
     id("org.jetbrains.kotlinx.kover")
     id("org.octopusden.octopus-quality")
+    id("org.sonarqube")
     idea
     `maven-publish`
 }
@@ -58,6 +59,22 @@ java {
     withSourcesJar()
     toolchain {
         languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+sonar {
+    // The Sonar Gradle plugin derives sonar.sources from the JVM source sets, so the React
+    // application under frontend/ - 421 TypeScript files - is invisible to it. eslint and tsc
+    // cover that code through npmLint and npmTypecheck; Sonar adds the security and reliability
+    // rules those do not have, and puts the whole repository behind one quality gate.
+    //
+    // Naming sonar.sources replaces the derived value rather than adding to it, so the Kotlin
+    // root has to be listed here too. This is the repository's own layout, which the shared
+    // workflow in octopus-base cannot know; every Sonar deployment property still comes from it.
+    properties {
+        property("sonar.sources", "src/main/kotlin,frontend/src")
+        property("sonar.tests", "src/test/kotlin,frontend/e2e")
+        property("sonar.exclusions", "frontend/node_modules/**,frontend/dist/**,frontend/coverage/**")
     }
 }
 
