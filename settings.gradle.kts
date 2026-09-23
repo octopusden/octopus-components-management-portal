@@ -11,6 +11,7 @@ pluginManagement {
         id("dev.detekt") version "2.0.0-alpha.3"
         id("org.jlleitschuh.gradle.ktlint") version "14.2.0"
         id("org.jetbrains.kotlinx.kover") version "0.9.8"
+        id("org.sonarqube") version "7.5.0.8588"
     }
 }
 
