@@ -64,16 +64,33 @@ java {
 
 sonar {
     // The Sonar Gradle plugin derives sonar.sources from the JVM source sets, so the React
-    // application under frontend/ - 421 TypeScript files - is invisible to it. eslint and tsc
-    // cover that code through npmLint and npmTypecheck; Sonar adds the security and reliability
-    // rules those do not have, and puts the whole repository behind one quality gate.
+    // application under frontend/ is invisible to it. eslint and tsc cover that code through
+    // npmLint and npmTypecheck; Sonar adds the security and reliability rules those do not
+    // have, and puts the whole repository behind one quality gate.
     //
     // Naming sonar.sources replaces the derived value rather than adding to it, so the Kotlin
     // root has to be listed here too. This is the repository's own layout, which the shared
     // workflow in octopus-base cannot know; every Sonar deployment property still comes from it.
+    //
+    // The frontend unit tests live beside the code they test, so frontend/src appears in BOTH
+    // sonar.sources and sonar.tests, partitioned by sonar.test.inclusions. The scanner appends
+    // those patterns to the excluded sources itself, so the main scope needs no matching entry.
+    // sonar.test.inclusions filters every test root, not just the frontend one, so the Kotlin
+    // and e2e roots are listed as well - omitting them would drop those tests from test scope.
+    val frontendTestPatterns = listOf(
+        "frontend/src/**/*.test.ts",
+        "frontend/src/**/*.test.tsx",
+        "frontend/src/**/*.spec.ts",
+        "frontend/src/**/*.spec.tsx",
+        "frontend/src/test/**",
+    )
     properties {
         property("sonar.sources", "src/main/kotlin,frontend/src")
-        property("sonar.tests", "src/test/kotlin,frontend/e2e")
+        property("sonar.tests", "src/test/kotlin,frontend/src,frontend/e2e")
+        property(
+            "sonar.test.inclusions",
+            (listOf("src/test/kotlin/**", "frontend/e2e/**") + frontendTestPatterns).joinToString(","),
+        )
         property("sonar.exclusions", "frontend/node_modules/**,frontend/dist/**,frontend/coverage/**")
     }
 }
