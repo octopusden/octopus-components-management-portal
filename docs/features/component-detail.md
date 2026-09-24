@@ -51,6 +51,16 @@ Saving `build.javaVersion`/`build.mavenVersion` goes through CRS's write-time AC
 - **`409 RMS_REGISTERED_VALUE_CONFLICT`** — the new value disagrees with a non-null ACTUAL value. Classified as its own `kind: 'rms'` in [`useOptimisticConflict.ts`](../../frontend/src/hooks/useOptimisticConflict.ts) — deliberately not `'value'`, so this never risks being misrouted by the Jira-pair message-text heuristic that `'value'` conflicts go through. The Review dialog closes, the Build tab shows the message inline (`BuildTab`'s `conflictError` → `StatusBanner`), and the toast states plainly that nothing was saved (CRS applies the whole PATCH in one transaction). Portal then fires a best-effort `refetchQueries(['component', id])` *after* the message is shown — never awaited, so a slow or failed refetch can't delay or mask it — since CRS refreshed its own cached ACTUAL data for this component at the moment it rejected the write.
 - **`503` with `errorCode: 'RMS_UNAVAILABLE'`** — the live RMS check was unreachable, timed out, or was ambiguous, so CRS failed closed. Shown as a distinct "Registered build data unavailable" toast rather than the generic "Save failed"; any other `503` (or one with a different/no `errorCode`) falls through to that generic path unchanged.
 
+## VCS tab — checkout placement
+
+Each VCS entry carries the registry's **Source Path** (the directory of the repository that belongs to the component; empty = the whole repository) and **Checkout Directory** (where a secondary entry is placed on the build agent: its sources land at `Checkout Directory / Source Path`). Decision: program ADR-001 (VCS root checkout placement).
+
+- **Both editors.** The VCS tab ([`VcsTab.tsx`](../../frontend/src/components/editor/VcsTab.tsx), state in `useVcsSection`) and the per-range override editor ([`OverrideRowEditor.tsx`](../../frontend/src/components/editor/OverrideRowEditor.tsx)) show the two fields per entry. A blank value is sent as `null`.
+- **Primary entry.** The first entry is checked out at the checkout root, so its Checkout Directory is shown read-only and empty, with that reason under it, and `checkoutDirectory: null` is always sent for the first entry sent, including a secondary that became first when the entry above it was removed.
+- **Name is read-only.** The registry derives it (a secondary's is its Checkout Directory). The stored Name is still sent unchanged, so a registry rolled back to before this change keeps it.
+- **Errors on the field.** A 400 `vcsEntries[<i>].<sourcePath|checkoutDirectory>: …` shows under that field of entry `<i>` on the VCS tab (the tab is switched to, no toast). `fieldOverrides[<j>].vcsEntries[<i>].<field>: …` is traced to the override row sent at index `<j>` (`useOverridesSection().rowIds`) and shows in that row's editor when it is opened again; the toast stays, since the editor is closed. `<i>` counts only the entries sent, i.e. those with a VCS Path. Errors clear on the next save, on Discard and on navigation.
+- **Chain-mismatch warning.** A successful PATCH whose response carries `warnings` (CRS sends one when base VCS entries change on a component with a TeamCity project) shows each as a toast after "Component saved".
+
 ## General tab
 
 ### Name (B7.1.4 — rename)
