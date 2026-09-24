@@ -391,3 +391,29 @@ describe('VcsTab — placement fields (Source Path / Checkout Directory)', () =>
     expect(fieldDescriptions['vcs.checkoutDirectory']).toContain('Checkout Directory / Source Path')
   })
 })
+
+describe('VcsTab — primary entry Checkout Directory', () => {
+  const twoEntries = () => makeComponent({}, makeBaseRow({
+    vcsEntries: [
+      { id: 'vcs-1', sortOrder: 0, name: 'core', vcsPath: 'ssh://one', repositoryType: 'GIT', tag: null, branch: null, hotfixBranch: null },
+      { id: 'vcs-2', sortOrder: 1, name: 'feature', vcsPath: 'ssh://two', repositoryType: 'GIT', tag: null, branch: null, hotfixBranch: null, checkoutDirectory: 'feature' },
+    ],
+  }))
+
+  it('shows the first entry read-only with its reason; later entries stay editable', () => {
+    renderTab(twoEntries())
+    const cd = screen.getAllByLabelText('Checkout Directory')
+    expect(cd[0]).toHaveAttribute('readonly')
+    expect(cd[1]).not.toHaveAttribute('readonly')
+    expect(screen.getAllByText(/checked out at the checkout root/i)).toHaveLength(1)
+  })
+
+  it('a secondary promoted to primary shows read-only and is sent with checkoutDirectory null', () => {
+    renderTab(twoEntries())
+    act(() => captured.section!.removeEntry(0))
+    const cd = screen.getByLabelText('Checkout Directory')
+    expect(cd).toHaveAttribute('readonly')
+    expect((cd as HTMLInputElement).value).toBe('')
+    expect(captured.section!.slice.request.baseConfiguration!.vcsEntries![0]!.checkoutDirectory).toBeNull()
+  })
+})

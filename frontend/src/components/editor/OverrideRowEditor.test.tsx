@@ -1049,3 +1049,43 @@ describe('OverrideRowEditor — VCS placement', () => {
     expect(sentEntries().map((e) => e.name)).toEqual(['core', 'alpha', 'beta'])
   })
 })
+
+describe('OverrideRowEditor — primary entry Checkout Directory', () => {
+  beforeEach(() => {
+    mockQueueUpdate.mockReset()
+    mockOverridesList = []
+  })
+
+  const vcsOverride = (): FieldOverride => ({
+    id: 'fo-vcs', overriddenAttribute: 'vcs.settings', versionRange: '[1,2)', rowType: 'MARKER', value: null,
+    markerChildren: {
+      vcsEntries: [
+        { name: 'core', vcsPath: 'ssh://one' },
+        { name: 'feature', vcsPath: 'ssh://two', checkoutDirectory: 'feature' },
+      ],
+    },
+    createdAt: null, updatedAt: null,
+  })
+
+  it('shows the first entry read-only with its reason; later entries stay editable', () => {
+    renderEditor({ mode: 'edit', override: vcsOverride() })
+    const cd = screen.getAllByLabelText('Checkout Directory')
+    expect(cd[0]).toHaveAttribute('readonly')
+    expect(cd[1]).not.toHaveAttribute('readonly')
+    expect(screen.getAllByText(/checked out at the checkout root/i)).toHaveLength(1)
+  })
+
+  it('a secondary promoted to primary shows read-only and is sent with checkoutDirectory null', async () => {
+    renderEditor({ mode: 'edit', override: vcsOverride() })
+    fireEvent.click(screen.getByText('Entry 1').parentElement!.querySelector('button')!)
+    const cd = screen.getByLabelText('Checkout Directory')
+    expect(cd).toHaveAttribute('readonly')
+    expect((cd as HTMLInputElement).value).toBe('')
+    await userEvent.click(screen.getByRole('button', { name: /^update$/i }))
+    await waitFor(() => expect(mockQueueUpdate).toHaveBeenCalledOnce())
+    const sent = mockQueueUpdate.mock.calls[0]![1].markerChildren.vcsEntries
+    expect(sent).toHaveLength(1)
+    expect(sent[0].vcsPath).toBe('ssh://two')
+    expect(sent[0].checkoutDirectory).toBeNull()
+  })
+})
