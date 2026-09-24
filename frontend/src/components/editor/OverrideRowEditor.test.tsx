@@ -998,3 +998,52 @@ describe('OverrideRowEditor — empty/inverted version range (client-side early 
     expect(mockQueueCreate).not.toHaveBeenCalled()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Tests: VCS placement (Source Path / Checkout Directory) + read-only Name
+// ---------------------------------------------------------------------------
+
+describe('OverrideRowEditor — VCS placement', () => {
+  beforeEach(() => {
+    mockQueueUpdate.mockReset()
+    mockOverridesList = []
+  })
+
+  const vcsOverride = (): FieldOverride => ({
+    id: 'fo-vcs', overriddenAttribute: 'vcs.settings', versionRange: '[1,2)', rowType: 'MARKER', value: null,
+    markerChildren: {
+      vcsEntries: [
+        { name: 'core', vcsPath: 'ssh://one', sourcePath: 'src', checkoutDirectory: null },
+        { name: 'alpha', vcsPath: 'ssh://two', sourcePath: null, checkoutDirectory: 'alpha' },
+        { name: 'beta', vcsPath: 'ssh://three', sourcePath: null, checkoutDirectory: 'beta' },
+      ],
+    },
+    createdAt: null, updatedAt: null,
+  })
+  const sentEntries = () => mockQueueUpdate.mock.calls[0]![1].markerChildren.vcsEntries as Array<Record<string, unknown>>
+
+  it('prefills Source Path and Checkout Directory', () => {
+    renderEditor({ mode: 'edit', override: vcsOverride() })
+    expect(screen.getAllByLabelText('Source Path').map((i) => (i as HTMLInputElement).value)).toEqual(['src', '', ''])
+    expect((screen.getAllByLabelText('Checkout Directory')[2] as HTMLInputElement).value).toBe('beta')
+  })
+
+  it('sends the edited placement, null for blanks', async () => {
+    renderEditor({ mode: 'edit', override: vcsOverride() })
+    const cd = screen.getAllByLabelText('Checkout Directory')
+    fireEvent.change(cd[1]!, { target: { value: 'feature' } })
+    fireEvent.change(cd[2]!, { target: { value: 'extra' } })
+    fireEvent.change(screen.getAllByLabelText('Source Path')[0]!, { target: { value: ' ' } })
+    await userEvent.click(screen.getByRole('button', { name: /^update$/i }))
+    await waitFor(() => expect(mockQueueUpdate).toHaveBeenCalledOnce())
+    expect(sentEntries().map((e) => [e.sourcePath, e.checkoutDirectory])).toEqual([[null, null], [null, 'feature'], [null, 'extra']])
+  })
+
+  it('shows Name read-only and sends the stored Name unchanged', async () => {
+    renderEditor({ mode: 'edit', override: vcsOverride() })
+    expect(screen.getByDisplayValue('alpha')).toHaveAttribute('readonly')
+    await userEvent.click(screen.getByRole('button', { name: /^update$/i }))
+    await waitFor(() => expect(mockQueueUpdate).toHaveBeenCalledOnce())
+    expect(sentEntries().map((e) => e.name)).toEqual(['core', 'alpha', 'beta'])
+  })
+})
