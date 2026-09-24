@@ -9,10 +9,13 @@ response) must merge and deploy first.
 
 ## What Changes
 
-- The VCS editor shows **Source Path** and **Checkout Directory** for every VCS entry, with
-  descriptions that say the sources land at `Checkout Directory / Source Path`.
-- **Name** is shown read-only: the registry derives it.
-- Registry validation errors for the two fields appear on the field that caused them.
+- The VCS editor (VCS tab) and the per-range override editor show **Source Path** and **Checkout
+  Directory** for every VCS entry, with descriptions that say the sources land at
+  `Checkout Directory / Source Path`.
+- **Name** is shown read-only in both: the registry derives it. The stored value is still sent
+  unchanged, so a rolled-back registry keeps names.
+- Registry validation errors for the two fields (`vcsEntries[<i>].<field>: …`) appear on the
+  field of the entry that caused them.
 - After saving, a registry warning that the build chain must be recreated is shown to the editor.
 
 ## Capabilities
@@ -28,7 +31,9 @@ None.
 
 ## Impact
 
-- Frontend only (VCS editor tab, field descriptions, save flow); the BFF proxies the new fields
-  unchanged.
+- Frontend only; the BFF proxies the new fields unchanged. Touches the VCS tab and its section
+  hook, the override row editor, field descriptions, the server-error parser (today it accepts
+  only plain identifiers as field names) and an inline-error slot on VCS entry fields (the VCS
+  section has none today), and the save flow for `warnings`.
 - Requires the registry version that returns the new fields; against an older registry the fields
   stay empty and saving omits them.
