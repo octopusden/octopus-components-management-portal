@@ -43,6 +43,8 @@ export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
     overrideEntryErrors,
   } = section
   const allowedHost = hostOf(gitBaseUrl)
+  // The primary is the first entry sent, i.e. the first with a VCS Path.
+  const primary = Math.max(0, entries.findIndex((e) => e.vcsPath.trim() !== ''))
   // Registry placement error on a field: flag it and name the message as its description.
   const errorProps = (index: number, field: string) =>
     entryErrors[`${index}.${field}`]
@@ -189,7 +191,7 @@ export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
                   <Label htmlFor={`vcs-${index}-checkoutDirectory`} className="text-xs"><FieldLabelText path="vcs.checkoutDirectory" fallback="Checkout Directory" /></Label>
                   <FieldInfo path="vcs.checkoutDirectory" label="Checkout Directory" />
                 </div>
-                {index === 0 ? (
+                {index === primary ? (
                   <>
                     <Input id={`vcs-${index}-checkoutDirectory`} value="" disabled readOnly placeholder="Checkout root" className="bg-muted font-mono text-xs" {...errorProps(index, 'checkoutDirectory')} />
                     <p className="text-xs text-muted-foreground">{PRIMARY_CHECKOUT_DIRECTORY_HINT}</p>

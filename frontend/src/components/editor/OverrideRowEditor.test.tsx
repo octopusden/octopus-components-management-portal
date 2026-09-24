@@ -1105,7 +1105,9 @@ describe('OverrideRowEditor — primary is the first entry with a VCS Path', () 
         createdAt: null, updatedAt: null,
       },
     })
-    fireEvent.change(screen.getAllByPlaceholderText('ssh://git@...')[0]!, { target: { value: '' } })
+    // Whitespace, not empty: the path input is `required`, so an empty one blocks
+    // the submit, while "   " passes it and is dropped by the serializer.
+    fireEvent.change(screen.getAllByPlaceholderText('ssh://git@...')[0]!, { target: { value: '   ' } })
     const cd = screen.getAllByLabelText('Checkout Directory')
     expect(cd[1]).toHaveAttribute('readonly')
     expect(cd[0]).not.toHaveAttribute('readonly')

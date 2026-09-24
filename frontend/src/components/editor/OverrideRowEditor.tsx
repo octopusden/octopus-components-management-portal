@@ -347,6 +347,8 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
   function addVcs() { setVcsEntries((p) => [...p, toVcsState({ vcsPath: '' })]) }
   function updateVcs(i: number, field: keyof VcsState, v: string) { setVcsEntries((p) => p.map((r, idx) => idx === i ? { ...r, [field]: v } : r)) }
   function removeVcs(i: number) { setVcsEntries((p) => p.filter((_, idx) => idx !== i)) }
+  // The primary is the first entry sent, i.e. the first with a VCS Path.
+  const primaryVcs = Math.max(0, vcsEntries.findIndex((e) => e.vcsPath.trim() !== ''))
   const vcsErrorProps = (i: number, field: string) =>
     vcsEntryErrors[`${i}.${field}`]
       ? { 'aria-invalid': true, 'aria-describedby': `ovr-vcs-${i}-${field}-error` }
@@ -766,7 +768,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
                             <Label htmlFor={`ovr-vcs-${i}-checkoutDirectory`} className="text-xs">Checkout Directory</Label>
                             <FieldInfo path="vcs.checkoutDirectory" label="Checkout Directory" />
                           </div>
-                          {i === 0 ? (
+                          {i === primaryVcs ? (
                             <>
                               <Input id={`ovr-vcs-${i}-checkoutDirectory`} value="" disabled readOnly placeholder="Checkout root" className="bg-muted font-mono text-xs" {...vcsErrorProps(i, 'checkoutDirectory')} />
                               <p className="text-xs text-muted-foreground">{PRIMARY_CHECKOUT_DIRECTORY_HINT}</p>
