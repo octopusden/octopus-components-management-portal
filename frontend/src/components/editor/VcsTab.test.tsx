@@ -417,3 +417,13 @@ describe('VcsTab — primary entry Checkout Directory', () => {
     expect(captured.section!.slice.request.baseConfiguration!.vcsEntries![0]!.checkoutDirectory).toBeNull()
   })
 })
+
+describe('VcsTab — Name is read-only', () => {
+  it('shows Name read-only and sends the stored Name unchanged (none for a new entry)', () => {
+    renderTab(makeComponent())
+    expect(screen.getByDisplayValue('main')).toHaveAttribute('readonly')
+    act(() => captured.section!.addEntry())
+    fireEvent.change(screen.getAllByPlaceholderText('ssh://git@...')[1]!, { target: { value: 'ssh://two' } })
+    expect(captured.section!.slice.request.baseConfiguration!.vcsEntries!.map((e) => e.name)).toEqual(['main', null])
+  })
+})
