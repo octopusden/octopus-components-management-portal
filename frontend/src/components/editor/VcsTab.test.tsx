@@ -353,3 +353,41 @@ describe('VcsTab — VCS host validation', () => {
     expect(screen.queryByText(/vcs host must be/i)).toBeNull()
   })
 })
+
+describe('VcsTab — placement fields (Source Path / Checkout Directory)', () => {
+  const twoEntries = () => makeComponent({}, makeBaseRow({
+    vcsEntries: [
+      { id: 'vcs-1', sortOrder: 0, name: 'core', vcsPath: 'ssh://one', repositoryType: 'GIT', tag: null, branch: null, hotfixBranch: null, sourcePath: 'src', checkoutDirectory: null },
+      { id: 'vcs-2', sortOrder: 1, name: 'feature', vcsPath: 'ssh://two', repositoryType: 'GIT', tag: null, branch: null, hotfixBranch: null, sourcePath: null, checkoutDirectory: 'feature' },
+    ],
+  }))
+  const sentEntries = () => captured.section!.slice.request.baseConfiguration!.vcsEntries!
+
+  it('prefills Source Path and Checkout Directory from the registry', () => {
+    renderTab(twoEntries())
+    expect(screen.getAllByLabelText('Source Path').map((i) => (i as HTMLInputElement).value)).toEqual(['src', ''])
+    expect((screen.getAllByLabelText('Checkout Directory')[1] as HTMLInputElement).value).toBe('feature')
+  })
+
+  it('sends the edited placement on save', () => {
+    renderTab(twoEntries())
+    const sp = screen.getAllByLabelText('Source Path')
+    fireEvent.change(sp[0]!, { target: { value: 'mapper' } })
+    fireEvent.change(sp[1]!, { target: { value: 'data' } })
+    expect(captured.section!.slice.isDirty).toBe(true)
+    expect(sentEntries().map((e) => [e.sourcePath, e.checkoutDirectory])).toEqual([['mapper', null], ['data', 'feature']])
+  })
+
+  it('sends null for a cleared secondary Checkout Directory', () => {
+    renderTab(twoEntries())
+    fireEvent.change(screen.getAllByLabelText('Checkout Directory')[1]!, { target: { value: '  ' } })
+    expect(sentEntries()[1]!.checkoutDirectory).toBeNull()
+  })
+
+  it('describes both fields; the Checkout Directory description names the combined location', () => {
+    renderTab(twoEntries())
+    expect(document.querySelectorAll('[data-field-path="vcs.sourcePath"]')).toHaveLength(2)
+    expect(document.querySelectorAll('[data-field-path="vcs.checkoutDirectory"]').length).toBeGreaterThan(0)
+    expect(fieldDescriptions['vcs.checkoutDirectory']).toContain('Checkout Directory / Source Path')
+  })
+})
