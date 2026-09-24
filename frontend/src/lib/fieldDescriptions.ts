@@ -103,6 +103,10 @@ export const fieldDescriptions: Record<string, string> = {
     'Optional identifier of this repository entry (e.g. main, docs). Useful to tell entries apart when the component has more than one repository.',
   'vcs.vcsPath':
     'Repository location, e.g. an ssh:// Git URL. Required for each entry. Supports dynamic variables; release automation and escrow generation clone the sources from this path.',
+  'vcs.sourcePath':
+    'Directory inside the repository that belongs to the component (e.g. mapper). Leave empty to use the whole repository. A relative path; each segment may contain letters, digits, ".", "_" and "-".',
+  'vcs.checkoutDirectory':
+    'Directory on the build agent under which a secondary entry is placed: its sources land at Checkout Directory / Source Path below the checkout root. Required on every entry after the first; a single name (letters, digits, ".", "_", "-"; no leading dot). The entry Name follows it.',
   'vcs.repositoryType':
     'Type of the version-control system hosting the repository (e.g. GIT). Read-only — it follows the VCS host and is not user-editable.',
   'vcs.branch':

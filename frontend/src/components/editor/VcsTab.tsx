@@ -166,6 +166,20 @@ export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
                 </div>
                 <Input value={entry.hotfixBranch} onChange={(e) => updateEntry(index, 'hotfixBranch', e.target.value)} placeholder="Hotfix branch pattern" className="font-mono text-xs" />
               </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-1">
+                  <Label htmlFor={`vcs-${index}-sourcePath`} className="text-xs"><FieldLabelText path="vcs.sourcePath" fallback="Source Path" /></Label>
+                  <FieldInfo path="vcs.sourcePath" label="Source Path" />
+                </div>
+                <Input id={`vcs-${index}-sourcePath`} value={entry.sourcePath} onChange={(e) => updateEntry(index, 'sourcePath', e.target.value)} placeholder="Whole repository" className="font-mono text-xs" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-1">
+                  <Label htmlFor={`vcs-${index}-checkoutDirectory`} className="text-xs"><FieldLabelText path="vcs.checkoutDirectory" fallback="Checkout Directory" /></Label>
+                  <FieldInfo path="vcs.checkoutDirectory" label="Checkout Directory" />
+                </div>
+                <Input id={`vcs-${index}-checkoutDirectory`} value={entry.checkoutDirectory} onChange={(e) => updateEntry(index, 'checkoutDirectory', e.target.value)} placeholder="Directory name" className="font-mono text-xs" />
+              </div>
             </div>
           </div>
         ))}

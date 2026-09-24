@@ -109,6 +109,9 @@ export interface ComponentDetail {
   // registered-build-parameters spec. Absent/null for a component CRS doesn't
   // track this for (archived, non-Maven/Gradle, or RMS integration disabled).
   registeredBuildParameters?: RegisteredBuildParametersDetail | null
+  // Non-blocking advisories on a write response (e.g. the TeamCity build chain
+  // must be recreated); [] on GET. Optional — absent against an older registry.
+  warnings?: string[]
 }
 
 /** One RMS-registered ("ACTUAL") version range for a single build attribute. */
@@ -218,6 +221,9 @@ export interface VcsEntry {
   tag?: string | null
   hotfixBranch?: string | null
   repositoryType?: string | null
+  // Checkout placement. Absent against an older registry.
+  sourcePath?: string | null
+  checkoutDirectory?: string | null
   sortOrder: number
 }
 
@@ -347,6 +353,8 @@ export interface VcsEntryRequest {
   tag?: string | null
   hotfixBranch?: string | null
   repositoryType?: string | null
+  sourcePath?: string | null
+  checkoutDirectory?: string | null
 }
 
 export interface MavenArtifactRequest {

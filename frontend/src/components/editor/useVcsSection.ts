@@ -31,6 +31,8 @@ export interface VcsEntryState {
   tag: string
   branch: string
   hotfixBranch: string
+  sourcePath: string
+  checkoutDirectory: string
 }
 
 interface VcsState {
@@ -47,6 +49,8 @@ function toEntryState(e: VcsEntry): VcsEntryState {
     tag: e.tag ?? '',
     branch: e.branch ?? '',
     hotfixBranch: e.hotfixBranch ?? '',
+    sourcePath: e.sourcePath ?? '',
+    checkoutDirectory: e.checkoutDirectory ?? '',
   }
 }
 
@@ -68,6 +72,8 @@ interface CleanVcsEntry {
   tag: string
   hotfixBranch: string
   repositoryType: string
+  sourcePath: string
+  checkoutDirectory: string
 }
 function cleanVcsEntries(entries: VcsEntryState[]): CleanVcsEntry[] {
   return entries
@@ -78,6 +84,8 @@ function cleanVcsEntries(entries: VcsEntryState[]): CleanVcsEntry[] {
       tag: (e.tag || '').trim(),
       hotfixBranch: (e.hotfixBranch || '').trim(),
       repositoryType: (e.repositoryType || '').trim(),
+      sourcePath: (e.sourcePath || '').trim(),
+      checkoutDirectory: (e.checkoutDirectory || '').trim(),
     }))
     .filter((e) => e.vcsPath !== '')
 }
@@ -124,7 +132,7 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
   const addEntry = () =>
     setState((p) => ({
       ...p,
-      entries: [...p.entries, { name: '', vcsPath: '', repositoryType: '', tag: '', branch: '', hotfixBranch: '' }],
+      entries: [...p.entries, { name: '', vcsPath: '', repositoryType: '', tag: '', branch: '', hotfixBranch: '', sourcePath: '', checkoutDirectory: '' }],
     }))
   const removeEntry = (index: number) =>
     setState((p) => ({ ...p, entries: p.entries.filter((_, i) => i !== index) }))
@@ -156,6 +164,8 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
       { key: 'tag', label: 'Tag' },
       { key: 'hotfixBranch', label: 'Hotfix Branch' },
       { key: 'repositoryType', label: 'Repository Type' },
+      { key: 'sourcePath', label: 'Source Path' },
+      { key: 'checkoutDirectory', label: 'Checkout Directory' },
     ]
     const maxLen = Math.max(cleanedPriorEntries.length, cleanedEntries.length)
     for (let i = 0; i < maxLen; i++) {
@@ -191,6 +201,8 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
         tag: e.tag || null,
         hotfixBranch: e.hotfixBranch || null,
         repositoryType: e.repositoryType || null,
+        sourcePath: e.sourcePath || null,
+        checkoutDirectory: e.checkoutDirectory || null,
       })),
     },
   }

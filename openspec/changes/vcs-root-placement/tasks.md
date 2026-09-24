@@ -1,7 +1,7 @@
 ## 1. Frontend (test-first; after the registry change is deployed or mocked in tests)
 
-- [ ] 1.1 Types: `sourcePath`, `checkoutDirectory` on VCS entries; `warnings` on the detail response
-- [ ] 1.2 Failing component tests for each requirement, then the VCS tab fields and descriptions
+- [x] 1.1 Types: `sourcePath`, `checkoutDirectory` on VCS entries; `warnings` on the detail response
+- [x] 1.2 Failing component tests for each requirement, then the VCS tab fields and descriptions
 - [ ] 1.3 Override row editor: the two fields, Name read-only
 - [ ] 1.4 Primary entry's Checkout Directory read-only (shown, not hidden) in both editors, with its description;
       `null` sent for it
