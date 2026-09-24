@@ -36,4 +36,4 @@ None.
   only plain identifiers as field names) and an inline-error slot on VCS entry fields (the VCS
   section has none today), and the save flow for `warnings`.
 - Requires the registry version that returns the new fields; against an older registry the fields
-  stay empty and saving omits them.
+  stay empty.
