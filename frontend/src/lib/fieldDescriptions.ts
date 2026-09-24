@@ -100,7 +100,7 @@ export const fieldDescriptions: Record<string, string> = {
   'vcs.entries':
     'Source repositories of the component. Most components have a single entry; multiple entries describe components assembled from several repositories. Rows with an empty VCS Path are dropped on save.',
   'vcs.name':
-    'Optional identifier of this repository entry (e.g. main, docs). Useful to tell entries apart when the component has more than one repository.',
+    'Identifier of this repository entry, set by the registry: the Checkout Directory for entries after the first; the first entry keeps its existing name (main for a new component). Read-only.',
   'vcs.vcsPath':
     'Repository location, e.g. an ssh:// Git URL. Required for each entry. Supports dynamic variables; release automation and escrow generation clone the sources from this path.',
   'vcs.sourcePath':

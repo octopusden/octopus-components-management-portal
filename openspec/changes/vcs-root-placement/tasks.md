@@ -5,7 +5,7 @@
 - [x] 1.3 Override row editor: the two fields, Name read-only
 - [x] 1.4 Primary entry's Checkout Directory read-only (shown, not hidden) in both editors, with its description;
       `null` sent for it
-- [ ] 1.5 Name read-only in both editors; stored Name sent unchanged
+- [x] 1.5 Name read-only in both editors; stored Name sent unchanged
 - [ ] 1.6 Server-error parser accepts `vcsEntries[<i>].<field>` and `fieldOverrides[<j>].vcsEntries[<i>].<field>`; route a prefixed error by the id of the row at index `<j>` of the list as sent; inline-error slot on VCS entry
       fields in both editors
 - [ ] 1.7 Warning shown after save

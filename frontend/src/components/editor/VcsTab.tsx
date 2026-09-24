@@ -123,10 +123,11 @@ export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <div className="space-y-1">
                 <div className="flex items-center gap-1">
-                  <Label className="text-xs"><FieldLabelText path="vcs.name" fallback="Name" /></Label>
+                  <Label htmlFor={`vcs-${index}-name`} className="text-xs"><FieldLabelText path="vcs.name" fallback="Name" /></Label>
                   <FieldInfo path="vcs.name" label="Name" />
                 </div>
-                <Input value={entry.name} onChange={(e) => updateEntry(index, 'name', e.target.value)} placeholder="Entry name" />
+                {/* Read-only: the registry derives the name; the stored value is sent unchanged. */}
+                <Input id={`vcs-${index}-name`} value={entry.name} disabled readOnly placeholder="Set by the registry" className="bg-muted" />
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-1">
