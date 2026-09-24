@@ -223,8 +223,8 @@ test.describe.serial('Editor attribute matrix — every tab saves without a fals
         // drives the same VCS PATCH plumbing as editing an existing entry.
         // Keep the path local/Bitbucket-style (not ssh://) so the portal's
         // optional ecosystem-host check does not depend on stand links.
+        // Name is read-only (the registry names a new primary entry `main`).
         await page.getByRole('button', { name: /add entry/i }).click()
-        await page.getByPlaceholder('Entry name').first().fill('main')
         await page.getByPlaceholder('ssh://git@...').first().fill(`E2E/attr-${SUFFIX}`)
         await page.getByPlaceholder('Branch pattern').first().fill(`release/${SUFFIX}`)
       },
