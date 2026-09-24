@@ -27,7 +27,7 @@ vi.mock('./overridesDraft', () => ({
 
 // Stub the modal — its internals are covered by OverrideRowEditor.test.tsx.
 // Capture the props VcsTab opens it with so we can assert the wiring.
-type CapturedEditorProps = { open: boolean; mode: string; presetAttribute?: string; override?: FieldOverride; collapseMemberIds?: string[] }
+type CapturedEditorProps = { open: boolean; mode: string; presetAttribute?: string; override?: FieldOverride; collapseMemberIds?: string[]; vcsEntryErrors?: Record<string, string> }
 let lastEditorProps: CapturedEditorProps | null = null
 vi.mock('./OverrideRowEditor', () => ({
   OverrideRowEditor: (props: CapturedEditorProps) => {
@@ -442,5 +442,25 @@ describe('VcsTab — primary is the first entry with a VCS Path', () => {
     expect(cd[0]).not.toHaveAttribute('readonly')
     const sent = captured.section!.slice.request.baseConfiguration!.vcsEntries!
     expect(sent.map((e) => [e.vcsPath, e.checkoutDirectory])).toEqual([['ssh://two', null]])
+  })
+})
+
+describe('VcsTab — placement errors on a coalesced per-range group', () => {
+  it('passes the editor an error that landed on a non-representative member', () => {
+    const empty = (id: string, versionRange: string): FieldOverride => ({
+      id, overriddenAttribute: 'vcs.settings', versionRange, rowType: 'MARKER',
+      value: null, markerChildren: { vcsEntries: [] }, createdAt: null, updatedAt: null,
+    })
+    mockEffective = [empty('a', '[1.0,1.2.471)'), empty('b', '[1.2.471,1.2.474)')]
+    renderTab(makeComponent())
+    act(() => {
+      captured.section!.applyServerErrors(
+        new Map([['fieldOverrides[1].vcsEntries[1].checkoutDirectory', 'required on a secondary VCS entry']]),
+        ['a', 'b'],
+      )
+    })
+    fireEvent.click(screen.getByRole('button', { name: /edit override \[1\.0,1\.2\.474\)/i }))
+    expect(lastEditorProps!.override?.id).toBe('a')
+    expect(lastEditorProps!.vcsEntryErrors).toEqual({ '1.checkoutDirectory': 'required on a secondary VCS entry' })
   })
 })
