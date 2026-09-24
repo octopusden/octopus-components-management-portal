@@ -826,3 +826,19 @@ describe('ComponentDetailPage — chain-mismatch warning', () => {
     expect(toastMock).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('ComponentDetailPage — VCS placement for a read-only viewer', () => {
+  it('shows Source Path and Checkout Directory without letting them be edited', async () => {
+    const entry = (name: string, vcsPath: string, sortOrder: number, checkoutDirectory?: string) =>
+      ({ id: `id-${name}`, sortOrder, name, vcsPath, repositoryType: 'GIT', sourcePath: 'src', checkoutDirectory })
+    renderPage({
+      ...baseComponent,
+      canEdit: false,
+      configurations: [{ ...baseComponent.configurations[0]!, vcsEntries: [entry('core', 'ssh://one', 0), entry('feature', 'ssh://two', 1, 'feature')] }],
+    })
+    await openTab(/^VCS/)
+    const fields = [...screen.getAllByLabelText('Source Path'), ...screen.getAllByLabelText('Checkout Directory')]
+    expect(fields.map((f) => (f as HTMLInputElement).value)).toEqual(['src', 'src', '', 'feature'])
+    for (const f of fields) expect(f).toBeDisabled()
+  })
+})
