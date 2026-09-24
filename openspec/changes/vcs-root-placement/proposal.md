@@ -9,9 +9,11 @@ response) must merge and deploy first.
 
 ## What Changes
 
-- The VCS editor (VCS tab) and the per-range override editor show **Source Path** and **Checkout
-  Directory** for every VCS entry, with descriptions that say the sources land at
-  `Checkout Directory / Source Path`.
+- The VCS editor (VCS tab) and the per-range override editor show **Source Path** for every VCS
+  entry and **Checkout Directory** for every secondary entry, with descriptions that say a
+  secondary's sources land at `Checkout Directory / Source Path`. The primary (first) entry's
+  Checkout Directory is not editable, with a short description why: it is checked out at the
+  checkout root, and the registry rejects a Checkout Directory there.
 - **Name** is shown read-only in both: the registry derives it. The stored value is still sent
   unchanged, so a rolled-back registry keeps names.
 - Registry validation errors for the two fields (`vcsEntries[<i>].<field>: …`, or `fieldOverrides[<j>].vcsEntries[<i>].<field>: …` for a per-range row) appear on the
