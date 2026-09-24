@@ -804,3 +804,25 @@ describe('ComponentDetailPage — VCS placement errors', () => {
     expect(within(screen.getByRole('dialog')).getAllByLabelText('Checkout Directory')[1]).toHaveAccessibleDescription('required on a secondary VCS entry')
   })
 })
+
+describe('ComponentDetailPage — chain-mismatch warning', () => {
+  const warning = 'VCS entries changed; the TeamCity build chain no longer matches and must be recreated.'
+  async function editBuildAndSave(warnings: string[]) {
+    renderPage(baseComponent, vi.fn(() => Promise.resolve({ ...baseComponent, version: 10, warnings })) as never)
+    await openTab(/^Build/)
+    fireEvent.change(screen.getByTestId('enum-build-javaVersion'), { target: { value: '21' } })
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /^confirm$/i }))
+    await waitFor(() => expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Component saved' })))
+  }
+
+  it('shows the registry warning after a successful save', async () => {
+    await editBuildAndSave([warning])
+    expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ description: warning }))
+  })
+
+  it('shows no warning when the response carries none', async () => {
+    await editBuildAndSave([])
+    expect(toastMock).toHaveBeenCalledTimes(1)
+  })
+})
