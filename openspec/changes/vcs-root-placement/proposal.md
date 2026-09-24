@@ -14,7 +14,7 @@ response) must merge and deploy first.
   `Checkout Directory / Source Path`.
 - **Name** is shown read-only in both: the registry derives it. The stored value is still sent
   unchanged, so a rolled-back registry keeps names.
-- Registry validation errors for the two fields (`vcsEntries[<i>].<field>: …`) appear on the
+- Registry validation errors for the two fields (`vcsEntries[<i>].<field>: …`, or `fieldOverrides[<j>].vcsEntries[<i>].<field>: …` for a per-range row) appear on the
   field of the entry that caused them.
 - After saving, a registry warning that the build chain must be recreated is shown to the editor.
 
