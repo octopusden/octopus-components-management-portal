@@ -120,8 +120,9 @@ export interface VcsSection {
   /** The same for per-range rows, by override id. */
   overrideEntryErrors: Record<string, Record<string, string>>
   /** Route the `vcsEntries[…]` / `fieldOverrides[<j>].vcsEntries[…]` errors of a
-   *  400 (`rowIds` = the override ids in the order sent); reports what was routed. */
-  applyServerErrors: (fieldErrors: Map<string, string>, rowIds: string[]) => { base: boolean; overrides: boolean }
+   *  400 (`rowIds` = the override ids in the order sent); true when one landed on a
+   *  base entry (shown inline, so the page needs no toast for it). */
+  applyServerErrors: (fieldErrors: Map<string, string>, rowIds: string[]) => boolean
   clearServerErrors: () => void
 }
 
@@ -184,7 +185,7 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
     }
     setEntryErrors(base)
     setOverrideEntryErrors(overrides)
-    return { base: Object.keys(base).length > 0, overrides: Object.keys(overrides).length > 0 }
+    return Object.keys(base).length > 0
   }
 
   // The request + diff + dirty all run off this one cleaned projection.

@@ -683,7 +683,7 @@ function ComponentDetailEditor() {
         )
         // A placement error on a base VCS entry shows inline on the VCS tab. One
         // on a per-range row shows in its (closed) editor, so it keeps the toast.
-        let anyFieldMapped = vcsSection.applyServerErrors(fieldErrors, sentOverrideIds).base
+        let anyFieldMapped = vcsSection.applyServerErrors(fieldErrors, sentOverrideIds)
         let switchTo: string | null = null
         for (const [field, message] of fieldErrors) {
           const isGeneral = (GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(field)
