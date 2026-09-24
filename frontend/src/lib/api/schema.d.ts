@@ -1248,6 +1248,7 @@ export interface components {
             vcsExternalRegistry?: string;
             /** Format: int64 */
             version: number;
+            warnings: string[];
         };
         ComponentEditorsResponse: {
             componentOwner?: string;
@@ -1979,14 +1980,17 @@ export interface components {
         };
         VcsEntryRequest: {
             branch?: string;
+            checkoutDirectory?: string;
             hotfixBranch?: string;
             name?: string;
             repositoryType?: string;
+            sourcePath?: string;
             tag?: string;
             vcsPath: string;
         };
         VcsEntryResponse: {
             branch?: string;
+            checkoutDirectory?: string;
             hotfixBranch?: string;
             /** Format: uuid */
             id: string;
@@ -1994,6 +1998,7 @@ export interface components {
             repositoryType?: string;
             /** Format: int32 */
             sortOrder: number;
+            sourcePath?: string;
             tag?: string;
             vcsPath: string;
         };
