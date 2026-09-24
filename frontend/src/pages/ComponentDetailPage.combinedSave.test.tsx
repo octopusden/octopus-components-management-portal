@@ -842,3 +842,20 @@ describe('ComponentDetailPage — VCS placement for a read-only viewer', () => {
     for (const f of fields) expect(f).toBeDisabled()
   })
 })
+
+describe('ComponentDetailPage — chain-mismatch warning on a partly saved save', () => {
+  it('still shows the PATCH warnings when the supported-versions PUT then fails', async () => {
+    const warning = 'VCS entries changed; the TeamCity build chain no longer matches and must be recreated.'
+    svMock.data = { all: false, ranges: ['[1.0,2.0)'], warnings: [] }
+    svMock.mutateAsync.mockRejectedValue(new Error('coverage service unavailable'))
+    renderPage(baseComponent, vi.fn(() => Promise.resolve({ ...baseComponent, version: 10, warnings: [warning] })) as never)
+    await openTab(/^Build/)
+    fireEvent.change(screen.getByTestId('enum-build-javaVersion'), { target: { value: '21' } })
+    await openTab(/Supported Versions/)
+    fireEvent.click(screen.getByRole('button', { name: /set to all versions/i }))
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /^confirm$/i }))
+    await waitFor(() => expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Partly saved' })))
+    expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ description: warning }))
+  })
+})
