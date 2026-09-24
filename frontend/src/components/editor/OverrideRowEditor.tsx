@@ -385,8 +385,8 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
     if (!selectedMarkerAttr) return null
     const key = selectedMarkerAttr.childKey
     // Each marker branch trims string fields and drops rows whose required
-    // fields are still blank — the modal Save is a button click (not a form
-    // submit), so HTML `required` doesn't gate the wire body. Without this
+    // fields are still blank — HTML `required` blocks an empty field but not a
+    // whitespace-only one, so it doesn't gate the wire body. Without this
     // a newly-added empty row reaches the server as `"   "` and 400s. Same
     // pattern that VcsTab + DistributionTab already use for the BASE-row
     // paths — required-field rules below mirror CRS v4 wire contract.
