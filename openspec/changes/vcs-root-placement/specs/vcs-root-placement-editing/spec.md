@@ -10,8 +10,8 @@ them when a save leaves the component's TeamCity build chain out of date.
 The VCS editor and the per-range override editor SHALL show Source Path for every VCS entry and
 Checkout Directory for every secondary entry (position 2 onwards), prefilled from the registry,
 editable by users allowed to edit the component, and SHALL send both on save, sending `null` for a
-field left blank. The primary (first) entry's Checkout Directory SHALL NOT be editable (hidden or
-read-only) and SHALL carry a short description that the primary is checked out at the checkout
+field left blank. The primary (first) entry's Checkout Directory SHALL be shown read-only (not hidden)
+and SHALL carry a short description that the primary is checked out at the checkout
 root; the Portal SHALL send `checkoutDirectory: null` for the entry in first position.
 
 #### Scenario: Editing placement
@@ -20,15 +20,15 @@ root; the Portal SHALL send `checkoutDirectory: null` for the entry in first pos
 - **THEN** the save request carries those values, with `checkoutDirectory: null` on the primary,
   and the reloaded editor shows them
 
-#### Scenario: Primary Checkout Directory not editable
+#### Scenario: Primary Checkout Directory read-only
 - **WHEN** an editor opens the VCS tab or a per-range VCS override row
-- **THEN** the first entry's Checkout Directory cannot be edited and its description says why, and
+- **THEN** the first entry's Checkout Directory is shown read-only with its description saying why, and
   the Checkout Directory of every other entry can be edited
 
 #### Scenario: Secondary becomes primary
 - **WHEN** an editor removes the first of two entries, the remaining one having Checkout Directory
   `feature`, and saves
-- **THEN** the remaining entry's Checkout Directory is no longer editable and the save request
+- **THEN** the remaining entry's Checkout Directory is shown read-only and the save request
   carries `checkoutDirectory: null` for it
 
 #### Scenario: Blank field
