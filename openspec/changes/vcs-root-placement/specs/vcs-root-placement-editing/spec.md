@@ -23,8 +23,8 @@ SHALL send both on save, sending `null` for a field left blank.
 #### Scenario: Per-range override row
 - **WHEN** an editor sets Checkout Directories `core` and `feature` on the two entries of a
   per-range VCS override row and saves
-- **THEN** the field-override request carries both `checkoutDirectory` values and the reloaded
-  override editor shows them
+- **THEN** the component PATCH's `fieldOverrides` entry for that row carries both
+  `checkoutDirectory` values and the reloaded override editor shows them
 
 #### Scenario: Read-only viewer
 - **WHEN** a user without edit permission opens the VCS tab
@@ -46,8 +46,9 @@ SHALL send the stored Name unchanged (none for a new entry).
 ### Requirement: Placement validation errors on the field
 
 The VCS editor SHALL show a registry error whose message starts with `vcsEntries[<i>].sourcePath: `
-or `vcsEntries[<i>].checkoutDirectory: ` next to that field of entry `<i>`; the per-range override
-editor SHALL do the same for the row being saved.
+or `vcsEntries[<i>].checkoutDirectory: ` next to that field of entry `<i>`. The per-range override
+editor SHALL show an error starting `fieldOverrides[<j>].vcsEntries[<i>].<field>: ` next to that
+field of entry `<i>` in the override row sent as the PATCH's `fieldOverrides[<j>]`.
 
 #### Scenario: Missing Checkout Directory on a multi-entry component
 - **WHEN** an editor saves two entries, the second without a Checkout Directory, and the registry
@@ -55,6 +56,13 @@ editor SHALL do the same for the row being saved.
   entry`
 - **THEN** the save is rejected and the message is shown on the second entry's Checkout Directory
   field
+
+#### Scenario: Error on a per-range override row
+- **WHEN** a save sends three override rows and the registry answers 400 with
+  `fieldOverrides[2].vcsEntries[0].checkoutDirectory: required when a row has more than one VCS
+  entry`
+- **THEN** the message is shown on the first entry's Checkout Directory field of the override row
+  sent third, and the VCS tab shows no error
 
 ### Requirement: Chain-mismatch warning
 
