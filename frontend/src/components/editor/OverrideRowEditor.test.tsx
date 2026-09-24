@@ -1089,3 +1089,29 @@ describe('OverrideRowEditor — primary entry Checkout Directory', () => {
     expect(sent[0].checkoutDirectory).toBeNull()
   })
 })
+
+describe('OverrideRowEditor — primary is the first entry with a VCS Path', () => {
+  beforeEach(() => {
+    mockQueueUpdate.mockReset()
+    mockOverridesList = []
+  })
+
+  it('shows the first row with a path read-only and sends it with checkoutDirectory null', async () => {
+    renderEditor({
+      mode: 'edit',
+      override: {
+        id: 'fo-vcs', overriddenAttribute: 'vcs.settings', versionRange: '[1,2)', rowType: 'MARKER', value: null,
+        markerChildren: { vcsEntries: [{ name: 'core', vcsPath: 'ssh://one' }, { name: 'feature', vcsPath: 'ssh://two', checkoutDirectory: 'feature' }] },
+        createdAt: null, updatedAt: null,
+      },
+    })
+    fireEvent.change(screen.getAllByPlaceholderText('ssh://git@...')[0]!, { target: { value: '' } })
+    const cd = screen.getAllByLabelText('Checkout Directory')
+    expect(cd[1]).toHaveAttribute('readonly')
+    expect(cd[0]).not.toHaveAttribute('readonly')
+    await userEvent.click(screen.getByRole('button', { name: /^update$/i }))
+    await waitFor(() => expect(mockQueueUpdate).toHaveBeenCalledOnce())
+    const sent = mockQueueUpdate.mock.calls[0]![1].markerChildren.vcsEntries
+    expect(sent.map((e: { vcsPath: string; checkoutDirectory: string | null }) => [e.vcsPath, e.checkoutDirectory])).toEqual([['ssh://two', null]])
+  })
+})
