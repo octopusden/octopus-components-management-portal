@@ -23,6 +23,7 @@ import {
 } from '../ui/select'
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs'
 import { FieldInfo } from '../ui/FieldInfo'
+import { PRIMARY_CHECKOUT_DIRECTORY_HINT } from '../../lib/fieldDescriptions'
 import { useOverridesDraft } from './overridesDraft'
 import { useToast } from '../../hooks/use-toast'
 import { useFieldConfig } from '../../hooks/useAdminConfig'
@@ -395,7 +396,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
           checkoutDirectory: (e.checkoutDirectory || '').trim(),
         }))
         .filter((e) => e.vcsPath !== '')
-        .map((e) => ({
+        .map((e, i) => ({
           name: e.name || null,
           vcsPath: e.vcsPath,
           branch: e.branch || null,
@@ -403,7 +404,8 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
           hotfixBranch: e.hotfixBranch || null,
           repositoryType: e.repositoryType || null,
           sourcePath: e.sourcePath || null,
-          checkoutDirectory: e.checkoutDirectory || null,
+          // The primary (first sent) entry sits at the checkout root: never a Checkout Directory.
+          checkoutDirectory: i === 0 ? null : e.checkoutDirectory || null,
         }))
       return { vcsEntries: entries }
     }
@@ -755,7 +757,14 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
                             <Label htmlFor={`ovr-vcs-${i}-checkoutDirectory`} className="text-xs">Checkout Directory</Label>
                             <FieldInfo path="vcs.checkoutDirectory" label="Checkout Directory" />
                           </div>
-                          <Input id={`ovr-vcs-${i}-checkoutDirectory`} value={entry.checkoutDirectory} onChange={(e) => updateVcs(i, 'checkoutDirectory', e.target.value)} placeholder="Directory name" className="font-mono text-xs" />
+                          {i === 0 ? (
+                            <>
+                              <Input id={`ovr-vcs-${i}-checkoutDirectory`} value="" disabled readOnly placeholder="Checkout root" className="bg-muted font-mono text-xs" />
+                              <p className="text-xs text-muted-foreground">{PRIMARY_CHECKOUT_DIRECTORY_HINT}</p>
+                            </>
+                          ) : (
+                            <Input id={`ovr-vcs-${i}-checkoutDirectory`} value={entry.checkoutDirectory} onChange={(e) => updateVcs(i, 'checkoutDirectory', e.target.value)} placeholder="Directory name" className="font-mono text-xs" />
+                          )}
                         </div>
                       </div>
                     </div>

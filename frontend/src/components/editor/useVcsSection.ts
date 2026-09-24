@@ -88,6 +88,8 @@ function cleanVcsEntries(entries: VcsEntryState[]): CleanVcsEntry[] {
       checkoutDirectory: (e.checkoutDirectory || '').trim(),
     }))
     .filter((e) => e.vcsPath !== '')
+    // The primary (first sent) entry sits at the checkout root: never a Checkout Directory.
+    .map((e, i) => (i === 0 ? { ...e, checkoutDirectory: '' } : e))
 }
 
 // Normalized view for the dirty compare (P1-4): the cleaned entries plus the

@@ -180,3 +180,7 @@ export const fieldDescriptions: Record<string, string> = {
   'escrow.buildTask':
     'Custom build task the escrow generation runs instead of the default build lifecycle. Supports dynamic variables; set it for components that need a non-standard escrow build sequence. Configurable as a per-version override.',
 }
+
+/** Shown under the first VCS entry's read-only Checkout Directory (VCS tab and override editor). */
+export const PRIMARY_CHECKOUT_DIRECTORY_HINT =
+  'The first entry is checked out at the checkout root, so it has no Checkout Directory.'
