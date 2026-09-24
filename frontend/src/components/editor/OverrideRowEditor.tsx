@@ -23,7 +23,7 @@ import {
 } from '../ui/select'
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs'
 import { FieldInfo } from '../ui/FieldInfo'
-import { EntryError } from './EntryError'
+import { EntryError, entryErrorProps } from './EntryError'
 import { PRIMARY_CHECKOUT_DIRECTORY_HINT } from '../../lib/fieldDescriptions'
 import { useOverridesDraft } from './overridesDraft'
 import { useToast } from '../../hooks/use-toast'
@@ -349,10 +349,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
   function removeVcs(i: number) { setVcsEntries((p) => p.filter((_, idx) => idx !== i)) }
   // The primary is the first entry sent, i.e. the first with a VCS Path.
   const primaryVcs = Math.max(0, vcsEntries.findIndex((e) => e.vcsPath.trim() !== ''))
-  const vcsErrorProps = (i: number, field: string) =>
-    vcsEntryErrors[`${i}.${field}`]
-      ? { 'aria-invalid': true, 'aria-describedby': `ovr-vcs-${i}-${field}-error` }
-      : {}
+  const vcsErrorProps = (i: number, field: string) => entryErrorProps('ovr-vcs', vcsEntryErrors, i, field)
 
   // Maven helpers
   function addMaven() { setMavenArtifacts((p) => [...p, { groupPattern: '', artifactPattern: '', extension: '', classifier: '' }]) }

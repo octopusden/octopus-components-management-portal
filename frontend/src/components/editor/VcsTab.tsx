@@ -15,7 +15,7 @@ import { useVcsOverrides, VCS_MARKER_PATH } from './useVcsOverrides'
 import { VcsPerRange } from './VcsPerRange'
 import { coalescePerRangeOverrides, type PerRangeGroup } from './perRangeGrouping'
 import { OverrideRowEditor } from './OverrideRowEditor'
-import { EntryError } from './EntryError'
+import { EntryError, entryErrorProps } from './EntryError'
 import type { FieldOverride } from '../../lib/types'
 import type { VcsSection } from './useVcsSection'
 
@@ -45,11 +45,7 @@ export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
   const allowedHost = hostOf(gitBaseUrl)
   // The primary is the first entry sent, i.e. the first with a VCS Path.
   const primary = Math.max(0, entries.findIndex((e) => e.vcsPath.trim() !== ''))
-  // Registry placement error on a field: flag it and name the message as its description.
-  const errorProps = (index: number, field: string) =>
-    entryErrors[`${index}.${field}`]
-      ? { 'aria-invalid': true, 'aria-describedby': `vcs-${index}-${field}-error` }
-      : {}
+  const errorProps = (index: number, field: string) => entryErrorProps('vcs', entryErrors, index, field)
 
   // Per-range VCS overrides (the `vcs.settings` marker). Add/edit/delete queue
   // into the same page-level draft the combined Save flushes.
