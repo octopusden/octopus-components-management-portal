@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import type { ComponentDetail, VcsEntry } from '../../lib/types'
 import { selectBaseRow } from '../../lib/api/baseRow'
 import type { SectionSlice, DiffEntry } from '../../lib/editor/combineRequest'
@@ -5,6 +6,7 @@ import { scalarDiff } from '../../lib/editor/diffUtil'
 import { useSectionSnapshot } from './useSectionSnapshot'
 import { useFieldEditable } from '../../hooks/useFieldConfig'
 import { omitNonEditable } from '../../lib/editor/payloadGating'
+import { parseVcsEntryErrorPath } from '../../lib/serverErrors'
 
 /**
  * External Registry (R10) is a Whiskey-only field: it is shown only when the
@@ -113,6 +115,14 @@ export interface VcsSection {
   removeEntry: (index: number) => void
   slice: SectionSlice
   reset: () => void
+  /** Registry placement errors on base entries, keyed `<entry index>.<field>`. */
+  entryErrors: Record<string, string>
+  /** The same for per-range rows, by override id. */
+  overrideEntryErrors: Record<string, Record<string, string>>
+  /** Route the `vcsEntries[…]` / `fieldOverrides[<j>].vcsEntries[…]` errors of a
+   *  400 (`rowIds` = the override ids in the order sent); reports what was routed. */
+  applyServerErrors: (fieldErrors: Map<string, string>, rowIds: string[]) => { base: boolean; overrides: boolean }
+  clearServerErrors: () => void
 }
 
 export function useVcsSection(component: ComponentDetail): VcsSection {
@@ -136,10 +146,46 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
       ...p,
       entries: [...p.entries, { name: '', vcsPath: '', repositoryType: '', tag: '', branch: '', hotfixBranch: '', sourcePath: '', checkoutDirectory: '' }],
     }))
-  const removeEntry = (index: number) =>
-    setState((p) => ({ ...p, entries: p.entries.filter((_, i) => i !== index) }))
+  const [entryErrors, setEntryErrors] = useState<Record<string, string>>({})
+  const [overrideEntryErrors, setOverrideEntryErrors] = useState<Record<string, Record<string, string>>>({})
+  const clearServerErrors = () => {
+    setEntryErrors({})
+    setOverrideEntryErrors({})
+  }
+  // Another component: its entries are not the ones the errors point at.
+  useEffect(() => clearServerErrors(), [component.id])
 
-  const reset = reseed
+  const removeEntry = (index: number) => {
+    // Indices shift: a routed error would land on the wrong entry.
+    setEntryErrors({})
+    setState((p) => ({ ...p, entries: p.entries.filter((_, i) => i !== index) }))
+  }
+
+  const reset = () => {
+    clearServerErrors()
+    reseed()
+  }
+
+  const applyServerErrors = (fieldErrors: Map<string, string>, rowIds: string[]) => {
+    // The request drops path-less rows, so a sent index maps to the i-th kept row.
+    const stateIndexOfSent = state.entries.flatMap((e, i) => (e.vcsPath.trim() !== '' ? [i] : []))
+    const base: Record<string, string> = {}
+    const overrides: Record<string, Record<string, string>> = {}
+    for (const [path, message] of fieldErrors) {
+      const p = parseVcsEntryErrorPath(path)
+      if (!p) continue
+      if (p.overrideIndex === undefined) {
+        const index = stateIndexOfSent[p.entry]
+        if (index !== undefined) base[`${index}.${p.field}`] = message
+      } else {
+        const id = rowIds[p.overrideIndex]
+        if (id !== undefined) overrides[id] = { ...overrides[id], [`${p.entry}.${p.field}`]: message }
+      }
+    }
+    setEntryErrors(base)
+    setOverrideEntryErrors(overrides)
+    return { base: Object.keys(base).length > 0, overrides: Object.keys(overrides).length > 0 }
+  }
 
   // The request + diff + dirty all run off this one cleaned projection.
   const cleanedEntries = cleanVcsEntries(state.entries)
@@ -236,5 +282,9 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
     removeEntry,
     slice,
     reset,
+    entryErrors,
+    overrideEntryErrors,
+    applyServerErrors,
+    clearServerErrors,
   }
 }

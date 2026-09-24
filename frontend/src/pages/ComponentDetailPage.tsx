@@ -150,6 +150,8 @@ function sectionForField(field: string): string | null {
   if ((MISC_TAB_FIELDS as ReadonlyArray<string>).includes(field)) return 'misc'
   if (field.startsWith('build')) return 'build'
   if (field.startsWith('vcs')) return 'vcs'
+  // A per-range VCS row's placement error (`fieldOverrides[<j>].vcsEntries[<i>].<field>`).
+  if (/^fieldOverrides\[\d+\]\.vcsEntries\[/.test(field)) return 'vcs'
   if (field.startsWith('jira')) return 'jira'
   if (field.startsWith('escrow') || field === 'productType') return 'escrow'
   // Docker images are their own tab now (split out of Distribution), so route a
@@ -532,6 +534,7 @@ function ComponentDetailEditor() {
     setReviewError(null)
     setJiraConflict(null)
     setBuildConflict(null)
+    vcsSection.clearServerErrors()
 
     // Build System is REQUIRED (P1-3). Clearing it would PATCH null = a CRS
     // no-op, so block and surface the Build section's inline required error.
@@ -545,6 +548,8 @@ function ComponentDetailEditor() {
     // the component — merge it onto the combined PATCH. Values arrive already
     // normalized (undefined when blank), so JSON.stringify omits them.
     const patchDirty = anyDirty(slices)
+    // The override rows in the order sent as `fieldOverrides`, to route its indexed 400s.
+    const sentOverrideIds = overridesSection.rowIds
     const request = {
       ...combineRequest(component.version, slices),
       jiraTaskKey: meta.jiraTaskKey,
@@ -666,7 +671,9 @@ function ComponentDetailEditor() {
         const hasGeneralError = [...fieldErrors.keys()].some((f) =>
           (GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(f),
         )
-        let anyFieldMapped = false
+        // A placement error on a base VCS entry shows inline on the VCS tab. One
+        // on a per-range row shows in its (closed) editor, so it keeps the toast.
+        let anyFieldMapped = vcsSection.applyServerErrors(fieldErrors, sentOverrideIds).base
         let switchTo: string | null = null
         for (const [field, message] of fieldErrors) {
           const isGeneral = (GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(field)
@@ -696,8 +703,8 @@ function ComponentDetailEditor() {
         if (anyFieldMapped || switchTo) {
           setReviewOpen(false)
           // A General/Misc field 400 (anyFieldMapped) surfaces inline via
-          // form.setError, so we stop here (no toast). Non-RHF section fields
-          // (build/vcs/jira/escrow/distribution) have no inline-error slot, so
+          // form.setError (or, for a base VCS entry, the VCS tab), so we stop here
+          // (no toast). Other non-RHF section fields have no inline-error slot, so
           // we switch to the owning section AND fall through to the toast below
           // — the toast is their only error surface.
           if (anyFieldMapped) return

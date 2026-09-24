@@ -23,6 +23,7 @@ import {
 } from '../ui/select'
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs'
 import { FieldInfo } from '../ui/FieldInfo'
+import { EntryError } from './EntryError'
 import { PRIMARY_CHECKOUT_DIRECTORY_HINT } from '../../lib/fieldDescriptions'
 import { useOverridesDraft } from './overridesDraft'
 import { useToast } from '../../hooks/use-toast'
@@ -144,13 +145,16 @@ export interface OverrideRowEditorProps {
    *  also excluded from the overlap-conflict preview so the merged range doesn't
    *  report a false conflict against its own members. */
   collapseMemberIds?: string[]
+  /** Edit-mode only: registry placement errors on this row's VCS entries,
+   *  keyed `<entry index>.<field>` (set by the page after a 400). */
+  vcsEntryErrors?: Record<string, string>
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAttribute, collapseMemberIds }: OverrideRowEditorProps) {
+export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAttribute, collapseMemberIds, vcsEntryErrors = {} }: OverrideRowEditorProps) {
   // Item D: the modal queues the create/update into the page-level draft (the
   // real write is the editor's one combined Save), so it closes immediately on
   // submit. Conflict detection reads the effective (draft-applied) set so a
@@ -343,6 +347,10 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
   function addVcs() { setVcsEntries((p) => [...p, toVcsState({ vcsPath: '' })]) }
   function updateVcs(i: number, field: keyof VcsState, v: string) { setVcsEntries((p) => p.map((r, idx) => idx === i ? { ...r, [field]: v } : r)) }
   function removeVcs(i: number) { setVcsEntries((p) => p.filter((_, idx) => idx !== i)) }
+  const vcsErrorProps = (i: number, field: string) =>
+    vcsEntryErrors[`${i}.${field}`]
+      ? { 'aria-invalid': true, 'aria-describedby': `ovr-vcs-${i}-${field}-error` }
+      : {}
 
   // Maven helpers
   function addMaven() { setMavenArtifacts((p) => [...p, { groupPattern: '', artifactPattern: '', extension: '', classifier: '' }]) }
@@ -750,7 +758,8 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
                             <Label htmlFor={`ovr-vcs-${i}-sourcePath`} className="text-xs">Source Path</Label>
                             <FieldInfo path="vcs.sourcePath" label="Source Path" />
                           </div>
-                          <Input id={`ovr-vcs-${i}-sourcePath`} value={entry.sourcePath} onChange={(e) => updateVcs(i, 'sourcePath', e.target.value)} placeholder="Whole repository" className="font-mono text-xs" />
+                          <Input id={`ovr-vcs-${i}-sourcePath`} value={entry.sourcePath} onChange={(e) => updateVcs(i, 'sourcePath', e.target.value)} placeholder="Whole repository" className="font-mono text-xs" {...vcsErrorProps(i, 'sourcePath')} />
+                          <EntryError id={`ovr-vcs-${i}-sourcePath-error`} message={vcsEntryErrors[`${i}.sourcePath`]} />
                         </div>
                         <div className="space-y-1">
                           <div className="flex items-center gap-1">
@@ -759,12 +768,13 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
                           </div>
                           {i === 0 ? (
                             <>
-                              <Input id={`ovr-vcs-${i}-checkoutDirectory`} value="" disabled readOnly placeholder="Checkout root" className="bg-muted font-mono text-xs" />
+                              <Input id={`ovr-vcs-${i}-checkoutDirectory`} value="" disabled readOnly placeholder="Checkout root" className="bg-muted font-mono text-xs" {...vcsErrorProps(i, 'checkoutDirectory')} />
                               <p className="text-xs text-muted-foreground">{PRIMARY_CHECKOUT_DIRECTORY_HINT}</p>
                             </>
                           ) : (
-                            <Input id={`ovr-vcs-${i}-checkoutDirectory`} value={entry.checkoutDirectory} onChange={(e) => updateVcs(i, 'checkoutDirectory', e.target.value)} placeholder="Directory name" className="font-mono text-xs" />
+                            <Input id={`ovr-vcs-${i}-checkoutDirectory`} value={entry.checkoutDirectory} onChange={(e) => updateVcs(i, 'checkoutDirectory', e.target.value)} placeholder="Directory name" className="font-mono text-xs" {...vcsErrorProps(i, 'checkoutDirectory')} />
                           )}
+                          <EntryError id={`ovr-vcs-${i}-checkoutDirectory-error`} message={vcsEntryErrors[`${i}.checkoutDirectory`]} />
                         </div>
                       </div>
                     </div>

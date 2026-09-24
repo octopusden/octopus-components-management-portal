@@ -44,10 +44,12 @@ export function parseServerFieldErrors(apiErrorMessage: string): Map<string, str
   // Colon-prefixed single message — "<field>: <message>" with the colon
   // directly after the identifier (no preceding space), e.g. the distribution-
   // coordinate rule "distribution: an explicit+external component must …".
+  // The field may be an indexed path such as "vcsEntries[1].checkoutDirectory"
+  // or "fieldOverrides[2].vcsEntries[1].checkoutDirectory" (see parseVcsEntryErrorPath).
   // The space heuristic below would miss these (identifier is followed by ':',
   // not whitespace). Field names are camelCase identifiers; require a space
   // after the colon so a bare "foo:" without a message doesn't match.
-  const colonMatch = /^([a-zA-Z][a-zA-Z0-9]*): (.+)$/.exec(errorMessage)
+  const colonMatch = /^((?:[a-zA-Z][a-zA-Z0-9]*\[\d+\]\.)*[a-zA-Z][a-zA-Z0-9]*): (.+)$/.exec(errorMessage)
   if (colonMatch) {
     result.set(colonMatch[1]!, colonMatch[2]!.trim())
     return result
@@ -67,4 +69,24 @@ export function parseServerFieldErrors(apiErrorMessage: string): Map<string, str
   }
 
   return result
+}
+
+export type VcsPlacementField = 'sourcePath' | 'checkoutDirectory'
+
+/** A placement error on VCS entry `entry` of the base row, or of the override row
+ *  sent as the PATCH's `fieldOverrides[overrideIndex]`. */
+export interface VcsEntryErrorPath {
+  overrideIndex?: number
+  entry: number
+  field: VcsPlacementField
+}
+
+/** Reads `vcsEntries[<i>].<field>` / `fieldOverrides[<j>].vcsEntries[<i>].<field>`
+ *  (a parseServerFieldErrors key); null for any other path. */
+export function parseVcsEntryErrorPath(path: string): VcsEntryErrorPath | null {
+  const m = /^(?:fieldOverrides\[(\d+)\]\.)?vcsEntries\[(\d+)\]\.(sourcePath|checkoutDirectory)$/.exec(path)
+  if (!m) return null
+  const entry = Number(m[2])
+  const field = m[3] as VcsPlacementField
+  return m[1] === undefined ? { entry, field } : { overrideIndex: Number(m[1]), entry, field }
 }

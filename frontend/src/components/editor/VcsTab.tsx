@@ -15,6 +15,7 @@ import { useVcsOverrides, VCS_MARKER_PATH } from './useVcsOverrides'
 import { VcsPerRange } from './VcsPerRange'
 import { coalescePerRangeOverrides, type PerRangeGroup } from './perRangeGrouping'
 import { OverrideRowEditor } from './OverrideRowEditor'
+import { EntryError } from './EntryError'
 import type { FieldOverride } from '../../lib/types'
 import type { VcsSection } from './useVcsSection'
 
@@ -38,8 +39,15 @@ export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
     updateEntry,
     addEntry,
     removeEntry,
+    entryErrors,
+    overrideEntryErrors,
   } = section
   const allowedHost = hostOf(gitBaseUrl)
+  // Registry placement error on a field: flag it and name the message as its description.
+  const errorProps = (index: number, field: string) =>
+    entryErrors[`${index}.${field}`]
+      ? { 'aria-invalid': true, 'aria-describedby': `vcs-${index}-${field}-error` }
+      : {}
 
   // Per-range VCS overrides (the `vcs.settings` marker). Add/edit/delete queue
   // into the same page-level draft the combined Save flushes.
@@ -173,7 +181,8 @@ export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
                   <Label htmlFor={`vcs-${index}-sourcePath`} className="text-xs"><FieldLabelText path="vcs.sourcePath" fallback="Source Path" /></Label>
                   <FieldInfo path="vcs.sourcePath" label="Source Path" />
                 </div>
-                <Input id={`vcs-${index}-sourcePath`} value={entry.sourcePath} onChange={(e) => updateEntry(index, 'sourcePath', e.target.value)} placeholder="Whole repository" className="font-mono text-xs" />
+                <Input id={`vcs-${index}-sourcePath`} value={entry.sourcePath} onChange={(e) => updateEntry(index, 'sourcePath', e.target.value)} placeholder="Whole repository" className="font-mono text-xs" {...errorProps(index, 'sourcePath')} />
+                <EntryError id={`vcs-${index}-sourcePath-error`} message={entryErrors[`${index}.sourcePath`]} />
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-1">
@@ -182,12 +191,13 @@ export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
                 </div>
                 {index === 0 ? (
                   <>
-                    <Input id={`vcs-${index}-checkoutDirectory`} value="" disabled readOnly placeholder="Checkout root" className="bg-muted font-mono text-xs" />
+                    <Input id={`vcs-${index}-checkoutDirectory`} value="" disabled readOnly placeholder="Checkout root" className="bg-muted font-mono text-xs" {...errorProps(index, 'checkoutDirectory')} />
                     <p className="text-xs text-muted-foreground">{PRIMARY_CHECKOUT_DIRECTORY_HINT}</p>
                   </>
                 ) : (
-                  <Input id={`vcs-${index}-checkoutDirectory`} value={entry.checkoutDirectory} onChange={(e) => updateEntry(index, 'checkoutDirectory', e.target.value)} placeholder="Directory name" className="font-mono text-xs" />
+                  <Input id={`vcs-${index}-checkoutDirectory`} value={entry.checkoutDirectory} onChange={(e) => updateEntry(index, 'checkoutDirectory', e.target.value)} placeholder="Directory name" className="font-mono text-xs" {...errorProps(index, 'checkoutDirectory')} />
                 )}
+                <EntryError id={`vcs-${index}-checkoutDirectory-error`} message={entryErrors[`${index}.checkoutDirectory`]} />
               </div>
             </div>
           </div>
@@ -216,6 +226,7 @@ export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
         presetAttribute={editor && !editor.override ? VCS_MARKER_PATH : undefined}
         override={editor?.override}
         collapseMemberIds={editor?.collapseMemberIds}
+        vcsEntryErrors={editor?.override ? overrideEntryErrors[editor.override.id] : undefined}
         onOpenChange={(o) => { if (!o) setEditor(null) }}
       />
     </div>
