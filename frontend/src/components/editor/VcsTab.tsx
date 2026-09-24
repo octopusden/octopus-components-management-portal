@@ -228,7 +228,12 @@ export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
         presetAttribute={editor && !editor.override ? VCS_MARKER_PATH : undefined}
         override={editor?.override}
         collapseMemberIds={editor?.collapseMemberIds}
-        vcsEntryErrors={editor?.override ? overrideEntryErrors[editor.override.id] : undefined}
+        vcsEntryErrors={
+          // A coalesced group edits as its representative, but the error may sit on any member.
+          editor?.override
+            ? [editor.override.id, ...(editor.collapseMemberIds ?? [])].map((id) => overrideEntryErrors[id]).find(Boolean)
+            : undefined
+        }
         onOpenChange={(o) => { if (!o) setEditor(null) }}
       />
     </div>
