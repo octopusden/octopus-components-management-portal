@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { OverrideRowEditor } from './OverrideRowEditor'
+import { TooltipProvider } from '../ui/tooltip'
 import type { FieldOverride } from '../../lib/types'
 
 // ---------------------------------------------------------------------------
@@ -111,7 +112,8 @@ function renderEditor(props: Partial<Parameters<typeof OverrideRowEditor>[0]> = 
     mode: 'create' as const,
     ...props,
   }
-  return render(<OverrideRowEditor {...defaults} />)
+  // FieldInfo (VCS placement descriptions) needs the app-level TooltipProvider.
+  return render(<TooltipProvider><OverrideRowEditor {...defaults} /></TooltipProvider>)
 }
 
 function makeScalarOverride(overrides: Partial<FieldOverride> = {}): FieldOverride {
@@ -1041,7 +1043,7 @@ describe('OverrideRowEditor — VCS placement', () => {
 
   it('shows Name read-only and sends the stored Name unchanged', async () => {
     renderEditor({ mode: 'edit', override: vcsOverride() })
-    expect(screen.getByDisplayValue('alpha')).toHaveAttribute('readonly')
+    expect(screen.getAllByLabelText('Name')[1]).toHaveAttribute('readonly')
     await userEvent.click(screen.getByRole('button', { name: /^update$/i }))
     await waitFor(() => expect(mockQueueUpdate).toHaveBeenCalledOnce())
     expect(sentEntries().map((e) => e.name)).toEqual(['core', 'alpha', 'beta'])
