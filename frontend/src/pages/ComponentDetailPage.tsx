@@ -559,6 +559,9 @@ function ComponentDetailEditor() {
     // Non-blocking advisories from the PATCH response (e.g. the TeamCity build
     // chain must be recreated after a base VCS change), shown once the save is done.
     let saveWarnings: string[] = []
+    const showSaveWarnings = () => {
+      for (const warning of saveWarnings) toast({ title: 'Warning', description: warning })
+    }
     try {
       // The combined PATCH fires only when a PATCH-backed section is dirty — a
       // supported-versions-only save must not send an (essentially empty) PATCH.
@@ -603,6 +606,8 @@ function ComponentDetailEditor() {
               description: `Your other changes were saved, but updating supported versions failed: ${msg}`,
               variant: 'destructive',
             })
+            // The PATCH did land, so its advisories still apply.
+            showSaveWarnings()
             return
           }
           // Coverage-only failure: nothing else persisted, so defer to the shared
@@ -621,7 +626,7 @@ function ComponentDetailEditor() {
       overridesSection.reset()
       setReviewOpen(false)
       toast({ title: 'Component saved', description: 'Changes have been saved successfully.' })
-      for (const warning of saveWarnings) toast({ title: 'Warning', description: warning })
+      showSaveWarnings()
     } catch (err) {
       // 409 — split by kind. A `value` conflict (uniqueness / overlapping range)
       // is fixable in place, so keep the Review dialog open with a persistent
