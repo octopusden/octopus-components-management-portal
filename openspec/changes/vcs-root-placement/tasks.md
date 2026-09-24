@@ -8,5 +8,5 @@
 - [x] 1.5 Name read-only in both editors; stored Name sent unchanged
 - [x] 1.6 Server-error parser accepts `vcsEntries[<i>].<field>` and `fieldOverrides[<j>].vcsEntries[<i>].<field>`; route a prefixed error by the id of the row at index `<j>` of the list as sent; inline-error slot on VCS entry
       fields in both editors
-- [ ] 1.7 Warning shown after save
+- [x] 1.7 Warning shown after save
 - [ ] 1.8 `./gradlew qualityStatic` and the vitest suite green

@@ -556,11 +556,15 @@ function ComponentDetailEditor() {
       changeComment: meta.changeComment,
     }
 
+    // Non-blocking advisories from the PATCH response (e.g. the TeamCity build
+    // chain must be recreated after a base VCS change), shown once the save is done.
+    let saveWarnings: string[] = []
     try {
       // The combined PATCH fires only when a PATCH-backed section is dirty — a
       // supported-versions-only save must not send an (essentially empty) PATCH.
       if (patchDirty) {
         const saved = await updateMutation.mutateAsync(request)
+        saveWarnings = saved?.warnings ?? []
         // Re-baseline the General/Misc form to the SAVED (server-normalized) component.
         // The GeneralTab re-hydration guard skips while the form is dirty/touched, so without
         // an explicit reset here the form would stay dirty for the rest of the session and a
@@ -617,6 +621,7 @@ function ComponentDetailEditor() {
       overridesSection.reset()
       setReviewOpen(false)
       toast({ title: 'Component saved', description: 'Changes have been saved successfully.' })
+      for (const warning of saveWarnings) toast({ title: 'Warning', description: warning })
     } catch (err) {
       // 409 — split by kind. A `value` conflict (uniqueness / overlapping range)
       // is fixable in place, so keep the Review dialog open with a persistent
