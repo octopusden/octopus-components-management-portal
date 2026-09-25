@@ -59,6 +59,7 @@ export function formatOverrideValue(o: FieldOverride): string {
       const arr = mc[key]
       if (Array.isArray(arr) && arr.length > 0) parts.push(`${arr.length} ${label}`)
     }
+    if (mc.buildWorkingDirectory) parts.push(`build in ${mc.buildWorkingDirectory}`)
     return parts.length > 0 ? parts.join(', ') : 'marker (no entries)'
   }
   return formatDiffValue(o.value)
