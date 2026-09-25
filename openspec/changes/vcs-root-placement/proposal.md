@@ -40,7 +40,7 @@ None.
 
 - Frontend only; the BFF proxies the new fields unchanged. Touches the VCS tab and its section
   hook (`useVcsSection.ts`, which today forces the first entry's Checkout Directory empty at
-  `:93-94`), the override row editor (`OverrideRowEditor.tsx`, the same at `:414` and the read-only
+  `:93-94`), the override row editor (`OverrideRowEditor.tsx`, the same at `:415` and the read-only
   field at `:768-771`), field descriptions (`PRIMARY_CHECKOUT_DIRECTORY_HINT` removed), the
   server-error parser (`serverErrors.ts:87`), the save flow for `warnings`, and the vendored
   `v4.json`.

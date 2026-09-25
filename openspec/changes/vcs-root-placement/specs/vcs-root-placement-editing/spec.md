@@ -40,7 +40,10 @@ edit the component, and SHALL send both on save, sending `null` for a field left
 
 The VCS tab SHALL show the base row's Build Working Directory and the per-range override editor
 the Build Working Directory of each VCS override row, prefilled from the registry, editable by
-users allowed to edit the component, and SHALL send it with that row, `null` when left blank.
+users allowed to edit the component, and SHALL send it with that row. Left blank, the base row
+SHALL send `''` (the registry's base PATCH treats `null` as "unchanged" and blank as "clear", the
+Portal's convention for base scalars), and a VCS override row MAY send `null`, since its payload
+replaces the row.
 
 #### Scenario: Base value
 - **WHEN** an editor sets Build Working Directory `core/mapper` on the VCS tab and saves
@@ -54,8 +57,13 @@ users allowed to edit the component, and SHALL send it with that row, `null` whe
 
 #### Scenario: Cleared
 - **WHEN** an editor clears the base Build Working Directory and saves
-- **THEN** the save request carries a blank or `null` value that the registry treats as cleared,
-  and the reloaded tab shows the field empty
+- **THEN** the save request carries `buildWorkingDirectory: ""` in the base configuration, and the
+  reloaded tab shows the field empty
+
+#### Scenario: Entries emptied
+- **WHEN** an editor removes every VCS entry on the VCS tab of a component whose base row stores a
+  Build Working Directory, and saves
+- **THEN** the save request carries `vcsEntries: []` and `buildWorkingDirectory: ""`
 
 ### Requirement: Name is read-only
 

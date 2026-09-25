@@ -12,11 +12,12 @@
 
 - [ ] 2.1 Checkout Directory editable on every entry in both editors; remove the read-only first
       entry, `PRIMARY_CHECKOUT_DIRECTORY_HINT` and the forced empty value (`useVcsSection.ts:93-94`,
-      `OverrideRowEditor.tsx:414`); descriptions updated
+      `OverrideRowEditor.tsx:415`); descriptions updated
 - [ ] 2.2 Types: `buildWorkingDirectory` on the base configuration request/response and the VCS
       marker payload; re-vendor `v4.json` from the registry branch
 - [ ] 2.3 Build Working Directory field on the VCS tab and in the VCS override row editor, with its
-      description; sent `null` when blank
+      description; blank sends `''` on the base row (`null` would leave the stored value) and
+      `null` on a VCS override row
 - [ ] 2.4 Server-error parser and routing for `buildWorkingDirectory` and
       `fieldOverrides[<j>].buildWorkingDirectory`
 - [ ] 2.5 `./gradlew qualityStatic` and the vitest suite green
