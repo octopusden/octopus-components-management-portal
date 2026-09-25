@@ -721,7 +721,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
                     <div key={i} className="rounded-md border p-3 space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-medium text-muted-foreground">Entry {i + 1}</span>
-                        <Button variant="ghost" size="sm" type="button" onClick={() => removeVcs(i)} className="h-7 text-destructive hover:text-destructive">
+                        <Button variant="ghost" size="sm" type="button" onClick={() => removeVcs(i)} aria-label={`Remove VCS entry ${i + 1}`} className="h-7 text-destructive hover:text-destructive">
                           <Trash2 className="h-3 w-3" />
                         </Button>
                       </div>
