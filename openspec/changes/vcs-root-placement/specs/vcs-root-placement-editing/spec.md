@@ -27,7 +27,7 @@ edit the component, and SHALL send both on save, sending `null` for a field left
 
 #### Scenario: Per-range override row
 - **WHEN** an editor sets Checkout Directories `core` and `feature` on the first and second
-  entries of a per-range VCS override row and saves
+  entries of a per-range VCS override row, and its Build Working Directory `core`, and saves
 - **THEN** the component PATCH's `fieldOverrides` entry for that row carries both
   `checkoutDirectory` values and the reloaded override editor shows them
 
@@ -89,6 +89,13 @@ Working Directory, in the override row sent as the PATCH's `fieldOverrides[<j>]`
 - **WHEN** the registry answers 400 with `buildWorkingDirectory: must start with the Checkout
   Directory of a VCS entry`
 - **THEN** the message is shown on the VCS tab's Build Working Directory field
+
+#### Scenario: Build Working Directory required
+- **WHEN** an editor saves two entries in Checkout Directories `core` and `feature` without a Build
+  Working Directory and the registry answers 400 with
+  `buildWorkingDirectory: required when every VCS entry has a Checkout Directory`
+- **THEN** the save is rejected and the message is shown on the VCS tab's Build Working Directory
+  field
 
 #### Scenario: Error on a per-range override row
 - **WHEN** a save sends three override rows and the registry answers 400 with
