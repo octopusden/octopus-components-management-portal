@@ -107,6 +107,8 @@ export const fieldDescriptions: Record<string, string> = {
     'Directory inside the repository that belongs to the component (e.g. mapper). Leave empty to use the whole repository. A relative path; each segment may contain letters, digits, ".", "_" and "-".',
   'vcs.checkoutDirectory':
     'Directory below the checkout root in which this entry is placed: its sources land at Checkout Directory / Source Path. Leave empty to check the entry out at the checkout root itself; at most one entry of a row can do so. A single name (letters, digits, ".", "_", "-"; no leading dot). The entry Name follows it.',
+  'vcs.buildWorkingDirectory':
+    'Directory the build runs in, relative to the checkout root (e.g. core/mapper). Leave empty to build at the checkout root. Set per configuration row; required when every VCS entry has a Checkout Directory, and must then start with one of them.',
   'vcs.repositoryType':
     'Type of the version-control system hosting the repository (e.g. GIT). Read-only — it follows the VCS host and is not user-editable.',
   'vcs.branch':
