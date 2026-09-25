@@ -36,7 +36,7 @@ export function toUpsert(o: FieldOverride): FieldOverrideUpsert {
 }
 
 const MARKER_CHILD_LABELS: [keyof MarkerChildrenPayload, string][] = [
-  ['vcsEntries', 'VCS entries'],
+  ['vcsEntries', 'VCS Roots'],
   ['mavenArtifacts', 'Maven artifacts'],
   ['fileUrlArtifacts', 'file URLs'],
   ['dockerImages', 'Docker images'],

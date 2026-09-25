@@ -714,7 +714,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
 
           {overrideType === 'marker' && attribute && selectedMarkerAttr && (
             <div className="space-y-3">
-              <Label>{attrLabel(selectedMarkerAttr)} — entries</Label>
+              <Label>{attrLabel(selectedMarkerAttr)} — {selectedMarkerAttr.childKey === 'vcsEntries' ? 'VCS Roots' : 'entries'}</Label>
 
               {/* VCS Settings */}
               {selectedMarkerAttr.childKey === 'vcsEntries' && (
@@ -722,8 +722,8 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
                   {vcsEntries.map((entry, i) => (
                     <div key={i} className="rounded-md border p-3 space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-muted-foreground">Entry {i + 1}</span>
-                        <Button variant="ghost" size="sm" type="button" onClick={() => removeVcs(i)} aria-label={`Remove VCS entry ${i + 1}`} className="h-7 text-destructive hover:text-destructive">
+                        <span className="text-xs font-medium text-muted-foreground">VCS Root {i + 1}</span>
+                        <Button variant="ghost" size="sm" type="button" onClick={() => removeVcs(i)} aria-label={`Remove VCS Root ${i + 1}`} className="h-7 text-destructive hover:text-destructive">
                           <Trash2 className="h-3 w-3" />
                         </Button>
                       </div>
@@ -774,11 +774,11 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
                     </div>
                   ))}
                   {vcsEntries.length === 0 && (
-                    <div className="rounded-md border border-dashed p-3 text-center text-xs text-muted-foreground">No VCS entries.</div>
+                    <div className="rounded-md border border-dashed p-3 text-center text-xs text-muted-foreground">No VCS Roots.</div>
                   )}
                   <Button type="button" variant="ghost" size="sm" onClick={addVcs}>
                     <Plus className="h-4 w-4" />
-                    Add Entry
+                    Add VCS Root
                   </Button>
                   <div className="space-y-1">
                     <div className="flex items-center gap-1">

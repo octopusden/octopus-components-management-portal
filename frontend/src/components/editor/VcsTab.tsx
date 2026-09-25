@@ -105,23 +105,23 @@ export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1">
-            <h3 className="text-sm font-semibold"><FieldLabelText path="vcs.entries" fallback="VCS Entries" /></h3>
-            <FieldInfo path="vcs.entries" label="VCS Entries" />
+            <h3 className="text-sm font-semibold"><FieldLabelText path="vcs.entries" fallback="VCS Roots" /></h3>
+            <FieldInfo path="vcs.entries" label="VCS Roots" />
             {perRangeCount > 0 && (
               <Badge variant="secondary" className="ml-1 text-[10px]">{perRangeCount} per-range</Badge>
             )}
           </div>
           <Button variant="outline" size="sm" onClick={addEntry} disabled={!canEdit}>
             <Plus className="h-4 w-4" />
-            Add Entry
+            Add VCS Root
           </Button>
         </div>
 
         {entries.map((entry, index) => (
           <div key={index} className="rounded-md border p-3 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground">Entry {index + 1}</span>
-              <Button variant="ghost" size="sm" onClick={() => removeEntry(index)} disabled={!canEdit} aria-label={`Remove VCS entry ${index + 1}`} className="h-7 text-destructive hover:text-destructive">
+              <span className="text-xs font-medium text-muted-foreground">VCS Root {index + 1}</span>
+              <Button variant="ghost" size="sm" onClick={() => removeEntry(index)} disabled={!canEdit} aria-label={`Remove VCS Root ${index + 1}`} className="h-7 text-destructive hover:text-destructive">
                 <Trash2 className="h-3 w-3" />
               </Button>
             </div>
@@ -195,7 +195,7 @@ export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
 
         {entries.length === 0 && (
           <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-            No VCS entries. Click "Add Entry" to create one.
+            No VCS Roots. Click "Add VCS Root" to create one.
           </div>
         )}
 

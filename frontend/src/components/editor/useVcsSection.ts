@@ -238,7 +238,7 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
     for (let i = 0; i < maxLen; i++) {
       const before = cleanedPriorEntries[i]
       const after = cleanedEntries[i]
-      const rowLabel = (field: string) => `VCS · ${after?.vcsPath || before?.vcsPath || `entry ${i + 1}`} · ${field}`
+      const rowLabel = (field: string) => `VCS · ${after?.vcsPath || before?.vcsPath || `VCS Root ${i + 1}`} · ${field}`
       if (before && !after) {
         push({ label: `VCS · ${before.vcsPath}`, oldValue: 'present', newValue: '—' })
         continue
