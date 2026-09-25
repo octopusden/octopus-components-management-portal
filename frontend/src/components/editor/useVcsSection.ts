@@ -206,6 +206,8 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
   const cleanedEntries = cleanVcsEntries(state.entries)
   const prior = snapshotRef.current
   const cleanedPriorEntries = cleanVcsEntries(prior.entries)
+  // With no entries there is nothing to build in, so it clears too (diff and request agree).
+  const buildWorkingDirectory = cleanedEntries.length === 0 ? '' : state.buildWorkingDirectory.trim()
 
   const diff: DiffEntry[] = []
   const push = (d: DiffEntry | null) => { if (d) diff.push(d) }
@@ -213,7 +215,7 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
     // vcsExternalRegistry clears via '' (CRS-A ""-clear); the prior null-clear was
     // a silent no-op (prep §1.6). Not flagged as a no-op — the clear now persists.
     push(scalarDiff('VCS · External Registry', prior.externalRegistry, state.externalRegistry))
-    push(scalarDiff('VCS · Build Working Directory', prior.buildWorkingDirectory.trim(), state.buildWorkingDirectory.trim()))
+    push(scalarDiff('VCS · Build Working Directory', prior.buildWorkingDirectory.trim(), buildWorkingDirectory))
     // Field-level entry diff (P1-2): the request persists name/branch/tag/
     // hotfixBranch/repositoryType, so editing ANY of them must surface a row —
     // not just a vcsPath change. Compare index-by-index over the normalized
@@ -268,9 +270,8 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
         sourcePath: e.sourcePath || null,
         checkoutDirectory: e.checkoutDirectory || null,
       })),
-      // ""-clear: a base-row null would leave the stored value. With no entries
-      // there is nothing to build in, so it clears too.
-      buildWorkingDirectory: cleanedEntries.length === 0 ? '' : state.buildWorkingDirectory.trim(),
+      // ""-clear: a base-row null would leave the stored value.
+      buildWorkingDirectory,
     },
   }
 

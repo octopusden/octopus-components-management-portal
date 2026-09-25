@@ -484,7 +484,7 @@ describe('VcsTab — Build Working Directory (base row)', () => {
     expect(base().buildWorkingDirectory).toBe('')
     // The Review dialog shows the clear that the PATCH carries.
     expect(captured.section!.slice.diff).toContainEqual(
-      expect.objectContaining({ label: 'VCS · Build Working Directory', oldValue: 'core', newValue: '' }),
+      expect.objectContaining({ label: 'VCS · Build Working Directory', oldValue: 'core', newValue: '—' }),
     )
   })
 })
