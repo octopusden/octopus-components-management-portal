@@ -1122,6 +1122,13 @@ describe('OverrideRowEditor — Build Working Directory', () => {
     expect(sentChildren().vcsEntries).toHaveLength(2)
   })
 
+  it('sends null for a row that never had one', async () => {
+    renderEditor({ mode: 'edit', override: vcsOverride(undefined) })
+    await userEvent.click(screen.getByRole('button', { name: /^update$/i }))
+    await waitFor(() => expect(mockQueueUpdate).toHaveBeenCalledOnce())
+    expect(sentChildren()).toHaveProperty('buildWorkingDirectory', null)
+  })
+
   it('sends null when left blank', async () => {
     renderEditor({ mode: 'edit', override: vcsOverride('core') })
     fireEvent.change(screen.getByLabelText('Build Working Directory'), { target: { value: ' ' } })
