@@ -63,6 +63,9 @@ const EXPECTED_KEYS = [
   'vcs.branch',
   'vcs.tag',
   'vcs.hotfixBranch',
+  'vcs.sourcePath',
+  'vcs.checkoutDirectory',
+  'vcs.buildWorkingDirectory',
   // DistributionTab
   'component.distributionExplicit',
   'component.distributionExternal',

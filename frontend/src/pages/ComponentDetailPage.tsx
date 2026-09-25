@@ -148,8 +148,12 @@ function sectionForField(field: string): string | null {
   if (field === 'distributionExplicit' || field === 'distributionExternal') return 'general'
   if ((GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(field)) return 'general'
   if ((MISC_TAB_FIELDS as ReadonlyArray<string>).includes(field)) return 'misc'
+  // The Build Working Directory is edited with the VCS entries, not on the Build tab.
+  if (field === 'buildWorkingDirectory' || /^fieldOverrides\[\d+\]\.buildWorkingDirectory$/.test(field)) return 'vcs'
   if (field.startsWith('build')) return 'build'
   if (field.startsWith('vcs')) return 'vcs'
+  // A per-range VCS row's placement error (`fieldOverrides[<j>].vcsEntries[<i>].<field>`).
+  if (/^fieldOverrides\[\d+\]\.vcsEntries\[/.test(field)) return 'vcs'
   if (field.startsWith('jira')) return 'jira'
   if (field.startsWith('escrow') || field === 'productType') return 'escrow'
   // Docker images are their own tab now (split out of Distribution), so route a
@@ -532,6 +536,7 @@ function ComponentDetailEditor() {
     setReviewError(null)
     setJiraConflict(null)
     setBuildConflict(null)
+    vcsSection.clearServerErrors()
 
     // Build System is REQUIRED (P1-3). Clearing it would PATCH null = a CRS
     // no-op, so block and surface the Build section's inline required error.
@@ -545,17 +550,26 @@ function ComponentDetailEditor() {
     // the component — merge it onto the combined PATCH. Values arrive already
     // normalized (undefined when blank), so JSON.stringify omits them.
     const patchDirty = anyDirty(slices)
+    // The override rows in the order sent as `fieldOverrides`, to route its indexed 400s.
+    const sentOverrideIds = overridesSection.rowIds
     const request = {
       ...combineRequest(component.version, slices),
       jiraTaskKey: meta.jiraTaskKey,
       changeComment: meta.changeComment,
     }
 
+    // Non-blocking advisories from the PATCH response (e.g. the TeamCity build
+    // chain must be recreated after a base VCS change), shown once the save is done.
+    let saveWarnings: string[] = []
+    const showSaveWarnings = () => {
+      for (const warning of saveWarnings) toast({ title: 'Warning', description: warning })
+    }
     try {
       // The combined PATCH fires only when a PATCH-backed section is dirty — a
       // supported-versions-only save must not send an (essentially empty) PATCH.
       if (patchDirty) {
         const saved = await updateMutation.mutateAsync(request)
+        saveWarnings = saved?.warnings ?? []
         // Re-baseline the General/Misc form to the SAVED (server-normalized) component.
         // The GeneralTab re-hydration guard skips while the form is dirty/touched, so without
         // an explicit reset here the form would stay dirty for the rest of the session and a
@@ -594,6 +608,8 @@ function ComponentDetailEditor() {
               description: `Your other changes were saved, but updating supported versions failed: ${msg}`,
               variant: 'destructive',
             })
+            // The PATCH did land, so its advisories still apply.
+            showSaveWarnings()
             return
           }
           // Coverage-only failure: nothing else persisted, so defer to the shared
@@ -612,6 +628,7 @@ function ComponentDetailEditor() {
       overridesSection.reset()
       setReviewOpen(false)
       toast({ title: 'Component saved', description: 'Changes have been saved successfully.' })
+      showSaveWarnings()
     } catch (err) {
       // 409 — split by kind. A `value` conflict (uniqueness / overlapping range)
       // is fixable in place, so keep the Review dialog open with a persistent
@@ -666,7 +683,9 @@ function ComponentDetailEditor() {
         const hasGeneralError = [...fieldErrors.keys()].some((f) =>
           (GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(f),
         )
-        let anyFieldMapped = false
+        // A placement error on a base VCS entry shows inline on the VCS tab. One
+        // on a per-range row shows in its (closed) editor, so it keeps the toast.
+        let anyFieldMapped = vcsSection.applyServerErrors(fieldErrors, sentOverrideIds)
         let switchTo: string | null = null
         for (const [field, message] of fieldErrors) {
           const isGeneral = (GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(field)
@@ -696,8 +715,8 @@ function ComponentDetailEditor() {
         if (anyFieldMapped || switchTo) {
           setReviewOpen(false)
           // A General/Misc field 400 (anyFieldMapped) surfaces inline via
-          // form.setError, so we stop here (no toast). Non-RHF section fields
-          // (build/vcs/jira/escrow/distribution) have no inline-error slot, so
+          // form.setError (or, for a base VCS entry, the VCS tab), so we stop here
+          // (no toast). Other non-RHF section fields have no inline-error slot, so
           // we switch to the owning section AND fall through to the toast below
           // — the toast is their only error surface.
           if (anyFieldMapped) return

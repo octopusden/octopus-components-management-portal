@@ -98,11 +98,17 @@ export const fieldDescriptions: Record<string, string> = {
   'vcs.externalRegistry':
     'Reference to an external registry holding this component’s sources when they are not managed in the standard VCS. Set only for externally sourced components.',
   'vcs.entries':
-    'Source repositories of the component. Most components have a single entry; multiple entries describe components assembled from several repositories. Rows with an empty VCS Path are dropped on save.',
+    'Source repositories of the component, one VCS Root each. Most components have a single VCS Root; several describe a component assembled from several repositories. A VCS Root with an empty VCS Path is dropped on save.',
   'vcs.name':
-    'Optional identifier of this repository entry (e.g. main, docs). Useful to tell entries apart when the component has more than one repository.',
+    'Identifier of this VCS Root, set by the registry: its Checkout Directory when it has one; otherwise it keeps its existing name (main for a new one). Read-only.',
   'vcs.vcsPath':
-    'Repository location, e.g. an ssh:// Git URL. Required for each entry. Supports dynamic variables; release automation and escrow generation clone the sources from this path.',
+    'Repository location, e.g. an ssh:// Git URL. Required for each VCS Root. Supports dynamic variables; release automation and escrow generation clone the sources from this path.',
+  'vcs.sourcePath':
+    'Directory inside the repository that belongs to the component (e.g. mapper). Leave empty to use the whole repository. A relative path; each segment may contain letters, digits, ".", "_" and "-".',
+  'vcs.checkoutDirectory':
+    'Directory below the checkout root in which this VCS Root is placed: its sources land at Checkout Directory / Source Path. Leave empty to check it out at the checkout root itself; at most one VCS Root of a row can do so. A single name (letters, digits, ".", "_", "-"; no leading dot). The VCS Root Name follows it.',
+  'vcs.buildWorkingDirectory':
+    'Directory the build runs in, relative to the checkout root (e.g. core/mapper). Leave empty to build at the checkout root. Set per configuration row; required when every VCS Root has a Checkout Directory, and must then start with one of them.',
   'vcs.repositoryType':
     'Type of the version-control system hosting the repository (e.g. GIT). Read-only — it follows the VCS host and is not user-editable.',
   'vcs.branch':

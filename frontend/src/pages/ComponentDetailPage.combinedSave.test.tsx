@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { ComponentDetailPage } from './ComponentDetailPage'
 import type { User } from '@/lib/auth'
-import type { ComponentDetail } from '@/lib/types'
+import type { ComponentDetail, FieldOverride } from '@/lib/types'
 
 // Mock only data hooks + the heavy/non-section tabs. CRITICALLY: BuildTab,
 // VcsTab, DistributionTab, JiraTab, EscrowTab stay REAL so their section hooks
@@ -110,7 +110,7 @@ vi.mock('../components/ui/EnumSelect', () => ({
 }))
 
 import { useCurrentUser } from '../hooks/useCurrentUser'
-import { useComponent, useUpdateComponent, useDeleteComponent } from '../hooks/useComponent'
+import { useComponent, useUpdateComponent, useDeleteComponent, useFieldOverrides } from '../hooks/useComponent'
 import { TooltipProvider } from '../components/ui/tooltip'
 import { ApiError } from '../lib/api'
 
@@ -742,5 +742,189 @@ describe('ComponentDetailPage — combined PATCH (Phase 3b)', () => {
     const titles = toastMock.mock.calls.map((c) => (c[0] as { title?: string }).title)
     expect(titles).not.toContain('Partly saved')
     expect(titles).not.toContain('Component saved')
+  })
+})
+
+describe('ComponentDetailPage — VCS placement errors', () => {
+  afterEach(() => {
+    vi.mocked(useFieldOverrides).mockReturnValue({ data: [] } as unknown as ReturnType<typeof useFieldOverrides>)
+  })
+  const vcsEntry = (name: string, vcsPath: string, checkoutDirectory?: string) =>
+    ({ id: `id-${name}`, sortOrder: 0, name, vcsPath, repositoryType: 'GIT', checkoutDirectory })
+  const withVcs: ComponentDetail = {
+    ...baseComponent,
+    configurations: [{ ...baseComponent.configurations[0]!, vcsEntries: [vcsEntry('core', 'ssh://one'), vcsEntry('feature', 'ssh://two', 'feature')] }],
+  }
+  const reject400 = (errorMessage: string) =>
+    vi.fn(() => Promise.reject(new ApiError(400, 'bad', JSON.stringify({ errorMessage }))))
+  async function saveAndConfirm() {
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /^confirm$/i }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  }
+
+  it('shows a vcsEntries[i] error on that entry field and switches to the VCS tab', async () => {
+    renderPage(withVcs, reject400('vcsEntries[1].checkoutDirectory: required on a secondary VCS entry'))
+    await openTab(/^VCS/)
+    fireEvent.change(screen.getAllByLabelText('Checkout Directory')[1]!, { target: { value: '' } })
+    await openTab(/^Build/)
+    await saveAndConfirm()
+    await waitFor(() => expect(screen.getByRole('tab', { name: /^VCS/ })).toHaveAttribute('aria-current', 'page'))
+    const cd = screen.getAllByLabelText('Checkout Directory')
+    expect(cd[1]).toHaveAccessibleDescription('required on a secondary VCS entry')
+    expect(cd[1]).toHaveAttribute('aria-invalid', 'true')
+    expect(cd[0]).not.toHaveAttribute('aria-invalid')
+  })
+
+  it('shows a fieldOverrides[j] error on the override row sent at index j, not on the base entries', async () => {
+    const marker = (id: string, versionRange: string): FieldOverride => ({
+      id, overriddenAttribute: 'vcs.settings', versionRange, rowType: 'MARKER', value: null,
+      markerChildren: { vcsEntries: [{ name: 'core', vcsPath: 'ssh://one' }, { name: 'x', vcsPath: 'ssh://two', checkoutDirectory: 'x' }] },
+      createdAt: null, updatedAt: null,
+    })
+    const scalar: FieldOverride = {
+      id: 'o-java', overriddenAttribute: 'build.javaVersion', versionRange: '[1,2)', rowType: 'SCALAR_OVERRIDE',
+      value: '11', markerChildren: null, createdAt: null, updatedAt: null,
+    }
+    vi.mocked(useFieldOverrides).mockReturnValue({ data: [marker('o-a', '[1,2)'), scalar, marker('o-b', '[5,6)')] } as unknown as ReturnType<typeof useFieldOverrides>)
+    renderPage(withVcs, reject400('fieldOverrides[2].vcsEntries[1].checkoutDirectory: required on a secondary VCS entry'))
+    await openTab(/^VCS/)
+    fireEvent.click(screen.getByRole('button', { name: /edit override \[5/i }))
+    fireEvent.change(within(screen.getByRole('dialog')).getAllByLabelText('Checkout Directory')[1]!, { target: { value: '' } })
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^update$/i }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await saveAndConfirm()
+
+    expect(document.querySelector('[aria-invalid="true"]')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /edit override \[1/i }))
+    expect(within(screen.getByRole('dialog')).getAllByLabelText('Checkout Directory')[1]).not.toHaveAttribute('aria-invalid')
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /cancel/i }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    fireEvent.click(screen.getByRole('button', { name: /edit override \[5/i }))
+    expect(within(screen.getByRole('dialog')).getAllByLabelText('Checkout Directory')[1]).toHaveAccessibleDescription('required on a secondary VCS entry')
+  })
+})
+
+describe('ComponentDetailPage — chain-mismatch warning', () => {
+  const warning = 'VCS entries changed; the TeamCity build chain no longer matches and must be recreated.'
+  async function editBuildAndSave(warnings: string[]) {
+    renderPage(baseComponent, vi.fn(() => Promise.resolve({ ...baseComponent, version: 10, warnings })) as never)
+    await openTab(/^Build/)
+    fireEvent.change(screen.getByTestId('enum-build-javaVersion'), { target: { value: '21' } })
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /^confirm$/i }))
+    await waitFor(() => expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Component saved' })))
+  }
+
+  it('shows the registry warning after a successful save', async () => {
+    await editBuildAndSave([warning])
+    expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ description: warning }))
+  })
+
+  it('shows no warning when the response carries none', async () => {
+    await editBuildAndSave([])
+    expect(toastMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('ComponentDetailPage — VCS placement for a read-only viewer', () => {
+  it('shows Source Path, Checkout Directory and Build Working Directory without letting them be edited', async () => {
+    const entry = (name: string, vcsPath: string, sortOrder: number, checkoutDirectory?: string) =>
+      ({ id: `id-${name}`, sortOrder, name, vcsPath, repositoryType: 'GIT', sourcePath: 'src', checkoutDirectory })
+    renderPage({
+      ...baseComponent,
+      canEdit: false,
+      configurations: [{
+        ...baseComponent.configurations[0]!,
+        vcsEntries: [entry('core', 'ssh://one', 0), entry('feature', 'ssh://two', 1, 'feature')],
+        buildWorkingDirectory: 'feature',
+      } as ComponentDetail['configurations'][number]],
+    })
+    await openTab(/^VCS/)
+    const fields = [
+      ...screen.getAllByLabelText('Source Path'),
+      ...screen.getAllByLabelText('Checkout Directory'),
+      screen.getByLabelText('Build Working Directory'),
+    ]
+    expect(fields.map((f) => (f as HTMLInputElement).value)).toEqual(['src', 'src', '', 'feature', 'feature'])
+    for (const f of fields) expect(f).toBeDisabled()
+  })
+})
+
+describe('ComponentDetailPage — chain-mismatch warning on a partly saved save', () => {
+  it('still shows the PATCH warnings when the supported-versions PUT then fails', async () => {
+    const warning = 'VCS entries changed; the TeamCity build chain no longer matches and must be recreated.'
+    svMock.data = { all: false, ranges: ['[1.0,2.0)'], warnings: [] }
+    svMock.mutateAsync.mockRejectedValue(new Error('coverage service unavailable'))
+    renderPage(baseComponent, vi.fn(() => Promise.resolve({ ...baseComponent, version: 10, warnings: [warning] })) as never)
+    await openTab(/^Build/)
+    fireEvent.change(screen.getByTestId('enum-build-javaVersion'), { target: { value: '21' } })
+    await openTab(/Supported Versions/)
+    fireEvent.click(screen.getByRole('button', { name: /set to all versions/i }))
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /^confirm$/i }))
+    await waitFor(() => expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Partly saved' })))
+    expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ description: warning }))
+  })
+})
+
+describe('ComponentDetailPage — Build Working Directory errors', () => {
+  const entry = (name: string, vcsPath: string, checkoutDirectory: string) =>
+    ({ id: `id-${name}`, sortOrder: 0, name, vcsPath, repositoryType: 'GIT', checkoutDirectory })
+  const withVcs: ComponentDetail = {
+    ...baseComponent,
+    configurations: [{ ...baseComponent.configurations[0]!, vcsEntries: [entry('core', 'ssh://one', 'core'), entry('feature', 'ssh://two', 'feature')] }],
+  }
+  const reject400 = (errorMessage: string) =>
+    vi.fn(() => Promise.reject(new ApiError(400, 'bad', JSON.stringify({ errorMessage }))))
+  async function saveAndConfirm() {
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /^confirm$/i }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  }
+  afterEach(() => {
+    vi.mocked(useFieldOverrides).mockReturnValue({ data: [] } as unknown as ReturnType<typeof useFieldOverrides>)
+  })
+
+  it('shows a base buildWorkingDirectory error on the VCS tab field, not on the Build tab', async () => {
+    const message = 'required when every VCS entry has a Checkout Directory'
+    renderPage(withVcs, reject400(`buildWorkingDirectory: ${message}`))
+    await openTab(/^VCS/)
+    fireEvent.change(screen.getAllByLabelText('Source Path')[1]!, { target: { value: 'data' } })
+    await openTab(/^Build/)
+    await saveAndConfirm()
+    await waitFor(() => expect(screen.getByRole('tab', { name: /^VCS/ })).toHaveAttribute('aria-current', 'page'))
+    const field = screen.getByLabelText('Build Working Directory')
+    expect(field).toHaveAccessibleDescription(message)
+    expect(field).toHaveAttribute('aria-invalid', 'true')
+  })
+
+  it('shows a fieldOverrides[j].buildWorkingDirectory error in the editor of the row sent at index j', async () => {
+    const message = 'must start with the Checkout Directory of a VCS entry'
+    const marker = (id: string, versionRange: string): FieldOverride => ({
+      id, overriddenAttribute: 'vcs.settings', versionRange, rowType: 'MARKER', value: null,
+      markerChildren: { vcsEntries: [{ name: 'core', vcsPath: 'ssh://one', checkoutDirectory: 'core' }] },
+      createdAt: null, updatedAt: null,
+    })
+    const scalar: FieldOverride = {
+      id: 'o-java', overriddenAttribute: 'build.javaVersion', versionRange: '[1,2)', rowType: 'SCALAR_OVERRIDE',
+      value: '11', markerChildren: null, createdAt: null, updatedAt: null,
+    }
+    vi.mocked(useFieldOverrides).mockReturnValue({ data: [marker('o-a', '[1,2)'), scalar, marker('o-b', '[5,6)')] } as unknown as ReturnType<typeof useFieldOverrides>)
+    renderPage(withVcs, reject400(`fieldOverrides[2].buildWorkingDirectory: ${message}`))
+    await openTab(/^VCS/)
+    fireEvent.click(screen.getByRole('button', { name: /edit override \[5/i }))
+    fireEvent.change(within(screen.getByRole('dialog')).getByLabelText('Build Working Directory'), { target: { value: 'elsewhere' } })
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^update$/i }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await saveAndConfirm()
+
+    expect(document.querySelector('[aria-invalid="true"]')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /edit override \[1/i }))
+    expect(within(screen.getByRole('dialog')).getByLabelText('Build Working Directory')).not.toHaveAttribute('aria-invalid')
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /cancel/i }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    fireEvent.click(screen.getByRole('button', { name: /edit override \[5/i }))
+    expect(within(screen.getByRole('dialog')).getByLabelText('Build Working Directory')).toHaveAccessibleDescription(message)
   })
 })

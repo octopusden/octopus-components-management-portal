@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import type { ComponentDetail, VcsEntry } from '../../lib/types'
 import { selectBaseRow } from '../../lib/api/baseRow'
 import type { SectionSlice, DiffEntry } from '../../lib/editor/combineRequest'
@@ -5,6 +6,7 @@ import { scalarDiff } from '../../lib/editor/diffUtil'
 import { useSectionSnapshot } from './useSectionSnapshot'
 import { useFieldEditable } from '../../hooks/useFieldConfig'
 import { omitNonEditable } from '../../lib/editor/payloadGating'
+import { parseVcsEntryErrorPath } from '../../lib/serverErrors'
 
 /**
  * External Registry (R10) is a Whiskey-only field: it is shown only when the
@@ -31,11 +33,14 @@ export interface VcsEntryState {
   tag: string
   branch: string
   hotfixBranch: string
+  sourcePath: string
+  checkoutDirectory: string
 }
 
 interface VcsState {
   externalRegistry: string
   entries: VcsEntryState[]
+  buildWorkingDirectory: string
 }
 
 function toEntryState(e: VcsEntry): VcsEntryState {
@@ -47,6 +52,8 @@ function toEntryState(e: VcsEntry): VcsEntryState {
     tag: e.tag ?? '',
     branch: e.branch ?? '',
     hotfixBranch: e.hotfixBranch ?? '',
+    sourcePath: e.sourcePath ?? '',
+    checkoutDirectory: e.checkoutDirectory ?? '',
   }
 }
 
@@ -54,6 +61,7 @@ function snapshotFrom(component: ComponentDetail): VcsState {
   return {
     externalRegistry: component.vcsExternalRegistry ?? '',
     entries: selectBaseRow(component)?.vcsEntries?.map(toEntryState) ?? [],
+    buildWorkingDirectory: selectBaseRow(component)?.buildWorkingDirectory ?? '',
   }
 }
 
@@ -68,6 +76,8 @@ interface CleanVcsEntry {
   tag: string
   hotfixBranch: string
   repositoryType: string
+  sourcePath: string
+  checkoutDirectory: string
 }
 function cleanVcsEntries(entries: VcsEntryState[]): CleanVcsEntry[] {
   return entries
@@ -78,14 +88,23 @@ function cleanVcsEntries(entries: VcsEntryState[]): CleanVcsEntry[] {
       tag: (e.tag || '').trim(),
       hotfixBranch: (e.hotfixBranch || '').trim(),
       repositoryType: (e.repositoryType || '').trim(),
+      sourcePath: (e.sourcePath || '').trim(),
+      checkoutDirectory: (e.checkoutDirectory || '').trim(),
     }))
     .filter((e) => e.vcsPath !== '')
 }
 
-// Normalized view for the dirty compare (P1-4): the cleaned entries plus the
-// trimmed external-registry. dirty ⇔ this differs from the snapshot's view.
-function normalizeVcs(s: VcsState): unknown {
-  return { externalRegistry: (s.externalRegistry || '').trim(), entries: cleanVcsEntries(s.entries) }
+// What the request sends, and the dirty compare's view (P1-4): the cleaned entries,
+// the trimmed external-registry, and the Build Working Directory, which clears ('')
+// when no entry is sent since there is nothing to build in. dirty ⇔ this differs
+// from the snapshot's view.
+function projectVcs(s: VcsState) {
+  const entries = cleanVcsEntries(s.entries)
+  return {
+    externalRegistry: (s.externalRegistry || '').trim(),
+    entries,
+    buildWorkingDirectory: entries.length === 0 ? '' : s.buildWorkingDirectory.trim(),
+  }
 }
 
 export interface VcsSection {
@@ -98,18 +117,30 @@ export interface VcsSection {
    *  → EDIT_ANY_COMPONENT). Drives the disabled dropdown + "admin only" pill. */
   externalRegistryEditable: boolean
   entries: VcsEntryState[]
+  buildWorkingDirectory: string
+  setBuildWorkingDirectory: (v: string) => void
   updateEntry: (index: number, field: keyof VcsEntryState, value: string) => void
   addEntry: () => void
   removeEntry: (index: number) => void
   slice: SectionSlice
   reset: () => void
+  /** Registry placement errors on base entries, keyed `<entry index>.<field>`
+   *  (`buildWorkingDirectory` for the row's own field). */
+  entryErrors: Record<string, string>
+  /** The same for per-range rows, by override id. */
+  overrideEntryErrors: Record<string, Record<string, string>>
+  /** Route the `vcsEntries[…]` / `fieldOverrides[<j>].vcsEntries[…]` errors of a
+   *  400 (`rowIds` = the override ids in the order sent); true when one landed on a
+   *  base entry (shown inline, so the page needs no toast for it). */
+  applyServerErrors: (fieldErrors: Map<string, string>, rowIds: string[]) => boolean
+  clearServerErrors: () => void
 }
 
 export function useVcsSection(component: ComponentDetail): VcsSection {
   const { state, setState, snapshotRef, isDirty, reseed } = useSectionSnapshot(
     component,
     snapshotFrom,
-    normalizeVcs,
+    projectVcs,
   )
 
   // useFieldEditable fails CLOSED while field-config / current-user load (and on
@@ -119,22 +150,65 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
   const showExternalRegistry = selectBaseRow(component)?.build?.buildSystem === WHISKEY
 
   const setExternalRegistry = (v: string) => setState((p) => ({ ...p, externalRegistry: v }))
+  const setBuildWorkingDirectory = (v: string) => setState((p) => ({ ...p, buildWorkingDirectory: v }))
   const updateEntry = (index: number, field: keyof VcsEntryState, value: string) =>
     setState((p) => ({ ...p, entries: p.entries.map((e, i) => (i === index ? { ...e, [field]: value } : e)) }))
   const addEntry = () =>
     setState((p) => ({
       ...p,
-      entries: [...p.entries, { name: '', vcsPath: '', repositoryType: '', tag: '', branch: '', hotfixBranch: '' }],
+      entries: [...p.entries, { name: '', vcsPath: '', repositoryType: '', tag: '', branch: '', hotfixBranch: '', sourcePath: '', checkoutDirectory: '' }],
     }))
-  const removeEntry = (index: number) =>
+  const [entryErrors, setEntryErrors] = useState<Record<string, string>>({})
+  const [overrideEntryErrors, setOverrideEntryErrors] = useState<Record<string, Record<string, string>>>({})
+  const clearServerErrors = () => {
+    setEntryErrors({})
+    setOverrideEntryErrors({})
+  }
+  // Another component: its entries are not the ones the errors point at.
+  useEffect(() => clearServerErrors(), [component.id])
+
+  const removeEntry = (index: number) => {
+    // Indices shift: a routed error would land on the wrong entry.
+    setEntryErrors({})
     setState((p) => ({ ...p, entries: p.entries.filter((_, i) => i !== index) }))
+  }
 
-  const reset = reseed
+  const reset = () => {
+    clearServerErrors()
+    reseed()
+  }
 
-  // The request + diff + dirty all run off this one cleaned projection.
-  const cleanedEntries = cleanVcsEntries(state.entries)
+  const applyServerErrors = (fieldErrors: Map<string, string>, rowIds: string[]) => {
+    // The request drops path-less rows, so a sent index maps to the i-th kept row.
+    const stateIndexOfSent = state.entries.flatMap((e, i) => (e.vcsPath.trim() !== '' ? [i] : []))
+    const base: Record<string, string> = {}
+    const overrides: Record<string, Record<string, string>> = {}
+    for (const [path, message] of fieldErrors) {
+      const p = parseVcsEntryErrorPath(path)
+      if (!p) continue
+      // Keys: `<entry index>.<field>`, or the bare field for the row's Build Working Directory.
+      if (p.overrideIndex === undefined) {
+        if (p.entry === undefined) {
+          base[p.field] = message
+        } else {
+          const index = stateIndexOfSent[p.entry]
+          if (index !== undefined) base[`${index}.${p.field}`] = message
+        }
+      } else {
+        const id = rowIds[p.overrideIndex]
+        const key = p.entry === undefined ? p.field : `${p.entry}.${p.field}`
+        if (id !== undefined) overrides[id] = { ...overrides[id], [key]: message }
+      }
+    }
+    setEntryErrors(base)
+    setOverrideEntryErrors(overrides)
+    return Object.keys(base).length > 0
+  }
+
+  // The request + diff + dirty all run off this one projection (projectVcs).
+  const { entries: cleanedEntries, buildWorkingDirectory } = projectVcs(state)
   const prior = snapshotRef.current
-  const cleanedPriorEntries = cleanVcsEntries(prior.entries)
+  const { entries: cleanedPriorEntries, buildWorkingDirectory: priorBuildWorkingDirectory } = projectVcs(prior)
 
   const diff: DiffEntry[] = []
   const push = (d: DiffEntry | null) => { if (d) diff.push(d) }
@@ -142,6 +216,7 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
     // vcsExternalRegistry clears via '' (CRS-A ""-clear); the prior null-clear was
     // a silent no-op (prep §1.6). Not flagged as a no-op — the clear now persists.
     push(scalarDiff('VCS · External Registry', prior.externalRegistry, state.externalRegistry))
+    push(scalarDiff('VCS · Build Working Directory', priorBuildWorkingDirectory, buildWorkingDirectory))
     // Field-level entry diff (P1-2): the request persists name/branch/tag/
     // hotfixBranch/repositoryType, so editing ANY of them must surface a row —
     // not just a vcsPath change. Compare index-by-index over the normalized
@@ -156,12 +231,14 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
       { key: 'tag', label: 'Tag' },
       { key: 'hotfixBranch', label: 'Hotfix Branch' },
       { key: 'repositoryType', label: 'Repository Type' },
+      { key: 'sourcePath', label: 'Source Path' },
+      { key: 'checkoutDirectory', label: 'Checkout Directory' },
     ]
     const maxLen = Math.max(cleanedPriorEntries.length, cleanedEntries.length)
     for (let i = 0; i < maxLen; i++) {
       const before = cleanedPriorEntries[i]
       const after = cleanedEntries[i]
-      const rowLabel = (field: string) => `VCS · ${after?.vcsPath || before?.vcsPath || `entry ${i + 1}`} · ${field}`
+      const rowLabel = (field: string) => `VCS · ${after?.vcsPath || before?.vcsPath || `VCS Root ${i + 1}`} · ${field}`
       if (before && !after) {
         push({ label: `VCS · ${before.vcsPath}`, oldValue: 'present', newValue: '—' })
         continue
@@ -191,7 +268,11 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
         tag: e.tag || null,
         hotfixBranch: e.hotfixBranch || null,
         repositoryType: e.repositoryType || null,
+        sourcePath: e.sourcePath || null,
+        checkoutDirectory: e.checkoutDirectory || null,
       })),
+      // ""-clear: a base-row null would leave the stored value.
+      buildWorkingDirectory,
     },
   }
 
@@ -217,10 +298,16 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
     showExternalRegistry,
     externalRegistryEditable,
     entries: state.entries,
+    buildWorkingDirectory: state.buildWorkingDirectory,
+    setBuildWorkingDirectory,
     updateEntry,
     addEntry,
     removeEntry,
     slice,
     reset,
+    entryErrors,
+    overrideEntryErrors,
+    applyServerErrors,
+    clearServerErrors,
   }
 }

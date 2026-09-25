@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { OverrideRowEditor } from './OverrideRowEditor'
+import { TooltipProvider } from '../ui/tooltip'
 import type { FieldOverride } from '../../lib/types'
 
 // ---------------------------------------------------------------------------
@@ -111,7 +112,8 @@ function renderEditor(props: Partial<Parameters<typeof OverrideRowEditor>[0]> = 
     mode: 'create' as const,
     ...props,
   }
-  return render(<OverrideRowEditor {...defaults} />)
+  // FieldInfo (VCS placement descriptions) needs the app-level TooltipProvider.
+  return render(<TooltipProvider><OverrideRowEditor {...defaults} /></TooltipProvider>)
 }
 
 function makeScalarOverride(overrides: Partial<FieldOverride> = {}): FieldOverride {
@@ -262,12 +264,12 @@ describe('OverrideRowEditor — create mode', () => {
     expect(screen.getByPlaceholderText('tool-a, tool-b')).toBeDefined()
   })
 
-  it('switching to Marker and selecting vcs.settings renders VCS child list with Add Entry button', async () => {
+  it('switching to Marker and selecting vcs.settings renders VCS child list with Add VCS Root button', async () => {
     renderEditor()
     await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
     await userEvent.selectOptions(select, 'vcs.settings')
-    expect(screen.getByRole('button', { name: /add entry/i })).toBeDefined()
+    expect(screen.getByRole('button', { name: /add vcs root/i })).toBeDefined()
   })
 
   it('switching to Marker and selecting distribution.docker renders Docker child list editor', async () => {
@@ -596,12 +598,12 @@ describe('OverrideRowEditor — marker child trim + blank-row filter', () => {
     await userEvent.selectOptions(select, 'vcs.settings')
 
     // Row 1 — populate vcsPath with surrounding whitespace
-    await userEvent.click(screen.getByRole('button', { name: /add entry/i }))
+    await userEvent.click(screen.getByRole('button', { name: /add vcs root/i }))
     const vcsPathInputs = await screen.findAllByPlaceholderText('ssh://git@...')
     await userEvent.type(vcsPathInputs[0]!, '  ssh://git@host/repo  ')
 
     // Row 2 — whitespace-only vcsPath (satisfies HTML5 required) → row dropped
-    await userEvent.click(screen.getByRole('button', { name: /add entry/i }))
+    await userEvent.click(screen.getByRole('button', { name: /add vcs root/i }))
     const vcsPathInputs2 = await screen.findAllByPlaceholderText('ssh://git@...')
     await userEvent.type(vcsPathInputs2[1]!, '   ')
 
@@ -996,5 +998,142 @@ describe('OverrideRowEditor — empty/inverted version range (client-side early 
     expect(createBtn).toBeDisabled()
     await user.click(createBtn)
     expect(mockQueueCreate).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests: VCS placement (Source Path / Checkout Directory) + read-only Name
+// ---------------------------------------------------------------------------
+
+describe('OverrideRowEditor — VCS placement', () => {
+  beforeEach(() => {
+    mockQueueUpdate.mockReset()
+    mockOverridesList = []
+  })
+
+  const vcsOverride = (): FieldOverride => ({
+    id: 'fo-vcs', overriddenAttribute: 'vcs.settings', versionRange: '[1,2)', rowType: 'MARKER', value: null,
+    markerChildren: {
+      vcsEntries: [
+        { name: 'core', vcsPath: 'ssh://one', sourcePath: 'src', checkoutDirectory: null },
+        { name: 'alpha', vcsPath: 'ssh://two', sourcePath: null, checkoutDirectory: 'alpha' },
+        { name: 'beta', vcsPath: 'ssh://three', sourcePath: null, checkoutDirectory: 'beta' },
+      ],
+    },
+    createdAt: null, updatedAt: null,
+  })
+  const sentEntries = () => mockQueueUpdate.mock.calls[0]![1].markerChildren.vcsEntries as Array<Record<string, unknown>>
+
+  it('prefills Source Path and Checkout Directory', () => {
+    renderEditor({ mode: 'edit', override: vcsOverride() })
+    expect(screen.getAllByLabelText('Source Path').map((i) => (i as HTMLInputElement).value)).toEqual(['src', '', ''])
+    expect((screen.getAllByLabelText('Checkout Directory')[2] as HTMLInputElement).value).toBe('beta')
+  })
+
+  it('names each remove-entry button for assistive technology', () => {
+    renderEditor({ mode: 'edit', override: vcsOverride() })
+    expect(screen.getByRole('button', { name: 'Remove VCS Root 3' })).toBeInTheDocument()
+  })
+
+  it('sends the edited placement, null for blanks', async () => {
+    renderEditor({ mode: 'edit', override: vcsOverride() })
+    const cd = screen.getAllByLabelText('Checkout Directory')
+    fireEvent.change(cd[1]!, { target: { value: 'feature' } })
+    fireEvent.change(cd[2]!, { target: { value: 'extra' } })
+    fireEvent.change(screen.getAllByLabelText('Source Path')[0]!, { target: { value: ' ' } })
+    await userEvent.click(screen.getByRole('button', { name: /^update$/i }))
+    await waitFor(() => expect(mockQueueUpdate).toHaveBeenCalledOnce())
+    expect(sentEntries().map((e) => [e.sourcePath, e.checkoutDirectory])).toEqual([[null, null], [null, 'feature'], [null, 'extra']])
+  })
+
+  it('shows Name read-only and sends the stored Name unchanged', async () => {
+    renderEditor({ mode: 'edit', override: vcsOverride() })
+    expect(screen.getAllByLabelText('Name')[1]).toHaveAttribute('readonly')
+    await userEvent.click(screen.getByRole('button', { name: /^update$/i }))
+    await waitFor(() => expect(mockQueueUpdate).toHaveBeenCalledOnce())
+    expect(sentEntries().map((e) => e.name)).toEqual(['core', 'alpha', 'beta'])
+  })
+})
+
+describe('OverrideRowEditor — Checkout Directory on every entry', () => {
+  beforeEach(() => {
+    mockQueueUpdate.mockReset()
+    mockOverridesList = []
+  })
+
+  const vcsOverride = (): FieldOverride => ({
+    id: 'fo-vcs', overriddenAttribute: 'vcs.settings', versionRange: '[1,2)', rowType: 'MARKER', value: null,
+    markerChildren: {
+      vcsEntries: [
+        { name: 'core', vcsPath: 'ssh://one' },
+        { name: 'feature', vcsPath: 'ssh://two', checkoutDirectory: 'feature' },
+      ],
+    },
+    createdAt: null, updatedAt: null,
+  })
+  const sent = () => (mockQueueUpdate.mock.calls[0]![1].markerChildren.vcsEntries as Array<{ vcsPath: string; checkoutDirectory: string | null }>)
+    .map((e) => [e.vcsPath, e.checkoutDirectory])
+
+  it('lets the first entry\'s Checkout Directory be edited and sends it', async () => {
+    renderEditor({ mode: 'edit', override: vcsOverride() })
+    const cd = screen.getAllByLabelText('Checkout Directory')
+    for (const f of cd) expect(f).not.toHaveAttribute('readonly')
+    expect(screen.queryByText(/checked out at the checkout root, so it has no Checkout Directory/i)).toBeNull()
+    fireEvent.change(cd[0]!, { target: { value: 'core' } })
+    await userEvent.click(screen.getByRole('button', { name: /^update$/i }))
+    await waitFor(() => expect(mockQueueUpdate).toHaveBeenCalledOnce())
+    expect(sent()).toEqual([['ssh://one', 'core'], ['ssh://two', 'feature']])
+  })
+
+  it('an entry that becomes first keeps its own Checkout Directory', async () => {
+    renderEditor({ mode: 'edit', override: vcsOverride() })
+    fireEvent.click(screen.getByText('VCS Root 1').parentElement!.querySelector('button')!)
+    expect((screen.getByLabelText('Checkout Directory') as HTMLInputElement).value).toBe('feature')
+    await userEvent.click(screen.getByRole('button', { name: /^update$/i }))
+    await waitFor(() => expect(mockQueueUpdate).toHaveBeenCalledOnce())
+    expect(sent()).toEqual([['ssh://two', 'feature']])
+  })
+})
+
+describe('OverrideRowEditor — Build Working Directory', () => {
+  beforeEach(() => {
+    mockQueueUpdate.mockReset()
+    mockOverridesList = []
+  })
+
+  const vcsOverride = (buildWorkingDirectory?: string | null): FieldOverride => ({
+    id: 'fo-vcs', overriddenAttribute: 'vcs.settings', versionRange: '[1,2)', rowType: 'MARKER', value: null,
+    markerChildren: {
+      vcsEntries: [{ name: 'core', vcsPath: 'ssh://one', checkoutDirectory: 'core' }, { name: 'feature', vcsPath: 'ssh://two', checkoutDirectory: 'feature' }],
+      buildWorkingDirectory,
+    } as FieldOverride['markerChildren'],
+    createdAt: null, updatedAt: null,
+  })
+  const sentChildren = () => mockQueueUpdate.mock.calls[0]![1].markerChildren as Record<string, unknown>
+
+  it('prefills the row value and sends an edit next to the entries', async () => {
+    renderEditor({ mode: 'edit', override: vcsOverride('core') })
+    const field = screen.getByLabelText('Build Working Directory') as HTMLInputElement
+    expect(field.value).toBe('core')
+    fireEvent.change(field, { target: { value: 'core/app' } })
+    await userEvent.click(screen.getByRole('button', { name: /^update$/i }))
+    await waitFor(() => expect(mockQueueUpdate).toHaveBeenCalledOnce())
+    expect(sentChildren().buildWorkingDirectory).toBe('core/app')
+    expect(sentChildren().vcsEntries).toHaveLength(2)
+  })
+
+  it('sends null for a row that never had one', async () => {
+    renderEditor({ mode: 'edit', override: vcsOverride(undefined) })
+    await userEvent.click(screen.getByRole('button', { name: /^update$/i }))
+    await waitFor(() => expect(mockQueueUpdate).toHaveBeenCalledOnce())
+    expect(sentChildren()).toHaveProperty('buildWorkingDirectory', null)
+  })
+
+  it('sends null when left blank', async () => {
+    renderEditor({ mode: 'edit', override: vcsOverride('core') })
+    fireEvent.change(screen.getByLabelText('Build Working Directory'), { target: { value: ' ' } })
+    await userEvent.click(screen.getByRole('button', { name: /^update$/i }))
+    await waitFor(() => expect(mockQueueUpdate).toHaveBeenCalledOnce())
+    expect(sentChildren().buildWorkingDirectory).toBeNull()
   })
 })

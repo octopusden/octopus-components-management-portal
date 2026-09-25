@@ -109,6 +109,9 @@ export interface ComponentDetail {
   // registered-build-parameters spec. Absent/null for a component CRS doesn't
   // track this for (archived, non-Maven/Gradle, or RMS integration disabled).
   registeredBuildParameters?: RegisteredBuildParametersDetail | null
+  // Non-blocking advisories on a write response (e.g. the TeamCity build chain
+  // must be recreated); [] on GET. Optional — absent against an older registry.
+  warnings?: string[]
 }
 
 /** One RMS-registered ("ACTUAL") version range for a single build attribute. */
@@ -160,6 +163,8 @@ export interface ComponentConfiguration {
   escrow?: EscrowAspect | null
   jira?: JiraAspect | null
   vcsEntries: VcsEntry[]
+  // Directory the build runs in, relative to the checkout root. Absent against an older registry.
+  buildWorkingDirectory?: string | null
   mavenArtifacts: MavenArtifact[]
   fileUrlArtifacts: FileUrlArtifact[]
   dockerImages: DockerImage[]
@@ -218,6 +223,9 @@ export interface VcsEntry {
   tag?: string | null
   hotfixBranch?: string | null
   repositoryType?: string | null
+  // Checkout placement. Absent against an older registry.
+  sourcePath?: string | null
+  checkoutDirectory?: string | null
   sortOrder: number
 }
 
@@ -347,6 +355,8 @@ export interface VcsEntryRequest {
   tag?: string | null
   hotfixBranch?: string | null
   repositoryType?: string | null
+  sourcePath?: string | null
+  checkoutDirectory?: string | null
 }
 
 export interface MavenArtifactRequest {
@@ -409,6 +419,8 @@ export interface BaseConfigurationRequest {
   escrow?: EscrowAspect | null
   jira?: JiraAspect | null
   vcsEntries?: VcsEntryRequest[] | null
+  // `null` leaves the stored value; `''` clears it.
+  buildWorkingDirectory?: string | null
   mavenArtifacts?: MavenArtifactRequest[] | null
   fileUrlArtifacts?: FileUrlArtifactRequest[] | null
   dockerImages?: DockerImageRequest[] | null
@@ -624,6 +636,8 @@ export interface AuditLogEntry {
 //    securityGroups/teamcityProjects/group) are marker-overridable.
 export interface MarkerChildrenPayload {
   vcsEntries?: VcsEntryRequest[] | null
+  // With `vcsEntries` on a `vcs.settings` row; the payload replaces the row.
+  buildWorkingDirectory?: string | null
   mavenArtifacts?: MavenArtifactRequest[] | null
   fileUrlArtifacts?: FileUrlArtifactRequest[] | null
   dockerImages?: DockerImageRequest[] | null

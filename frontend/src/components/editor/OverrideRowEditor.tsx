@@ -22,6 +22,8 @@ import {
   SelectValue,
 } from '../ui/select'
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs'
+import { FieldInfo } from '../ui/FieldInfo'
+import { EntryError, fieldErrorProps } from './EntryError'
 import { useOverridesDraft } from './overridesDraft'
 import { useToast } from '../../hooks/use-toast'
 import { useFieldConfig } from '../../hooks/useAdminConfig'
@@ -103,7 +105,19 @@ const unknownAttrWarned = new WeakSet<object>()
 // Child list state types
 // ---------------------------------------------------------------------------
 
-interface VcsState { name: string; vcsPath: string; branch: string; tag: string; hotfixBranch: string; repositoryType: string }
+interface VcsState { name: string; vcsPath: string; branch: string; tag: string; hotfixBranch: string; repositoryType: string; sourcePath: string; checkoutDirectory: string }
+function toVcsState(e: VcsEntryRequest): VcsState {
+  return {
+    name: e.name ?? '',
+    vcsPath: e.vcsPath ?? '',
+    branch: e.branch ?? '',
+    tag: e.tag ?? '',
+    hotfixBranch: e.hotfixBranch ?? '',
+    repositoryType: e.repositoryType ?? '',
+    sourcePath: e.sourcePath ?? '',
+    checkoutDirectory: e.checkoutDirectory ?? '',
+  }
+}
 interface MavenState { groupPattern: string; artifactPattern: string; extension: string; classifier: string }
 interface FileUrlState { url: string; artifactId: string; classifier: string }
 interface DockerState { imageName: string; flavor: string }
@@ -130,13 +144,16 @@ export interface OverrideRowEditorProps {
    *  also excluded from the overlap-conflict preview so the merged range doesn't
    *  report a false conflict against its own members. */
   collapseMemberIds?: string[]
+  /** Edit-mode only: registry placement errors on this row's VCS entries,
+   *  keyed `<entry index>.<field>` (set by the page after a 400). */
+  vcsEntryErrors?: Record<string, string>
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAttribute, collapseMemberIds }: OverrideRowEditorProps) {
+export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAttribute, collapseMemberIds, vcsEntryErrors = {} }: OverrideRowEditorProps) {
   // Item D: the modal queues the create/update into the page-level draft (the
   // real write is the editor's one combined Save), so it closes immediately on
   // submit. Conflict detection reads the effective (draft-applied) set so a
@@ -206,17 +223,13 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
   // Marker child list states
   const [vcsEntries, setVcsEntries] = useState<VcsState[]>(() => {
     if (mode === 'edit' && override?.markerChildren?.vcsEntries) {
-      return override.markerChildren.vcsEntries.map((e) => ({
-        name: e.name ?? '',
-        vcsPath: e.vcsPath ?? '',
-        branch: e.branch ?? '',
-        tag: e.tag ?? '',
-        hotfixBranch: e.hotfixBranch ?? '',
-        repositoryType: e.repositoryType ?? '',
-      }))
+      return override.markerChildren.vcsEntries.map(toVcsState)
     }
     return []
   })
+  const [vcsBuildWorkingDirectory, setVcsBuildWorkingDirectory] = useState<string>(
+    () => (mode === 'edit' && override?.markerChildren?.buildWorkingDirectory) || '',
+  )
   const [mavenArtifacts, setMavenArtifacts] = useState<MavenState[]>(() => {
     if (mode === 'edit' && override?.markerChildren?.mavenArtifacts) {
       return override.markerChildren.mavenArtifacts.map((a) => ({
@@ -287,7 +300,8 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
       setScalarBoolValue(typeof override.value === 'boolean' ? override.value : false)
 
       const mc = override.markerChildren
-      setVcsEntries((mc?.vcsEntries ?? []).map((e) => ({ name: e.name ?? '', vcsPath: e.vcsPath ?? '', branch: e.branch ?? '', tag: e.tag ?? '', hotfixBranch: e.hotfixBranch ?? '', repositoryType: e.repositoryType ?? '' })))
+      setVcsEntries((mc?.vcsEntries ?? []).map(toVcsState))
+      setVcsBuildWorkingDirectory(mc?.buildWorkingDirectory ?? '')
       setMavenArtifacts((mc?.mavenArtifacts ?? []).map((a) => ({ groupPattern: a.groupPattern, artifactPattern: a.artifactPattern, extension: a.extension ?? '', classifier: a.classifier ?? '' })))
       setFileUrlArtifacts((mc?.fileUrlArtifacts ?? []).map((a) => ({ url: a.url, artifactId: a.artifactId ?? '', classifier: a.classifier ?? '' })))
       setDockerImages((mc?.dockerImages ?? []).map((d) => ({ imageName: d.imageName, flavor: d.flavor ?? '' })))
@@ -297,6 +311,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
       setScalarStringValue('')
       setScalarBoolValue(false)
       setVcsEntries([])
+      setVcsBuildWorkingDirectory('')
       setMavenArtifacts([])
       setFileUrlArtifacts([])
       setDockerImages([])
@@ -333,9 +348,10 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
   // ---------------------------------------------------------------------------
   // VCS helpers
   // ---------------------------------------------------------------------------
-  function addVcs() { setVcsEntries((p) => [...p, { name: '', vcsPath: '', branch: '', tag: '', hotfixBranch: '', repositoryType: '' }]) }
+  function addVcs() { setVcsEntries((p) => [...p, toVcsState({ vcsPath: '' })]) }
   function updateVcs(i: number, field: keyof VcsState, v: string) { setVcsEntries((p) => p.map((r, idx) => idx === i ? { ...r, [field]: v } : r)) }
   function removeVcs(i: number) { setVcsEntries((p) => p.filter((_, idx) => idx !== i)) }
+  const vcsErrorProps = (i: number, field: string) => fieldErrorProps('ovr-vcs', vcsEntryErrors, `${i}.${field}`)
 
   // Maven helpers
   function addMaven() { setMavenArtifacts((p) => [...p, { groupPattern: '', artifactPattern: '', extension: '', classifier: '' }]) }
@@ -371,8 +387,8 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
     if (!selectedMarkerAttr) return null
     const key = selectedMarkerAttr.childKey
     // Each marker branch trims string fields and drops rows whose required
-    // fields are still blank — the modal Save is a button click (not a form
-    // submit), so HTML `required` doesn't gate the wire body. Without this
+    // fields are still blank — HTML `required` blocks an empty field but not a
+    // whitespace-only one, so it doesn't gate the wire body. Without this
     // a newly-added empty row reaches the server as `"   "` and 400s. Same
     // pattern that VcsTab + DistributionTab already use for the BASE-row
     // paths — required-field rules below mirror CRS v4 wire contract.
@@ -385,6 +401,8 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
           tag: (e.tag || '').trim(),
           hotfixBranch: (e.hotfixBranch || '').trim(),
           repositoryType: (e.repositoryType || '').trim(),
+          sourcePath: (e.sourcePath || '').trim(),
+          checkoutDirectory: (e.checkoutDirectory || '').trim(),
         }))
         .filter((e) => e.vcsPath !== '')
         .map((e) => ({
@@ -394,8 +412,11 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
           tag: e.tag || null,
           hotfixBranch: e.hotfixBranch || null,
           repositoryType: e.repositoryType || null,
+          sourcePath: e.sourcePath || null,
+          checkoutDirectory: e.checkoutDirectory || null,
         }))
-      return { vcsEntries: entries }
+      // Blank is null: the payload replaces the row, and the registry reads null as none.
+      return { vcsEntries: entries, buildWorkingDirectory: vcsBuildWorkingDirectory.trim() || null }
     }
     if (key === 'mavenArtifacts') {
       const arts: MavenArtifactRequest[] = mavenArtifacts
@@ -693,7 +714,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
 
           {overrideType === 'marker' && attribute && selectedMarkerAttr && (
             <div className="space-y-3">
-              <Label>{attrLabel(selectedMarkerAttr)} — entries</Label>
+              <Label>{attrLabel(selectedMarkerAttr)} — {selectedMarkerAttr.childKey === 'vcsEntries' ? 'VCS Roots' : 'entries'}</Label>
 
               {/* VCS Settings */}
               {selectedMarkerAttr.childKey === 'vcsEntries' && (
@@ -701,15 +722,16 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
                   {vcsEntries.map((entry, i) => (
                     <div key={i} className="rounded-md border p-3 space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-muted-foreground">Entry {i + 1}</span>
-                        <Button variant="ghost" size="sm" type="button" onClick={() => removeVcs(i)} className="h-7 text-destructive hover:text-destructive">
+                        <span className="text-xs font-medium text-muted-foreground">VCS Root {i + 1}</span>
+                        <Button variant="ghost" size="sm" type="button" onClick={() => removeVcs(i)} aria-label={`Remove VCS Root ${i + 1}`} className="h-7 text-destructive hover:text-destructive">
                           <Trash2 className="h-3 w-3" />
                         </Button>
                       </div>
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         <div className="space-y-1">
-                          <Label className="text-xs">Name</Label>
-                          <Input value={entry.name} onChange={(e) => updateVcs(i, 'name', e.target.value)} placeholder="Entry name" className="text-xs" />
+                          <Label htmlFor={`ovr-vcs-${i}-name`} className="text-xs">Name</Label>
+                          {/* Read-only: the registry derives the name; the stored value is sent unchanged. */}
+                          <Input id={`ovr-vcs-${i}-name`} value={entry.name} disabled readOnly placeholder="Set by the registry" className="bg-muted text-xs" />
                         </div>
                         <div className="space-y-1">
                           <Label className="text-xs">VCS Path <span className="text-destructive">*</span></Label>
@@ -732,16 +754,40 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
                           <Label className="text-xs">Hotfix Branch</Label>
                           <Input value={entry.hotfixBranch} onChange={(e) => updateVcs(i, 'hotfixBranch', e.target.value)} placeholder="Hotfix branch pattern" className="font-mono text-xs" />
                         </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1">
+                            <Label htmlFor={`ovr-vcs-${i}-sourcePath`} className="text-xs">Source Path</Label>
+                            <FieldInfo path="vcs.sourcePath" label="Source Path" />
+                          </div>
+                          <Input id={`ovr-vcs-${i}-sourcePath`} value={entry.sourcePath} onChange={(e) => updateVcs(i, 'sourcePath', e.target.value)} placeholder="Whole repository" className="font-mono text-xs" {...vcsErrorProps(i, 'sourcePath')} />
+                          <EntryError id={`ovr-vcs-${i}-sourcePath-error`} message={vcsEntryErrors[`${i}.sourcePath`]} />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1">
+                            <Label htmlFor={`ovr-vcs-${i}-checkoutDirectory`} className="text-xs">Checkout Directory</Label>
+                            <FieldInfo path="vcs.checkoutDirectory" label="Checkout Directory" />
+                          </div>
+                          <Input id={`ovr-vcs-${i}-checkoutDirectory`} value={entry.checkoutDirectory} onChange={(e) => updateVcs(i, 'checkoutDirectory', e.target.value)} placeholder="Checkout root" className="font-mono text-xs" {...vcsErrorProps(i, 'checkoutDirectory')} />
+                          <EntryError id={`ovr-vcs-${i}-checkoutDirectory-error`} message={vcsEntryErrors[`${i}.checkoutDirectory`]} />
+                        </div>
                       </div>
                     </div>
                   ))}
                   {vcsEntries.length === 0 && (
-                    <div className="rounded-md border border-dashed p-3 text-center text-xs text-muted-foreground">No VCS entries.</div>
+                    <div className="rounded-md border border-dashed p-3 text-center text-xs text-muted-foreground">No VCS Roots.</div>
                   )}
                   <Button type="button" variant="ghost" size="sm" onClick={addVcs}>
                     <Plus className="h-4 w-4" />
-                    Add Entry
+                    Add VCS Root
                   </Button>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor="ovr-vcs-buildWorkingDirectory" className="text-xs">Build Working Directory</Label>
+                      <FieldInfo path="vcs.buildWorkingDirectory" label="Build Working Directory" />
+                    </div>
+                    <Input id="ovr-vcs-buildWorkingDirectory" value={vcsBuildWorkingDirectory} onChange={(e) => setVcsBuildWorkingDirectory(e.target.value)} placeholder="Checkout root" className="font-mono text-xs" {...fieldErrorProps('ovr-vcs', vcsEntryErrors, 'buildWorkingDirectory')} />
+                    <EntryError id="ovr-vcs-buildWorkingDirectory-error" message={vcsEntryErrors.buildWorkingDirectory} />
+                  </div>
                 </div>
               )}
 
