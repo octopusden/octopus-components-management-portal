@@ -369,6 +369,12 @@ describe('VcsTab — placement fields (Source Path / Checkout Directory)', () =>
     expect((screen.getAllByLabelText('Checkout Directory')[1] as HTMLInputElement).value).toBe('feature')
   })
 
+  it('names each remove-entry button for assistive technology', () => {
+    renderTab(twoEntries())
+    expect(screen.getByRole('button', { name: 'Remove VCS entry 1' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remove VCS entry 2' })).toBeInTheDocument()
+  })
+
   it('sends the edited placement on save', () => {
     renderTab(twoEntries())
     const sp = screen.getAllByLabelText('Source Path')

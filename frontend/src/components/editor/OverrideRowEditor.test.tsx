@@ -1030,6 +1030,11 @@ describe('OverrideRowEditor — VCS placement', () => {
     expect((screen.getAllByLabelText('Checkout Directory')[2] as HTMLInputElement).value).toBe('beta')
   })
 
+  it('names each remove-entry button for assistive technology', () => {
+    renderEditor({ mode: 'edit', override: vcsOverride() })
+    expect(screen.getByRole('button', { name: 'Remove VCS entry 3' })).toBeInTheDocument()
+  })
+
   it('sends the edited placement, null for blanks', async () => {
     renderEditor({ mode: 'edit', override: vcsOverride() })
     const cd = screen.getAllByLabelText('Checkout Directory')
