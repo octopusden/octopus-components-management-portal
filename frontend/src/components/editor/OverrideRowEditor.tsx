@@ -23,7 +23,7 @@ import {
 } from '../ui/select'
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs'
 import { FieldInfo } from '../ui/FieldInfo'
-import { EntryError, entryErrorProps } from './EntryError'
+import { EntryError, entryErrorProps, rowErrorProps } from './EntryError'
 import { useOverridesDraft } from './overridesDraft'
 import { useToast } from '../../hooks/use-toast'
 import { useFieldConfig } from '../../hooks/useAdminConfig'
@@ -792,7 +792,8 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
                       <Label htmlFor="ovr-vcs-buildWorkingDirectory" className="text-xs">Build Working Directory</Label>
                       <FieldInfo path="vcs.buildWorkingDirectory" label="Build Working Directory" />
                     </div>
-                    <Input id="ovr-vcs-buildWorkingDirectory" value={vcsBuildWorkingDirectory} onChange={(e) => setVcsBuildWorkingDirectory(e.target.value)} placeholder="Checkout root" className="font-mono text-xs" />
+                    <Input id="ovr-vcs-buildWorkingDirectory" value={vcsBuildWorkingDirectory} onChange={(e) => setVcsBuildWorkingDirectory(e.target.value)} placeholder="Checkout root" className="font-mono text-xs" {...rowErrorProps('ovr-vcs', vcsEntryErrors)} />
+                    <EntryError id="ovr-vcs-buildWorkingDirectory-error" message={vcsEntryErrors.buildWorkingDirectory} />
                   </div>
                 </div>
               )}

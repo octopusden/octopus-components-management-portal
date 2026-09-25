@@ -18,6 +18,6 @@
 - [x] 2.3 Build Working Directory field on the VCS tab and in the VCS override row editor, with its
       description; blank sends `''` on the base row (`null` would leave the stored value) and
       `null` on a VCS override row
-- [ ] 2.4 Server-error parser and routing for `buildWorkingDirectory` and
+- [x] 2.4 Server-error parser and routing for `buildWorkingDirectory` and
       `fieldOverrides[<j>].buildWorkingDirectory`
 - [ ] 2.5 `./gradlew qualityStatic` and the vitest suite green

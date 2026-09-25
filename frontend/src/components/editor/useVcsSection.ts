@@ -121,7 +121,8 @@ export interface VcsSection {
   removeEntry: (index: number) => void
   slice: SectionSlice
   reset: () => void
-  /** Registry placement errors on base entries, keyed `<entry index>.<field>`. */
+  /** Registry placement errors on base entries, keyed `<entry index>.<field>`
+   *  (`buildWorkingDirectory` for the row's own field). */
   entryErrors: Record<string, string>
   /** The same for per-range rows, by override id. */
   overrideEntryErrors: Record<string, Record<string, string>>
@@ -182,12 +183,18 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
     for (const [path, message] of fieldErrors) {
       const p = parseVcsEntryErrorPath(path)
       if (!p) continue
+      // Keys: `<entry index>.<field>`, or the bare field for the row's Build Working Directory.
       if (p.overrideIndex === undefined) {
-        const index = stateIndexOfSent[p.entry]
-        if (index !== undefined) base[`${index}.${p.field}`] = message
+        if (p.entry === undefined) {
+          base[p.field] = message
+        } else {
+          const index = stateIndexOfSent[p.entry]
+          if (index !== undefined) base[`${index}.${p.field}`] = message
+        }
       } else {
         const id = rowIds[p.overrideIndex]
-        if (id !== undefined) overrides[id] = { ...overrides[id], [`${p.entry}.${p.field}`]: message }
+        const key = p.entry === undefined ? p.field : `${p.entry}.${p.field}`
+        if (id !== undefined) overrides[id] = { ...overrides[id], [key]: message }
       }
     }
     setEntryErrors(base)

@@ -11,3 +11,11 @@ export function entryErrorProps(prefix: string, errors: Record<string, string>, 
     ? { 'aria-invalid': true, 'aria-describedby': `${prefix}-${i}-${field}-error` }
     : {}
 }
+
+/** The same for the row's Build Working Directory (key `buildWorkingDirectory`, id `<prefix>-buildWorkingDirectory-error`). */
+// eslint-disable-next-line react-refresh/only-export-components -- tiny helper co-located with the component it pairs with
+export function rowErrorProps(prefix: string, errors: Record<string, string>) {
+  return errors.buildWorkingDirectory
+    ? { 'aria-invalid': true, 'aria-describedby': `${prefix}-buildWorkingDirectory-error` }
+    : {}
+}

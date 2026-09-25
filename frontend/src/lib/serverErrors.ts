@@ -71,22 +71,26 @@ export function parseServerFieldErrors(apiErrorMessage: string): Map<string, str
   return result
 }
 
-export type VcsPlacementField = 'sourcePath' | 'checkoutDirectory'
+export type VcsPlacementField = 'sourcePath' | 'checkoutDirectory' | 'buildWorkingDirectory'
 
-/** A placement error on VCS entry `entry` of the base row, or of the override row
- *  sent as the PATCH's `fieldOverrides[overrideIndex]`. */
+/** A placement error on VCS entry `entry` (absent for the row's Build Working
+ *  Directory) of the base row, or of the override row sent as the PATCH's
+ *  `fieldOverrides[overrideIndex]`. */
 export interface VcsEntryErrorPath {
   overrideIndex?: number
-  entry: number
+  entry?: number
   field: VcsPlacementField
 }
 
-/** Reads `vcsEntries[<i>].<field>` / `fieldOverrides[<j>].vcsEntries[<i>].<field>`
- *  (a parseServerFieldErrors key); null for any other path. */
+/** Reads `vcsEntries[<i>].<field>` / `buildWorkingDirectory`, optionally prefixed
+ *  `fieldOverrides[<j>].` (a parseServerFieldErrors key); null for any other path. */
 export function parseVcsEntryErrorPath(path: string): VcsEntryErrorPath | null {
-  const m = /^(?:fieldOverrides\[(\d+)\]\.)?vcsEntries\[(\d+)\]\.(sourcePath|checkoutDirectory)$/.exec(path)
+  const m = /^(?:fieldOverrides\[(\d+)\]\.)?(?:vcsEntries\[(\d+)\]\.(sourcePath|checkoutDirectory)|(buildWorkingDirectory))$/.exec(path)
   if (!m) return null
-  const entry = Number(m[2])
-  const field = m[3] as VcsPlacementField
-  return m[1] === undefined ? { entry, field } : { overrideIndex: Number(m[1]), entry, field }
+  const field = (m[3] ?? m[4]) as VcsPlacementField
+  return {
+    ...(m[1] === undefined ? {} : { overrideIndex: Number(m[1]) }),
+    ...(m[2] === undefined ? {} : { entry: Number(m[2]) }),
+    field,
+  }
 }
