@@ -132,6 +132,19 @@ describe('parseVcsEntryErrorPath', () => {
     expect(parseVcsEntryErrorPath('fieldOverrides[2].vcsEntries[0].sourcePath')).toEqual({ overrideIndex: 2, entry: 0, field: 'sourcePath' })
   })
 
+  it('reads a base-row Build Working Directory path (no entry index)', () => {
+    expect(parseVcsEntryErrorPath('buildWorkingDirectory')).toEqual({ field: 'buildWorkingDirectory' })
+  })
+
+  it('reads a per-range Build Working Directory path', () => {
+    expect(parseVcsEntryErrorPath('fieldOverrides[2].buildWorkingDirectory')).toEqual({ overrideIndex: 2, field: 'buildWorkingDirectory' })
+  })
+
+  it('keys a Build Working Directory 400 by its field', () => {
+    const body = JSON.stringify({ errorMessage: 'buildWorkingDirectory: required when every VCS entry has a Checkout Directory' })
+    expect([...parseServerFieldErrors(body)]).toEqual([['buildWorkingDirectory', 'required when every VCS entry has a Checkout Directory']])
+  })
+
   it.each(['vcsEntries', 'vcsEntries[1].branch', 'docs[0].majorVersion', 'fieldOverrides[1].value'])('ignores %s', (path) => {
     expect(parseVcsEntryErrorPath(path)).toBeNull()
   })
