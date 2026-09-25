@@ -1094,3 +1094,39 @@ describe('OverrideRowEditor — Checkout Directory on every entry', () => {
     expect(sent()).toEqual([['ssh://two', 'feature']])
   })
 })
+
+describe('OverrideRowEditor — Build Working Directory', () => {
+  beforeEach(() => {
+    mockQueueUpdate.mockReset()
+    mockOverridesList = []
+  })
+
+  const vcsOverride = (buildWorkingDirectory?: string | null): FieldOverride => ({
+    id: 'fo-vcs', overriddenAttribute: 'vcs.settings', versionRange: '[1,2)', rowType: 'MARKER', value: null,
+    markerChildren: {
+      vcsEntries: [{ name: 'core', vcsPath: 'ssh://one', checkoutDirectory: 'core' }, { name: 'feature', vcsPath: 'ssh://two', checkoutDirectory: 'feature' }],
+      buildWorkingDirectory,
+    } as FieldOverride['markerChildren'],
+    createdAt: null, updatedAt: null,
+  })
+  const sentChildren = () => mockQueueUpdate.mock.calls[0]![1].markerChildren as Record<string, unknown>
+
+  it('prefills the row value and sends an edit next to the entries', async () => {
+    renderEditor({ mode: 'edit', override: vcsOverride('core') })
+    const field = screen.getByLabelText('Build Working Directory') as HTMLInputElement
+    expect(field.value).toBe('core')
+    fireEvent.change(field, { target: { value: 'core/app' } })
+    await userEvent.click(screen.getByRole('button', { name: /^update$/i }))
+    await waitFor(() => expect(mockQueueUpdate).toHaveBeenCalledOnce())
+    expect(sentChildren().buildWorkingDirectory).toBe('core/app')
+    expect(sentChildren().vcsEntries).toHaveLength(2)
+  })
+
+  it('sends null when left blank', async () => {
+    renderEditor({ mode: 'edit', override: vcsOverride('core') })
+    fireEvent.change(screen.getByLabelText('Build Working Directory'), { target: { value: ' ' } })
+    await userEvent.click(screen.getByRole('button', { name: /^update$/i }))
+    await waitFor(() => expect(mockQueueUpdate).toHaveBeenCalledOnce())
+    expect(sentChildren().buildWorkingDirectory).toBeNull()
+  })
+})

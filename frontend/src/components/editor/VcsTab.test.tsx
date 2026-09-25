@@ -454,3 +454,33 @@ describe('VcsTab — placement errors on a coalesced per-range group', () => {
     expect(lastEditorProps!.vcsEntryErrors).toEqual({ '1.checkoutDirectory': 'required on a secondary VCS entry' })
   })
 })
+
+describe('VcsTab — Build Working Directory (base row)', () => {
+  const withBwd = (buildWorkingDirectory: string | null) =>
+    makeComponent({}, makeBaseRow({ buildWorkingDirectory } as Partial<ComponentConfiguration>))
+  const base = () => captured.section!.slice.request.baseConfiguration!
+
+  it('prefills the base value and sends an edit', () => {
+    renderTab(withBwd('core'))
+    const field = screen.getByLabelText('Build Working Directory') as HTMLInputElement
+    expect(field.value).toBe('core')
+    expect(captured.section!.slice.isDirty).toBe(false)
+    fireEvent.change(field, { target: { value: ' core/mapper ' } })
+    expect(captured.section!.slice.isDirty).toBe(true)
+    expect(base().buildWorkingDirectory).toBe('core/mapper')
+  })
+
+  it('sends "" when cleared, so the registry clears the stored value', () => {
+    renderTab(withBwd('core'))
+    fireEvent.change(screen.getByLabelText('Build Working Directory'), { target: { value: '  ' } })
+    expect(captured.section!.slice.isDirty).toBe(true)
+    expect(base().buildWorkingDirectory).toBe('')
+  })
+
+  it('sends "" with an emptied entry list', () => {
+    renderTab(withBwd('core'))
+    act(() => captured.section!.removeEntry(0))
+    expect(base().vcsEntries).toEqual([])
+    expect(base().buildWorkingDirectory).toBe('')
+  })
+})
