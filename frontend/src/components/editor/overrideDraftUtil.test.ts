@@ -57,8 +57,8 @@ describe('formatOverrideValue', () => {
       overriddenAttribute: 'vcs.settings', rowType: 'MARKER', value: null,
       markerChildren: { vcsEntries: [{}, {}] as never, buildWorkingDirectory },
     })
-    expect(formatOverrideValue(vcs('core'))).toBe('2 VCS entries, build in core')
-    expect(formatOverrideValue(vcs(null))).toBe('2 VCS entries')
+    expect(formatOverrideValue(vcs('core'))).toBe('2 VCS Roots, build in core')
+    expect(formatOverrideValue(vcs(null))).toBe('2 VCS Roots')
   })
 
   it('renders an empty marker payload distinctly (not [object Object])', () => {

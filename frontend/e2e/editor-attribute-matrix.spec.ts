@@ -219,12 +219,12 @@ test.describe.serial('Editor attribute matrix — every tab saves without a fals
       tab: /vcs/i,
       edit: async (page) => {
         // The v4 create API does not seed a VCS entry, so the tab opens empty
-        // ("No VCS entries"). Add one via the UI, then set its branch — this
+        // ("No VCS Roots"). Add one via the UI, then set its branch — this
         // drives the same VCS PATCH plumbing as editing an existing entry.
         // Keep the path local/Bitbucket-style (not ssh://) so the portal's
         // optional ecosystem-host check does not depend on stand links.
         // Name is read-only (the registry names a new entry at the checkout root `main`).
-        await page.getByRole('button', { name: /add entry/i }).click()
+        await page.getByRole('button', { name: /add vcs root/i }).click()
         await page.getByPlaceholder('ssh://git@...').first().fill(`E2E/attr-${SUFFIX}`)
         await page.getByPlaceholder('Branch pattern').first().fill(`release/${SUFFIX}`)
       },

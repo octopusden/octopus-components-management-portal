@@ -264,12 +264,12 @@ describe('OverrideRowEditor — create mode', () => {
     expect(screen.getByPlaceholderText('tool-a, tool-b')).toBeDefined()
   })
 
-  it('switching to Marker and selecting vcs.settings renders VCS child list with Add Entry button', async () => {
+  it('switching to Marker and selecting vcs.settings renders VCS child list with Add VCS Root button', async () => {
     renderEditor()
     await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
     await userEvent.selectOptions(select, 'vcs.settings')
-    expect(screen.getByRole('button', { name: /add entry/i })).toBeDefined()
+    expect(screen.getByRole('button', { name: /add vcs root/i })).toBeDefined()
   })
 
   it('switching to Marker and selecting distribution.docker renders Docker child list editor', async () => {
@@ -598,12 +598,12 @@ describe('OverrideRowEditor — marker child trim + blank-row filter', () => {
     await userEvent.selectOptions(select, 'vcs.settings')
 
     // Row 1 — populate vcsPath with surrounding whitespace
-    await userEvent.click(screen.getByRole('button', { name: /add entry/i }))
+    await userEvent.click(screen.getByRole('button', { name: /add vcs root/i }))
     const vcsPathInputs = await screen.findAllByPlaceholderText('ssh://git@...')
     await userEvent.type(vcsPathInputs[0]!, '  ssh://git@host/repo  ')
 
     // Row 2 — whitespace-only vcsPath (satisfies HTML5 required) → row dropped
-    await userEvent.click(screen.getByRole('button', { name: /add entry/i }))
+    await userEvent.click(screen.getByRole('button', { name: /add vcs root/i }))
     const vcsPathInputs2 = await screen.findAllByPlaceholderText('ssh://git@...')
     await userEvent.type(vcsPathInputs2[1]!, '   ')
 
@@ -1032,7 +1032,7 @@ describe('OverrideRowEditor — VCS placement', () => {
 
   it('names each remove-entry button for assistive technology', () => {
     renderEditor({ mode: 'edit', override: vcsOverride() })
-    expect(screen.getByRole('button', { name: 'Remove VCS entry 3' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remove VCS Root 3' })).toBeInTheDocument()
   })
 
   it('sends the edited placement, null for blanks', async () => {
@@ -1087,7 +1087,7 @@ describe('OverrideRowEditor — Checkout Directory on every entry', () => {
 
   it('an entry that becomes first keeps its own Checkout Directory', async () => {
     renderEditor({ mode: 'edit', override: vcsOverride() })
-    fireEvent.click(screen.getByText('Entry 1').parentElement!.querySelector('button')!)
+    fireEvent.click(screen.getByText('VCS Root 1').parentElement!.querySelector('button')!)
     expect((screen.getByLabelText('Checkout Directory') as HTMLInputElement).value).toBe('feature')
     await userEvent.click(screen.getByRole('button', { name: /^update$/i }))
     await waitFor(() => expect(mockQueueUpdate).toHaveBeenCalledOnce())

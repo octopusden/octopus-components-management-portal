@@ -371,8 +371,8 @@ describe('VcsTab — placement fields (Source Path / Checkout Directory)', () =>
 
   it('names each remove-entry button for assistive technology', () => {
     renderTab(twoEntries())
-    expect(screen.getByRole('button', { name: 'Remove VCS entry 1' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Remove VCS entry 2' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remove VCS Root 1' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remove VCS Root 2' })).toBeInTheDocument()
   })
 
   it('sends the edited placement on save', () => {
@@ -496,5 +496,19 @@ describe('VcsTab — Build Working Directory with no entries sent', () => {
     fireEvent.change(screen.getByLabelText('Build Working Directory'), { target: { value: 'core' } })
     expect(captured.section!.slice.request.baseConfiguration!.buildWorkingDirectory).toBe('')
     expect(captured.section!.slice.isDirty).toBe(false)
+  })
+})
+
+describe('VcsTab — VCS Root wording', () => {
+  it('calls the entries VCS Roots in the heading, card labels and buttons', () => {
+    renderTab(makeComponent())
+    expect(screen.getByRole('heading', { name: 'VCS Roots' })).toBeInTheDocument()
+    expect(screen.getByText('VCS Root 1')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^add vcs root$/i })).toBeInTheDocument()
+  })
+
+  it('names the empty state in the same words', () => {
+    renderTab(makeComponent({}, makeBaseRow({ vcsEntries: [] })))
+    expect(screen.getByText('No VCS Roots. Click "Add VCS Root" to create one.')).toBeInTheDocument()
   })
 })
