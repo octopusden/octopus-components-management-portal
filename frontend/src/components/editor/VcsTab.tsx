@@ -14,7 +14,7 @@ import { useVcsOverrides, VCS_MARKER_PATH } from './useVcsOverrides'
 import { VcsPerRange } from './VcsPerRange'
 import { coalescePerRangeOverrides, type PerRangeGroup } from './perRangeGrouping'
 import { OverrideRowEditor } from './OverrideRowEditor'
-import { EntryError, entryErrorProps, rowErrorProps } from './EntryError'
+import { EntryError, fieldErrorProps } from './EntryError'
 import type { FieldOverride } from '../../lib/types'
 import type { VcsSection } from './useVcsSection'
 
@@ -44,7 +44,7 @@ export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
     overrideEntryErrors,
   } = section
   const allowedHost = hostOf(gitBaseUrl)
-  const errorProps = (index: number, field: string) => entryErrorProps('vcs', entryErrors, index, field)
+  const errorProps = (index: number, field: string) => fieldErrorProps('vcs', entryErrors, `${index}.${field}`)
 
   // Per-range VCS overrides (the `vcs.settings` marker). Add/edit/delete queue
   // into the same page-level draft the combined Save flushes.
@@ -206,7 +206,7 @@ export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
               <Label htmlFor="vcs-buildWorkingDirectory" className="text-xs"><FieldLabelText path="vcs.buildWorkingDirectory" fallback="Build Working Directory" /></Label>
               <FieldInfo path="vcs.buildWorkingDirectory" label="Build Working Directory" />
             </div>
-            <Input id="vcs-buildWorkingDirectory" value={buildWorkingDirectory} onChange={(e) => setBuildWorkingDirectory(e.target.value)} placeholder="Checkout root" className="font-mono text-xs" {...rowErrorProps('vcs', entryErrors)} />
+            <Input id="vcs-buildWorkingDirectory" value={buildWorkingDirectory} onChange={(e) => setBuildWorkingDirectory(e.target.value)} placeholder="Checkout root" className="font-mono text-xs" {...fieldErrorProps('vcs', entryErrors, 'buildWorkingDirectory')} />
             <EntryError id="vcs-buildWorkingDirectory-error" message={entryErrors.buildWorkingDirectory} />
           </div>
         )}

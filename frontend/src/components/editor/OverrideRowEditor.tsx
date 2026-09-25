@@ -23,7 +23,7 @@ import {
 } from '../ui/select'
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs'
 import { FieldInfo } from '../ui/FieldInfo'
-import { EntryError, entryErrorProps, rowErrorProps } from './EntryError'
+import { EntryError, fieldErrorProps } from './EntryError'
 import { useOverridesDraft } from './overridesDraft'
 import { useToast } from '../../hooks/use-toast'
 import { useFieldConfig } from '../../hooks/useAdminConfig'
@@ -351,7 +351,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
   function addVcs() { setVcsEntries((p) => [...p, toVcsState({ vcsPath: '' })]) }
   function updateVcs(i: number, field: keyof VcsState, v: string) { setVcsEntries((p) => p.map((r, idx) => idx === i ? { ...r, [field]: v } : r)) }
   function removeVcs(i: number) { setVcsEntries((p) => p.filter((_, idx) => idx !== i)) }
-  const vcsErrorProps = (i: number, field: string) => entryErrorProps('ovr-vcs', vcsEntryErrors, i, field)
+  const vcsErrorProps = (i: number, field: string) => fieldErrorProps('ovr-vcs', vcsEntryErrors, `${i}.${field}`)
 
   // Maven helpers
   function addMaven() { setMavenArtifacts((p) => [...p, { groupPattern: '', artifactPattern: '', extension: '', classifier: '' }]) }
@@ -785,7 +785,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
                       <Label htmlFor="ovr-vcs-buildWorkingDirectory" className="text-xs">Build Working Directory</Label>
                       <FieldInfo path="vcs.buildWorkingDirectory" label="Build Working Directory" />
                     </div>
-                    <Input id="ovr-vcs-buildWorkingDirectory" value={vcsBuildWorkingDirectory} onChange={(e) => setVcsBuildWorkingDirectory(e.target.value)} placeholder="Checkout root" className="font-mono text-xs" {...rowErrorProps('ovr-vcs', vcsEntryErrors)} />
+                    <Input id="ovr-vcs-buildWorkingDirectory" value={vcsBuildWorkingDirectory} onChange={(e) => setVcsBuildWorkingDirectory(e.target.value)} placeholder="Checkout root" className="font-mono text-xs" {...fieldErrorProps('ovr-vcs', vcsEntryErrors, 'buildWorkingDirectory')} />
                     <EntryError id="ovr-vcs-buildWorkingDirectory-error" message={vcsEntryErrors.buildWorkingDirectory} />
                   </div>
                 </div>

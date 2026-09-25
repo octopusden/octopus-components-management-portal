@@ -3,19 +3,12 @@ export function EntryError({ id, message }: { id: string; message?: string }) {
   return message ? <p id={id} className="text-xs text-destructive">{message}</p> : null
 }
 
-/** Input props for a VCS entry field: flag it and name its registry error (keyed
- *  `<index>.<field>`, rendered by EntryError as `<prefix>-<index>-<field>-error`) as its description. */
+/** Input props for a VCS field with a registry error: flag it and name the message
+ *  as its description. `key` is `<entry index>.<field>`, or `buildWorkingDirectory`
+ *  for the row's own field; EntryError renders it as `<prefix>-<key, "." as "-">-error`. */
 // eslint-disable-next-line react-refresh/only-export-components -- tiny helper co-located with the component it pairs with
-export function entryErrorProps(prefix: string, errors: Record<string, string>, i: number, field: string) {
-  return errors[`${i}.${field}`]
-    ? { 'aria-invalid': true, 'aria-describedby': `${prefix}-${i}-${field}-error` }
-    : {}
-}
-
-/** The same for the row's Build Working Directory (key `buildWorkingDirectory`, id `<prefix>-buildWorkingDirectory-error`). */
-// eslint-disable-next-line react-refresh/only-export-components -- tiny helper co-located with the component it pairs with
-export function rowErrorProps(prefix: string, errors: Record<string, string>) {
-  return errors.buildWorkingDirectory
-    ? { 'aria-invalid': true, 'aria-describedby': `${prefix}-buildWorkingDirectory-error` }
+export function fieldErrorProps(prefix: string, errors: Record<string, string>, key: string) {
+  return errors[key]
+    ? { 'aria-invalid': true, 'aria-describedby': `${prefix}-${key.replace('.', '-')}-error` }
     : {}
 }
