@@ -10,7 +10,7 @@
 
 ## 2. Revision 3 (test-first; after the registry change is deployed or mocked in tests)
 
-- [ ] 2.1 Checkout Directory editable on every entry in both editors; remove the read-only first
+- [x] 2.1 Checkout Directory editable on every entry in both editors; remove the read-only first
       entry, `PRIMARY_CHECKOUT_DIRECTORY_HINT` and the forced empty value (`useVcsSection.ts:93-94`,
       `OverrideRowEditor.tsx:415`); descriptions updated
 - [ ] 2.2 Types: `buildWorkingDirectory` on the base configuration request/response and the VCS

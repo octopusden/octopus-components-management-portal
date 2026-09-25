@@ -8,7 +8,6 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip'
 import { FieldInfo } from '../ui/FieldInfo'
 import { FieldLabelText } from '../ui/FieldLabelText'
 import { Separator } from '../ui/separator'
-import { PRIMARY_CHECKOUT_DIRECTORY_HINT } from '../../lib/fieldDescriptions'
 import { isVcsHostSupported, hostOf } from '../../lib/vcsHost'
 import { ExternalRegistrySelect } from './ExternalRegistrySelect'
 import { useVcsOverrides, VCS_MARKER_PATH } from './useVcsOverrides'
@@ -43,8 +42,6 @@ export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
     overrideEntryErrors,
   } = section
   const allowedHost = hostOf(gitBaseUrl)
-  // The primary is the first entry sent, i.e. the first with a VCS Path.
-  const primary = Math.max(0, entries.findIndex((e) => e.vcsPath.trim() !== ''))
   const errorProps = (index: number, field: string) => entryErrorProps('vcs', entryErrors, index, field)
 
   // Per-range VCS overrides (the `vcs.settings` marker). Add/edit/delete queue
@@ -187,14 +184,7 @@ export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
                   <Label htmlFor={`vcs-${index}-checkoutDirectory`} className="text-xs"><FieldLabelText path="vcs.checkoutDirectory" fallback="Checkout Directory" /></Label>
                   <FieldInfo path="vcs.checkoutDirectory" label="Checkout Directory" />
                 </div>
-                {index === primary ? (
-                  <>
-                    <Input id={`vcs-${index}-checkoutDirectory`} value="" disabled readOnly placeholder="Checkout root" className="bg-muted font-mono text-xs" {...errorProps(index, 'checkoutDirectory')} />
-                    <p className="text-xs text-muted-foreground">{PRIMARY_CHECKOUT_DIRECTORY_HINT}</p>
-                  </>
-                ) : (
-                  <Input id={`vcs-${index}-checkoutDirectory`} value={entry.checkoutDirectory} onChange={(e) => updateEntry(index, 'checkoutDirectory', e.target.value)} placeholder="Directory name" className="font-mono text-xs" {...errorProps(index, 'checkoutDirectory')} />
-                )}
+                <Input id={`vcs-${index}-checkoutDirectory`} value={entry.checkoutDirectory} onChange={(e) => updateEntry(index, 'checkoutDirectory', e.target.value)} placeholder="Checkout root" className="font-mono text-xs" {...errorProps(index, 'checkoutDirectory')} />
                 <EntryError id={`vcs-${index}-checkoutDirectory-error`} message={entryErrors[`${index}.checkoutDirectory`]} />
               </div>
             </div>

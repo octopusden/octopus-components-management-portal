@@ -100,13 +100,13 @@ export const fieldDescriptions: Record<string, string> = {
   'vcs.entries':
     'Source repositories of the component. Most components have a single entry; multiple entries describe components assembled from several repositories. Rows with an empty VCS Path are dropped on save.',
   'vcs.name':
-    'Identifier of this repository entry, set by the registry: the Checkout Directory for entries after the first; the first entry keeps its existing name (main for a new component). Read-only.',
+    'Identifier of this repository entry, set by the registry: the Checkout Directory when the entry has one; otherwise the entry keeps its existing name (main for a new one). Read-only.',
   'vcs.vcsPath':
     'Repository location, e.g. an ssh:// Git URL. Required for each entry. Supports dynamic variables; release automation and escrow generation clone the sources from this path.',
   'vcs.sourcePath':
     'Directory inside the repository that belongs to the component (e.g. mapper). Leave empty to use the whole repository. A relative path; each segment may contain letters, digits, ".", "_" and "-".',
   'vcs.checkoutDirectory':
-    'Directory on the build agent under which a secondary entry is placed: its sources land at Checkout Directory / Source Path below the checkout root. Required on every entry after the first; a single name (letters, digits, ".", "_", "-"; no leading dot). The entry Name follows it.',
+    'Directory below the checkout root in which this entry is placed: its sources land at Checkout Directory / Source Path. Leave empty to check the entry out at the checkout root itself; at most one entry of a row can do so. A single name (letters, digits, ".", "_", "-"; no leading dot). The entry Name follows it.',
   'vcs.repositoryType':
     'Type of the version-control system hosting the repository (e.g. GIT). Read-only — it follows the VCS host and is not user-editable.',
   'vcs.branch':
@@ -180,7 +180,3 @@ export const fieldDescriptions: Record<string, string> = {
   'escrow.buildTask':
     'Custom build task the escrow generation runs instead of the default build lifecycle. Supports dynamic variables; set it for components that need a non-standard escrow build sequence. Configurable as a per-version override.',
 }
-
-/** Shown under the first VCS entry's read-only Checkout Directory (VCS tab and override editor). */
-export const PRIMARY_CHECKOUT_DIRECTORY_HINT =
-  'The first entry is checked out at the checkout root, so it has no Checkout Directory.'

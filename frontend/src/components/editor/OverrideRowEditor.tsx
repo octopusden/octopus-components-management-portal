@@ -24,7 +24,6 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs'
 import { FieldInfo } from '../ui/FieldInfo'
 import { EntryError, entryErrorProps } from './EntryError'
-import { PRIMARY_CHECKOUT_DIRECTORY_HINT } from '../../lib/fieldDescriptions'
 import { useOverridesDraft } from './overridesDraft'
 import { useToast } from '../../hooks/use-toast'
 import { useFieldConfig } from '../../hooks/useAdminConfig'
@@ -347,8 +346,6 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
   function addVcs() { setVcsEntries((p) => [...p, toVcsState({ vcsPath: '' })]) }
   function updateVcs(i: number, field: keyof VcsState, v: string) { setVcsEntries((p) => p.map((r, idx) => idx === i ? { ...r, [field]: v } : r)) }
   function removeVcs(i: number) { setVcsEntries((p) => p.filter((_, idx) => idx !== i)) }
-  // The primary is the first entry sent, i.e. the first with a VCS Path.
-  const primaryVcs = Math.max(0, vcsEntries.findIndex((e) => e.vcsPath.trim() !== ''))
   const vcsErrorProps = (i: number, field: string) => entryErrorProps('ovr-vcs', vcsEntryErrors, i, field)
 
   // Maven helpers
@@ -403,7 +400,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
           checkoutDirectory: (e.checkoutDirectory || '').trim(),
         }))
         .filter((e) => e.vcsPath !== '')
-        .map((e, i) => ({
+        .map((e) => ({
           name: e.name || null,
           vcsPath: e.vcsPath,
           branch: e.branch || null,
@@ -411,8 +408,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
           hotfixBranch: e.hotfixBranch || null,
           repositoryType: e.repositoryType || null,
           sourcePath: e.sourcePath || null,
-          // The primary (first sent) entry sits at the checkout root: never a Checkout Directory.
-          checkoutDirectory: i === 0 ? null : e.checkoutDirectory || null,
+          checkoutDirectory: e.checkoutDirectory || null,
         }))
       return { vcsEntries: entries }
     }
@@ -765,14 +761,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
                             <Label htmlFor={`ovr-vcs-${i}-checkoutDirectory`} className="text-xs">Checkout Directory</Label>
                             <FieldInfo path="vcs.checkoutDirectory" label="Checkout Directory" />
                           </div>
-                          {i === primaryVcs ? (
-                            <>
-                              <Input id={`ovr-vcs-${i}-checkoutDirectory`} value="" disabled readOnly placeholder="Checkout root" className="bg-muted font-mono text-xs" {...vcsErrorProps(i, 'checkoutDirectory')} />
-                              <p className="text-xs text-muted-foreground">{PRIMARY_CHECKOUT_DIRECTORY_HINT}</p>
-                            </>
-                          ) : (
-                            <Input id={`ovr-vcs-${i}-checkoutDirectory`} value={entry.checkoutDirectory} onChange={(e) => updateVcs(i, 'checkoutDirectory', e.target.value)} placeholder="Directory name" className="font-mono text-xs" {...vcsErrorProps(i, 'checkoutDirectory')} />
-                          )}
+                          <Input id={`ovr-vcs-${i}-checkoutDirectory`} value={entry.checkoutDirectory} onChange={(e) => updateVcs(i, 'checkoutDirectory', e.target.value)} placeholder="Checkout root" className="font-mono text-xs" {...vcsErrorProps(i, 'checkoutDirectory')} />
                           <EntryError id={`ovr-vcs-${i}-checkoutDirectory-error`} message={vcsEntryErrors[`${i}.checkoutDirectory`]} />
                         </div>
                       </div>
