@@ -415,15 +415,8 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
           sourcePath: e.sourcePath || null,
           checkoutDirectory: e.checkoutDirectory || null,
         }))
-      const buildWorkingDirectory = vcsBuildWorkingDirectory.trim()
-      return {
-        vcsEntries: entries,
-        // Blank is null (the payload replaces the row); omitted when the row had
-        // none either, so an untouched row from an older registry stays unchanged.
-        ...(buildWorkingDirectory || override?.markerChildren?.buildWorkingDirectory != null
-          ? { buildWorkingDirectory: buildWorkingDirectory || null }
-          : {}),
-      }
+      // Blank is null: the payload replaces the row, and the registry reads null as none.
+      return { vcsEntries: entries, buildWorkingDirectory: vcsBuildWorkingDirectory.trim() || null }
     }
     if (key === 'mavenArtifacts') {
       const arts: MavenArtifactRequest[] = mavenArtifacts
