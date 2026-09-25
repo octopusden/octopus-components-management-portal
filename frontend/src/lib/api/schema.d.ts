@@ -1086,6 +1086,8 @@ export interface components {
         BaseConfigurationRequest: {
             build?: components["schemas"]["BuildAspectRequest"];
             buildToolBeans?: components["schemas"]["BuildToolBeanRequest"][];
+            /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. */
+            buildWorkingDirectory?: string;
             dockerImages?: components["schemas"]["DockerImageRequest"][];
             escrow?: components["schemas"]["EscrowAspectRequest"];
             fileUrlArtifacts?: components["schemas"]["FileUrlArtifactRequest"][];
@@ -1159,6 +1161,7 @@ export interface components {
         ComponentConfigurationResponse: {
             build?: components["schemas"]["BuildAspectResponse"];
             buildToolBeans: components["schemas"]["BuildToolBeanResponse"][];
+            buildWorkingDirectory?: string;
             dockerImages: components["schemas"]["DockerImageResponse"][];
             escrow?: components["schemas"]["EscrowAspectResponse"];
             fileUrlArtifacts: components["schemas"]["FileUrlArtifactResponse"][];
@@ -1621,6 +1624,7 @@ export interface components {
         };
         MarkerChildrenPayload: {
             buildToolBeans?: components["schemas"]["BuildToolBeanRequest"][];
+            buildWorkingDirectory?: string;
             dockerImages?: components["schemas"]["DockerImageRequest"][];
             fileUrlArtifacts?: components["schemas"]["FileUrlArtifactRequest"][];
             mavenArtifacts?: components["schemas"]["MavenArtifactRequest"][];
