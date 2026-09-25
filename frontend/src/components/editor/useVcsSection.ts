@@ -94,13 +94,16 @@ function cleanVcsEntries(entries: VcsEntryState[]): CleanVcsEntry[] {
     .filter((e) => e.vcsPath !== '')
 }
 
-// Normalized view for the dirty compare (P1-4): the cleaned entries plus the
-// trimmed external-registry. dirty ⇔ this differs from the snapshot's view.
-function normalizeVcs(s: VcsState): unknown {
+// What the request sends, and the dirty compare's view (P1-4): the cleaned entries,
+// the trimmed external-registry, and the Build Working Directory, which clears ('')
+// when no entry is sent since there is nothing to build in. dirty ⇔ this differs
+// from the snapshot's view.
+function projectVcs(s: VcsState) {
+  const entries = cleanVcsEntries(s.entries)
   return {
     externalRegistry: (s.externalRegistry || '').trim(),
-    entries: cleanVcsEntries(s.entries),
-    buildWorkingDirectory: s.buildWorkingDirectory.trim(),
+    entries,
+    buildWorkingDirectory: entries.length === 0 ? '' : s.buildWorkingDirectory.trim(),
   }
 }
 
@@ -137,7 +140,7 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
   const { state, setState, snapshotRef, isDirty, reseed } = useSectionSnapshot(
     component,
     snapshotFrom,
-    normalizeVcs,
+    projectVcs,
   )
 
   // useFieldEditable fails CLOSED while field-config / current-user load (and on
@@ -202,12 +205,10 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
     return Object.keys(base).length > 0
   }
 
-  // The request + diff + dirty all run off this one cleaned projection.
-  const cleanedEntries = cleanVcsEntries(state.entries)
+  // The request + diff + dirty all run off this one projection (projectVcs).
+  const { entries: cleanedEntries, buildWorkingDirectory } = projectVcs(state)
   const prior = snapshotRef.current
-  const cleanedPriorEntries = cleanVcsEntries(prior.entries)
-  // With no entries there is nothing to build in, so it clears too (diff and request agree).
-  const buildWorkingDirectory = cleanedEntries.length === 0 ? '' : state.buildWorkingDirectory.trim()
+  const { entries: cleanedPriorEntries, buildWorkingDirectory: priorBuildWorkingDirectory } = projectVcs(prior)
 
   const diff: DiffEntry[] = []
   const push = (d: DiffEntry | null) => { if (d) diff.push(d) }
@@ -215,7 +216,7 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
     // vcsExternalRegistry clears via '' (CRS-A ""-clear); the prior null-clear was
     // a silent no-op (prep §1.6). Not flagged as a no-op — the clear now persists.
     push(scalarDiff('VCS · External Registry', prior.externalRegistry, state.externalRegistry))
-    push(scalarDiff('VCS · Build Working Directory', prior.buildWorkingDirectory.trim(), buildWorkingDirectory))
+    push(scalarDiff('VCS · Build Working Directory', priorBuildWorkingDirectory, buildWorkingDirectory))
     // Field-level entry diff (P1-2): the request persists name/branch/tag/
     // hotfixBranch/repositoryType, so editing ANY of them must surface a row —
     // not just a vcsPath change. Compare index-by-index over the normalized
