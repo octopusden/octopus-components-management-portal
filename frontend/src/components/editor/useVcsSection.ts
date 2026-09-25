@@ -40,6 +40,7 @@ export interface VcsEntryState {
 interface VcsState {
   externalRegistry: string
   entries: VcsEntryState[]
+  buildWorkingDirectory: string
 }
 
 function toEntryState(e: VcsEntry): VcsEntryState {
@@ -60,6 +61,7 @@ function snapshotFrom(component: ComponentDetail): VcsState {
   return {
     externalRegistry: component.vcsExternalRegistry ?? '',
     entries: selectBaseRow(component)?.vcsEntries?.map(toEntryState) ?? [],
+    buildWorkingDirectory: selectBaseRow(component)?.buildWorkingDirectory ?? '',
   }
 }
 
@@ -95,7 +97,11 @@ function cleanVcsEntries(entries: VcsEntryState[]): CleanVcsEntry[] {
 // Normalized view for the dirty compare (P1-4): the cleaned entries plus the
 // trimmed external-registry. dirty ⇔ this differs from the snapshot's view.
 function normalizeVcs(s: VcsState): unknown {
-  return { externalRegistry: (s.externalRegistry || '').trim(), entries: cleanVcsEntries(s.entries) }
+  return {
+    externalRegistry: (s.externalRegistry || '').trim(),
+    entries: cleanVcsEntries(s.entries),
+    buildWorkingDirectory: s.buildWorkingDirectory.trim(),
+  }
 }
 
 export interface VcsSection {
@@ -108,6 +114,8 @@ export interface VcsSection {
    *  → EDIT_ANY_COMPONENT). Drives the disabled dropdown + "admin only" pill. */
   externalRegistryEditable: boolean
   entries: VcsEntryState[]
+  buildWorkingDirectory: string
+  setBuildWorkingDirectory: (v: string) => void
   updateEntry: (index: number, field: keyof VcsEntryState, value: string) => void
   addEntry: () => void
   removeEntry: (index: number) => void
@@ -138,6 +146,7 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
   const showExternalRegistry = selectBaseRow(component)?.build?.buildSystem === WHISKEY
 
   const setExternalRegistry = (v: string) => setState((p) => ({ ...p, externalRegistry: v }))
+  const setBuildWorkingDirectory = (v: string) => setState((p) => ({ ...p, buildWorkingDirectory: v }))
   const updateEntry = (index: number, field: keyof VcsEntryState, value: string) =>
     setState((p) => ({ ...p, entries: p.entries.map((e, i) => (i === index ? { ...e, [field]: value } : e)) }))
   const addEntry = () =>
@@ -197,6 +206,7 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
     // vcsExternalRegistry clears via '' (CRS-A ""-clear); the prior null-clear was
     // a silent no-op (prep §1.6). Not flagged as a no-op — the clear now persists.
     push(scalarDiff('VCS · External Registry', prior.externalRegistry, state.externalRegistry))
+    push(scalarDiff('VCS · Build Working Directory', prior.buildWorkingDirectory.trim(), state.buildWorkingDirectory.trim()))
     // Field-level entry diff (P1-2): the request persists name/branch/tag/
     // hotfixBranch/repositoryType, so editing ANY of them must surface a row —
     // not just a vcsPath change. Compare index-by-index over the normalized
@@ -251,6 +261,9 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
         sourcePath: e.sourcePath || null,
         checkoutDirectory: e.checkoutDirectory || null,
       })),
+      // ""-clear: a base-row null would leave the stored value. With no entries
+      // there is nothing to build in, so it clears too.
+      buildWorkingDirectory: cleanedEntries.length === 0 ? '' : state.buildWorkingDirectory.trim(),
     },
   }
 
@@ -276,6 +289,8 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
     showExternalRegistry,
     externalRegistryEditable,
     entries: state.entries,
+    buildWorkingDirectory: state.buildWorkingDirectory,
+    setBuildWorkingDirectory,
     updateEntry,
     addEntry,
     removeEntry,

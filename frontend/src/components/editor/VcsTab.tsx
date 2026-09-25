@@ -35,6 +35,8 @@ export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
     showExternalRegistry,
     externalRegistryEditable,
     entries,
+    buildWorkingDirectory,
+    setBuildWorkingDirectory,
     updateEntry,
     addEntry,
     removeEntry,
@@ -194,6 +196,17 @@ export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
         {entries.length === 0 && (
           <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
             No VCS entries. Click "Add Entry" to create one.
+          </div>
+        )}
+
+        {/* Row-level, not per entry. Hidden with no entries: it is then sent as "". */}
+        {entries.length > 0 && (
+          <div className="space-y-1 sm:w-1/2">
+            <div className="flex items-center gap-1">
+              <Label htmlFor="vcs-buildWorkingDirectory" className="text-xs"><FieldLabelText path="vcs.buildWorkingDirectory" fallback="Build Working Directory" /></Label>
+              <FieldInfo path="vcs.buildWorkingDirectory" label="Build Working Directory" />
+            </div>
+            <Input id="vcs-buildWorkingDirectory" value={buildWorkingDirectory} onChange={(e) => setBuildWorkingDirectory(e.target.value)} placeholder="Checkout root" className="font-mono text-xs" />
           </div>
         )}
 

@@ -163,6 +163,8 @@ export interface ComponentConfiguration {
   escrow?: EscrowAspect | null
   jira?: JiraAspect | null
   vcsEntries: VcsEntry[]
+  // Directory the build runs in, relative to the checkout root. Absent against an older registry.
+  buildWorkingDirectory?: string | null
   mavenArtifacts: MavenArtifact[]
   fileUrlArtifacts: FileUrlArtifact[]
   dockerImages: DockerImage[]
@@ -417,6 +419,8 @@ export interface BaseConfigurationRequest {
   escrow?: EscrowAspect | null
   jira?: JiraAspect | null
   vcsEntries?: VcsEntryRequest[] | null
+  // `null` leaves the stored value; `''` clears it.
+  buildWorkingDirectory?: string | null
   mavenArtifacts?: MavenArtifactRequest[] | null
   fileUrlArtifacts?: FileUrlArtifactRequest[] | null
   dockerImages?: DockerImageRequest[] | null
@@ -632,6 +636,8 @@ export interface AuditLogEntry {
 //    securityGroups/teamcityProjects/group) are marker-overridable.
 export interface MarkerChildrenPayload {
   vcsEntries?: VcsEntryRequest[] | null
+  // With `vcsEntries` on a `vcs.settings` row; the payload replaces the row.
+  buildWorkingDirectory?: string | null
   mavenArtifacts?: MavenArtifactRequest[] | null
   fileUrlArtifacts?: FileUrlArtifactRequest[] | null
   dockerImages?: DockerImageRequest[] | null

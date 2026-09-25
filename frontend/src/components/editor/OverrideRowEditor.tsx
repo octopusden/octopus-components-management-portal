@@ -227,6 +227,9 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
     }
     return []
   })
+  const [vcsBuildWorkingDirectory, setVcsBuildWorkingDirectory] = useState<string>(
+    () => (mode === 'edit' && override?.markerChildren?.buildWorkingDirectory) || '',
+  )
   const [mavenArtifacts, setMavenArtifacts] = useState<MavenState[]>(() => {
     if (mode === 'edit' && override?.markerChildren?.mavenArtifacts) {
       return override.markerChildren.mavenArtifacts.map((a) => ({
@@ -298,6 +301,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
 
       const mc = override.markerChildren
       setVcsEntries((mc?.vcsEntries ?? []).map(toVcsState))
+      setVcsBuildWorkingDirectory(mc?.buildWorkingDirectory ?? '')
       setMavenArtifacts((mc?.mavenArtifacts ?? []).map((a) => ({ groupPattern: a.groupPattern, artifactPattern: a.artifactPattern, extension: a.extension ?? '', classifier: a.classifier ?? '' })))
       setFileUrlArtifacts((mc?.fileUrlArtifacts ?? []).map((a) => ({ url: a.url, artifactId: a.artifactId ?? '', classifier: a.classifier ?? '' })))
       setDockerImages((mc?.dockerImages ?? []).map((d) => ({ imageName: d.imageName, flavor: d.flavor ?? '' })))
@@ -307,6 +311,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
       setScalarStringValue('')
       setScalarBoolValue(false)
       setVcsEntries([])
+      setVcsBuildWorkingDirectory('')
       setMavenArtifacts([])
       setFileUrlArtifacts([])
       setDockerImages([])
@@ -410,7 +415,15 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
           sourcePath: e.sourcePath || null,
           checkoutDirectory: e.checkoutDirectory || null,
         }))
-      return { vcsEntries: entries }
+      const buildWorkingDirectory = vcsBuildWorkingDirectory.trim()
+      return {
+        vcsEntries: entries,
+        // Blank is null (the payload replaces the row); omitted when the row had
+        // none either, so an untouched row from an older registry stays unchanged.
+        ...(buildWorkingDirectory || override?.markerChildren?.buildWorkingDirectory != null
+          ? { buildWorkingDirectory: buildWorkingDirectory || null }
+          : {}),
+      }
     }
     if (key === 'mavenArtifacts') {
       const arts: MavenArtifactRequest[] = mavenArtifacts
@@ -774,6 +787,13 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
                     <Plus className="h-4 w-4" />
                     Add Entry
                   </Button>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor="ovr-vcs-buildWorkingDirectory" className="text-xs">Build Working Directory</Label>
+                      <FieldInfo path="vcs.buildWorkingDirectory" label="Build Working Directory" />
+                    </div>
+                    <Input id="ovr-vcs-buildWorkingDirectory" value={vcsBuildWorkingDirectory} onChange={(e) => setVcsBuildWorkingDirectory(e.target.value)} placeholder="Checkout root" className="font-mono text-xs" />
+                  </div>
                 </div>
               )}
 
