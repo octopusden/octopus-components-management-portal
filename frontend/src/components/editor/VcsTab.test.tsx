@@ -398,29 +398,30 @@ describe('VcsTab — placement fields (Source Path / Checkout Directory)', () =>
   })
 })
 
-describe('VcsTab — primary entry Checkout Directory', () => {
+describe('VcsTab — Checkout Directory on every entry', () => {
   const twoEntries = () => makeComponent({}, makeBaseRow({
     vcsEntries: [
       { id: 'vcs-1', sortOrder: 0, name: 'core', vcsPath: 'ssh://one', repositoryType: 'GIT', tag: null, branch: null, hotfixBranch: null },
       { id: 'vcs-2', sortOrder: 1, name: 'feature', vcsPath: 'ssh://two', repositoryType: 'GIT', tag: null, branch: null, hotfixBranch: null, checkoutDirectory: 'feature' },
     ],
   }))
+  const sent = () => captured.section!.slice.request.baseConfiguration!.vcsEntries!.map((e) => [e.vcsPath, e.checkoutDirectory])
 
-  it('shows the first entry read-only with its reason; later entries stay editable', () => {
+  it('lets the first entry\'s Checkout Directory be edited and sends it', () => {
     renderTab(twoEntries())
     const cd = screen.getAllByLabelText('Checkout Directory')
-    expect(cd[0]).toHaveAttribute('readonly')
-    expect(cd[1]).not.toHaveAttribute('readonly')
-    expect(screen.getAllByText(/checked out at the checkout root/i)).toHaveLength(1)
+    for (const f of cd) expect(f).not.toHaveAttribute('readonly')
+    expect(screen.queryByText(/checked out at the checkout root, so it has no Checkout Directory/i)).toBeNull()
+    fireEvent.change(cd[0]!, { target: { value: 'core' } })
+    fireEvent.change(cd[1]!, { target: { value: '' } })
+    expect(sent()).toEqual([['ssh://one', 'core'], ['ssh://two', null]])
   })
 
-  it('a secondary promoted to primary shows read-only and is sent with checkoutDirectory null', () => {
+  it('an entry that becomes first keeps its own Checkout Directory', () => {
     renderTab(twoEntries())
     act(() => captured.section!.removeEntry(0))
-    const cd = screen.getByLabelText('Checkout Directory')
-    expect(cd).toHaveAttribute('readonly')
-    expect((cd as HTMLInputElement).value).toBe('')
-    expect(captured.section!.slice.request.baseConfiguration!.vcsEntries![0]!.checkoutDirectory).toBeNull()
+    expect((screen.getByLabelText('Checkout Directory') as HTMLInputElement).value).toBe('feature')
+    expect(sent()).toEqual([['ssh://two', 'feature']])
   })
 })
 
@@ -431,23 +432,6 @@ describe('VcsTab — Name is read-only', () => {
     act(() => captured.section!.addEntry())
     fireEvent.change(screen.getAllByPlaceholderText('ssh://git@...')[1]!, { target: { value: 'ssh://two' } })
     expect(captured.section!.slice.request.baseConfiguration!.vcsEntries!.map((e) => e.name)).toEqual(['main', null])
-  })
-})
-
-describe('VcsTab — primary is the first entry with a VCS Path', () => {
-  it('shows the first row with a path read-only and sends it with checkoutDirectory null', () => {
-    renderTab(makeComponent({}, makeBaseRow({
-      vcsEntries: [
-        { id: 'vcs-1', sortOrder: 0, name: 'core', vcsPath: 'ssh://one', repositoryType: 'GIT', tag: null, branch: null, hotfixBranch: null },
-        { id: 'vcs-2', sortOrder: 1, name: 'feature', vcsPath: 'ssh://two', repositoryType: 'GIT', tag: null, branch: null, hotfixBranch: null, checkoutDirectory: 'feature' },
-      ],
-    })))
-    fireEvent.change(screen.getAllByPlaceholderText('ssh://git@...')[0]!, { target: { value: '' } })
-    const cd = screen.getAllByLabelText('Checkout Directory')
-    expect(cd[1]).toHaveAttribute('readonly')
-    expect(cd[0]).not.toHaveAttribute('readonly')
-    const sent = captured.section!.slice.request.baseConfiguration!.vcsEntries!
-    expect(sent.map((e) => [e.vcsPath, e.checkoutDirectory])).toEqual([['ssh://two', null]])
   })
 })
 

@@ -1055,7 +1055,7 @@ describe('OverrideRowEditor — VCS placement', () => {
   })
 })
 
-describe('OverrideRowEditor — primary entry Checkout Directory', () => {
+describe('OverrideRowEditor — Checkout Directory on every entry', () => {
   beforeEach(() => {
     mockQueueUpdate.mockReset()
     mockOverridesList = []
@@ -1071,54 +1071,26 @@ describe('OverrideRowEditor — primary entry Checkout Directory', () => {
     },
     createdAt: null, updatedAt: null,
   })
+  const sent = () => (mockQueueUpdate.mock.calls[0]![1].markerChildren.vcsEntries as Array<{ vcsPath: string; checkoutDirectory: string | null }>)
+    .map((e) => [e.vcsPath, e.checkoutDirectory])
 
-  it('shows the first entry read-only with its reason; later entries stay editable', () => {
+  it('lets the first entry\'s Checkout Directory be edited and sends it', async () => {
     renderEditor({ mode: 'edit', override: vcsOverride() })
     const cd = screen.getAllByLabelText('Checkout Directory')
-    expect(cd[0]).toHaveAttribute('readonly')
-    expect(cd[1]).not.toHaveAttribute('readonly')
-    expect(screen.getAllByText(/checked out at the checkout root/i)).toHaveLength(1)
+    for (const f of cd) expect(f).not.toHaveAttribute('readonly')
+    expect(screen.queryByText(/checked out at the checkout root, so it has no Checkout Directory/i)).toBeNull()
+    fireEvent.change(cd[0]!, { target: { value: 'core' } })
+    await userEvent.click(screen.getByRole('button', { name: /^update$/i }))
+    await waitFor(() => expect(mockQueueUpdate).toHaveBeenCalledOnce())
+    expect(sent()).toEqual([['ssh://one', 'core'], ['ssh://two', 'feature']])
   })
 
-  it('a secondary promoted to primary shows read-only and is sent with checkoutDirectory null', async () => {
+  it('an entry that becomes first keeps its own Checkout Directory', async () => {
     renderEditor({ mode: 'edit', override: vcsOverride() })
     fireEvent.click(screen.getByText('Entry 1').parentElement!.querySelector('button')!)
-    const cd = screen.getByLabelText('Checkout Directory')
-    expect(cd).toHaveAttribute('readonly')
-    expect((cd as HTMLInputElement).value).toBe('')
+    expect((screen.getByLabelText('Checkout Directory') as HTMLInputElement).value).toBe('feature')
     await userEvent.click(screen.getByRole('button', { name: /^update$/i }))
     await waitFor(() => expect(mockQueueUpdate).toHaveBeenCalledOnce())
-    const sent = mockQueueUpdate.mock.calls[0]![1].markerChildren.vcsEntries
-    expect(sent).toHaveLength(1)
-    expect(sent[0].vcsPath).toBe('ssh://two')
-    expect(sent[0].checkoutDirectory).toBeNull()
-  })
-})
-
-describe('OverrideRowEditor — primary is the first entry with a VCS Path', () => {
-  beforeEach(() => {
-    mockQueueUpdate.mockReset()
-    mockOverridesList = []
-  })
-
-  it('shows the first row with a path read-only and sends it with checkoutDirectory null', async () => {
-    renderEditor({
-      mode: 'edit',
-      override: {
-        id: 'fo-vcs', overriddenAttribute: 'vcs.settings', versionRange: '[1,2)', rowType: 'MARKER', value: null,
-        markerChildren: { vcsEntries: [{ name: 'core', vcsPath: 'ssh://one' }, { name: 'feature', vcsPath: 'ssh://two', checkoutDirectory: 'feature' }] },
-        createdAt: null, updatedAt: null,
-      },
-    })
-    // Whitespace, not empty: the path input is `required`, so an empty one blocks
-    // the submit, while "   " passes it and is dropped by the serializer.
-    fireEvent.change(screen.getAllByPlaceholderText('ssh://git@...')[0]!, { target: { value: '   ' } })
-    const cd = screen.getAllByLabelText('Checkout Directory')
-    expect(cd[1]).toHaveAttribute('readonly')
-    expect(cd[0]).not.toHaveAttribute('readonly')
-    await userEvent.click(screen.getByRole('button', { name: /^update$/i }))
-    await waitFor(() => expect(mockQueueUpdate).toHaveBeenCalledOnce())
-    const sent = mockQueueUpdate.mock.calls[0]![1].markerChildren.vcsEntries
-    expect(sent.map((e: { vcsPath: string; checkoutDirectory: string | null }) => [e.vcsPath, e.checkoutDirectory])).toEqual([['ssh://two', null]])
+    expect(sent()).toEqual([['ssh://two', 'feature']])
   })
 })
