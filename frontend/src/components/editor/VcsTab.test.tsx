@@ -488,3 +488,13 @@ describe('VcsTab — Build Working Directory (base row)', () => {
     )
   })
 })
+
+describe('VcsTab — Build Working Directory with no entries sent', () => {
+  it('a value typed next to only path-less entries does not make the tab dirty, as none is sent', () => {
+    renderTab(makeComponent({}, makeBaseRow({ vcsEntries: [] })))
+    act(() => captured.section!.addEntry())
+    fireEvent.change(screen.getByLabelText('Build Working Directory'), { target: { value: 'core' } })
+    expect(captured.section!.slice.request.baseConfiguration!.buildWorkingDirectory).toBe('')
+    expect(captured.section!.slice.isDirty).toBe(false)
+  })
+})
