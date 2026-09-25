@@ -52,6 +52,15 @@ describe('formatOverrideValue', () => {
     expect(formatOverrideValue(marker)).toBe('2 Maven artifacts, 1 Docker images')
   })
 
+  it('includes a VCS row\'s Build Working Directory, so a change to it alone shows', () => {
+    const vcs = (buildWorkingDirectory: string | null) => ov({
+      overriddenAttribute: 'vcs.settings', rowType: 'MARKER', value: null,
+      markerChildren: { vcsEntries: [{}, {}] as never, buildWorkingDirectory },
+    })
+    expect(formatOverrideValue(vcs('core'))).toBe('2 VCS entries, build in core')
+    expect(formatOverrideValue(vcs(null))).toBe('2 VCS entries')
+  })
+
   it('renders an empty marker payload distinctly (not [object Object])', () => {
     const marker = ov({ rowType: 'MARKER', value: null, markerChildren: {} })
     expect(formatOverrideValue(marker)).toBe('marker (no entries)')
