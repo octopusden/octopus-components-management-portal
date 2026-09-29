@@ -151,3 +151,12 @@ describe('useVcsSection — ""-clear round trip', () => {
     expect(result.current.slice.isDirty).toBe(false)
   })
 })
+
+describe('useVcsSection — effective Build Working Directory (what the Build tab shows)', () => {
+  it('follows the request: cleared once every VCS Root is removed', () => {
+    const { result } = render(makeComponent({}, makeBaseRow({ buildWorkingDirectory: 'core' })))
+    expect(result.current.effectiveBuildWorkingDirectory).toBe('core')
+    act(() => result.current.removeEntry(0))
+    expect(result.current.effectiveBuildWorkingDirectory).toBe('')
+  })
+})
