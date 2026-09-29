@@ -1190,7 +1190,11 @@ function ComponentDetailEditor() {
             <TabsContent value="build">
               <EditSurface canEdit={canEdit} label="Build">
                 <div className="space-y-6">
-                  <BuildTab section={buildSection} canEdit={canEdit} conflictError={buildConflict} />
+                  <BuildTab
+                    section={buildSection} canEdit={canEdit} conflictError={buildConflict}
+                    buildWorkingDirectory={vcsSection.buildWorkingDirectory}
+                    onEditBuildWorkingDirectory={() => setActiveTab('vcs')}
+                  />
                   <ProducedArtifactsSection form={form} component={component} canEdit={canEdit} />
                 </div>
               </EditSurface>
