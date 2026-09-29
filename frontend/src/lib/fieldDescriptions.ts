@@ -108,7 +108,7 @@ export const fieldDescriptions: Record<string, string> = {
   'vcs.checkoutDirectory':
     'Directory below the checkout root in which this VCS Root is placed: its sources land at Checkout Directory / Source Path. Leave empty to check it out at the checkout root itself; at most one VCS Root of a row can do so. A single name (letters, digits, ".", "_", "-"; no leading dot). The VCS Root Name follows it.',
   'vcs.buildWorkingDirectory':
-    'Directory the build runs in, relative to the checkout root (e.g. core/mapper). Leave empty to build at the checkout root. Set per configuration row; required when every VCS Root has a Checkout Directory, and must then start with one of them.',
+    'Directory the build runs in, relative to the checkout root (e.g. core/mapper). Leave empty to build at the checkout root. Set per configuration row; required when every VCS Root has a Checkout Directory, and must then start with one of them. Chain generation sets it as the TeamCity parameter WORK_DIR (%teamcity.build.checkoutDir%/<this directory>).',
   'vcs.repositoryType':
     'Type of the version-control system hosting the repository (e.g. GIT). Read-only — it follows the VCS host and is not user-editable.',
   'vcs.branch':
