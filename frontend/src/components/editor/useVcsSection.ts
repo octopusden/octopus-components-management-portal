@@ -118,6 +118,8 @@ export interface VcsSection {
   externalRegistryEditable: boolean
   entries: VcsEntryState[]
   buildWorkingDirectory: string
+  /** The value the save sends (projectVcs): '' once no VCS Root is sent. For read-only views. */
+  effectiveBuildWorkingDirectory: string
   setBuildWorkingDirectory: (v: string) => void
   updateEntry: (index: number, field: keyof VcsEntryState, value: string) => void
   addEntry: () => void
@@ -299,6 +301,7 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
     externalRegistryEditable,
     entries: state.entries,
     buildWorkingDirectory: state.buildWorkingDirectory,
+    effectiveBuildWorkingDirectory: buildWorkingDirectory,
     setBuildWorkingDirectory,
     updateEntry,
     addEntry,
