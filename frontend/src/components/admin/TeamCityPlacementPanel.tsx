@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAdminMode } from '@/lib/adminModeStore'
@@ -202,6 +202,15 @@ export function TeamCityPlacementPanel() {
   const selectableRows = useMemo(() => rows.filter(isPlacementRowSelectable), [rows])
   const allResolvedSelected =
     selectableRows.length > 0 && selectableRows.every((row) => selected.has(row.componentId))
+  const someResolvedSelected = selected.size > 0 && !allResolvedSelected
+
+  // React has no `indeterminate` prop for a native checkbox — it's a DOM-only
+  // property, set imperatively so a partial selection doesn't read
+  // identically to "none selected" for screen-reader / assistive-tech users.
+  const selectAllRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = someResolvedSelected
+  }, [someResolvedSelected])
 
   function toggleRow(componentId: string, checked: boolean) {
     setSelected((prev) => {
@@ -361,6 +370,7 @@ export function TeamCityPlacementPanel() {
 
       <label className="flex w-fit items-center gap-2 text-sm">
         <input
+          ref={selectAllRef}
           type="checkbox"
           role="checkbox"
           aria-label="Select all resolved"
