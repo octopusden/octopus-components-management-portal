@@ -11,9 +11,9 @@ export function getPlacementStatusTone(
   switch (status) {
     case 'RESOLVED':
       return 'success'
+    // OUTSIDE_SCOPE: archived components and per-range (vcs.settings) marker
+    // rows — always report-only, never a Sync candidate, but not alarming.
     case 'IN_SYNC':
-    // Archived components and per-range (vcs.settings) marker rows — always
-    // report-only, never a Sync candidate, but not alarming either.
     case 'OUTSIDE_SCOPE':
       return 'secondary'
     case 'INVALID':
