@@ -10,6 +10,7 @@ import { MigrationHistoryPanel } from '../components/admin/MigrationHistoryPanel
 import { MigrationPanel } from '../components/admin/MigrationPanel'
 import { TeamCityResyncPanel } from '../components/admin/TeamCityResyncPanel'
 import { TeamCityValidationPanel } from '../components/admin/TeamCityValidationPanel'
+import { TeamCityPlacementPanel } from '../components/admin/TeamCityPlacementPanel'
 import { ServiceEventsPanel } from '../components/admin/ServiceEventsPanel'
 import { FeedbackPanel } from '../components/admin/FeedbackPanel'
 import { AdminModeArmBar } from '../components/admin/AdminModeArmBar'
@@ -160,6 +161,19 @@ export function AdminSettingsPage() {
                 </p>
                 <div className="pt-2">
                   <TeamCityValidationPanel />
+                </div>
+              </div>
+
+              <div className="border-t pt-6 space-y-2">
+                <h2 className="text-lg font-semibold">TeamCity placement</h2>
+                <p className="text-sm text-muted-foreground">
+                  Diff finds where a component's Checkout Directory, Source Path, or Build Working
+                  Directory drifted from what its linked TeamCity compile configuration(s) derive.
+                  Sync writes back only the rows you select. Diff's report is visible to anyone who
+                  can view components; running Diff or Sync needs Admin mode armed above.
+                </p>
+                <div className="pt-2">
+                  <TeamCityPlacementPanel />
                 </div>
               </div>
             </div>
