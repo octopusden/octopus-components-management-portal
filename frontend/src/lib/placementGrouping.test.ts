@@ -3,7 +3,9 @@ import {
   appliesToLabel,
   buildProposedChangeLines,
   fieldChange,
+  countChangedFields,
   groupPlacementRows,
+  summarizeKeys,
   wasRowDerived,
 } from './placementGrouping'
 import type { PlacementRowDiff } from './types'
@@ -128,7 +130,7 @@ describe('groupPlacementRows', () => {
     ]
     const groups = groupPlacementRows(rows)
     expect(groups.map((g) => g.componentKey)).toEqual(['app-alpha', 'app-beta'])
-    const beta = groups[1]
+    const beta = groups[1]!
     expect(beta.rows.map((r) => r.configurationRowId)).toEqual(['row-b1', 'row-b3', 'row-b2'])
   })
 
@@ -137,18 +139,46 @@ describe('groupPlacementRows', () => {
       row({ rowLabel: 'BASE', status: 'RESOLVED', configurationRowId: 'row-1' }),
       row({ rowLabel: 'vcs.settings', versionRange: '[2.0,)', status: 'OUTSIDE_SCOPE', configurationRowId: 'row-2' }),
     ]
-    const [group] = groupPlacementRows(rows)
+    const group = groupPlacementRows(rows)[0]!
     expect(group.statuses).toEqual(['RESOLVED', 'OUTSIDE_SCOPE'])
   })
 
   it('is selectable only when the group has a RESOLVED Base row', () => {
-    const resolvedBase = groupPlacementRows([row({ rowLabel: 'BASE', status: 'RESOLVED' })])[0]
+    const resolvedBase = groupPlacementRows([row({ rowLabel: 'BASE', status: 'RESOLVED' })])[0]!
     expect(resolvedBase.selectable).toBe(true)
 
-    const conflictBase = groupPlacementRows([row({ rowLabel: 'BASE', status: 'CONFLICT' })])[0]
+    const conflictBase = groupPlacementRows([row({ rowLabel: 'BASE', status: 'CONFLICT' })])[0]!
     expect(conflictBase.selectable).toBe(false)
 
-    const noBase = groupPlacementRows([row({ rowLabel: 'vcs.settings', versionRange: '[2.0,)', status: 'OUTSIDE_SCOPE' })])[0]
+    const noBase = groupPlacementRows([row({ rowLabel: 'vcs.settings', versionRange: '[2.0,)', status: 'OUTSIDE_SCOPE' })])[0]!
     expect(noBase.selectable).toBe(false)
+  })
+})
+
+describe('summarizeKeys', () => {
+  it('joins up to 10 keys as-is', () => {
+    expect(summarizeKeys(['a', 'b', 'c'])).toBe('a, b, c')
+  })
+
+  it('lists the first 10 then "and N more" beyond that', () => {
+    const keys = Array.from({ length: 12 }, (_, i) => `k${i}`)
+    expect(summarizeKeys(keys)).toBe('k0, k1, k2, k3, k4, k5, k6, k7, k8, k9, and 2 more')
+  })
+})
+
+describe('countChangedFields', () => {
+  it('sums the changed fields of the selected components\' Base rows only', () => {
+    const groups = groupPlacementRows([
+      row({
+        componentId: 'comp-a',
+        rowLabel: 'BASE',
+        entries: [{ name: 'main', vcsPath: '.', derivedCheckoutDirectory: 'app-alpha' }],
+        derivedBuildWorkingDirectory: 'app-alpha',
+      }),
+      row({ componentId: 'comp-b', componentKey: 'app-beta', rowLabel: 'BASE' }),
+    ])
+    expect(countChangedFields(groups, new Set(['comp-a']))).toBe(2)
+    expect(countChangedFields(groups, new Set(['comp-a', 'comp-b']))).toBe(2)
+    expect(countChangedFields(groups, new Set())).toBe(0)
   })
 })

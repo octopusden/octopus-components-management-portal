@@ -390,13 +390,15 @@ describe('TeamCityPlacementPanel — zero state', () => {
   it('shows "All N components in sync — nothing to do" when the default view has no attention rows', () => {
     const onlyNothingToDo: PlacementDiffResult = {
       ...REPORT,
-      rows: [REPORT.rows[2]], // app-gamma, OUTSIDE_SCOPE only
+      rows: [REPORT.rows[2]!], // app-gamma, OUTSIDE_SCOPE only
     }
     mockUseDiffJob.mockReturnValue(buildQuery(COMPLETED_DIFF_JOB) as unknown as ReturnType<typeof usePlacementDiffJob>)
     mockUseReport.mockReturnValue(buildQuery(onlyNothingToDo) as unknown as ReturnType<typeof usePlacementDiffReport>)
     renderPanel()
     expect(screen.getByText(/All 1 components in sync — nothing to do/i)).toBeDefined()
-    expect(screen.getByRole('button', { name: /^Show all \(1\)$/ })).toBeDefined()
+    // Two "Show all (1)" affordances coexist on purpose: the summary bar's
+    // toggle button, and the zero state's own inline link to the same action.
+    expect(screen.getAllByRole('button', { name: /^Show all \(1\)$/ }).length).toBe(2)
   })
 })
 
@@ -410,7 +412,8 @@ describe('TeamCityPlacementPanel — result table', () => {
     renderPanel()
     const headings = screen.getAllByRole('checkbox').map((el) => el.getAttribute('aria-label'))
     // Default view hides app-gamma (Nothing to do); alpha/beta/delta in key order.
-    expect(headings.filter((l) => l?.startsWith('Select '))).toEqual([
+    // (Excludes the "Select all visible ready" checkbox, which also starts with "Select ".)
+    expect(headings.filter((l) => l?.startsWith('Select ') && !l.startsWith('Select all'))).toEqual([
       'Select app-alpha',
       'Select app-beta',
       'Select app-delta',
@@ -419,9 +422,14 @@ describe('TeamCityPlacementPanel — result table', () => {
 
   it('renders the human status label with the raw code as a tooltip/title', () => {
     renderPanel()
-    const badge = screen.getByText('Ready to sync')
-    expect(badge.getAttribute('title')).toBe('RESOLVED')
-    expect(screen.getByText('TeamCity configurations disagree').getAttribute('title')).toBe('CONFLICT')
+    // app-alpha's single RESOLVED row renders "Ready to sync" twice — once as
+    // the group header's status chip, once as the detail row's Status cell.
+    const readyBadges = screen.getAllByText('Ready to sync')
+    expect(readyBadges.length).toBeGreaterThan(0)
+    for (const badge of readyBadges) expect(badge.getAttribute('title')).toBe('RESOLVED')
+    for (const badge of screen.getAllByText('TeamCity configurations disagree')) {
+      expect(badge.getAttribute('title')).toBe('CONFLICT')
+    }
   })
 
   it('renders a single "Proposed change" column with full field names, no CD/SP/BWD abbreviations', () => {

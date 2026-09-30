@@ -54,22 +54,25 @@ export interface PlacementComponentGroup {
 
 /** Groups Diff rows by component: Base first then overrides sorted by range, sorted by component key. */
 export function groupPlacementRows(rows: PlacementRowDiff[]): PlacementComponentGroup[] {
-  const byComponent = new Map<string, PlacementRowDiff[]>()
+  // Keyed by componentId; componentId/componentKey are captured at the row
+  // that creates the bucket, so building the group never needs an
+  // after-the-fact `rows[0]` (which noUncheckedIndexedAccess can't prove
+  // non-empty even though a bucket is never created without its first row).
+  const byComponent = new Map<string, PlacementComponentGroup>()
   for (const row of rows) {
-    const existing = byComponent.get(row.componentId)
-    if (existing) existing.push(row)
-    else byComponent.set(row.componentId, [row])
+    const group = byComponent.get(row.componentId)
+    if (group) group.rows.push(row)
+    else byComponent.set(row.componentId, { componentId: row.componentId, componentKey: row.componentKey, rows: [row], statuses: [], selectable: false })
   }
 
-  const groups = [...byComponent.values()].map((componentRows): PlacementComponentGroup => {
-    const base = componentRows.filter((r) => r.rowLabel === 'BASE')
-    const overrides = componentRows
+  const groups = [...byComponent.values()].map((group): PlacementComponentGroup => {
+    const base = group.rows.filter((r) => r.rowLabel === 'BASE')
+    const overrides = group.rows
       .filter((r) => r.rowLabel !== 'BASE')
       .sort((a, b) => a.versionRange.localeCompare(b.versionRange))
     const orderedRows = [...base, ...overrides]
     return {
-      componentId: componentRows[0].componentId,
-      componentKey: componentRows[0].componentKey,
+      ...group,
       rows: orderedRows,
       statuses: [...new Set(orderedRows.map((r) => r.status))],
       selectable: base.some(isPlacementRowSelectable),
@@ -77,4 +80,20 @@ export function groupPlacementRows(rows: PlacementRowDiff[]): PlacementComponent
   })
 
   return groups.sort((a, b) => a.componentKey.localeCompare(b.componentKey))
+}
+
+/** "a, b, c" for up to `max` keys, else "a, b, … and N more" — the Sync confirm dialog's component list. */
+export function summarizeKeys(keys: string[], max = 10): string {
+  if (keys.length <= max) return keys.join(', ')
+  return `${keys.slice(0, max).join(', ')}, and ${keys.length - max} more`
+}
+
+/** Total changed fields across the selected components' Base rows — only Base rows are ever written. */
+export function countChangedFields(groups: PlacementComponentGroup[], selectedIds: Set<string>): number {
+  return groups
+    .filter((g) => selectedIds.has(g.componentId))
+    .reduce((total, g) => {
+      const base = g.rows.find((r) => r.rowLabel === 'BASE')
+      return total + (base ? buildProposedChangeLines(base).length : 0)
+    }, 0)
 }
