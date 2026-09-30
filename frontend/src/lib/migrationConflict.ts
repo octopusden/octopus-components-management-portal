@@ -52,3 +52,25 @@ export function parseSameKindAttach<T>(err: ApiError): T | null {
   if (typeof obj['id'] !== 'string' || !looksLikeKnownState) return null
   return obj as unknown as T
 }
+
+/**
+ * True when a `POST /admin/teamcity-placement/sync` 409 means "the diffId no
+ * longer matches the latest Diff" (`TeamcityPlacementControllerV4.startSync`'s
+ * own guard, thrown as a plain `ResponseStatusException` — CRS's default
+ * error body: `{timestamp, status, error, message, path}`, no `kind` field).
+ * That shape is neither a same-kind attach (`parseSameKindAttach` already
+ * returns null for it, since it carries no `id`/`state`) nor a cross-kind
+ * `MigrationConflictResponse` (`kind: 'conflict'`) — so the panel uses this
+ * check to tell "Diff was replaced, re-run it" apart from a genuine cross-kind
+ * conflict, which should render the standard destructive banner instead.
+ */
+export function isDiffReplacedConflict(err: unknown): boolean {
+  if (!(err instanceof ApiError) || err.status !== 409) return false
+  try {
+    const parsed = JSON.parse(err.rawBody) as unknown
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return false
+    return !('kind' in (parsed as Record<string, unknown>))
+  } catch {
+    return false
+  }
+}
