@@ -1160,6 +1160,8 @@ export interface PlacementRowDiff {
 
 /** `GET /admin/teamcity-placement/diff/report.json` (component read access, 404 until a Diff has completed). */
 export interface PlacementDiffResult {
+  /** The Diff run these rows came from; what a Sync request must name. */
+  diffId?: string
   generatedAt: string
   rows: PlacementRowDiff[]
 }

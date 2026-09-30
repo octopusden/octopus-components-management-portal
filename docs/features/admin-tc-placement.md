@@ -64,7 +64,7 @@ regardless of the current filter view.
 ### Sync
 
 "Sync selected (N)" opens a confirm dialog naming the count, then
-`POST /sync` with `{ diffId: <the currently-displayed Diff job's id>, componentIds: [...selected] }`.
+`POST /sync` with `{ diffId: <the displayed report's own `diffId`>, componentIds: [...selected] }`.
 Two 409 shapes share this endpoint and the Portal tells them apart
 (`isDiffReplacedConflict` in [`lib/migrationConflict.ts`](../../frontend/src/lib/migrationConflict.ts)):
 

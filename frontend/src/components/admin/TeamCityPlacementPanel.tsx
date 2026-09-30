@@ -513,7 +513,9 @@ export function TeamCityPlacementPanel() {
   async function runSync() {
     setConfirmSyncOpen(false)
     setSyncNotice(null)
-    const diffId = diffJobData?.id
+    // The report's own id, not /diff/job's: the selection was made from these rows,
+    // and CRS refuses the Sync if a newer Diff has replaced them.
+    const diffId = report.data?.diffId
     if (!diffId) return
     try {
       await startSync.mutateAsync({ diffId, componentIds: [...selected] })
@@ -533,6 +535,7 @@ export function TeamCityPlacementPanel() {
     otherKindRunning ||
     diffRunning ||
     selected.size === 0 ||
+    !report.data?.diffId ||
     // The report + selection can still show a previous COMPLETED Diff's rows
     // while /diff/job now names a newer run — only a COMPLETED job has a
     // result CRS's own 409 guard will accept a Sync against (review finding).
