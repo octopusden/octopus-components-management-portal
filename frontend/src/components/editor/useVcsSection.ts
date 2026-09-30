@@ -138,6 +138,26 @@ export interface VcsSection {
   clearServerErrors: () => void
 }
 
+// Where one parsed server field-error path routes to: a base-row entry field,
+// or a per-range override's entry field. Extracted from applyServerErrors so
+// the routing decision is a flat sequence of early returns instead of nested
+// if/else (SonarCloud S3776 — cognitive complexity).
+type ErrorRoute = { kind: 'base'; key: string } | { kind: 'override'; id: string; key: string }
+
+function routeVcsError(path: string, rowIds: string[], stateIndexOfSent: number[]): ErrorRoute | null {
+  const p = parseVcsEntryErrorPath(path)
+  if (!p) return null
+  if (p.overrideIndex === undefined) {
+    if (p.entry === undefined) return { kind: 'base', key: p.field }
+    const index = stateIndexOfSent[p.entry]
+    return index === undefined ? null : { kind: 'base', key: `${index}.${p.field}` }
+  }
+  const id = rowIds[p.overrideIndex]
+  if (id === undefined) return null
+  const key = p.entry === undefined ? p.field : `${p.entry}.${p.field}`
+  return { kind: 'override', id, key }
+}
+
 export function useVcsSection(component: ComponentDetail): VcsSection {
   const { state, setState, snapshotRef, isDirty, reseed } = useSectionSnapshot(
     component,
@@ -186,20 +206,13 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
     const base: Record<string, string> = {}
     const overrides: Record<string, Record<string, string>> = {}
     for (const [path, message] of fieldErrors) {
-      const p = parseVcsEntryErrorPath(path)
-      if (!p) continue
+      const route = routeVcsError(path, rowIds, stateIndexOfSent)
+      if (!route) continue
       // Keys: `<entry index>.<field>`, or the bare field for the row's Build Working Directory.
-      if (p.overrideIndex === undefined) {
-        if (p.entry === undefined) {
-          base[p.field] = message
-        } else {
-          const index = stateIndexOfSent[p.entry]
-          if (index !== undefined) base[`${index}.${p.field}`] = message
-        }
+      if (route.kind === 'base') {
+        base[route.key] = message
       } else {
-        const id = rowIds[p.overrideIndex]
-        const key = p.entry === undefined ? p.field : `${p.entry}.${p.field}`
-        if (id !== undefined) overrides[id] = { ...overrides[id], [key]: message }
+        overrides[route.id] = { ...overrides[route.id], [route.key]: message }
       }
     }
     setEntryErrors(base)

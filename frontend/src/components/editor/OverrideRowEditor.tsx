@@ -124,6 +124,211 @@ interface DockerState { imageName: string; flavor: string }
 interface PackageState { packageType: string; packageName: string }
 
 // ---------------------------------------------------------------------------
+// Pure helpers (extracted so their branching is scored on its own, not folded
+// into the component's cognitive complexity — SonarCloud S3776)
+// ---------------------------------------------------------------------------
+
+// Scalar and marker catalogues are disjoint, so a stored/preset attribute
+// path alone decides which of the two the editor opens on.
+function resolveOverrideType(
+  mode: 'create' | 'edit',
+  override: FieldOverride | undefined,
+  presetAttribute: string | undefined,
+): 'scalar' | 'marker' {
+  if (mode === 'edit' && override) return MARKER_BY_PATH.has(override.overriddenAttribute) ? 'marker' : 'scalar'
+  if (presetAttribute) return MARKER_BY_PATH.has(presetAttribute) ? 'marker' : 'scalar'
+  return 'scalar'
+}
+
+function buildScalarValue(selectedScalarAttr: ScalarAttr | undefined, scalarBoolValue: boolean, scalarStringValue: string): unknown {
+  if (!selectedScalarAttr) return undefined
+  return selectedScalarAttr.type === 'boolean' ? scalarBoolValue : scalarStringValue
+}
+
+interface MarkerChildInputs {
+  vcsEntries: VcsState[]
+  vcsBuildWorkingDirectory: string
+  mavenArtifacts: MavenState[]
+  fileUrlArtifacts: FileUrlState[]
+  dockerImages: DockerState[]
+  packages: PackageState[]
+  requiredToolsInput: string
+}
+
+// Each marker branch trims string fields and drops rows whose required
+// fields are still blank — HTML `required` blocks an empty field but not a
+// whitespace-only one, so it doesn't gate the wire body. Without this
+// a newly-added empty row reaches the server as `"   "` and 400s. Same
+// pattern that VcsTab + DistributionTab already use for the BASE-row
+// paths — required-field rules below mirror CRS v4 wire contract.
+function buildMarkerChildren(selectedMarkerAttr: MarkerAttr | undefined, inputs: MarkerChildInputs): MarkerChildrenPayload | null {
+  if (!selectedMarkerAttr) return null
+  const { vcsEntries, vcsBuildWorkingDirectory, mavenArtifacts, fileUrlArtifacts, dockerImages, packages, requiredToolsInput } = inputs
+  const key = selectedMarkerAttr.childKey
+  if (key === 'vcsEntries') {
+    const entries: VcsEntryRequest[] = vcsEntries
+      .map((e) => ({
+        name: (e.name || '').trim(),
+        vcsPath: e.vcsPath.trim(),
+        branch: (e.branch || '').trim(),
+        tag: (e.tag || '').trim(),
+        hotfixBranch: (e.hotfixBranch || '').trim(),
+        repositoryType: (e.repositoryType || '').trim(),
+        sourcePath: (e.sourcePath || '').trim(),
+        checkoutDirectory: (e.checkoutDirectory || '').trim(),
+      }))
+      .filter((e) => e.vcsPath !== '')
+      .map((e) => ({
+        name: e.name || null,
+        vcsPath: e.vcsPath,
+        branch: e.branch || null,
+        tag: e.tag || null,
+        hotfixBranch: e.hotfixBranch || null,
+        repositoryType: e.repositoryType || null,
+        sourcePath: e.sourcePath || null,
+        checkoutDirectory: e.checkoutDirectory || null,
+      }))
+    // Blank is null: the payload replaces the row, and the registry reads null as none.
+    return { vcsEntries: entries, buildWorkingDirectory: vcsBuildWorkingDirectory.trim() || null }
+  }
+  if (key === 'mavenArtifacts') {
+    const arts: MavenArtifactRequest[] = mavenArtifacts
+      .map((a) => ({
+        groupPattern: a.groupPattern.trim(),
+        artifactPattern: a.artifactPattern.trim(),
+        extension: (a.extension || '').trim(),
+        classifier: (a.classifier || '').trim(),
+      }))
+      .filter((a) => a.groupPattern !== '' && a.artifactPattern !== '')
+      .map((a) => ({
+        groupPattern: a.groupPattern,
+        artifactPattern: a.artifactPattern,
+        extension: a.extension || null,
+        classifier: a.classifier || null,
+      }))
+    return { mavenArtifacts: arts }
+  }
+  if (key === 'fileUrlArtifacts') {
+    const arts: FileUrlArtifactRequest[] = fileUrlArtifacts
+      .map((a) => ({
+        url: a.url.trim(),
+        artifactId: (a.artifactId || '').trim(),
+        classifier: (a.classifier || '').trim(),
+      }))
+      .filter((a) => a.url !== '')
+      .map((a) => ({
+        url: a.url,
+        artifactId: a.artifactId || null,
+        classifier: a.classifier || null,
+      }))
+    return { fileUrlArtifacts: arts }
+  }
+  if (key === 'dockerImages') {
+    const imgs: DockerImageRequest[] = dockerImages
+      .map((d) => ({
+        imageName: d.imageName.trim(),
+        flavor: (d.flavor || '').trim(),
+      }))
+      .filter((d) => d.imageName !== '')
+      .map((d) => ({
+        imageName: d.imageName,
+        flavor: d.flavor || null,
+      }))
+    return { dockerImages: imgs }
+  }
+  if (key === 'packages') {
+    const pkgs: PackageRequest[] = packages
+      .map((p) => ({
+        packageType: p.packageType.trim(),
+        packageName: p.packageName.trim(),
+      }))
+      .filter((p) => p.packageType !== '' && p.packageName !== '')
+    return { packages: pkgs }
+  }
+  if (key === 'requiredTools') {
+    const tools = [...new Set(requiredToolsInput.split(',').map((t) => t.trim()).filter(Boolean))]
+    return { requiredTools: tools }
+  }
+  return null
+}
+
+interface ResetValues {
+  scalarStringValue: string
+  scalarBoolValue: boolean
+  vcsEntries: VcsState[]
+  vcsBuildWorkingDirectory: string
+  mavenArtifacts: MavenState[]
+  fileUrlArtifacts: FileUrlState[]
+  dockerImages: DockerState[]
+  packages: PackageState[]
+  requiredToolsInput: string
+}
+
+// The create-mode / no-override form state, and the edit-mode prefill from a
+// stored override — one source of truth shared by the initial useState seed
+// and resetState (dialog reopen / override swap).
+function computeResetValues(mode: 'create' | 'edit', override: FieldOverride | undefined): ResetValues {
+  if (mode !== 'edit' || !override) {
+    return {
+      scalarStringValue: '',
+      scalarBoolValue: false,
+      vcsEntries: [],
+      vcsBuildWorkingDirectory: '',
+      mavenArtifacts: [],
+      fileUrlArtifacts: [],
+      dockerImages: [],
+      packages: [],
+      requiredToolsInput: '',
+    }
+  }
+  const mc = override.markerChildren
+  return {
+    scalarStringValue: override.value !== null && override.value !== undefined
+      ? (typeof override.value === 'string' ? override.value : String(override.value))
+      : '',
+    scalarBoolValue: typeof override.value === 'boolean' ? override.value : false,
+    vcsEntries: (mc?.vcsEntries ?? []).map(toVcsState),
+    vcsBuildWorkingDirectory: mc?.buildWorkingDirectory ?? '',
+    mavenArtifacts: (mc?.mavenArtifacts ?? []).map((a) => ({ groupPattern: a.groupPattern, artifactPattern: a.artifactPattern, extension: a.extension ?? '', classifier: a.classifier ?? '' })),
+    fileUrlArtifacts: (mc?.fileUrlArtifacts ?? []).map((a) => ({ url: a.url, artifactId: a.artifactId ?? '', classifier: a.classifier ?? '' })),
+    dockerImages: (mc?.dockerImages ?? []).map((d) => ({ imageName: d.imageName, flavor: d.flavor ?? '' })),
+    packages: (mc?.packages ?? []).map((p) => ({ packageType: p.packageType, packageName: p.packageName })),
+    requiredToolsInput: (mc?.requiredTools as string[] | null | undefined)?.join(', ') ?? '',
+  }
+}
+
+// Submit guard chain: attribute picked, attribute still in a known catalogue,
+// range syntactically/semantically valid, no overlap with a sibling override.
+// Returns the toast to show, or null when the submit may proceed.
+function validateOverrideSubmit(args: {
+  attribute: string
+  overrideType: 'scalar' | 'marker'
+  selectedScalarAttr: ScalarAttr | undefined
+  selectedMarkerAttr: MarkerAttr | undefined
+  rangeError: string | null
+  conflictMessage: string | null
+}): { title: string; description?: string } | null {
+  const { attribute, overrideType, selectedScalarAttr, selectedMarkerAttr, rangeError, conflictMessage } = args
+  if (!attribute) return { title: 'Please select an attribute' }
+  // Guard against a stored attribute that no longer maps to any catalogue
+  // entry (e.g. server adds a new path the portal build doesn't know about).
+  // Without this, buildScalarValue / buildMarkerChildren return undefined /
+  // null and the wire body would be silently malformed.
+  if (overrideType === 'scalar' && !selectedScalarAttr) return { title: 'Unknown scalar attribute', description: attribute }
+  if (overrideType === 'marker' && !selectedMarkerAttr) return { title: 'Unknown marker attribute', description: attribute }
+  // ADR-018: field-override ranges may be bounded, open-upper (`[2.0,)`), or
+  // historical-left-unbounded; only the all-versions shapes denote the base
+  // default, and an inverted/empty interval (`[3076,3010]`) is rejected before
+  // the round-trip. Server enforces the same as the backstop.
+  if (rangeError !== null) return { title: rangeError }
+  // R3 client-side preview: prevent submission of a range that overlaps or
+  // duplicates a sibling override on the same attribute. CRS-side P-Overlap
+  // will catch the unknown-parse cases this skips.
+  if (conflictMessage !== null) return { title: conflictMessage }
+  return null
+}
+
+// ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
 
@@ -167,14 +372,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
   const attrLabel = (a: { path: string; label: string }) => labelFor(fieldConfigData, a.path, a.label)
 
   // Determine initial type and attribute from existing override in edit mode
-  const initialType: 'scalar' | 'marker' = (() => {
-    if (mode === 'edit' && override) {
-      if (MARKER_BY_PATH.has(override.overriddenAttribute)) return 'marker'
-      return 'scalar'
-    }
-    if (presetAttribute) return MARKER_BY_PATH.has(presetAttribute) ? 'marker' : 'scalar'
-    return 'scalar'
-  })()
+  const initialType = resolveOverrideType(mode, override, presetAttribute)
 
   // CRS drift surfaces: when an existing override row's attribute is
   // present in NEITHER catalogue (because CRS added a new scalar path the
@@ -208,116 +406,38 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
   const [attribute, setAttribute] = useState(initialAttribute)
   const [versionRange, setVersionRange] = useState(initialVersionRange)
 
-  // Scalar value state
-  const [scalarStringValue, setScalarStringValue] = useState<string>(() => {
-    if (mode === 'edit' && override && override.value !== null && override.value !== undefined) {
-      return typeof override.value === 'string' ? override.value : String(override.value)
-    }
-    return ''
-  })
-  const [scalarBoolValue, setScalarBoolValue] = useState<boolean>(() => {
-    if (mode === 'edit' && override && typeof override.value === 'boolean') return override.value
-    return false
-  })
-
-  // Marker child list states
-  const [vcsEntries, setVcsEntries] = useState<VcsState[]>(() => {
-    if (mode === 'edit' && override?.markerChildren?.vcsEntries) {
-      return override.markerChildren.vcsEntries.map(toVcsState)
-    }
-    return []
-  })
-  const [vcsBuildWorkingDirectory, setVcsBuildWorkingDirectory] = useState<string>(
-    () => (mode === 'edit' && override?.markerChildren?.buildWorkingDirectory) || '',
-  )
-  const [mavenArtifacts, setMavenArtifacts] = useState<MavenState[]>(() => {
-    if (mode === 'edit' && override?.markerChildren?.mavenArtifacts) {
-      return override.markerChildren.mavenArtifacts.map((a) => ({
-        groupPattern: a.groupPattern,
-        artifactPattern: a.artifactPattern,
-        extension: a.extension ?? '',
-        classifier: a.classifier ?? '',
-      }))
-    }
-    return []
-  })
-  const [fileUrlArtifacts, setFileUrlArtifacts] = useState<FileUrlState[]>(() => {
-    if (mode === 'edit' && override?.markerChildren?.fileUrlArtifacts) {
-      return override.markerChildren.fileUrlArtifacts.map((a) => ({
-        url: a.url,
-        artifactId: a.artifactId ?? '',
-        classifier: a.classifier ?? '',
-      }))
-    }
-    return []
-  })
-  const [dockerImages, setDockerImages] = useState<DockerState[]>(() => {
-    if (mode === 'edit' && override?.markerChildren?.dockerImages) {
-      return override.markerChildren.dockerImages.map((d) => ({
-        imageName: d.imageName,
-        flavor: d.flavor ?? '',
-      }))
-    }
-    return []
-  })
-  const [packages, setPackages] = useState<PackageState[]>(() => {
-    if (mode === 'edit' && override?.markerChildren?.packages) {
-      return override.markerChildren.packages.map((p) => ({
-        packageType: p.packageType,
-        packageName: p.packageName,
-      }))
-    }
-    return []
-  })
-  const [requiredToolsInput, setRequiredToolsInput] = useState<string>(() => {
-    if (mode === 'edit' && override?.markerChildren?.requiredTools) {
-      return (override.markerChildren.requiredTools as string[]).join(', ')
-    }
-    return ''
-  })
+  // Scalar value + marker child list state, seeded from the same projection
+  // resetState uses on reopen (computeResetValues) — one source of truth.
+  const initialReset = computeResetValues(mode, override)
+  const [scalarStringValue, setScalarStringValue] = useState<string>(initialReset.scalarStringValue)
+  const [scalarBoolValue, setScalarBoolValue] = useState<boolean>(initialReset.scalarBoolValue)
+  const [vcsEntries, setVcsEntries] = useState<VcsState[]>(initialReset.vcsEntries)
+  const [vcsBuildWorkingDirectory, setVcsBuildWorkingDirectory] = useState<string>(initialReset.vcsBuildWorkingDirectory)
+  const [mavenArtifacts, setMavenArtifacts] = useState<MavenState[]>(initialReset.mavenArtifacts)
+  const [fileUrlArtifacts, setFileUrlArtifacts] = useState<FileUrlState[]>(initialReset.fileUrlArtifacts)
+  const [dockerImages, setDockerImages] = useState<DockerState[]>(initialReset.dockerImages)
+  const [packages, setPackages] = useState<PackageState[]>(initialReset.packages)
+  const [requiredToolsInput, setRequiredToolsInput] = useState<string>(initialReset.requiredToolsInput)
 
   // ---------------------------------------------------------------------------
   // Reset state when dialog opens/closes or override changes
   // ---------------------------------------------------------------------------
 
   function resetState() {
-    const t: 'scalar' | 'marker' = (() => {
-      if (mode === 'edit' && override) {
-        if (MARKER_BY_PATH.has(override.overriddenAttribute)) return 'marker'
-        return 'scalar'
-      }
-      if (presetAttribute) return MARKER_BY_PATH.has(presetAttribute) ? 'marker' : 'scalar'
-      return 'scalar'
-    })()
-    setOverrideType(t)
+    setOverrideType(resolveOverrideType(mode, override, presetAttribute))
     setAttribute(mode === 'edit' && override ? override.overriddenAttribute : (presetAttribute ?? ''))
     setVersionRange(mode === 'edit' && override ? override.versionRange : '')
 
-    if (mode === 'edit' && override) {
-      setScalarStringValue(override.value !== null && override.value !== undefined
-        ? (typeof override.value === 'string' ? override.value : String(override.value))
-        : '')
-      setScalarBoolValue(typeof override.value === 'boolean' ? override.value : false)
-
-      const mc = override.markerChildren
-      setVcsEntries((mc?.vcsEntries ?? []).map(toVcsState))
-      setVcsBuildWorkingDirectory(mc?.buildWorkingDirectory ?? '')
-      setMavenArtifacts((mc?.mavenArtifacts ?? []).map((a) => ({ groupPattern: a.groupPattern, artifactPattern: a.artifactPattern, extension: a.extension ?? '', classifier: a.classifier ?? '' })))
-      setFileUrlArtifacts((mc?.fileUrlArtifacts ?? []).map((a) => ({ url: a.url, artifactId: a.artifactId ?? '', classifier: a.classifier ?? '' })))
-      setDockerImages((mc?.dockerImages ?? []).map((d) => ({ imageName: d.imageName, flavor: d.flavor ?? '' })))
-      setPackages((mc?.packages ?? []).map((p) => ({ packageType: p.packageType, packageName: p.packageName })))
-      setRequiredToolsInput((mc?.requiredTools as string[] | null | undefined)?.join(', ') ?? '')
-    } else {
-      setScalarStringValue('')
-      setScalarBoolValue(false)
-      setVcsEntries([])
-      setVcsBuildWorkingDirectory('')
-      setMavenArtifacts([])
-      setFileUrlArtifacts([])
-      setDockerImages([])
-      setPackages([])
-      setRequiredToolsInput('')
-    }
+    const reset = computeResetValues(mode, override)
+    setScalarStringValue(reset.scalarStringValue)
+    setScalarBoolValue(reset.scalarBoolValue)
+    setVcsEntries(reset.vcsEntries)
+    setVcsBuildWorkingDirectory(reset.vcsBuildWorkingDirectory)
+    setMavenArtifacts(reset.mavenArtifacts)
+    setFileUrlArtifacts(reset.fileUrlArtifacts)
+    setDockerImages(reset.dockerImages)
+    setPackages(reset.packages)
+    setRequiredToolsInput(reset.requiredToolsInput)
   }
 
   function handleOpenChange(nextOpen: boolean) {
@@ -374,167 +494,39 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
   function removePackage(i: number) { setPackages((p) => p.filter((_, idx) => idx !== i)) }
 
   // ---------------------------------------------------------------------------
-  // Wire body builders
-  // ---------------------------------------------------------------------------
-
-  function buildScalarValue(): unknown {
-    if (!selectedScalarAttr) return undefined
-    if (selectedScalarAttr.type === 'boolean') return scalarBoolValue
-    return scalarStringValue
-  }
-
-  function buildMarkerChildren(): MarkerChildrenPayload | null {
-    if (!selectedMarkerAttr) return null
-    const key = selectedMarkerAttr.childKey
-    // Each marker branch trims string fields and drops rows whose required
-    // fields are still blank — HTML `required` blocks an empty field but not a
-    // whitespace-only one, so it doesn't gate the wire body. Without this
-    // a newly-added empty row reaches the server as `"   "` and 400s. Same
-    // pattern that VcsTab + DistributionTab already use for the BASE-row
-    // paths — required-field rules below mirror CRS v4 wire contract.
-    if (key === 'vcsEntries') {
-      const entries: VcsEntryRequest[] = vcsEntries
-        .map((e) => ({
-          name: (e.name || '').trim(),
-          vcsPath: e.vcsPath.trim(),
-          branch: (e.branch || '').trim(),
-          tag: (e.tag || '').trim(),
-          hotfixBranch: (e.hotfixBranch || '').trim(),
-          repositoryType: (e.repositoryType || '').trim(),
-          sourcePath: (e.sourcePath || '').trim(),
-          checkoutDirectory: (e.checkoutDirectory || '').trim(),
-        }))
-        .filter((e) => e.vcsPath !== '')
-        .map((e) => ({
-          name: e.name || null,
-          vcsPath: e.vcsPath,
-          branch: e.branch || null,
-          tag: e.tag || null,
-          hotfixBranch: e.hotfixBranch || null,
-          repositoryType: e.repositoryType || null,
-          sourcePath: e.sourcePath || null,
-          checkoutDirectory: e.checkoutDirectory || null,
-        }))
-      // Blank is null: the payload replaces the row, and the registry reads null as none.
-      return { vcsEntries: entries, buildWorkingDirectory: vcsBuildWorkingDirectory.trim() || null }
-    }
-    if (key === 'mavenArtifacts') {
-      const arts: MavenArtifactRequest[] = mavenArtifacts
-        .map((a) => ({
-          groupPattern: a.groupPattern.trim(),
-          artifactPattern: a.artifactPattern.trim(),
-          extension: (a.extension || '').trim(),
-          classifier: (a.classifier || '').trim(),
-        }))
-        .filter((a) => a.groupPattern !== '' && a.artifactPattern !== '')
-        .map((a) => ({
-          groupPattern: a.groupPattern,
-          artifactPattern: a.artifactPattern,
-          extension: a.extension || null,
-          classifier: a.classifier || null,
-        }))
-      return { mavenArtifacts: arts }
-    }
-    if (key === 'fileUrlArtifacts') {
-      const arts: FileUrlArtifactRequest[] = fileUrlArtifacts
-        .map((a) => ({
-          url: a.url.trim(),
-          artifactId: (a.artifactId || '').trim(),
-          classifier: (a.classifier || '').trim(),
-        }))
-        .filter((a) => a.url !== '')
-        .map((a) => ({
-          url: a.url,
-          artifactId: a.artifactId || null,
-          classifier: a.classifier || null,
-        }))
-      return { fileUrlArtifacts: arts }
-    }
-    if (key === 'dockerImages') {
-      const imgs: DockerImageRequest[] = dockerImages
-        .map((d) => ({
-          imageName: d.imageName.trim(),
-          flavor: (d.flavor || '').trim(),
-        }))
-        .filter((d) => d.imageName !== '')
-        .map((d) => ({
-          imageName: d.imageName,
-          flavor: d.flavor || null,
-        }))
-      return { dockerImages: imgs }
-    }
-    if (key === 'packages') {
-      const pkgs: PackageRequest[] = packages
-        .map((p) => ({
-          packageType: p.packageType.trim(),
-          packageName: p.packageName.trim(),
-        }))
-        .filter((p) => p.packageType !== '' && p.packageName !== '')
-      return { packages: pkgs }
-    }
-    if (key === 'requiredTools') {
-      const tools = [...new Set(requiredToolsInput.split(',').map((t) => t.trim()).filter(Boolean))]
-      return { requiredTools: tools }
-    }
-    return null
-  }
-
-  // ---------------------------------------------------------------------------
   // Submit
   // ---------------------------------------------------------------------------
 
+  // Marker-child inputs bundled once for the buildMarkerChildren helper call(s) below.
+  const markerChildInputs: MarkerChildInputs = {
+    vcsEntries,
+    vcsBuildWorkingDirectory,
+    mavenArtifacts,
+    fileUrlArtifacts,
+    dockerImages,
+    packages,
+    requiredToolsInput,
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!attribute) {
-      toast({ title: 'Please select an attribute', variant: 'destructive' })
+    const invalid = validateOverrideSubmit({ attribute, overrideType, selectedScalarAttr, selectedMarkerAttr, rangeError, conflictMessage })
+    if (invalid) {
+      toast({ ...invalid, variant: 'destructive' })
       return
     }
-    // Guard against a stored attribute that no longer maps to any catalogue
-    // entry (e.g. server adds a new path the portal build doesn't know about).
-    // Without this, buildScalarValue / buildMarkerChildren return undefined /
-    // null and the wire body would be silently malformed.
-    if (overrideType === 'scalar' && !selectedScalarAttr) {
-      toast({ title: 'Unknown scalar attribute', description: attribute, variant: 'destructive' })
-      return
-    }
-    if (overrideType === 'marker' && !selectedMarkerAttr) {
-      toast({ title: 'Unknown marker attribute', description: attribute, variant: 'destructive' })
-      return
-    }
-    // ADR-018: field-override ranges may be bounded, open-upper (`[2.0,)`), or
-    // historical-left-unbounded; only the all-versions shapes denote the base
-    // default, and an inverted/empty interval (`[3076,3010]`) is rejected before
-    // the round-trip. Server enforces the same as the backstop.
-    if (rangeError !== null) {
-      toast({ title: rangeError, variant: 'destructive' })
-      return
-    }
-    // R3 client-side preview: prevent submission of a range that overlaps or
-    // duplicates a sibling override on the same attribute. CRS-side P-Overlap
-    // will catch the unknown-parse cases this skips.
-    if (conflictMessage !== null) {
-      toast({
-        title: conflictMessage,
-        variant: 'destructive',
-      })
-      return
-    }
+    const value = overrideType === 'scalar' ? buildScalarValue(selectedScalarAttr, scalarBoolValue, scalarStringValue) : null
+    const children = overrideType === 'marker' ? buildMarkerChildren(selectedMarkerAttr, markerChildInputs) : null
     if (mode === 'edit' && override) {
-      if (overrideType === 'scalar') {
-        queueUpdate(override.id, { versionRange, value: buildScalarValue(), markerChildren: null })
-      } else {
-        queueUpdate(override.id, { versionRange, value: null, markerChildren: buildMarkerChildren() })
-      }
+      queueUpdate(override.id, { versionRange, value, markerChildren: children })
       // Collapse a coalesced group: the row is presented as ONE override, so on
       // save it becomes one — the edited representative keeps the (possibly
       // narrowed) range and the former siblings are dropped. Narrowing the range
       // therefore shrinks the override's coverage exactly as narrowing a genuine
       // single override would; the backing rows are an implementation detail.
       collapseMemberIds?.forEach((id) => queueDelete(id))
-    } else if (overrideType === 'scalar') {
-      queueCreate({ overriddenAttribute: attribute, versionRange, value: buildScalarValue(), markerChildren: null })
     } else {
-      queueCreate({ overriddenAttribute: attribute, versionRange, value: null, markerChildren: buildMarkerChildren() })
+      queueCreate({ overriddenAttribute: attribute, versionRange, value, markerChildren: children })
     }
     onOpenChange(false)
   }
