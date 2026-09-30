@@ -379,6 +379,20 @@ describe('TeamCityPlacementPanel — Sync selected', () => {
     expect(screen.getByRole('button', { name: /sync selected/i })).toBeDisabled()
   })
 
+  it('disables Sync selected when the current Diff job is not COMPLETED (e.g. a later Diff failed)', () => {
+    // The report + selection can still show the previous COMPLETED Diff's
+    // rows while /diff/job now names a newer, FAILED run — Sync must not be
+    // postable against a diffId that has no result (Codex review finding).
+    mockUseDiffJob.mockReturnValue(
+      buildQuery({ ...COMPLETED_DIFF_JOB, id: 'diff-2', state: 'FAILED', errorMessage: 'TC unreachable' }) as unknown as ReturnType<
+        typeof usePlacementDiffJob
+      >,
+    )
+    renderPanel()
+    fireEvent.click(screen.getByRole('checkbox', { name: /select app-alpha/i }))
+    expect(screen.getByRole('button', { name: /sync selected/i })).toBeDisabled()
+  })
+
   it('confirm dialog shows the selected count and fires useRunPlacementSync with diffId + componentIds', async () => {
     const { base, mutateAsync } = buildMutation()
     mockUseRunSync.mockReturnValue(base as unknown as ReturnType<typeof useRunPlacementSync>)
