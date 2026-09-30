@@ -431,10 +431,11 @@ describe('TeamCityPlacementPanel — Sync selected', () => {
   it('lists the per-component outcome on COMPLETED', () => {
     mockUseSyncJob.mockReturnValue(buildQuery(COMPLETED_SYNC_JOB) as unknown as ReturnType<typeof usePlacementSyncJob>)
     renderPanel()
-    expect(screen.getByText('app-alpha')).toBeDefined()
-    expect(screen.getByText(/^applied$/i)).toBeDefined()
-    expect(screen.getByText('app-gamma')).toBeDefined()
-    expect(screen.getByText(/skipped: outside scope/i)).toBeDefined()
+    const results = within(screen.getByText(/^results \(2 components\)$/i).closest('details') as HTMLElement)
+    expect(results.getByText('app-alpha')).toBeDefined()
+    expect(results.getByText(/applied/i)).toBeDefined()
+    expect(results.getByText('app-gamma')).toBeDefined()
+    expect(results.getByText(/skipped: outside scope/i)).toBeDefined()
   })
 })
 

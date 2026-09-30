@@ -446,6 +446,20 @@ export function TeamCityPlacementPanel() {
             <StatCard label="Skipped" value={syncJobData.result.skipped} />
             <StatCard label="Failed" value={syncJobData.result.failed} />
           </div>
+          <details className="rounded-md border p-3 text-sm">
+            <summary className="cursor-pointer font-medium">
+              Results ({syncJobData.result.components.length} component
+              {syncJobData.result.components.length === 1 ? '' : 's'})
+            </summary>
+            <ul className="mt-2 space-y-1 text-xs">
+              {syncJobData.result.components.map((c) => (
+                <li key={c.componentId}>
+                  <span className="font-medium">{c.componentKey}</span>:{' '}
+                  {c.rows.map((r) => r.outcome).join(', ')}
+                </li>
+              ))}
+            </ul>
+          </details>
           <a
             href={`${API_BASE}/admin/teamcity-placement/sync/report.csv`}
             className="text-sm text-primary hover:underline"
