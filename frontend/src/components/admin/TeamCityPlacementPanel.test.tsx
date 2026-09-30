@@ -200,11 +200,22 @@ const COMPLETED_SYNC_JOB: TeamcityPlacementSyncJobResponse = {
   finishedAt: '2026-09-30T10:05:05Z',
   result: {
     triggeredBy: 'alice',
-    requested: 1,
+    requested: 2,
     applied: 1,
-    skipped: 0,
+    skipped: 1,
     failed: 0,
-    components: [{ componentId: 'comp-a', componentKey: 'app-alpha', rows: [] }],
+    components: [
+      {
+        componentId: 'comp-a',
+        componentKey: 'app-alpha',
+        rows: [{ configurationRowId: 'row-a', rowLabel: 'BASE', outcome: 'applied' }],
+      },
+      {
+        componentId: 'comp-c',
+        componentKey: 'app-gamma',
+        rows: [{ configurationRowId: 'row-c', rowLabel: 'vcs.settings', outcome: 'skipped: outside scope' }],
+      },
+    ],
     fieldChanges: [],
   },
 }
@@ -415,6 +426,15 @@ describe('TeamCityPlacementPanel — Sync selected', () => {
     expect(screen.getByText('Applied')).toBeDefined()
     const csvLink = screen.getByRole('link', { name: /sync report/i })
     expect(csvLink.getAttribute('href')).toMatch(/\/admin\/teamcity-placement\/sync\/report\.csv$/)
+  })
+
+  it('lists the per-component outcome on COMPLETED', () => {
+    mockUseSyncJob.mockReturnValue(buildQuery(COMPLETED_SYNC_JOB) as unknown as ReturnType<typeof usePlacementSyncJob>)
+    renderPanel()
+    expect(screen.getByText('app-alpha')).toBeDefined()
+    expect(screen.getByText(/^applied$/i)).toBeDefined()
+    expect(screen.getByText('app-gamma')).toBeDefined()
+    expect(screen.getByText(/skipped: outside scope/i)).toBeDefined()
   })
 })
 
