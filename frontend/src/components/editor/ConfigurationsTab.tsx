@@ -21,7 +21,7 @@ const MARKER_COLLECTION_MAP: Record<
   string,
   { key: keyof ComponentConfiguration; unit: string }
 > = {
-  'vcs.settings': { key: 'vcsEntries', unit: 'entries' },
+  'vcs.settings': { key: 'vcsEntries', unit: 'VCS roots' },
   'distribution.maven': { key: 'mavenArtifacts', unit: 'entries' },
   'distribution.fileUrl': { key: 'fileUrlArtifacts', unit: 'entries' },
   'distribution.docker': { key: 'dockerImages', unit: 'entries' },
@@ -36,7 +36,7 @@ function baseRowSummary(row: ComponentConfiguration): string {
   if (row.jira) aspects.push('jira')
 
   const collections: string[] = []
-  if (row.vcsEntries.length > 0) collections.push(`vcsEntries: ${row.vcsEntries.length}`)
+  if (row.vcsEntries.length > 0) collections.push(`VCS roots: ${row.vcsEntries.length}`)
   if (row.mavenArtifacts.length > 0) collections.push(`maven: ${row.mavenArtifacts.length}`)
   if (row.fileUrlArtifacts.length > 0) collections.push(`fileUrl: ${row.fileUrlArtifacts.length}`)
   if (row.dockerImages.length > 0) collections.push(`docker: ${row.dockerImages.length}`)
