@@ -1933,6 +1933,7 @@ export interface components {
             rows: components["schemas"]["PlacementRowSyncOutcome"][];
         };
         PlacementDiffResult: {
+            diffId?: string;
             /** Format: date-time */
             generatedAt: string;
             rows: components["schemas"]["PlacementRowDiff"][];
