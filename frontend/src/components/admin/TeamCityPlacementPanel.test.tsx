@@ -22,9 +22,11 @@ import type {
 import { TeamCityPlacementPanel } from './TeamCityPlacementPanel'
 
 // Hooks are mocked so this test focuses on panel behaviour — admin-mode gate,
-// confirm dialogs, RUNNING/COMPLETED/FAILED rendering, the result table's
-// filters/selection, and cross-kind disable. The hooks themselves are covered
-// by useTeamCityPlacement.test.ts.
+// confirm dialogs, RUNNING/COMPLETED/FAILED rendering, the grouped result
+// table's summary-bucket filters/selection, and cross-kind disable. The
+// hooks themselves are covered by useTeamCityPlacement.test.ts; the pure
+// grouping/label logic is covered by placementGrouping.test.ts and
+// placementStatus.test.ts.
 
 vi.mock('@/hooks/useTeamCityPlacement', () => ({
   useRunPlacementDiff: vi.fn(),
@@ -130,6 +132,9 @@ const FAILED_DIFF_JOB: TeamcityPlacementDiffJobResponse = {
   errorMessage: 'TC unreachable',
 }
 
+// Four components: app-alpha (RESOLVED/ready), app-beta (CONFLICT/needs a
+// look), app-gamma (a per-range OUTSIDE_SCOPE marker row only — no Base row
+// at all), app-delta (RESOLVED/ready).
 const REPORT: PlacementDiffResult = {
   diffId: 'diff-1',
   generatedAt: '2026-09-30T10:00:42Z',
@@ -283,7 +288,7 @@ describe('TeamCityPlacementPanel — admin-mode gate', () => {
 })
 
 describe('TeamCityPlacementPanel — Run Diff confirm + mutation', () => {
-  it('opens confirm dialog and fires useRunPlacementDiff on confirm', async () => {
+  it('opens confirm dialog (renamed for the redesign) and fires useRunPlacementDiff on confirm', async () => {
     const { base, mutateAsync } = buildMutation()
     mockUseRunDiff.mockReturnValue(base as unknown as ReturnType<typeof useRunPlacementDiff>)
     useAdminMode.setState({ enabled: true })
@@ -291,6 +296,7 @@ describe('TeamCityPlacementPanel — Run Diff confirm + mutation', () => {
     renderPanel()
     fireEvent.click(screen.getByRole('button', { name: /run diff/i }))
     const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByRole('heading', { name: /run the checkout paths diff/i })).toBeDefined()
     fireEvent.click(within(dialog).getByRole('button', { name: /confirm/i }))
 
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce())
@@ -312,10 +318,28 @@ describe('TeamCityPlacementPanel — Run Diff confirm + mutation', () => {
   })
 })
 
-describe('TeamCityPlacementPanel — report links', () => {
-  it('shows Open report (HTML) and Download CSV once a Diff has completed', () => {
+describe('TeamCityPlacementPanel — pre-Diff empty state', () => {
+  it('explains what the card does before any Diff has run', () => {
+    renderPanel()
+    expect(
+      screen.getByText(/Where TeamCity checks out each VCS root.*and where it builds/i),
+    ).toBeDefined()
+  })
+
+  it('does not show the summary bar (report links, bucket counts) before any Diff has completed', () => {
+    renderPanel()
+    expect(screen.queryByRole('link', { name: /open report/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^ready/i })).toBeNull()
+  })
+})
+
+describe('TeamCityPlacementPanel — summary bar', () => {
+  beforeEach(() => {
     mockUseDiffJob.mockReturnValue(buildQuery(COMPLETED_DIFF_JOB) as unknown as ReturnType<typeof usePlacementDiffJob>)
     mockUseReport.mockReturnValue(buildQuery(REPORT) as unknown as ReturnType<typeof usePlacementDiffReport>)
+  })
+
+  it('shows Open report (HTML) and Download CSV once a Diff has completed', () => {
     renderPanel()
     const htmlLink = screen.getByRole('link', { name: /open report \(html\)/i })
     const csvLink = screen.getByRole('link', { name: /download csv/i })
@@ -323,9 +347,56 @@ describe('TeamCityPlacementPanel — report links', () => {
     expect(csvLink.getAttribute('href')).toMatch(/\/admin\/teamcity-placement\/diff\/report\.csv$/)
   })
 
-  it('does not show report links before any Diff has completed', () => {
+  it('shows "Report from <local time>"', () => {
     renderPanel()
-    expect(screen.queryByRole('link', { name: /open report/i })).toBeNull()
+    expect(screen.getByText(/^Report from /)).toBeDefined()
+  })
+
+  it('shows a clickable, aria-pressed count button per bucket', () => {
+    renderPanel()
+    const ready = screen.getByRole('button', { name: /^Ready \(2\)$/ })
+    const needsLook = screen.getByRole('button', { name: /^Needs a look \(1\)$/ })
+    expect(ready.getAttribute('aria-pressed')).toBe('false')
+    expect(needsLook.getAttribute('aria-pressed')).toBe('false')
+
+    fireEvent.click(needsLook)
+    expect(needsLook.getAttribute('aria-pressed')).toBe('true')
+    // Only the CONFLICT (needs-a-look) component shows once filtered to that bucket.
+    expect(screen.getByText('app-beta')).toBeDefined()
+    expect(screen.queryByText('app-alpha')).toBeNull()
+
+    // Clicking the same bucket again clears the filter back to the default view.
+    fireEvent.click(needsLook)
+    expect(needsLook.getAttribute('aria-pressed')).toBe('false')
+    expect(screen.getByText('app-alpha')).toBeDefined()
+  })
+
+  it('defaults to Ready + Needs a look; "Show all (N)" reveals the rest', () => {
+    renderPanel()
+    expect(screen.getByText('app-alpha')).toBeDefined()
+    expect(screen.getByText('app-beta')).toBeDefined()
+    // app-gamma is OUTSIDE_SCOPE ("Nothing to do") — hidden by default.
+    expect(screen.queryByText('app-gamma')).toBeNull()
+
+    const showAll = screen.getByRole('button', { name: /^Show all \(4\)$/ })
+    expect(showAll.getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(showAll)
+    expect(showAll.getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByText('app-gamma')).toBeDefined()
+  })
+})
+
+describe('TeamCityPlacementPanel — zero state', () => {
+  it('shows "All N components in sync — nothing to do" when the default view has no attention rows', () => {
+    const onlyNothingToDo: PlacementDiffResult = {
+      ...REPORT,
+      rows: [REPORT.rows[2]], // app-gamma, OUTSIDE_SCOPE only
+    }
+    mockUseDiffJob.mockReturnValue(buildQuery(COMPLETED_DIFF_JOB) as unknown as ReturnType<typeof usePlacementDiffJob>)
+    mockUseReport.mockReturnValue(buildQuery(onlyNothingToDo) as unknown as ReturnType<typeof usePlacementDiffReport>)
+    renderPanel()
+    expect(screen.getByText(/All 1 components in sync — nothing to do/i)).toBeDefined()
+    expect(screen.getByRole('button', { name: /^Show all \(1\)$/ })).toBeDefined()
   })
 })
 
@@ -335,62 +406,80 @@ describe('TeamCityPlacementPanel — result table', () => {
     mockUseReport.mockReturnValue(buildQuery(REPORT) as unknown as ReturnType<typeof usePlacementDiffReport>)
   })
 
-  it('renders one row per report row with its status', () => {
+  it('groups rows under one header per component, sorted by component key', () => {
     renderPanel()
-    const table = within(screen.getByRole('table'))
-    expect(table.getByText('app-alpha')).toBeDefined()
-    expect(table.getByText('app-beta')).toBeDefined()
-    expect(table.getAllByText('RESOLVED').length).toBeGreaterThan(0)
-    expect(table.getByText('CONFLICT')).toBeDefined()
+    const headings = screen.getAllByRole('checkbox').map((el) => el.getAttribute('aria-label'))
+    // Default view hides app-gamma (Nothing to do); alpha/beta/delta in key order.
+    expect(headings.filter((l) => l?.startsWith('Select '))).toEqual([
+      'Select app-alpha',
+      'Select app-beta',
+      'Select app-delta',
+    ])
   })
 
-  it('enables the row checkbox only for the RESOLVED + BASE row', () => {
+  it('renders the human status label with the raw code as a tooltip/title', () => {
     renderPanel()
-    expect(screen.getByRole('checkbox', { name: /select app-alpha/i })).not.toBeDisabled()
-    expect(screen.getByRole('checkbox', { name: /select app-beta/i })).toBeDisabled()
+    const badge = screen.getByText('Ready to sync')
+    expect(badge.getAttribute('title')).toBe('RESOLVED')
+    expect(screen.getByText('TeamCity configurations disagree').getAttribute('title')).toBe('CONFLICT')
   })
 
-  it('renders an OUTSIDE_SCOPE marker row (archived component / per-range row) with a disabled checkbox', () => {
+  it('renders a single "Proposed change" column with full field names, no CD/SP/BWD abbreviations', () => {
     renderPanel()
-    const table = within(screen.getByRole('table'))
-    expect(table.getByText('app-gamma')).toBeDefined()
-    expect(table.getByText('OUTSIDE_SCOPE')).toBeDefined()
-    expect(screen.getByRole('checkbox', { name: /select app-gamma/i })).toBeDisabled()
-    // Also offered as a status filter option.
-    expect(within(screen.getByLabelText(/^status$/i)).getByRole('option', { name: 'OUTSIDE_SCOPE' })).toBeDefined()
+    expect(screen.getByText('Checkout Directory: (root) → app-alpha')).toBeDefined()
+    expect(screen.getByText('Build Working Directory: (root) → app-alpha')).toBeDefined()
+    expect(screen.getByText('Build Working Directory: (root) → app-delta')).toBeDefined()
+    expect(screen.queryByText(/^CD:/)).toBeNull()
+    expect(screen.queryByText(/^SP:/)).toBeNull()
+    expect(screen.queryByText(/^BWD:/)).toBeNull()
   })
 
-  it('filters rows by status', () => {
+  it('"Applies to" shows Base / Override for versions <range>; the literal "vcs.settings" never appears', () => {
+    mockUseDiffJob.mockReturnValue(buildQuery(COMPLETED_DIFF_JOB) as unknown as ReturnType<typeof usePlacementDiffJob>)
+    mockUseReport.mockReturnValue(buildQuery(REPORT) as unknown as ReturnType<typeof usePlacementDiffReport>)
     renderPanel()
-    fireEvent.change(screen.getByLabelText(/^status$/i), { target: { value: 'CONFLICT' } })
-    expect(screen.queryByText('app-alpha')).toBeNull()
-    expect(screen.getByText('app-beta')).toBeDefined()
+    fireEvent.click(screen.getByRole('button', { name: /^Show all \(4\)$/ }))
+    expect(screen.getAllByText('Base').length).toBeGreaterThan(0)
+    expect(screen.getByText('Override for versions [2.0,)')).toBeDefined()
+    expect(screen.queryByText(/vcs\.settings/)).toBeNull()
   })
 
-  it('filters rows by component text', () => {
+  it('disables the header checkbox for a component with no RESOLVED Base row', () => {
+    renderPanel()
+    expect(screen.getByRole('checkbox', { name: 'Select app-alpha' })).not.toBeDisabled()
+    expect(screen.getByRole('checkbox', { name: 'Select app-beta' })).toBeDisabled()
+  })
+
+  it('filters rows by component text (kept from the previous design)', () => {
     renderPanel()
     fireEvent.change(screen.getByLabelText(/component/i), { target: { value: 'alpha' } })
     expect(screen.getByText('app-alpha')).toBeDefined()
     expect(screen.queryByText('app-beta')).toBeNull()
   })
 
-  it('"Select all resolved" selects every RESOLVED + BASE row', () => {
+  it('"Select all visible ready (N)" selects every currently-visible ready component and respects filters', () => {
     renderPanel()
-    fireEvent.click(screen.getByRole('checkbox', { name: /select all resolved/i }))
-    expect(screen.getByRole('checkbox', { name: /select app-alpha/i })).toBeChecked()
-    expect(screen.getByRole('checkbox', { name: /select app-delta/i })).toBeChecked()
+    const selectAll = screen.getByRole('checkbox', { name: /select all visible ready \(2\)/i }) as HTMLInputElement
+    fireEvent.click(selectAll)
+    expect(screen.getByRole('checkbox', { name: 'Select app-alpha' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Select app-delta' })).toBeChecked()
+
+    fireEvent.click(selectAll)
+    // Narrow to "Needs a look" — no ready components are visible anymore.
+    fireEvent.click(screen.getByRole('button', { name: /^Needs a look \(1\)$/ }))
+    expect(screen.getByRole('checkbox', { name: /select all visible ready \(0\)/i })).toBeDisabled()
   })
 
-  it('marks "Select all resolved" indeterminate when only some resolved rows are selected', () => {
+  it('marks "Select all visible ready" indeterminate when only some visible ready rows are selected', () => {
     renderPanel()
-    const selectAll = screen.getByRole('checkbox', { name: /select all resolved/i }) as HTMLInputElement
+    const selectAll = screen.getByRole('checkbox', { name: /select all visible ready/i }) as HTMLInputElement
     expect(selectAll.indeterminate).toBe(false)
 
-    fireEvent.click(screen.getByRole('checkbox', { name: /select app-alpha/i }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select app-alpha' }))
     expect(selectAll.indeterminate).toBe(true)
     expect(selectAll).not.toBeChecked()
 
-    fireEvent.click(screen.getByRole('checkbox', { name: /select app-delta/i }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select app-delta' }))
     expect(selectAll.indeterminate).toBe(false)
     expect(selectAll).toBeChecked()
   })
@@ -409,40 +498,59 @@ describe('TeamCityPlacementPanel — Sync selected', () => {
   })
 
   it('disables Sync selected when the current Diff job is not COMPLETED (e.g. a later Diff failed)', () => {
-    // The report + selection can still show the previous COMPLETED Diff's
-    // rows while /diff/job now names a newer, FAILED run — Sync must not be
-    // postable against a diffId that has no result (Codex review finding).
     mockUseDiffJob.mockReturnValue(
       buildQuery({ ...COMPLETED_DIFF_JOB, id: 'diff-2', state: 'FAILED', errorMessage: 'TC unreachable' }) as unknown as ReturnType<
         typeof usePlacementDiffJob
       >,
     )
     renderPanel()
-    fireEvent.click(screen.getByRole('checkbox', { name: /select app-alpha/i }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select app-alpha' }))
     expect(screen.getByRole('button', { name: /sync selected/i })).toBeDisabled()
   })
 
-  it('confirm dialog shows the selected count and fires useRunPlacementSync with diffId + componentIds', async () => {
+  it('confirm dialog lists the selected component keys, the field count, and the base-configuration note', async () => {
     const { base, mutateAsync } = buildMutation()
     mockUseRunSync.mockReturnValue(base as unknown as ReturnType<typeof useRunPlacementSync>)
 
     renderPanel()
-    fireEvent.click(screen.getByRole('checkbox', { name: /select app-alpha/i }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select app-alpha' }))
     fireEvent.click(screen.getByRole('button', { name: /sync selected/i }))
 
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByRole('heading', { name: /sync 1 component\?/i })).toBeDefined()
-    fireEvent.click(within(dialog).getByRole('button', { name: /confirm/i }))
+    expect(within(dialog).getByText('app-alpha')).toBeDefined()
+    // app-alpha's Base row has 2 changed fields (Checkout Directory + Build Working Directory).
+    expect(within(dialog).getByText(/2 fields will be written/i)).toBeDefined()
+    expect(
+      within(dialog).getByText(/Only base configurations are written\. A before\/after CSV is kept for rollback\./i),
+    ).toBeDefined()
 
+    fireEvent.click(within(dialog).getByRole('button', { name: /confirm/i }))
     await waitFor(() =>
       expect(mutateAsync).toHaveBeenCalledWith({ diffId: 'diff-1', componentIds: ['comp-a'] }),
     )
   })
 
+  it('lists the first 10 selected component keys then "and N more"', async () => {
+    const manyRows = Array.from({ length: 12 }, (_, i) => ({
+      ...REPORT.rows[0],
+      componentId: `comp-${i}`,
+      componentKey: `app-${String(i).padStart(2, '0')}`,
+      configurationRowId: `row-${i}`,
+    }))
+    mockUseReport.mockReturnValue(
+      buildQuery({ ...REPORT, rows: manyRows }) as unknown as ReturnType<typeof usePlacementDiffReport>,
+    )
+    renderPanel()
+    fireEvent.click(screen.getByRole('button', { name: /^Show all \(12\)$/ }))
+    fireEvent.click(screen.getByRole('checkbox', { name: /select all visible ready/i }))
+    fireEvent.click(screen.getByRole('button', { name: /sync selected/i }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(/and 2 more/i)).toBeDefined()
+  })
+
   it('sends the diffId of the report on screen, not of a newer job whose report has not loaded yet', async () => {
-    // A newer Diff already COMPLETED on /diff/job while the table still shows
-    // diff-1's rows: the selection was made from diff-1, so Sync must name it
-    // (CRS then refuses it as replaced) instead of applying diff-2 unseen.
     mockUseDiffJob.mockReturnValue(
       buildQuery({ ...COMPLETED_DIFF_JOB, id: 'diff-2' }) as unknown as ReturnType<typeof usePlacementDiffJob>,
     )
@@ -450,7 +558,7 @@ describe('TeamCityPlacementPanel — Sync selected', () => {
     mockUseRunSync.mockReturnValue(base as unknown as ReturnType<typeof useRunPlacementSync>)
 
     renderPanel()
-    fireEvent.click(screen.getByRole('checkbox', { name: /select app-alpha/i }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select app-alpha' }))
     fireEvent.click(screen.getByRole('button', { name: /sync selected/i }))
     fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: /confirm/i }))
 
@@ -474,20 +582,20 @@ describe('TeamCityPlacementPanel — Sync selected', () => {
     } as unknown as ReturnType<typeof useRunPlacementSync>)
 
     renderPanel()
-    fireEvent.click(screen.getByRole('checkbox', { name: /select app-alpha/i }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select app-alpha' }))
     fireEvent.click(screen.getByRole('button', { name: /sync selected/i }))
     const dialog = await screen.findByRole('dialog')
     fireEvent.click(within(dialog).getByRole('button', { name: /confirm/i }))
 
     await waitFor(() => expect(screen.getByText(/diff was replaced/i)).toBeDefined())
-    expect(screen.getByRole('checkbox', { name: /select app-alpha/i })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Select app-alpha' })).not.toBeChecked()
   })
 
-  it('renders applied/skipped/failed + a link to the sync CSV report on COMPLETED', () => {
+  it('renders applied/skipped/failed + a "Download rollback trace (CSV)" link on COMPLETED', () => {
     mockUseSyncJob.mockReturnValue(buildQuery(COMPLETED_SYNC_JOB) as unknown as ReturnType<typeof usePlacementSyncJob>)
     renderPanel()
     expect(screen.getByText('Applied')).toBeDefined()
-    const csvLink = screen.getByRole('link', { name: /sync report/i })
+    const csvLink = screen.getByRole('link', { name: /download rollback trace \(csv\)/i })
     expect(csvLink.getAttribute('href')).toMatch(/\/admin\/teamcity-placement\/sync\/report\.csv$/)
   })
 
