@@ -131,6 +131,7 @@ const FAILED_DIFF_JOB: TeamcityPlacementDiffJobResponse = {
 }
 
 const REPORT: PlacementDiffResult = {
+  diffId: 'diff-1',
   generatedAt: '2026-09-30T10:00:42Z',
   rows: [
     {
@@ -432,6 +433,26 @@ describe('TeamCityPlacementPanel — Sync selected', () => {
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByRole('heading', { name: /sync 1 component\?/i })).toBeDefined()
     fireEvent.click(within(dialog).getByRole('button', { name: /confirm/i }))
+
+    await waitFor(() =>
+      expect(mutateAsync).toHaveBeenCalledWith({ diffId: 'diff-1', componentIds: ['comp-a'] }),
+    )
+  })
+
+  it('sends the diffId of the report on screen, not of a newer job whose report has not loaded yet', async () => {
+    // A newer Diff already COMPLETED on /diff/job while the table still shows
+    // diff-1's rows: the selection was made from diff-1, so Sync must name it
+    // (CRS then refuses it as replaced) instead of applying diff-2 unseen.
+    mockUseDiffJob.mockReturnValue(
+      buildQuery({ ...COMPLETED_DIFF_JOB, id: 'diff-2' }) as unknown as ReturnType<typeof usePlacementDiffJob>,
+    )
+    const { base, mutateAsync } = buildMutation()
+    mockUseRunSync.mockReturnValue(base as unknown as ReturnType<typeof useRunPlacementSync>)
+
+    renderPanel()
+    fireEvent.click(screen.getByRole('checkbox', { name: /select app-alpha/i }))
+    fireEvent.click(screen.getByRole('button', { name: /sync selected/i }))
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: /confirm/i }))
 
     await waitFor(() =>
       expect(mutateAsync).toHaveBeenCalledWith({ diffId: 'diff-1', componentIds: ['comp-a'] }),
