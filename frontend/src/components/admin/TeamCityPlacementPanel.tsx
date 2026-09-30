@@ -243,7 +243,11 @@ export function TeamCityPlacementPanel() {
     startSync.isPending ||
     otherKindRunning ||
     diffRunning ||
-    selected.size === 0
+    selected.size === 0 ||
+    // The report + selection can still show a previous COMPLETED Diff's rows
+    // while /diff/job now names a newer run — only a COMPLETED job has a
+    // result CRS's own 409 guard will accept a Sync against (review finding).
+    diffJobData?.state !== 'COMPLETED'
 
   const runningOtherLabel = componentsRunning
     ? 'Components migration'
