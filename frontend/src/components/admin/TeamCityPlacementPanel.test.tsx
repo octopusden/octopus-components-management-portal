@@ -181,6 +181,19 @@ const REPORT: PlacementDiffResult = {
       sourceBuildTypeIds: [],
       notes: ['marker row — report-only'],
     },
+    {
+      componentId: 'comp-d',
+      componentKey: 'app-delta',
+      configurationRowId: 'row-d',
+      versionRange: '[1.0,)',
+      rowLabel: 'BASE',
+      status: 'RESOLVED',
+      entries: [],
+      currentBuildWorkingDirectory: undefined,
+      derivedBuildWorkingDirectory: 'app-delta',
+      sourceBuildTypeIds: ['Build_App_Delta'],
+      notes: [],
+    },
   ],
 }
 
@@ -326,7 +339,7 @@ describe('TeamCityPlacementPanel — result table', () => {
     const table = within(screen.getByRole('table'))
     expect(table.getByText('app-alpha')).toBeDefined()
     expect(table.getByText('app-beta')).toBeDefined()
-    expect(table.getByText('RESOLVED')).toBeDefined()
+    expect(table.getAllByText('RESOLVED').length).toBeGreaterThan(0)
     expect(table.getByText('CONFLICT')).toBeDefined()
   })
 
@@ -364,6 +377,21 @@ describe('TeamCityPlacementPanel — result table', () => {
     renderPanel()
     fireEvent.click(screen.getByRole('checkbox', { name: /select all resolved/i }))
     expect(screen.getByRole('checkbox', { name: /select app-alpha/i })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: /select app-delta/i })).toBeChecked()
+  })
+
+  it('marks "Select all resolved" indeterminate when only some resolved rows are selected', () => {
+    renderPanel()
+    const selectAll = screen.getByRole('checkbox', { name: /select all resolved/i }) as HTMLInputElement
+    expect(selectAll.indeterminate).toBe(false)
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /select app-alpha/i }))
+    expect(selectAll.indeterminate).toBe(true)
+    expect(selectAll).not.toBeChecked()
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /select app-delta/i }))
+    expect(selectAll.indeterminate).toBe(false)
+    expect(selectAll).toBeChecked()
   })
 })
 
