@@ -56,20 +56,28 @@ export function parseSameKindAttach<T>(err: ApiError): T | null {
 /**
  * True when a `POST /admin/teamcity-placement/sync` 409 means "the diffId no
  * longer matches the latest Diff" (`TeamcityPlacementControllerV4.startSync`'s
- * own guard, thrown as a plain `ResponseStatusException` — CRS's default
- * error body: `{timestamp, status, error, message, path}`, no `kind` field).
- * That shape is neither a same-kind attach (`parseSameKindAttach` already
- * returns null for it, since it carries no `id`/`state`) nor a cross-kind
- * `MigrationConflictResponse` (`kind: 'conflict'`) — so the panel uses this
- * check to tell "Diff was replaced, re-run it" apart from a genuine cross-kind
- * conflict, which should render the standard destructive banner instead.
+ * own guard, thrown as a plain `ResponseStatusException("diff replaced,
+ * re-run Diff")` — CRS's default error body: `{timestamp, status, error,
+ * message, path}`, no `kind` field). That shape is neither a same-kind attach
+ * (`parseSameKindAttach` already returns null for it, since it carries no
+ * `id`/`state`) nor a cross-kind `MigrationConflictResponse`
+ * (`kind: 'conflict'`) — so the panel uses this check to tell "Diff was
+ * replaced, re-run it" apart from a genuine cross-kind conflict, which should
+ * render the standard destructive banner instead.
+ *
+ * Checks the message too, not just the absence of `kind` (review finding):
+ * a kind-less 409 is currently unique to this one guard, but matching on
+ * shape alone would silently swallow any future plain-409 CRS ever adds to
+ * this endpoint under the same "diff was replaced" banner.
  */
 export function isDiffReplacedConflict(err: unknown): boolean {
   if (!(err instanceof ApiError) || err.status !== 409) return false
   try {
     const parsed = JSON.parse(err.rawBody) as unknown
     if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return false
-    return !('kind' in (parsed as Record<string, unknown>))
+    const obj = parsed as Record<string, unknown>
+    if ('kind' in obj) return false
+    return typeof obj['message'] === 'string' && obj['message'].toLowerCase().includes('diff replaced')
   } catch {
     return false
   }
