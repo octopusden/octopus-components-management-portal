@@ -168,6 +168,19 @@ const REPORT: PlacementDiffResult = {
       sourceBuildTypeIds: ['Build_App_Beta_1', 'Build_App_Beta_2'],
       notes: ['two compile configurations disagree'],
     },
+    {
+      componentId: 'comp-c',
+      componentKey: 'app-gamma',
+      configurationRowId: 'row-c',
+      versionRange: '[2.0,)',
+      rowLabel: 'vcs.settings',
+      status: 'OUTSIDE_SCOPE',
+      entries: [],
+      currentBuildWorkingDirectory: undefined,
+      derivedBuildWorkingDirectory: undefined,
+      sourceBuildTypeIds: [],
+      notes: ['marker row — report-only'],
+    },
   ],
 }
 
@@ -310,6 +323,16 @@ describe('TeamCityPlacementPanel — result table', () => {
     renderPanel()
     expect(screen.getByRole('checkbox', { name: /select app-alpha/i })).not.toBeDisabled()
     expect(screen.getByRole('checkbox', { name: /select app-beta/i })).toBeDisabled()
+  })
+
+  it('renders an OUTSIDE_SCOPE marker row (archived component / per-range row) with a disabled checkbox', () => {
+    renderPanel()
+    const table = within(screen.getByRole('table'))
+    expect(table.getByText('app-gamma')).toBeDefined()
+    expect(table.getByText('OUTSIDE_SCOPE')).toBeDefined()
+    expect(screen.getByRole('checkbox', { name: /select app-gamma/i })).toBeDisabled()
+    // Also offered as a status filter option.
+    expect(within(screen.getByLabelText(/^status$/i)).getByRole('option', { name: 'OUTSIDE_SCOPE' })).toBeDefined()
   })
 
   it('filters rows by status', () => {

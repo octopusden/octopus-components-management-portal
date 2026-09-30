@@ -44,6 +44,7 @@ const STATUS_OPTIONS: PlacementDiffRowStatus[] = [
   'UNEXPRESSIBLE',
   'NO_CHAIN',
   'OUTSIDE_TEMPLATES',
+  'OUTSIDE_SCOPE',
   'COMPILE_PAUSED',
   'TC_ERROR',
 ]
