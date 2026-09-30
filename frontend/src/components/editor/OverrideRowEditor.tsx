@@ -297,6 +297,24 @@ function computeResetValues(mode: 'create' | 'edit', override: FieldOverride | u
   }
 }
 
+// Single source of truth for the range field's validity + message: bad syntax,
+// then all-versions (= base default), then an inverted/empty interval.
+function computeRangeError(versionRange: string): string | null {
+  if (!isValidVersionRange(versionRange)) return 'Invalid version range syntax'
+  if (!isAllowedOverrideRange(versionRange)) return 'All-versions range is the base default — use a bounded or open-upper sub-range'
+  if (isEmptyVersionRange(versionRange)) return 'Empty range — the lower bound must be below the upper bound'
+  return null
+}
+
+// The conflict-preview toast text for an overlap found by the walk in the
+// component (kept there — it needs the live effectiveOverrides list).
+function describeOverlapConflict(overlapConflict: { range: string; kind: 'partial' | 'contains' | 'equal' } | null): string | null {
+  if (overlapConflict === null) return null
+  return overlapConflict.kind === 'equal'
+    ? `Semantically equal to existing override ${overlapConflict.range}`
+    : `Overlaps with existing override ${overlapConflict.range}`
+}
+
 // Submit guard chain: attribute picked, attribute still in a known catalogue,
 // range syntactically/semantically valid, no overlap with a sibling override.
 // Returns the toast to show, or null when the submit may proceed.
@@ -326,6 +344,119 @@ function validateOverrideSubmit(args: {
   // will catch the unknown-parse cases this skips.
   if (conflictMessage !== null) return { title: conflictMessage }
   return null
+}
+
+// A locked-in attribute (edit mode, or a preset from the Distribution tab)
+// reads read-only; otherwise a Select over the catalogue for the current type.
+// Extracted so its branching is scored on its own (SonarCloud S3776).
+function AttributeSelector({
+  mode,
+  presetAttribute,
+  overrideType,
+  attribute,
+  setAttribute,
+  attrLabel,
+}: {
+  mode: 'create' | 'edit'
+  presetAttribute: string | undefined
+  overrideType: 'scalar' | 'marker'
+  attribute: string
+  setAttribute: (v: string) => void
+  attrLabel: (a: { path: string; label: string }) => string
+}) {
+  if (mode === 'edit' || presetAttribute) {
+    return (
+      <p className="text-sm font-mono text-muted-foreground px-3 py-2 rounded-md border bg-muted">
+        {attribute}
+      </p>
+    )
+  }
+  if (overrideType === 'scalar') {
+    return (
+      <Select value={attribute} onValueChange={setAttribute}>
+        <SelectTrigger id="attribute">
+          <SelectValue placeholder="Select attribute..." />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            <SelectLabel>Build</SelectLabel>
+            {SCALAR_ATTRS.filter((a) => a.path.startsWith('build.')).map((a) => (
+              <SelectItem key={a.path} value={a.path}>{attrLabel(a)}</SelectItem>
+            ))}
+          </SelectGroup>
+          <SelectGroup>
+            <SelectLabel>Escrow</SelectLabel>
+            {SCALAR_ATTRS.filter((a) => a.path.startsWith('escrow.')).map((a) => (
+              <SelectItem key={a.path} value={a.path}>{attrLabel(a)}</SelectItem>
+            ))}
+          </SelectGroup>
+          <SelectGroup>
+            <SelectLabel>Jira</SelectLabel>
+            {SCALAR_ATTRS.filter((a) => a.path.startsWith('jira.')).map((a) => (
+              <SelectItem key={a.path} value={a.path}>{attrLabel(a)}</SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    )
+  }
+  return (
+    <Select value={attribute} onValueChange={setAttribute}>
+      <SelectTrigger id="attribute">
+        <SelectValue placeholder="Select marker..." />
+      </SelectTrigger>
+      <SelectContent>
+        {MARKER_ATTRS.map((a) => (
+          <SelectItem key={a.path} value={a.path}>{attrLabel(a)}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
+
+// The scalar Value control: a Switch for a boolean attribute, else a text
+// Input. Extracted alongside AttributeSelector for the same reason.
+function ScalarValueEditor({
+  isBoolean,
+  scalarBoolValue,
+  setScalarBoolValue,
+  scalarStringValue,
+  setScalarStringValue,
+  selectedScalarAttr,
+  attribute,
+  attrLabel,
+}: {
+  isBoolean: boolean
+  scalarBoolValue: boolean
+  setScalarBoolValue: (v: boolean) => void
+  scalarStringValue: string
+  setScalarStringValue: (v: string) => void
+  selectedScalarAttr: ScalarAttr | undefined
+  attribute: string
+  attrLabel: (a: { path: string; label: string }) => string
+}) {
+  if (isBoolean) {
+    return (
+      <div className="flex items-center gap-3">
+        <Switch
+          id="scalar-bool"
+          checked={scalarBoolValue}
+          onCheckedChange={setScalarBoolValue}
+        />
+        <Label htmlFor="scalar-bool" className="cursor-pointer text-sm">
+          {scalarBoolValue ? 'true' : 'false'}
+        </Label>
+      </div>
+    )
+  }
+  return (
+    <Input
+      id="scalar-string"
+      value={scalarStringValue}
+      onChange={(e) => setScalarStringValue(e.target.value)}
+      placeholder={`Value for ${selectedScalarAttr ? attrLabel(selectedScalarAttr) : attribute}`}
+    />
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -531,18 +662,9 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
     onOpenChange(false)
   }
 
-  // Single source of truth for the range field's validity + message: bad syntax,
-  // then all-versions (= base default), then an inverted/empty interval. Empty
-  // input reads as invalid (blocks submit / disables the button) but the inline
-  // message is suppressed until the user types (see the render guard).
-  const rangeError: string | null =
-    !isValidVersionRange(versionRange)
-      ? 'Invalid version range syntax'
-      : !isAllowedOverrideRange(versionRange)
-        ? 'All-versions range is the base default — use a bounded or open-upper sub-range'
-        : isEmptyVersionRange(versionRange)
-          ? 'Empty range — the lower bound must be below the upper bound'
-          : null
+  // Empty input reads as invalid (blocks submit / disables the button) but the
+  // inline message is suppressed until the user types (see the render guard).
+  const rangeError = computeRangeError(versionRange)
   const versionRangeInvalid = rangeError !== null
   // Walk existing overrides on the same attribute for client-side conflict
   // preview. Partial overlap, strict containment, and semantic-equal duplicates
@@ -566,11 +688,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
     }
     return null
   })()
-  const conflictMessage = overlapConflict === null
-    ? null
-    : overlapConflict.kind === 'equal'
-      ? `Semantically equal to existing override ${overlapConflict.range}`
-      : `Overlaps with existing override ${overlapConflict.range}`
+  const conflictMessage = describeOverlapConflict(overlapConflict)
   const versionRangeBlocks = versionRangeInvalid || overlapConflict !== null
 
   // ---------------------------------------------------------------------------
@@ -609,48 +727,14 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
           {/* ── Attribute selector ── */}
           <div className="space-y-1.5">
             <Label htmlFor="attribute">Attribute</Label>
-            {mode === 'edit' || presetAttribute ? (
-              <p className="text-sm font-mono text-muted-foreground px-3 py-2 rounded-md border bg-muted">
-                {attribute}
-              </p>
-            ) : overrideType === 'scalar' ? (
-              <Select value={attribute} onValueChange={setAttribute}>
-                <SelectTrigger id="attribute">
-                  <SelectValue placeholder="Select attribute..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectLabel>Build</SelectLabel>
-                    {SCALAR_ATTRS.filter((a) => a.path.startsWith('build.')).map((a) => (
-                      <SelectItem key={a.path} value={a.path}>{attrLabel(a)}</SelectItem>
-                    ))}
-                  </SelectGroup>
-                  <SelectGroup>
-                    <SelectLabel>Escrow</SelectLabel>
-                    {SCALAR_ATTRS.filter((a) => a.path.startsWith('escrow.')).map((a) => (
-                      <SelectItem key={a.path} value={a.path}>{attrLabel(a)}</SelectItem>
-                    ))}
-                  </SelectGroup>
-                  <SelectGroup>
-                    <SelectLabel>Jira</SelectLabel>
-                    {SCALAR_ATTRS.filter((a) => a.path.startsWith('jira.')).map((a) => (
-                      <SelectItem key={a.path} value={a.path}>{attrLabel(a)}</SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            ) : (
-              <Select value={attribute} onValueChange={setAttribute}>
-                <SelectTrigger id="attribute">
-                  <SelectValue placeholder="Select marker..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {MARKER_ATTRS.map((a) => (
-                    <SelectItem key={a.path} value={a.path}>{attrLabel(a)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            <AttributeSelector
+              mode={mode}
+              presetAttribute={presetAttribute}
+              overrideType={overrideType}
+              attribute={attribute}
+              setAttribute={setAttribute}
+              attrLabel={attrLabel}
+            />
           </div>
 
           {/* ── Version Range ── */}
@@ -682,25 +766,16 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
           {overrideType === 'scalar' && attribute && (
             <div className="space-y-1.5">
               <Label>Value</Label>
-              {isBoolean ? (
-                <div className="flex items-center gap-3">
-                  <Switch
-                    id="scalar-bool"
-                    checked={scalarBoolValue}
-                    onCheckedChange={setScalarBoolValue}
-                  />
-                  <Label htmlFor="scalar-bool" className="cursor-pointer text-sm">
-                    {scalarBoolValue ? 'true' : 'false'}
-                  </Label>
-                </div>
-              ) : (
-                <Input
-                  id="scalar-string"
-                  value={scalarStringValue}
-                  onChange={(e) => setScalarStringValue(e.target.value)}
-                  placeholder={`Value for ${selectedScalarAttr ? attrLabel(selectedScalarAttr) : attribute}`}
-                />
-              )}
+              <ScalarValueEditor
+                isBoolean={isBoolean}
+                scalarBoolValue={scalarBoolValue}
+                setScalarBoolValue={setScalarBoolValue}
+                scalarStringValue={scalarStringValue}
+                setScalarStringValue={setScalarStringValue}
+                selectedScalarAttr={selectedScalarAttr}
+                attribute={attribute}
+                attrLabel={attrLabel}
+              />
             </div>
           )}
 
