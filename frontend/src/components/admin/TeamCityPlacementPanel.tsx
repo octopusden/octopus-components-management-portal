@@ -33,7 +33,7 @@ import {
 } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { StatCard } from './StatCard'
-import type { PlacementDiffRowStatus, PlacementRowDiff } from '@/lib/types'
+import type { PlacementDiffRowStatus, PlacementRowDiff, PlacementSyncResult } from '@/lib/types'
 
 const STATUS_OPTIONS: PlacementDiffRowStatus[] = [
   'RESOLVED',
@@ -71,7 +71,6 @@ function PlacementRow({
       <TableCell>
         <input
           type="checkbox"
-          role="checkbox"
           aria-label={`Select ${row.componentKey} ${row.rowLabel}`}
           checked={checked}
           disabled={!selectable}
@@ -108,6 +107,287 @@ function PlacementRow({
       <TableCell className="text-xs">{bwd ?? <span className="text-muted-foreground">—</span>}</TableCell>
       <TableCell className="text-xs text-muted-foreground">{row.notes.join('; ')}</TableCell>
     </TableRow>
+  )
+}
+
+/** Which of the other four async job kinds (if any) is currently running, for the "wait for it" hint. */
+function describeOtherRunningJob(flags: {
+  componentsRunning: boolean
+  historyRunning: boolean
+  resyncRunning: boolean
+  validationRunning: boolean
+}): string {
+  if (flags.componentsRunning) return 'Components migration'
+  if (flags.historyRunning) return 'History migration'
+  if (flags.resyncRunning) return 'TC resync'
+  return 'TC validation'
+}
+
+/**
+ * Run Diff button + its progress banner, failure banners, and report links.
+ * Extracted out of TeamCityPlacementPanel so its own branching is scored on
+ * its own function (SonarCloud S3776 — cognitive complexity).
+ */
+function PlacementDiffControls({
+  adminMode,
+  diffButtonDisabled,
+  diffRunning,
+  diffPending,
+  onRequestRun,
+  otherKindRunning,
+  runningOtherLabel,
+  diffFinishedAt,
+  diffFailed,
+  diffErrorMessage,
+  startDiffIsError,
+  startDiffError,
+  hasReport,
+  reportGeneratedAt,
+}: {
+  adminMode: boolean
+  diffButtonDisabled: boolean
+  diffRunning: boolean
+  diffPending: boolean
+  onRequestRun: () => void
+  otherKindRunning: boolean
+  runningOtherLabel: string
+  diffFinishedAt: string | null | undefined
+  diffFailed: boolean
+  diffErrorMessage: string | null | undefined
+  startDiffIsError: boolean
+  startDiffError: unknown
+  hasReport: boolean
+  reportGeneratedAt: string | null
+}) {
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          type="button"
+          variant={adminMode ? 'destructive' : 'default'}
+          onClick={onRequestRun}
+          disabled={diffButtonDisabled}
+          aria-busy={diffRunning || diffPending}
+        >
+          {(diffRunning || diffPending) && <Loader2 className="animate-spin" aria-hidden="true" />}
+          {diffRunning ? 'Running Diff…' : diffPending ? 'Starting…' : 'Run Diff'}
+        </Button>
+        {!adminMode && (
+          <span className="text-xs text-muted-foreground">Arm Admin mode above to run Diff or Sync.</span>
+        )}
+        {adminMode && otherKindRunning && !diffRunning && (
+          <span className="text-xs text-muted-foreground">{runningOtherLabel} is running — wait for it to finish.</span>
+        )}
+        {diffFinishedAt && !diffRunning && (
+          <span className="ml-auto text-xs text-muted-foreground">
+            Last run <RelativeTime ts={diffFinishedAt} />
+          </span>
+        )}
+      </div>
+
+      {diffRunning && (
+        <div
+          data-testid="tc-placement-diff-progress"
+          className="rounded-md border bg-card p-3 space-y-2 text-sm"
+          aria-busy="true"
+          aria-live="polite"
+        >
+          <div className="font-medium">Deriving placement from TeamCity for every in-scope component…</div>
+          <div className="h-2 overflow-hidden rounded-full bg-muted">
+            <div className="h-full bg-primary/60 animate-pulse" />
+          </div>
+        </div>
+      )}
+
+      {diffFailed && diffErrorMessage && (
+        <StatusBanner variant="destructive">Diff failed: {diffErrorMessage}</StatusBanner>
+      )}
+      {startDiffIsError && (
+        <StatusBanner variant="destructive">{formatMigrationError(startDiffError)}</StatusBanner>
+      )}
+
+      {hasReport && (
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <a
+            href={`${API_BASE}/admin/teamcity-placement/diff/report.html`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline"
+          >
+            Open report (HTML)
+          </a>
+          <a
+            href={`${API_BASE}/admin/teamcity-placement/diff/report.csv`}
+            className="text-primary hover:underline"
+          >
+            Download CSV
+          </a>
+          <span className="text-xs text-muted-foreground">
+            Generated <RelativeTime ts={reportGeneratedAt} />
+          </span>
+        </div>
+      )}
+    </>
+  )
+}
+
+/**
+ * The report table area: empty states for "no report yet" / "no in-scope
+ * rows" / "no rows match the filters", else the filtered table.
+ */
+function PlacementResultsArea({
+  hasReport,
+  totalRows,
+  filteredRows,
+  selected,
+  onToggleRow,
+}: {
+  hasReport: boolean
+  totalRows: number
+  filteredRows: PlacementRowDiff[]
+  selected: Set<string>
+  onToggleRow: (componentId: string, checked: boolean) => void
+}) {
+  if (!hasReport) {
+    return <EmptyState message="Run Diff to see the current TeamCity ↔ CRS placement report." className="py-8" />
+  }
+  if (totalRows === 0) {
+    return <EmptyState message="The latest Diff found no in-scope rows." className="py-8" />
+  }
+  if (filteredRows.length === 0) {
+    return <EmptyState message="No rows match these filters." className="py-8" />
+  }
+  return (
+    <div className="rounded-md border max-h-[28rem] overflow-y-auto">
+      <Table className="table-fixed">
+        <TableHeader className="sticky top-0 z-10 bg-background">
+          <TableRow>
+            <TableHead className="w-12">Select</TableHead>
+            <TableHead>Component</TableHead>
+            <TableHead>Row</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Placement (current → derived)</TableHead>
+            <TableHead>Build Working Directory</TableHead>
+            <TableHead>Notes</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {filteredRows.map((row) => (
+            <PlacementRow key={row.configurationRowId} row={row} checked={selected.has(row.componentId)} onToggle={onToggleRow} />
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  )
+}
+
+/**
+ * Sync button + its progress banner, failure banners, and the COMPLETED
+ * result summary (summary counts, per-component outcomes, CSV trace link).
+ */
+function PlacementSyncControls({
+  adminMode,
+  syncButtonDisabled,
+  syncRunning,
+  syncPending,
+  onRequestRun,
+  selectedCount,
+  syncFinishedAt,
+  syncNotice,
+  syncFailed,
+  syncErrorMessage,
+  startSyncIsError,
+  startSyncError,
+  result,
+}: {
+  adminMode: boolean
+  syncButtonDisabled: boolean
+  syncRunning: boolean
+  syncPending: boolean
+  onRequestRun: () => void
+  selectedCount: number
+  syncFinishedAt: string | null | undefined
+  syncNotice: string | null
+  syncFailed: boolean
+  syncErrorMessage: string | null | undefined
+  startSyncIsError: boolean
+  startSyncError: unknown
+  result: PlacementSyncResult | null | undefined
+}) {
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-3 border-t pt-4">
+        <Button
+          type="button"
+          variant={adminMode ? 'destructive' : 'default'}
+          onClick={onRequestRun}
+          disabled={syncButtonDisabled}
+          aria-busy={syncRunning || syncPending}
+        >
+          {(syncRunning || syncPending) && <Loader2 className="animate-spin" aria-hidden="true" />}
+          {syncRunning ? 'Syncing…' : syncPending ? 'Starting…' : `Sync selected (${selectedCount})`}
+        </Button>
+        {syncFinishedAt && !syncRunning && (
+          <span className="text-xs text-muted-foreground">
+            Last sync <RelativeTime ts={syncFinishedAt} />
+          </span>
+        )}
+      </div>
+
+      {syncNotice && <StatusBanner variant="warning">{syncNotice}</StatusBanner>}
+
+      {syncRunning && (
+        <div
+          data-testid="tc-placement-sync-progress"
+          className="rounded-md border bg-card p-3 space-y-2 text-sm"
+          aria-busy="true"
+          aria-live="polite"
+        >
+          <div className="font-medium">Writing the selected rows through the registry write path…</div>
+          <div className="h-2 overflow-hidden rounded-full bg-muted">
+            <div className="h-full bg-primary/60 animate-pulse" />
+          </div>
+        </div>
+      )}
+
+      {syncFailed && syncErrorMessage && (
+        <StatusBanner variant="destructive">Sync failed: {syncErrorMessage}</StatusBanner>
+      )}
+      {startSyncIsError && (
+        <StatusBanner variant="destructive">{formatMigrationError(startSyncError)}</StatusBanner>
+      )}
+
+      {result && (
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+            <StatCard label="Requested" value={result.requested} />
+            <StatCard label="Applied" value={result.applied} />
+            <StatCard label="Skipped" value={result.skipped} />
+            <StatCard label="Failed" value={result.failed} />
+          </div>
+          <details className="rounded-md border p-3 text-sm">
+            <summary className="cursor-pointer font-medium">
+              Results ({result.components.length} component
+              {result.components.length === 1 ? '' : 's'})
+            </summary>
+            <ul className="mt-2 space-y-1 text-xs">
+              {result.components.map((c) => (
+                <li key={c.componentId}>
+                  <span className="font-medium">{c.componentKey}</span>:{' '}
+                  {c.rows.map((r) => r.outcome).join(', ')}
+                </li>
+              ))}
+            </ul>
+          </details>
+          <a
+            href={`${API_BASE}/admin/teamcity-placement/sync/report.csv`}
+            className="text-sm text-primary hover:underline"
+          >
+            Download sync report CSV (before/after trace)
+          </a>
+        </div>
+      )}
+    </>
   )
 }
 
@@ -179,13 +459,13 @@ export function TeamCityPlacementPanel() {
   // handles the fast COMPLETED-on-start race (see useTeamCityPlacement.ts).
   useEffect(() => {
     if (diffJobData?.state === 'COMPLETED') {
-      queryClient.invalidateQueries({ queryKey: ['tc-placement-diff', 'report'] })
+      void queryClient.invalidateQueries({ queryKey: ['tc-placement-diff', 'report'] }).catch(() => {})
     }
   }, [diffJobData?.state, diffJobData?.id, queryClient])
   useEffect(() => {
     if (syncJobData?.state === 'COMPLETED' && syncJobData.result) {
-      queryClient.invalidateQueries({ queryKey: ['components'] })
-      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'component' })
+      void queryClient.invalidateQueries({ queryKey: ['components'] }).catch(() => {})
+      void queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'component' }).catch(() => {})
     }
   }, [syncJobData?.state, syncJobData?.id, syncJobData?.result, queryClient])
 
@@ -258,82 +538,26 @@ export function TeamCityPlacementPanel() {
     // result CRS's own 409 guard will accept a Sync against (review finding).
     diffJobData?.state !== 'COMPLETED'
 
-  const runningOtherLabel = componentsRunning
-    ? 'Components migration'
-    : historyRunning
-      ? 'History migration'
-      : resyncRunning
-        ? 'TC resync'
-        : 'TC validation'
+  const runningOtherLabel = describeOtherRunningJob({ componentsRunning, historyRunning, resyncRunning, validationRunning })
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          type="button"
-          variant={adminMode ? 'destructive' : 'default'}
-          onClick={() => setConfirmDiffOpen(true)}
-          disabled={diffButtonDisabled}
-          aria-busy={diffRunning || startDiff.isPending}
-        >
-          {(diffRunning || startDiff.isPending) && <Loader2 className="animate-spin" aria-hidden="true" />}
-          {diffRunning ? 'Running Diff…' : startDiff.isPending ? 'Starting…' : 'Run Diff'}
-        </Button>
-        {!adminMode && (
-          <span className="text-xs text-muted-foreground">Arm Admin mode above to run Diff or Sync.</span>
-        )}
-        {adminMode && otherKindRunning && !diffRunning && (
-          <span className="text-xs text-muted-foreground">{runningOtherLabel} is running — wait for it to finish.</span>
-        )}
-        {diffJobData?.finishedAt && !diffRunning && (
-          <span className="ml-auto text-xs text-muted-foreground">
-            Last run <RelativeTime ts={diffJobData.finishedAt} />
-          </span>
-        )}
-      </div>
-
-      {diffRunning && (
-        <div
-          data-testid="tc-placement-diff-progress"
-          className="rounded-md border bg-card p-3 space-y-2 text-sm"
-          aria-busy="true"
-          aria-live="polite"
-        >
-          <div className="font-medium">Deriving placement from TeamCity for every in-scope component…</div>
-          <div className="h-2 overflow-hidden rounded-full bg-muted">
-            <div className="h-full bg-primary/60 animate-pulse" />
-          </div>
-        </div>
-      )}
-
-      {diffFailed && diffJobData?.errorMessage && (
-        <StatusBanner variant="destructive">Diff failed: {diffJobData.errorMessage}</StatusBanner>
-      )}
-      {startDiff.isError && (
-        <StatusBanner variant="destructive">{formatMigrationError(startDiff.error)}</StatusBanner>
-      )}
-
-      {report.data && (
-        <div className="flex flex-wrap items-center gap-3 text-sm">
-          <a
-            href={`${API_BASE}/admin/teamcity-placement/diff/report.html`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary hover:underline"
-          >
-            Open report (HTML)
-          </a>
-          <a
-            href={`${API_BASE}/admin/teamcity-placement/diff/report.csv`}
-            className="text-primary hover:underline"
-          >
-            Download CSV
-          </a>
-          <span className="text-xs text-muted-foreground">
-            Generated <RelativeTime ts={report.data.generatedAt} />
-          </span>
-        </div>
-      )}
+      <PlacementDiffControls
+        adminMode={adminMode}
+        diffButtonDisabled={diffButtonDisabled}
+        diffRunning={diffRunning}
+        diffPending={startDiff.isPending}
+        onRequestRun={() => setConfirmDiffOpen(true)}
+        otherKindRunning={otherKindRunning}
+        runningOtherLabel={runningOtherLabel}
+        diffFinishedAt={diffJobData?.finishedAt}
+        diffFailed={diffFailed}
+        diffErrorMessage={diffJobData?.errorMessage}
+        startDiffIsError={startDiff.isError}
+        startDiffError={startDiff.error}
+        hasReport={!!report.data}
+        reportGeneratedAt={report.data?.generatedAt ?? null}
+      />
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1">
@@ -372,7 +596,6 @@ export function TeamCityPlacementPanel() {
         <input
           ref={selectAllRef}
           type="checkbox"
-          role="checkbox"
           aria-label="Select all resolved"
           checked={allResolvedSelected}
           disabled={selectableRows.length === 0}
@@ -382,106 +605,29 @@ export function TeamCityPlacementPanel() {
         Select all resolved ({selectableRows.length})
       </label>
 
-      {report.data && rows.length === 0 ? (
-        <EmptyState message="The latest Diff found no in-scope rows." className="py-8" />
-      ) : report.data && filteredRows.length === 0 ? (
-        <EmptyState message="No rows match these filters." className="py-8" />
-      ) : report.data ? (
-        <div className="rounded-md border max-h-[28rem] overflow-y-auto">
-          <Table className="table-fixed">
-            <TableHeader className="sticky top-0 z-10 bg-background">
-              <TableRow>
-                <TableHead className="w-12">Select</TableHead>
-                <TableHead>Component</TableHead>
-                <TableHead>Row</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Placement (current → derived)</TableHead>
-                <TableHead>Build Working Directory</TableHead>
-                <TableHead>Notes</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredRows.map((row) => (
-                <PlacementRow key={row.configurationRowId} row={row} checked={selected.has(row.componentId)} onToggle={toggleRow} />
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      ) : (
-        <EmptyState message="Run Diff to see the current TeamCity ↔ CRS placement report." className="py-8" />
-      )}
+      <PlacementResultsArea
+        hasReport={!!report.data}
+        totalRows={rows.length}
+        filteredRows={filteredRows}
+        selected={selected}
+        onToggleRow={toggleRow}
+      />
 
-      <div className="flex flex-wrap items-center gap-3 border-t pt-4">
-        <Button
-          type="button"
-          variant={adminMode ? 'destructive' : 'default'}
-          onClick={() => setConfirmSyncOpen(true)}
-          disabled={syncButtonDisabled}
-          aria-busy={syncRunning || startSync.isPending}
-        >
-          {(syncRunning || startSync.isPending) && <Loader2 className="animate-spin" aria-hidden="true" />}
-          {syncRunning ? 'Syncing…' : startSync.isPending ? 'Starting…' : `Sync selected (${selected.size})`}
-        </Button>
-        {syncJobData?.finishedAt && !syncRunning && (
-          <span className="text-xs text-muted-foreground">
-            Last sync <RelativeTime ts={syncJobData.finishedAt} />
-          </span>
-        )}
-      </div>
-
-      {syncNotice && <StatusBanner variant="warning">{syncNotice}</StatusBanner>}
-
-      {syncRunning && (
-        <div
-          data-testid="tc-placement-sync-progress"
-          className="rounded-md border bg-card p-3 space-y-2 text-sm"
-          aria-busy="true"
-          aria-live="polite"
-        >
-          <div className="font-medium">Writing the selected rows through the registry write path…</div>
-          <div className="h-2 overflow-hidden rounded-full bg-muted">
-            <div className="h-full bg-primary/60 animate-pulse" />
-          </div>
-        </div>
-      )}
-
-      {syncJobData?.state === 'FAILED' && syncJobData.errorMessage && (
-        <StatusBanner variant="destructive">Sync failed: {syncJobData.errorMessage}</StatusBanner>
-      )}
-      {startSync.isError && !isDiffReplacedConflict(startSync.error) && (
-        <StatusBanner variant="destructive">{formatMigrationError(startSync.error)}</StatusBanner>
-      )}
-
-      {syncJobData?.state === 'COMPLETED' && syncJobData.result && (
-        <div className="space-y-3">
-          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
-            <StatCard label="Requested" value={syncJobData.result.requested} />
-            <StatCard label="Applied" value={syncJobData.result.applied} />
-            <StatCard label="Skipped" value={syncJobData.result.skipped} />
-            <StatCard label="Failed" value={syncJobData.result.failed} />
-          </div>
-          <details className="rounded-md border p-3 text-sm">
-            <summary className="cursor-pointer font-medium">
-              Results ({syncJobData.result.components.length} component
-              {syncJobData.result.components.length === 1 ? '' : 's'})
-            </summary>
-            <ul className="mt-2 space-y-1 text-xs">
-              {syncJobData.result.components.map((c) => (
-                <li key={c.componentId}>
-                  <span className="font-medium">{c.componentKey}</span>:{' '}
-                  {c.rows.map((r) => r.outcome).join(', ')}
-                </li>
-              ))}
-            </ul>
-          </details>
-          <a
-            href={`${API_BASE}/admin/teamcity-placement/sync/report.csv`}
-            className="text-sm text-primary hover:underline"
-          >
-            Download sync report CSV (before/after trace)
-          </a>
-        </div>
-      )}
+      <PlacementSyncControls
+        adminMode={adminMode}
+        syncButtonDisabled={syncButtonDisabled}
+        syncRunning={syncRunning}
+        syncPending={startSync.isPending}
+        onRequestRun={() => setConfirmSyncOpen(true)}
+        selectedCount={selected.size}
+        syncFinishedAt={syncJobData?.finishedAt}
+        syncNotice={syncNotice}
+        syncFailed={syncJobData?.state === 'FAILED'}
+        syncErrorMessage={syncJobData?.errorMessage}
+        startSyncIsError={startSync.isError && !isDiffReplacedConflict(startSync.error)}
+        startSyncError={startSync.error}
+        result={syncJobData?.state === 'COMPLETED' ? syncJobData.result : null}
+      />
 
       <Dialog open={confirmDiffOpen} onOpenChange={setConfirmDiffOpen}>
         <DialogContent>

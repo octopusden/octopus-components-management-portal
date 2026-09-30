@@ -40,7 +40,7 @@ export function useRunPlacementDiff() {
       // COMPLETED transition the panel listens for never fires in that case,
       // so refresh the report cache here too.
       if (job.state === 'COMPLETED') {
-        queryClient.invalidateQueries({ queryKey: DIFF_REPORT_KEY })
+        void queryClient.invalidateQueries({ queryKey: DIFF_REPORT_KEY }).catch(() => {})
       }
     },
   })
@@ -112,10 +112,10 @@ export function useRunPlacementSync() {
     onSuccess: (job) => {
       queryClient.setQueryData(SYNC_JOB_KEY, job)
       if (job.state === 'COMPLETED' && job.result) {
-        queryClient.invalidateQueries({ queryKey: ['components'] })
-        queryClient.invalidateQueries({
-          predicate: (query) => query.queryKey[0] === 'component',
-        })
+        void queryClient.invalidateQueries({ queryKey: ['components'] }).catch(() => {})
+        void queryClient
+          .invalidateQueries({ predicate: (query) => query.queryKey[0] === 'component' })
+          .catch(() => {})
       }
     },
   })
