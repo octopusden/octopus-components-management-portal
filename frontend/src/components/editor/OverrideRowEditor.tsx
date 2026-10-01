@@ -22,6 +22,8 @@ import {
   SelectValue,
 } from '../ui/select'
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs'
+import { FieldInfo } from '../ui/FieldInfo'
+import { EntryError, fieldErrorProps } from './EntryError'
 import { useOverridesDraft } from './overridesDraft'
 import { useToast } from '../../hooks/use-toast'
 import { useFieldConfig } from '../../hooks/useAdminConfig'
@@ -103,11 +105,359 @@ const unknownAttrWarned = new WeakSet<object>()
 // Child list state types
 // ---------------------------------------------------------------------------
 
-interface VcsState { name: string; vcsPath: string; branch: string; tag: string; hotfixBranch: string; repositoryType: string }
+interface VcsState { name: string; vcsPath: string; branch: string; tag: string; hotfixBranch: string; repositoryType: string; sourcePath: string; checkoutDirectory: string }
+function toVcsState(e: VcsEntryRequest): VcsState {
+  return {
+    name: e.name ?? '',
+    vcsPath: e.vcsPath ?? '',
+    branch: e.branch ?? '',
+    tag: e.tag ?? '',
+    hotfixBranch: e.hotfixBranch ?? '',
+    repositoryType: e.repositoryType ?? '',
+    sourcePath: e.sourcePath ?? '',
+    checkoutDirectory: e.checkoutDirectory ?? '',
+  }
+}
 interface MavenState { groupPattern: string; artifactPattern: string; extension: string; classifier: string }
 interface FileUrlState { url: string; artifactId: string; classifier: string }
 interface DockerState { imageName: string; flavor: string }
 interface PackageState { packageType: string; packageName: string }
+
+// ---------------------------------------------------------------------------
+// Pure helpers (extracted so their branching is scored on its own, not folded
+// into the component's cognitive complexity — SonarCloud S3776)
+// ---------------------------------------------------------------------------
+
+// Scalar and marker catalogues are disjoint, so a stored/preset attribute
+// path alone decides which of the two the editor opens on.
+function resolveOverrideType(
+  mode: 'create' | 'edit',
+  override: FieldOverride | undefined,
+  presetAttribute: string | undefined,
+): 'scalar' | 'marker' {
+  if (mode === 'edit' && override) return MARKER_BY_PATH.has(override.overriddenAttribute) ? 'marker' : 'scalar'
+  if (presetAttribute) return MARKER_BY_PATH.has(presetAttribute) ? 'marker' : 'scalar'
+  return 'scalar'
+}
+
+function buildScalarValue(selectedScalarAttr: ScalarAttr | undefined, scalarBoolValue: boolean, scalarStringValue: string): unknown {
+  if (!selectedScalarAttr) return undefined
+  return selectedScalarAttr.type === 'boolean' ? scalarBoolValue : scalarStringValue
+}
+
+interface MarkerChildInputs {
+  vcsEntries: VcsState[]
+  vcsBuildWorkingDirectory: string
+  mavenArtifacts: MavenState[]
+  fileUrlArtifacts: FileUrlState[]
+  dockerImages: DockerState[]
+  packages: PackageState[]
+  requiredToolsInput: string
+}
+
+// Each marker branch trims string fields and drops rows whose required
+// fields are still blank — HTML `required` blocks an empty field but not a
+// whitespace-only one, so it doesn't gate the wire body. Without this
+// a newly-added empty row reaches the server as `"   "` and 400s. Same
+// pattern that VcsTab + DistributionTab already use for the BASE-row
+// paths — required-field rules below mirror CRS v4 wire contract.
+function buildMarkerChildren(selectedMarkerAttr: MarkerAttr | undefined, inputs: MarkerChildInputs): MarkerChildrenPayload | null {
+  if (!selectedMarkerAttr) return null
+  const { vcsEntries, vcsBuildWorkingDirectory, mavenArtifacts, fileUrlArtifacts, dockerImages, packages, requiredToolsInput } = inputs
+  const key = selectedMarkerAttr.childKey
+  if (key === 'vcsEntries') {
+    const entries: VcsEntryRequest[] = vcsEntries
+      .map((e) => ({
+        name: (e.name || '').trim(),
+        vcsPath: e.vcsPath.trim(),
+        branch: (e.branch || '').trim(),
+        tag: (e.tag || '').trim(),
+        hotfixBranch: (e.hotfixBranch || '').trim(),
+        repositoryType: (e.repositoryType || '').trim(),
+        sourcePath: (e.sourcePath || '').trim(),
+        checkoutDirectory: (e.checkoutDirectory || '').trim(),
+      }))
+      .filter((e) => e.vcsPath !== '')
+      .map((e) => ({
+        name: e.name || null,
+        vcsPath: e.vcsPath,
+        branch: e.branch || null,
+        tag: e.tag || null,
+        hotfixBranch: e.hotfixBranch || null,
+        repositoryType: e.repositoryType || null,
+        sourcePath: e.sourcePath || null,
+        checkoutDirectory: e.checkoutDirectory || null,
+      }))
+    // Blank is null: the payload replaces the row, and the registry reads null as none.
+    return { vcsEntries: entries, buildWorkingDirectory: vcsBuildWorkingDirectory.trim() || null }
+  }
+  if (key === 'mavenArtifacts') {
+    const arts: MavenArtifactRequest[] = mavenArtifacts
+      .map((a) => ({
+        groupPattern: a.groupPattern.trim(),
+        artifactPattern: a.artifactPattern.trim(),
+        extension: (a.extension || '').trim(),
+        classifier: (a.classifier || '').trim(),
+      }))
+      .filter((a) => a.groupPattern !== '' && a.artifactPattern !== '')
+      .map((a) => ({
+        groupPattern: a.groupPattern,
+        artifactPattern: a.artifactPattern,
+        extension: a.extension || null,
+        classifier: a.classifier || null,
+      }))
+    return { mavenArtifacts: arts }
+  }
+  if (key === 'fileUrlArtifacts') {
+    const arts: FileUrlArtifactRequest[] = fileUrlArtifacts
+      .map((a) => ({
+        url: a.url.trim(),
+        artifactId: (a.artifactId || '').trim(),
+        classifier: (a.classifier || '').trim(),
+      }))
+      .filter((a) => a.url !== '')
+      .map((a) => ({
+        url: a.url,
+        artifactId: a.artifactId || null,
+        classifier: a.classifier || null,
+      }))
+    return { fileUrlArtifacts: arts }
+  }
+  if (key === 'dockerImages') {
+    const imgs: DockerImageRequest[] = dockerImages
+      .map((d) => ({
+        imageName: d.imageName.trim(),
+        flavor: (d.flavor || '').trim(),
+      }))
+      .filter((d) => d.imageName !== '')
+      .map((d) => ({
+        imageName: d.imageName,
+        flavor: d.flavor || null,
+      }))
+    return { dockerImages: imgs }
+  }
+  if (key === 'packages') {
+    const pkgs: PackageRequest[] = packages
+      .map((p) => ({
+        packageType: p.packageType.trim(),
+        packageName: p.packageName.trim(),
+      }))
+      .filter((p) => p.packageType !== '' && p.packageName !== '')
+    return { packages: pkgs }
+  }
+  if (key === 'requiredTools') {
+    const tools = [...new Set(requiredToolsInput.split(',').map((t) => t.trim()).filter(Boolean))]
+    return { requiredTools: tools }
+  }
+  return null
+}
+
+interface ResetValues {
+  scalarStringValue: string
+  scalarBoolValue: boolean
+  vcsEntries: VcsState[]
+  vcsBuildWorkingDirectory: string
+  mavenArtifacts: MavenState[]
+  fileUrlArtifacts: FileUrlState[]
+  dockerImages: DockerState[]
+  packages: PackageState[]
+  requiredToolsInput: string
+}
+
+// The create-mode / no-override form state, and the edit-mode prefill from a
+// stored override — one source of truth shared by the initial useState seed
+// and resetState (dialog reopen / override swap).
+function computeResetValues(mode: 'create' | 'edit', override: FieldOverride | undefined): ResetValues {
+  if (mode !== 'edit' || !override) {
+    return {
+      scalarStringValue: '',
+      scalarBoolValue: false,
+      vcsEntries: [],
+      vcsBuildWorkingDirectory: '',
+      mavenArtifacts: [],
+      fileUrlArtifacts: [],
+      dockerImages: [],
+      packages: [],
+      requiredToolsInput: '',
+    }
+  }
+  const mc = override.markerChildren
+  return {
+    scalarStringValue: override.value !== null && override.value !== undefined
+      ? (typeof override.value === 'string' ? override.value : String(override.value))
+      : '',
+    scalarBoolValue: typeof override.value === 'boolean' ? override.value : false,
+    vcsEntries: (mc?.vcsEntries ?? []).map(toVcsState),
+    vcsBuildWorkingDirectory: mc?.buildWorkingDirectory ?? '',
+    mavenArtifacts: (mc?.mavenArtifacts ?? []).map((a) => ({ groupPattern: a.groupPattern, artifactPattern: a.artifactPattern, extension: a.extension ?? '', classifier: a.classifier ?? '' })),
+    fileUrlArtifacts: (mc?.fileUrlArtifacts ?? []).map((a) => ({ url: a.url, artifactId: a.artifactId ?? '', classifier: a.classifier ?? '' })),
+    dockerImages: (mc?.dockerImages ?? []).map((d) => ({ imageName: d.imageName, flavor: d.flavor ?? '' })),
+    packages: (mc?.packages ?? []).map((p) => ({ packageType: p.packageType, packageName: p.packageName })),
+    requiredToolsInput: (mc?.requiredTools as string[] | null | undefined)?.join(', ') ?? '',
+  }
+}
+
+// Single source of truth for the range field's validity + message: bad syntax,
+// then all-versions (= base default), then an inverted/empty interval.
+function computeRangeError(versionRange: string): string | null {
+  if (!isValidVersionRange(versionRange)) return 'Invalid version range syntax'
+  if (!isAllowedOverrideRange(versionRange)) return 'All-versions range is the base default — use a bounded or open-upper sub-range'
+  if (isEmptyVersionRange(versionRange)) return 'Empty range — the lower bound must be below the upper bound'
+  return null
+}
+
+// The conflict-preview toast text for an overlap found by the walk in the
+// component (kept there — it needs the live effectiveOverrides list).
+function describeOverlapConflict(overlapConflict: { range: string; kind: 'partial' | 'contains' | 'equal' } | null): string | null {
+  if (overlapConflict === null) return null
+  return overlapConflict.kind === 'equal'
+    ? `Semantically equal to existing override ${overlapConflict.range}`
+    : `Overlaps with existing override ${overlapConflict.range}`
+}
+
+// Submit guard chain: attribute picked, attribute still in a known catalogue,
+// range syntactically/semantically valid, no overlap with a sibling override.
+// Returns the toast to show, or null when the submit may proceed.
+function validateOverrideSubmit(args: {
+  attribute: string
+  overrideType: 'scalar' | 'marker'
+  selectedScalarAttr: ScalarAttr | undefined
+  selectedMarkerAttr: MarkerAttr | undefined
+  rangeError: string | null
+  conflictMessage: string | null
+}): { title: string; description?: string } | null {
+  const { attribute, overrideType, selectedScalarAttr, selectedMarkerAttr, rangeError, conflictMessage } = args
+  if (!attribute) return { title: 'Please select an attribute' }
+  // Guard against a stored attribute that no longer maps to any catalogue
+  // entry (e.g. server adds a new path the portal build doesn't know about).
+  // Without this, buildScalarValue / buildMarkerChildren return undefined /
+  // null and the wire body would be silently malformed.
+  if (overrideType === 'scalar' && !selectedScalarAttr) return { title: 'Unknown scalar attribute', description: attribute }
+  if (overrideType === 'marker' && !selectedMarkerAttr) return { title: 'Unknown marker attribute', description: attribute }
+  // ADR-018: field-override ranges may be bounded, open-upper (`[2.0,)`), or
+  // historical-left-unbounded; only the all-versions shapes denote the base
+  // default, and an inverted/empty interval (`[3076,3010]`) is rejected before
+  // the round-trip. Server enforces the same as the backstop.
+  if (rangeError !== null) return { title: rangeError }
+  // R3 client-side preview: prevent submission of a range that overlaps or
+  // duplicates a sibling override on the same attribute. CRS-side P-Overlap
+  // will catch the unknown-parse cases this skips.
+  if (conflictMessage !== null) return { title: conflictMessage }
+  return null
+}
+
+// A locked-in attribute (edit mode, or a preset from the Distribution tab)
+// reads read-only; otherwise a Select over the catalogue for the current type.
+// Extracted so its branching is scored on its own (SonarCloud S3776).
+function AttributeSelector({
+  mode,
+  presetAttribute,
+  overrideType,
+  attribute,
+  setAttribute,
+  attrLabel,
+}: {
+  mode: 'create' | 'edit'
+  presetAttribute: string | undefined
+  overrideType: 'scalar' | 'marker'
+  attribute: string
+  setAttribute: (v: string) => void
+  attrLabel: (a: { path: string; label: string }) => string
+}) {
+  if (mode === 'edit' || presetAttribute) {
+    return (
+      <p className="text-sm font-mono text-muted-foreground px-3 py-2 rounded-md border bg-muted">
+        {attribute}
+      </p>
+    )
+  }
+  if (overrideType === 'scalar') {
+    return (
+      <Select value={attribute} onValueChange={setAttribute}>
+        <SelectTrigger id="attribute">
+          <SelectValue placeholder="Select attribute..." />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            <SelectLabel>Build</SelectLabel>
+            {SCALAR_ATTRS.filter((a) => a.path.startsWith('build.')).map((a) => (
+              <SelectItem key={a.path} value={a.path}>{attrLabel(a)}</SelectItem>
+            ))}
+          </SelectGroup>
+          <SelectGroup>
+            <SelectLabel>Escrow</SelectLabel>
+            {SCALAR_ATTRS.filter((a) => a.path.startsWith('escrow.')).map((a) => (
+              <SelectItem key={a.path} value={a.path}>{attrLabel(a)}</SelectItem>
+            ))}
+          </SelectGroup>
+          <SelectGroup>
+            <SelectLabel>Jira</SelectLabel>
+            {SCALAR_ATTRS.filter((a) => a.path.startsWith('jira.')).map((a) => (
+              <SelectItem key={a.path} value={a.path}>{attrLabel(a)}</SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    )
+  }
+  return (
+    <Select value={attribute} onValueChange={setAttribute}>
+      <SelectTrigger id="attribute">
+        <SelectValue placeholder="Select marker..." />
+      </SelectTrigger>
+      <SelectContent>
+        {MARKER_ATTRS.map((a) => (
+          <SelectItem key={a.path} value={a.path}>{attrLabel(a)}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
+
+// The scalar Value control: a Switch for a boolean attribute, else a text
+// Input. Extracted alongside AttributeSelector for the same reason.
+function ScalarValueEditor({
+  isBoolean,
+  scalarBoolValue,
+  setScalarBoolValue,
+  scalarStringValue,
+  setScalarStringValue,
+  selectedScalarAttr,
+  attribute,
+  attrLabel,
+}: {
+  isBoolean: boolean
+  scalarBoolValue: boolean
+  setScalarBoolValue: (v: boolean) => void
+  scalarStringValue: string
+  setScalarStringValue: (v: string) => void
+  selectedScalarAttr: ScalarAttr | undefined
+  attribute: string
+  attrLabel: (a: { path: string; label: string }) => string
+}) {
+  if (isBoolean) {
+    return (
+      <div className="flex items-center gap-3">
+        <Switch
+          id="scalar-bool"
+          checked={scalarBoolValue}
+          onCheckedChange={setScalarBoolValue}
+        />
+        <Label htmlFor="scalar-bool" className="cursor-pointer text-sm">
+          {scalarBoolValue ? 'true' : 'false'}
+        </Label>
+      </div>
+    )
+  }
+  return (
+    <Input
+      id="scalar-string"
+      value={scalarStringValue}
+      onChange={(e) => setScalarStringValue(e.target.value)}
+      placeholder={`Value for ${selectedScalarAttr ? attrLabel(selectedScalarAttr) : attribute}`}
+    />
+  )
+}
 
 // ---------------------------------------------------------------------------
 // Props
@@ -130,13 +480,16 @@ export interface OverrideRowEditorProps {
    *  also excluded from the overlap-conflict preview so the merged range doesn't
    *  report a false conflict against its own members. */
   collapseMemberIds?: string[]
+  /** Edit-mode only: registry placement errors on this row's VCS entries,
+   *  keyed `<entry index>.<field>` (set by the page after a 400). */
+  vcsEntryErrors?: Record<string, string>
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAttribute, collapseMemberIds }: OverrideRowEditorProps) {
+export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAttribute, collapseMemberIds, vcsEntryErrors = {} }: OverrideRowEditorProps) {
   // Item D: the modal queues the create/update into the page-level draft (the
   // real write is the editor's one combined Save), so it closes immediately on
   // submit. Conflict detection reads the effective (draft-applied) set so a
@@ -150,14 +503,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
   const attrLabel = (a: { path: string; label: string }) => labelFor(fieldConfigData, a.path, a.label)
 
   // Determine initial type and attribute from existing override in edit mode
-  const initialType: 'scalar' | 'marker' = (() => {
-    if (mode === 'edit' && override) {
-      if (MARKER_BY_PATH.has(override.overriddenAttribute)) return 'marker'
-      return 'scalar'
-    }
-    if (presetAttribute) return MARKER_BY_PATH.has(presetAttribute) ? 'marker' : 'scalar'
-    return 'scalar'
-  })()
+  const initialType = resolveOverrideType(mode, override, presetAttribute)
 
   // CRS drift surfaces: when an existing override row's attribute is
   // present in NEITHER catalogue (because CRS added a new scalar path the
@@ -191,118 +537,38 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
   const [attribute, setAttribute] = useState(initialAttribute)
   const [versionRange, setVersionRange] = useState(initialVersionRange)
 
-  // Scalar value state
-  const [scalarStringValue, setScalarStringValue] = useState<string>(() => {
-    if (mode === 'edit' && override && override.value !== null && override.value !== undefined) {
-      return typeof override.value === 'string' ? override.value : String(override.value)
-    }
-    return ''
-  })
-  const [scalarBoolValue, setScalarBoolValue] = useState<boolean>(() => {
-    if (mode === 'edit' && override && typeof override.value === 'boolean') return override.value
-    return false
-  })
-
-  // Marker child list states
-  const [vcsEntries, setVcsEntries] = useState<VcsState[]>(() => {
-    if (mode === 'edit' && override?.markerChildren?.vcsEntries) {
-      return override.markerChildren.vcsEntries.map((e) => ({
-        name: e.name ?? '',
-        vcsPath: e.vcsPath ?? '',
-        branch: e.branch ?? '',
-        tag: e.tag ?? '',
-        hotfixBranch: e.hotfixBranch ?? '',
-        repositoryType: e.repositoryType ?? '',
-      }))
-    }
-    return []
-  })
-  const [mavenArtifacts, setMavenArtifacts] = useState<MavenState[]>(() => {
-    if (mode === 'edit' && override?.markerChildren?.mavenArtifacts) {
-      return override.markerChildren.mavenArtifacts.map((a) => ({
-        groupPattern: a.groupPattern,
-        artifactPattern: a.artifactPattern,
-        extension: a.extension ?? '',
-        classifier: a.classifier ?? '',
-      }))
-    }
-    return []
-  })
-  const [fileUrlArtifacts, setFileUrlArtifacts] = useState<FileUrlState[]>(() => {
-    if (mode === 'edit' && override?.markerChildren?.fileUrlArtifacts) {
-      return override.markerChildren.fileUrlArtifacts.map((a) => ({
-        url: a.url,
-        artifactId: a.artifactId ?? '',
-        classifier: a.classifier ?? '',
-      }))
-    }
-    return []
-  })
-  const [dockerImages, setDockerImages] = useState<DockerState[]>(() => {
-    if (mode === 'edit' && override?.markerChildren?.dockerImages) {
-      return override.markerChildren.dockerImages.map((d) => ({
-        imageName: d.imageName,
-        flavor: d.flavor ?? '',
-      }))
-    }
-    return []
-  })
-  const [packages, setPackages] = useState<PackageState[]>(() => {
-    if (mode === 'edit' && override?.markerChildren?.packages) {
-      return override.markerChildren.packages.map((p) => ({
-        packageType: p.packageType,
-        packageName: p.packageName,
-      }))
-    }
-    return []
-  })
-  const [requiredToolsInput, setRequiredToolsInput] = useState<string>(() => {
-    if (mode === 'edit' && override?.markerChildren?.requiredTools) {
-      return (override.markerChildren.requiredTools as string[]).join(', ')
-    }
-    return ''
-  })
+  // Scalar value + marker child list state, seeded from the same projection
+  // resetState uses on reopen (computeResetValues) — one source of truth.
+  const initialReset = computeResetValues(mode, override)
+  const [scalarStringValue, setScalarStringValue] = useState<string>(initialReset.scalarStringValue)
+  const [scalarBoolValue, setScalarBoolValue] = useState<boolean>(initialReset.scalarBoolValue)
+  const [vcsEntries, setVcsEntries] = useState<VcsState[]>(initialReset.vcsEntries)
+  const [vcsBuildWorkingDirectory, setVcsBuildWorkingDirectory] = useState<string>(initialReset.vcsBuildWorkingDirectory)
+  const [mavenArtifacts, setMavenArtifacts] = useState<MavenState[]>(initialReset.mavenArtifacts)
+  const [fileUrlArtifacts, setFileUrlArtifacts] = useState<FileUrlState[]>(initialReset.fileUrlArtifacts)
+  const [dockerImages, setDockerImages] = useState<DockerState[]>(initialReset.dockerImages)
+  const [packages, setPackages] = useState<PackageState[]>(initialReset.packages)
+  const [requiredToolsInput, setRequiredToolsInput] = useState<string>(initialReset.requiredToolsInput)
 
   // ---------------------------------------------------------------------------
   // Reset state when dialog opens/closes or override changes
   // ---------------------------------------------------------------------------
 
   function resetState() {
-    const t: 'scalar' | 'marker' = (() => {
-      if (mode === 'edit' && override) {
-        if (MARKER_BY_PATH.has(override.overriddenAttribute)) return 'marker'
-        return 'scalar'
-      }
-      if (presetAttribute) return MARKER_BY_PATH.has(presetAttribute) ? 'marker' : 'scalar'
-      return 'scalar'
-    })()
-    setOverrideType(t)
+    setOverrideType(resolveOverrideType(mode, override, presetAttribute))
     setAttribute(mode === 'edit' && override ? override.overriddenAttribute : (presetAttribute ?? ''))
     setVersionRange(mode === 'edit' && override ? override.versionRange : '')
 
-    if (mode === 'edit' && override) {
-      setScalarStringValue(override.value !== null && override.value !== undefined
-        ? (typeof override.value === 'string' ? override.value : String(override.value))
-        : '')
-      setScalarBoolValue(typeof override.value === 'boolean' ? override.value : false)
-
-      const mc = override.markerChildren
-      setVcsEntries((mc?.vcsEntries ?? []).map((e) => ({ name: e.name ?? '', vcsPath: e.vcsPath ?? '', branch: e.branch ?? '', tag: e.tag ?? '', hotfixBranch: e.hotfixBranch ?? '', repositoryType: e.repositoryType ?? '' })))
-      setMavenArtifacts((mc?.mavenArtifacts ?? []).map((a) => ({ groupPattern: a.groupPattern, artifactPattern: a.artifactPattern, extension: a.extension ?? '', classifier: a.classifier ?? '' })))
-      setFileUrlArtifacts((mc?.fileUrlArtifacts ?? []).map((a) => ({ url: a.url, artifactId: a.artifactId ?? '', classifier: a.classifier ?? '' })))
-      setDockerImages((mc?.dockerImages ?? []).map((d) => ({ imageName: d.imageName, flavor: d.flavor ?? '' })))
-      setPackages((mc?.packages ?? []).map((p) => ({ packageType: p.packageType, packageName: p.packageName })))
-      setRequiredToolsInput((mc?.requiredTools as string[] | null | undefined)?.join(', ') ?? '')
-    } else {
-      setScalarStringValue('')
-      setScalarBoolValue(false)
-      setVcsEntries([])
-      setMavenArtifacts([])
-      setFileUrlArtifacts([])
-      setDockerImages([])
-      setPackages([])
-      setRequiredToolsInput('')
-    }
+    const reset = computeResetValues(mode, override)
+    setScalarStringValue(reset.scalarStringValue)
+    setScalarBoolValue(reset.scalarBoolValue)
+    setVcsEntries(reset.vcsEntries)
+    setVcsBuildWorkingDirectory(reset.vcsBuildWorkingDirectory)
+    setMavenArtifacts(reset.mavenArtifacts)
+    setFileUrlArtifacts(reset.fileUrlArtifacts)
+    setDockerImages(reset.dockerImages)
+    setPackages(reset.packages)
+    setRequiredToolsInput(reset.requiredToolsInput)
   }
 
   function handleOpenChange(nextOpen: boolean) {
@@ -333,9 +599,10 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
   // ---------------------------------------------------------------------------
   // VCS helpers
   // ---------------------------------------------------------------------------
-  function addVcs() { setVcsEntries((p) => [...p, { name: '', vcsPath: '', branch: '', tag: '', hotfixBranch: '', repositoryType: '' }]) }
+  function addVcs() { setVcsEntries((p) => [...p, toVcsState({ vcsPath: '' })]) }
   function updateVcs(i: number, field: keyof VcsState, v: string) { setVcsEntries((p) => p.map((r, idx) => idx === i ? { ...r, [field]: v } : r)) }
   function removeVcs(i: number) { setVcsEntries((p) => p.filter((_, idx) => idx !== i)) }
+  const vcsErrorProps = (i: number, field: string) => fieldErrorProps('ovr-vcs', vcsEntryErrors, `${i}.${field}`)
 
   // Maven helpers
   function addMaven() { setMavenArtifacts((p) => [...p, { groupPattern: '', artifactPattern: '', extension: '', classifier: '' }]) }
@@ -358,178 +625,46 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
   function removePackage(i: number) { setPackages((p) => p.filter((_, idx) => idx !== i)) }
 
   // ---------------------------------------------------------------------------
-  // Wire body builders
-  // ---------------------------------------------------------------------------
-
-  function buildScalarValue(): unknown {
-    if (!selectedScalarAttr) return undefined
-    if (selectedScalarAttr.type === 'boolean') return scalarBoolValue
-    return scalarStringValue
-  }
-
-  function buildMarkerChildren(): MarkerChildrenPayload | null {
-    if (!selectedMarkerAttr) return null
-    const key = selectedMarkerAttr.childKey
-    // Each marker branch trims string fields and drops rows whose required
-    // fields are still blank — the modal Save is a button click (not a form
-    // submit), so HTML `required` doesn't gate the wire body. Without this
-    // a newly-added empty row reaches the server as `"   "` and 400s. Same
-    // pattern that VcsTab + DistributionTab already use for the BASE-row
-    // paths — required-field rules below mirror CRS v4 wire contract.
-    if (key === 'vcsEntries') {
-      const entries: VcsEntryRequest[] = vcsEntries
-        .map((e) => ({
-          name: (e.name || '').trim(),
-          vcsPath: e.vcsPath.trim(),
-          branch: (e.branch || '').trim(),
-          tag: (e.tag || '').trim(),
-          hotfixBranch: (e.hotfixBranch || '').trim(),
-          repositoryType: (e.repositoryType || '').trim(),
-        }))
-        .filter((e) => e.vcsPath !== '')
-        .map((e) => ({
-          name: e.name || null,
-          vcsPath: e.vcsPath,
-          branch: e.branch || null,
-          tag: e.tag || null,
-          hotfixBranch: e.hotfixBranch || null,
-          repositoryType: e.repositoryType || null,
-        }))
-      return { vcsEntries: entries }
-    }
-    if (key === 'mavenArtifacts') {
-      const arts: MavenArtifactRequest[] = mavenArtifacts
-        .map((a) => ({
-          groupPattern: a.groupPattern.trim(),
-          artifactPattern: a.artifactPattern.trim(),
-          extension: (a.extension || '').trim(),
-          classifier: (a.classifier || '').trim(),
-        }))
-        .filter((a) => a.groupPattern !== '' && a.artifactPattern !== '')
-        .map((a) => ({
-          groupPattern: a.groupPattern,
-          artifactPattern: a.artifactPattern,
-          extension: a.extension || null,
-          classifier: a.classifier || null,
-        }))
-      return { mavenArtifacts: arts }
-    }
-    if (key === 'fileUrlArtifacts') {
-      const arts: FileUrlArtifactRequest[] = fileUrlArtifacts
-        .map((a) => ({
-          url: a.url.trim(),
-          artifactId: (a.artifactId || '').trim(),
-          classifier: (a.classifier || '').trim(),
-        }))
-        .filter((a) => a.url !== '')
-        .map((a) => ({
-          url: a.url,
-          artifactId: a.artifactId || null,
-          classifier: a.classifier || null,
-        }))
-      return { fileUrlArtifacts: arts }
-    }
-    if (key === 'dockerImages') {
-      const imgs: DockerImageRequest[] = dockerImages
-        .map((d) => ({
-          imageName: d.imageName.trim(),
-          flavor: (d.flavor || '').trim(),
-        }))
-        .filter((d) => d.imageName !== '')
-        .map((d) => ({
-          imageName: d.imageName,
-          flavor: d.flavor || null,
-        }))
-      return { dockerImages: imgs }
-    }
-    if (key === 'packages') {
-      const pkgs: PackageRequest[] = packages
-        .map((p) => ({
-          packageType: p.packageType.trim(),
-          packageName: p.packageName.trim(),
-        }))
-        .filter((p) => p.packageType !== '' && p.packageName !== '')
-      return { packages: pkgs }
-    }
-    if (key === 'requiredTools') {
-      const tools = [...new Set(requiredToolsInput.split(',').map((t) => t.trim()).filter(Boolean))]
-      return { requiredTools: tools }
-    }
-    return null
-  }
-
-  // ---------------------------------------------------------------------------
   // Submit
   // ---------------------------------------------------------------------------
 
+  // Marker-child inputs bundled once for the buildMarkerChildren helper call(s) below.
+  const markerChildInputs: MarkerChildInputs = {
+    vcsEntries,
+    vcsBuildWorkingDirectory,
+    mavenArtifacts,
+    fileUrlArtifacts,
+    dockerImages,
+    packages,
+    requiredToolsInput,
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!attribute) {
-      toast({ title: 'Please select an attribute', variant: 'destructive' })
+    const invalid = validateOverrideSubmit({ attribute, overrideType, selectedScalarAttr, selectedMarkerAttr, rangeError, conflictMessage })
+    if (invalid) {
+      toast({ ...invalid, variant: 'destructive' })
       return
     }
-    // Guard against a stored attribute that no longer maps to any catalogue
-    // entry (e.g. server adds a new path the portal build doesn't know about).
-    // Without this, buildScalarValue / buildMarkerChildren return undefined /
-    // null and the wire body would be silently malformed.
-    if (overrideType === 'scalar' && !selectedScalarAttr) {
-      toast({ title: 'Unknown scalar attribute', description: attribute, variant: 'destructive' })
-      return
-    }
-    if (overrideType === 'marker' && !selectedMarkerAttr) {
-      toast({ title: 'Unknown marker attribute', description: attribute, variant: 'destructive' })
-      return
-    }
-    // ADR-018: field-override ranges may be bounded, open-upper (`[2.0,)`), or
-    // historical-left-unbounded; only the all-versions shapes denote the base
-    // default, and an inverted/empty interval (`[3076,3010]`) is rejected before
-    // the round-trip. Server enforces the same as the backstop.
-    if (rangeError !== null) {
-      toast({ title: rangeError, variant: 'destructive' })
-      return
-    }
-    // R3 client-side preview: prevent submission of a range that overlaps or
-    // duplicates a sibling override on the same attribute. CRS-side P-Overlap
-    // will catch the unknown-parse cases this skips.
-    if (conflictMessage !== null) {
-      toast({
-        title: conflictMessage,
-        variant: 'destructive',
-      })
-      return
-    }
+    const value = overrideType === 'scalar' ? buildScalarValue(selectedScalarAttr, scalarBoolValue, scalarStringValue) : null
+    const children = overrideType === 'marker' ? buildMarkerChildren(selectedMarkerAttr, markerChildInputs) : null
     if (mode === 'edit' && override) {
-      if (overrideType === 'scalar') {
-        queueUpdate(override.id, { versionRange, value: buildScalarValue(), markerChildren: null })
-      } else {
-        queueUpdate(override.id, { versionRange, value: null, markerChildren: buildMarkerChildren() })
-      }
+      queueUpdate(override.id, { versionRange, value, markerChildren: children })
       // Collapse a coalesced group: the row is presented as ONE override, so on
       // save it becomes one — the edited representative keeps the (possibly
       // narrowed) range and the former siblings are dropped. Narrowing the range
       // therefore shrinks the override's coverage exactly as narrowing a genuine
       // single override would; the backing rows are an implementation detail.
       collapseMemberIds?.forEach((id) => queueDelete(id))
-    } else if (overrideType === 'scalar') {
-      queueCreate({ overriddenAttribute: attribute, versionRange, value: buildScalarValue(), markerChildren: null })
     } else {
-      queueCreate({ overriddenAttribute: attribute, versionRange, value: null, markerChildren: buildMarkerChildren() })
+      queueCreate({ overriddenAttribute: attribute, versionRange, value, markerChildren: children })
     }
     onOpenChange(false)
   }
 
-  // Single source of truth for the range field's validity + message: bad syntax,
-  // then all-versions (= base default), then an inverted/empty interval. Empty
-  // input reads as invalid (blocks submit / disables the button) but the inline
-  // message is suppressed until the user types (see the render guard).
-  const rangeError: string | null =
-    !isValidVersionRange(versionRange)
-      ? 'Invalid version range syntax'
-      : !isAllowedOverrideRange(versionRange)
-        ? 'All-versions range is the base default — use a bounded or open-upper sub-range'
-        : isEmptyVersionRange(versionRange)
-          ? 'Empty range — the lower bound must be below the upper bound'
-          : null
+  // Empty input reads as invalid (blocks submit / disables the button) but the
+  // inline message is suppressed until the user types (see the render guard).
+  const rangeError = computeRangeError(versionRange)
   const versionRangeInvalid = rangeError !== null
   // Walk existing overrides on the same attribute for client-side conflict
   // preview. Partial overlap, strict containment, and semantic-equal duplicates
@@ -553,11 +688,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
     }
     return null
   })()
-  const conflictMessage = overlapConflict === null
-    ? null
-    : overlapConflict.kind === 'equal'
-      ? `Semantically equal to existing override ${overlapConflict.range}`
-      : `Overlaps with existing override ${overlapConflict.range}`
+  const conflictMessage = describeOverlapConflict(overlapConflict)
   const versionRangeBlocks = versionRangeInvalid || overlapConflict !== null
 
   // ---------------------------------------------------------------------------
@@ -596,48 +727,14 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
           {/* ── Attribute selector ── */}
           <div className="space-y-1.5">
             <Label htmlFor="attribute">Attribute</Label>
-            {mode === 'edit' || presetAttribute ? (
-              <p className="text-sm font-mono text-muted-foreground px-3 py-2 rounded-md border bg-muted">
-                {attribute}
-              </p>
-            ) : overrideType === 'scalar' ? (
-              <Select value={attribute} onValueChange={setAttribute}>
-                <SelectTrigger id="attribute">
-                  <SelectValue placeholder="Select attribute..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectLabel>Build</SelectLabel>
-                    {SCALAR_ATTRS.filter((a) => a.path.startsWith('build.')).map((a) => (
-                      <SelectItem key={a.path} value={a.path}>{attrLabel(a)}</SelectItem>
-                    ))}
-                  </SelectGroup>
-                  <SelectGroup>
-                    <SelectLabel>Escrow</SelectLabel>
-                    {SCALAR_ATTRS.filter((a) => a.path.startsWith('escrow.')).map((a) => (
-                      <SelectItem key={a.path} value={a.path}>{attrLabel(a)}</SelectItem>
-                    ))}
-                  </SelectGroup>
-                  <SelectGroup>
-                    <SelectLabel>Jira</SelectLabel>
-                    {SCALAR_ATTRS.filter((a) => a.path.startsWith('jira.')).map((a) => (
-                      <SelectItem key={a.path} value={a.path}>{attrLabel(a)}</SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            ) : (
-              <Select value={attribute} onValueChange={setAttribute}>
-                <SelectTrigger id="attribute">
-                  <SelectValue placeholder="Select marker..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {MARKER_ATTRS.map((a) => (
-                    <SelectItem key={a.path} value={a.path}>{attrLabel(a)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            <AttributeSelector
+              mode={mode}
+              presetAttribute={presetAttribute}
+              overrideType={overrideType}
+              attribute={attribute}
+              setAttribute={setAttribute}
+              attrLabel={attrLabel}
+            />
           </div>
 
           {/* ── Version Range ── */}
@@ -669,31 +766,22 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
           {overrideType === 'scalar' && attribute && (
             <div className="space-y-1.5">
               <Label>Value</Label>
-              {isBoolean ? (
-                <div className="flex items-center gap-3">
-                  <Switch
-                    id="scalar-bool"
-                    checked={scalarBoolValue}
-                    onCheckedChange={setScalarBoolValue}
-                  />
-                  <Label htmlFor="scalar-bool" className="cursor-pointer text-sm">
-                    {scalarBoolValue ? 'true' : 'false'}
-                  </Label>
-                </div>
-              ) : (
-                <Input
-                  id="scalar-string"
-                  value={scalarStringValue}
-                  onChange={(e) => setScalarStringValue(e.target.value)}
-                  placeholder={`Value for ${selectedScalarAttr ? attrLabel(selectedScalarAttr) : attribute}`}
-                />
-              )}
+              <ScalarValueEditor
+                isBoolean={isBoolean}
+                scalarBoolValue={scalarBoolValue}
+                setScalarBoolValue={setScalarBoolValue}
+                scalarStringValue={scalarStringValue}
+                setScalarStringValue={setScalarStringValue}
+                selectedScalarAttr={selectedScalarAttr}
+                attribute={attribute}
+                attrLabel={attrLabel}
+              />
             </div>
           )}
 
           {overrideType === 'marker' && attribute && selectedMarkerAttr && (
             <div className="space-y-3">
-              <Label>{attrLabel(selectedMarkerAttr)} — entries</Label>
+              <Label>{attrLabel(selectedMarkerAttr)} — {selectedMarkerAttr.childKey === 'vcsEntries' ? 'VCS Roots' : 'entries'}</Label>
 
               {/* VCS Settings */}
               {selectedMarkerAttr.childKey === 'vcsEntries' && (
@@ -701,15 +789,16 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
                   {vcsEntries.map((entry, i) => (
                     <div key={i} className="rounded-md border p-3 space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-muted-foreground">Entry {i + 1}</span>
-                        <Button variant="ghost" size="sm" type="button" onClick={() => removeVcs(i)} className="h-7 text-destructive hover:text-destructive">
+                        <span className="text-xs font-medium text-muted-foreground">VCS Root {i + 1}</span>
+                        <Button variant="ghost" size="sm" type="button" onClick={() => removeVcs(i)} aria-label={`Remove VCS Root ${i + 1}`} className="h-7 text-destructive hover:text-destructive">
                           <Trash2 className="h-3 w-3" />
                         </Button>
                       </div>
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         <div className="space-y-1">
-                          <Label className="text-xs">Name</Label>
-                          <Input value={entry.name} onChange={(e) => updateVcs(i, 'name', e.target.value)} placeholder="Entry name" className="text-xs" />
+                          <Label htmlFor={`ovr-vcs-${i}-name`} className="text-xs">Name</Label>
+                          {/* Read-only: the registry derives the name; the stored value is sent unchanged. */}
+                          <Input id={`ovr-vcs-${i}-name`} value={entry.name} disabled readOnly placeholder="Set by the registry" className="bg-muted text-xs" />
                         </div>
                         <div className="space-y-1">
                           <Label className="text-xs">VCS Path <span className="text-destructive">*</span></Label>
@@ -732,16 +821,40 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
                           <Label className="text-xs">Hotfix Branch</Label>
                           <Input value={entry.hotfixBranch} onChange={(e) => updateVcs(i, 'hotfixBranch', e.target.value)} placeholder="Hotfix branch pattern" className="font-mono text-xs" />
                         </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1">
+                            <Label htmlFor={`ovr-vcs-${i}-sourcePath`} className="text-xs">Source Path</Label>
+                            <FieldInfo path="vcs.sourcePath" label="Source Path" />
+                          </div>
+                          <Input id={`ovr-vcs-${i}-sourcePath`} value={entry.sourcePath} onChange={(e) => updateVcs(i, 'sourcePath', e.target.value)} placeholder="Whole repository" className="font-mono text-xs" {...vcsErrorProps(i, 'sourcePath')} />
+                          <EntryError id={`ovr-vcs-${i}-sourcePath-error`} message={vcsEntryErrors[`${i}.sourcePath`]} />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1">
+                            <Label htmlFor={`ovr-vcs-${i}-checkoutDirectory`} className="text-xs">Checkout Directory</Label>
+                            <FieldInfo path="vcs.checkoutDirectory" label="Checkout Directory" />
+                          </div>
+                          <Input id={`ovr-vcs-${i}-checkoutDirectory`} value={entry.checkoutDirectory} onChange={(e) => updateVcs(i, 'checkoutDirectory', e.target.value)} placeholder="Checkout root" className="font-mono text-xs" {...vcsErrorProps(i, 'checkoutDirectory')} />
+                          <EntryError id={`ovr-vcs-${i}-checkoutDirectory-error`} message={vcsEntryErrors[`${i}.checkoutDirectory`]} />
+                        </div>
                       </div>
                     </div>
                   ))}
                   {vcsEntries.length === 0 && (
-                    <div className="rounded-md border border-dashed p-3 text-center text-xs text-muted-foreground">No VCS entries.</div>
+                    <div className="rounded-md border border-dashed p-3 text-center text-xs text-muted-foreground">No VCS Roots.</div>
                   )}
                   <Button type="button" variant="ghost" size="sm" onClick={addVcs}>
                     <Plus className="h-4 w-4" />
-                    Add Entry
+                    Add VCS Root
                   </Button>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1">
+                      <Label htmlFor="ovr-vcs-buildWorkingDirectory" className="text-xs">Build Working Directory</Label>
+                      <FieldInfo path="vcs.buildWorkingDirectory" label="Build Working Directory" />
+                    </div>
+                    <Input id="ovr-vcs-buildWorkingDirectory" value={vcsBuildWorkingDirectory} onChange={(e) => setVcsBuildWorkingDirectory(e.target.value)} placeholder="Checkout root" className="font-mono text-xs" {...fieldErrorProps('ovr-vcs', vcsEntryErrors, 'buildWorkingDirectory')} />
+                    <EntryError id="ovr-vcs-buildWorkingDirectory-error" message={vcsEntryErrors.buildWorkingDirectory} />
+                  </div>
                 </div>
               )}
 

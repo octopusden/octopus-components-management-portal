@@ -82,13 +82,20 @@ function makeComponent(over: Partial<ComponentDetail> = {}): ComponentDetail {
 // capture the live section so tests can inspect its slice after interactions.
 const captured: { section?: ReturnType<typeof useBuildSection> } = {}
 function Harness({
-  component, canEdit = true, conflictError,
-}: { component: ComponentDetail; canEdit?: boolean; conflictError?: string | null }) {
+  component, canEdit = true, conflictError, buildWorkingDirectory, onEditBuildWorkingDirectory,
+}: {
+  component: ComponentDetail; canEdit?: boolean; conflictError?: string | null
+  buildWorkingDirectory?: string; onEditBuildWorkingDirectory?: () => void
+}) {
   const section = useBuildSection(component)
   captured.section = section
   return (
     <TooltipProvider>
-      <BuildTab section={section} canEdit={canEdit} conflictError={conflictError} />
+      <BuildTab
+        section={section} canEdit={canEdit} conflictError={conflictError}
+        buildWorkingDirectory={buildWorkingDirectory}
+        onEditBuildWorkingDirectory={onEditBuildWorkingDirectory}
+      />
     </TooltipProvider>
   )
 }
@@ -293,5 +300,27 @@ describe('BuildTab — RMS registered-value conflict banner', () => {
       msg,
     )
     expect(screen.getByRole('alert')).toHaveTextContent(msg)
+  })
+})
+
+describe('BuildTab — Build Working Directory (read-only, edited on the VCS tab)', () => {
+  it('shows the value, labelled with its TeamCity parameter, and links to the VCS tab', async () => {
+    const onEdit = vi.fn()
+    render(<Harness component={makeComponent()} buildWorkingDirectory="core/app" onEditBuildWorkingDirectory={onEdit} />)
+    expect(screen.getByText('Build Working Directory (WORK_DIR in TC)')).toBeInTheDocument()
+    expect(screen.getByText('core/app')).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: /build working directory/i })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /edit on the vcs tab/i }))
+    expect(onEdit).toHaveBeenCalledTimes(1)
+  })
+
+  it('an empty value reads as the checkout root', () => {
+    render(<Harness component={makeComponent()} buildWorkingDirectory="" onEditBuildWorkingDirectory={() => {}} />)
+    expect(screen.getByText('Checkout root')).toBeInTheDocument()
+  })
+
+  it('is not shown when the page passes no value', () => {
+    renderTab(makeComponent())
+    expect(screen.queryByText('Build Working Directory (WORK_DIR in TC)')).not.toBeInTheDocument()
   })
 })

@@ -27,7 +27,7 @@ vi.mock('./overridesDraft', () => ({
 
 // Stub the modal — its internals are covered by OverrideRowEditor.test.tsx.
 // Capture the props VcsTab opens it with so we can assert the wiring.
-type CapturedEditorProps = { open: boolean; mode: string; presetAttribute?: string; override?: FieldOverride; collapseMemberIds?: string[] }
+type CapturedEditorProps = { open: boolean; mode: string; presetAttribute?: string; override?: FieldOverride; collapseMemberIds?: string[]; vcsEntryErrors?: Record<string, string> }
 let lastEditorProps: CapturedEditorProps | null = null
 vi.mock('./OverrideRowEditor', () => ({
   OverrideRowEditor: (props: CapturedEditorProps) => {
@@ -351,5 +351,164 @@ describe('VcsTab — VCS host validation', () => {
     }))
     renderWithGit(c, 'https://bitbucket.example.com')
     expect(screen.queryByText(/vcs host must be/i)).toBeNull()
+  })
+})
+
+describe('VcsTab — placement fields (Source Path / Checkout Directory)', () => {
+  const twoEntries = () => makeComponent({}, makeBaseRow({
+    vcsEntries: [
+      { id: 'vcs-1', sortOrder: 0, name: 'core', vcsPath: 'ssh://one', repositoryType: 'GIT', tag: null, branch: null, hotfixBranch: null, sourcePath: 'src', checkoutDirectory: null },
+      { id: 'vcs-2', sortOrder: 1, name: 'feature', vcsPath: 'ssh://two', repositoryType: 'GIT', tag: null, branch: null, hotfixBranch: null, sourcePath: null, checkoutDirectory: 'feature' },
+    ],
+  }))
+  const sentEntries = () => captured.section!.slice.request.baseConfiguration!.vcsEntries!
+
+  it('prefills Source Path and Checkout Directory from the registry', () => {
+    renderTab(twoEntries())
+    expect(screen.getAllByLabelText('Source Path').map((i) => (i as HTMLInputElement).value)).toEqual(['src', ''])
+    expect((screen.getAllByLabelText('Checkout Directory')[1] as HTMLInputElement).value).toBe('feature')
+  })
+
+  it('names each remove-entry button for assistive technology', () => {
+    renderTab(twoEntries())
+    expect(screen.getByRole('button', { name: 'Remove VCS Root 1' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remove VCS Root 2' })).toBeInTheDocument()
+  })
+
+  it('sends the edited placement on save', () => {
+    renderTab(twoEntries())
+    const sp = screen.getAllByLabelText('Source Path')
+    fireEvent.change(sp[0]!, { target: { value: 'mapper' } })
+    fireEvent.change(sp[1]!, { target: { value: 'data' } })
+    expect(captured.section!.slice.isDirty).toBe(true)
+    expect(sentEntries().map((e) => [e.sourcePath, e.checkoutDirectory])).toEqual([['mapper', null], ['data', 'feature']])
+  })
+
+  it('sends null for a cleared secondary Checkout Directory', () => {
+    renderTab(twoEntries())
+    fireEvent.change(screen.getAllByLabelText('Checkout Directory')[1]!, { target: { value: '  ' } })
+    expect(sentEntries()[1]!.checkoutDirectory).toBeNull()
+  })
+
+  it('describes both fields; the Checkout Directory description names the combined location', () => {
+    renderTab(twoEntries())
+    expect(document.querySelectorAll('[data-field-path="vcs.sourcePath"]')).toHaveLength(2)
+    expect(document.querySelectorAll('[data-field-path="vcs.checkoutDirectory"]').length).toBeGreaterThan(0)
+    expect(fieldDescriptions['vcs.checkoutDirectory']).toContain('Checkout Directory / Source Path')
+  })
+})
+
+describe('VcsTab — Checkout Directory on every entry', () => {
+  const twoEntries = () => makeComponent({}, makeBaseRow({
+    vcsEntries: [
+      { id: 'vcs-1', sortOrder: 0, name: 'core', vcsPath: 'ssh://one', repositoryType: 'GIT', tag: null, branch: null, hotfixBranch: null },
+      { id: 'vcs-2', sortOrder: 1, name: 'feature', vcsPath: 'ssh://two', repositoryType: 'GIT', tag: null, branch: null, hotfixBranch: null, checkoutDirectory: 'feature' },
+    ],
+  }))
+  const sent = () => captured.section!.slice.request.baseConfiguration!.vcsEntries!.map((e) => [e.vcsPath, e.checkoutDirectory])
+
+  it('lets the first entry\'s Checkout Directory be edited and sends it', () => {
+    renderTab(twoEntries())
+    const cd = screen.getAllByLabelText('Checkout Directory')
+    for (const f of cd) expect(f).not.toHaveAttribute('readonly')
+    expect(screen.queryByText(/checked out at the checkout root, so it has no Checkout Directory/i)).toBeNull()
+    fireEvent.change(cd[0]!, { target: { value: 'core' } })
+    fireEvent.change(cd[1]!, { target: { value: '' } })
+    expect(sent()).toEqual([['ssh://one', 'core'], ['ssh://two', null]])
+  })
+
+  it('an entry that becomes first keeps its own Checkout Directory', () => {
+    renderTab(twoEntries())
+    act(() => captured.section!.removeEntry(0))
+    expect((screen.getByLabelText('Checkout Directory') as HTMLInputElement).value).toBe('feature')
+    expect(sent()).toEqual([['ssh://two', 'feature']])
+  })
+})
+
+describe('VcsTab — Name is read-only', () => {
+  it('shows Name read-only and sends the stored Name unchanged (none for a new entry)', () => {
+    renderTab(makeComponent())
+    expect(screen.getByDisplayValue('main')).toHaveAttribute('readonly')
+    act(() => captured.section!.addEntry())
+    fireEvent.change(screen.getAllByPlaceholderText('ssh://git@...')[1]!, { target: { value: 'ssh://two' } })
+    expect(captured.section!.slice.request.baseConfiguration!.vcsEntries!.map((e) => e.name)).toEqual(['main', null])
+  })
+})
+
+describe('VcsTab — placement errors on a coalesced per-range group', () => {
+  it('passes the editor an error that landed on a non-representative member', () => {
+    const empty = (id: string, versionRange: string): FieldOverride => ({
+      id, overriddenAttribute: 'vcs.settings', versionRange, rowType: 'MARKER',
+      value: null, markerChildren: { vcsEntries: [] }, createdAt: null, updatedAt: null,
+    })
+    mockEffective = [empty('a', '[1.0,1.2.471)'), empty('b', '[1.2.471,1.2.474)')]
+    renderTab(makeComponent())
+    act(() => {
+      captured.section!.applyServerErrors(
+        new Map([['fieldOverrides[1].vcsEntries[1].checkoutDirectory', 'required on a secondary VCS entry']]),
+        ['a', 'b'],
+      )
+    })
+    fireEvent.click(screen.getByRole('button', { name: /edit override \[1\.0,1\.2\.474\)/i }))
+    expect(lastEditorProps!.override?.id).toBe('a')
+    expect(lastEditorProps!.vcsEntryErrors).toEqual({ '1.checkoutDirectory': 'required on a secondary VCS entry' })
+  })
+})
+
+describe('VcsTab — Build Working Directory (base row)', () => {
+  const withBwd = (buildWorkingDirectory: string | null) =>
+    makeComponent({}, makeBaseRow({ buildWorkingDirectory } as Partial<ComponentConfiguration>))
+  const base = () => captured.section!.slice.request.baseConfiguration!
+
+  it('prefills the base value and sends an edit', () => {
+    renderTab(withBwd('core'))
+    const field = screen.getByLabelText('Build Working Directory') as HTMLInputElement
+    expect(field.value).toBe('core')
+    expect(captured.section!.slice.isDirty).toBe(false)
+    fireEvent.change(field, { target: { value: ' core/mapper ' } })
+    expect(captured.section!.slice.isDirty).toBe(true)
+    expect(base().buildWorkingDirectory).toBe('core/mapper')
+  })
+
+  it('sends "" when cleared, so the registry clears the stored value', () => {
+    renderTab(withBwd('core'))
+    fireEvent.change(screen.getByLabelText('Build Working Directory'), { target: { value: '  ' } })
+    expect(captured.section!.slice.isDirty).toBe(true)
+    expect(base().buildWorkingDirectory).toBe('')
+  })
+
+  it('sends "" with an emptied entry list', () => {
+    renderTab(withBwd('core'))
+    act(() => captured.section!.removeEntry(0))
+    expect(base().vcsEntries).toEqual([])
+    expect(base().buildWorkingDirectory).toBe('')
+    // The Review dialog shows the clear that the PATCH carries.
+    expect(captured.section!.slice.diff).toContainEqual(
+      expect.objectContaining({ label: 'VCS · Build Working Directory', oldValue: 'core', newValue: '—' }),
+    )
+  })
+})
+
+describe('VcsTab — Build Working Directory with no entries sent', () => {
+  it('a value typed next to only path-less entries does not make the tab dirty, as none is sent', () => {
+    renderTab(makeComponent({}, makeBaseRow({ vcsEntries: [] })))
+    act(() => captured.section!.addEntry())
+    fireEvent.change(screen.getByLabelText('Build Working Directory'), { target: { value: 'core' } })
+    expect(captured.section!.slice.request.baseConfiguration!.buildWorkingDirectory).toBe('')
+    expect(captured.section!.slice.isDirty).toBe(false)
+  })
+})
+
+describe('VcsTab — VCS Root wording', () => {
+  it('calls the entries VCS Roots in the heading, card labels and buttons', () => {
+    renderTab(makeComponent())
+    expect(screen.getByRole('heading', { name: 'VCS Roots' })).toBeInTheDocument()
+    expect(screen.getByText('VCS Root 1')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^add vcs root$/i })).toBeInTheDocument()
+  })
+
+  it('names the empty state in the same words', () => {
+    renderTab(makeComponent({}, makeBaseRow({ vcsEntries: [] })))
+    expect(screen.getByText('No VCS Roots. Click "Add VCS Root" to create one.')).toBeInTheDocument()
   })
 })
