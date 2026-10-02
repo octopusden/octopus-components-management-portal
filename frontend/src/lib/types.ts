@@ -1126,6 +1126,7 @@ export type PlacementDiffRowStatus =
   | 'IN_SYNC'
   | 'INVALID'
   | 'TC_ERROR'
+  | 'ROOTS_MISMATCH'
 
 /** One VCS root entry's current vs. TeamCity-derived Checkout Directory / Source Path. */
 export interface PlacementEntryDiff {

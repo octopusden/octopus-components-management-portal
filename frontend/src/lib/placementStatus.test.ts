@@ -28,6 +28,7 @@ describe('getPlacementStatusTone', () => {
     expect(getPlacementStatusTone('OUTSIDE_TEMPLATES')).toBe('warning')
     expect(getPlacementStatusTone('COMPILE_PAUSED')).toBe('warning')
     expect(getPlacementStatusTone('MANUAL_EDIT')).toBe('warning')
+    expect(getPlacementStatusTone('ROOTS_MISMATCH')).toBe('warning')
   })
 })
 
@@ -42,6 +43,7 @@ describe('isPlacementRowSelectable', () => {
 
   it('is false for any other non-RESOLVED status', () => {
     expect(isPlacementRowSelectable({ status: 'CONFLICT', rowLabel: 'BASE' })).toBe(false)
+    expect(isPlacementRowSelectable({ status: 'ROOTS_MISMATCH', rowLabel: 'BASE' })).toBe(false)
   })
 })
 
@@ -62,6 +64,7 @@ describe('getPlacementStatusLabel', () => {
     expect(getPlacementStatusLabel('NO_CHAIN')).toBe('No TeamCity chain found')
     expect(getPlacementStatusLabel('OUTSIDE_TEMPLATES')).toBe('Not on a supported template')
     expect(getPlacementStatusLabel('COMPILE_PAUSED')).toBe('Compile configurations paused')
+    expect(getPlacementStatusLabel('ROOTS_MISMATCH')).toBe('VCS roots differ from the registry')
   })
 
   it('labels the "nothing to do" statuses', () => {
@@ -80,6 +83,7 @@ describe('getPlacementStatusBucket', () => {
     expect(getPlacementStatusBucket('NO_CHAIN')).toBe('cantDerive')
     expect(getPlacementStatusBucket('OUTSIDE_TEMPLATES')).toBe('cantDerive')
     expect(getPlacementStatusBucket('COMPILE_PAUSED')).toBe('cantDerive')
+    expect(getPlacementStatusBucket('ROOTS_MISMATCH')).toBe('cantDerive')
     expect(getPlacementStatusBucket('IN_SYNC')).toBe('nothingToDo')
   })
 })
