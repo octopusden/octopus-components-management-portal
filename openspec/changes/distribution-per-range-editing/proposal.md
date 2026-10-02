@@ -48,10 +48,9 @@ issue #146 that was deferred when the rest of per-range editing shipped.
 **Portal only if the narrow contract is accepted; cross-repo if it is not.** As
 written the preview reads data the API already returns and applies rules the
 registry already implements, so no CRS change is required and nothing has to
-merge first. If instead resolution moves to a registry endpoint — the option
-design.md recommends considering, because it removes rather than extends the
-duplication — this becomes a CRS change that merges first, with the Portal work
-following.
+merge first. If instead resolution moves to a registry endpoint — option 3
+in design.md, which removes the duplication rather than extending it — this
+becomes a CRS change that merges first, with the Portal work following.
 
 Either way the main risk is the same one: as specified, the Portal holds a
 second implementation of resolution semantics that the registry owns. The two

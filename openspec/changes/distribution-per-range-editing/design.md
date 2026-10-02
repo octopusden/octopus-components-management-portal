@@ -32,10 +32,6 @@ client-side.
 
 **Non-Goals:**
 
-- Asking the registry to resolve the preview. A round trip per keystroke for a
-  read the client can already compute is not worth the coupling, and the
-  endpoint answers for the saved component, not for the unsaved override draft
-  the user is editing.
 - Reproducing scalar-override or ownership resolution. This change is limited to
   the four distribution marker paths.
 
@@ -126,7 +122,6 @@ it: `1.2-0003`, `3.0.0-0`, `2.1.0-RC1`, `1.0.0-SNAPSHOT`. Those are ordinary
 shapes in this registry, not exotic ones, and the same limit applies to a range
 whose bounds are qualified.
 
-An earlier draft of this document claimed the affected set was small. It is not.
 Built as specified, the preview would decline a large share of real components —
 and a preview that answers "cannot evaluate" for the versions a team actually
 ships is not worth the code. Three ways out, and the choice belongs to the
