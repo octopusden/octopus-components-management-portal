@@ -1,9 +1,11 @@
-> Depends on CRS SYS-099 (`POST /rest/api/4/components/{id}/distribution/preview`).
-> CRS merges first; the Portal re-vendors the v4 spec after.
+> Depends on CRS SYS-099 (`POST /rest/api/4/components/{idOrName}/distribution/preview`).
+> CRS merges first; the Portal re-vendors the v4 spec from `main` after.
 
 ## 1. API surface
 
-- [ ] 1.1 Vendor the CRS spec carrying SYS-099 (`CRS_SPEC_REF=<branch> npm run vendor-spec`)
+- [ ] 1.1 Vendor the CRS spec carrying SYS-099 from the CRS branch
+      (`CRS_SPEC_REF=<branch> npm run vendor-spec`); re-vendor from `main` after
+      CRS merges
 - [ ] 1.2 Failing tests in `hooks/useDistributionPreview.test.ts`: posts the
       version with the override and supported-version drafts; blank or
       whitespace version issues no request; maps a 400 to an invalid-input state
@@ -16,7 +18,10 @@
       `api.post`
 - [ ] 2.2 Add the version box (debounced) and per-subsection attribution to
       `DistributionTab.tsx`
-- [ ] 2.3 Pass the supported-versions draft from `ComponentDetailPage.tsx`
+- [ ] 2.3 Failing page test in `ComponentDetailPage` tests: entering a version
+      keeps Save disabled and sends no write; the preview works for a user
+      without `canEdit`; the supported-versions draft reaches the request
+- [ ] 2.4 Pass the supported-versions draft from `ComponentDetailPage.tsx`
 
 ## 3. Winning row
 
@@ -27,6 +32,6 @@
 
 ## 4. Close out
 
-- [ ] 4.1 `npm run lint`, `npm run typecheck`, `npm run test:coverage`
+- [ ] 4.1 `npm run lint`, `npm run typecheck`, the touched vitest suites, `npm run test:coverage`
 - [ ] 4.2 `./gradlew qualityStatic`
 - [ ] 4.3 Update `docs/features/component-detail.md` — Distribution tab section

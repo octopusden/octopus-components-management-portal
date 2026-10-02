@@ -32,11 +32,13 @@ second copy does the most damage.
 ## Decisions
 
 **A stateless CRS endpoint resolves a candidate state.**
-`POST /rest/api/4/components/{id}/distribution/preview` with
+`POST /rest/api/4/components/{idOrName}/distribution/preview` with
 `{ version, fieldOverrides?, supportedVersions? }`. `fieldOverrides` is the
-same `FieldOverrideUpsertRequest[]` the combined Save sends; `supportedVersions`
-is `{ all, ranges }`. Either one omitted means "use what is saved". The response
-is a verdict, not children:
+full `FieldOverrideUpsertRequest[]` the combined Save would send, and replaces
+the saved set — a deleted draft row is simply absent. `supportedVersions` is
+`{ all, ranges }`. Either one omitted means "use what is saved". The response
+is a verdict, not children, with one entry per `distribution.*` family (Docker
+included) and `paths: []` when unsupported:
 
 ```
 { version, supported,
@@ -69,13 +71,17 @@ that the path's answer may be incomplete. A supported-version range that does
 not parse counts as covering — the registry's gate is conservative in that
 direction, preferring to serve a configuration over a false not-found.
 
-**The winning row is identified by group.** The per-range list renders coalesced
-groups of contiguous same-value overrides. The Portal maps each matched range
-back to the group containing that member and marks the group.
+**The winning row is identified by echoed range text.** CRS echoes each matched
+range exactly as sent, so the Portal finds the draft row by attribute and
+`versionRange` string. The per-range list renders contiguous same-value
+overrides as one row, so the row containing that member is the one marked.
 
 **Debounced, cached, read-only.** Same pattern as the Jira version preview:
 350 ms debounce over the serialised request, react-query cache keyed by it, no
-retries. A 400 (unparseable version) shows as invalid input.
+retries. The only 400 is an unparseable version, shown as invalid input;
+candidate data never fails the request. No request is sent until the
+supported-versions draft has loaded, so a missing draft is never read as
+"unrestricted".
 
 ## Risks / Trade-offs
 

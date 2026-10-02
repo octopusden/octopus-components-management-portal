@@ -12,7 +12,7 @@ The Distribution tab SHALL offer a control for entering a concrete version to
 preview. The entered version SHALL NOT be persisted, SHALL NOT mark the editor
 dirty, and SHALL NOT participate in the combined Save. The preview SHALL be
 available to every user who can open the component (`ACCESS_COMPONENTS`),
-independent of edit rights.
+independent of edit rights (`ComponentDetail.canEdit`).
 
 #### Scenario: Entering a version leaves the form clean
 
@@ -25,6 +25,18 @@ independent of edit rights.
 - **WHEN** a user who cannot edit the component opens the Distribution tab
 - **THEN** the preview control is usable and its results are shown, while the
   add, edit and delete actions remain disabled
+
+#### Scenario: Preview follows the drafts
+
+- **WHEN** a version is entered and the user then adds, edits or deletes a
+  per-range row or a supported-version range without saving
+- **THEN** the preview updates to the edited drafts
+
+#### Scenario: Only the settled input is shown
+
+- **WHEN** the user types a version quickly
+- **THEN** results for intermediate input are not shown; while the settled
+  version is being resolved the tab says so
 
 #### Scenario: Blank input requests nothing
 
@@ -65,6 +77,12 @@ resolve independently of each other.
   that range, and the Packages subsection shows the base packages attributed to
   the component level
 
+#### Scenario: Component without per-range overrides
+
+- **WHEN** the component has no per-range overrides and a supported version is
+  previewed
+- **THEN** every subsection shows its base list and no row is marked
+
 #### Scenario: A gap between ranges falls back to base
 
 - **WHEN** a path has overrides for `[1.0,2.0)` and `[3.0,4.0)` and the version
@@ -86,8 +104,9 @@ resolve independently of each other.
 ### Requirement: The winning row is marked
 
 Where an override determines a path's outcome, the per-range row containing it
-SHALL be marked as in effect, including when it is an interior member of a
-coalesced group.
+SHALL carry an "In effect" badge. The list shows contiguous same-value overrides
+as one row; when the winning override is one of several merged into a row, that
+row is the one marked.
 
 #### Scenario: Winning row is identifiable
 
@@ -128,5 +147,5 @@ coalesced group.
 
 #### Scenario: Preview request fails
 
-- **WHEN** the preview request fails for any other reason
+- **WHEN** the preview request fails for any other reason, including 401 or 403
 - **THEN** the tab states that the preview is unavailable and shows no result
