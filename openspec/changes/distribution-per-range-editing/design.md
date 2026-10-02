@@ -76,16 +76,18 @@ range exactly as sent, so the Portal finds the draft row by attribute and
 `versionRange` string. The per-range list renders contiguous same-value
 overrides as one row, so the row containing that member is the one marked.
 
-**Debounced, cached, read-only.** Same pattern as the Jira version preview:
-350 ms debounce over the serialised request, react-query cache keyed by it, no
-retries. The only 400 is an unparseable version, shown as invalid input;
-candidate data never fails the request. No request is sent until the
-supported-versions draft has loaded, so a missing draft is never read as
-"unrestricted".
+**Debounced, cached, read-only.** The typed version is debounced (350 ms);
+draft edits are discrete actions and re-request at once. React-query caches by
+the request content, with no retries. The only 400 is an unparseable version,
+shown as invalid input; candidate data never fails the request. No request is
+sent until both drafts have loaded, so a missing draft is never read as "no
+overrides" or "unrestricted"; a draft that failed to load is omitted and the
+registry uses the saved state.
 
 ## Risks / Trade-offs
 
-- **A request per settled keystroke.** Bounded by the debounce and cache; the
+- **A request per settled version or draft edit.** Bounded by the debounce and
+  cache; the
   endpoint touches one component and no external service.
 - **The preview is only as current as the drafts sent.** Both drafts are sent on
   every request, so there is nothing to go stale between them.
