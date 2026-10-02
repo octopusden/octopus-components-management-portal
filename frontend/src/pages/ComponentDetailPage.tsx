@@ -1417,9 +1417,9 @@ export function ComponentDetailPage() {
   // invalidateOverrideAndComponent, and window-focus refetches both — so a fresh
   // version never pairs with a stale override set. (A fully snapshot-coupled
   // baseline derived from component.configurations is a possible follow-up.)
-  const { data: serverOverrides = [], isLoading: overridesLoading } = useFieldOverrides(id ?? '')
+  const { data: serverOverrides = [], isLoading: overridesLoading, isError: overridesError } = useFieldOverrides(id ?? '')
   return (
-    <OverridesDraftProvider componentId={id ?? ''} serverOverrides={serverOverrides} serverLoading={overridesLoading}>
+    <OverridesDraftProvider componentId={id ?? ''} serverOverrides={serverOverrides} serverLoading={overridesLoading} serverError={overridesError}>
       <ComponentDetailEditor />
     </OverridesDraftProvider>
   )

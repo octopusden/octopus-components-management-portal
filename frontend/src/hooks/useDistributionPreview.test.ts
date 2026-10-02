@@ -52,15 +52,8 @@ describe('useDistributionPreview', () => {
     expect(result.current.data).toEqual(RESPONSE)
   })
 
-  it('trims the version before sending', async () => {
-    mockApi.post.mockResolvedValue(RESPONSE)
-    renderHook(() => useDistributionPreview('c-1', request('  1.5 '), true), { wrapper: makeWrapper() })
-    await waitFor(() => expect(mockApi.post).toHaveBeenCalled())
-    expect((mockApi.post.mock.calls[0]?.[1] as DistributionPreviewRequest).version).toBe('1.5')
-  })
-
-  it.each(['', '   '])('issues no request for a blank version %j', (version) => {
-    const { result } = renderHook(() => useDistributionPreview('c-1', request(version), true), { wrapper: makeWrapper() })
+  it('issues no request for an empty version (the caller trims)', () => {
+    const { result } = renderHook(() => useDistributionPreview('c-1', request(''), true), { wrapper: makeWrapper() })
     expect(mockApi.post).not.toHaveBeenCalled()
     expect(result.current.isInvalid).toBe(false)
     expect(result.current.isError).toBe(false)

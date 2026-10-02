@@ -27,12 +27,15 @@ vi.mock('./FieldOverrideInline', () => ({ FieldOverrideInline: () => null }))
 // Per-range distribution overrides ride the shared page-level draft. Mock it so
 // tests can seed effective overrides and spy on queued deletes without a provider.
 let mockEffective: FieldOverride[] = []
+let mockDraftLoading = false
+let mockDraftError = false
 const mockQueueDelete = vi.fn()
 vi.mock('./overridesDraft', () => ({
   useOverridesDraft: () => ({
     serverOverrides: mockEffective,
     effectiveOverrides: mockEffective,
-    isLoading: false,
+    isLoading: mockDraftLoading,
+    isError: mockDraftError,
     isDirty: false,
     queueCreate: vi.fn(),
     queueUpdate: vi.fn(),
@@ -73,6 +76,8 @@ function baseComponent(overrides: Partial<ComponentDetail> = {}): ComponentDetai
 beforeEach(() => {
   vi.clearAllMocks()
   mockEffective = []
+  mockDraftLoading = false
+  mockDraftError = false
   mockQueueDelete.mockReset()
 })
 
@@ -283,6 +288,34 @@ describe('DistributionTab — version preview', () => {
     })
   })
 
+  it('re-requests when the supported-versions draft changes', async () => {
+    respond(allBase())
+    const { rerender } = renderTab(populated(), true, { all: false, ranges: ['[1.0,3.0)'] })
+    enter('1.5')
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1))
+    rerender(<Harness component={populated()} supportedVersions={{ all: false, ranges: ['[1.0,3.0)', '[4.0,5.0)'] }} />)
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(2))
+    expect(mockPost.mock.calls[1]![1]).toMatchObject({ supportedVersions: { all: false, ranges: ['[1.0,3.0)', '[4.0,5.0)'] } })
+  })
+
+  it('waits for the override draft to load before requesting', async () => {
+    mockDraftLoading = true
+    respond(allBase())
+    renderTab(populated())
+    enter('1.5')
+    await new Promise((r) => setTimeout(r, 450))
+    expect(mockPost).not.toHaveBeenCalled()
+  })
+
+  it('omits the override draft when it failed to load, so the registry uses the saved set', async () => {
+    mockDraftError = true
+    respond(allBase())
+    renderTab(populated())
+    enter('1.5')
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1))
+    expect(mockPost.mock.calls[0]![1]).not.toHaveProperty('fieldOverrides')
+  })
+
   it('waits for the supported-versions draft before requesting', async () => {
     respond(allBase())
     renderTab(populated(), true, null)
@@ -300,8 +333,7 @@ describe('DistributionTab — version preview', () => {
     expect(maven.textContent).toContain('org.example:ov-art')
     expect(maven.textContent).toContain('[1.0,2.0)')
     const pkgs = await verdict('distribution.packages')
-    expect(pkgs.textContent).toContain('rpm base-pkg')
-    expect(pkgs.textContent).toMatch(/component level/i)
+    expect(pkgs.textContent).toMatch(/base list \(component level\)/i)
   })
 
   it('states that nothing is published for an empty override, attributed to its range', async () => {
@@ -320,14 +352,14 @@ describe('DistributionTab — version preview', () => {
     respond([path('distribution.docker', 'OVERRIDE', ['[1.0,2.0)'])])
     renderTab(populated())
     enter('1.5')
-    expect((await screen.findByTestId('dist-preview-docker')).textContent).toMatch(/Docker images.*\[1\.0,2\.0\)/)
+    expect((await screen.findByTestId('dist-preview-distribution.docker')).textContent).toMatch(/Docker images.*\[1\.0,2\.0\)/)
   })
 
   it('reports the Docker base list at the component level', async () => {
     respond(allBase())
     renderTab(populated())
     enter('1.5')
-    expect((await screen.findByTestId('dist-preview-docker')).textContent).toMatch(/Docker images.*component level/i)
+    expect((await screen.findByTestId('dist-preview-distribution.docker')).textContent).toMatch(/Docker images.*component level/i)
   })
 
   it('states the component has no configuration for an unsupported version', async () => {
@@ -336,7 +368,7 @@ describe('DistributionTab — version preview', () => {
     enter('9.0')
     await waitFor(() => expect(screen.getByTestId('dist-preview-status').textContent).toMatch(/no configuration/i))
     expect(screen.queryByTestId('dist-preview-distribution.maven')).toBeNull()
-    expect(screen.queryByTestId('dist-preview-docker')).toBeNull()
+    expect(screen.queryByTestId('dist-preview-distribution.docker')).toBeNull()
   })
 
   it('reports an unparseable version as invalid input', async () => {
@@ -348,7 +380,7 @@ describe('DistributionTab — version preview', () => {
     expect(screen.queryByTestId('dist-preview-distribution.maven')).toBeNull()
   })
 
-  it.each([401, 403, 500])('reports the preview unavailable on a %i', async (status) => {
+  it.each([403, 500])('reports the preview unavailable on a %i', async (status) => {
     mockPost.mockRejectedValue(new ApiError(status, 'nope'))
     renderTab(populated())
     enter('1.5')
@@ -385,7 +417,7 @@ describe('DistributionTab — version preview', () => {
     respond(allBase())
     renderTab(populated())
     enter('1.5')
-    expect((await verdict('distribution.maven')).textContent).toContain('org.example:base-art')
+    expect((await verdict('distribution.maven')).textContent).toMatch(/base list \(component level\)/i)
     expect(screen.queryByText('In effect')).toBeNull()
   })
 

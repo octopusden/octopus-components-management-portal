@@ -17,11 +17,7 @@ import { useOverridesDraft } from './overridesDraft'
 import { toUpsert } from './overrideDraftUtil'
 import type { SupportedVersionsState } from './useSupportedVersionsSection'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
-import {
-  useDistributionPreview,
-  type DistributionPathPreview,
-  type DistributionPreviewRequest,
-} from '../../hooks/useDistributionPreview'
+import { useDistributionPreview, type DistributionPreviewResponse } from '../../hooks/useDistributionPreview'
 import type { FieldOverride } from '../../lib/types'
 
 interface DistributionTabProps {
@@ -36,20 +32,19 @@ interface DistributionTabProps {
   supportedVersions?: SupportedVersionsState | null
 }
 
-// Stable request for the idle (blank / not-ready) preview so its query key
-// never churns per keystroke.
-const IDLE_REQUEST: DistributionPreviewRequest = { version: '' }
-
-/** One subsection's preview verdict: the children in effect for the version and
- *  where they came from. The registry decides the source; the children are the
- *  ones this tab already holds (base list or the matched draft row). */
-function PathVerdict({ entry, version, overrides, baseSummary }: {
-  entry: DistributionPathPreview | undefined
-  version: string
+/** One path's preview verdict: the children in effect for the version and
+ *  where they came from. The registry decides the source; override children
+ *  come from the matched draft row, base children are the rows shown in the
+ *  subsection. `label` prefixes the line (the Docker one-liner). */
+function PathVerdict({ path, verdict, overrides, label }: {
+  path: DistributionMarkerPath
+  verdict: DistributionPreviewResponse | undefined
   overrides: FieldOverride[]
-  baseSummary: string
+  label?: string
 }) {
-  if (!entry) return null
+  const entry = verdict?.paths.find((p) => p.attribute === path)
+  if (!verdict || !entry) return null
+  const version = verdict.version
   let line: string
   if (entry.source === 'CONFLICT') {
     line = `Data conflict: overlapping ranges ${entry.matchedRanges.join(', ')} all contain ${version} — resolve the overlap.`
@@ -61,11 +56,11 @@ function PathVerdict({ entry, version, overrides, baseSummary }: {
       ? `Nothing is published for ${version} — range ${range} overrides the list with nothing.`
       : `In effect for ${version}: ${summary ? `${summary} — ` : ''}from range ${range}.`
   } else {
-    line = `In effect for ${version}: ${baseSummary || 'nothing'} — base list (component level).`
+    line = `In effect for ${version}: base list (component level).`
   }
   return (
-    <div data-testid={`dist-preview-${entry.attribute}`} className="space-y-1 rounded-md bg-muted px-3 py-2 text-xs">
-      <p className={entry.source === 'CONFLICT' ? 'text-destructive' : undefined}>{line}</p>
+    <div data-testid={`dist-preview-${path}`} className="space-y-1 rounded-md bg-muted px-3 py-2 text-xs">
+      <p className={entry.source === 'CONFLICT' ? 'text-destructive' : undefined}>{label ? `${label} — ${line}` : line}</p>
       {entry.unevaluableRanges.length > 0 && (
         <p className="text-[color:var(--color-badge-yellow-fg)]">
           Range {entry.unevaluableRanges.join(', ')} could not be evaluated and was ignored — this answer may be incomplete.
@@ -73,13 +68,6 @@ function PathVerdict({ entry, version, overrides, baseSummary }: {
       )}
     </div>
   )
-}
-
-function dockerLine(entry: DistributionPathPreview | undefined, version: string): string | null {
-  if (!entry) return null
-  if (entry.source === 'CONFLICT') return `Docker images for ${version}: data conflict between ranges ${entry.matchedRanges.join(', ')}.`
-  if (entry.source === 'OVERRIDE') return `Docker images for ${version} come from range ${entry.matchedRanges[0] ?? ''} (Docker tab).`
-  return `Docker images for ${version} come from the base list (component level).`
 }
 
 /** Distribution tab — presentational. Base state + slice live in
@@ -101,30 +89,27 @@ export function DistributionTab({ componentId, section, canEdit, supportedGroups
 
   // Version preview — transient, read-only: never part of the draft or Save.
   // The registry resolves it over the unsaved override + supported-versions
-  // drafts; only the settled (debounced) request is ever shown.
-  const { effectiveOverrides } = useOverridesDraft()
+  // drafts. Only the version is debounced; a draft that is still loading holds
+  // the request back, one that failed to load is omitted (registry uses saved).
+  const { effectiveOverrides, isLoading: overridesLoading, isError: overridesError } = useOverridesDraft()
   const [previewVersion, setPreviewVersion] = useState('')
   const trimmedVersion = previewVersion.trim()
-  const previewReady = supportedVersions !== null
-  const previewRequest = useMemo<DistributionPreviewRequest>(
-    () =>
-      previewReady && trimmedVersion
-        ? {
-            version: trimmedVersion,
-            fieldOverrides: effectiveOverrides.map(toUpsert),
-            ...(supportedVersions ? { supportedVersions } : {}),
-          }
-        : IDLE_REQUEST,
-    [previewReady, trimmedVersion, effectiveOverrides, supportedVersions],
+  const settledVersion = useDebouncedValue(trimmedVersion, 350)
+  const previewReady = supportedVersions !== null && !overridesLoading
+  const fieldOverrides = useMemo(
+    () => (overridesError ? undefined : effectiveOverrides.map(toUpsert)),
+    [overridesError, effectiveOverrides],
   )
-  const requestKey = JSON.stringify(previewRequest)
-  const settledKey = useDebouncedValue(requestKey, 350)
   const preview = useDistributionPreview(
     componentId,
-    useMemo(() => JSON.parse(settledKey) as DistributionPreviewRequest, [settledKey]),
+    {
+      version: settledVersion,
+      ...(fieldOverrides ? { fieldOverrides } : {}),
+      ...(supportedVersions ? { supportedVersions } : {}),
+    },
     previewReady,
   )
-  const resolving = !previewReady || settledKey !== requestKey || preview.isFetching || preview.isPending
+  const resolving = !previewReady || settledVersion !== trimmedVersion || preview.isFetching
   const verdict = trimmedVersion && !resolving && preview.data?.supported ? preview.data : undefined
   let previewStatus: string | null = null
   if (trimmedVersion) {
@@ -134,16 +119,11 @@ export function DistributionTab({ componentId, section, canEdit, supportedGroups
     else if (preview.data && !preview.data.supported)
       previewStatus = `No configuration at ${preview.data.version} — it is outside this component’s supported versions.`
   }
-  const pathEntry = (path: DistributionMarkerPath) => verdict?.paths.find((p) => p.attribute === path)
-  const pathVerdict = (path: DistributionMarkerPath, baseSummary: string) => (
-    <PathVerdict entry={pathEntry(path)} version={verdict?.version ?? ''} overrides={distOverrides.byPath[path]} baseSummary={baseSummary} />
-  )
   // The single OVERRIDE match marks its row; CONFLICT / BASE mark nothing.
   const activeRange = (path: DistributionMarkerPath) => {
-    const entry = pathEntry(path)
+    const entry = verdict?.paths.find((p) => p.attribute === path)
     return entry?.source === 'OVERRIDE' ? entry.matchedRanges[0] : undefined
   }
-  const docker = dockerLine(pathEntry('distribution.docker'), verdict?.version ?? '')
   const [editor, setEditor] = useState<{ path: DistributionMarkerPath; override?: FieldOverride; collapseMemberIds?: string[] } | null>(null)
   const openCreate = (path: DistributionMarkerPath) => setEditor({ path })
   // A coalesced group edits as one override: a lone member edits itself; a
@@ -204,7 +184,7 @@ export function DistributionTab({ componentId, section, canEdit, supportedGroups
             {previewStatus}
           </p>
         )}
-        {docker && <p data-testid="dist-preview-docker" className="text-xs text-muted-foreground">{docker}</p>}
+        <PathVerdict path="distribution.docker" label="Docker images (Docker tab)" verdict={verdict} overrides={distOverrides.byPath['distribution.docker']} />
       </div>
 
       <Separator />
@@ -230,7 +210,7 @@ export function DistributionTab({ componentId, section, canEdit, supportedGroups
             </Button>
           </div>
 
-          {pathVerdict('distribution.maven', maven.filter((r) => r.groupPattern.trim() || r.artifactPattern.trim()).map((r) => `${r.groupPattern}:${r.artifactPattern}`).join(', '))}
+          <PathVerdict path="distribution.maven" verdict={verdict} overrides={distOverrides.byPath['distribution.maven']} />
 
           {maven.map((row, i) => (
             <div key={i} className="rounded-md border p-3 space-y-3">
@@ -306,7 +286,7 @@ export function DistributionTab({ componentId, section, canEdit, supportedGroups
             </Button>
           </div>
 
-          {pathVerdict('distribution.fileUrl', fileUrl.map((r) => r.url).filter((u) => u.trim()).join(', '))}
+          <PathVerdict path="distribution.fileUrl" verdict={verdict} overrides={distOverrides.byPath['distribution.fileUrl']} />
 
           {fileUrl.map((row, i) => (
             <div key={i} className="rounded-md border p-3 space-y-3">
@@ -365,7 +345,7 @@ export function DistributionTab({ componentId, section, canEdit, supportedGroups
             </Button>
           </div>
 
-          {pathVerdict('distribution.packages', packages.filter((r) => r.packageType.trim() || r.packageName.trim()).map((r) => `${r.packageType} ${r.packageName}`).join(', '))}
+          <PathVerdict path="distribution.packages" verdict={verdict} overrides={distOverrides.byPath['distribution.packages']} />
 
           {packages.map((row, i) => (
             <div key={i} className="rounded-md border p-3 space-y-3">

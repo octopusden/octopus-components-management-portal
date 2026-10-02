@@ -4,17 +4,13 @@ import type { components } from '../lib/api/schema'
 import type { FieldOverrideUpsert } from '../lib/types'
 
 export type DistributionPreviewResponse = components['schemas']['DistributionPreviewResponse']
-export type DistributionPathPreview = components['schemas']['DistributionPathPreview']
 
-/** CRS `DistributionPreviewRequest`, with `fieldOverrides` typed as the
+/** CRS `DistributionPreviewRequest`, with `fieldOverrides` widened to the
  *  hand-mirrored upsert the combined Save sends (the generated one types
- *  `value` as `Record<string, never>` — see `FieldOverrideUpsert`). */
-export interface DistributionPreviewRequest {
-  version: string
-  /** Full replacement of the saved override set; omitted = the saved set. */
+ *  `value` as `Record<string, never>` — see `FieldOverrideUpsert`). Omitted
+ *  `fieldOverrides` / `supportedVersions` = the saved state. */
+export type DistributionPreviewRequest = Omit<components['schemas']['DistributionPreviewRequest'], 'fieldOverrides'> & {
   fieldOverrides?: FieldOverrideUpsert[]
-  /** Candidate supported versions; omitted = the saved ones. */
-  supportedVersions?: components['schemas']['DistributionPreviewCoverage']
 }
 
 /**
@@ -23,16 +19,14 @@ export interface DistributionPreviewRequest {
  * (`POST /components/{id}/distribution/preview`, CRS SYS-099). Read-only: never
  * touches the editor's dirty state.
  *
- * The version is trimmed so the gate, key and body agree; a blank version
- * issues nothing. The only 400 is an unparseable version → `isInvalid`.
+ * The caller passes a trimmed version; an empty one issues nothing. The only
+ * 400 is an unparseable version → `isInvalid`.
  */
 export function useDistributionPreview(componentId: string, payload: DistributionPreviewRequest, enabled: boolean) {
-  const version = payload.version.trim()
-  const body: DistributionPreviewRequest = { ...payload, version }
   const query = useQuery<DistributionPreviewResponse>({
-    queryKey: ['distribution-preview', componentId, body],
-    queryFn: () => api.post<DistributionPreviewResponse>(`/components/${componentId}/distribution/preview`, body),
-    enabled: enabled && version.length > 0,
+    queryKey: ['distribution-preview', componentId, payload],
+    queryFn: () => api.post<DistributionPreviewResponse>(`/components/${componentId}/distribution/preview`, payload),
+    enabled: enabled && payload.version !== '',
     retry: false,
     staleTime: 5 * 60_000,
   })
