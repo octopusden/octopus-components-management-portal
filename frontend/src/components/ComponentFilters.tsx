@@ -430,7 +430,7 @@ export function ComponentFilters({
       // The people filters (`?releaseManager=` / `?securityChampion=`) already
       // backed the personal presets and the Registry Health deep-links; these are
       // the pickers that let anyone filter by SOMEONE ELSE, not just themselves.
-      // Options are the in-use sets, so every entry resolves to a non-empty page.
+      // Options are the in-use sets, so every entry matches at least one component.
       place: place('component.releaseManager', releaseManagerEntry),
       node: (
         <div key="releaseManager" className="flex flex-col gap-1">

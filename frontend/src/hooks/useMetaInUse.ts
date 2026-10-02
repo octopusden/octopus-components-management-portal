@@ -18,7 +18,8 @@ export interface UseMetaOptions {
  * missing-endpoint contract for all four: 404/501 → empty vocabulary so the picker
  * still opens against a CRS that has not shipped the endpoint yet; any other failure
  * (5xx, network) propagates as a real error. The thin per-field wrappers
- * (`useClientCodes`, `useJiraProjectKeys`, `useParentComponentNames`, `useGroupKeys`)
+ * (`useClientCodes`, `useJiraProjectKeys`, `useParentComponentNames`, `useGroupKeys`,
+ * `useReleaseManagers`, `useSecurityChampions`)
  * differ only by query key and endpoint path.
  */
 export function useMetaInUse(key: string, path: string, { enabled = true }: UseMetaOptions = {}) {
