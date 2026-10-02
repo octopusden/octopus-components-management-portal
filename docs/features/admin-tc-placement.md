@@ -15,9 +15,13 @@ edited by hand. Two CRS jobs, both under `rest/api/4/admin/teamcity-placement`:
 
 - **Diff** (`POST /diff`, read-only) — walks the current (Base) configuration of every in-scope,
   non-archived component (version-range overrides are not touched), derives placement from
-  TeamCity, and classifies each row with one of ten statuses (`PlacementDiffRowStatus`):
+  TeamCity, and classifies each row with one of eleven statuses (`PlacementDiffRowStatus`):
   `RESOLVED`, `IN_SYNC`, `INVALID`, `CONFLICT`, `MANUAL_EDIT`, `UNEXPRESSIBLE`, `NO_CHAIN`,
-  `OUTSIDE_TEMPLATES`, `COMPILE_PAUSED`, `TC_ERROR`. Only `RESOLVED` rows are ever offered to Sync.
+  `OUTSIDE_TEMPLATES`, `COMPILE_PAUSED`, `TC_ERROR`, `ROOTS_MISMATCH`. Only `RESOLVED` rows are ever offered to Sync.
+  `ROOTS_MISMATCH` ("VCS roots differ from the registry", Can't derive bucket) means TeamCity's
+  compile configurations attach repositories the registry does not list (e.g. a shared tooling
+  repository); the details are in the row's notes and in the component's TeamCity Validation
+  finding of the same name.
   Diff keeps no history — a new run replaces the previous result and id.
 - **Sync** (`POST /sync`, `IMPORT_DATA`) — writes the selected components' `RESOLVED` + `BASE` rows
   through the same validation/name-derivation/audit path a manual PATCH uses. Requires the `diffId`

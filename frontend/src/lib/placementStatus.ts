@@ -21,6 +21,7 @@ const STATUS_INFO: Record<
   NO_CHAIN: { tone: 'warning', label: 'No TeamCity chain found', bucket: 'cantDerive' },
   OUTSIDE_TEMPLATES: { tone: 'warning', label: 'Not on a supported template', bucket: 'cantDerive' },
   COMPILE_PAUSED: { tone: 'warning', label: 'Compile configurations paused', bucket: 'cantDerive' },
+  ROOTS_MISMATCH: { tone: 'warning', label: 'VCS roots differ from the registry', bucket: 'cantDerive' },
   IN_SYNC: { tone: 'secondary', label: 'Already in sync', bucket: 'nothingToDo' },
 }
 
