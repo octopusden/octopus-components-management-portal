@@ -25,10 +25,10 @@
 
 ## 3. Winning row
 
-- [ ] 3.1 Failing tests in `DistributionPerRange.test.tsx`: the winning row is
+- [x] 3.1 Failing tests in `DistributionPerRange.test.tsx`: the winning row is
       marked, including an interior member of a coalesced group; conflict marks
       nothing; clearing clears
-- [ ] 3.2 Mark the winning row in `DistributionPerRange.tsx`
+- [x] 3.2 Mark the winning row in `DistributionPerRange.tsx`
 
 ## 4. Close out
 

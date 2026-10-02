@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { DistributionTab } from './DistributionTab'
@@ -387,6 +387,15 @@ describe('DistributionTab — version preview', () => {
     enter('1.5')
     expect((await verdict('distribution.maven')).textContent).toContain('org.example:base-art')
     expect(screen.queryByText('In effect')).toBeNull()
+  })
+
+  it('marks the winning per-range row', async () => {
+    mockEffective = [marker('distribution.maven', '[1.0,2.0)', { mavenArtifacts: [{ groupPattern: 'g', artifactPattern: 'a' }] })]
+    respond([path('distribution.maven', 'OVERRIDE', ['[1.0,2.0)'])])
+    renderTab(populated())
+    enter('1.5')
+    await verdict('distribution.maven')
+    expect(within(screen.getAllByTestId('dist-per-range-row')[0]!).getByText('In effect')).toBeDefined()
   })
 
   it('keeps the preview usable without edit rights', async () => {

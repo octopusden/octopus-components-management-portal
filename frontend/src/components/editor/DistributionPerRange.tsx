@@ -1,5 +1,6 @@
 import { Plus, Trash2 } from 'lucide-react'
 import { Button } from '../ui/button'
+import { Badge } from '../ui/badge'
 import { formatVersionRange } from '../../lib/versionRange'
 import { coalescePerRangeOverrides, summarizeMarkerChildren, type PerRangeGroup } from './perRangeGrouping'
 import type { FieldOverride } from '../../lib/types'
@@ -14,6 +15,9 @@ export interface DistributionPerRangeProps {
   onEdit: (group: PerRangeGroup) => void
   /** Delete every override in the coalesced group. */
   onDelete: (group: PerRangeGroup) => void
+  /** versionRange of the override the version preview resolved this path to;
+   *  the row containing it is marked "In effect". */
+  activeRange?: string
 }
 
 /**
@@ -24,7 +28,7 @@ export interface DistributionPerRangeProps {
  * queue into the shared override draft so they ride the editor's one combined
  * Save. Terminology matches the Overrides tab ("override", not "variant").
  */
-export function DistributionPerRange({ overrides, canEdit, onAdd, onEdit, onDelete }: DistributionPerRangeProps) {
+export function DistributionPerRange({ overrides, canEdit, onAdd, onEdit, onDelete, activeRange }: DistributionPerRangeProps) {
   const groups = coalescePerRangeOverrides(overrides)
   return (
     <div className="rounded-md border border-dashed p-3 space-y-2">
@@ -39,10 +43,12 @@ export function DistributionPerRange({ overrides, canEdit, onAdd, onEdit, onDele
       </div>
       {groups.map((group) => {
         const summary = summarizeMarkerChildren(group.representative)
+        const inEffect = activeRange !== undefined && group.members.some((m) => m.versionRange === activeRange)
         return (
           <div key={group.members.map((m) => m.id).join('|')} data-testid="dist-per-range-row" className="flex items-center justify-between gap-2 rounded border px-2 py-1">
             <div className="flex min-w-0 flex-1 items-baseline gap-2">
               <span className="shrink-0 font-mono text-xs">{formatVersionRange(group.displayRange)}</span>
+              {inEffect && <Badge variant="success" className="shrink-0 text-[10px]">In effect</Badge>}
               {summary ? (
                 <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={summary}>
                   {summary}

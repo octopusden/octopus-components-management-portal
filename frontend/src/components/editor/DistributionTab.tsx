@@ -138,6 +138,11 @@ export function DistributionTab({ componentId, section, canEdit, supportedGroups
   const pathVerdict = (path: DistributionMarkerPath, baseSummary: string) => (
     <PathVerdict entry={pathEntry(path)} version={verdict?.version ?? ''} overrides={distOverrides.byPath[path]} baseSummary={baseSummary} />
   )
+  // The single OVERRIDE match marks its row; CONFLICT / BASE mark nothing.
+  const activeRange = (path: DistributionMarkerPath) => {
+    const entry = pathEntry(path)
+    return entry?.source === 'OVERRIDE' ? entry.matchedRanges[0] : undefined
+  }
   const docker = dockerLine(pathEntry('distribution.docker'), verdict?.version ?? '')
   const [editor, setEditor] = useState<{ path: DistributionMarkerPath; override?: FieldOverride; collapseMemberIds?: string[] } | null>(null)
   const openCreate = (path: DistributionMarkerPath) => setEditor({ path })
@@ -171,6 +176,7 @@ export function DistributionTab({ componentId, section, canEdit, supportedGroups
       onAdd={() => openCreate(path)}
       onEdit={openEditGroup}
       onDelete={deleteGroup}
+      activeRange={activeRange(path)}
     />
   )
 
