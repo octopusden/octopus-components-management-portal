@@ -6,10 +6,10 @@
 - [x] 1.1 Vendor the CRS spec carrying SYS-099 from the CRS branch
       (`CRS_SPEC_REF=<branch> npm run vendor-spec`); re-vendor from `main` after
       CRS merges
-- [ ] 1.2 Failing tests in `hooks/useDistributionPreview.test.ts`: posts the
+- [x] 1.2 Failing tests in `hooks/useDistributionPreview.test.ts`: posts the
       version with the override and supported-version drafts; blank or
       whitespace version issues no request; maps a 400 to an invalid-input state
-- [ ] 1.3 Implement `useDistributionPreview` following `useVersionPreview.ts`
+- [x] 1.3 Implement `useDistributionPreview` following `useVersionPreview.ts`
 
 ## 2. Preview control and attribution
 
