@@ -21,7 +21,7 @@ The whole filter row lives in [`frontend/src/components/ui/filter-bar.tsx`](../.
 
 ### Extended search
 
-An **Extended search** toggle (next to the archived button) reveals a second filter row of single-value controls that back the less-common search dimensions. The toggle auto-opens when the current filter already carries an extended value (so a shared/bookmarked URL never hides its own active filters), and "Clear filters" clears the extended row along with everything else.
+An **Extended search** toggle (next to the archived button) reveals a second filter row of controls that back the less-common search dimensions. The toggle auto-opens when the current filter already carries an extended value (so a shared/bookmarked URL never hides its own active filters), and "Clear filters" clears the extended row along with everything else.
 
 | Filter | Wire param | Control | Match |
 |---|---|---|---|
@@ -34,6 +34,10 @@ An **Extended search** toggle (next to the archived button) reveals a second fil
 | **Parent component** | `?parentComponentName=…` | text | parent-join eq on key |
 | **Can be parent** | `?canBeParent=true\|false` | tri-state | scalar eq |
 | **Group key** | `?groupKey=…` | text | group-join eq on `groupKey` |
+| **Release manager** | `?releaseManager=…` (CSV, OR semantics) | `MultiSelectFilter` populated from `GET /components/meta/release-managers` via [`useReleaseManagers`](../../frontend/src/hooks/useReleaseManagers.ts) | child-collection join + `IN (...)` on `component_release_managers.username` |
+| **Security champion** | `?securityChampion=…` (CSV, OR semantics) | `MultiSelectFilter` populated from `GET /components/meta/security-champions` via [`useSecurityChampions`](../../frontend/src/hooks/useSecurityChampions.ts) | same, against `component_security_champions` |
+
+The `?releaseManager=` / `?securityChampion=` params predate their pickers — they already backed the *I am Release Manager* / *I am Security Champion* presets and the Registry Health people deep-links. The dropdowns are what let a user filter by **someone else**. Options are the **in-use** sets (only usernames actually assigned on some component), so every option matches at least one component (archived ones included, as with the other in-use lists, so an archived-only name needs the archived toggle); an employee who is nobody's release manager is deliberately not offered. Both endpoints ship in a companion CRS release — until it is deployed, `useMetaInUse`'s 404/501 → empty-vocabulary contract keeps the picker openable rather than erroring.
 
 These params are added to [`useComponents`](../../frontend/src/hooks/useComponents.ts) and served by the CRS v4 `listComponents` controller (see `octopus-components-registry-service/docs/registry/functional-spec.md`). Each control is placed by the field's **Searchable** setting (below), not hard-coded into the row.
 
