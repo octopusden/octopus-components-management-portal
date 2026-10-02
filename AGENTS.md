@@ -7,8 +7,9 @@ Guidance for AI agents and developers working on this repository.
 ## Documentation hygiene
 
 - Keep only **living** docs in the tree: architecture, ADRs, feature docs, tech-debt, onboarding, and the `README`/`AGENTS`/`DOCS` indexes — things that describe **how the system works now**.
-- Do **not** commit **historical working artifacts** — design briefs, implementation/redesign plans, prep analyses, iteration change-logs, mockups, or one-off PR-review records. Once the work ships, that context already lives in the **PR and git history**; a completed plan left in the tree only rots, drifts, and misleads. Delete it as part of landing the feature.
-- Rule of thumb: if a doc describes *how a specific change was made* (a plan, a prep pass, a review record — usually past tense or a dated title) rather than *how the system behaves*, it doesn't belong in `docs/`. When in doubt, it goes in the PR description, not the repo.
+- Do **not** commit ad-hoc plans in `docs/` or elsewhere — design briefs, prep analyses, iteration change-logs, mockups, or one-off PR-review records. Once the work ships, that context lives in the PR and git history; a completed plan left in the tree only rots and misleads. Plan in `openspec/changes/`, or in the PR description.
+- **`openspec/` is the one exception, with a lifecycle.** In-flight change proposals live in `openspec/changes/<name>/`; the archive lifecycle is in the `archive` guidance of [`openspec/config.yaml`](openspec/config.yaml). Archived changes are kept on purpose.
+- Whether a change needs a spec is a **review judgement**, not a CI check: a path-based gate cannot tell a feature from a bug fix.
 
 ## Search & Context Efficiency
 
