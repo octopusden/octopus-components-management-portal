@@ -147,5 +147,11 @@ row is the one marked.
 
 #### Scenario: Preview request fails
 
-- **WHEN** the preview request fails for any other reason, including 401 or 403
+- **WHEN** the preview request fails for any other reason, including 403
 - **THEN** the tab states that the preview is unavailable and shows no result
+
+#### Scenario: Session expired
+
+- **WHEN** the preview request is answered with 401
+- **THEN** it follows the application's session-expiry redirect, like any other
+  request on the page
