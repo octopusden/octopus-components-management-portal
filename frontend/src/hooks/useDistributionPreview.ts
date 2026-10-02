@@ -36,6 +36,9 @@ export function useDistributionPreview(componentId: string, payload: Distributio
     retry: false,
     staleTime: 5 * 60_000,
   })
-  const isInvalid = query.error instanceof ApiError && query.error.status === 400
-  return { ...query, isInvalid }
+  // Pick fields rather than spreading: a spread reads `query.promise`, whose
+  // rejection then goes unhandled.
+  const { data, error, isError, isFetching, isPending, isSuccess } = query
+  const isInvalid = error instanceof ApiError && error.status === 400
+  return { data, isError, isFetching, isPending, isSuccess, isInvalid }
 }

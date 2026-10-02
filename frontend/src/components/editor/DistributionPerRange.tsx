@@ -1,21 +1,8 @@
 import { Plus, Trash2 } from 'lucide-react'
 import { Button } from '../ui/button'
 import { formatVersionRange } from '../../lib/versionRange'
-import { coalescePerRangeOverrides, type PerRangeGroup } from './perRangeGrouping'
+import { coalescePerRangeOverrides, summarizeMarkerChildren, type PerRangeGroup } from './perRangeGrouping'
 import type { FieldOverride } from '../../lib/types'
-
-/** One-line human summary of a distribution marker override's children —
- *  mirrors FieldOverrides' `markerSummary` for the four distribution paths. */
-function summarize(o: FieldOverride): string {
-  const mc = o.markerChildren
-  if (!mc) return ''
-  const join = (xs: Array<string | null | undefined>) => xs.filter((x): x is string => !!x).join(', ')
-  if (mc.mavenArtifacts?.length) return join(mc.mavenArtifacts.map((a) => `${a.groupPattern}:${a.artifactPattern}`))
-  if (mc.dockerImages?.length) return join(mc.dockerImages.map((d) => (d.flavor ? `${d.imageName}:${d.flavor}` : d.imageName)))
-  if (mc.fileUrlArtifacts?.length) return join(mc.fileUrlArtifacts.map((a) => a.url))
-  if (mc.packages?.length) return join(mc.packages.map((p) => `${p.packageType} ${p.packageName}`))
-  return ''
-}
 
 export interface DistributionPerRangeProps {
   overrides: FieldOverride[]
@@ -51,7 +38,7 @@ export function DistributionPerRange({ overrides, canEdit, onAdd, onEdit, onDele
         </Button>
       </div>
       {groups.map((group) => {
-        const summary = summarize(group.representative)
+        const summary = summarizeMarkerChildren(group.representative)
         return (
           <div key={group.members.map((m) => m.id).join('|')} data-testid="dist-per-range-row" className="flex items-center justify-between gap-2 rounded border px-2 py-1">
             <div className="flex min-w-0 flex-1 items-baseline gap-2">

@@ -13,15 +13,15 @@
 
 ## 2. Preview control and attribution
 
-- [ ] 2.1 Failing tests in `DistributionTab.test.tsx` for every spec scenario of
+- [x] 2.1 Failing tests in `DistributionTab.test.tsx` for every spec scenario of
       the control, attribution, Docker line and error states, mocking only
       `api.post`
-- [ ] 2.2 Add the version box (debounced) and per-subsection attribution to
+- [x] 2.2 Add the version box (debounced) and per-subsection attribution to
       `DistributionTab.tsx`
-- [ ] 2.3 Failing page test in `ComponentDetailPage` tests: entering a version
+- [x] 2.3 Failing page test in `ComponentDetailPage` tests: entering a version
       keeps Save disabled and sends no write; the preview works for a user
       without `canEdit`; the supported-versions draft reaches the request
-- [ ] 2.4 Pass the supported-versions draft from `ComponentDetailPage.tsx`
+- [x] 2.4 Pass the supported-versions draft from `ComponentDetailPage.tsx`
 
 ## 3. Winning row
 

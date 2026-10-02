@@ -57,3 +57,16 @@ export function coalescePerRangeOverrides(overrides: FieldOverride[]): PerRangeG
   }
   return groups
 }
+
+/** One-line human summary of a distribution marker override's children —
+ *  mirrors FieldOverrides' `markerSummary` for the four distribution paths. */
+export function summarizeMarkerChildren(o: FieldOverride): string {
+  const mc = o.markerChildren
+  if (!mc) return ''
+  const join = (xs: Array<string | null | undefined>) => xs.filter((x): x is string => !!x).join(', ')
+  if (mc.mavenArtifacts?.length) return join(mc.mavenArtifacts.map((a) => `${a.groupPattern}:${a.artifactPattern}`))
+  if (mc.dockerImages?.length) return join(mc.dockerImages.map((d) => (d.flavor ? `${d.imageName}:${d.flavor}` : d.imageName)))
+  if (mc.fileUrlArtifacts?.length) return join(mc.fileUrlArtifacts.map((a) => a.url))
+  if (mc.packages?.length) return join(mc.packages.map((p) => `${p.packageType} ${p.packageName}`))
+  return ''
+}

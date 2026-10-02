@@ -1190,9 +1190,24 @@ function ComponentDetailEditor() {
             </TabsContent>
 
             <TabsContent value="distribution">
-              <EditSurface canEdit={canEdit} label="Distribution">
-                <DistributionTab section={distributionSection} canEdit={canEdit} supportedGroups={supportedGroups} />
-              </EditSurface>
+              {/* No EditSurface: the tab owns its read-only fieldset so the
+                  version preview stays usable without edit rights. */}
+              <DistributionTab
+                componentId={shell.id}
+                section={distributionSection}
+                canEdit={canEdit}
+                supportedGroups={supportedGroups}
+                // Preview waits while the draft loads; on a load error it
+                // falls back to the saved set (undefined) rather than reading
+                // the empty draft as "unrestricted".
+                supportedVersions={
+                  supportedVersionsSection.isLoading
+                    ? null
+                    : supportedVersionsSection.isError
+                      ? undefined
+                      : supportedVersionsSection.state
+                }
+              />
             </TabsContent>
 
             <TabsContent value="docker">

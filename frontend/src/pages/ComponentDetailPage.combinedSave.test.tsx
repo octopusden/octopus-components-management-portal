@@ -13,6 +13,13 @@ import type { ComponentDetail } from '@/lib/types'
 // run and contribute slices to the ONE combined PATCH — that is what this suite
 // exercises (the whole point of Phase 3b).
 vi.mock('../hooks/useCurrentUser', () => ({ useCurrentUser: vi.fn() }))
+// The Distribution tab's version preview POSTs through the real
+// useDistributionPreview; the network boundary is mocked so tests can assert it
+// is the only call (no write) and inspect the drafts it carries.
+vi.mock('../lib/api', async () => {
+  const actual = await vi.importActual<typeof import('../lib/api')>('../lib/api')
+  return { ...actual, api: { ...actual.api, post: vi.fn(), patch: vi.fn(), put: vi.fn() } }
+})
 // Supported-versions coverage lives on a separate PUT endpoint. Hoisted so each
 // test can seed the GET data and capture the PUT (mutateAsync).
 const svMock = vi.hoisted(() => ({
@@ -112,7 +119,7 @@ vi.mock('../components/ui/EnumSelect', () => ({
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useComponent, useUpdateComponent, useDeleteComponent } from '../hooks/useComponent'
 import { TooltipProvider } from '../components/ui/tooltip'
-import { ApiError } from '../lib/api'
+import { ApiError, api } from '../lib/api'
 
 const baseComponent: ComponentDetail = {
   id: 'comp-1', name: 'my-component', displayName: 'My Component', componentOwner: 'alice',
@@ -742,5 +749,52 @@ describe('ComponentDetailPage — combined PATCH (Phase 3b)', () => {
     const titles = toastMock.mock.calls.map((c) => (c[0] as { title?: string }).title)
     expect(titles).not.toContain('Partly saved')
     expect(titles).not.toContain('Component saved')
+  })
+})
+
+describe('ComponentDetailPage — distribution version preview', () => {
+  const PREVIEW_PATH = '/components/comp-1/distribution/preview'
+  beforeEach(() => {
+    vi.mocked(api.post).mockResolvedValue({
+      version: '1.5',
+      supported: true,
+      paths: [{ attribute: 'distribution.maven', source: 'BASE', matchedRanges: [], unevaluableRanges: [] }],
+    })
+  })
+  const enterVersion = (v: string) => fireEvent.change(screen.getByLabelText('Preview version'), { target: { value: v } })
+
+  it('keeps Save disabled and sends no write when a version is entered', async () => {
+    const mutateAsync = vi.fn(() => Promise.resolve())
+    renderPage(baseComponent, mutateAsync)
+    await openTab(/^Distribution/)
+    enterVersion('1.5')
+    await screen.findByTestId('dist-preview-distribution.maven')
+    expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled()
+    expect(mutateAsync).not.toHaveBeenCalled()
+    expect(svMock.mutateAsync).not.toHaveBeenCalled()
+    expect(api.patch).not.toHaveBeenCalled()
+    expect(api.put).not.toHaveBeenCalled()
+    expect(vi.mocked(api.post).mock.calls.every(([path]) => path === PREVIEW_PATH)).toBe(true)
+  })
+
+  it('works for a user without edit rights', async () => {
+    renderPage({ ...baseComponent, canEdit: false })
+    await openTab(/^Distribution/)
+    // The read-only EditSurface fieldset must not swallow the preview control.
+    expect(screen.getByLabelText('Preview version')).not.toBeDisabled()
+    expect(screen.getAllByRole('button', { name: /^Add$/ })[0]).toBeDisabled()
+    enterVersion('1.5')
+    expect((await screen.findByTestId('dist-preview-distribution.maven')).textContent).toMatch(/component level/i)
+  })
+
+  it('sends the supported-versions draft', async () => {
+    svMock.data = { all: false, ranges: ['[1.0,3.0)'], warnings: [] }
+    renderPage(baseComponent)
+    await openTab(/^Distribution/)
+    enterVersion('1.5')
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith(PREVIEW_PATH, expect.objectContaining({
+      version: '1.5',
+      supportedVersions: { all: false, ranges: ['[1.0,3.0)'] },
+    })))
   })
 })
