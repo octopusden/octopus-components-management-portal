@@ -3,7 +3,7 @@
 
 ## 1. API surface
 
-- [ ] 1.1 Vendor the CRS spec carrying SYS-099 from the CRS branch
+- [x] 1.1 Vendor the CRS spec carrying SYS-099 from the CRS branch
       (`CRS_SPEC_REF=<branch> npm run vendor-spec`); re-vendor from `main` after
       CRS merges
 - [ ] 1.2 Failing tests in `hooks/useDistributionPreview.test.ts`: posts the
