@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatAbsoluteDate, formatRelativeTime } from './date'
+import { formatAbsoluteDate, formatLocalDateTime, formatRelativeTime } from './date'
 
 describe('formatAbsoluteDate', () => {
   it('returns em-dash for null', () => {
@@ -66,5 +66,22 @@ describe('formatRelativeTime', () => {
     // NaN time → defers to formatAbsoluteDate, which yields "Invalid Date" here
     // (see the formatAbsoluteDate suite — toLocaleDateString does not throw).
     expect(formatRelativeTime('garbage', now)).toBe('Invalid Date')
+  })
+})
+
+describe('formatLocalDateTime', () => {
+  it('returns em-dash for null', () => {
+    expect(formatLocalDateTime(null)).toBe('—')
+  })
+
+  it('renders a "DD Mon YYYY, HH:MM" shaped string in the viewer\'s local time', () => {
+    // Local-time-of-day is inherently timezone-dependent, so this pins the
+    // shape rather than an exact wall-clock value (mirrors formatAbsoluteDate's
+    // day-boundary caution, just for the added hour:minute component).
+    expect(formatLocalDateTime('2026-06-02T10:00:00Z')).toMatch(/^\d{2} \w{3} \d{4}, \d{2}:\d{2}$/)
+  })
+
+  it('yields "Invalid Date" for an unparseable string (matches formatAbsoluteDate\'s behavior)', () => {
+    expect(formatLocalDateTime('not-a-date')).toBe('Invalid Date')
   })
 })

@@ -16,6 +16,26 @@ export function formatAbsoluteDate(dateStr: string | null): string {
   }
 }
 
+/**
+ * Absolute date + time in the viewer's local timezone, "02 Jun 2026, 14:32".
+ * Same en-GB/em-dash/no-throw contract as formatAbsoluteDate — used where the
+ * day alone isn't precise enough (e.g. "Report from <generatedAt>").
+ */
+export function formatLocalDateTime(dateStr: string | null): string {
+  if (!dateStr) return '—'
+  try {
+    return new Date(dateStr).toLocaleString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  } catch {
+    return dateStr
+  }
+}
+
 const MS_PER_DAY = 1000 * 60 * 60 * 24
 
 /**
