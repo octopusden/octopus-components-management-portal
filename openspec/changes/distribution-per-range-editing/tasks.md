@@ -32,6 +32,6 @@
 
 ## 4. Close out
 
-- [ ] 4.1 `npm run lint`, `npm run typecheck`, the touched vitest suites, `npm run test:coverage`
-- [ ] 4.2 `./gradlew qualityStatic`
-- [ ] 4.3 Update `docs/features/component-detail.md` — Distribution tab section
+- [x] 4.1 `npm run lint`, `npm run typecheck`, the touched vitest suites, `npm run test:coverage`
+- [x] 4.2 `./gradlew qualityStatic`
+- [x] 4.3 Update `docs/features/component-detail.md` — Distribution tab section
