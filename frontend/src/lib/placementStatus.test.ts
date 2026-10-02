@@ -12,9 +12,8 @@ describe('getPlacementStatusTone', () => {
     expect(getPlacementStatusTone('RESOLVED')).toBe('success')
   })
 
-  it('tones IN_SYNC and OUTSIDE_SCOPE as secondary (neutral, not alarming)', () => {
+  it('tones IN_SYNC as secondary (neutral, not alarming)', () => {
     expect(getPlacementStatusTone('IN_SYNC')).toBe('secondary')
-    expect(getPlacementStatusTone('OUTSIDE_SCOPE')).toBe('secondary')
   })
 
   it('tones INVALID, CONFLICT and TC_ERROR as destructive', () => {
@@ -39,10 +38,6 @@ describe('isPlacementRowSelectable', () => {
 
   it('is false for a marker (per-range) row even when RESOLVED', () => {
     expect(isPlacementRowSelectable({ status: 'RESOLVED', rowLabel: 'vcs.settings' })).toBe(false)
-  })
-
-  it('is false for OUTSIDE_SCOPE — archived components and marker rows are report-only', () => {
-    expect(isPlacementRowSelectable({ status: 'OUTSIDE_SCOPE', rowLabel: 'BASE' })).toBe(false)
   })
 
   it('is false for any other non-RESOLVED status', () => {
@@ -71,7 +66,6 @@ describe('getPlacementStatusLabel', () => {
 
   it('labels the "nothing to do" statuses', () => {
     expect(getPlacementStatusLabel('IN_SYNC')).toBe('Already in sync')
-    expect(getPlacementStatusLabel('OUTSIDE_SCOPE')).toBe('Not synced (version-range override or archived)')
   })
 })
 
@@ -87,7 +81,6 @@ describe('getPlacementStatusBucket', () => {
     expect(getPlacementStatusBucket('OUTSIDE_TEMPLATES')).toBe('cantDerive')
     expect(getPlacementStatusBucket('COMPILE_PAUSED')).toBe('cantDerive')
     expect(getPlacementStatusBucket('IN_SYNC')).toBe('nothingToDo')
-    expect(getPlacementStatusBucket('OUTSIDE_SCOPE')).toBe('nothingToDo')
   })
 })
 

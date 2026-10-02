@@ -13,7 +13,8 @@ drifted from what its linked TeamCity compile configuration(s) derive, and lets 
 back only the rows they choose — never a blind overwrite, and never touching a field a human
 edited by hand. Two CRS jobs, both under `rest/api/4/admin/teamcity-placement`:
 
-- **Diff** (`POST /diff`, read-only) — walks every in-scope component, derives placement from
+- **Diff** (`POST /diff`, read-only) — walks the current (Base) configuration of every in-scope,
+  non-archived component (version-range overrides are not touched), derives placement from
   TeamCity, and classifies each row with one of ten statuses (`PlacementDiffRowStatus`):
   `RESOLVED`, `IN_SYNC`, `INVALID`, `CONFLICT`, `MANUAL_EDIT`, `UNEXPRESSIBLE`, `NO_CHAIN`,
   `OUTSIDE_TEMPLATES`, `COMPILE_PAUSED`, `TC_ERROR`. Only `RESOLVED` rows are ever offered to Sync.

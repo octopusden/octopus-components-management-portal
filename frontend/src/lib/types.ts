@@ -1121,7 +1121,6 @@ export type PlacementDiffRowStatus =
   | 'UNEXPRESSIBLE'
   | 'NO_CHAIN'
   | 'OUTSIDE_TEMPLATES'
-  | 'OUTSIDE_SCOPE'
   | 'COMPILE_PAUSED'
   | 'MANUAL_EDIT'
   | 'IN_SYNC'

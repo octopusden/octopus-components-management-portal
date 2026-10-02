@@ -1971,7 +1971,7 @@ export interface components {
             rowLabel: string;
             sourceBuildTypeIds: string[];
             /** @enum {string} */
-            status: "RESOLVED" | "CONFLICT" | "UNEXPRESSIBLE" | "NO_CHAIN" | "OUTSIDE_TEMPLATES" | "COMPILE_PAUSED" | "MANUAL_EDIT" | "IN_SYNC" | "INVALID" | "TC_ERROR" | "OUTSIDE_SCOPE";
+            status: "RESOLVED" | "CONFLICT" | "UNEXPRESSIBLE" | "NO_CHAIN" | "OUTSIDE_TEMPLATES" | "COMPILE_PAUSED" | "MANUAL_EDIT" | "IN_SYNC" | "INVALID" | "TC_ERROR";
             versionRange: string;
         };
         PlacementRowSyncOutcome: {

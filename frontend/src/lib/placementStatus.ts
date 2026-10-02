@@ -21,10 +21,7 @@ const STATUS_INFO: Record<
   NO_CHAIN: { tone: 'warning', label: 'No TeamCity chain found', bucket: 'cantDerive' },
   OUTSIDE_TEMPLATES: { tone: 'warning', label: 'Not on a supported template', bucket: 'cantDerive' },
   COMPILE_PAUSED: { tone: 'warning', label: 'Compile configurations paused', bucket: 'cantDerive' },
-  // OUTSIDE_SCOPE: archived components and per-range (vcs.settings) marker
-  // rows — always report-only, never a Sync candidate, but not alarming.
   IN_SYNC: { tone: 'secondary', label: 'Already in sync', bucket: 'nothingToDo' },
-  OUTSIDE_SCOPE: { tone: 'secondary', label: 'Not synced (version-range override or archived)', bucket: 'nothingToDo' },
 }
 
 /** Badge tone per Diff row status (`PlacementDiffRowStatus`, ADR-002's eleven outcomes). */

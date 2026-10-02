@@ -133,7 +133,7 @@ const FAILED_DIFF_JOB: TeamcityPlacementDiffJobResponse = {
 }
 
 // Four components: app-alpha (RESOLVED/ready), app-beta (CONFLICT/needs a
-// look), app-gamma (a per-range OUTSIDE_SCOPE marker row only — no Base row
+// look), app-gamma (a per-range IN_SYNC marker row only — no Base row
 // at all), app-delta (RESOLVED/ready).
 const REPORT: PlacementDiffResult = {
   diffId: 'diff-1',
@@ -180,7 +180,7 @@ const REPORT: PlacementDiffResult = {
       configurationRowId: 'row-c',
       versionRange: '[2.0,)',
       rowLabel: 'vcs.settings',
-      status: 'OUTSIDE_SCOPE',
+      status: 'IN_SYNC',
       entries: [],
       currentBuildWorkingDirectory: undefined,
       derivedBuildWorkingDirectory: undefined,
@@ -375,7 +375,7 @@ describe('TeamCityPlacementPanel — summary bar', () => {
     renderPanel()
     expect(screen.getByText('app-alpha')).toBeDefined()
     expect(screen.getByText('app-beta')).toBeDefined()
-    // app-gamma is OUTSIDE_SCOPE ("Nothing to do") — hidden by default.
+    // app-gamma is IN_SYNC ("Nothing to do") — hidden by default.
     expect(screen.queryByText('app-gamma')).toBeNull()
 
     const showAll = screen.getByRole('button', { name: /^Show all \(4\)$/ })
@@ -390,7 +390,7 @@ describe('TeamCityPlacementPanel — zero state', () => {
   it('shows "All N components in sync — nothing to do" when the default view has no attention rows', () => {
     const onlyNothingToDo: PlacementDiffResult = {
       ...REPORT,
-      rows: [REPORT.rows[2]!], // app-gamma, OUTSIDE_SCOPE only
+      rows: [REPORT.rows[2]!], // app-gamma, IN_SYNC only
     }
     mockUseDiffJob.mockReturnValue(buildQuery(COMPLETED_DIFF_JOB) as unknown as ReturnType<typeof usePlacementDiffJob>)
     mockUseReport.mockReturnValue(buildQuery(onlyNothingToDo) as unknown as ReturnType<typeof usePlacementDiffReport>)

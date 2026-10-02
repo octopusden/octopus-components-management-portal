@@ -137,10 +137,10 @@ describe('groupPlacementRows', () => {
   it('carries the distinct statuses present in the group, for the header chips', () => {
     const rows: PlacementRowDiff[] = [
       row({ rowLabel: 'BASE', status: 'RESOLVED', configurationRowId: 'row-1' }),
-      row({ rowLabel: 'vcs.settings', versionRange: '[2.0,)', status: 'OUTSIDE_SCOPE', configurationRowId: 'row-2' }),
+      row({ rowLabel: 'vcs.settings', versionRange: '[2.0,)', status: 'IN_SYNC', configurationRowId: 'row-2' }),
     ]
     const group = groupPlacementRows(rows)[0]!
-    expect(group.statuses).toEqual(['RESOLVED', 'OUTSIDE_SCOPE'])
+    expect(group.statuses).toEqual(['RESOLVED', 'IN_SYNC'])
   })
 
   it('is selectable only when the group has a RESOLVED Base row', () => {
@@ -150,7 +150,7 @@ describe('groupPlacementRows', () => {
     const conflictBase = groupPlacementRows([row({ rowLabel: 'BASE', status: 'CONFLICT' })])[0]!
     expect(conflictBase.selectable).toBe(false)
 
-    const noBase = groupPlacementRows([row({ rowLabel: 'vcs.settings', versionRange: '[2.0,)', status: 'OUTSIDE_SCOPE' })])[0]!
+    const noBase = groupPlacementRows([row({ rowLabel: 'vcs.settings', versionRange: '[2.0,)', status: 'IN_SYNC' })])[0]!
     expect(noBase.selectable).toBe(false)
   })
 })
