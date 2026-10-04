@@ -40,6 +40,7 @@ function makeValues(overrides: Partial<GeneralFormValues> = {}): GeneralFormValu
     clientCode: '',
     solution: false,
     archived: false,
+    testComponent: false,
     parentComponentName: '',
     canBeParent: false,
     releaseManager: [],
@@ -413,6 +414,23 @@ describe('buildUpdateRequest — canBeParent + clearParent (items 1/2 + 4)', () 
       dirtyFields: {},
     })
     expect(req.canBeParent).toBe(true)
+  })
+
+  it('testComponent: unchanged → omitted, toggled → emitted (value-compared like canBeParent)', () => {
+    const unchanged = buildUpdateRequest({
+      component: makeComponent({ testComponent: true }),
+      values: makeValues({ testComponent: true }),
+      visibilities: EDITABLE,
+      dirtyFields: {},
+    })
+    expect(unchanged.testComponent).toBeUndefined()
+    const toggled = buildUpdateRequest({
+      component: makeComponent({ testComponent: true }),
+      values: makeValues({ testComponent: false }),
+      visibilities: EDITABLE,
+      dirtyFields: {},
+    })
+    expect(toggled.testComponent).toBe(false)
   })
 
   it('clearing a parent emits clearParent:true (+ parentComponentName:null)', () => {

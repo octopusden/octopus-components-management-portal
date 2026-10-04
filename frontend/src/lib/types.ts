@@ -20,6 +20,10 @@ export interface ComponentSummary {
   systems: string[]
   productType: string | null
   archived: boolean
+  // Synthetic test component (e.g. the CVELAB stand). The list page hides these
+  // by default (`testComponent=false`); optional so existing fixtures need not
+  // set it — the server always emits it (default false).
+  testComponent?: boolean
   // Whether this component may be referenced as a parent (parent-picker
   // eligibility — NOT an aggregator, which is a `components { }` owner). Drives
   // the parent picker filter. Optional on the TS type so existing fixtures
@@ -59,6 +63,8 @@ export interface ComponentDetail {
   systems: string[]
   clientCode: string | null
   archived: boolean
+  // Synthetic test component — see ComponentSummary.testComponent.
+  testComponent?: boolean
   solution: boolean | null
   parentComponentName: string | null
   // Whether this component may itself be a parent. Editable (CAN_BE_PARENT
@@ -431,6 +437,7 @@ export interface ComponentCreateRequest {
   solution?: boolean | null
   parentComponentName?: string | null
   archived?: boolean
+  testComponent?: boolean
   // Ordered multi-value lists on create. The CRS ComponentCreateRequest
   // defaults them to emptyList(), so the field is optional here — the create
   // dialog omits it entirely (people are added later via the editor).
@@ -482,6 +489,7 @@ export interface ComponentUpdateRequest {
   canBeParent?: boolean | null
   clearParent?: boolean
   archived?: boolean | null
+  testComponent?: boolean | null
   // PATCH semantics mirror `labels`: omit / null = don't touch; a provided
   // ordered list (including empty [] = clear) REPLACES the whole list.
   releaseManager?: string[] | null
@@ -531,6 +539,8 @@ export interface ComponentFilter {
   /** Exact-match OR across values (components can belong to multiple systems via systemJunctions). CSV on the wire. */
   system?: string[]
   archived?: boolean
+  /** `false` hides test components, `true` shows only them; absent = both (CRS default). */
+  testComponent?: boolean
   search?: string
   /**
    * Server-side exact-match filter on `componentOwner`. Sourced from

@@ -124,6 +124,7 @@ function mapComponentToForm(component: ComponentDetail): GeneralFormValues {
     clientCode: component.clientCode ?? '',
     solution: component.solution ?? false,
     archived: component.archived,
+    testComponent: component.testComponent ?? false,
     parentComponentName: component.parentComponentName ?? '',
     canBeParent: component.canBeParent ?? false,
     releaseManager: component.releaseManager ?? [],
@@ -285,6 +286,7 @@ function ComponentDetailEditor() {
       clientCode: '',
       solution: false,
       archived: false,
+      testComponent: false,
       parentComponentName: '',
       canBeParent: false,
       releaseManager: [],
@@ -832,6 +834,7 @@ function ComponentDetailEditor() {
               <Badge variant={component.archived ? 'destructive' : 'secondary'}>
                 {component.archived ? 'Archived' : 'Active'}
               </Badge>
+              {component.testComponent && <Badge variant="outline">Test</Badge>}
               {!canEdit && (
                 <Badge variant="warning" title={CANNOT_EDIT_TITLE}>
                   <LockKeyhole className="mr-1 h-3 w-3" />

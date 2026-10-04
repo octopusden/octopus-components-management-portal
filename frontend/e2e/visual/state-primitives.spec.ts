@@ -99,3 +99,43 @@ test.describe('state primitives — list with data', () => {
     await expect(tr).toHaveCSS('opacity', '0.5')
   })
 })
+
+test.describe('state primitives — test components', () => {
+  test('list hides test components by default and shows a "Test" badge under the preset', async ({
+    page,
+  }) => {
+    // Route-mocked: one test component added to the shared fixture (kept
+    // inline so the other specs' row counts are untouched).
+    const withTestComponent = {
+      ...componentsFixture,
+      content: [
+        ...componentsFixture.content,
+        {
+          id: '00000000-0000-0000-0000-0000000000t1',
+          name: 'cvelab-test',
+          displayName: null,
+          componentOwner: 'alice',
+          systems: [],
+          productType: null,
+          archived: false,
+          testComponent: true,
+          updatedAt: '2026-01-15T10:00:00Z',
+        },
+      ],
+    }
+    await mockComponentList(page, withTestComponent)
+    await mockLabels(page, [])
+
+    const defaultRequest = page.waitForRequest('**/rest/api/4/components?**')
+    await page.goto('/components')
+    expect(new URL((await defaultRequest).url()).searchParams.get('testComponent')).toBe('false')
+
+    const presetRequest = page.waitForRequest(
+      (req) => new URL(req.url()).searchParams.get('testComponent') === 'true',
+    )
+    await page.getByRole('button', { name: 'Test components' }).click()
+    await presetRequest
+    const row = page.getByText('cvelab-test', { exact: true }).first().locator('xpath=ancestor::tr[1]')
+    await expect(row.getByText('Test', { exact: true })).toBeVisible()
+  })
+})

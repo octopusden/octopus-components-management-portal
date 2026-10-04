@@ -803,6 +803,15 @@ describe('ComponentDetailPage — Archive readiness gate', () => {
 })
 
 describe('ComponentDetailPage — breadcrumb badges', () => {
+  it('"Test" badge renders only for a test component', () => {
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    const { unmount } = renderPage({ ...baseComponent, testComponent: true }, user)
+    expect(screen.getByText('Test')).toBeDefined()
+    unmount()
+    renderPage(baseComponent, user)
+    expect(screen.queryByText('Test')).toBeNull()
+  })
+
   it('(e) System badge renders when system array is non-empty', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
     renderPage(baseComponent, user)

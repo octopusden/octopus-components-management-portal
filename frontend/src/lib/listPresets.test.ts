@@ -8,10 +8,10 @@ import {
 } from './listPresets'
 import type { ComponentFilter } from './types'
 
-const DEFAULT: ComponentFilter = { archived: false }
+const DEFAULT: ComponentFilter = { archived: false, testComponent: false }
 
 describe('PRESETS catalogue', () => {
-  it('exposes the six presets in display order', () => {
+  it('exposes the seven presets in display order', () => {
     expect(PRESETS.map((p) => p.id)).toEqual([
       'all',
       'mine',
@@ -19,6 +19,7 @@ describe('PRESETS catalogue', () => {
       'security-champion',
       'problems',
       'archived',
+      'test-components',
     ])
   })
 
@@ -39,12 +40,12 @@ describe('applyPreset — preset is sugar over filter state', () => {
   it('all → active-only default (archived=false), clearing other filters', () => {
     // Starting from a dirtied filter, selecting "all" resets to the default.
     const next = applyPreset('all', { archived: true, owner: ['bob'], search: 'x' }, 'alice')
-    expect(next).toEqual<ComponentFilter>({ archived: false })
+    expect(next).toEqual<ComponentFilter>(DEFAULT)
   })
 
   it('mine → owner == currentUser, archived=false', () => {
     expect(applyPreset('mine', DEFAULT, 'alice')).toEqual<ComponentFilter>({
-      archived: false,
+      ...DEFAULT,
       owner: ['alice'],
     })
   })
@@ -52,41 +53,54 @@ describe('applyPreset — preset is sugar over filter state', () => {
   it('mine → no-op-ish default when there is no current user (cannot scope to owner)', () => {
     // Without a username we cannot set owner; fall back to the default rather
     // than emitting owner: [undefined].
-    expect(applyPreset('mine', DEFAULT, null)).toEqual<ComponentFilter>({ archived: false })
+    expect(applyPreset('mine', DEFAULT, null)).toEqual<ComponentFilter>(DEFAULT)
   })
 
   it('problems → active-only default (the problems list is Portal-computed, not a CRS filter)', () => {
     // The problems preset does not encode a CRS query param; the page swaps the
     // list source. Its filter footprint is just the active-only default.
     expect(applyPreset('problems', { owner: ['x'], archived: true }, 'alice')).toEqual<ComponentFilter>(
-      { archived: false },
+      DEFAULT,
     )
   })
 
   it('archived → archived-only (archived=true), clearing other filters', () => {
     expect(applyPreset('archived', { owner: ['x'], archived: false }, 'alice')).toEqual<ComponentFilter>(
-      { archived: true },
+      { archived: true, testComponent: false },
     )
+  })
+
+  it('test-components → active test components only, clearing other filters', () => {
+    expect(
+      applyPreset('test-components', { owner: ['x'], archived: true }, 'alice'),
+    ).toEqual<ComponentFilter>({ archived: false, testComponent: true })
+  })
+
+  it('every preset except test-components keeps test components hidden', () => {
+    for (const p of PRESETS) {
+      if (p.id === 'test-components') continue
+      expect(applyPreset(p.id, { testComponent: true }, 'alice').testComponent).toBe(false)
+    }
   })
 
   it('selecting a preset clears conflicting prior filter state', () => {
     // mine after a search+system filter drops the unrelated state.
     const next = applyPreset('mine', { archived: false, search: 'foo', system: ['S1'] }, 'alice')
-    expect(next).toEqual<ComponentFilter>({ archived: false, owner: ['alice'] })
+    expect(next).toEqual<ComponentFilter>({ ...DEFAULT, owner: ['alice'] })
   })
 
   // Phase 1b: CRS now supports releaseManager= / securityChampion= list filters,
   // so these personal presets scope to the current user's own RM/SC role.
   it('release-manager → releaseManager == [currentUser], archived=false', () => {
     expect(applyPreset('release-manager', DEFAULT, 'alice')).toEqual<ComponentFilter>({
-      archived: false,
+      ...DEFAULT,
       releaseManager: ['alice'],
     })
   })
 
   it('security-champion → securityChampion == [currentUser], archived=false', () => {
     expect(applyPreset('security-champion', DEFAULT, 'alice')).toEqual<ComponentFilter>({
-      archived: false,
+      ...DEFAULT,
       securityChampion: ['alice'],
     })
   })
@@ -94,8 +108,8 @@ describe('applyPreset — preset is sugar over filter state', () => {
   it('release-manager / security-champion → default when there is no current user', () => {
     // Personal presets need a username to scope; without one fall back to the
     // default rather than emitting releaseManager: [undefined].
-    expect(applyPreset('release-manager', DEFAULT, null)).toEqual<ComponentFilter>({ archived: false })
-    expect(applyPreset('security-champion', DEFAULT, null)).toEqual<ComponentFilter>({ archived: false })
+    expect(applyPreset('release-manager', DEFAULT, null)).toEqual<ComponentFilter>(DEFAULT)
+    expect(applyPreset('security-champion', DEFAULT, null)).toEqual<ComponentFilter>(DEFAULT)
   })
 })
 
@@ -118,6 +132,22 @@ describe('matchPreset — derive the active preset from filter state', () => {
 
   it('archived=true matches "archived"', () => {
     expect(matchPreset({ archived: true }, 'alice')).toBe('archived')
+  })
+
+  it('the default footprint (incl. testComponent=false) matches "all" / "mine" / "archived"', () => {
+    expect(matchPreset(DEFAULT, 'alice')).toBe('all')
+    expect(matchPreset({ ...DEFAULT, owner: ['alice'] }, 'alice')).toBe('mine')
+    expect(matchPreset({ archived: true, testComponent: false }, 'alice')).toBe('archived')
+  })
+
+  it('testComponent=true matches "test-components", alone or with archived=false', () => {
+    expect(matchPreset({ archived: false, testComponent: true }, 'alice')).toBe('test-components')
+    expect(matchPreset({ testComponent: true }, 'alice')).toBe('test-components')
+  })
+
+  it('testComponent=true combined with anything else is custom (null)', () => {
+    expect(matchPreset({ archived: true, testComponent: true }, 'alice')).toBeNull()
+    expect(matchPreset({ archived: false, testComponent: true, owner: ['alice'] }, 'alice')).toBeNull()
   })
 
   it('an ad-hoc filter combo matches no preset (null)', () => {

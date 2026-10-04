@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { UseFormReturn } from 'react-hook-form'
 import { Label } from '../ui/label'
 import { Input } from '../ui/input'
+import { Switch } from '../ui/switch'
 import { EmployeeStatusBadge, PeopleInput } from '../ui/PeopleInput'
 import { PeopleListInput } from '../ui/PeopleListInput'
 import { ChipsInput } from '../ui/ChipsInput'
@@ -75,6 +76,9 @@ export interface GeneralFormValues {
   clientCode: string
   solution: boolean
   archived: boolean
+  // Synthetic test component (hidden from the list by default). Value-compared
+  // on save like canBeParent.
+  testComponent: boolean
   parentComponentName: string
   // canBeParent — editable Switch: whether this component may be picked as another
   // component's parent. A canBeParent component may not itself have a parent (single
@@ -159,6 +163,7 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
   // `systems` is a multi-value string[] (ChipsInput), watched so the controlled
   // primitive receives the current array.
   const systemsValue = watch('systems')
+  const testComponent = watch('testComponent')
 
   // Systems dictionary powers the ChipsInput options — see the note next to its
   // render block. 404/501 → [] (handled by the hook).
@@ -223,6 +228,7 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
     setValue('clientCode', component.clientCode ?? '')
     setValue('solution', component.solution ?? false)
     setValue('archived', component.archived)
+    setValue('testComponent', component.testComponent ?? false)
     // parentComponentName / canBeParent render on the Misc tab but are hydrated HERE: General
     // is the default tab (always mounted on load), whereas Radix unmounts the inactive Misc
     // tab, so hydrating in MiscTab would leave these unset until the user opens Misc.
@@ -320,6 +326,21 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
               )}
             </div>
           )}
+
+          {/* Test component — hides the component from lists by default. */}
+          <div className="sm:col-span-2 flex items-center gap-3">
+            <Switch
+              id="testComponent"
+              checked={testComponent}
+              onCheckedChange={(checked) =>
+                setValue('testComponent', checked, { shouldDirty: true, shouldTouch: true })
+              }
+            />
+            <Label htmlFor="testComponent" className="cursor-pointer">Test component</Label>
+            <span className="text-xs text-muted-foreground">
+              Synthetic component for testing; hidden from component lists by default.
+            </span>
+          </div>
 
           {/* Parent Component, Can-be-parent, and Group Key / Synthetic-group moved to the
               Misc tab (MiscTab.tsx) to keep General focused on identity/ownership/metadata.

@@ -118,6 +118,7 @@ function Harness({ component, formRef, onOwnerValidatingChange, canEdit, classif
       clientCode: component.clientCode ?? '',
       solution: component.solution ?? false,
       archived: component.archived,
+      testComponent: component.testComponent ?? false,
       parentComponentName: component.parentComponentName ?? '',
       canBeParent: component.canBeParent ?? false,
       releaseManager: component.releaseManager ?? [],
@@ -187,6 +188,17 @@ const EDITOR_USER = {
   ],
   groups: [],
 }
+
+describe('GeneralTab test component switch', () => {
+  it('hydrates from the component and writes the toggled value into the form', async () => {
+    const formRef = { current: null } as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    renderWithProviders(<Harness component={baseComponent({ testComponent: true })} formRef={formRef} />)
+    const sw = screen.getByRole('switch', { name: /test component/i })
+    expect(sw.getAttribute('aria-checked')).toBe('true')
+    await userEvent.click(sw)
+    expect(formRef.current!.getValues('testComponent')).toBe(false)
+  })
+})
 
 // parentComponentName / canBeParent / group-key tests moved to MiscTab.test.tsx (those
 // fields now render on the Misc tab).
