@@ -113,6 +113,11 @@ interface GeneralTabProps {
    */
   canEdit?: boolean
   /**
+   * ARCHIVE_COMPONENTS — CRS requires it to change `testComponent` (same guard
+   * as `archived`), so without it the Test component switch is read-only.
+   */
+  canSetTestComponent?: boolean
+  /**
    * In-flight signal of the owner PeopleInput's async directory validation.
    * The typed owner only commits to the form after the lookup resolves, so
    * ComponentDetailPage holds the global Save while this reports true —
@@ -133,7 +138,7 @@ interface GeneralTabProps {
   }
 }
 
-export function GeneralTab({ component, form, isNew = false, canEdit = true, onOwnerValidatingChange, classification }: GeneralTabProps) {
+export function GeneralTab({ component, form, isNew = false, canEdit = true, canSetTestComponent = false, onOwnerValidatingChange, classification }: GeneralTabProps) {
   const {
     register,
     setValue,
@@ -332,13 +337,16 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
             <Switch
               id="testComponent"
               checked={testComponent}
+              disabled={!canSetTestComponent}
               onCheckedChange={(checked) =>
                 setValue('testComponent', checked, { shouldDirty: true, shouldTouch: true })
               }
             />
             <Label htmlFor="testComponent" className="cursor-pointer">Test component</Label>
             <span className="text-xs text-muted-foreground">
-              Synthetic component for testing; hidden from component lists by default.
+              {canSetTestComponent
+                ? 'Synthetic component for testing; hidden from component lists by default.'
+                : 'Changing this requires the ARCHIVE_COMPONENTS permission.'}
             </span>
           </div>
 

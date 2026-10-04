@@ -1152,6 +1152,7 @@ function ComponentDetailEditor() {
                   component={component}
                   form={form}
                   canEdit={canEdit}
+                  canSetTestComponent={canUnarchive}
                   onOwnerValidatingChange={setOwnerValidating}
                   classification={{
                     explicit: distributionSection.state.explicit,

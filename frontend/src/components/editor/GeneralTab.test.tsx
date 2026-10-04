@@ -104,7 +104,7 @@ function setAllEditable() {
   mockUseFieldConfigEntry.mockImplementation(() => makeEntry('editable'))
 }
 
-function Harness({ component, formRef, onOwnerValidatingChange, canEdit, classification }: { component: ComponentDetail; formRef?: React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>; onOwnerValidatingChange?: (validating: boolean) => void; canEdit?: boolean; classification?: { explicit: boolean; external: boolean; setExplicit: (v: boolean) => void; setExternal: (v: boolean) => void } }) {
+function Harness({ component, formRef, onOwnerValidatingChange, canEdit, canSetTestComponent, classification }: { component: ComponentDetail; formRef?: React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>; onOwnerValidatingChange?: (validating: boolean) => void; canEdit?: boolean; canSetTestComponent?: boolean; classification?: { explicit: boolean; external: boolean; setExplicit: (v: boolean) => void; setExternal: (v: boolean) => void } }) {
   const form = useForm<GeneralFormValues>({
     defaultValues: {
       name: component.name,
@@ -132,7 +132,7 @@ function Harness({ component, formRef, onOwnerValidatingChange, canEdit, classif
     },
   })
   if (formRef) formRef.current = form
-  return <GeneralTab component={component} form={form} canEdit={canEdit} onOwnerValidatingChange={onOwnerValidatingChange} classification={classification} />
+  return <GeneralTab component={component} form={form} canEdit={canEdit} canSetTestComponent={canSetTestComponent} onOwnerValidatingChange={onOwnerValidatingChange} classification={classification} />
 }
 
 beforeEach(() => {
@@ -192,11 +192,20 @@ const EDITOR_USER = {
 describe('GeneralTab test component switch', () => {
   it('hydrates from the component and writes the toggled value into the form', async () => {
     const formRef = { current: null } as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
-    renderWithProviders(<Harness component={baseComponent({ testComponent: true })} formRef={formRef} />)
+    renderWithProviders(
+      <Harness component={baseComponent({ testComponent: true })} formRef={formRef} canSetTestComponent />,
+    )
     const sw = screen.getByRole('switch', { name: /test component/i })
     expect(sw.getAttribute('aria-checked')).toBe('true')
     await userEvent.click(sw)
     expect(formRef.current!.getValues('testComponent')).toBe(false)
+  })
+
+  it('is disabled without ARCHIVE_COMPONENTS (CRS guards the flag like archived)', () => {
+    renderWithProviders(<Harness component={baseComponent({ testComponent: true })} />)
+    const sw = screen.getByRole('switch', { name: /test component/i }) as HTMLButtonElement
+    expect(sw.disabled).toBe(true)
+    expect(screen.getByText(/requires the ARCHIVE_COMPONENTS permission/i)).toBeDefined()
   })
 })
 
