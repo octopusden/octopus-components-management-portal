@@ -667,6 +667,9 @@
             },
             "type" : "array"
           },
+          "testComponent" : {
+            "type" : "boolean"
+          },
           "vcsExternalRegistry" : {
             "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null.",
             "type" : "string"
@@ -801,6 +804,9 @@
             },
             "type" : "array"
           },
+          "testComponent" : {
+            "type" : "boolean"
+          },
           "updatedAt" : {
             "format" : "date-time",
             "type" : "string"
@@ -834,6 +840,7 @@
           "skipCommitCheck",
           "systems",
           "teamcityProjects",
+          "testComponent",
           "version",
           "warnings"
         ],
@@ -994,6 +1001,9 @@
           "teamcityProjectUrl" : {
             "type" : "string"
           },
+          "testComponent" : {
+            "type" : "boolean"
+          },
           "updatedAt" : {
             "format" : "date-time",
             "type" : "string"
@@ -1010,7 +1020,8 @@
           "name",
           "releaseManagers",
           "securityChampions",
-          "systems"
+          "systems",
+          "testComponent"
         ],
         "type" : "object"
       },
@@ -1180,6 +1191,9 @@
               "$ref" : "#/components/schemas/TeamcityProjectRequest"
             },
             "type" : "array"
+          },
+          "testComponent" : {
+            "type" : "boolean"
           },
           "vcsExternalRegistry" : {
             "description" : "Write tri-state: omit or null = leave unchanged; \"\" (or blank) = clear to null; non-blank = set verbatim. On create, \"\" is treated as null.",
@@ -7331,6 +7345,14 @@
           {
             "in" : "query",
             "name" : "archived",
+            "required" : false,
+            "schema" : {
+              "type" : "boolean"
+            }
+          },
+          {
+            "in" : "query",
+            "name" : "testComponent",
             "required" : false,
             "schema" : {
               "type" : "boolean"
