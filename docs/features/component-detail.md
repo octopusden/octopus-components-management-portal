@@ -4,7 +4,7 @@
 
 The detail page at `/components/<UUID>` is the editor surface. It renders [`pages/ComponentDetailPage.tsx`](../../frontend/src/pages/ComponentDetailPage.tsx) and decomposes into tabs (General, **Solution** (conditional), **Misc**, Build, VCS, **Documentation**, Distribution, Jira, Escrow, **Supported Versions**, Configurations, As Code, Overrides, History, and an admin-only **Validations** group — TeamCity, Unregistered Release). The page-level form lives once and General / Solution / Documentation / Misc all share its state via `react-hook-form`. The `Tabs` are controlled so a server 400 on a field that lives on a non-active tab auto-switches to the owning tab (`sectionForField`, incl. `docs → documentation`).
 
-**Labels** are edited in the page **header** (badges + a popover [`HeaderLabelsEditor`](../../frontend/src/components/editor/HeaderLabelsEditor.tsx)), not on General. A component with `solution = true` is flagged in the header (a prominent badge + an info `StatusBanner`). A component with `testComponent = true` gets a *Test* badge next to Archived/Active; the flag is edited by the **Test component** switch in General (Identity), enabled only with `ARCHIVE_COMPONENTS` (CRS guards the field like `archived`). Test components are hidden from the list by default (see [component-list](component-list.md)) but open normally by UUID or name.
+**Labels** are edited in the page **header** (badges + a popover [`HeaderLabelsEditor`](../../frontend/src/components/editor/HeaderLabelsEditor.tsx)), not on General. A component with `solution = true` is flagged in the header (a prominent badge + an info `StatusBanner`). A component with `testComponent = true` gets a *Test* badge next to Archived/Active; the flag is edited by the **Test component** switch in General (Identity). Test components are hidden from the list by default (see [component-list](component-list.md)) but open normally by UUID or name.
 
 ## URL stability
 
@@ -132,7 +132,7 @@ autocomplete (`frontend/src/components/ui/ComponentSelect.tsx`) drives the paren
 | `name` | `string` (rename) | Only when `trimmedName !== '' && trimmedName !== component.name`. |
 | `parentComponentName` | `string \| null \| undefined` | Three states: `unchanged → undefined`, `'' → null` (clear), `value → string` (set). |
 | `archived` | `boolean` | Only when `values.archived !== component.archived` — dead in practice: no control in the UI ever changes `values.archived` off its server-hydrated value, so this never fires. See "Archiving (readiness gate)" below for how archiving actually happens. |
-| `testComponent` | `boolean` | Only when the General **Test component** switch differs from `component.testComponent` (value-compared like `canBeParent`), so a plain edit by a user without `ARCHIVE_COMPONENTS` never trips the CRS guard. |
+| `testComponent` | `boolean` | Only when the General **Test component** switch differs from `component.testComponent` (value-compared like `canBeParent`). |
 
 If any of these fields is always sent, a non-admin's plain edit (only `displayName` or owner) would 403 because the server's PATCH SpEL guards `(#request.archived == null or canArchiveComponent(...))` etc.
 
