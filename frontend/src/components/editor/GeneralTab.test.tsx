@@ -31,6 +31,14 @@ vi.mock('../../hooks/useComponents', () => ({
 // with its own dict (rendered in the header, not GeneralTab).
 const mockUseSystemsDictionary = vi.fn(() => ({ data: ['SYS1', 'SYS2', 'SYS_NEW_DICT_ONLY'], isLoading: false, isError: false }))
 const mockUseLabelsDictionary = vi.fn(() => ({ data: ['backend', 'internal', 'frontend'], isLoading: false, isError: false }))
+// SYS-099 test-component key patterns; [] (default) = no restriction known.
+const mockTestPatterns = vi.fn((): { data?: string[] } => ({ data: [] }))
+vi.mock('../../hooks/useTestComponentNamePatterns', async () => {
+  const actual = await vi.importActual<typeof import('../../hooks/useTestComponentNamePatterns')>(
+    '../../hooks/useTestComponentNamePatterns',
+  )
+  return { ...actual, useTestComponentNamePatterns: () => mockTestPatterns() }
+})
 vi.mock('../../hooks/useSystemsDictionary', () => ({
   useSystemsDictionary: () => mockUseSystemsDictionary(),
 }))
@@ -188,6 +196,42 @@ const EDITOR_USER = {
   ],
   groups: [],
 }
+
+describe('GeneralTab test component switch — key patterns (SYS-099)', () => {
+  const PATTERNS = ['^test-', '^cvelab-']
+  const sw = () => screen.getByRole('switch', { name: /test component/i }) as HTMLButtonElement
+
+  it('enabled for a matching key', () => {
+    mockTestPatterns.mockReturnValue({ data: PATTERNS })
+    renderWithProviders(<Harness component={baseComponent({ name: 'cvelab-app' })} />)
+    expect(sw().disabled).toBe(false)
+    mockTestPatterns.mockReturnValue({ data: [] })
+  })
+
+  it('disabled with a hint naming the patterns when the key matches none and the flag is off', () => {
+    mockTestPatterns.mockReturnValue({ data: PATTERNS })
+    renderWithProviders(<Harness component={baseComponent({ name: 'payments' })} />)
+    expect(sw().disabled).toBe(true)
+    expect(
+      screen.getByText('Only components whose key matches ^test-, ^cvelab- can be test components.'),
+    ).toBeDefined()
+    mockTestPatterns.mockReturnValue({ data: [] })
+  })
+
+  it('stays enabled when the flag is already on, so it can be unset', () => {
+    mockTestPatterns.mockReturnValue({ data: PATTERNS })
+    renderWithProviders(<Harness component={baseComponent({ name: 'payments', testComponent: true })} />)
+    expect(sw().disabled).toBe(false)
+    mockTestPatterns.mockReturnValue({ data: [] })
+  })
+
+  it('fails open while patterns are unavailable (loading / error)', () => {
+    mockTestPatterns.mockReturnValue({ data: undefined })
+    renderWithProviders(<Harness component={baseComponent({ name: 'payments' })} />)
+    expect(sw().disabled).toBe(false)
+    mockTestPatterns.mockReturnValue({ data: [] })
+  })
+})
 
 describe('GeneralTab test component switch', () => {
   it('hydrates from the component and writes the toggled value into the form', async () => {
@@ -547,6 +591,16 @@ describe('GeneralTab server error display (S3.1a)', () => {
     await waitFor(() => {
       expect(screen.getByText('must not be blank')).toBeDefined()
     })
+  })
+
+  it('setError("testComponent") renders the CRS pattern message under the switch', async () => {
+    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    renderWithProviders(<Harness component={baseComponent()} formRef={formRef} />)
+    const msg = "test component key 'svc' matches none of the test-component name patterns [^test-, ^cvelab-]"
+    await act(async () => {
+      formRef.current?.setError('testComponent', { type: 'server', message: msg })
+    })
+    await waitFor(() => expect(screen.getByText(msg)).toBeDefined())
   })
 
   it('setError("name") renders the message and suppresses the rename hint', async () => {

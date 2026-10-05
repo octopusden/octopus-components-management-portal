@@ -14,6 +14,7 @@ import type { ComponentDetail } from '../../lib/types'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../../lib/auth'
 import { useFieldConfigEntry } from '../../hooks/useFieldConfig'
+import { keyMatchesTestPatterns, useTestComponentNamePatterns } from '../../hooks/useTestComponentNamePatterns'
 // system is MULTI-value (a component may belong to several systems —
 // component_systems junction). The editor is a ChipsInput multi-select fed the
 // FULL dictionary (not just in-use values) via useSystemsDictionary() →
@@ -53,6 +54,9 @@ export const GENERAL_TAB_FIELDS = [
   'releaseManager',
   'securityChampion',
   'copyright',
+  // CRS 400s `testComponent: … matches none of the test-component name patterns` (SYS-099);
+  // shown inline under the switch.
+  'testComponent',
 ] as const
 
 export interface GeneralFormValues {
@@ -164,6 +168,13 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
   // primitive receives the current array.
   const systemsValue = watch('systems')
   const testComponent = watch('testComponent')
+  // SYS-099: the flag may only be SET on a key matching a configured pattern
+  // (checked against the live form key, so a pending rename counts). Unsetting
+  // is always allowed, so the switch stays enabled while the flag is on.
+  // Fail-open while loading / on error: CRS 400 stays authoritative.
+  const testPatterns = useTestComponentNamePatterns().data ?? []
+  const testComponentBlocked =
+    !testComponent && !keyMatchesTestPatterns((watchedKey ?? '').trim(), testPatterns)
 
   // Systems dictionary powers the ChipsInput options — see the note next to its
   // render block. 404/501 → [] (handled by the hook).
@@ -333,14 +344,20 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
               id="testComponent"
               checked={testComponent}
               aria-describedby="testComponent-help"
+              disabled={testComponentBlocked}
               onCheckedChange={(checked) =>
                 setValue('testComponent', checked, { shouldDirty: true, shouldTouch: true })
               }
             />
             <Label htmlFor="testComponent" className="cursor-pointer">Test component</Label>
             <span id="testComponent-help" className="text-xs text-muted-foreground">
-              Synthetic component for testing; hidden from component lists by default.
+              {testComponentBlocked
+                ? `Only components whose key matches ${testPatterns.join(', ')} can be test components.`
+                : 'Synthetic component for testing; hidden from component lists by default.'}
             </span>
+            {errors.testComponent && (
+              <p className="text-xs text-destructive">{errors.testComponent.message}</p>
+            )}
           </div>
 
           {/* Parent Component, Can-be-parent, and Group Key / Synthetic-group moved to the

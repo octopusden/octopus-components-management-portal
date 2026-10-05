@@ -7,6 +7,7 @@ import { useClientCodes } from './useClientCodes'
 import { useJiraProjectKeys } from './useJiraProjectKeys'
 import { useParentComponentNames } from './useParentComponentNames'
 import { useGroupKeys } from './useGroupKeys'
+import { useTestComponentNamePatterns } from './useTestComponentNamePatterns'
 
 vi.mock('../lib/api', async () => {
   const actual = await vi.importActual<typeof import('../lib/api')>('../lib/api')
@@ -30,6 +31,11 @@ const cases = [
   { name: 'useJiraProjectKeys', hook: useJiraProjectKeys, path: '/components/meta/jira-project-keys' },
   { name: 'useParentComponentNames', hook: useParentComponentNames, path: '/components/meta/parent-component-names' },
   { name: 'useGroupKeys', hook: useGroupKeys, path: '/components/meta/group-keys' },
+  {
+    name: 'useTestComponentNamePatterns',
+    hook: useTestComponentNamePatterns,
+    path: '/components/meta/test-component-name-patterns',
+  },
 ]
 
 describe.each(cases)('$name', ({ hook, path }) => {
