@@ -332,12 +332,13 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
             <Switch
               id="testComponent"
               checked={testComponent}
+              aria-describedby="testComponent-help"
               onCheckedChange={(checked) =>
                 setValue('testComponent', checked, { shouldDirty: true, shouldTouch: true })
               }
             />
             <Label htmlFor="testComponent" className="cursor-pointer">Test component</Label>
-            <span className="text-xs text-muted-foreground">
+            <span id="testComponent-help" className="text-xs text-muted-foreground">
               Synthetic component for testing; hidden from component lists by default.
             </span>
           </div>

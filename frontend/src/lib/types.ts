@@ -65,6 +65,10 @@ export interface ComponentDetail {
   archived: boolean
   // Synthetic test component — see ComponentSummary.testComponent.
   testComponent?: boolean
+  // Non-blocking CRS advisories about this component (e.g. the `test-component`
+  // label without the testComponent flag). Required on the wire; optional here
+  // so existing fixtures need not set it.
+  warnings?: string[]
   solution: boolean | null
   parentComponentName: string | null
   // Whether this component may itself be a parent. Editable (CAN_BE_PARENT

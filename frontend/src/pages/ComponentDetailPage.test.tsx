@@ -803,6 +803,18 @@ describe('ComponentDetailPage — Archive readiness gate', () => {
 })
 
 describe('ComponentDetailPage — breadcrumb badges', () => {
+  it('CRS warnings render as a warning banner; none → no banner', () => {
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    const msg = "Label 'test-component' is set but testComponent is false"
+    const { unmount } = renderPage({ ...baseComponent, warnings: [msg] }, user)
+    const banner = screen.getByTestId('component-warnings')
+    expect(banner.getAttribute('data-variant')).toBe('warning')
+    expect(banner.textContent).toContain(msg)
+    unmount()
+    renderPage({ ...baseComponent, warnings: [] }, user)
+    expect(screen.queryByTestId('component-warnings')).toBeNull()
+  })
+
   it('"Test" badge renders only for a test component', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
     const { unmount } = renderPage({ ...baseComponent, testComponent: true }, user)

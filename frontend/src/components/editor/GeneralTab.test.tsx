@@ -195,6 +195,9 @@ describe('GeneralTab test component switch', () => {
     renderWithProviders(<Harness component={baseComponent({ testComponent: true })} formRef={formRef} />)
     const sw = screen.getByRole('switch', { name: /test component/i })
     expect(sw.getAttribute('aria-checked')).toBe('true')
+    expect(document.getElementById(sw.getAttribute('aria-describedby')!)!.textContent).toMatch(
+      /hidden from component lists by default/,
+    )
     await userEvent.click(sw)
     expect(formRef.current!.getValues('testComponent')).toBe(false)
   })

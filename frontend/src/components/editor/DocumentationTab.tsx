@@ -26,6 +26,9 @@ export function DocumentationTab({ form }: DocumentationTabProps) {
   // Doc-link rows use a controlled ComponentSelect (filtered to label=doc), so
   // watch the array to feed each row's current value.
   const watchedDocs = watch('docs')
+  // A real component must not reference a test component (CRS 400s it), so
+  // only a test component is offered test doc components.
+  const testComponent = watch('testComponent')
 
   return (
     <section data-testid="section-references" className="space-y-4">
@@ -58,7 +61,7 @@ export function DocumentationTab({ form }: DocumentationTabProps) {
                 onChange={(val) =>
                   setValue(`docs.${index}.docComponentKey` as const, val, { shouldDirty: true })
                 }
-                filter={{ labels: ['doc'] }}
+                filter={{ labels: ['doc'], testComponent: testComponent ? undefined : false }}
                 strict
                 placeholder="docs-component-key"
               />

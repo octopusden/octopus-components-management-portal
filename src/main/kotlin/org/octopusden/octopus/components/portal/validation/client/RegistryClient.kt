@@ -37,7 +37,9 @@ class RegistryClient(
      * the id is NESTED under "component", not a top-level "id".
      *
      * Archived components are EXCLUDED: there's no point validating decommissioned
-     * components, and dropping them trims the per-component fan-out.
+     * components, and dropping them trims the per-component fan-out. Test
+     * components (`testComponent: true`) are excluded too, so they don't surface
+     * in the list page's "With problems" preset, which hides them elsewhere.
      */
     fun componentIds(): Mono<List<String>> =
         webClient
@@ -45,7 +47,12 @@ class RegistryClient(
             .uri("/rest/api/3/components")
             .retrieve()
             .bodyToMono<List<ComponentRef>>()
-            .map { refs -> refs.mapNotNull { it.component }.filterNot { it.archived == true }.mapNotNull { it.id } }
+            .map { refs ->
+                refs
+                    .mapNotNull { it.component }
+                    .filterNot { it.archived == true || it.testComponent == true }
+                    .mapNotNull { it.id }
+            }
             .timeout(requestTimeout)
 
     /**
@@ -102,7 +109,11 @@ class RegistryClient(
     data class ComponentRef(val component: ComponentInner? = null)
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    data class ComponentInner(val id: String? = null, val archived: Boolean? = null)
+    data class ComponentInner(
+        val id: String? = null,
+        val archived: Boolean? = null,
+        val testComponent: Boolean? = null,
+    )
 
     data class VersionsRequest(val versions: List<String>)
 

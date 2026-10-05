@@ -101,41 +101,49 @@ test.describe('state primitives — list with data', () => {
 })
 
 test.describe('state primitives — test components', () => {
-  test('list hides test components by default and shows a "Test" badge under the preset', async ({
+  test('list hides test components by default and shows them with a "Test" badge under the preset', async ({
     page,
   }) => {
     // Route-mocked: one test component added to the shared fixture (kept
-    // inline so the other specs' row counts are untouched).
-    const withTestComponent = {
-      ...componentsFixture,
-      content: [
-        ...componentsFixture.content,
-        {
-          id: '00000000-0000-0000-0000-0000000000t1',
-          name: 'cvelab-test',
-          displayName: null,
-          componentOwner: 'alice',
-          systems: [],
-          productType: null,
-          archived: false,
-          testComponent: true,
-          updatedAt: '2026-01-15T10:00:00Z',
-        },
-      ],
-    }
-    await mockComponentList(page, withTestComponent)
+    // inline so the other specs' row counts are untouched). The handler
+    // honours ?testComponent= like CRS, so the absent/present asserts below
+    // prove the SPA sends the right filter.
+    const rows = [
+      ...componentsFixture.content,
+      {
+        id: '7d3f9a2e-5b1c-4e8f-9a6d-2c4b8e1f0a37',
+        name: 'cvelab-test',
+        displayName: null,
+        componentOwner: 'alice',
+        systems: [],
+        productType: null,
+        archived: false,
+        testComponent: true,
+        updatedAt: '2026-01-15T10:00:00Z',
+      },
+    ]
+    await page.route('**/rest/api/4/components?**', (route) => {
+      const flag = new URL(route.request().url()).searchParams.get('testComponent')
+      const content =
+        flag === null
+          ? rows
+          : rows.filter((r) => (('testComponent' in r && r.testComponent) || false) === (flag === 'true'))
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ...componentsFixture, content, totalElements: content.length }),
+      })
+    })
     await mockLabels(page, [])
 
-    const defaultRequest = page.waitForRequest('**/rest/api/4/components?**')
     await page.goto('/components')
-    expect(new URL((await defaultRequest).url()).searchParams.get('testComponent')).toBe('false')
+    await expect(page.getByText('alpha', { exact: true }).first()).toBeVisible()
+    await expect(page.getByText('cvelab-test', { exact: true })).toHaveCount(0)
 
-    const presetRequest = page.waitForRequest(
-      (req) => new URL(req.url()).searchParams.get('testComponent') === 'true',
-    )
     await page.getByRole('button', { name: 'Test components' }).click()
-    await presetRequest
-    const row = page.getByText('cvelab-test', { exact: true }).first().locator('xpath=ancestor::tr[1]')
-    await expect(row.getByText('Test', { exact: true })).toBeVisible()
+    const name = page.getByText('cvelab-test', { exact: true }).first()
+    await expect(name).toBeVisible()
+    await expect(page.getByText('alpha', { exact: true })).toHaveCount(0)
+    await expect(name.locator('xpath=ancestor::tr[1]').getByText('Test', { exact: true })).toBeVisible()
   })
 })

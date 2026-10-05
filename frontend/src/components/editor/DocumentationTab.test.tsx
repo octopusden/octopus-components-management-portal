@@ -11,8 +11,9 @@ vi.mock('../../hooks/useFieldConfig', () => ({
   useFieldConfigEntry: () => ({ entry: { visibility: 'editable' }, isLoading: false, isError: false }),
   useFieldLabel: (_path: string, fallback: string) => fallback,
 }))
+const mockUseComponents = vi.fn<(args: unknown) => unknown>(() => ({ data: { content: [], totalElements: 0 } }))
 vi.mock('../../hooks/useComponents', () => ({
-  useComponents: () => ({ data: { content: [], totalElements: 0 } }),
+  useComponents: (args: unknown) => mockUseComponents(args),
 }))
 
 function defaults(over: Partial<GeneralFormValues> = {}): GeneralFormValues {
@@ -50,6 +51,17 @@ describe('DocumentationTab', () => {
     render(<Harness initial={{ docs: [{ docComponentKey: 'docs-a', majorVersion: '3.x' }] }} />)
     expect(screen.getByLabelText(/doc link component key \(row 1\)/i)).toBeDefined()
     expect((screen.getByLabelText(/doc link major version \(row 1\)/i) as HTMLInputElement).value).toBe('3.x')
+  })
+
+  it('a real component is offered only non-test doc components; a test component sees all', () => {
+    const lastFilter = () =>
+      (mockUseComponents.mock.calls.at(-1)![0] as { filter?: Record<string, unknown> }).filter
+    const docs = [{ docComponentKey: 'docs-a', majorVersion: '3.x' }]
+    const { unmount } = render(<Harness initial={{ docs }} />)
+    expect(lastFilter()).toMatchObject({ labels: ['doc'], testComponent: false })
+    unmount()
+    render(<Harness initial={{ docs, testComponent: true }} />)
+    expect(lastFilter()!.testComponent).toBeUndefined()
   })
 
   it('"Add doc link" appends an empty row to the form', async () => {

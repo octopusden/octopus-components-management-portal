@@ -464,7 +464,11 @@ const columns = [
           <Badge variant={archived ? 'destructive' : 'secondary'}>
             {archived ? 'Archived' : 'Active'}
           </Badge>
-          {row.original.testComponent && <Badge variant="outline">Test</Badge>}
+          {row.original.testComponent && (
+            <Badge variant="outline" title="Test component">
+              Test
+            </Badge>
+          )}
         </div>
       )
     },
