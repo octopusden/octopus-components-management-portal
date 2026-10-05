@@ -40,6 +40,7 @@ export function MiscTab({ component, form }: MiscTabProps) {
 
   const parentComponentName = watch('parentComponentName')
   const canBeParent = watch('canBeParent')
+  const testComponent = watch('testComponent')
 
   const { entry: groupIdEntry } = useFieldConfigEntry('component.groupId')
   const { entry: canBeParentEntry } = useFieldConfigEntry('component.canBeParent')
@@ -94,7 +95,9 @@ export function MiscTab({ component, form }: MiscTabProps) {
                     ? 'A can-be-parent component cannot have a parent'
                     : 'No parent (top-level component)'
                 }
-                filter={{ canBeParent: true }}
+                // A real component must not reference a test component (CRS 400s it),
+                // so only a test component is offered test parents.
+                filter={{ canBeParent: true, testComponent: testComponent ? undefined : false }}
                 strict
                 disabled={canBeParent}
               />

@@ -157,6 +157,7 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
 
   // canBeParent: value-compared (boolean, no null ambiguity) like `archived`.
   const canBeParentChanged = (values.canBeParent ?? false) !== (component.canBeParent ?? false)
+  const testComponentChanged = (values.testComponent ?? false) !== (component.testComponent ?? false)
   // Clearing a parent needs the explicit clearParent flag — `parentComponentName:
   // null` reads as "don't touch" server-side. Fires only on non-empty → empty.
   const clearParent = currentParent !== '' && trimmedParent === ''
@@ -209,6 +210,7 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
     })(),
     solution: solutionChanged ? values.solution : undefined,
     archived: archivedChanged ? values.archived : undefined,
+    testComponent: testComponentChanged ? values.testComponent : undefined,
     parentComponentName,
     clearParent: clearParent ? true : undefined,
     canBeParent:

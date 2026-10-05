@@ -676,6 +676,17 @@ describe('ComponentTable', () => {
     })
   })
 
+  describe('test component badge', () => {
+    it('shows a "Test" badge next to the status for test components only', () => {
+      renderTable([
+        makeComponent({ id: 't1', name: 'test-svc', testComponent: true }),
+        makeComponent({ id: 'r1', name: 'real-svc' }),
+      ])
+      expect(screen.getAllByText('Test')).toHaveLength(1)
+      expect(screen.getAllByText('Active')).toHaveLength(2)
+    })
+  })
+
   describe('archived row dimming', () => {
     it('applies opacity-50 class to archived rows', () => {
       const { container } = renderTable([makeComponent({ archived: true })])

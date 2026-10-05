@@ -4,7 +4,7 @@
 
 The detail page at `/components/<UUID>` is the editor surface. It renders [`pages/ComponentDetailPage.tsx`](../../frontend/src/pages/ComponentDetailPage.tsx) and decomposes into tabs (General, **Solution** (conditional), **Misc**, Build, VCS, **Documentation**, Distribution, Jira, Escrow, **Supported Versions**, Configurations, As Code, Overrides, History, and an admin-only **Validations** group — TeamCity, Unregistered Release). The page-level form lives once and General / Solution / Documentation / Misc all share its state via `react-hook-form`. The `Tabs` are controlled so a server 400 on a field that lives on a non-active tab auto-switches to the owning tab (`sectionForField`, incl. `docs → documentation`).
 
-**Labels** are edited in the page **header** (badges + a popover [`HeaderLabelsEditor`](../../frontend/src/components/editor/HeaderLabelsEditor.tsx)), not on General. A component with `solution = true` is flagged in the header (a prominent badge + an info `StatusBanner`).
+**Labels** are edited in the page **header** (badges + a popover [`HeaderLabelsEditor`](../../frontend/src/components/editor/HeaderLabelsEditor.tsx)), not on General. A component with `solution = true` is flagged in the header (a prominent badge + an info `StatusBanner`). A component with `testComponent = true` gets a *Test* badge next to Archived/Active; the flag is edited by the **Test component** switch in General (Identity). The flag can only be set on a key matching one of the CRS test-component name patterns (`GET /components/meta/test-component-name-patterns`, e.g. `^test-`, `^cvelab-`; checked against the live form key): otherwise the switch is disabled with a hint naming them. It stays enabled while the flag is on so it can always be unset, and fails open if the patterns cannot be loaded. The CRS 400 for a non-matching key (`testComponent: …`) shows inline under the switch; a rename of a flagged component to a non-matching key comes back as `name: …` under the key. CRS advisories in `ComponentDetail.warnings` (e.g. the `test-component` label without the flag) render as a warning `StatusBanner` under the header. Test components are hidden from the list by default (see [component-list](component-list.md)) but open normally by UUID or name.
 
 ## URL stability
 
@@ -132,6 +132,7 @@ autocomplete (`frontend/src/components/ui/ComponentSelect.tsx`) drives the paren
 | `name` | `string` (rename) | Only when `trimmedName !== '' && trimmedName !== component.name`. |
 | `parentComponentName` | `string \| null \| undefined` | Three states: `unchanged → undefined`, `'' → null` (clear), `value → string` (set). |
 | `archived` | `boolean` | Only when `values.archived !== component.archived` — dead in practice: no control in the UI ever changes `values.archived` off its server-hydrated value, so this never fires. See "Archiving (readiness gate)" below for how archiving actually happens. |
+| `testComponent` | `boolean` | Only when the General **Test component** switch differs from `component.testComponent` (value-compared like `canBeParent`). |
 
 If any of these fields is always sent, a non-admin's plain edit (only `displayName` or owner) would 403 because the server's PATCH SpEL guards `(#request.archived == null or canArchiveComponent(...))` etc.
 

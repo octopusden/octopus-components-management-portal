@@ -36,6 +36,7 @@ const FIELD_LABELS: Partial<Record<keyof ComponentFilter, string>> = {
   distributionExplicit: 'Distribution explicit',
   distributionExternal: 'Distribution external',
   archived: 'Status',
+  testComponent: 'Status',
 }
 
 // Array-valued fields → one chip per selected value.
@@ -114,6 +115,10 @@ export function describeFilterChips(
   // Only archived=true is a chip — active-only (false) is the implicit default.
   if (filter.archived === true) {
     chips.push({ key: 'archived', label: `${FIELD_LABELS.archived}: Archived` })
+  }
+  // Same for testComponent: hidden (false) is the default, not a chip.
+  if (filter.testComponent === true) {
+    chips.push({ key: 'testComponent', label: `${FIELD_LABELS.testComponent}: Test components` })
   }
 
   return chips

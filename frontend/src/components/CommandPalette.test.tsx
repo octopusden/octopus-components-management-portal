@@ -196,6 +196,12 @@ describe('CommandPalette — component search', () => {
     expect(arg.enabled).toBe(false)
   })
 
+  it('hides archived and test components from the search', () => {
+    renderPalette()
+    const arg = mockUseComponents.mock.calls[0]![0] as { filter: Record<string, unknown> }
+    expect(arg.filter).toMatchObject({ archived: false, testComponent: false })
+  })
+
   it('debounces the search query then passes it to useComponents', async () => {
     const user = userEvent.setup()
     renderPalette()

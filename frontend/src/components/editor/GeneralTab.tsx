@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { UseFormReturn } from 'react-hook-form'
 import { Label } from '../ui/label'
 import { Input } from '../ui/input'
+import { Switch } from '../ui/switch'
 import { EmployeeStatusBadge, PeopleInput } from '../ui/PeopleInput'
 import { PeopleListInput } from '../ui/PeopleListInput'
 import { ChipsInput } from '../ui/ChipsInput'
@@ -13,6 +14,7 @@ import type { ComponentDetail } from '../../lib/types'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../../lib/auth'
 import { useFieldConfigEntry } from '../../hooks/useFieldConfig'
+import { keyMatchesTestPatterns, useTestComponentNamePatterns } from '../../hooks/useTestComponentNamePatterns'
 // system is MULTI-value (a component may belong to several systems —
 // component_systems junction). The editor is a ChipsInput multi-select fed the
 // FULL dictionary (not just in-use values) via useSystemsDictionary() →
@@ -52,6 +54,9 @@ export const GENERAL_TAB_FIELDS = [
   'releaseManager',
   'securityChampion',
   'copyright',
+  // CRS 400s `testComponent: … matches none of the test-component name patterns` (SYS-099);
+  // shown inline under the switch.
+  'testComponent',
 ] as const
 
 export interface GeneralFormValues {
@@ -75,6 +80,9 @@ export interface GeneralFormValues {
   clientCode: string
   solution: boolean
   archived: boolean
+  // Synthetic test component (hidden from the list by default). Value-compared
+  // on save like canBeParent.
+  testComponent: boolean
   parentComponentName: string
   // canBeParent — editable Switch: whether this component may be picked as another
   // component's parent. A canBeParent component may not itself have a parent (single
@@ -159,6 +167,14 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
   // `systems` is a multi-value string[] (ChipsInput), watched so the controlled
   // primitive receives the current array.
   const systemsValue = watch('systems')
+  const testComponent = watch('testComponent')
+  // SYS-099: the flag may only be SET on a key matching a configured pattern
+  // (checked against the live form key, so a pending rename counts). Unsetting
+  // is always allowed, so the switch stays enabled while the flag is on.
+  // Fail-open while loading / on error: CRS 400 stays authoritative.
+  const testPatterns = useTestComponentNamePatterns().data ?? []
+  const testComponentBlocked =
+    !testComponent && !keyMatchesTestPatterns((watchedKey ?? '').trim(), testPatterns)
 
   // Systems dictionary powers the ChipsInput options — see the note next to its
   // render block. 404/501 → [] (handled by the hook).
@@ -223,6 +239,7 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
     setValue('clientCode', component.clientCode ?? '')
     setValue('solution', component.solution ?? false)
     setValue('archived', component.archived)
+    setValue('testComponent', component.testComponent ?? false)
     // parentComponentName / canBeParent render on the Misc tab but are hydrated HERE: General
     // is the default tab (always mounted on load), whereas Radix unmounts the inactive Misc
     // tab, so hydrating in MiscTab would leave these unset until the user opens Misc.
@@ -320,6 +337,28 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
               )}
             </div>
           )}
+
+          {/* Test component — hides the component from lists by default. */}
+          <div className="sm:col-span-2 flex items-center gap-3">
+            <Switch
+              id="testComponent"
+              checked={testComponent}
+              aria-describedby="testComponent-help"
+              disabled={testComponentBlocked}
+              onCheckedChange={(checked) =>
+                setValue('testComponent', checked, { shouldDirty: true, shouldTouch: true })
+              }
+            />
+            <Label htmlFor="testComponent" className="cursor-pointer">Test component</Label>
+            <span id="testComponent-help" className="text-xs text-muted-foreground">
+              {testComponentBlocked
+                ? `Only components whose key matches ${testPatterns.join(', ')} can be test components.`
+                : 'Synthetic component for testing; hidden from component lists by default.'}
+            </span>
+            {errors.testComponent && (
+              <p className="text-xs text-destructive">{errors.testComponent.message}</p>
+            )}
+          </div>
 
           {/* Parent Component, Can-be-parent, and Group Key / Synthetic-group moved to the
               Misc tab (MiscTab.tsx) to keep General focused on identity/ownership/metadata.

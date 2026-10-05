@@ -124,6 +124,7 @@ function mapComponentToForm(component: ComponentDetail): GeneralFormValues {
     clientCode: component.clientCode ?? '',
     solution: component.solution ?? false,
     archived: component.archived,
+    testComponent: component.testComponent ?? false,
     parentComponentName: component.parentComponentName ?? '',
     canBeParent: component.canBeParent ?? false,
     releaseManager: component.releaseManager ?? [],
@@ -285,6 +286,7 @@ function ComponentDetailEditor() {
       clientCode: '',
       solution: false,
       archived: false,
+      testComponent: false,
       parentComponentName: '',
       canBeParent: false,
       releaseManager: [],
@@ -832,6 +834,11 @@ function ComponentDetailEditor() {
               <Badge variant={component.archived ? 'destructive' : 'secondary'}>
                 {component.archived ? 'Archived' : 'Active'}
               </Badge>
+              {component.testComponent && (
+                <Badge variant="outline" title="Test component">
+                  Test
+                </Badge>
+              )}
               {!canEdit && (
                 <Badge variant="warning" title={CANNOT_EDIT_TITLE}>
                   <LockKeyhole className="mr-1 h-3 w-3" />
@@ -1048,6 +1055,16 @@ function ComponentDetailEditor() {
           <StatusBanner variant="info" className="flex items-center gap-2" data-testid="solution-banner">
             <Boxes className="h-4 w-4 shrink-0" aria-hidden />
             <span>This component is a <span className="font-medium">Solution</span> — it groups and ships other components together.</span>
+          </StatusBanner>
+        )}
+
+        {(component.warnings ?? []).length > 0 && (
+          <StatusBanner variant="warning" data-testid="component-warnings">
+            <ul className="space-y-1">
+              {component.warnings!.map((w) => (
+                <li key={w}>{w}</li>
+              ))}
+            </ul>
           </StatusBanner>
         )}
 

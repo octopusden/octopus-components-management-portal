@@ -103,6 +103,26 @@ class RegistryClientTest {
     }
 
     @Test
+    @DisplayName("componentIds SKIPS test components")
+    fun `componentIds skips test components`() {
+        val stub = startStub()
+        stub.createContext("/rest/api/3/components") { exchange ->
+            respondJson(
+                exchange,
+                200,
+                """[{"component":{"id":"comp-a","archived":false,"testComponent":false},"variants":{}},""" +
+                    """{"component":{"id":"comp-test","archived":false,"testComponent":true},"variants":{}},""" +
+                    """{"component":{"id":"comp-b"},"variants":{}}]""",
+            )
+        }
+
+        val ids = client(stub).componentIds().block(Duration.ofSeconds(10))!!
+
+        // comp-test is dropped; comp-b has no "testComponent" field (older CRS) → kept.
+        assertEquals(listOf("comp-a", "comp-b"), ids)
+    }
+
+    @Test
     @DisplayName("componentIds parses a body LARGER than the default 256 KB codec limit and skips archived")
     fun `componentIds parses large body over default codec limit`() {
         val stub = startStub()
