@@ -73,6 +73,10 @@ describe('Layout nav visibility', () => {
 
     renderLayout()
     expect(screen.getByRole('link', { name: /Components/i })).toBeDefined()
+    // Global search has no permission gate beyond ACCESS_COMPONENTS, and its label never wraps.
+    const search = screen.getByRole('link', { name: 'Search' })
+    expect(search.getAttribute('href')).toBe('/search')
+    expect(search.className).toContain('whitespace-nowrap')
     expect(screen.queryByRole('link', { name: /Audit/i })).toBeNull()
     expect(screen.queryByRole('link', { name: /Admin/i })).toBeNull()
     expect(screen.queryByRole('link', { name: /Validations/i })).toBeNull()

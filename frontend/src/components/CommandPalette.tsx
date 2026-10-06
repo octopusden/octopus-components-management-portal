@@ -1,6 +1,6 @@
 import { Fragment, type ReactNode, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { Package, History, ShieldCheck, Plus, ListFilter, FileSearch } from 'lucide-react'
+import { Package, History, ShieldCheck, Plus, ListFilter, Search } from 'lucide-react'
 import {
   CommandDialog,
   CommandInput,
@@ -96,7 +96,7 @@ export function CommandPalette() {
   // Static entries, gated by permission. Built every render but cheap.
   const navItems: PaletteItem[] = [
     { value: 'goto components', label: 'Components', icon: <Package />, onSelect: () => go('/components') },
-    { value: 'goto search', label: 'Global search', icon: <FileSearch />, onSelect: () => go('/search') },
+    { value: 'goto search', label: 'Global search', icon: <Search />, onSelect: () => go('/search') },
     ...(canAudit
       ? [{ value: 'goto audit', label: 'Audit', icon: <History />, onSelect: () => go('/audit') }]
       : []),
@@ -178,7 +178,7 @@ export function CommandPalette() {
           {
             value: 'action global search',
             label: `Global search for \u201c${debounced}\u201d`,
-            icon: <FileSearch />,
+            icon: <Search />,
             onSelect: () => go(`/search?q=${encodeURIComponent(debounced)}`),
           },
         ]

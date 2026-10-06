@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router'
-import { Package, History, Settings, LogOut, AlertTriangle, ShieldCheck, FileSearch } from 'lucide-react'
+import { Package, History, Settings, LogOut, AlertTriangle, ShieldCheck, Search } from 'lucide-react'
 import { cn, initials } from '../lib/utils'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { usePortalInfo } from '@/hooks/useInfo'
@@ -31,8 +31,9 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { href: '/components', label: 'Components', icon: Package },
-  // No permission gate: the search endpoint needs ACCESS_COMPONENTS, like the list page.
-  { href: '/search', label: 'Global search', icon: FileSearch },
+  // Global search (the page is titled so). "Search" is unambiguous here: the list's controls are
+  // filters and ⌘K is "Go to…". No permission gate: the endpoint needs ACCESS_COMPONENTS, like the list.
+  { href: '/search', label: 'Search', icon: Search },
   {
     href: '/validations',
     label: 'Validations',
@@ -106,13 +107,15 @@ export function Layout({ children }: LayoutProps) {
                   to={href}
                   data-spotlight={href === '/search' ? 'as-code-search' : undefined}
                   className={cn(
-                    'flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                    // nowrap + shrink-0: a crowded header must never wrap a label onto two lines
+                    // (which also squeezed its icon); it scrolls/overflows instead.
+                    'flex shrink-0 items-center gap-2 whitespace-nowrap px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
                     isActive
                       ? 'bg-accent text-accent-foreground'
                       : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
                   )}
                 >
-                  <Icon className="h-4 w-4" />
+                  <Icon className="h-4 w-4 shrink-0" />
                   {label}
                   {href === '/admin' && isAdminOperator && openFeedbackCount > 0 && (
                     <span
