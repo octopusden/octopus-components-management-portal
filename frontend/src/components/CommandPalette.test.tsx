@@ -150,6 +150,21 @@ describe('CommandPalette — navigation', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/audit')
   })
 
+  it('Go to > Search as code opens the as-code search page', async () => {
+    const user = userEvent.setup()
+    renderPalette()
+    await user.click(screen.getByText('Search as code'))
+    expect(mockNavigate).toHaveBeenCalledWith('/search')
+  })
+
+  it('hands the typed text to the as-code search page', async () => {
+    const user = userEvent.setup()
+    renderPalette()
+    await user.type(screen.getByPlaceholderText(/Search components/i), 'org.example')
+    await user.click(await screen.findByText(/Search as code for/))
+    expect(mockNavigate).toHaveBeenCalledWith('/search?q=org.example')
+  })
+
   it('Filter > My Components navigates to /components?owner=…&preset=mine (Phase 1 serialization)', async () => {
     const user = userEvent.setup()
     renderPalette()

@@ -1,6 +1,6 @@
 import { Fragment, type ReactNode, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { Package, History, ShieldCheck, Plus, ListFilter } from 'lucide-react'
+import { Package, History, ShieldCheck, Plus, ListFilter, FileSearch } from 'lucide-react'
 import {
   CommandDialog,
   CommandInput,
@@ -14,6 +14,7 @@ import { useUiOverlay } from '@/lib/uiOverlayStore'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { useComponents } from '@/hooks/useComponents'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
+import { AS_CODE_SEARCH_MIN_QUERY } from '@/hooks/useAsCodeSearch'
 import { matchesQuery, rankComponents } from '@/lib/paletteSearch'
 import { hasPermission, PERMISSIONS } from '@/lib/auth'
 import { useAdminMode } from '@/lib/adminModeStore'
@@ -95,6 +96,7 @@ export function CommandPalette() {
   // Static entries, gated by permission. Built every render but cheap.
   const navItems: PaletteItem[] = [
     { value: 'goto components', label: 'Components', icon: <Package />, onSelect: () => go('/components') },
+    { value: 'goto search', label: 'Search as code', icon: <FileSearch />, onSelect: () => go('/search') },
     ...(canAudit
       ? [{ value: 'goto audit', label: 'Audit', icon: <History />, onSelect: () => go('/audit') }]
       : []),
@@ -167,8 +169,26 @@ export function CommandPalette() {
       </CommandGroup>
     ) : null
 
+  // Hand the typed text to the as-code search page: the palette only matches component
+  // names, the search page matches everything the as-code view shows.
+  const asCodeSearchGroup: ReactNode =
+    searchActive && debounced.length >= AS_CODE_SEARCH_MIN_QUERY ? (
+      <CommandGroup key="as-code-search" heading="Search">
+        <CommandItem
+          value="search as code"
+          onSelect={() => go(`/search?q=${encodeURIComponent(debounced)}`)}
+        >
+          <FileSearch />
+          <span>
+            Search as code for <span className="font-mono">&ldquo;{debounced}&rdquo;</span>
+          </span>
+        </CommandItem>
+      </CommandGroup>
+    ) : null
+
   const groups: { key: string; node: ReactNode }[] = [
     { key: 'components', node: componentsGroup },
+    { key: 'as-code-search', node: asCodeSearchGroup },
     { key: 'goto', node: itemGroup('goto', 'Go to', matched(navItems)) },
     { key: 'action', node: itemGroup('action', 'Action', matched(actionItems)) },
     { key: 'filter', node: itemGroup('filter', 'Filter', matched(filterItems)) },

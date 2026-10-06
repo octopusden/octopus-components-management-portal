@@ -516,6 +516,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/rest/api/4/components/as-code/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["searchAsCode"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rest/api/4/components/meta/build-systems": {
         parameters: {
             query?: never;
@@ -740,6 +756,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/rest/api/4/components/meta/release-managers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getDistinctReleaseManagers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rest/api/4/components/meta/repository-types": {
         parameters: {
             query?: never;
@@ -748,6 +780,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getRepositoryTypes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rest/api/4/components/meta/security-champions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getDistinctSecurityChampions"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1059,6 +1107,29 @@ export interface components {
             mode: string;
             versionRange?: string;
         };
+        AsCodeSearchHit: {
+            archived: boolean;
+            componentKey: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: int32 */
+            matchCount: number;
+            matches: components["schemas"]["AsCodeSearchLine"][];
+        };
+        AsCodeSearchLine: {
+            /** Format: int32 */
+            line: number;
+            path: string[];
+            text: string;
+        };
+        AsCodeSearchResponse: {
+            query: string;
+            regex: boolean;
+            results: components["schemas"]["AsCodeSearchHit"][];
+            /** Format: int32 */
+            totalComponents: number;
+            truncated: boolean;
+        };
         AuditLogResponse: {
             action: string;
             changeComment?: string;
@@ -1091,6 +1162,7 @@ export interface components {
             dockerImages?: components["schemas"]["DockerImageRequest"][];
             escrow?: components["schemas"]["EscrowAspectRequest"];
             fileUrlArtifacts?: components["schemas"]["FileUrlArtifactRequest"][];
+            genericArtifacts?: components["schemas"]["GenericArtifactRequest"][];
             jira?: components["schemas"]["JiraAspectRequest"];
             mavenArtifacts?: components["schemas"]["MavenArtifactRequest"][];
             packages?: components["schemas"]["PackageRequest"][];
@@ -1165,6 +1237,7 @@ export interface components {
             dockerImages: components["schemas"]["DockerImageResponse"][];
             escrow?: components["schemas"]["EscrowAspectResponse"];
             fileUrlArtifacts: components["schemas"]["FileUrlArtifactResponse"][];
+            genericArtifacts: components["schemas"]["GenericArtifactResponse"][];
             /** Format: uuid */
             id: string;
             isSyntheticBase: boolean;
@@ -1528,6 +1601,16 @@ export interface components {
                 [key: string]: Record<string, never>;
             };
         };
+        GenericArtifactRequest: {
+            path: string;
+        };
+        GenericArtifactResponse: {
+            /** Format: uuid */
+            id: string;
+            path: string;
+            /** Format: int32 */
+            sortOrder: number;
+        };
         HealthStatisticsResponse: {
             /** Format: int64 */
             activeComponents: number;
@@ -1627,6 +1710,7 @@ export interface components {
             buildWorkingDirectory?: string;
             dockerImages?: components["schemas"]["DockerImageRequest"][];
             fileUrlArtifacts?: components["schemas"]["FileUrlArtifactRequest"][];
+            genericArtifacts?: components["schemas"]["GenericArtifactRequest"][];
             mavenArtifacts?: components["schemas"]["MavenArtifactRequest"][];
             packages?: components["schemas"]["PackageRequest"][];
             requiredTools?: string[];
@@ -5614,6 +5698,113 @@ export interface operations {
             };
         };
     };
+    searchAsCode: {
+        parameters: {
+            query: {
+                q: string;
+                regex?: boolean;
+                archived?: boolean;
+                limit?: number;
+                maxMatchesPerComponent?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AsCodeSearchResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Early */
+            425: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     getBuildSystems: {
         parameters: {
             query?: never;
@@ -7036,7 +7227,209 @@ export interface operations {
             };
         };
     };
+    getDistinctReleaseManagers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string[];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Early */
+            425: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     getRepositoryTypes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string[];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Early */
+            425: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getDistinctSecurityChampions: {
         parameters: {
             query?: never;
             header?: never;

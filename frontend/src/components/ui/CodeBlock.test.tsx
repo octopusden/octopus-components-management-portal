@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { CodeBlock } from './CodeBlock'
 
@@ -19,5 +19,20 @@ describe('CodeBlock', () => {
     const { container } = render(<CodeBlock code={'x {\n}\n'} />)
     const lines = container.querySelectorAll('code > span.block')
     expect(lines.length).toBe(2)
+  })
+
+  it('marks the requested 1-based line and scrolls it into view', () => {
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+    const { container } = render(<CodeBlock code={'a {\n    x = 1\n}\n'} highlightLine={2} />)
+    const marked = container.querySelectorAll('[data-highlighted="true"]')
+    expect(marked.length).toBe(1)
+    expect(marked[0]?.textContent).toBe('    x = 1')
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' })
+  })
+
+  it('marks nothing without highlightLine', () => {
+    const { container } = render(<CodeBlock code={'a {\n}\n'} />)
+    expect(container.querySelectorAll('[data-highlighted]').length).toBe(0)
   })
 })

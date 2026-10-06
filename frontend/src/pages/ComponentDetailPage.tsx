@@ -1,4 +1,4 @@
-import { useParams, useNavigate, Link } from 'react-router'
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { ArrowLeft, Copy, Trash2, AlertTriangle, LockKeyhole, Boxes, CircleCheck, CircleDashed } from 'lucide-react'
@@ -163,6 +163,14 @@ function sectionForField(field: string): string | null {
   return null
 }
 
+const AS_CODE_TAB = 'as-code'
+
+/** A positive integer from a query param, or undefined. */
+function parsePositiveInt(raw: string | null): number | undefined {
+  const n = Number(raw)
+  return raw && Number.isInteger(n) && n > 0 ? n : undefined
+}
+
 /**
  * The editor body. Rendered INSIDE OverridesDraftProvider (see
  * ComponentDetailPage below) so it — and every override surface — share one
@@ -189,7 +197,15 @@ function ComponentDetailEditor() {
   const [buildConflict, setBuildConflict] = useState<string | null>(null)
   // Controlled tab so a server 400 on a field that lives on a non-active tab can
   // auto-switch to the owning tab (otherwise the inline error renders on a hidden tab).
-  const [activeTab, setActiveTab] = useState('general')
+  //
+  // `?tab=as-code&line=N` (the as-code search page's deep link) opens the As Code tab
+  // scrolled to line N. Only `as-code` is honoured: every other tab keeps opening on
+  // General, as before.
+  const [searchParams] = useSearchParams()
+  const [activeTab, setActiveTab] = useState(() =>
+    searchParams.get('tab') === AS_CODE_TAB ? AS_CODE_TAB : 'general',
+  )
+  const asCodeLine = parsePositiveInt(searchParams.get('line'))
   // GeneralTab's owner PeopleInput commits a typed value only after its async
   // directory lookup resolves. Hold Save while that is in flight.
   const [ownerValidating, setOwnerValidating] = useState(false)
@@ -1109,7 +1125,7 @@ function ComponentDetailEditor() {
               {
                 label: 'Tools',
                 items: [
-                  { value: 'as-code', label: 'As Code' },
+                  { value: AS_CODE_TAB, label: 'As Code' },
                   { value: 'overrides', label: 'Overrides' },
                   { value: 'history', label: 'History' },
                 ],
@@ -1229,8 +1245,8 @@ function ComponentDetailEditor() {
               <ConfigurationsTab component={component} />
             </TabsContent>
 
-            <TabsContent value="as-code">
-              <AsCodeTab component={component} />
+            <TabsContent value={AS_CODE_TAB}>
+              <AsCodeTab component={component} highlightLine={asCodeLine} />
             </TabsContent>
 
             <TabsContent value="overrides">

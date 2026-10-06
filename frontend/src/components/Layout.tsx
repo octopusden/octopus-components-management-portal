@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router'
-import { Package, History, Settings, LogOut, AlertTriangle, ShieldCheck } from 'lucide-react'
+import { Package, History, Settings, LogOut, AlertTriangle, ShieldCheck, FileSearch } from 'lucide-react'
 import { cn, initials } from '../lib/utils'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { usePortalInfo } from '@/hooks/useInfo'
@@ -31,6 +31,8 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { href: '/components', label: 'Components', icon: Package },
+  // No permission gate: the search endpoint needs ACCESS_COMPONENTS, like the list page.
+  { href: '/search', label: 'Search', icon: FileSearch },
   {
     href: '/validations',
     label: 'Validations',
@@ -102,6 +104,7 @@ export function Layout({ children }: LayoutProps) {
                 <Link
                   key={href}
                   to={href}
+                  data-spotlight={href === '/search' ? 'as-code-search' : undefined}
                   className={cn(
                     'flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
                     isActive

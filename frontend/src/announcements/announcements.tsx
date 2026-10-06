@@ -29,6 +29,28 @@ export interface Announcement {
 
 export const ANNOUNCEMENTS: Announcement[] = [
   {
+    id: 'as-code-search-2026-10',
+    version: '1.3',
+    title: 'New: search across all components, like grepping the old Groovy files',
+    publishedAt: '2026-10-06',
+    spotlightTarget: 'as-code-search',
+    body: (
+      <div className="space-y-2">
+        <p>
+          The new <strong>Search</strong> page looks through the as-code text of{' '}
+          <strong>every</strong> component at once — artifact and group patterns, version ranges,
+          VCS URLs, Jira keys, docker images, owners. Each match shows its line and the version
+          range it belongs to; click it to jump straight to that line in the component&apos;s{' '}
+          <strong>As Code</strong> tab.
+        </p>
+        <p className="text-muted-foreground">
+          Matching is case-insensitive. Switch to <strong>Regex</strong> for a regular expression,
+          and narrow to active or archived components if you need to.
+        </p>
+      </div>
+    ),
+  },
+  {
     id: 'owner-manager-can-edit-2026-07',
     version: '1.2',
     title: "New: a component owner's manager can now edit it too",

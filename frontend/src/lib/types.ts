@@ -1282,3 +1282,37 @@ export interface ArchiveReadinessResponse {
   ready: boolean
   entries: ArchiveReadinessEntry[]
 }
+
+// ---------------------------------------------------------------------------
+// As-code search — GET /components/as-code/search
+// ---------------------------------------------------------------------------
+
+/** One matching line of a component's FULL as-code view. */
+export interface AsCodeSearchLine {
+  /** 1-based line number in the FULL as-code view (the As Code tab, Full mode). */
+  line: number
+  /** The matching line without its indentation. */
+  text: string
+  /** Enclosing block headers, outermost first; `[0]` is the component block itself. */
+  path: string[]
+}
+
+/** One matching component. `matches` is capped server-side; `matchCount` is not. */
+export interface AsCodeSearchHit {
+  /** Component UUID — what the editor route and every write endpoint are addressed by. */
+  id: string
+  componentKey: string
+  archived: boolean
+  matchCount: number
+  matches: AsCodeSearchLine[]
+}
+
+export interface AsCodeSearchResponse {
+  query: string
+  regex: boolean
+  /** Matching components BEFORE the `limit` cut. */
+  totalComponents: number
+  truncated: boolean
+  /** Sorted by component key. */
+  results: AsCodeSearchHit[]
+}
