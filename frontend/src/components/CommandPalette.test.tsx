@@ -150,10 +150,10 @@ describe('CommandPalette — navigation', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/audit')
   })
 
-  it('Go to > Search as code opens the as-code search page', async () => {
+  it('Go to > Global search opens the search page', async () => {
     const user = userEvent.setup()
     renderPalette()
-    await user.click(screen.getByText('Search as code'))
+    await user.click(screen.getByText('Global search'))
     expect(mockNavigate).toHaveBeenCalledWith('/search')
   })
 
@@ -161,7 +161,7 @@ describe('CommandPalette — navigation', () => {
     const user = userEvent.setup()
     renderPalette()
     await user.type(screen.getByPlaceholderText(/Search components/i), 'org.example')
-    await user.click(await screen.findByText(/Search as code for/))
+    await user.click(await screen.findByText(/Global search for/))
     expect(mockNavigate).toHaveBeenCalledWith('/search?q=org.example')
   })
 

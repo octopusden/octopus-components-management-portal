@@ -1,4 +1,4 @@
-# Search as code
+# Global search
 
 ## What it does
 
@@ -37,7 +37,7 @@ link uses the component **UUID** returned with each hit, not the key: the editor
 ### Entry points
 
 - Nav item **Search** (no permission gate — the endpoint needs `ACCESS_COMPONENTS`, like the list).
-- Command palette (⌘K): **Go to › Search as code**, and **Search › Search as code for "…"**
+- Command palette (⌘K): **Go to › Global search**, and **Search › Global search for "…"**
   which hands the typed text to `/search?q=…`.
 - What's new entry `as-code-search-2026-10`, with a spotlight on the nav item.
 

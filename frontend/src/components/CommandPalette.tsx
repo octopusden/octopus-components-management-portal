@@ -96,7 +96,7 @@ export function CommandPalette() {
   // Static entries, gated by permission. Built every render but cheap.
   const navItems: PaletteItem[] = [
     { value: 'goto components', label: 'Components', icon: <Package />, onSelect: () => go('/components') },
-    { value: 'goto search', label: 'Search as code', icon: <FileSearch />, onSelect: () => go('/search') },
+    { value: 'goto search', label: 'Global search', icon: <FileSearch />, onSelect: () => go('/search') },
     ...(canAudit
       ? [{ value: 'goto audit', label: 'Audit', icon: <History />, onSelect: () => go('/audit') }]
       : []),
@@ -175,12 +175,12 @@ export function CommandPalette() {
     searchActive && debounced.length >= AS_CODE_SEARCH_MIN_QUERY ? (
       <CommandGroup key="as-code-search" heading="Search">
         <CommandItem
-          value="search as code"
+          value="global search"
           onSelect={() => go(`/search?q=${encodeURIComponent(debounced)}`)}
         >
           <FileSearch />
           <span>
-            Search as code for <span className="font-mono">&ldquo;{debounced}&rdquo;</span>
+            Global search for <span className="font-mono">&ldquo;{debounced}&rdquo;</span>
           </span>
         </CommandItem>
       </CommandGroup>

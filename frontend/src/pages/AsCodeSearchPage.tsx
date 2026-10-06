@@ -85,7 +85,7 @@ export function AsCodeSearchPage() {
     <Layout>
       <div className="space-y-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Search as code</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Global search</h1>
           <p className="text-sm text-muted-foreground">
             Search the as-code text of every component — artifacts, versions, VCS URLs, Jira keys, people.
           </p>
