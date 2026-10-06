@@ -12,12 +12,12 @@ describe('CodeBlock', () => {
 
   it('colors enum tokens distinctly from string values', () => {
     render(<CodeBlock code={'build {\n    buildSystem = MAVEN\n}'} />)
-    expect(screen.getByText('MAVEN').className).toContain('amber')
+    expect(screen.getByText('MAVEN').className).toContain('text-code-enum')
   })
 
   it('drops a single trailing newline (no empty last line span)', () => {
     const { container } = render(<CodeBlock code={'x {\n}\n'} />)
-    const lines = container.querySelectorAll('code > span.block')
+    const lines = container.querySelectorAll('code > span')
     expect(lines.length).toBe(2)
   })
 
@@ -34,5 +34,11 @@ describe('CodeBlock', () => {
   it('marks nothing without highlightLine', () => {
     const { container } = render(<CodeBlock code={'a {\n}\n'} />)
     expect(container.querySelectorAll('[data-highlighted]').length).toBe(0)
+  })
+
+  it('renders a dark pane whose line numbers are not part of the text (copy yields code only)', () => {
+    const { container } = render(<CodeBlock code={'a {\n    x = 1\n}\n'} />)
+    expect(container.querySelector('pre')?.className).toContain('bg-code-bg')
+    expect(container.textContent).toBe('a {    x = 1}')
   })
 })

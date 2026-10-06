@@ -5,7 +5,7 @@
  * in a full grammar library. Pure function — unit-tested directly.
  */
 
-export type TokenType = 'header' | 'property' | 'string' | 'enum' | 'keyword' | 'number' | 'plain'
+export type TokenType = 'header' | 'range' | 'property' | 'string' | 'enum' | 'keyword' | 'number' | 'plain'
 
 export interface Token {
   text: string
@@ -34,7 +34,7 @@ function tokenizeValue(value: string): Token[] {
 
 /**
  * Tokenize a single line into colored spans. Recognizes:
- *  - block headers (`name {` / `"range" {`),
+ *  - block headers (`name {` / `"key" {`) and version-range headers (`"[1.5,)" {`),
  *  - `name = value` assignments (name → property, value → tokenized),
  *  - everything else (closing braces, blanks) as plain.
  */
@@ -47,7 +47,9 @@ export function tokenizeLine(line: string): Token[] {
 
   if (rest.endsWith('{')) {
     const header = rest.slice(0, rest.length - 1).trimEnd()
-    tokens.push({ text: header, type: header.startsWith('"') ? 'string' : 'header' })
+    // A quoted header is either a version-range block (`"[1.5,)" {`) or a component key that is
+    // not a plain identifier (`"my-component" {`); both are block headers, not string values.
+    tokens.push({ text: header, type: /^"[[(]/.test(header) ? 'range' : 'header' })
     tokens.push({ text: rest.slice(header.length), type: 'plain' }) // the " {" tail
     return tokens
   }
