@@ -1107,6 +1107,12 @@ export interface components {
             mode: string;
             versionRange?: string;
         };
+        AsCodeMatchRange: {
+            /** Format: int32 */
+            end: number;
+            /** Format: int32 */
+            start: number;
+        };
         AsCodeSearchHit: {
             archived: boolean;
             componentKey: string;
@@ -1120,6 +1126,7 @@ export interface components {
             /** Format: int32 */
             line: number;
             path: string[];
+            ranges: components["schemas"]["AsCodeMatchRange"][];
             text: string;
         };
         AsCodeSearchResponse: {

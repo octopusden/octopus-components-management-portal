@@ -1295,6 +1295,17 @@ export interface AsCodeSearchLine {
   text: string
   /** Enclosing block headers, outermost first; `[0]` is the component block itself. */
   path: string[]
+  /**
+   * Where the query matched within `text` (end exclusive), as found by the server's own matcher —
+   * substring or Java regex — so regex hits are highlighted exactly, not re-run in JS.
+   */
+  ranges: AsCodeMatchRange[]
+}
+
+/** A matched span of {@link AsCodeSearchLine.text}: `start` inclusive, `end` exclusive. */
+export interface AsCodeMatchRange {
+  start: number
+  end: number
 }
 
 /** One matching component. `matches` is capped server-side; `matchCount` is not. */

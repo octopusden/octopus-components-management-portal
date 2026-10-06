@@ -1,10 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import { render } from '@testing-library/react'
-import { asCodeLineHref, highlightSubstring } from './asCodeSearch'
+import { asCodeLineHref, highlightRanges } from './asCodeSearch'
+import type { AsCodeMatchRange } from './types'
 
-function marks(text: string, query: string): string[] {
-  const { container } = render(<span>{highlightSubstring(text, query)}</span>)
-  return Array.from(container.querySelectorAll('mark')).map((m) => m.textContent ?? '')
+function render_(text: string, ranges: AsCodeMatchRange[]) {
+  const { container } = render(<span>{highlightRanges(text, ranges)}</span>)
+  return {
+    marks: Array.from(container.querySelectorAll('mark')).map((m) => m.textContent ?? ''),
+    text: container.textContent,
+  }
 }
 
 describe('asCodeLineHref', () => {
@@ -13,22 +17,34 @@ describe('asCodeLineHref', () => {
   })
 })
 
-describe('highlightSubstring', () => {
-  it('marks every case-insensitive occurrence, keeping the original casing', () => {
-    expect(marks('groupId = "Org.Example.org.example"', 'org.example')).toEqual(['Org.Example', 'org.example'])
+describe('highlightRanges', () => {
+  it('marks exactly the server-reported spans and keeps the text intact', () => {
+    const out = render_('groupId = "Org.Example.org.example"', [
+      { start: 11, end: 22 },
+      { start: 23, end: 34 },
+    ])
+    expect(out.marks).toEqual(['Org.Example', 'org.example'])
+    expect(out.text).toBe('groupId = "Org.Example.org.example"')
   })
 
-  it('keeps the surrounding text intact', () => {
-    const { container } = render(<span>{highlightSubstring('a FOO b', 'foo')}</span>)
-    expect(container.textContent).toBe('a FOO b')
+  it('marks regex hits as reported (no client-side regex)', () => {
+    // e.g. the server matched `\d+\.\d+` against `javaVersion = "21.0"`.
+    expect(render_('javaVersion = "21.0"', [{ start: 15, end: 19 }]).marks).toEqual(['21.0'])
   })
 
-  it('treats regex metacharacters literally', () => {
-    expect(marks('version = "1.0.*"', '.*')).toEqual(['.*'])
+  it('sorts spans and ignores empty, out-of-range or overlapping ones', () => {
+    const out = render_('abcdef', [
+      { start: 4, end: 6 },
+      { start: 0, end: 2 },
+      { start: 1, end: 3 }, // overlaps the first — only its non-overlapping tail is marked
+      { start: 3, end: 3 }, // empty
+      { start: 5, end: 99 }, // runs past the end, already covered
+    ])
+    expect(out.marks).toEqual(['ab', 'c', 'ef'])
+    expect(out.text).toBe('abcdef')
   })
 
-  it('marks nothing for a blank query or no occurrence', () => {
-    expect(marks('anything', '  ')).toEqual([])
-    expect(marks('anything', 'zzz')).toEqual([])
+  it('marks nothing when there are no spans', () => {
+    expect(render_('anything', []).marks).toEqual([])
   })
 })

@@ -11,8 +11,8 @@ people.
   so typing never produces a 400.
 - **Text / Regex** — Text is a case-insensitive substring match with regex metacharacters taken
   literally; Regex sends the query as a case-insensitive (Java) regular expression. Matched text
-  is highlighted in Text mode only: a JS `RegExp` cannot be trusted to reproduce the server's Java
-  regex semantics, so regex hits are shown unmarked.
+  is highlighted in both modes from the `ranges` the server returns per line — the pattern is
+  never re-run in the browser, whose JS `RegExp` would not reproduce Java regex semantics.
 - **All / Active / Archived** — defaults to All, like the API.
 - **Results** — grouped by component (sorted by key, archived ones badged). Each line shows its
   line number, its text and the enclosing block path minus the component block itself (e.g.
@@ -46,7 +46,7 @@ link uses the component **UUID** returned with each hit, not the key: the editor
 - [`frontend/src/pages/AsCodeSearchPage.tsx`](../../frontend/src/pages/AsCodeSearchPage.tsx)
 - [`frontend/src/components/AsCodeSearchResults.tsx`](../../frontend/src/components/AsCodeSearchResults.tsx)
 - [`frontend/src/hooks/useAsCodeSearch.ts`](../../frontend/src/hooks/useAsCodeSearch.ts)
-- [`frontend/src/lib/asCodeSearch.tsx`](../../frontend/src/lib/asCodeSearch.tsx) — deep-link href, substring highlighting.
+- [`frontend/src/lib/asCodeSearch.tsx`](../../frontend/src/lib/asCodeSearch.tsx) — deep-link href, highlighting from server-reported ranges.
 - [`frontend/src/components/ui/CodeBlock.tsx`](../../frontend/src/components/ui/CodeBlock.tsx) — `highlightLine`.
 - [`frontend/src/components/editor/AsCodeTab.tsx`](../../frontend/src/components/editor/AsCodeTab.tsx) — `highlightLine` (Full mode only).
 
@@ -58,6 +58,6 @@ link uses the component **UUID** returned with each hit, not the key: the editor
 
 Params: `q` (2–200 chars), `regex`, `archived`, `limit` (1–1000, default 100),
 `maxMatchesPerComponent` (1–1000, default 20). Response `AsCodeSearchResponse`
-`{query, regex, totalComponents, truncated, results: [{id, componentKey, archived, matchCount, matches: [{line, text, path}]}]}`.
+`{query, regex, totalComponents, truncated, results: [{id, componentKey, archived, matchCount, matches: [{line, text, path, ranges: [{start, end}]}]}]}`.
 Results reflect an edit on the next search; edits that bypass both the component rows and the
 audit log (TeamCity version-line sync) show up within 5 minutes.

@@ -175,7 +175,7 @@ function SearchBody({ tooShort, regex, data, error, canRaiseLimit, onRaiseLimit 
           </span>
         </StatusBanner>
       )}
-      <AsCodeSearchResults hits={data.results} query={data.query} regex={data.regex} />
+      <AsCodeSearchResults hits={data.results} />
     </>
   )
 }

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import type { AsCodeMatchRange } from './types'
 
 /** Detail-page deep link that opens the As Code tab (Full view) scrolled to [line]. */
 export function asCodeLineHref(componentId: string, line: number): string {
@@ -6,26 +7,24 @@ export function asCodeLineHref(componentId: string, line: number): string {
 }
 
 /**
- * Splits [text] around every case-insensitive occurrence of [query] and wraps the hits in
- * <mark>. Used only for substring searches: in regex mode the server matched a Java regex,
- * which a JS RegExp cannot be trusted to reproduce, so the line is shown unmarked instead.
+ * Wraps the server-reported matched spans of [text] in <mark>. The spans come from the server's
+ * own matcher (substring or Java regex), so regex hits are highlighted exactly — no JS RegExp is
+ * ever run on the pattern. Out-of-range, empty or overlapping spans are ignored defensively.
  */
-export function highlightSubstring(text: string, query: string): ReactNode[] {
-  const needle = query.trim().toLowerCase()
-  if (!needle) return [text]
-  const haystack = text.toLowerCase()
+export function highlightRanges(text: string, ranges: readonly AsCodeMatchRange[]): ReactNode[] {
   const parts: ReactNode[] = []
   let from = 0
-  let at = haystack.indexOf(needle, from)
-  while (at !== -1) {
-    if (at > from) parts.push(text.slice(from, at))
+  for (const { start, end } of [...ranges].sort((a, b) => a.start - b.start)) {
+    const s = Math.max(start, from)
+    const e = Math.min(end, text.length)
+    if (s >= e) continue
+    if (s > from) parts.push(text.slice(from, s))
     parts.push(
-      <mark key={at} className="rounded-sm bg-amber-200 px-0.5 text-inherit dark:bg-amber-500/40">
-        {text.slice(at, at + needle.length)}
+      <mark key={s} className="rounded-sm bg-amber-200 px-0.5 text-inherit dark:bg-amber-500/40">
+        {text.slice(s, e)}
       </mark>,
     )
-    from = at + needle.length
-    at = haystack.indexOf(needle, from)
+    from = e
   }
   if (from < text.length) parts.push(text.slice(from))
   return parts

@@ -32,8 +32,8 @@ const response: AsCodeSearchResponse = {
       archived: false,
       matchCount: 3,
       matches: [
-        { line: 12, text: 'groupId = "org.example.alpha"', path: ['alpha'] },
-        { line: 31, text: 'groupId = "org.example.api"', path: ['alpha', '"[2.0,)"', 'distribution'] },
+        { line: 12, text: 'groupId = "org.example.alpha"', path: ['alpha'], ranges: [{ start: 11, end: 22 }] },
+        { line: 31, text: 'groupId = "org.example.api"', path: ['alpha', '"[2.0,)"', 'distribution'], ranges: [{ start: 11, end: 22 }] },
       ],
     },
     {
@@ -41,7 +41,7 @@ const response: AsCodeSearchResponse = {
       componentKey: 'old-component',
       archived: true,
       matchCount: 1,
-      matches: [{ line: 8, text: 'groupId = "org.example.old"', path: ['"old-component"'] }],
+      matches: [{ line: 8, text: 'groupId = "org.example.old"', path: ['"old-component"'], ranges: [{ start: 11, end: 22 }] }],
     },
   ],
 }
@@ -116,15 +116,15 @@ describe('AsCodeSearchPage', () => {
     expect(within(old).getByText('Archived')).toBeTruthy()
   })
 
-  it('highlights the matched text in Text mode only', () => {
+  it('marks the server-reported match spans in Text and Regex mode alike', () => {
     mockSearch.mockReturnValue(hookResult({ data: response }))
     const { container, unmount } = renderPage('/search?q=org.example')
-    expect(container.querySelectorAll('mark').length).toBeGreaterThan(0)
+    expect(Array.from(container.querySelectorAll('mark')).map((m) => m.textContent)).toContain('org.example')
     unmount()
 
     mockSearch.mockReturnValue(hookResult({ data: { ...response, regex: true } }))
-    const regexView = renderPage('/search?q=org.example&regex=true')
-    expect(regexView.container.querySelectorAll('mark').length).toBe(0)
+    const regexView = renderPage('/search?q=org%5C.example&regex=true')
+    expect(Array.from(regexView.container.querySelectorAll('mark')).map((m) => m.textContent)).toContain('org.example')
   })
 
   it('switching to Regex and to Archived updates the URL', async () => {

@@ -1,21 +1,20 @@
 import { Fragment } from 'react'
 import { Link } from 'react-router'
 import { Badge } from './ui/badge'
-import { asCodeLineHref, highlightSubstring } from '../lib/asCodeSearch'
+import { asCodeLineHref, highlightRanges } from '../lib/asCodeSearch'
 import type { AsCodeSearchHit } from '../lib/types'
 
 interface AsCodeSearchResultsProps {
   hits: AsCodeSearchHit[]
-  query: string
-  regex: boolean
 }
 
 /**
  * Matches grouped by component. Each line links into the component's As Code tab at that
  * line; the block path (minus the component block itself) tells which version range or
- * section a match sits in without opening the component.
+ * section a match sits in without opening the component. Matched text is marked from the
+ * server-reported ranges, in Text and Regex mode alike.
  */
-export function AsCodeSearchResults({ hits, query, regex }: AsCodeSearchResultsProps) {
+export function AsCodeSearchResults({ hits }: AsCodeSearchResultsProps) {
   return (
     <div className="space-y-3">
       {hits.map((hit) => {
@@ -47,7 +46,7 @@ export function AsCodeSearchResults({ hits, query, regex }: AsCodeSearchResultsP
                     >
                       <span className="w-10 shrink-0 text-right font-mono text-xs text-muted-foreground">{m.line}</span>
                       <span className="min-w-0 flex-1 truncate font-mono text-xs">
-                        {regex ? m.text : highlightSubstring(m.text, query)}
+                        {highlightRanges(m.text, m.ranges ?? [])}
                       </span>
                       {nested.length > 0 && (
                         <span className="shrink-0 truncate font-mono text-xs text-muted-foreground" title={nested.join(' › ')}>
