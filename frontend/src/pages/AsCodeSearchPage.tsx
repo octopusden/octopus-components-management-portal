@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { Layout } from '../components/Layout'
 import { AsCodeSearchResults } from '../components/AsCodeSearchResults'
@@ -12,6 +12,7 @@ import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { AS_CODE_SEARCH_MIN_QUERY, useAsCodeSearch } from '../hooks/useAsCodeSearch'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { ApiError } from '../lib/api'
+import type { AsCodeSearchResponse } from '../lib/types'
 
 /** The server's maximum `limit`; offered when the default cut truncates the results. */
 const MAX_LIMIT = 1000
@@ -30,56 +31,55 @@ function parseScope(raw: string | null): ArchivedScope {
   return 'all'
 }
 
+function parseLimit(raw: string | null): number | undefined {
+  const n = Number(raw)
+  return Number.isInteger(n) && n > 0 ? n : undefined
+}
+
+/**
+ * The search state, kept in the URL so a search is shareable: `?q=&regex=true&archived=&limit=`.
+ * Every write replaces the history entry (one entry per page visit, not per keystroke), and any
+ * change other than `limit` itself drops a previously raised `limit`.
+ */
+function useAsCodeSearchUrlState() {
+  const [params, setParams] = useSearchParams()
+  const setParam = useCallback(
+    (key: string, value: string | null) =>
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          if (value) next.set(key, value)
+          else next.delete(key)
+          if (key !== 'limit') next.delete('limit')
+          return next
+        },
+        { replace: true },
+      ),
+    [setParams],
+  )
+  return {
+    query: params.get('q') ?? '',
+    regex: params.get('regex') === 'true',
+    scope: parseScope(params.get('archived')),
+    limit: parseLimit(params.get('limit')),
+    setParam,
+  }
+}
+
 /**
  * Global text search over every component's as-code view — the replacement for grepping the
- * Groovy DSL files. URL-shareable: `?q=&regex=true&archived=true|false`. The input is
- * debounced; the URL and the request follow the debounced value.
+ * Groovy DSL files. The input is debounced; the URL and the request follow the debounced value.
  */
 export function AsCodeSearchPage() {
-  const [params, setParams] = useSearchParams()
-  const urlQuery = params.get('q') ?? ''
-  const regex = params.get('regex') === 'true'
-  const scope = parseScope(params.get('archived'))
-  const limitParam = Number(params.get('limit'))
-  const limit = Number.isInteger(limitParam) && limitParam > 0 ? limitParam : undefined
-
+  const { query: urlQuery, regex, scope, limit, setParam } = useAsCodeSearchUrlState()
   const [input, setInput] = useState(urlQuery)
   const debounced = useDebouncedValue(input, 300)
 
-  // Keep the URL in step with the debounced input (replace, not push: one history entry per
-  // search page visit, not per keystroke). A changed query drops a previously raised limit.
   useEffect(() => {
-    if (debounced === urlQuery) return
-    setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev)
-        if (debounced) next.set('q', debounced)
-        else next.delete('q')
-        next.delete('limit')
-        return next
-      },
-      { replace: true },
-    )
-  }, [debounced, urlQuery, setParams])
+    if (debounced !== urlQuery) setParam('q', debounced)
+  }, [debounced, urlQuery, setParam])
 
-  function updateParam(key: string, value: string | null) {
-    setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev)
-        if (value === null) next.delete(key)
-        else next.set(key, value)
-        if (key !== 'limit') next.delete('limit')
-        return next
-      },
-      { replace: true },
-    )
-  }
-
-  const query = useAsCodeSearch({ query: urlQuery, regex, archived: archivedParam(scope), limit })
-  const tooShort = urlQuery.trim().length < AS_CODE_SEARCH_MIN_QUERY
-  const data = tooShort ? undefined : query.data
-  const errorMessage =
-    query.error instanceof ApiError ? query.error.message : query.error ? String(query.error) : null
+  const search = useAsCodeSearch({ query: urlQuery, regex, archived: archivedParam(scope), limit })
 
   return (
     <Layout>
@@ -100,7 +100,7 @@ export function AsCodeSearchPage() {
             onChange={(e) => setInput(e.target.value)}
             autoFocus
           />
-          <Tabs value={regex ? 'regex' : 'text'} onValueChange={(v) => updateParam('regex', v === 'regex' ? 'true' : null)} variant="pill">
+          <Tabs value={regex ? 'regex' : 'text'} onValueChange={(v) => setParam('regex', v === 'regex' ? 'true' : null)} variant="pill">
             <TabsList aria-label="Match mode">
               <TabsTrigger value="text">Text</TabsTrigger>
               <TabsTrigger value="regex">Regex</TabsTrigger>
@@ -109,8 +109,8 @@ export function AsCodeSearchPage() {
           <Tabs
             value={scope}
             onValueChange={(v) => {
-              const p = archivedParam(v as ArchivedScope)
-              updateParam('archived', p === undefined ? null : String(p))
+              const archived = archivedParam(v as ArchivedScope)
+              setParam('archived', archived === undefined ? null : String(archived))
             }}
             variant="pill"
           >
@@ -122,37 +122,60 @@ export function AsCodeSearchPage() {
           </Tabs>
         </div>
 
-        {tooShort ? (
-          <p className="text-sm text-muted-foreground">
-            Type at least {AS_CODE_SEARCH_MIN_QUERY} characters. Matching is case-insensitive
-            {regex ? '; the query is a regular expression.' : '; the text is matched literally.'}
-          </p>
-        ) : errorMessage ? (
-          <InlineError message={errorMessage} />
-        ) : !data ? (
-          <SkeletonBlock height="h-48" width="w-full" />
-        ) : data.results.length === 0 ? (
-          <EmptyState message="No component's as-code view matches." />
-        ) : (
-          <>
-            <p className="text-sm text-muted-foreground">
-              {data.totalComponents} {data.totalComponents === 1 ? 'component matches' : 'components match'}
-              {data.truncated && ` — showing the first ${data.results.length}`}
-            </p>
-            {data.truncated && (limit ?? 0) < MAX_LIMIT && (
-              <StatusBanner variant="info">
-                <span className="flex flex-wrap items-center gap-2">
-                  More components match than are shown. Narrow the query, or
-                  <Button variant="outline" size="sm" onClick={() => updateParam('limit', String(MAX_LIMIT))}>
-                    Show up to {MAX_LIMIT}
-                  </Button>
-                </span>
-              </StatusBanner>
-            )}
-            <AsCodeSearchResults hits={data.results} query={data.query} regex={data.regex} />
-          </>
-        )}
+        <SearchBody
+          tooShort={urlQuery.trim().length < AS_CODE_SEARCH_MIN_QUERY}
+          regex={regex}
+          data={search.data}
+          error={search.error}
+          canRaiseLimit={(limit ?? 0) < MAX_LIMIT}
+          onRaiseLimit={() => setParam('limit', String(MAX_LIMIT))}
+        />
       </div>
     </Layout>
+  )
+}
+
+interface SearchBodyProps {
+  tooShort: boolean
+  regex: boolean
+  data: AsCodeSearchResponse | undefined
+  error: Error | null
+  canRaiseLimit: boolean
+  onRaiseLimit: () => void
+}
+
+function SearchBody({ tooShort, regex, data, error, canRaiseLimit, onRaiseLimit }: SearchBodyProps) {
+  if (tooShort) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Type at least {AS_CODE_SEARCH_MIN_QUERY} characters. Matching is case-insensitive
+        {regex ? '; the query is a regular expression.' : '; the text is matched literally.'}
+      </p>
+    )
+  }
+  if (error) {
+    // A 400 carries the server's reason (invalid regex, too expensive, too complex).
+    return <InlineError message={error instanceof ApiError ? error.message : String(error)} />
+  }
+  if (!data) return <SkeletonBlock height="h-48" width="w-full" />
+  if (data.results.length === 0) return <EmptyState message="No component's as-code view matches." />
+  return (
+    <>
+      <p className="text-sm text-muted-foreground">
+        {data.totalComponents} {data.totalComponents === 1 ? 'component matches' : 'components match'}
+        {data.truncated && ` — showing the first ${data.results.length}`}
+      </p>
+      {data.truncated && canRaiseLimit && (
+        <StatusBanner variant="info">
+          <span className="flex flex-wrap items-center gap-2">
+            More components match than are shown. Narrow the query, or
+            <Button variant="outline" size="sm" onClick={onRaiseLimit}>
+              Show up to {MAX_LIMIT}
+            </Button>
+          </span>
+        </StatusBanner>
+      )}
+      <AsCodeSearchResults hits={data.results} query={data.query} regex={data.regex} />
+    </>
   )
 }
