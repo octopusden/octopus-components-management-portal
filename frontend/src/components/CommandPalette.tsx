@@ -169,28 +169,25 @@ export function CommandPalette() {
       </CommandGroup>
     ) : null
 
-  // Hand the typed text to the as-code search page: the palette only matches component
-  // names, the search page matches everything the as-code view shows.
-  const asCodeSearchGroup: ReactNode =
-    searchActive && debounced.length >= AS_CODE_SEARCH_MIN_QUERY ? (
-      <CommandGroup key="as-code-search" heading="Search">
-        <CommandItem
-          value="global search"
-          onSelect={() => go(`/search?q=${encodeURIComponent(debounced)}`)}
-        >
-          <FileSearch />
-          <span>
-            Global search for <span className="font-mono">&ldquo;{debounced}&rdquo;</span>
-          </span>
-        </CommandItem>
-      </CommandGroup>
-    ) : null
+  // Hand the typed text to the Global search page (an Action, first when present): the palette
+  // only matches component names, Global search matches everything the as-code view shows.
+  // Never label-filtered — it echoes the query, so it always applies.
+  const globalSearchItems: PaletteItem[] =
+    searchActive && debounced.length >= AS_CODE_SEARCH_MIN_QUERY
+      ? [
+          {
+            value: 'action global search',
+            label: `Global search for \u201c${debounced}\u201d`,
+            icon: <FileSearch />,
+            onSelect: () => go(`/search?q=${encodeURIComponent(debounced)}`),
+          },
+        ]
+      : []
 
   const groups: { key: string; node: ReactNode }[] = [
     { key: 'components', node: componentsGroup },
-    { key: 'as-code-search', node: asCodeSearchGroup },
     { key: 'goto', node: itemGroup('goto', 'Go to', matched(navItems)) },
-    { key: 'action', node: itemGroup('action', 'Action', matched(actionItems)) },
+    { key: 'action', node: itemGroup('action', 'Action', [...globalSearchItems, ...matched(actionItems)]) },
     { key: 'filter', node: itemGroup('filter', 'Filter', matched(filterItems)) },
   ].filter((g) => g.node != null)
 
@@ -198,7 +195,7 @@ export function CommandPalette() {
     <>
       <CommandDialog open={open} onOpenChange={setOpen} shouldFilter={false}>
         <CommandInput
-          placeholder="Search components, jump to a page, run an action…"
+          placeholder="Go to a component or page, run an action…"
           value={query}
           onValueChange={setQuery}
         />

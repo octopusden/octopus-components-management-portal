@@ -24,7 +24,7 @@ describe('SearchCommandButton', () => {
   it('opens the palette when clicked', async () => {
     const user = userEvent.setup()
     render(<SearchCommandButton />)
-    await user.click(screen.getByRole('button', { name: /search/i }))
+    await user.click(screen.getByRole('button', { name: /go to/i }))
     expect(useUiOverlay.getState().paletteOpen).toBe(true)
   })
 

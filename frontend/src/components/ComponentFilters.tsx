@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Search, SlidersHorizontal } from 'lucide-react'
+import { Funnel, SlidersHorizontal } from 'lucide-react'
 import { Input } from './ui/input'
 import { Button } from './ui/button'
 import { FilterBar } from './ui/filter-bar'
@@ -560,9 +560,9 @@ export function ComponentFilters({
           inert={crsFiltersDisabled}
         >
           <div className="relative flex-1 min-w-[200px] max-w-xs">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Funnel className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search components..."
+              placeholder="Filter by key or name…"
               value={searchValue}
               onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-9"
@@ -584,7 +584,7 @@ export function ComponentFilters({
               aria-expanded={extendedOpen}
             >
               <SlidersHorizontal className="h-4 w-4" />
-              Extended search
+              More filters
             </Button>
           )}
         </div>

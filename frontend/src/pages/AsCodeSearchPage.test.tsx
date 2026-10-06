@@ -81,18 +81,20 @@ describe('AsCodeSearchPage', () => {
 
   it('restores the search from the URL (shareable link)', () => {
     mockSearch.mockReturnValue(hookResult({ data: response }))
-    renderPage('/search?q=org.example&regex=true&archived=false')
+    renderPage('/search?q=org.example&regex=true&archived=all')
     expect((screen.getByLabelText('Search text') as HTMLInputElement).value).toBe('org.example')
-    expect(lastParams()).toMatchObject({ query: 'org.example', regex: true, archived: false })
+    expect(lastParams()).toMatchObject({ query: 'org.example', regex: true, archived: undefined })
     expect(screen.getByRole('tab', { name: 'Regex' }).getAttribute('data-state')).toBe('active')
-    expect(screen.getByRole('tab', { name: 'Active' }).getAttribute('data-state')).toBe('active')
+    expect(screen.getByRole('tab', { name: 'All' }).getAttribute('data-state')).toBe('active')
   })
 
   it('writes the typed query into the URL', async () => {
     renderPage('/search')
     await userEvent.type(screen.getByLabelText('Search text'), 'foo')
     expect(location()).toBe('/search?q=foo')
-    expect(lastParams()).toMatchObject({ query: 'foo', regex: false, archived: undefined })
+    // No archived param = the Active default: only active components are searched.
+    expect(lastParams()).toMatchObject({ query: 'foo', regex: false, archived: false })
+    expect(screen.getByRole('tab', { name: 'Active' }).getAttribute('data-state')).toBe('active')
   })
 
   it('groups matches by component, links each line to the As Code tab, and shows the block path', () => {
@@ -134,6 +136,8 @@ describe('AsCodeSearchPage', () => {
     await userEvent.click(screen.getByRole('tab', { name: 'Archived' }))
     expect(location()).toContain('archived=true')
     await userEvent.click(screen.getByRole('tab', { name: 'All' }))
+    expect(location()).toContain('archived=all')
+    await userEvent.click(screen.getByRole('tab', { name: 'Active' }))
     expect(location()).not.toContain('archived')
   })
 

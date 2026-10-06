@@ -284,6 +284,26 @@ describe('ComponentListPage — New Component button gating', () => {
   })
 })
 
+describe('ComponentListPage — Global search hand-off', () => {
+  it('offers Global search for the key/name filter text', () => {
+    mockUser(viewerUser)
+    mockComponentsOk()
+
+    renderPage(['/components?search=org.example'])
+
+    expect(screen.getByRole('link', { name: /global search/i }).getAttribute('href')).toBe('/search?q=org.example')
+  })
+
+  it('offers nothing without filter text', () => {
+    mockUser(viewerUser)
+    mockComponentsOk()
+
+    renderPage()
+
+    expect(screen.queryByRole('link', { name: /global search/i })).toBeNull()
+  })
+})
+
 describe('ComponentListPage — error message rendering', () => {
   it('renders friendlier message on 403 ApiError, no raw "Access Denied"', () => {
     // Any user — the 403 branch is independent of who the user is. Picking

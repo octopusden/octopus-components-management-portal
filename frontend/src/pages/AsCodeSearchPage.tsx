@@ -25,10 +25,14 @@ function archivedParam(scope: ArchivedScope): boolean | undefined {
   return undefined
 }
 
+// URL form of the scope. Active is the default and leaves no param, so a plain /search link
+// (palette, nav) searches active components only.
+const SCOPE_PARAM: Record<ArchivedScope, string | null> = { active: null, all: 'all', archived: 'true' }
+
 function parseScope(raw: string | null): ArchivedScope {
-  if (raw === 'false') return 'active'
+  if (raw === 'all') return 'all'
   if (raw === 'true') return 'archived'
-  return 'all'
+  return 'active'
 }
 
 function parseLimit(raw: string | null): number | undefined {
@@ -37,7 +41,8 @@ function parseLimit(raw: string | null): number | undefined {
 }
 
 /**
- * The search state, kept in the URL so a search is shareable: `?q=&regex=true&archived=&limit=`.
+ * The search state, kept in the URL so a search is shareable: `?q=&regex=true&archived=all|true&limit=`
+ * (no `archived` = active components only).
  * Every write replaces the history entry (one entry per page visit, not per keystroke), and any
  * change other than `limit` itself drops a previously raised `limit`.
  */
@@ -108,16 +113,13 @@ export function AsCodeSearchPage() {
           </Tabs>
           <Tabs
             value={scope}
-            onValueChange={(v) => {
-              const archived = archivedParam(v as ArchivedScope)
-              setParam('archived', archived === undefined ? null : String(archived))
-            }}
+            onValueChange={(v) => setParam('archived', SCOPE_PARAM[v as ArchivedScope])}
             variant="pill"
           >
             <TabsList aria-label="Archived">
-              <TabsTrigger value="all">All</TabsTrigger>
               <TabsTrigger value="active">Active</TabsTrigger>
               <TabsTrigger value="archived">Archived</TabsTrigger>
+              <TabsTrigger value="all">All</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>

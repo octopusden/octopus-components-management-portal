@@ -10,7 +10,7 @@ Independently optional filters, ANDed server-side. Each filter resets pagination
 
 | Filter | Source / wire param | UI control | Notes |
 |---|---|---|---|
-| **Search** | `?search=…` (server-side ILIKE on `name` + `displayName`) | Debounced text input (300 ms) | |
+| **Key or name** | `?search=…` (server-side ILIKE on `name` + `displayName`) | Debounced text input (300 ms), placeholder "Filter by key or name…" | Narrows this list only. With ≥ 2 characters a "Global search →" link offers the same text to the as-code [Global search](as-code-search.md). |
 | **Owner** | `?owner=…` (CSV, OR semantics) | `MultiSelectFilter` populated from `GET /components/meta/owners` via [`useOwners`](../../frontend/src/hooks/useOwners.ts) | CRS `SYS-035` baseline; multi-value OR added in CRS PR #265. Multiple selections produce `?owner=a,b` and match `componentOwner IN (...)`. |
 | **System** | `?system=…` (CSV, OR semantics) | `MultiSelectFilter` populated from `GET /components/meta/systems` via [`useFieldOptions('system')`](../../frontend/src/hooks/useFieldOptions.ts) | CRS SYS-042. Server-side JOIN through `component_systems` + `IN (...)`. |
 | **Build system** | `?buildSystem=…` (CSV, OR semantics) | `MultiSelectFilter` populated from `GET /components/meta/build-systems` via [`useFieldOptions('buildSystem')`](../../frontend/src/hooks/useFieldOptions.ts) (fallback when admin field-config has no options) | CRS SYS-041. OR semantics against `component_configurations.build_system` on the base row. |
@@ -19,9 +19,9 @@ Independently optional filters, ANDed server-side. Each filter resets pagination
 
 The whole filter row lives in [`frontend/src/components/ui/filter-bar.tsx`](../../frontend/src/components/ui/filter-bar.tsx); the multi-selects use [`frontend/src/components/ui/MultiSelectFilter.tsx`](../../frontend/src/components/ui/MultiSelectFilter.tsx). A "Clear filters" button surfaces whenever any filter is active.
 
-### Extended search
+### More filters
 
-An **Extended search** toggle (next to the archived button) reveals a second filter row of single-value controls that back the less-common search dimensions. The toggle auto-opens when the current filter already carries an extended value (so a shared/bookmarked URL never hides its own active filters), and "Clear filters" clears the extended row along with everything else.
+A **More filters** toggle (next to the archived button) reveals a second filter row of single-value controls that back the less-common search dimensions. The toggle auto-opens when the current filter already carries an extended value (so a shared/bookmarked URL never hides its own active filters), and "Clear filters" clears the extended row along with everything else.
 
 | Filter | Wire param | Control | Match |
 |---|---|---|---|
@@ -57,7 +57,7 @@ Per-filter option-fetch timing differs:
 Each field carries a **`searchable`** placement — one of:
 
 - **`Main`** — always-visible filter in the top row (today's defaults: `system`, `buildSystem`, `labels`, `componentOwner`).
-- **`Extended`** — only shown when the Extended search toggle is open (the default for the new single-value filters above).
+- **`Extended`** — only shown when the More filters toggle is open (the default for the new single-value filters above).
 - **`None`** — not searchable; the control is never rendered.
 
 The effective placement is resolved by [`searchabilityFor`](../../frontend/src/hooks/useFieldConfig.ts): an explicit `searchable` wins; otherwise a legacy `filterable: false` maps to `None`; otherwise a central `DEFAULT_SEARCHABILITY` map applies; otherwise the field defaults to `Extended`. This means a fresh install (empty field-config) already places every filter correctly before an admin saves the catalog. `searchable` **supersedes** the older boolean `filterable` flag, which was never surfaced in the admin UI — `filterable: false` is still honoured (as `None`) for backward-compat. Placement is independent of the form-level `visibility` flag (a field can be editor-hidden yet searchable, or vice-versa).

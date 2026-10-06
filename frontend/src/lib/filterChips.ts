@@ -16,7 +16,7 @@ export interface FilterChip {
 
 // Human labels for the filter fields, matching the filter-bar control labels.
 const FIELD_LABELS: Partial<Record<keyof ComponentFilter, string>> = {
-  search: 'Search',
+  search: 'Key or name',
   system: 'System',
   buildSystem: 'Build system',
   labels: 'Label',

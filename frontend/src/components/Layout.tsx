@@ -32,7 +32,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: '/components', label: 'Components', icon: Package },
   // No permission gate: the search endpoint needs ACCESS_COMPONENTS, like the list page.
-  { href: '/search', label: 'Search', icon: FileSearch },
+  { href: '/search', label: 'Global search', icon: FileSearch },
   {
     href: '/validations',
     label: 'Validations',

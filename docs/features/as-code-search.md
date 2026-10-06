@@ -2,7 +2,7 @@
 
 ## What it does
 
-`/search` (nav item **Search**) searches the as-code text of **every** component at once — the
+`/search` (nav item **Global search**) searches the as-code text of **every** component at once — the
 replacement for grepping the old Groovy DSL files. Anything the component's **As Code** tab shows
 is searchable: artifact and group patterns, version ranges, VCS URLs, Jira keys, docker images,
 people.
@@ -13,7 +13,8 @@ people.
   literally; Regex sends the query as a case-insensitive (Java) regular expression. Matched text
   is highlighted in both modes from the `ranges` the server returns per line — the pattern is
   never re-run in the browser, whose JS `RegExp` would not reproduce Java regex semantics.
-- **All / Active / Archived** — defaults to All, like the API.
+- **Active / Archived / All** — defaults to **Active** (no `archived` param in the URL);
+  `archived=true` is archived only, `archived=all` both.
 - **Results** — grouped by component (sorted by key, archived ones badged). Each line shows its
   line number, its text and the enclosing block path minus the component block itself (e.g.
   `"[2.0,)" › distribution`), so a hit inside a version range is identifiable without opening the
@@ -23,7 +24,7 @@ people.
 - **Errors** — the server's 400 message (invalid regex, too expensive, too complex) is shown
   inline.
 
-State lives in the URL, so a search is shareable: `?q=…&regex=true&archived=true|false&limit=…`.
+State lives in the URL, so a search is shareable: `?q=…&regex=true&archived=true|all&limit=…`.
 Changing the query, mode or scope drops a raised `limit`.
 
 ### Deep link into the As Code tab
@@ -36,9 +37,11 @@ link uses the component **UUID** returned with each hit, not the key: the editor
 
 ### Entry points
 
-- Nav item **Search** (no permission gate — the endpoint needs `ACCESS_COMPONENTS`, like the list).
-- Command palette (⌘K): **Go to › Global search**, and **Search › Global search for "…"**
+- Nav item **Global search** (no permission gate — the endpoint needs `ACCESS_COMPONENTS`, like the list).
+- **Go to…** palette (⌘K): **Go to › Global search**, and **Action › Global search for "…"**
   which hands the typed text to `/search?q=…`.
+- Component list: while the key/name filter holds ≥ 2 characters, a "Global search →" link
+  offers the same text to `/search`.
 - What's new entry `as-code-search-2026-10`, with a spotlight on the nav item.
 
 ## Source

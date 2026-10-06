@@ -37,15 +37,17 @@ export const ANNOUNCEMENTS: Announcement[] = [
     body: (
       <div className="space-y-2">
         <p>
-          The new <strong>Search</strong> page looks through the as-code text of{' '}
+          The new <strong>Global search</strong> page looks through the as-code text of{' '}
           <strong>every</strong> component at once — artifact and group patterns, version ranges,
           VCS URLs, Jira keys, docker images, owners. Each match shows its line and the version
           range it belongs to; click it to jump straight to that line in the component&apos;s{' '}
           <strong>As Code</strong> tab.
         </p>
         <p className="text-muted-foreground">
-          Matching is case-insensitive. Switch to <strong>Regex</strong> for a regular expression,
-          and narrow to active or archived components if you need to.
+          Matching is case-insensitive and covers active components by default. Switch to{' '}
+          <strong>Regex</strong> for a regular expression, or to <strong>Archived</strong> /{' '}
+          <strong>All</strong> to include archived ones. To jump straight to a component by name,
+          use <strong>Go to…</strong> (⌘K).
         </p>
       </div>
     ),

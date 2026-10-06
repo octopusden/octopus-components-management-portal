@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Search, X } from 'lucide-react'
+import { Compass, X } from 'lucide-react'
 import { Button } from './ui/button'
 import { useUiOverlay } from '@/lib/uiOverlayStore'
 import { useOnboardingBannerVisible } from '@/hooks/useOnboardingBannerVisible'
@@ -29,7 +29,7 @@ function dismissCoachmark() {
 
 /**
  * Discoverability entry point for the command palette (spec §1.6): a visible
- * "Search ⌘K" button in the list header that opens the palette, plus a
+ * "Go to… ⌘K" button in the list header that opens the palette, plus a
  * one-time dismissible coachmark pointing at it.
  */
 export function SearchCommandButton() {
@@ -63,8 +63,8 @@ export function SearchCommandButton() {
         className="gap-2 text-muted-foreground"
         aria-keyshortcuts={isMac() ? 'Meta+K' : 'Control+K'}
       >
-        <Search className="h-4 w-4" />
-        Search
+        <Compass className="h-4 w-4" />
+        Go to…
         <kbd className="ml-1 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium">
           {isMac() ? '⌘K' : 'Ctrl K'}
         </kbd>
@@ -86,8 +86,8 @@ export function SearchCommandButton() {
           </button>
           <p className="pr-4 font-medium text-foreground">Quick tip</p>
           <p className="mt-1 text-muted-foreground">
-            Press {isMac() ? '⌘K' : 'Ctrl+K'} anywhere to search components, jump to a page, or run
-            an action.
+            Press {isMac() ? '⌘K' : 'Ctrl+K'} anywhere to open a component, jump to a page, or run an
+            action.
           </p>
         </div>
       )}

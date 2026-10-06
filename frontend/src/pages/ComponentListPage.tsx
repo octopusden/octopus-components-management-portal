@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { Layout } from '../components/Layout'
 import { ComponentFilters } from '../components/ComponentFilters'
 import { ComponentTable } from '../components/ComponentTable'
@@ -11,6 +11,7 @@ import { SearchCommandButton } from '../components/SearchCommandButton'
 import { InlineError } from '../components/ui/inline-error'
 import { StatusBanner } from '../components/ui/status-banner'
 import { useComponents } from '../hooks/useComponents'
+import { AS_CODE_SEARCH_MIN_QUERY } from '../hooks/useAsCodeSearch'
 import {
   useValidationProblems,
   useComponentsWithProblems,
@@ -274,6 +275,20 @@ export function ComponentListPage() {
           onRemove={handleChipRemove}
           onClearAll={handleClearAll}
         />
+
+        {/* The key/name filter only narrows this list; offer the same text to Global search,
+            which looks through every component's as-code view (artifacts, VCS URLs, …). */}
+        {(filter.search?.trim().length ?? 0) >= AS_CODE_SEARCH_MIN_QUERY && (
+          <p className="text-sm text-muted-foreground">
+            Looking for “{filter.search?.trim()}” anywhere in a component&apos;s configuration?{' '}
+            <Link
+              to={`/search?q=${encodeURIComponent(filter.search?.trim() ?? '')}`}
+              className="font-medium text-primary hover:underline"
+            >
+              Global search →
+            </Link>
+          </p>
+        )}
 
         {/* The validation report is a scheduled Portal sweep; when its most
             recent refresh failed the held data may be stale. Surface that so a
