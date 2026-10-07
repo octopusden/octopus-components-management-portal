@@ -14,7 +14,8 @@ import { serializeFilterState } from '../hooks/useFilterUrlState'
  */
 export function presetUrl(id: PresetId, username: string | null): string {
   const filter = applyPreset(id, { archived: false }, username)
-  const params = serializeFilterState({ filter, preset: id })
+  // Only `problems` needs `preset=` (it has no filter footprint); the others are plain filters.
+  const params = serializeFilterState({ filter, preset: id === 'problems' ? id : null })
   const qs = params.toString()
   return qs ? `/components?${qs}` : '/components'
 }

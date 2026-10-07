@@ -29,6 +29,8 @@ const ARRAY_KEYS = [
   // round-trip through the URL like the other multi-value filters.
   'releaseManager',
   'securityChampion',
+  'involves',
+  'involvesRoles',
 ] as const satisfies readonly (keyof ComponentFilter)[]
 
 // Scalar free-text filters.
@@ -50,14 +52,16 @@ const ARCHIVED_KEY = 'archived'
 
 /** searchParams -> {filter, preset}. Absent/empty params yield active-only defaults. */
 export function parseFilterParams(params: URLSearchParams): FilterUrlState {
-  // archived defaults to false (active-only) — mirrors ComponentListPage's
-  // initial filter so a bare /components URL parses to the same state.
-  const filter: ComponentFilter = { archived: params.get(ARCHIVED_KEY) === 'true' }
+  // Status: no param = Active (archived: false, the default — a bare /components URL),
+  // archived=true = Archived only, archived=all = both (archived undefined → no CRS param).
+  const rawArchived = params.get(ARCHIVED_KEY)
+  const filter: ComponentFilter =
+    rawArchived === 'all' ? {} : { archived: rawArchived === 'true' }
 
   for (const key of ARRAY_KEYS) {
     const raw = params.get(key)
     if (raw != null && raw.length > 0) {
-      filter[key] = raw.split(',').filter(Boolean)
+      ;(filter as Record<string, string[]>)[key] = raw.split(',').filter(Boolean)
     }
   }
   for (const key of STRING_KEYS) {
@@ -90,8 +94,9 @@ export function serializeFilterState({ filter, preset }: FilterUrlState): URLSea
     const value = filter[key]
     if (typeof value === 'boolean') params.set(key, String(value))
   }
-  // Only the non-default (archived) is written; false is the implicit default.
-  if (filter.archived) params.set(ARCHIVED_KEY, 'true')
+  // Active (false) is the implicit default; Archived and All are written.
+  if (filter.archived === true) params.set(ARCHIVED_KEY, 'true')
+  else if (filter.archived === undefined) params.set(ARCHIVED_KEY, 'all')
   if (preset) params.set(PRESET_KEY, preset)
 
   return params

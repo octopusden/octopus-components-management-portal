@@ -853,7 +853,7 @@ describe('ComponentFilters — problems-only dimming + hint', () => {
     const group = screen.getByTestId('crs-filter-controls')
     expect(group.className).not.toContain('pointer-events-none')
     expect(group.getAttribute('aria-disabled')).toBeNull()
-    expect(screen.queryByText(/don.t apply in the .With problems. preset/i)).toBeNull()
+    expect(screen.queryByText(/don.t apply while .With problems. is on/i)).toBeNull()
   })
 
   it('dims + disables the CRS filter group and shows a hint when problemsOnly is on', () => {
@@ -864,7 +864,7 @@ describe('ComponentFilters — problems-only dimming + hint', () => {
     expect(group.className).toContain('opacity-50')
     expect(group.className).toContain('pointer-events-none')
     expect(group.getAttribute('aria-disabled')).toBe('true')
-    expect(screen.getByText(/don.t apply in the .With problems. preset/i)).toBeDefined()
+    expect(screen.getByText(/don.t apply while .With problems. is on/i)).toBeDefined()
   })
 
   it('shows the found-count beside the hint when problemsCount is given (plural)', () => {
@@ -878,7 +878,7 @@ describe('ComponentFilters — problems-only dimming + hint', () => {
     )
     // The count and the existing hint share one line.
     expect(screen.getByText(/3 components with validation problems/i)).toBeDefined()
-    expect(screen.getByText(/don.t apply in the .With problems. preset/i)).toBeDefined()
+    expect(screen.getByText(/don.t apply while .With problems. is on/i)).toBeDefined()
   })
 
   it('uses the singular noun (no plural "s") when problemsCount is 1', () => {
@@ -900,7 +900,88 @@ describe('ComponentFilters — problems-only dimming + hint', () => {
       <ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} problemsOnly />,
     )
     // Hint shows, but no found-count yet.
-    expect(screen.getByText(/don.t apply in the .With problems. preset/i)).toBeDefined()
+    expect(screen.getByText(/don.t apply while .With problems. is on/i)).toBeDefined()
     expect(screen.queryByText(/with validation problems\./i)).toBeNull()
+  })
+})
+
+describe('ComponentFilters — Status, Mine and With problems', () => {
+  const onFilterChange = vi.fn()
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    for (const k of Object.keys(fieldOptionSeeds)) delete fieldOptionSeeds[k]
+    applyFieldOptionsMock()
+    mockLabels()
+    mockCurrentUser('testuser')
+    mockFieldConfig([])
+  })
+
+  it('Status: Active is checked by default; Archived and All set archived true / unset', async () => {
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    const status = within(screen.getByRole('radiogroup', { name: 'Status' }))
+    expect(status.getByRole('radio', { name: 'Active' }).getAttribute('aria-checked')).toBe('true')
+    await userEvent.click(status.getByRole('radio', { name: 'Archived' }))
+    expect(onFilterChange).toHaveBeenLastCalledWith(expect.objectContaining({ archived: true }))
+    await userEvent.click(status.getByRole('radio', { name: 'All' }))
+    expect(onFilterChange.mock.calls.at(-1)![0]).not.toHaveProperty('archived')
+  })
+
+  it('Status reads All when archived is unset', () => {
+    render(<ComponentFilters filter={{}} onFilterChange={onFilterChange} />)
+    expect(within(screen.getByRole('radiogroup', { name: 'Status' })).getByRole('radio', { name: 'All' }).getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('Mine: ticking roles builds involves = current user + the ticked roles (OR on the server)', async () => {
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Mine' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: "I'm release manager" }))
+    expect(onFilterChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ involves: ['testuser'], involvesRoles: ['releaseManager'] }),
+    )
+  })
+
+  it('Mine: all three roles ticked = any role (no involvesRoles); none = no filter', async () => {
+    const { rerender } = render(
+      <ComponentFilters
+        filter={{ archived: false, involves: ['testuser'], involvesRoles: ['owner', 'releaseManager'] }}
+        onFilterChange={onFilterChange}
+      />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Mine: owner, RM' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: "I'm security champion" }))
+    const all = onFilterChange.mock.calls.at(-1)![0]
+    expect(all.involves).toEqual(['testuser'])
+    expect(all).not.toHaveProperty('involvesRoles')
+
+    rerender(
+      <ComponentFilters filter={{ archived: false, involves: ['testuser'], involvesRoles: ['owner'] }} onFilterChange={onFilterChange} />,
+    )
+    await userEvent.click(screen.getByRole('checkbox', { name: "I'm owner" }))
+    const none = onFilterChange.mock.calls.at(-1)![0]
+    expect(none).not.toHaveProperty('involves')
+    expect(none).not.toHaveProperty('involvesRoles')
+  })
+
+  it('Mine: no search box for three options; the trigger names the roles', async () => {
+    render(
+      <ComponentFilters
+        filter={{ archived: false, involves: ['testuser'], involvesRoles: ['owner', 'releaseManager', 'securityChampion'] }}
+        onFilterChange={onFilterChange}
+      />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Mine: any role' }))
+    expect(screen.queryByPlaceholderText(/Search roles/)).toBeNull()
+  })
+
+  it('With problems: shown only when allowed, toggles via the callback', async () => {
+    const onProblems = vi.fn()
+    const { rerender } = render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    expect(screen.queryByRole('button', { name: 'With problems' })).toBeNull()
+    rerender(
+      <ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} canFilterProblems onProblemsOnlyChange={onProblems} />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'With problems' }))
+    expect(onProblems).toHaveBeenCalledWith(true)
   })
 })

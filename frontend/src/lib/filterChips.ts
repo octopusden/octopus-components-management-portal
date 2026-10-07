@@ -1,4 +1,4 @@
-import type { ComponentFilter } from './types'
+import { INVOLVEMENT_ROLES, type ComponentFilter, type InvolvementRole } from './types'
 import { presetById, type PresetId } from './listPresets'
 
 /**
@@ -36,6 +36,12 @@ const FIELD_LABELS: Partial<Record<keyof ComponentFilter, string>> = {
   distributionExplicit: 'Distribution explicit',
   distributionExternal: 'Distribution external',
   archived: 'Status',
+}
+
+const ROLE_LABELS: Record<InvolvementRole, string> = {
+  owner: 'owner',
+  releaseManager: 'release manager',
+  securityChampion: 'security champion',
 }
 
 // Array-valued fields → one chip per selected value.
@@ -77,10 +83,18 @@ export function describeFilterChips(
 ): FilterChip[] {
   const chips: FilterChip[] = []
 
-  // `all` is the default state, not an active filter — it gets no chip.
-  if (preset && preset !== 'all') {
+  // Only "With problems" survives as a preset in the UI (it has no filter footprint);
+  // the others are plain filters now and show their own chips below.
+  if (preset === 'problems') {
     const def = presetById(preset)
-    if (def) chips.push({ key: 'preset', label: `Preset: ${def.label}` })
+    if (def) chips.push({ key: 'preset', label: def.label })
+  }
+
+  // "Mine" (CRS involves) is one chip naming the roles; removing it clears the filter.
+  if (filter.involves?.length) {
+    const roles = filter.involvesRoles?.length ? filter.involvesRoles : INVOLVEMENT_ROLES
+    const who = roles.length === INVOLVEMENT_ROLES.length ? 'any role' : roles.map((r) => ROLE_LABELS[r]).join(', ')
+    chips.push({ key: 'involves', label: `Mine: ${who}` })
   }
 
   if (filter.search) {
@@ -111,9 +125,11 @@ export function describeFilterChips(
     }
   }
 
-  // Only archived=true is a chip — active-only (false) is the implicit default.
+  // Active (false) is the implicit default; Archived and All are chips.
   if (filter.archived === true) {
     chips.push({ key: 'archived', label: `${FIELD_LABELS.archived}: Archived` })
+  } else if (filter.archived === undefined) {
+    chips.push({ key: 'archived', label: `${FIELD_LABELS.archived}: All` })
   }
 
   return chips

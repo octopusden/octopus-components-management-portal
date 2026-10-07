@@ -64,6 +64,12 @@ interface MultiSelectFilterProps {
    */
   inline?: boolean
   onDone?: () => void
+  /** Trigger width classes; defaults to a fixed 200px. Compact filter rows pass a content-sized width. */
+  triggerClassName?: string
+  /** Show the search box above the options (default true); pointless for a handful of options. */
+  searchable?: boolean
+  /** Custom trigger text for the current selection; falls back to the placeholder / value / "N units". */
+  formatTriggerLabel?: (value: string[]) => string
 }
 
 export function MultiSelectFilter({
@@ -83,6 +89,9 @@ export function MultiSelectFilter({
   monospaceOptions = true,
   inline = false,
   onDone,
+  triggerClassName = 'w-[200px]',
+  searchable = true,
+  formatTriggerLabel,
 }: MultiSelectFilterProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -153,8 +162,9 @@ export function MultiSelectFilter({
   }
 
   const pluralUnit = `${unitLabel}s`
-  const triggerLabel =
-    value.length === 0
+  const triggerLabel = formatTriggerLabel
+    ? formatTriggerLabel(value)
+    : value.length === 0
       ? placeholder
       : value.length === 1
         ? getOptionLabel(value[0]!)
@@ -174,14 +184,16 @@ export function MultiSelectFilter({
 
   const body = (
     <>
-      <div className="mb-2">
-        <Input
-          placeholder={`Search ${pluralUnit}...`}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="h-8 text-sm"
-        />
-      </div>
+      {searchable && (
+        <div className="mb-2">
+          <Input
+            placeholder={`Search ${pluralUnit}...`}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-8 text-sm"
+          />
+        </div>
+      )}
       <div
         className="max-h-64 overflow-auto"
         onKeyDown={handleListKeyDown}
@@ -265,11 +277,11 @@ export function MultiSelectFilter({
           aria-describedby={ariaDescribedBy}
           variant="outline"
           size="sm"
-          className="w-[200px] justify-between font-normal"
+          className={cn('justify-between font-normal', triggerClassName)}
           disabled={disabled}
         >
           <span className="truncate">{triggerLabel}</span>
-          {value.length > 0 && (
+          {value.length > 0 && !formatTriggerLabel && (
             <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">
               {value.length}
             </Badge>

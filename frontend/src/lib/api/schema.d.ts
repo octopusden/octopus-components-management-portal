@@ -5486,6 +5486,8 @@ export interface operations {
                 owner?: string[];
                 releaseManager?: string[];
                 securityChampion?: string[];
+                involves?: string[];
+                involvesRoles?: string[];
                 buildSystem?: string[];
                 javaVersion?: string[];
                 labels?: string[];

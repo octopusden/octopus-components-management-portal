@@ -542,6 +542,13 @@ export interface ComponentFilter {
   releaseManager?: string[]
   /** Exact-match OR across values (a component may have several security champions). CSV on the wire. */
   securityChampion?: string[]
+  /**
+   * CRS SYS-101: components where any listed user is the owner OR a release manager OR a security
+   * champion — the "Mine" filter (the owner/releaseManager/securityChampion filters AND together).
+   */
+  involves?: string[]
+  /** Roles `involves` checks: any of `owner`, `releaseManager`, `securityChampion`; absent = all three. */
+  involvesRoles?: InvolvementRole[]
   /** Exact-match OR across values (a component has exactly one buildSystem). CSV on the wire. */
   buildSystem?: string[]
   /** Exact-match AND across values; sourced from /components/meta/labels. CSV on the wire. */
@@ -1327,3 +1334,7 @@ export interface AsCodeSearchResponse {
   /** Sorted by component key. */
   results: AsCodeSearchHit[]
 }
+
+/** Roles the "Mine" (CRS `involves`) filter can check. */
+export type InvolvementRole = 'owner' | 'releaseManager' | 'securityChampion'
+export const INVOLVEMENT_ROLES: readonly InvolvementRole[] = ['owner', 'releaseManager', 'securityChampion']

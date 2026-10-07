@@ -165,24 +165,25 @@ describe('CommandPalette — navigation', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/search?q=org.example')
   })
 
-  it('Filter > My Components navigates to /components?owner=…&preset=mine (Phase 1 serialization)', async () => {
+  it('Filter > My Components navigates to the "Mine" filter as owner', async () => {
     const user = userEvent.setup()
     renderPalette()
     await user.click(screen.getByText('My Components'))
     const arg = mockNavigate.mock.calls[0]![0] as string
     const params = new URL(arg, 'http://x').searchParams
-    expect(params.get('owner')).toBe('alice')
-    expect(params.get('preset')).toBe('mine')
+    expect(params.get('involves')).toBe('alice')
+    expect(params.get('involvesRoles')).toBe('owner')
+    expect(params.get('preset')).toBeNull()
   })
 
-  it('Filter > I am Release Manager navigates to /components?releaseManager=…&preset=release-manager (Phase 1b)', async () => {
+  it('Filter > I am Release Manager navigates to the "Mine" filter as release manager', async () => {
     const user = userEvent.setup()
     renderPalette()
     await user.click(screen.getByText('I am Release Manager'))
     const arg = mockNavigate.mock.calls[0]![0] as string
     const params = new URL(arg, 'http://x').searchParams
-    expect(params.get('releaseManager')).toBe('alice')
-    expect(params.get('preset')).toBe('release-manager')
+    expect(params.get('involves')).toBe('alice')
+    expect(params.get('involvesRoles')).toBe('releaseManager')
   })
 
   it('Filter > With problems navigates with the problems preset and no filter footprint', async () => {

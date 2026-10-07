@@ -5,9 +5,10 @@ import { Button } from './ui/button'
 import { FilterBar } from './ui/filter-bar'
 import { Label } from './ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
-import type { ComponentFilter } from '../lib/types'
+import { INVOLVEMENT_ROLES, type ComponentFilter, type InvolvementRole } from '../lib/types'
 import { cn } from '../lib/utils'
 import { useOwners } from '../hooks/useOwners'
+import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useLabels } from '../hooks/useLabels'
 import { useClientCodes } from '../hooks/useClientCodes'
 import { useJiraProjectKeys } from '../hooks/useJiraProjectKeys'
@@ -41,6 +42,10 @@ interface ComponentFiltersProps {
    * without a count.
    */
   problemsCount?: number
+  /** Admins (admin mode + IMPORT_DATA) get the "With problems" toggle; everyone else never sees it. */
+  canFilterProblems?: boolean
+  /** Turns "With problems" on/off (the page swaps the list source to the validation report). */
+  onProblemsOnlyChange?: (on: boolean) => void
 }
 
 // Debounced free-text filter. Mirrors the main search box's 300ms debounce so
@@ -122,6 +127,100 @@ function TriStateFilter({
         )
       })}
     </div>
+  )
+}
+
+type Status = 'active' | 'archived' | 'all'
+
+const STATUS_OPTIONS: { value: Status; text: string }[] = [
+  { value: 'active', text: 'Active' },
+  { value: 'archived', text: 'Archived' },
+  { value: 'all', text: 'All' },
+]
+
+/** Status — Active / Archived / All — as a segmented control (archived false / true / undefined). */
+function StatusFilter({ filter, onChange }: { filter: ComponentFilter; onChange: (f: ComponentFilter) => void }) {
+  const current: Status = filter.archived === true ? 'archived' : filter.archived === false ? 'active' : 'all'
+  return (
+    <div role="radiogroup" aria-label="Status" className="inline-flex h-9 items-center rounded-md border border-input p-0.5">
+      {STATUS_OPTIONS.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="radio"
+          aria-checked={current === o.value}
+          onClick={() => {
+            const next: ComponentFilter = { ...filter }
+            if (o.value === 'all') delete next.archived
+            else next.archived = o.value === 'archived'
+            onChange(next)
+          }}
+          className={cn(
+            'h-7 rounded px-2.5 text-xs font-medium transition-colors',
+            current === o.value ? 'bg-secondary text-secondary-foreground' : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          {o.text}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// Content-sized pickers keep the one-row filter bar from wrapping on a normal screen.
+const BAR_PICKER_WIDTH = 'w-auto max-w-[15rem] gap-2'
+
+const MINE_SHORT: Record<InvolvementRole, string> = { owner: 'owner', releaseManager: 'RM', securityChampion: 'SC' }
+
+function mineLabel(roles: string[]): string {
+  if (!roles.length) return 'Mine'
+  if (roles.length === INVOLVEMENT_ROLES.length) return 'Mine: any role'
+  return `Mine: ${roles.map((r) => MINE_SHORT[r as InvolvementRole]).join(', ')}`
+}
+
+const MINE_LABELS: Record<InvolvementRole, string> = {
+  owner: "I'm owner",
+  releaseManager: "I'm release manager",
+  securityChampion: "I'm security champion",
+}
+
+/**
+ * "Mine": the roles the current user holds on a component (CRS `involves`, SYS-101) — owner OR
+ * release manager OR security champion, OR across the ticked roles. Nothing ticked = no filter;
+ * all three ticked = any role (no `involvesRoles` on the wire).
+ */
+function MineFilter({ filter, onChange }: { filter: ComponentFilter; onChange: (f: ComponentFilter) => void }) {
+  const { data: user } = useCurrentUser()
+  const username = user?.username ?? null
+  const value: string[] = filter.involves?.length
+    ? [...(filter.involvesRoles?.length ? filter.involvesRoles : INVOLVEMENT_ROLES)]
+    : []
+  return (
+    <MultiSelectFilter
+      id="filter-mine"
+      value={value}
+      options={[...INVOLVEMENT_ROLES]}
+      getOptionLabel={(r) => MINE_LABELS[r as InvolvementRole]}
+      monospaceOptions={false}
+      placeholder="Mine"
+      unitLabel="role"
+      searchable={false}
+      triggerClassName={BAR_PICKER_WIDTH}
+      formatTriggerLabel={mineLabel}
+      disabled={!username}
+      onChange={(next) => {
+        const f: ComponentFilter = { ...filter }
+        if (!next.length || !username) {
+          delete f.involves
+          delete f.involvesRoles
+        } else {
+          f.involves = [username]
+          if (next.length === INVOLVEMENT_ROLES.length) delete f.involvesRoles
+          else f.involvesRoles = next as InvolvementRole[]
+        }
+        onChange(f)
+      }}
+    />
   )
 }
 
@@ -241,6 +340,8 @@ export function ComponentFilters({
   onFilterChange,
   problemsOnly = false,
   problemsCount,
+  canFilterProblems = false,
+  onProblemsOnlyChange,
 }: ComponentFiltersProps) {
   const [searchValue, setSearchValue] = useState(filter.search ?? '')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -343,6 +444,7 @@ export function ComponentFilters({
       key={key}
       id={inline ? undefined : `filter-${key}`}
       inline={inline}
+      triggerClassName={BAR_PICKER_WIDTH}
       value={filter[key] ?? []}
       onChange={setList(key)}
       options={props.options}
@@ -504,14 +606,14 @@ export function ComponentFilters({
             have no effect while it is on. */}
         <div
           data-testid="crs-filter-controls"
-          className={cn('flex flex-wrap items-center gap-2', disabledGroupClass)}
+          className={cn('flex flex-1 flex-wrap items-center gap-2', disabledGroupClass)}
           // Belt-and-braces alongside pointer-events-none: `inert` (React 19)
           // removes the group from the tab order + pointer/AT interaction when
           // disabled, and aria-disabled marks it for assistive tech.
           aria-disabled={crsFiltersDisabled || undefined}
           inert={crsFiltersDisabled}
         >
-          <div className="relative flex-1 min-w-[200px] max-w-xs">
+          <div className="relative flex-1 min-w-[12rem] max-w-[16rem]">
             <Funnel className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Filter by key or name…"
@@ -520,6 +622,9 @@ export function ComponentFilters({
               className="pl-9"
             />
           </div>
+
+          <StatusFilter filter={filter} onChange={onFilterChange} />
+          <MineFilter filter={filter} onChange={onFilterChange} />
 
           {mainDefs.map((d) =>
             d.bare ? <div key={d.id}>{d.control}</div> : <LabelledFilter key={d.id} def={d} />,
@@ -530,7 +635,20 @@ export function ComponentFilters({
           )}
         </div>
 
-        {/* Hint that CRS filters are inert while the "With problems" preset is on. */}
+        {/* Admin-only: outside the CRS group so it stays clickable while that group is inert. */}
+        {canFilterProblems && onProblemsOnlyChange && (
+          <Button
+            variant={problemsOnly ? 'secondary' : 'outline'}
+            size="sm"
+            className="h-9"
+            aria-pressed={problemsOnly}
+            onClick={() => onProblemsOnlyChange(!problemsOnly)}
+          >
+            With problems
+          </Button>
+        )}
+
+        {/* Hint that CRS filters are inert while "With problems" is on. */}
         {crsFiltersDisabled && (
           <span className="text-xs text-muted-foreground">
             {typeof problemsCount === 'number' && (
@@ -538,7 +656,7 @@ export function ComponentFilters({
                 {problemsCount} component{problemsCount === 1 ? '' : 's'} with validation problems.{' '}
               </>
             )}
-            Component filters don’t apply in the “With problems” preset.
+            Component filters don’t apply while “With problems” is on.
           </span>
         )}
       </FilterBar>

@@ -1,8 +1,8 @@
 import type { ComponentFilter } from './types'
 
 /**
- * List-page presets (spec §1.1). Each preset is *sugar* over the existing
- * `ComponentFilter` state: selecting one sets a known filter combo and clears
+ * List presets — now only URL/palette sugar (the list page's preset bar was replaced by the
+ * Status and "Mine" filters). Each preset maps to plain `ComponentFilter` state: selecting one sets a known filter combo and clears
  * any conflicting prior state. The active preset is reflected in the URL via
  * useFilterUrlState so a shared link restores both the preset and its filter.
  *
@@ -64,7 +64,7 @@ export function applyPreset(
     // the owner filter, so fall back to the default rather than emitting a
     // broken owner: [undefined].
     return currentUsername
-      ? { archived: false, owner: [currentUsername] }
+      ? { archived: false, involves: [currentUsername], involvesRoles: ['owner'] }
       : { ...DEFAULT_FILTER }
   }
   if (id === 'archived') {
@@ -75,12 +75,12 @@ export function applyPreset(
     // Without a username we cannot scope, so fall back to the default rather
     // than emitting releaseManager: [undefined].
     return currentUsername
-      ? { archived: false, releaseManager: [currentUsername] }
+      ? { archived: false, involves: [currentUsername], involvesRoles: ['releaseManager'] }
       : { ...DEFAULT_FILTER }
   }
   if (id === 'security-champion') {
     return currentUsername
-      ? { archived: false, securityChampion: [currentUsername] }
+      ? { archived: false, involves: [currentUsername], involvesRoles: ['securityChampion'] }
       : { ...DEFAULT_FILTER }
   }
   // Everything else applies only the active-only default footprint:
@@ -88,53 +88,4 @@ export function applyPreset(
   //  - `problems` carries no CRS query param (Portal-computed) — the page swaps
   //    the list source instead.
   return { ...DEFAULT_FILTER }
-}
-
-/**
- * Derive which preset (if any) a filter currently represents, so a URL with a
- * bare filter (no explicit `preset=`) still lights up the matching segment.
- * `problems` is intentionally NOT derivable — it shares "all"'s footprint and
- * is only ever active via an explicit URL preset — so a default filter is "all".
- */
-export function matchPreset(
-  filter: ComponentFilter,
-  currentUsername: string | null,
-): PresetId | null {
-  // Any extra filter beyond the ones a preset sets means "custom" → no match.
-  const onlyKeys = (allowed: (keyof ComponentFilter)[]): boolean =>
-    (Object.keys(filter) as (keyof ComponentFilter)[]).every(
-      (k) => allowed.includes(k) || filter[k] === undefined,
-    )
-
-  if (filter.archived === true && onlyKeys(['archived'])) return 'archived'
-
-  if (filter.archived === false || filter.archived === undefined) {
-    if (
-      currentUsername &&
-      filter.owner?.length === 1 &&
-      filter.owner[0] === currentUsername &&
-      onlyKeys(['archived', 'owner'])
-    ) {
-      return 'mine'
-    }
-    if (
-      currentUsername &&
-      filter.releaseManager?.length === 1 &&
-      filter.releaseManager[0] === currentUsername &&
-      onlyKeys(['archived', 'releaseManager'])
-    ) {
-      return 'release-manager'
-    }
-    if (
-      currentUsername &&
-      filter.securityChampion?.length === 1 &&
-      filter.securityChampion[0] === currentUsername &&
-      onlyKeys(['archived', 'securityChampion'])
-    ) {
-      return 'security-champion'
-    }
-    if (onlyKeys(['archived'])) return 'all'
-  }
-
-  return null
 }
