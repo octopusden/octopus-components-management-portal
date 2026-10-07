@@ -28,10 +28,10 @@ interface NavItem {
 // Everyday destinations only. Admin tooling (Admin settings, Validations) lives in the account
 // menu (UserMenu); help and feedback in the "?" menu (HelpMenu).
 const navItems: NavItem[] = [
-  { href: '/components', label: 'Components', icon: Package },
+  { href: '/components', label: 'Components', icon: Package, requires: PERMISSIONS.ACCESS_COMPONENTS },
   // Global search (the page is titled so). "Search" is unambiguous here: the list's controls are
-  // filters and ⌘K is "Go to…". No permission gate: the endpoint needs ACCESS_COMPONENTS, like the list.
-  { href: '/search', label: 'Search', icon: Search },
+  // filters and ⌘K is "Go to…". Gated like the list: the endpoint needs ACCESS_COMPONENTS.
+  { href: '/search', label: 'Search', icon: Search, requires: PERMISSIONS.ACCESS_COMPONENTS },
   { href: '/audit', label: 'Audit', icon: History, requires: PERMISSIONS.ACCESS_AUDIT },
 ]
 

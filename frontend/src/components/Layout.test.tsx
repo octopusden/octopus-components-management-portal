@@ -193,6 +193,34 @@ describe('Layout nav visibility', () => {
   })
 })
 
+describe('Layout nav — ACCESS_COMPONENTS gate', () => {
+  it('hides Components and Search from a logged-in user without ACCESS_COMPONENTS', () => {
+    mockedUseCurrentUser.mockReturnValue({
+      data: { username: 'nobody', roles: [], groups: [] },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useCurrentUser>)
+    renderLayout()
+    expect(screen.queryByRole('link', { name: /Components/i })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Search' })).toBeNull()
+  })
+
+  it('keeps them on an auth backend error (fail open, the server still authorizes)', () => {
+    mockedUseCurrentUser.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new Error('500'),
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useCurrentUser>)
+    renderLayout()
+    expect(screen.getByRole('link', { name: /Components/i })).toBeDefined()
+    expect(screen.getByRole('link', { name: 'Search' })).toBeDefined()
+  })
+})
+
 describe('Layout ADMIN badge — double-gate', () => {
   const adminUser: User = {
     username: 'alice',
