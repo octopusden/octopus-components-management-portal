@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Funnel, Plus, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Funnel, Plus } from 'lucide-react'
 import { Input } from './ui/input'
 import { Button } from './ui/button'
 import { FilterBar } from './ui/filter-bar'
@@ -144,10 +144,14 @@ interface FilterDef {
   controlId?: string
   /** Main-placed classic pickers render bare — their placeholder ("All owners") is the label. */
   bare?: boolean
+  /** The control as shown inside the "+ Filter" panel (multi-selects render their list inline). */
+  editor: ReactNode
+  /** Short current-value text for the "+ Filter" list, when the dimension holds a value. */
+  summary?: string
 }
 
-/** A filter shown in the bar with its name in front and, when removable, a × after it. */
-function LabelledFilter({ def, onRemove }: { def: FilterDef; onRemove?: () => void }) {
+/** An admin-promoted (Main-placed) extended filter, shown in the bar with its name in front. */
+function LabelledFilter({ def }: { def: FilterDef }) {
   return (
     <div className="flex items-center gap-1.5" data-testid={`filter-${def.id}`}>
       {def.controlId ? (
@@ -160,56 +164,73 @@ function LabelledFilter({ def, onRemove }: { def: FilterDef; onRemove?: () => vo
         </span>
       )}
       {def.control}
-      {onRemove && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-muted-foreground"
-          aria-label={`Remove ${def.label} filter`}
-          title="Remove filter"
-          onClick={onRemove}
-        >
-          <X className="h-3.5 w-3.5" />
-        </Button>
-      )}
     </div>
   )
 }
 
-/** The "+ Filter" picker: the Extended-placed dimensions not yet in the bar, grouped by topic. */
-function AddFilterMenu({ defs, onAdd }: { defs: FilterDef[]; onAdd: (id: string) => void }) {
+/**
+ * The "+ Filter" panel: the Extended-placed dimensions grouped by topic (those holding a value
+ * show it), and — once one is picked — that dimension's editor. Values set here show as
+ * removable chips under the bar (ActiveFilterChips), so the bar itself never grows.
+ */
+function AddFilterMenu({ defs, activeCount }: { defs: FilterDef[]; activeCount: number }) {
   const [open, setOpen] = useState(false)
+  const [editing, setEditing] = useState<string | null>(null)
+  const current = defs.find((d) => d.id === editing)
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (!next) setEditing(null)
+      }}
+    >
       <PopoverTrigger asChild>
         <Button variant="outline" size="sm" className="h-9 gap-1.5" aria-label="Add filter">
           <Plus className="h-4 w-4" />
           Filter
+          {activeCount > 0 && (
+            <span className="ml-0.5 rounded-full bg-secondary px-1.5 text-xs text-secondary-foreground">{activeCount}</span>
+          )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-60 p-1">
-        {FILTER_GROUPS.map((group) => {
-          const items = defs.filter((d) => d.group === group)
-          if (!items.length) return null
-          return (
-            <div key={group} role="group" aria-label={group} className="py-1">
-              <div className="px-2 pb-1 text-xs font-medium text-muted-foreground">{group}</div>
-              {items.map((d) => (
-                <button
-                  key={d.id}
-                  type="button"
-                  className="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
-                  onClick={() => {
-                    onAdd(d.id)
-                    setOpen(false)
-                  }}
-                >
-                  {d.label}
-                </button>
-              ))}
-            </div>
-          )
-        })}
+      <PopoverContent align="start" className="w-auto min-w-60 p-1">
+        {current ? (
+          <div role="group" aria-label={current.label}>
+            <button
+              type="button"
+              className="flex w-full items-center gap-1 rounded-sm px-2 py-1.5 text-left text-xs font-medium text-muted-foreground hover:text-foreground"
+              onClick={() => setEditing(null)}
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              {current.label}
+            </button>
+            <div className="p-1">{current.editor}</div>
+          </div>
+        ) : (
+          FILTER_GROUPS.map((group) => {
+            const items = defs.filter((d) => d.group === group)
+            if (!items.length) return null
+            return (
+              <div key={group} role="group" aria-label={group} className="py-1">
+                <div className="px-2 pb-1 text-xs font-medium text-muted-foreground">{group}</div>
+                {items.map((d) => (
+                  <button
+                    key={d.id}
+                    type="button"
+                    aria-label={d.label}
+                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+                    onClick={() => setEditing(d.id)}
+                  >
+                    <span className="flex-1">{d.label}</span>
+                    {d.summary && <span className="max-w-32 truncate text-xs text-muted-foreground">{d.summary}</span>}
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                  </button>
+                ))}
+              </div>
+            )
+          })
+        )}
       </PopoverContent>
     </Popover>
   )
@@ -223,10 +244,6 @@ export function ComponentFilters({
 }: ComponentFiltersProps) {
   const [searchValue, setSearchValue] = useState(filter.search ?? '')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // Extended dimensions the user added via "+ Filter" that hold no value yet. A dimension
-  // with a value is always shown (so a shared/bookmarked URL never hides its own filters).
-  const [added, setAdded] = useState<string[]>([])
-
   // Sync external filter.search into local state when it changes from outside
   useEffect(() => {
     setSearchValue(filter.search ?? '')
@@ -320,10 +337,12 @@ export function ComponentFilters({
       unitLabel: string
       onFirstOpen?: () => void
     },
+    inline = false,
   ) => (
     <MultiSelectFilter
       key={key}
-      id={`filter-${key}`}
+      id={inline ? undefined : `filter-${key}`}
+      inline={inline}
       value={filter[key] ?? []}
       onChange={setList(key)}
       options={props.options}
@@ -355,23 +374,26 @@ export function ComponentFilters({
   )
 
   // Every filter dimension, placed by the admin field-config searchability (Main / Extended /
-  // None — `searchabilityFor`). Main: always in the bar. Extended: offered by "+ Filter" and
-  // shown in the bar once added or holding a value. None: never rendered.
+  // None — `searchabilityFor`). Main: always in the bar. Extended: edited in the "+ Filter"
+  // panel, values shown as chips. None: never rendered.
   const defs: FilterDef[] = [
     {
       id: 'system', label: 'System', group: 'Classification', place: systemPlace,
       active: !!filter.system?.length, cleared: { system: undefined }, controlId: 'filter-system', bare: true,
       control: multi('system', { options: systemOptions, isLoading: systemLoading, placeholder: 'All systems', unitLabel: 'system', onFirstOpen: () => setSystemActivated(true) }),
+      editor: multi('system', { options: systemOptions, isLoading: systemLoading, placeholder: 'All systems', unitLabel: 'system', onFirstOpen: () => setSystemActivated(true) }, true),
     },
     {
       id: 'buildSystem', label: 'Build system', group: 'Build & VCS', place: buildSystemPlace,
       active: !!filter.buildSystem?.length, cleared: { buildSystem: undefined }, controlId: 'filter-buildSystem', bare: true,
       control: multi('buildSystem', { options: buildSystemOptions, isLoading: buildSystemLoading, placeholder: 'All build systems', unitLabel: 'build system' }),
+      editor: multi('buildSystem', { options: buildSystemOptions, isLoading: buildSystemLoading, placeholder: 'All build systems', unitLabel: 'build system' }, true),
     },
     {
       id: 'labels', label: 'Labels', group: 'Classification', place: labelsPlace,
       active: !!filter.labels?.length, cleared: { labels: undefined }, controlId: 'filter-labels', bare: true,
       control: multi('labels', { options: labelOptions, isLoading: labelsLoading, placeholder: 'All labels', unitLabel: 'label', onFirstOpen: () => setLabelsActivated(true) }),
+      editor: multi('labels', { options: labelOptions, isLoading: labelsLoading, placeholder: 'All labels', unitLabel: 'label', onFirstOpen: () => setLabelsActivated(true) }, true),
     },
     {
       // The "My Components" shortcut lives in the preset bar; the owner picker is placed by the
@@ -379,78 +401,91 @@ export function ComponentFilters({
       id: 'owner', label: 'Owner', group: 'Ownership', place: ownerPlace,
       active: !!filter.owner?.length, cleared: { owner: undefined }, controlId: 'filter-owner', bare: true,
       control: multi('owner', { options: owners, isLoading: ownersLoading, placeholder: 'All owners', unitLabel: 'owner' }),
+      editor: multi('owner', { options: owners, isLoading: ownersLoading, placeholder: 'All owners', unitLabel: 'owner' }, true),
     },
     {
       id: 'clientCode', label: 'Client code', group: 'Ownership', place: place('component.clientCode', clientCodeEntry),
       active: !!filter.clientCode?.length, cleared: { clientCode: undefined }, controlId: 'filter-clientCode',
       control: multi('clientCode', { options: clientCodeOptions, isLoading: clientCodesLoading, placeholder: 'All client codes', unitLabel: 'client code', onFirstOpen: () => setClientCodesActivated(true) }),
+      editor: multi('clientCode', { options: clientCodeOptions, isLoading: clientCodesLoading, placeholder: 'All client codes', unitLabel: 'client code', onFirstOpen: () => setClientCodesActivated(true) }, true),
     },
     {
       id: 'groupKey', label: 'Group key', group: 'Ownership', place: place('component.groupKey', groupKeyEntry),
       active: !!filter.groupKey?.length, cleared: { groupKey: undefined }, controlId: 'filter-groupKey',
       control: multi('groupKey', { options: groupKeyOptions, isLoading: groupKeysLoading, placeholder: 'All groups', unitLabel: 'group', onFirstOpen: () => setGroupKeysActivated(true) }),
+      editor: multi('groupKey', { options: groupKeyOptions, isLoading: groupKeysLoading, placeholder: 'All groups', unitLabel: 'group', onFirstOpen: () => setGroupKeysActivated(true) }, true),
     },
     {
       id: 'parentComponentName', label: 'Parent component', group: 'Structure', place: place('component.parentComponentName', parentEntry),
       active: !!filter.parentComponentName?.length, cleared: { parentComponentName: undefined }, controlId: 'filter-parentComponentName',
       control: multi('parentComponentName', { options: parentComponentNameOptions, isLoading: parentNamesLoading, placeholder: 'All parents', unitLabel: 'parent', onFirstOpen: () => setParentNamesActivated(true) }),
+      editor: multi('parentComponentName', { options: parentComponentNameOptions, isLoading: parentNamesLoading, placeholder: 'All parents', unitLabel: 'parent', onFirstOpen: () => setParentNamesActivated(true) }, true),
     },
     {
       id: 'canBeParent', label: 'Can be parent', group: 'Structure', place: place('component.canBeParent', canBeParentEntry),
       active: filter.canBeParent !== undefined, cleared: { canBeParent: undefined },
       control: tri('canBeParent', 'Can be parent'),
+      editor: tri('canBeParent', 'Can be parent'),
     },
     {
       id: 'solution', label: 'Solution', group: 'Structure', place: place('component.solution', solutionEntry),
       active: filter.solution !== undefined, cleared: { solution: undefined },
       control: tri('solution', 'Solution'),
+      editor: tri('solution', 'Solution'),
     },
     {
       id: 'javaVersion', label: 'Java version', group: 'Build & VCS', place: place('build.javaVersion', javaVersionEntry),
       active: !!filter.javaVersion?.length, cleared: { javaVersion: undefined }, controlId: 'filter-javaVersion',
       control: multi('javaVersion', { options: javaVersionOptions, isLoading: javaVersionsLoading, placeholder: 'All Java versions', unitLabel: 'Java version', onFirstOpen: () => setJavaVersionsActivated(true) }),
+      editor: multi('javaVersion', { options: javaVersionOptions, isLoading: javaVersionsLoading, placeholder: 'All Java versions', unitLabel: 'Java version', onFirstOpen: () => setJavaVersionsActivated(true) }, true),
     },
     {
       id: 'vcsPath', label: 'VCS path', group: 'Build & VCS', place: place('vcs.vcsPath', vcsPathEntry),
       active: !!filter.vcsPath, cleared: { vcsPath: undefined }, controlId: 'filter-vcsPath',
       control: text('vcsPath', 'VCS path', 'contains…'),
+      editor: text('vcsPath', 'VCS path', 'contains…'),
     },
     {
       id: 'productionBranch', label: 'Production branch', group: 'Build & VCS', place: place('vcs.branch', productionBranchEntry),
       active: !!filter.productionBranch, cleared: { productionBranch: undefined }, controlId: 'filter-productionBranch',
       control: text('productionBranch', 'Production branch', 'contains…'),
+      editor: text('productionBranch', 'Production branch', 'contains…'),
     },
     {
       id: 'jiraProjectKey', label: 'Jira project key', group: 'Jira', place: place('jira.projectKey', jiraProjectKeyEntry),
       active: !!filter.jiraProjectKey?.length, cleared: { jiraProjectKey: undefined }, controlId: 'filter-jiraProjectKey',
       control: multi('jiraProjectKey', { options: jiraProjectKeyOptions, isLoading: jiraProjectKeysLoading, placeholder: 'All Jira keys', unitLabel: 'Jira key', onFirstOpen: () => setJiraProjectKeysActivated(true) }),
+      editor: multi('jiraProjectKey', { options: jiraProjectKeyOptions, isLoading: jiraProjectKeysLoading, placeholder: 'All Jira keys', unitLabel: 'Jira key', onFirstOpen: () => setJiraProjectKeysActivated(true) }, true),
     },
     {
       id: 'jiraTechnical', label: 'Jira technical', group: 'Jira', place: place('jira.technical', jiraTechnicalEntry),
       active: filter.jiraTechnical !== undefined, cleared: { jiraTechnical: undefined },
       control: tri('jiraTechnical', 'Jira technical'),
+      editor: tri('jiraTechnical', 'Jira technical'),
     },
     {
       id: 'distributionExplicit', label: 'Distribution explicit', group: 'Distribution', place: place('component.distributionExplicit', distributionExplicitEntry),
       active: filter.distributionExplicit !== undefined, cleared: { distributionExplicit: undefined },
       control: tri('distributionExplicit', 'Distribution explicit'),
+      editor: tri('distributionExplicit', 'Distribution explicit'),
     },
     {
       id: 'distributionExternal', label: 'Distribution external', group: 'Distribution', place: place('component.distributionExternal', distributionExternalEntry),
       active: filter.distributionExternal !== undefined, cleared: { distributionExternal: undefined },
       control: tri('distributionExternal', 'Distribution external'),
+      editor: tri('distributionExternal', 'Distribution external'),
     },
   ]
 
+  // Current-value text for the "+ Filter" list.
+  for (const d of defs) {
+    if (!d.active) continue
+    const v = filter[d.id as keyof ComponentFilter]
+    d.summary = Array.isArray(v) ? (v.length === 1 ? String(v[0]) : `${v.length} selected`) : typeof v === 'boolean' ? (v ? 'Yes' : 'No') : String(v)
+  }
+
   const mainDefs = defs.filter((d) => d.place === 'Main')
   const extendedDefs = defs.filter((d) => d.place === 'Extended')
-  const shownExtended = extendedDefs.filter((d) => d.active || added.includes(d.id))
-  const addable = extendedDefs.filter((d) => !d.active && !added.includes(d.id))
-
-  const removeFilter = (d: FilterDef) => {
-    setAdded((a) => a.filter((id) => id !== d.id))
-    if (d.active) onFilterChange({ ...filter, ...d.cleared })
-  }
 
   // In "Only with problems" mode the displayed list is driven by the Portal
   // validation report, not a CRS query — so the CRS filter controls have no
@@ -462,9 +497,9 @@ export function ComponentFilters({
   return (
     <div className="space-y-2">
       <FilterBar>
-        {/* One row, however many filters are on: key/name, the Main-placed pickers, any
-            Extended filter that holds a value or was added, then "+ Filter". Values show as
-            removable chips below (ActiveFilterChips). Dimmed + inert in problems-only mode
+        {/* One row, however many filters are on: key/name, the Main-placed pickers, then
+            "+ Filter" for the Extended dimensions. Every value shows as a removable chip below
+            (ActiveFilterChips), so extended values never add controls to the bar. Dimmed + inert in problems-only mode
             (the "With problems" preset): problems are Portal-computed, so the CRS filters
             have no effect while it is on. */}
         <div
@@ -490,12 +525,8 @@ export function ComponentFilters({
             d.bare ? <div key={d.id}>{d.control}</div> : <LabelledFilter key={d.id} def={d} />,
           )}
 
-          {shownExtended.map((d) => (
-            <LabelledFilter key={d.id} def={d} onRemove={() => removeFilter(d)} />
-          ))}
-
-          {addable.length > 0 && (
-            <AddFilterMenu defs={addable} onAdd={(id) => setAdded((a) => (a.includes(id) ? a : [...a, id]))} />
+          {extendedDefs.length > 0 && (
+            <AddFilterMenu defs={extendedDefs} activeCount={extendedDefs.filter((d) => d.active).length} />
           )}
         </div>
 

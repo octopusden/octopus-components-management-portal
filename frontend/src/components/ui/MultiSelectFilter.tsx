@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { Button } from './button'
 import { Input } from './input'
@@ -57,6 +57,13 @@ interface MultiSelectFilterProps {
    * system values) but not human-readable labels.
    */
   monospaceOptions?: boolean
+  /**
+   * Render just the option list (search + checkboxes), with no trigger button or popover — for
+   * hosting the picker inside another panel (the filter bar's "+ Filter"). `onOpenChange(true)`
+   * fires on mount so lazily-enabled option queries load; `onDone` backs the "Done" button.
+   */
+  inline?: boolean
+  onDone?: () => void
 }
 
 export function MultiSelectFilter({
@@ -74,9 +81,17 @@ export function MultiSelectFilter({
   'aria-describedby': ariaDescribedBy,
   getOptionLabel = (option) => option,
   monospaceOptions = true,
+  inline = false,
+  onDone,
 }: MultiSelectFilterProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    if (inline) onOpenChange?.(true)
+    // Mount-only: the inline list is "open" for as long as it is rendered.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleOpenChange = (next: boolean) => {
     // When disabled, ignore open requests — keeps the popover from
@@ -157,6 +172,89 @@ export function MultiSelectFilter({
 
   const clearAll = () => onChange([])
 
+  const body = (
+    <>
+      <div className="mb-2">
+        <Input
+          placeholder={`Search ${pluralUnit}...`}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="h-8 text-sm"
+        />
+      </div>
+      <div
+        className="max-h-64 overflow-auto"
+        onKeyDown={handleListKeyDown}
+        data-testid="multi-select-options-list"
+      >
+        {isLoading ? (
+          <div className="px-2 py-3 text-sm text-muted-foreground">Loading…</div>
+        ) : options.length === 0 ? (
+          <div className="px-2 py-3 text-sm text-muted-foreground">
+            No {pluralUnit} available
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="px-2 py-3 text-sm text-muted-foreground">
+            No matches for "{search}"
+          </div>
+        ) : (
+          filtered.map((option) => {
+            const checked = value.includes(option)
+            return (
+              <label
+                key={option}
+                className={cn(
+                  'flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground',
+                )}
+              >
+                <input
+                  ref={(el) => {
+                    if (el) optionRefs.current.set(option, el)
+                    else optionRefs.current.delete(option)
+                  }}
+                  type="checkbox"
+                  aria-label={getOptionLabel(option)}
+                  className="accent-primary h-4 w-4 rounded"
+                  checked={checked}
+                  onChange={() => toggle(option)}
+                />
+                <span className={cn('truncate text-xs', monospaceOptions && 'font-mono')}>
+                  {getOptionLabel(option)}
+                </span>
+              </label>
+            )
+          })
+        )}
+      </div>
+      <div className="mt-2 flex items-center justify-between border-t pt-2">
+        {value.length > 0 ? (
+          <button
+            type="button"
+            className="text-xs text-muted-foreground hover:text-foreground"
+            onClick={clearAll}
+          >
+            Clear
+          </button>
+        ) : (
+          <span />
+        )}
+        {(!inline || onDone) && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => (inline ? onDone?.() : handleOpenChange(false))}
+          >
+            Done
+          </Button>
+        )}
+      </div>
+    </>
+  )
+
+  if (inline) return <div className="w-[260px] p-2">{body}</div>
+
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
@@ -179,80 +277,7 @@ export function MultiSelectFilter({
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[260px] p-2">
-        <div className="mb-2">
-          <Input
-            placeholder={`Search ${pluralUnit}...`}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-8 text-sm"
-          />
-        </div>
-        <div
-          className="max-h-64 overflow-auto"
-          onKeyDown={handleListKeyDown}
-          data-testid="multi-select-options-list"
-        >
-          {isLoading ? (
-            <div className="px-2 py-3 text-sm text-muted-foreground">Loading…</div>
-          ) : options.length === 0 ? (
-            <div className="px-2 py-3 text-sm text-muted-foreground">
-              No {pluralUnit} available
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="px-2 py-3 text-sm text-muted-foreground">
-              No matches for "{search}"
-            </div>
-          ) : (
-            filtered.map((option) => {
-              const checked = value.includes(option)
-              return (
-                <label
-                  key={option}
-                  className={cn(
-                    'flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground',
-                  )}
-                >
-                  <input
-                    ref={(el) => {
-                      if (el) optionRefs.current.set(option, el)
-                      else optionRefs.current.delete(option)
-                    }}
-                    type="checkbox"
-                    aria-label={getOptionLabel(option)}
-                    className="accent-primary h-4 w-4 rounded"
-                    checked={checked}
-                    onChange={() => toggle(option)}
-                  />
-                  <span className={cn('truncate text-xs', monospaceOptions && 'font-mono')}>
-                    {getOptionLabel(option)}
-                  </span>
-                </label>
-              )
-            })
-          )}
-        </div>
-        <div className="mt-2 flex items-center justify-between border-t pt-2">
-          {value.length > 0 ? (
-            <button
-              type="button"
-              className="text-xs text-muted-foreground hover:text-foreground"
-              onClick={clearAll}
-            >
-              Clear
-            </button>
-          ) : (
-            <span />
-          )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs"
-            onClick={() => handleOpenChange(false)}
-          >
-            Done
-          </Button>
-        </div>
+        {body}
       </PopoverContent>
     </Popover>
   )
