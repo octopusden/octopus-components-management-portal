@@ -1,6 +1,6 @@
 import React from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, act } from '@testing-library/react'
+import { render, screen, act, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { fireEvent } from '@testing-library/react'
 import { ComponentFilters } from './ComponentFilters'
@@ -592,7 +592,18 @@ describe('ComponentFilters System multi-select', () => {
   })
 })
 
-describe('ComponentFilters extended search (items 5 / 10)', () => {
+/** Opens "+ Filter" and adds the named dimension to the bar. */
+async function addFilter(label: string) {
+  await userEvent.click(screen.getByRole('button', { name: 'Add filter' }))
+  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: label }))
+}
+
+/** Picks Any / Yes / No on a tri-state filter (a segmented radio group). */
+async function pickTriState(label: string, option: 'Any' | 'Yes' | 'No') {
+  await userEvent.click(within(screen.getByRole('radiogroup', { name: label })).getByRole('radio', { name: option }))
+}
+
+describe('ComponentFilters "+ Filter" (extended dimensions)', () => {
   const onFilterChange = vi.fn()
 
   beforeEach(() => {
@@ -604,38 +615,58 @@ describe('ComponentFilters extended search (items 5 / 10)', () => {
     mockFieldConfig([])
   })
 
-  it('renders a "More filters" toggle button', () => {
+  it('renders an "Add filter" button', () => {
     render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
-    expect(screen.getByRole('button', { name: /more filters/i })).toBeDefined()
+    expect(screen.getByRole('button', { name: 'Add filter' })).toBeDefined()
   })
 
-  it('extended controls are hidden until the toggle is clicked', async () => {
+  it('offers every Extended dimension, grouped by topic, and shows none in the bar until added', async () => {
     render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
-    // Collapsed by default — no extended control in the DOM.
+    // Nothing extended in the bar by default.
     expect(screen.queryByLabelText('Client code')).toBeNull()
-    await userEvent.click(screen.getByRole('button', { name: /more filters/i }))
-    // Default field-config has no `searchable` entries, so each new field
-    // falls back to DEFAULT_SEARCHABILITY = 'Extended' and shows in the row.
-    expect(screen.getByLabelText('Client code')).toBeDefined()
-    expect(screen.getByLabelText('Jira project key')).toBeDefined()
-    expect(screen.getByLabelText('Java version')).toBeDefined()
-    expect(screen.getByLabelText('VCS path')).toBeDefined()
-    expect(screen.getByLabelText('Production branch')).toBeDefined()
-    expect(screen.getByLabelText('Parent component')).toBeDefined()
-    expect(screen.getByLabelText('Group key')).toBeDefined()
-    expect(screen.getByLabelText('Solution')).toBeDefined()
-    expect(screen.getByLabelText('Jira technical')).toBeDefined()
-    expect(screen.getByLabelText('Can be parent')).toBeDefined()
-    expect(screen.getByLabelText('Distribution explicit')).toBeDefined()
-    expect(screen.getByLabelText('Distribution external')).toBeDefined()
+    await userEvent.click(screen.getByRole('button', { name: 'Add filter' }))
+    const menu = screen.getByRole('dialog')
+    // Default field-config has no `searchable` entries, so each extended field
+    // falls back to DEFAULT_SEARCHABILITY = 'Extended' and is offered here.
+    for (const label of [
+      'Client code', 'Jira project key', 'Java version', 'VCS path', 'Production branch', 'Parent component',
+      'Group key', 'Solution', 'Jira technical', 'Can be parent', 'Distribution explicit', 'Distribution external',
+    ]) {
+      expect(within(menu).getByRole('button', { name: label })).toBeDefined()
+    }
+    expect(within(within(menu).getByRole('group', { name: 'Jira' })).getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'Jira project key',
+      'Jira technical',
+    ])
+  })
+
+  it('adding a dimension puts its labelled control in the bar and takes it out of the menu', async () => {
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    await addFilter('Client code')
+    expect(screen.getByLabelText('Client code').tagName).toBe('BUTTON')
+    await userEvent.click(screen.getByRole('button', { name: 'Add filter' }))
+    expect(within(screen.getByRole('dialog')).queryByRole('button', { name: 'Client code' })).toBeNull()
+  })
+
+  it('removing an empty added dimension just hides it (no filter change)', async () => {
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    await addFilter('Group key')
+    await userEvent.click(screen.getByRole('button', { name: 'Remove Group key filter' }))
+    expect(screen.queryByLabelText('Group key')).toBeNull()
+    expect(onFilterChange).not.toHaveBeenCalled()
+  })
+
+  it('removing a dimension that holds a value clears that value', async () => {
+    render(<ComponentFilters filter={{ archived: false, jiraTechnical: true }} onFilterChange={onFilterChange} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Remove Jira technical filter' }))
+    const lastArg = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
+    expect(lastArg.jiraTechnical).toBeUndefined()
   })
 
   it('typing in an extended text filter calls onFilterChange after debounce', () => {
     vi.useFakeTimers()
-    // Preset vcsPath so extended search auto-opens (no toggle click needed,
-    // which keeps fake timers and userEvent from interfering). vcsPath stays a
-    // free-text TextFilter after SYS-046 — only clientCode / jiraProjectKey /
-    // parentComponentName / groupKey became multi-selects.
+    // Preset vcsPath so the control is already in the bar (an active dimension always
+    // shows), which keeps fake timers and userEvent from interfering.
     render(
       <ComponentFilters
         filter={{ archived: false, vcsPath: 'X' }}
@@ -655,7 +686,7 @@ describe('ComponentFilters extended search (items 5 / 10)', () => {
   it('selecting a Java version emits a javaVersion filter (extended, multi-value)', async () => {
     mockFieldOptions('build.javaVersion', ['17', '21'])
     render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
-    await userEvent.click(screen.getByRole('button', { name: /more filters/i }))
+    await addFilter('Java version')
     // The <Label htmlFor="filter-javaVersion"> makes the picker trigger's
     // accessible name "Java version" (label wins over the placeholder text).
     await userEvent.click(screen.getByRole('button', { name: 'Java version' }))
@@ -664,22 +695,20 @@ describe('ComponentFilters extended search (items 5 / 10)', () => {
     expect(lastCall.javaVersion).toEqual(['17'])
   })
 
-  it('a preset javaVersion filter auto-opens extended search and shows the control', () => {
+  it('a preset javaVersion filter shows its control without adding it', () => {
     render(
       <ComponentFilters
         filter={{ archived: false, javaVersion: ['17'] }}
         onFilterChange={onFilterChange}
       />,
     )
-    // javaVersion preset → extendedActive → panel auto-opens without a toggle click.
     expect(screen.getByLabelText('Java version')).toBeDefined()
   })
 
   it('selecting "Yes" on the Can-be-parent tri-state emits canBeParent: true', async () => {
     render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
-    await userEvent.click(screen.getByRole('button', { name: /more filters/i }))
-    const select = screen.getByLabelText('Can be parent')
-    fireEvent.change(select, { target: { value: 'true' } })
+    await addFilter('Can be parent')
+    await pickTriState('Can be parent', 'Yes')
     expect(onFilterChange).toHaveBeenCalledWith(
       expect.objectContaining({ canBeParent: true }),
     )
@@ -689,9 +718,8 @@ describe('ComponentFilters extended search (items 5 / 10)', () => {
     // The false branch is the easy-to-miss case: an empty result on a `false`
     // selection previously read as a phantom bug, so pin it explicitly.
     render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
-    await userEvent.click(screen.getByRole('button', { name: /more filters/i }))
-    const select = screen.getByLabelText('Can be parent')
-    fireEvent.change(select, { target: { value: 'false' } })
+    await addFilter('Can be parent')
+    await pickTriState('Can be parent', 'No')
     expect(onFilterChange).toHaveBeenCalledWith(
       expect.objectContaining({ canBeParent: false }),
     )
@@ -704,9 +732,9 @@ describe('ComponentFilters extended search (items 5 / 10)', () => {
         onFilterChange={onFilterChange}
       />,
     )
-    // canBeParent preset → extended row auto-opens (extendedActive).
-    const select = screen.getByLabelText('Can be parent')
-    fireEvent.change(select, { target: { value: '' } })
+    // canBeParent preset → its control is in the bar; the current value is checked.
+    expect(within(screen.getByRole('radiogroup', { name: 'Can be parent' })).getByRole('radio', { name: 'Yes' }).getAttribute('aria-checked')).toBe('true')
+    await pickTriState('Can be parent', 'Any')
     const lastArg = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
     expect(lastArg.canBeParent).toBeUndefined()
   })
@@ -718,47 +746,44 @@ describe('ComponentFilters extended search (items 5 / 10)', () => {
         onFilterChange={onFilterChange}
       />,
     )
-    // jiraTechnical preset → row auto-opens.
-    const select = screen.getByLabelText('Jira technical')
-    fireEvent.change(select, { target: { value: '' } })
+    await pickTriState('Jira technical', 'Any')
     const lastArg = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
     expect(lastArg.jiraTechnical).toBeUndefined()
   })
 
-  it('hides an extended control whose field is configured searchable: None', async () => {
+  it('does not offer an extended dimension configured searchable: None', async () => {
     mockUseFieldConfig.mockReturnValue({
       data: { component: { clientCode: { searchable: 'None' } } },
       isLoading: false,
     } as unknown as ReturnType<typeof useFieldConfig>)
     render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
-    await userEvent.click(screen.getByRole('button', { name: /more filters/i }))
-    expect(screen.queryByLabelText('Client code')).toBeNull()
-    // A sibling extended field with no override still shows.
-    expect(screen.getByLabelText('Jira project key')).toBeDefined()
+    await userEvent.click(screen.getByRole('button', { name: 'Add filter' }))
+    const menu = screen.getByRole('dialog')
+    expect(within(menu).queryByRole('button', { name: 'Client code' })).toBeNull()
+    // A sibling extended field with no override is still offered.
+    expect(within(menu).getByRole('button', { name: 'Jira project key' })).toBeDefined()
   })
 
-  it('auto-opens extended search when an extended filter is already active', () => {
+  it('shows an extended dimension that already holds a value (a shared URL never hides its filters)', () => {
     render(
       <ComponentFilters
         filter={{ archived: false, vcsPath: 'repo/x' }}
         onFilterChange={onFilterChange}
       />,
     )
-    // No click — vcsPath being set forces the row open so a shared URL does
-    // not hide its own active filter.
     expect(screen.getByLabelText('VCS path')).toBeDefined()
   })
 
-  it('renders a searchable:Main extended field in the always-visible bar (no toggle needed)', () => {
+  it('renders a searchable:Main extended field in the bar with its label and no remove button', () => {
     mockUseFieldConfig.mockReturnValue({
       data: { component: { clientCode: { searchable: 'Main' } } },
       isLoading: false,
     } as unknown as ReturnType<typeof useFieldConfig>)
     render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
-    // Promoted to Main → visible without opening the Extended search panel.
     expect(screen.getByLabelText('Client code')).toBeDefined()
-    // The toggle still exists for the remaining Extended-placed fields.
-    expect(screen.getByRole('button', { name: /more filters/i })).toBeDefined()
+    expect(screen.queryByRole('button', { name: 'Remove Client code filter' })).toBeNull()
+    // "+ Filter" still exists for the remaining Extended-placed fields.
+    expect(screen.getByRole('button', { name: 'Add filter' })).toBeDefined()
   })
 
   it('owner searchable:None hides the owner picker', () => {
@@ -772,7 +797,7 @@ describe('ComponentFilters extended search (items 5 / 10)', () => {
     expect(screen.getByRole('button', { name: /all systems/i })).toBeDefined()
   })
 
-  it('a classic filter set searchable:Extended moves into the toggle-gated row', async () => {
+  it('a classic filter set searchable:Extended moves into "+ Filter"', async () => {
     mockUseFieldConfig.mockReturnValue({
       data: { component: { system: { searchable: 'Extended' } } },
       isLoading: false,
@@ -780,9 +805,9 @@ describe('ComponentFilters extended search (items 5 / 10)', () => {
     render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
     // System is no longer in the always-visible bar...
     expect(screen.queryByRole('button', { name: /all systems/i })).toBeNull()
-    // ...it appears once Extended search is opened.
-    await userEvent.click(screen.getByRole('button', { name: /more filters/i }))
-    expect(screen.getByRole('button', { name: /all systems/i })).toBeDefined()
+    // ...it is offered by "+ Filter" and, once added, shows with its label.
+    await addFilter('System')
+    expect(screen.getByLabelText('System')).toBeDefined()
   })
 
   it('labels searchable:None hides the labels filter entirely', () => {
@@ -794,17 +819,15 @@ describe('ComponentFilters extended search (items 5 / 10)', () => {
     expect(screen.queryByRole('button', { name: /all labels/i })).toBeNull()
   })
 
-  it('owner searchable:Extended moves the owner picker into the toggle row', async () => {
+  it('owner searchable:Extended moves the owner picker into "+ Filter"', async () => {
     mockUseFieldConfig.mockReturnValue({
       data: { component: { componentOwner: { searchable: 'Extended' } } },
       isLoading: false,
     } as unknown as ReturnType<typeof useFieldConfig>)
     render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
-    // Collapsed: the owner picker no longer sits in the always-visible bar.
     expect(screen.queryByRole('button', { name: /all owners/i })).toBeNull()
-    // Opening Extended search reveals it.
-    await userEvent.click(screen.getByRole('button', { name: /more filters/i }))
-    expect(screen.getByRole('button', { name: /all owners/i })).toBeDefined()
+    await addFilter('Owner')
+    expect(screen.getByLabelText('Owner')).toBeDefined()
   })
 })
 
@@ -824,9 +847,9 @@ describe('ComponentFilters multi-value extended filters + distribution (SYS-045/
     metaState.groupKeys = []
   })
 
-  it('renders clientCode as a multi-select dropdown (button, not a text input) in the extended row', async () => {
+  it('renders clientCode as a multi-select dropdown (button, not a text input)', async () => {
     render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
-    await userEvent.click(screen.getByRole('button', { name: /more filters/i }))
+    await addFilter('Client code')
     const trigger = screen.getByLabelText('Client code')
     expect(trigger.tagName).toBe('BUTTON')
   })
@@ -834,29 +857,27 @@ describe('ComponentFilters multi-value extended filters + distribution (SYS-045/
   it('picking a client code emits a single-element clientCode array', async () => {
     metaState.clientCodes = ['ACME-PORTAL', 'OTHER-CC']
     render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
-    await userEvent.click(screen.getByRole('button', { name: /more filters/i }))
+    await addFilter('Client code')
     await userEvent.click(screen.getByLabelText('Client code'))
     await userEvent.click(screen.getByRole('checkbox', { name: 'ACME-PORTAL' }))
     const lastCall = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
     expect(lastCall.clientCode).toEqual(['ACME-PORTAL'])
   })
 
-  it('auto-opens extended search when a multi-value extended filter is active', () => {
+  it('shows a multi-value extended filter that is already active', () => {
     render(
       <ComponentFilters
         filter={{ archived: false, groupKey: ['org.acme'] }}
         onFilterChange={onFilterChange}
       />,
     )
-    // No toggle click — a populated groupKey array forces the row open.
     expect(screen.getByLabelText('Group key')).toBeDefined()
   })
 
   it('selecting "Yes" on the Distribution explicit tri-state emits distributionExplicit: true', async () => {
     render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
-    await userEvent.click(screen.getByRole('button', { name: /more filters/i }))
-    const select = screen.getByLabelText('Distribution explicit')
-    fireEvent.change(select, { target: { value: 'true' } })
+    await addFilter('Distribution explicit')
+    await pickTriState('Distribution explicit', 'Yes')
     expect(onFilterChange).toHaveBeenCalledWith(
       expect.objectContaining({ distributionExplicit: true }),
     )
@@ -864,9 +885,8 @@ describe('ComponentFilters multi-value extended filters + distribution (SYS-045/
 
   it('selecting "No" on the Distribution external tri-state emits distributionExternal: false', async () => {
     render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
-    await userEvent.click(screen.getByRole('button', { name: /more filters/i }))
-    const select = screen.getByLabelText('Distribution external')
-    fireEvent.change(select, { target: { value: 'false' } })
+    await addFilter('Distribution external')
+    await pickTriState('Distribution external', 'No')
     expect(onFilterChange).toHaveBeenCalledWith(
       expect.objectContaining({ distributionExternal: false }),
     )

@@ -19,9 +19,16 @@ Independently optional filters, ANDed server-side. Each filter resets pagination
 
 The whole filter row lives in [`frontend/src/components/ui/filter-bar.tsx`](../../frontend/src/components/ui/filter-bar.tsx); the multi-selects use [`frontend/src/components/ui/MultiSelectFilter.tsx`](../../frontend/src/components/ui/MultiSelectFilter.tsx). A "Clear filters" button surfaces whenever any filter is active.
 
-### More filters
+### + Filter
 
-A **More filters** toggle (next to the archived button) reveals a second filter row of single-value controls that back the less-common search dimensions. The toggle auto-opens when the current filter already carries an extended value (so a shared/bookmarked URL never hides its own active filters), and "Clear filters" clears the extended row along with everything else.
+The filter bar is always one row: the key/name filter, the Main-placed pickers, then any
+Extended dimension that is in use, then a **+ Filter** button. **+ Filter** lists the remaining
+Extended dimensions grouped by topic (Classification, Ownership, Build & VCS, Jira, Distribution,
+Structure); picking one adds its labelled control to the bar, with a **×** that removes it (and
+clears its value). A dimension that already holds a value is always shown, so a shared/bookmarked
+URL never hides its own filters. Booleans are a compact **Any / Yes / No** segmented control.
+Values also show as removable chips under the bar, and "Clear all" clears everything. URL
+parameters are unchanged.
 
 | Filter | Wire param | Control | Match |
 |---|---|---|---|
@@ -57,7 +64,7 @@ Per-filter option-fetch timing differs:
 Each field carries a **`searchable`** placement — one of:
 
 - **`Main`** — always-visible filter in the top row (today's defaults: `system`, `buildSystem`, `labels`, `componentOwner`).
-- **`Extended`** — only shown when the More filters toggle is open (the default for the new single-value filters above).
+- **`Extended`** — offered by **+ Filter** (shown in the bar once added or holding a value) (the default for the new single-value filters above).
 - **`None`** — not searchable; the control is never rendered.
 
 The effective placement is resolved by [`searchabilityFor`](../../frontend/src/hooks/useFieldConfig.ts): an explicit `searchable` wins; otherwise a legacy `filterable: false` maps to `None`; otherwise a central `DEFAULT_SEARCHABILITY` map applies; otherwise the field defaults to `Extended`. This means a fresh install (empty field-config) already places every filter correctly before an admin saves the catalog. `searchable` **supersedes** the older boolean `filterable` flag, which was never surfaced in the admin UI — `filterable: false` is still honoured (as `None`) for backward-compat. Placement is independent of the form-level `visibility` flag (a field can be editor-hidden yet searchable, or vice-versa).
