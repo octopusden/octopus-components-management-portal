@@ -5,12 +5,11 @@
 Persistent footer rendered on every page (`AppFooter`):
 
 - Build label, e.g. `Components Registry — portal 0.0.1 · service 4.7.2-SNAPSHOT` (graceful fallback to `portal ? · service ?` if either info call fails).
-- **Admin-mode toggle** (`AdminPane`), visible only to users with the `IMPORT_DATA` permission. See [`admin-mode.md`](admin-mode.md).
+- **Keyboard shortcuts** link. (The Admin-mode toggle moved to the header account menu — see [`admin-mode.md`](admin-mode.md).)
 
 ## Source
 
 - [`frontend/src/components/AppFooter.tsx`](../../frontend/src/components/AppFooter.tsx)
-- [`frontend/src/components/AdminPane.tsx`](../../frontend/src/components/AdminPane.tsx)
 - [`frontend/src/hooks/useInfo.ts`](../../frontend/src/hooks/useInfo.ts) — both info hooks.
 
 ## Backend contract

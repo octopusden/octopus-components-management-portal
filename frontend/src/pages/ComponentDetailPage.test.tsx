@@ -40,7 +40,7 @@ vi.mock('../hooks/useInfo', () => ({
   // Layout consumes usePortalInfo for the environment banner; return "no data"
   // so these page tests render without a banner.
   usePortalInfo: vi.fn(() => ({ data: undefined })),
-  // Layout's OnboardingVideoButton consumes this; "no data" → not ready → renders nothing.
+  // Layout's HelpMenu (intro-video entry) consumes this; "no data" → not ready → renders nothing.
   useOnboardingVideoStatus: vi.fn(() => ({ data: undefined })),
 }))
 // The always-rendered header labels editor calls useLabelsDictionary; mock it to

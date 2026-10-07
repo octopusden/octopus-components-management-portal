@@ -7,7 +7,6 @@ import { ListPresetBar } from '../components/ListPresetBar'
 import { ActiveFilterChips } from '../components/ActiveFilterChips'
 import { Pagination } from '../components/Pagination'
 import { CreateComponentButton } from './CreateComponentPage'
-import { SearchCommandButton } from '../components/SearchCommandButton'
 import { InlineError } from '../components/ui/inline-error'
 import { StatusBanner } from '../components/ui/status-banner'
 import { useComponents } from '../hooks/useComponents'
@@ -245,10 +244,7 @@ export function ComponentListPage() {
                   </span>
                 )}
           </div>
-          <div className="flex items-center gap-2">
-            <SearchCommandButton />
-            {canCreate && <CreateComponentButton />}
-          </div>
+          {canCreate && <CreateComponentButton />}
         </div>
 
         {/* Preset segmented control (spec §1.1): sugar over the filter state.
