@@ -19,13 +19,13 @@
 
 ## 2. Profiles hook (Decision 1)
 
-- [ ] 2.1 Failing tests for `useComponentProfiles`:
-  - [ ] 2.1.1 returns the `regular` profiles in the order the registry sends them
-  - [ ] 2.1.2 drops entries whose `kind` is not `regular`
-  - [ ] 2.1.3 refetches when a new consumer mounts (no cached list served across wizard opens)
-  - [ ] 2.1.4 exposes the error state when the request fails, and a refetch for Retry
-- [ ] 2.2 Implement `frontend/src/hooks/useComponentProfiles.ts`.
-- [ ] 2.3 Confirm the hook tests pass.
+- [x] 2.1 Failing tests for `useComponentProfiles`:
+  - [x] 2.1.1 returns the `regular` profiles in the order the registry sends them
+  - [x] 2.1.2 drops entries whose `kind` is not `regular`
+  - [x] 2.1.3 refetches when a new consumer mounts (no cached list served across wizard opens)
+  - [x] 2.1.4 exposes the error state when the request fails, and a refetch for Retry
+- [x] 2.2 Implement `frontend/src/hooks/useComponentProfiles.ts`.
+- [x] 2.3 Confirm the hook tests pass. `useComponentProfiles.test.ts` 4/4; `tsc`, `eslint` clean.
 
 ## 3. Classification from the profile (Decision 2)
 
