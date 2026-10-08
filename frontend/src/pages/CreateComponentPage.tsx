@@ -6,6 +6,7 @@ import {
   Controller,
   type FieldPath,
   type UseFormRegisterReturn,
+  type UseFormSetError,
 } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Check, ChevronLeft, ChevronRight, Plus, X, AlertCircle, Loader2 } from 'lucide-react'
@@ -34,7 +35,7 @@ import { useFieldConfig, useComponentDefaults } from '../hooks/useAdminConfig'
 import { useComponentProfiles, type ComponentProfile } from '../hooks/useComponentProfiles'
 import { useLabels } from '../hooks/useLabels'
 import { ChipsInput } from '../components/ui/ChipsInput'
-import { isFieldEditableFor, useFieldEditable, useFieldConfigEntry } from '../hooks/useFieldConfig'
+import { isFieldEditableFor, useFieldEditable, useFieldConfigEntry, useFieldVisibility } from '../hooks/useFieldConfig'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useComponent, useCreateComponent } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
@@ -49,7 +50,7 @@ import {
   type CreateFormValues,
 } from '../lib/component/buildCreateRequest'
 import { makeCreateSchema, initialValues, type ComponentDefaults } from '../lib/component/createFormModel'
-import { asksExplicit, flagsForProfile, profileFromSource } from '../lib/component/createProfile'
+import { asksExplicit, flagsForProfile, initialProfile } from '../lib/component/createProfile'
 import { formFieldOfRulePath, ruleErrorOf } from '../lib/component/profileRules'
 import type { ComponentDetail } from '../lib/types'
 import { OWNERSHIP_MODES } from '../lib/artifactOwnership'
@@ -84,6 +85,26 @@ const SCRATCH_STEPS: StepId[] = ['profile', 'general', 'build', 'vcs', 'jira', '
 // but stays editable (changing it resets the Component Key + recomputes flags).
 // When no registry profile matches the source, the clone opens on it instead.
 const CLONE_STEPS: StepId[] = ['profile', 'general', 'build', 'vcs', 'jira', 'distribution', 'escrow', 'review']
+
+// A registry rejection of the profile (`profile: …`) belongs to the Profile step; one of a
+// profile field rule (`<create-request path>: …`) to the wizard field for that path, on its step.
+function routeProfileRejection(
+  rawBody: string,
+  fieldErrors: Map<string, string>,
+  setError: UseFormSetError<CreateFormValues>,
+): StepId | null {
+  if (fieldErrors.get('profile')) return 'profile'
+  const ruleError = ruleErrorOf(rawBody)
+  const field = ruleError && formFieldOfRulePath(ruleError.path)
+  if (!ruleError || !field) return null
+  setError(field as FieldPath<CreateFormValues>, { type: 'server', message: ruleError.message })
+  return stepOfField(field)
+}
+
+// A clone with a pre-selected profile skips to General; otherwise the Profile step comes first.
+function startStepFor(isClone: boolean, profileId: string | null): StepId {
+  return isClone && profileId !== null ? 'general' : 'profile'
+}
 
 // Map a zod-issue / RHF-error field path to the wizard step that owns it.
 function stepOfField(path: string): StepId {
@@ -251,11 +272,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
 
   // Profile: scratch pre-selects the first usable registry profile; clone derives it from
   // the source (editable afterwards). Frozen at mount — the profiles arrive with the wizard.
-  const [initial] = useState(() =>
-    source
-      ? profileFromSource(source, profiles)
-      : { profileId: profiles.find((p) => p.usable)?.id ?? null, explicit: false },
-  )
+  const [initial] = useState(() => initialProfile(source, profiles))
   const [profileId, setProfileId] = useState<string | null>(initial.profileId)
   const [explicitAnswer, setExplicitAnswer] = useState<boolean>(initial.explicit)
   const profile = profiles.find((p) => p.id === profileId) ?? null
@@ -282,7 +299,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
     // Live validation so inline field errors surface as the user types (the
     // stepper's cross-step markers use an independent safeParse).
     mode: 'onChange',
-    defaultValues: initialValues(source, defaults, profiles.find((p) => p.id === initial.profileId) ?? null),
+    defaultValues: initialValues(source, defaults, initial.profile),
   })
 
   const values = watch()
@@ -310,19 +327,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
   const escrowGenerationHidden =
     escrowFcLoading || escrowFcError || escrowGenerationEntry.visibility === 'hidden'
   const escrowGenerationEditable = useFieldEditable('escrow.generation')
-  const {
-    entry: buildTasksEntry,
-    isLoading: buildTasksFcLoading,
-    isError: buildTasksFcError,
-  } = useFieldConfigEntry('build.buildTasks')
-  const buildTasksEditable = useFieldEditable('build.buildTasks')
-  // Fail closed while field-config loads, as for escrow generation.
-  const buildTasksVisibility: 'editable' | 'readonly' | 'hidden' =
-    buildTasksFcLoading || buildTasksFcError || buildTasksEntry.visibility === 'hidden'
-      ? 'hidden'
-      : buildTasksEditable
-        ? 'editable'
-        : 'readonly'
+  const buildTasksVisibility = useFieldVisibility('build.buildTasks')
   const { data: labelOptions = [], isLoading: labelsLoading } = useLabels({ enabled: editable('labels') })
   // Skip the escrow-generations meta fetch when the field is hidden — the control
   // isn't rendered and generation isn't sent, so the vocabulary is never needed.
@@ -455,7 +460,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
 
   // ---- Steps + cross-step validity ------------------------------------------
   const steps = isClone ? CLONE_STEPS : SCRATCH_STEPS
-  const startStep: StepId = isClone && initial.profileId !== null ? 'general' : 'profile'
+  const startStep = startStepFor(isClone, initial.profileId)
   const [current, setCurrent] = useState<StepId>(startStep)
   // Steps the user has landed on, plus whether a Create was attempted. Together
   // they gate the rail's invalid/done markers so nothing is flagged eagerly on
@@ -577,13 +582,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
       }
       if (err instanceof ApiError && err.status === 400) {
         const fieldErrors = parseServerFieldErrors(err.rawBody)
-        if (fieldErrors.get('profile')) stepId = 'profile'
-        const ruleError = ruleErrorOf(err.rawBody)
-        const ruleField = ruleError && formFieldOfRulePath(ruleError.path)
-        if (ruleError && ruleField) {
-          setError(ruleField as FieldPath<CreateFormValues>, { type: 'server', message: ruleError.message })
-          stepId = stepOfField(ruleField)
-        }
+        stepId = routeProfileRejection(err.rawBody, fieldErrors, setError) ?? stepId
         if (fieldErrors.get('name')) {
           setError('name', { type: 'server', message: fieldErrors.get('name')! })
           stepId = 'general'
@@ -1397,8 +1396,8 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
 
       <SummaryDiff
         values={values}
-        labels={editable('labels') ? values.labels : []}
-        buildTasks={buildTasksVisibility === 'hidden' ? '' : values.buildTasks}
+        showLabels={editable('labels')}
+        showBuildTasks={buildTasksVisibility !== 'hidden'}
         gated={gated}
         vcsApplies={vcsApplies}
         classification={classificationRecap()}
@@ -1717,6 +1716,11 @@ function FieldError({ message }: { message?: string }) {
   return <p className="text-xs text-destructive">{message}</p>
 }
 
+// A summary row with an empty value is left out (see `push` in SummaryDiff).
+function shownIf(show: boolean, value: string): string {
+  return show ? value : ''
+}
+
 /** Green-`+` summary of the fields that will be created (brief §5/§7). */
 function SummaryDiff({
   values,
@@ -1724,12 +1728,12 @@ function SummaryDiff({
   vcsApplies,
   classification,
   escrowGeneration,
-  labels,
-  buildTasks,
+  showLabels,
+  showBuildTasks,
 }: {
   values: CreateFormValues
-  labels: string[]
-  buildTasks: string
+  showLabels: boolean
+  showBuildTasks: boolean
   gated: boolean
   vcsApplies: boolean
   classification: string
@@ -1749,7 +1753,7 @@ function SummaryDiff({
     ['Security Champions', values.securityChampion.join(', ')],
     ['Copyright', values.copyright],
     ['Classification', classification],
-    ['Labels', labels.join(', ')],
+    ['Labels', shownIf(showLabels, values.labels.join(', '))],
   ])
   const ownershipSummary = values.ownership
     .filter((r) => r.groupId.trim())
@@ -1760,7 +1764,7 @@ function SummaryDiff({
     .join('\n')
   push('Build', [
     ['Build System', values.buildSystem],
-    ['Build Tasks', buildTasks],
+    ['Build Tasks', shownIf(showBuildTasks, values.buildTasks)],
     ['Produced Artifacts', ownershipSummary],
   ])
   if (vcsApplies) {

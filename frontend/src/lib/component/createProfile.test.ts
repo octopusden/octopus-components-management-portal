@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { asksExplicit, flagsForProfile, profileFromSource } from './createProfile'
+import { asksExplicit, flagsForProfile, initialProfile, profileFromSource } from './createProfile'
 import type { ComponentDetail } from '../types'
 import type { ComponentProfile } from '../../hooks/useComponentProfiles'
 import shipped from '../../test-fixtures/component-profiles.contract.json'
@@ -85,5 +85,31 @@ describe('profileFromSource', () => {
     const src = source({ name: 'payments-dmp-bundle', solution: true, distributionExternal: true, distributionExplicit: true })
     const withBundleUnusable = profiles.map((p) => (p.id === 'dmp-bundle' ? { ...p, usable: false } : p))
     expect(profileFromSource(src, withBundleUnusable).profileId).toBe('solution')
+  })
+})
+
+describe('initialProfile', () => {
+  const profiles = shipped.profiles as ComponentProfile[]
+
+  it('a new component opens with the first usable profile', () => {
+    const withFirstUnusable = profiles.map((p, i) => (i === 0 ? { ...p, usable: false } : p))
+    expect(initialProfile(null, withFirstUnusable)).toEqual({
+      profileId: 'regular-internal',
+      profile: byId('regular-internal'),
+      explicit: false,
+    })
+  })
+
+  it('a clone opens with the profile derived from its source', () => {
+    const src = { name: 'pay-solution', solution: true, distributionExternal: true, distributionExplicit: true } as ComponentDetail
+    expect(initialProfile(src, profiles)).toMatchObject({ profileId: 'solution', explicit: true })
+  })
+
+  it('opens with nothing selected when no profile is usable', () => {
+    expect(initialProfile(null, profiles.map((p) => ({ ...p, usable: false })))).toEqual({
+      profileId: null,
+      profile: null,
+      explicit: false,
+    })
   })
 })

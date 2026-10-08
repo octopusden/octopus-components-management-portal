@@ -7,6 +7,7 @@ import {
   useFieldConfigEntry,
   useFieldLabel,
   useFieldEditable,
+  useFieldVisibility,
   isFieldEditableFor,
   resolveFieldEntry,
   labelFor,
@@ -485,6 +486,35 @@ describe('useFieldEditable', () => {
     mockUseCurrentUser.mockReturnValue({ data: regularUser, isLoading: false } as unknown as ReturnType<typeof useCurrentUser>)
     const { result } = renderHook(() => useFieldEditable('jira.projectKey'), { wrapper: makeWrapper() })
     expect(result.current).toBe(true)
+  })
+})
+
+describe('useFieldVisibility', () => {
+  const visibilityOf = (fieldConfig: unknown, fcOverrides: Record<string, unknown> = {}) => {
+    mockUseFieldConfig.mockReturnValue({
+      data: fieldConfig,
+      isLoading: false,
+      ...fcOverrides,
+    } as unknown as ReturnType<typeof useFieldConfig>)
+    mockUseCurrentUser.mockReturnValue({ data: regularUser, isLoading: false } as unknown as ReturnType<typeof useCurrentUser>)
+    return renderHook(() => useFieldVisibility('build.buildTasks'), { wrapper: makeWrapper() }).result.current
+  }
+
+  it('is editable for an ordinary field', () => {
+    expect(visibilityOf({ build: { buildTasks: {} } })).toBe('editable')
+  })
+
+  it('is readonly when the user may not edit the field', () => {
+    expect(visibilityOf({ build: { buildTasks: { visibility: 'readonly' } } })).toBe('readonly')
+  })
+
+  it('is hidden when field-config hides the field', () => {
+    expect(visibilityOf({ build: { buildTasks: { visibility: 'hidden' } } })).toBe('hidden')
+  })
+
+  it('fails closed to hidden while field-config loads or after it errored', () => {
+    expect(visibilityOf(undefined, { isLoading: true })).toBe('hidden')
+    expect(visibilityOf(undefined, { isError: true })).toBe('hidden')
   })
 })
 

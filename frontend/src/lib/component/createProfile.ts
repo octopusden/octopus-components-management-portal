@@ -54,3 +54,17 @@ export function profileFromSource(
   const chosen = candidates.find((p) => keyPassesRules(p, source.name ?? '')) ?? candidates[0]
   return { profileId: chosen?.id ?? null, explicit: !!source.distributionExplicit }
 }
+
+/**
+ * The profile the wizard opens with: a clone's from [profileFromSource], a new component's the
+ * first usable profile. `profile` is the object for `profileId`, or `null` when none is selected.
+ */
+export function initialProfile(
+  source: ComponentDetail | null,
+  profiles: readonly ComponentProfile[],
+): { profileId: string | null; profile: ComponentProfile | null; explicit: boolean } {
+  const { profileId, explicit } = source
+    ? profileFromSource(source, profiles)
+    : { profileId: profiles.find((p) => p.usable)?.id ?? null, explicit: false }
+  return { profileId, profile: profiles.find((p) => p.id === profileId) ?? null, explicit }
+}

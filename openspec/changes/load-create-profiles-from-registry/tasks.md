@@ -231,3 +231,10 @@
 - [x] 13.3 The risks in `design.md` are still accurate; the solution-key risk now names TD-006,
       and one found during implementation is added (the live rule check treats build tasks as
       editable).
+- [x] 13.4 SonarCloud flagged `CreateComponentWizard` at cognitive complexity 19 (limit 15). The
+      wizard body now calls `initialProfile` (`createProfile.ts`, 3 tests), `useFieldVisibility`
+      (`useFieldConfig.ts`, 4 tests) and `startStepFor`; Review takes `showLabels` /
+      `showBuildTasks`; the profile and rule rejection routing moved out of `onSubmit` into
+      `routeProfileRejection`. Checked with `eslint-plugin-sonarjs`: the wizard and `SummaryDiff`
+      are within 15; `onSubmit` is 47 against 46 on `main` (an existing issue). Full vitest 178
+      files / 2641 tests. (added on review)
