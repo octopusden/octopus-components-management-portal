@@ -29,15 +29,19 @@
 
 ## 3. Classification from the profile (Decision 2)
 
-- [ ] 3.1 Failing tests for `flagsForProfile` over a registry profile:
-  - [ ] 3.1.1 solution / external / explicit `true` → all three `true`, the answer ignored
-  - [ ] 3.1.2 external, explicit `ask`, answer No → explicit `false`
-  - [ ] 3.1.3 internal, explicit `ask`, answer Yes → external `false`, explicit `true`
-  - [ ] 3.1.4 explicit `false` → `false` regardless of the answer
-  - [ ] 3.1.5 `asksExplicit` is true only for `ask`
-- [ ] 3.2 Rewrite `flagsForProfile` in `createFormModel.ts`; remove `PROFILE_META` and the
-      `ComponentProfile` union (`DEFAULT_SCRATCH_PROFILE` goes in 9.2, with `initialValues`).
-- [ ] 3.3 Confirm tests pass.
+- [x] 3.1 Failing tests for `flagsForProfile` over a registry profile:
+  - [x] 3.1.1 solution / external / explicit `true` → all three `true`, the answer ignored
+  - [x] 3.1.2 external, explicit `ask`, answer No → explicit `false`
+  - [x] 3.1.3 internal, explicit `ask`, answer Yes → external `false`, explicit `true`
+  - [x] 3.1.4 explicit `false` → `false` regardless of the answer
+  - [x] 3.1.5 `asksExplicit` is true only for `ask`
+- [x] 3.2 `flagsForProfile` and `asksExplicit` over a registry profile, in the new
+      `frontend/src/lib/component/createProfile.ts`. Shared fixture: the four shipped profiles as the
+      registry lists them, `test-fixtures/component-profiles.contract.json`.
+- [ ] 3.2a Remove the old `flagsForProfile`, `PROFILE_META` and the `ComponentProfile` union from
+      `createFormModel.ts` with their last caller, the Profile step (6.2), so every commit builds.
+      (added on review)
+- [x] 3.3 Confirm tests pass. `createProfile.test.ts` 5/5; `tsc`, `eslint` clean.
 
 ## 4. Field-rule checker (Decision 3)
 
