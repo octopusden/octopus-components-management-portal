@@ -34,45 +34,6 @@ export type ComponentProfile = 'solution' | 'dmp-bundle' | 'regular-external' | 
 // lockstep (the wizard only overlays `solution` at submit).
 export const DEFAULT_SCRATCH_PROFILE: ComponentProfile = 'regular-external'
 
-export interface ProfileMeta {
-  id: ComponentProfile
-  label: string
-  description: string
-  /** Whether "Has explicit distribution?" is asked (only the two Regular profiles). */
-  asksExplicit: boolean
-}
-
-// Fixed, sanitized copy (brief §10). No org/product tokens.
-export const PROFILE_META: readonly ProfileMeta[] = [
-  {
-    id: 'solution',
-    label: 'Solution',
-    description:
-      'A top-level solution component that groups and ships other components together. The key contains "-solution". External, with its own distribution.',
-    asksExplicit: false,
-  },
-  {
-    id: 'dmp-bundle',
-    label: 'DMP Bundle',
-    description:
-      'A bundle component (also a solution). The key contains "dmp-bundle". External, with its own distribution.',
-    asksExplicit: false,
-  },
-  {
-    id: 'regular-external',
-    label: 'Regular external component',
-    description:
-      'An ordinary component that is delivered to the client (explicitly or as part of another component).',
-    asksExplicit: true,
-  },
-  {
-    id: 'regular-internal',
-    label: 'Regular internal component',
-    description: 'An ordinary component for internal use only, not delivered to the client.',
-    asksExplicit: true,
-  },
-]
-
 export interface ProfileFlags {
   solution: boolean
   distributionExternal: boolean

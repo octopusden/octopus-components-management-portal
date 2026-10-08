@@ -30,7 +30,7 @@ import { useFieldOptions } from '../hooks/useFieldOptions'
 import { useSupportedGroups } from '../hooks/useSupportedGroups'
 import { usePortalLinks, usePortalConfig } from '../hooks/useInfo'
 import { useFieldConfig, useComponentDefaults } from '../hooks/useAdminConfig'
-import { useComponentProfiles } from '../hooks/useComponentProfiles'
+import { useComponentProfiles, type ComponentProfile } from '../hooks/useComponentProfiles'
 import { isFieldEditableFor, useFieldEditable, useFieldConfigEntry } from '../hooks/useFieldConfig'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useComponent, useCreateComponent } from '../hooks/useComponent'
@@ -48,13 +48,10 @@ import {
 import {
   makeCreateSchema,
   initialValues,
-  flagsForProfile,
   profileFromSource,
-  PROFILE_META,
-  DEFAULT_SCRATCH_PROFILE,
-  type ComponentProfile,
   type ComponentDefaults,
 } from '../lib/component/createFormModel'
+import { asksExplicit, flagsForProfile } from '../lib/component/createProfile'
 import type { ComponentDetail } from '../lib/types'
 import { OWNERSHIP_MODES } from '../lib/artifactOwnership'
 import { validateJiraKey, normalizeJiraKey, normalizeChangeComment } from '../lib/editor/jiraKey'
@@ -155,7 +152,13 @@ export function CreateComponentPage() {
   const { data: source, error } = useComponent(sourceId)
   const defaults = useComponentDefaults({ retry: false })
   const componentDefaults = (defaults.data ?? {}) as ComponentDefaults
-  const ready = (!isClone || (!!source && !error)) && (defaults.isSuccess || defaults.isError)
+  const profiles = useComponentProfiles()
+  const profilesUnavailable = profiles.isError || (profiles.isSuccess && (profiles.data ?? []).length === 0)
+  const ready =
+    (!isClone || (!!source && !error)) &&
+    (defaults.isSuccess || defaults.isError) &&
+    profiles.isSuccess &&
+    !profilesUnavailable
 
   return (
     <Dialog
@@ -183,6 +186,18 @@ export function CreateComponentPage() {
               }
             />
           </div>
+        ) : profilesUnavailable ? (
+          <div className="flex flex-1 flex-col gap-4 p-6">
+            <DialogTitle>{isClone ? 'Clone component' : 'Create component'}</DialogTitle>
+            <InlineError
+              message="Could not load the component profiles from the registry, so no component can be created right now."
+            />
+            <div>
+              <Button type="button" variant="outline" onClick={() => void profiles.refetch()}>
+                Retry
+              </Button>
+            </div>
+          </div>
         ) : !ready ? (
           <div className="flex flex-1 flex-col gap-4 p-6">
             <DialogTitle className="sr-only">Create component</DialogTitle>
@@ -196,6 +211,7 @@ export function CreateComponentPage() {
             source={source ?? null}
             isClone={isClone}
             defaults={componentDefaults}
+            profiles={profiles.data ?? []}
             onCreateAnother={() => setRemountKey((k) => k + 1)}
           />
         )}
@@ -208,12 +224,14 @@ interface WizardProps {
   source: ComponentDetail | null
   isClone: boolean
   defaults: ComponentDefaults
+  /** The registry's `regular` profiles, in its order; never empty (the page gates on it). */
+  profiles: ComponentProfile[]
   /** Remount the wizard as a fresh form instance after a successful create (same
    *  mode — scratch stays scratch, a clone restarts as another clone of the source). */
   onCreateAnother: () => void
 }
 
-function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: WizardProps) {
+function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAnother }: WizardProps) {
   const navigate = useNavigate()
   const createMutation = useCreateComponent()
   const { toast } = useToast()
@@ -233,16 +251,16 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
   const solutionPatterns = portalConfig?.solutionKeyPatterns
   const gitBaseUrl = portalLinks?.gitBaseUrl
 
-  // Profile (brief "Choose component profile"). Scratch pre-selects the most
-  // common profile ("Regular external component") so the step is ready to go;
-  // clone derives it from the source (editable afterwards).
-  const derived = useMemo(
-    () => (source ? profileFromSource(source, solutionPatterns) : null),
-    [source, solutionPatterns],
-  )
-  const [profile, setProfile] = useState<ComponentProfile | null>(
-    derived?.profile ?? DEFAULT_SCRATCH_PROFILE,
-  )
+  // Profile: scratch pre-selects the first usable registry profile; clone derives it from
+  // the source (editable afterwards).
+  const derived = useMemo(() => {
+    if (!source) return null
+    const legacy = profileFromSource(source, solutionPatterns)
+    const usable = profiles.find((p) => p.id === legacy.profile && p.usable)
+    return { profile: usable?.id ?? null, explicit: legacy.explicit }
+  }, [source, solutionPatterns, profiles])
+  const initialProfileId = derived ? derived.profile : (profiles.find((p) => p.usable)?.id ?? null)
+  const [profileId, setProfileId] = useState<string | null>(initialProfileId)
   const [explicitAnswer, setExplicitAnswer] = useState<boolean>(derived?.explicit ?? false)
   // The clone profile/explicit are seeded once from `derived`, but `derived` is
   // recomputed when solutionKeyPatterns arrive after mount (portal-config loads
@@ -252,18 +270,12 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
   const userPickedProfile = useRef(false)
   useEffect(() => {
     if (userPickedProfile.current || !derived) return
-    setProfile(derived.profile)
+    setProfileId(derived.profile)
     setExplicitAnswer(derived.explicit)
   }, [derived])
-  // A profile is needed for the (profile-dependent) key rule even before the
-  // scratch gate is passed; fall back to the base-regex profile for the schema.
-  const effectiveProfile: ComponentProfile = profile ?? 'regular-external'
+  const profile = profiles.find((p) => p.id === profileId) ?? null
 
-  const { data: registryProfiles } = useComponentProfiles()
-  const profileRules = useMemo(
-    () => registryProfiles?.find((p) => p.id === effectiveProfile)?.rules ?? [],
-    [registryProfiles, effectiveProfile],
-  )
+  const profileRules = useMemo(() => profile?.rules ?? [], [profile])
   const schema = useMemo(
     () => makeCreateSchema(editable, supportedGroups, gitBaseUrl, profileRules, source ?? undefined),
     [editable, supportedGroups, gitBaseUrl, profileRules, source],
@@ -348,9 +360,10 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
   // the Component Key so the profile-dependent rule is re-entered (brief).
   const applyProfile = useCallback(
     (next: ComponentProfile, nextExplicit: boolean) => {
+      if (!next.usable) return
       userPickedProfile.current = true
-      const changed = next !== profile
-      setProfile(next)
+      const changed = next.id !== profileId
+      setProfileId(next.id)
       setExplicitAnswer(nextExplicit)
       const flags = flagsForProfile(next, nextExplicit)
       // Mark the form dirty when the profile OR its derived distribution flags
@@ -371,7 +384,7 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
       }
       void trigger('name')
     },
-    [profile, setValue, getValues, clearErrors, trigger],
+    [profileId, setValue, getValues, clearErrors, trigger],
   )
 
   // Scratch: seed the owner from the current user once (brief §Ownership).
@@ -471,11 +484,11 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
   const invalidSteps = useMemo(() => {
     const set = new Set<StepId>()
     for (const issue of parseIssues) set.add(issue.step)
-    if (!isClone && profile === null) set.add('profile')
+    if (!isClone && profileId === null) set.add('profile')
     if (jiraKeyError) set.add('review')
     if (serverError) set.add(serverError.stepId)
     return set
-  }, [parseIssues, isClone, profile, jiraKeyError, serverError])
+  }, [parseIssues, isClone, profileId, jiraKeyError, serverError])
 
   // Invalid steps actually shown as such: only those visited (or all, once a
   // Create was attempted), and never the step you are currently on until you
@@ -534,7 +547,8 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
         escrowGenerationEditable,
         escrowGenerationHidden,
       )
-      const flags = flagsForProfile(effectiveProfile, explicitAnswer)
+      if (!profile) return
+      const flags = flagsForProfile(profile, explicitAnswer)
       const request = {
         ...base,
         // Solution comes from the profile (scratch has no source to copy it
@@ -623,7 +637,7 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
     // be retried after the user edits). Prevents bypassing the Profile gate by
     // jumping straight to Review via the stepper.
     parseIssues.length > 0 ||
-    (!isClone && profile === null)
+    (!isClone && profileId === null)
 
   // ---- Rendering helpers ----------------------------------------------------
 
@@ -644,6 +658,7 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
     count: number,
     index: number,
     select: (i: number) => void,
+    isEnabled: (i: number) => boolean = () => true,
   ) => {
     const delta =
       e.key === 'ArrowDown' || e.key === 'ArrowRight'
@@ -653,7 +668,9 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
           : 0
     if (!delta) return
     e.preventDefault()
-    const next = (index + delta + count) % count
+    let next = (index + delta + count) % count
+    while (next !== index && !isEnabled(next)) next = (next + delta + count) % count
+    if (next === index) return
     select(next)
     // Roving tabindex: carry keyboard focus to the newly selected radio in the
     // same group so it doesn't stay stranded on the previous (now tabIndex=-1)
@@ -669,27 +686,36 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
         subtitle="The profile sets how the component is classified and how its key is named."
       />
       <div role="radiogroup" aria-label="Component profile" className="grid gap-3 sm:grid-cols-2">
-        {PROFILE_META.map((p, idx) => {
-          const selected = profile === p.id
-          const tabbable = selected || (profile === null && idx === 0)
+        {profiles.map((p, idx) => {
+          const selected = profileId === p.id
+          const tabbable = selected || (profileId === null && idx === profiles.findIndex((q) => q.usable))
           return (
             <button
               key={p.id}
               type="button"
               role="radio"
               aria-checked={selected}
-              aria-label={p.label}
+              aria-label={p.title}
+              aria-describedby={p.usable ? undefined : `profile-${p.id}-reason`}
+              disabled={!p.usable}
               tabIndex={tabbable ? 0 : -1}
-              onClick={() => applyProfile(p.id, explicitAnswer)}
+              onClick={() => applyProfile(p, explicitAnswer)}
               onKeyDown={(e) =>
-                moveRadio(e, PROFILE_META.length, idx, (i) => {
-                  const next = PROFILE_META[i]
-                  if (next) applyProfile(next.id, explicitAnswer)
-                })
+                moveRadio(
+                  e,
+                  profiles.length,
+                  idx,
+                  (i) => {
+                    const next = profiles[i]
+                    if (next) applyProfile(next, explicitAnswer)
+                  },
+                  (i) => !!profiles[i]?.usable,
+                )
               }
               className={cn(
                 'flex gap-3 rounded-md border p-3 text-left transition-colors',
                 selected ? 'border-ring bg-muted' : 'border-border hover:bg-muted/50',
+                !p.usable && 'cursor-not-allowed opacity-60 hover:bg-transparent',
               )}
             >
               <span
@@ -702,8 +728,13 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
                 {selected && <span className="h-2 w-2 rounded-full bg-foreground" />}
               </span>
               <span className="flex flex-col">
-                <span className="font-medium">{p.label}</span>
+                <span className="font-medium">{p.title}</span>
                 <span className="mt-1 text-sm text-muted-foreground">{p.description}</span>
+                {!p.usable && p.unusableReason && (
+                  <span id={`profile-${p.id}-reason`} className="mt-1 text-sm text-muted-foreground">
+                    {p.unusableReason}
+                  </span>
+                )}
               </span>
             </button>
           )
@@ -719,7 +750,7 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
           </span>
         </p>
       )}
-      {profile && PROFILE_META.find((p) => p.id === profile)?.asksExplicit && (
+      {profile && asksExplicit(profile) && (
         <fieldset className="space-y-2 rounded-md border border-border p-4">
           <legend className="px-1 text-sm font-medium">Has explicit distribution?</legend>
           <p className="text-sm text-muted-foreground">
@@ -764,7 +795,7 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
       external ? 'External' : 'Internal',
       explicit ? 'explicit distribution' : 'implicit distribution',
     ]
-    if (flagsForProfile(effectiveProfile, explicitAnswer).solution) parts.push('solution')
+    if (profile?.classification.solution) parts.push('solution')
     return parts.join(', ')
   }
 
@@ -1403,9 +1434,7 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
   // compare against the pre-selected default — since the profile is never null in
   // scratch, "!== null" would make this always true and fire a spurious
   // unsaved-changes prompt on a pristine wizard.
-  const profileTouched = isClone
-    ? profile !== (derived?.profile ?? null) || explicitAnswer !== (derived?.explicit ?? false)
-    : profile !== DEFAULT_SCRATCH_PROFILE || explicitAnswer !== false
+  const profileTouched = profileId !== initialProfileId || explicitAnswer !== (derived?.explicit ?? false)
 
   // Post-create success panel — replaces the wizard body once the component is
   // created. `submitted` is already true, so no unsaved-changes guard is needed.

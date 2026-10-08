@@ -39,8 +39,9 @@
       `frontend/src/lib/component/createProfile.ts`. Shared fixture: the four shipped profiles as the
       registry lists them, `test-fixtures/component-profiles.contract.json`.
 - [ ] 3.2a Remove the old `flagsForProfile`, `PROFILE_META` and the `ComponentProfile` union from
-      `createFormModel.ts` with their last caller, the Profile step (6.2), so every commit builds.
-      (added on review)
+      `createFormModel.ts` with their last callers, so every commit builds: `PROFILE_META` went with
+      the Profile step (6.2); the union and the old `flagsForProfile` go with `profileFromSource`
+      (7.2) and `initialValues` (9.2). (added on review)
 - [x] 3.3 Confirm tests pass. `createProfile.test.ts` 5/5; `tsc`, `eslint` clean.
 
 ## 4. Field-rule checker (Decision 3)
@@ -86,20 +87,25 @@
 
 ## 6. Profile step (Decisions 1, 5)
 
-- [ ] 6.1 Failing tests in `CreateComponentPage.test.tsx`:
-  - [ ] 6.1.1 tiles render the registry's titles and descriptions in order
-  - [ ] 6.1.2 an unusable profile is disabled and shows its reason; clicking it changes nothing
-  - [ ] 6.1.3 arrow keys skip the unusable tile
-  - [ ] 6.1.4 a failed listing shows the error and Retry instead of the wizard; Retry that
-        succeeds opens the wizard with the tiles
-  - [ ] 6.1.5 a listing with no `regular` profile shows the same error instead of the wizard
-  - [ ] 6.1.6 a clone whose profiles fail to load shows the same error
-  - [ ] 6.1.7 scratch pre-selects the first usable profile; none usable → nothing selected
-  - [ ] 6.1.8 the explicit question shows only for `ask`
-  - [ ] 6.1.9 changing profile clears the key and re-checks against the new rules
-  - [ ] 6.1.10 typing `resolution-service` under Regular external shows the registry's message
-- [ ] 6.2 Implement the Profile step over `useComponentProfiles`.
-- [ ] 6.3 Confirm tests pass.
+- [x] 6.1 Failing tests in `CreateComponentPage.test.tsx`:
+  - [x] 6.1.1 tiles render the registry's titles and descriptions in order
+  - [x] 6.1.2 an unusable profile is disabled and shows its reason; clicking it changes nothing
+  - [x] 6.1.3 arrow keys skip the unusable tile
+  - [x] 6.1.4 a failed listing shows the error and Retry instead of the wizard; Retry refetches.
+        That a successful refetch opens the wizard is covered by the hook test (2.1.4): the page
+        test mocks the hook, so it cannot observe a real refetch.
+  - [x] 6.1.5 a listing with no `regular` profile shows the same error instead of the wizard
+  - [x] 6.1.6 a clone whose profiles fail to load shows the same error
+  - [x] 6.1.7 scratch pre-selects the first usable profile; none usable → nothing selected
+  - [x] 6.1.8 the explicit question shows only for `ask`
+  - [x] 6.1.9 changing profile clears the key and re-checks against the new rules
+  - [x] 6.1.10 typing `resolution-service` under Regular external shows the registry's message
+- [x] 6.2 Implement the Profile step over `useComponentProfiles`: the page gates on the
+      profiles (skeleton, or the error with Retry); the wizard takes them as a prop, holds the
+      selected id, disables unusable tiles with their reason, and arrow keys skip them. A clone
+      still derives the built-in id and takes the registry profile with that id until section 7.
+- [x] 6.3 Confirm tests pass. `CreateComponentPage.test.tsx` 63/63 (11 new); full vitest
+      178 files / 2594 tests; `tsc`, `eslint .` clean.
 
 ## 7. Clone pre-selection (Decision 4)
 

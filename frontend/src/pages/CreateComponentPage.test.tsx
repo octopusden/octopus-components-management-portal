@@ -68,6 +68,7 @@ const PROFILES_OK = {
   data: shippedProfiles.profiles as ComponentProfile[] | undefined,
   isLoading: false,
   isError: false,
+  isSuccess: true,
   refetch: vi.fn(),
 }
 const mockUseComponentProfiles = vi.fn(() => PROFILES_OK)
@@ -651,7 +652,7 @@ describe('CreateComponentPage — profile radio semantics', () => {
     await userEvent.click(external)
     external.focus()
     await userEvent.keyboard('{ArrowDown}')
-    // Arrow advances to the next profile (Regular internal is last in PROFILE_META).
+    // Arrow advances to the next profile in the registry order.
     await waitFor(() =>
       expect(
         screen.getByRole('radio', { name: /Regular internal component/i }).getAttribute('aria-checked'),
@@ -671,6 +672,131 @@ describe('CreateComponentPage — profile radio semantics', () => {
     // Roving-tabindex: focus must follow the selection to the next profile, not
     // stay stranded on the previous (now tabIndex=-1) radio.
     expect(internal).toHaveFocus()
+  })
+})
+
+describe('CreateComponentPage — profiles from the registry', () => {
+  const shipped = shippedProfiles.profiles as ComponentProfile[]
+  const byId = (id: string) => shipped.find((p) => p.id === id)!
+  const profilesResult = (data: ComponentProfile[] | undefined, overrides: Partial<typeof PROFILES_OK> = {}) => ({
+    ...PROFILES_OK,
+    data,
+    ...overrides,
+  })
+
+  it('renders one tile per registry profile, with its title and description, in the registry order', () => {
+    mockUseComponentProfiles.mockReturnValue(
+      profilesResult([
+        { ...byId('dmp-bundle'), title: 'Bundle (registry title)', description: 'Bundle from the registry.' },
+        { ...byId('regular-external'), title: 'Ordinary external', description: 'External from the registry.' },
+      ]),
+    )
+    renderWizard()
+    const tiles = screen.getAllByRole('radio', { name: /Bundle \(registry title\)|Ordinary external/ })
+    expect(tiles.map((t) => t.getAttribute('aria-label'))).toEqual(['Bundle (registry title)', 'Ordinary external'])
+    expect(screen.getByText('External from the registry.')).toBeDefined()
+    expect(screen.queryByRole('radio', { name: /^Solution$/ })).toBeNull()
+  })
+
+  it('shows an unusable profile disabled with the registry reason; clicking it changes nothing', async () => {
+    mockUseComponentProfiles.mockReturnValue(
+      profilesResult([
+        byId('regular-external'),
+        { ...byId('solution'), usable: false, unusableReason: 'Not for your role' },
+      ]),
+    )
+    renderWizard()
+    const solution = screen.getByRole('radio', { name: /^Solution$/ })
+    expect(solution).toBeDisabled()
+    expect(screen.getByText('Not for your role')).toBeDefined()
+    await userEvent.click(solution)
+    expect(solution.getAttribute('aria-checked')).toBe('false')
+    expect(screen.getByRole('radio', { name: /Regular external component/ }).getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('arrow keys skip an unusable profile', async () => {
+    mockUseComponentProfiles.mockReturnValue(
+      profilesResult([
+        byId('regular-external'),
+        { ...byId('regular-internal'), usable: false, unusableReason: 'No' },
+        byId('solution'),
+      ]),
+    )
+    renderWizard()
+    const external = screen.getByRole('radio', { name: /Regular external component/ })
+    external.focus()
+    await userEvent.keyboard('{ArrowDown}')
+    await waitFor(() => expect(screen.getByRole('radio', { name: /^Solution$/ })).toHaveAttribute('aria-checked', 'true'))
+    expect(screen.getByRole('radio', { name: /Regular internal component/ })).toHaveAttribute('aria-checked', 'false')
+  })
+
+  it('shows the error and Retry instead of the wizard when the listing fails; Retry refetches', async () => {
+    const refetch = vi.fn()
+    mockUseComponentProfiles.mockReturnValue(profilesResult(undefined, { isError: true, isSuccess: false, refetch }))
+    renderWizard()
+    expect(screen.getByText(/could not load the component profiles/i)).toBeDefined()
+    expect(screen.queryByText('Choose component profile')).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: /retry/i }))
+    expect(refetch).toHaveBeenCalled()
+  })
+
+  it('shows the same error when the listing has no regular profile', () => {
+    mockUseComponentProfiles.mockReturnValue(profilesResult([]))
+    renderWizard()
+    expect(screen.getByText(/could not load the component profiles/i)).toBeDefined()
+    expect(screen.queryByText('Choose component profile')).toBeNull()
+  })
+
+  it('shows the same error for a clone whose profiles fail to load', () => {
+    mockUseComponent.mockReturnValue({ data: makeSource(), isLoading: false, error: null })
+    mockUseComponentProfiles.mockReturnValue(profilesResult(undefined, { isError: true, isSuccess: false }))
+    renderWizard('/components/new?from=c-1')
+    expect(screen.getByText(/could not load the component profiles/i)).toBeDefined()
+  })
+
+  it('pre-selects the first usable profile for a new component', () => {
+    mockUseComponentProfiles.mockReturnValue(
+      profilesResult([{ ...byId('regular-external'), usable: false, unusableReason: 'No' }, byId('regular-internal')]),
+    )
+    renderWizard()
+    expect(screen.getByRole('radio', { name: /Regular internal component/ })).toHaveAttribute('aria-checked', 'true')
+  })
+
+  it('selects nothing and holds Next when no profile is usable', () => {
+    mockUseComponentProfiles.mockReturnValue(
+      profilesResult([{ ...byId('regular-external'), usable: false, unusableReason: 'No' }]),
+    )
+    renderWizard()
+    expect(screen.getByRole('radio', { name: /Regular external component/ })).toHaveAttribute('aria-checked', 'false')
+    expect((screen.getByRole('button', { name: /^next$/i }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('asks "Has explicit distribution?" only for a profile whose explicit is ask', async () => {
+    renderWizard()
+    expect(screen.getByText('Has explicit distribution?')).toBeDefined()
+    await userEvent.click(screen.getByRole('radio', { name: /^Solution$/ }))
+    expect(screen.queryByText('Has explicit distribution?')).toBeNull()
+  })
+
+  it('clears the key on a profile change and checks it against the new profile rules', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /^Solution$/ }))
+    await clickNext()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'payments-solution')
+    await userEvent.click(screen.getByRole('button', { name: /^Profile$/i }))
+    await userEvent.click(screen.getByRole('radio', { name: /Regular external component/ }))
+    await clickNext()
+    const key = screen.getByPlaceholderText('my-component') as HTMLInputElement
+    expect(key.value).toBe('')
+    await userEvent.type(key, 'payments-solution')
+    await waitFor(() => expect(screen.getByText(byId('regular-external').rules[0]!.message)).toBeDefined())
+  })
+
+  it('shows the registry message for resolution-service under Regular external', async () => {
+    renderWizard()
+    await clickNext()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'resolution-service')
+    await waitFor(() => expect(screen.getByText(byId('regular-external').rules[0]!.message)).toBeDefined())
   })
 })
 
