@@ -109,19 +109,22 @@
 
 ## 7. Clone pre-selection (Decision 4)
 
-- [ ] 7.1 Failing tests for `profileFromSource(source, profiles)`:
-  - [ ] 7.1.1 `payments-dmp-bundle` solution → `dmp-bundle`
-  - [ ] 7.1.2 `payments-solution` solution → `solution`
-  - [ ] 7.1.3 internal non-solution → `regular-internal`, explicit seeded from the source
-  - [ ] 7.1.4 classification matches but no rule passes → first classification match
-  - [ ] 7.1.5 no classification match → none
-  - [ ] 7.1.6 an unusable profile is never pre-selected
-  - [ ] 7.1.7 a clone with nothing pre-selected opens on the Profile step and Create stays
+- [x] 7.1 Failing tests for `profileFromSource(source, profiles)`:
+  - [x] 7.1.1 `payments-dmp-bundle` solution → `dmp-bundle`
+  - [x] 7.1.2 `payments-solution` solution → `solution`
+  - [x] 7.1.3 internal non-solution → `regular-internal`, explicit seeded from the source
+  - [x] 7.1.4 classification matches but no rule passes → first classification match
+  - [x] 7.1.5 no classification match → none
+  - [x] 7.1.6 an unusable profile is never pre-selected
+  - [x] 7.1.7 a clone with nothing pre-selected opens on the Profile step and Create stays
         disabled until a profile is picked
-- [ ] 7.2 Rewrite `profileFromSource`; drop the re-seed on `solutionKeyPatterns` arrival (the
+- [x] 7.2 Rewrite `profileFromSource` (now in `createProfile.ts`, the old one removed from
+      `createFormModel.ts`); drop the re-seed on `solutionKeyPatterns` arrival (the
       profiles are loaded before the wizard mounts, so no re-seed is needed); open a clone on
       Profile when nothing is pre-selected and extend the Profile gate to clones.
-- [ ] 7.3 Confirm tests pass.
+- [x] 7.3 Confirm tests pass. `createProfile.test.ts` 11/11; `CreateComponentPage.test.tsx`
+      63/63 — the clone test for a late `solutionKeyPatterns` re-seed is removed with the
+      re-seed; the wizard no longer reads portal-config. `tsc`, `eslint .` clean.
 
 ## 8. Submit and error routing (Decision 6)
 

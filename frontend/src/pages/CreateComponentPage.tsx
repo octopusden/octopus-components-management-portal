@@ -28,7 +28,7 @@ import { cn } from '../lib/utils'
 import { hostOf } from '../lib/vcsHost'
 import { useFieldOptions } from '../hooks/useFieldOptions'
 import { useSupportedGroups } from '../hooks/useSupportedGroups'
-import { usePortalLinks, usePortalConfig } from '../hooks/useInfo'
+import { usePortalLinks } from '../hooks/useInfo'
 import { useFieldConfig, useComponentDefaults } from '../hooks/useAdminConfig'
 import { useComponentProfiles, type ComponentProfile } from '../hooks/useComponentProfiles'
 import { isFieldEditableFor, useFieldEditable, useFieldConfigEntry } from '../hooks/useFieldConfig'
@@ -45,13 +45,8 @@ import {
   DEPRECATED_BUILD_SYSTEMS,
   type CreateFormValues,
 } from '../lib/component/buildCreateRequest'
-import {
-  makeCreateSchema,
-  initialValues,
-  profileFromSource,
-  type ComponentDefaults,
-} from '../lib/component/createFormModel'
-import { asksExplicit, flagsForProfile } from '../lib/component/createProfile'
+import { makeCreateSchema, initialValues, type ComponentDefaults } from '../lib/component/createFormModel'
+import { asksExplicit, flagsForProfile, profileFromSource } from '../lib/component/createProfile'
 import type { ComponentDetail } from '../lib/types'
 import { OWNERSHIP_MODES } from '../lib/artifactOwnership'
 import { validateJiraKey, normalizeJiraKey, normalizeChangeComment } from '../lib/editor/jiraKey'
@@ -82,8 +77,8 @@ const STEP_SUBTITLES: Record<StepId, string> = {
 
 const SCRATCH_STEPS: StepId[] = ['profile', 'general', 'build', 'vcs', 'jira', 'distribution', 'escrow', 'review']
 // Clone keeps the Profile step too: the profile is pre-derived from the source
-// but stays editable (changing it resets the Component Key + recomputes flags),
-// per the brief. It is not a gate in clone (a profile is always pre-selected).
+// but stays editable (changing it resets the Component Key + recomputes flags).
+// When no registry profile matches the source, the clone opens on it instead.
 const CLONE_STEPS: StepId[] = ['profile', 'general', 'build', 'vcs', 'jira', 'distribution', 'escrow', 'review']
 
 // Map a zod-issue / RHF-error field path to the wizard step that owns it.
@@ -247,32 +242,17 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
   )
   const { groups: supportedGroups } = useSupportedGroups()
   const { data: portalLinks } = usePortalLinks()
-  const { data: portalConfig } = usePortalConfig()
-  const solutionPatterns = portalConfig?.solutionKeyPatterns
   const gitBaseUrl = portalLinks?.gitBaseUrl
 
   // Profile: scratch pre-selects the first usable registry profile; clone derives it from
-  // the source (editable afterwards).
-  const derived = useMemo(() => {
-    if (!source) return null
-    const legacy = profileFromSource(source, solutionPatterns)
-    const usable = profiles.find((p) => p.id === legacy.profile && p.usable)
-    return { profile: usable?.id ?? null, explicit: legacy.explicit }
-  }, [source, solutionPatterns, profiles])
-  const initialProfileId = derived ? derived.profile : (profiles.find((p) => p.usable)?.id ?? null)
-  const [profileId, setProfileId] = useState<string | null>(initialProfileId)
-  const [explicitAnswer, setExplicitAnswer] = useState<boolean>(derived?.explicit ?? false)
-  // The clone profile/explicit are seeded once from `derived`, but `derived` is
-  // recomputed when solutionKeyPatterns arrive after mount (portal-config loads
-  // async), which can change the derived profile (e.g. solution → dmp-bundle).
-  // Re-seed from `derived` until the user actually picks a profile, so a late
-  // config load never looks like an unsaved edit.
-  const userPickedProfile = useRef(false)
-  useEffect(() => {
-    if (userPickedProfile.current || !derived) return
-    setProfileId(derived.profile)
-    setExplicitAnswer(derived.explicit)
-  }, [derived])
+  // the source (editable afterwards). Frozen at mount — the profiles arrive with the wizard.
+  const [initial] = useState(() =>
+    source
+      ? profileFromSource(source, profiles)
+      : { profileId: profiles.find((p) => p.usable)?.id ?? null, explicit: false },
+  )
+  const [profileId, setProfileId] = useState<string | null>(initial.profileId)
+  const [explicitAnswer, setExplicitAnswer] = useState<boolean>(initial.explicit)
   const profile = profiles.find((p) => p.id === profileId) ?? null
 
   const profileRules = useMemo(() => profile?.rules ?? [], [profile])
@@ -361,7 +341,6 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
   const applyProfile = useCallback(
     (next: ComponentProfile, nextExplicit: boolean) => {
       if (!next.usable) return
-      userPickedProfile.current = true
       const changed = next.id !== profileId
       setProfileId(next.id)
       setExplicitAnswer(nextExplicit)
@@ -457,12 +436,13 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
 
   // ---- Steps + cross-step validity ------------------------------------------
   const steps = isClone ? CLONE_STEPS : SCRATCH_STEPS
-  const [current, setCurrent] = useState<StepId>(isClone ? 'general' : 'profile')
+  const startStep: StepId = isClone && initial.profileId !== null ? 'general' : 'profile'
+  const [current, setCurrent] = useState<StepId>(startStep)
   // Steps the user has landed on, plus whether a Create was attempted. Together
   // they gate the rail's invalid/done markers so nothing is flagged eagerly on
   // first load — only after a step is visited (and left) or a submit is tried.
   const [visitedSteps, setVisitedSteps] = useState<Set<StepId>>(
-    () => new Set<StepId>([isClone ? 'general' : 'profile']),
+    () => new Set<StepId>([startStep]),
   )
   const [attempted, setAttempted] = useState(false)
   const enterStep = (step: StepId) => {
@@ -484,11 +464,11 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
   const invalidSteps = useMemo(() => {
     const set = new Set<StepId>()
     for (const issue of parseIssues) set.add(issue.step)
-    if (!isClone && profileId === null) set.add('profile')
+    if (profileId === null) set.add('profile')
     if (jiraKeyError) set.add('review')
     if (serverError) set.add(serverError.stepId)
     return set
-  }, [parseIssues, isClone, profileId, jiraKeyError, serverError])
+  }, [parseIssues, profileId, jiraKeyError, serverError])
 
   // Invalid steps actually shown as such: only those visited (or all, once a
   // Create was attempted), and never the step you are currently on until you
@@ -632,12 +612,12 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
     !!jiraKeyError ||
     fcLoading ||
     userLoading ||
-    // Client-side blocking issues: any invalid field (schema parse) or, in
-    // scratch, an unchosen Profile. Excludes serverError (so a failed submit can
-    // be retried after the user edits). Prevents bypassing the Profile gate by
-    // jumping straight to Review via the stepper.
+    // Client-side blocking issues: any invalid field (schema parse) or an unchosen
+    // Profile. Excludes serverError (so a failed submit can be retried after the
+    // user edits). Prevents bypassing the Profile gate by jumping straight to
+    // Review via the stepper.
     parseIssues.length > 0 ||
-    (!isClone && profileId === null)
+    profileId === null
 
   // ---- Rendering helpers ----------------------------------------------------
 
@@ -1429,12 +1409,9 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
     : 'Create component'
 
   // The profile lives outside RHF and drives submitted flags (incl. `solution`,
-  // which is not an RHF field), so isDirty alone misses a profile-only change. In
-  // clone mode compare against the source-derived profile/explicit; in scratch
-  // compare against the pre-selected default — since the profile is never null in
-  // scratch, "!== null" would make this always true and fire a spurious
-  // unsaved-changes prompt on a pristine wizard.
-  const profileTouched = profileId !== initialProfileId || explicitAnswer !== (derived?.explicit ?? false)
+  // which is not an RHF field), so isDirty alone misses a profile-only change:
+  // compare against the profile and answer the wizard opened with.
+  const profileTouched = profileId !== initial.profileId || explicitAnswer !== initial.explicit
 
   // Post-create success panel — replaces the wizard body once the component is
   // created. `submitted` is already true, so no unsaved-changes guard is needed.

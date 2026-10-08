@@ -873,33 +873,6 @@ describe('CreateComponentPage — clone unsaved-changes guard', () => {
     )
   })
 
-  it('does not engage the guard when late portal-config changes the derived clone profile', async () => {
-    // solutionKeyPatterns arrive only after mount; until then a solution source
-    // derives 'solution', and once the bundle pattern loads it re-derives to
-    // 'dmp-bundle'. That re-derivation must not read as a user profile change.
-    let patternsLoaded = false
-    mockUsePortalConfig.mockImplementation(() => ({
-      data: patternsLoaded ? { solutionKeyPatterns: ['-solution', 'dmp-bundle'] } : undefined,
-    }))
-    mockUseComponent.mockReturnValue({
-      data: makeSource({
-        solution: true,
-        name: 'acme-dmp-bundle',
-        distributionExternal: true,
-        distributionExplicit: true,
-      }),
-      isLoading: false,
-      error: null,
-    })
-    renderWizard('/components/new?from=c-1')
-    expect(screen.getByTestId('unsaved-guard').getAttribute('data-when')).toBe('false')
-    // Patterns load; force a re-render without touching the profile.
-    patternsLoaded = true
-    await userEvent.click(screen.getByRole('button', { name: 'Build' }))
-    await waitFor(() =>
-      expect(screen.getByTestId('unsaved-guard').getAttribute('data-when')).toBe('false'),
-    )
-  })
 })
 
 describe('CreateComponentPage — Escrow step', () => {
@@ -1115,6 +1088,22 @@ describe('CreateComponentPage — clone mode', () => {
     expect((screen.getByPlaceholderText('my-component') as HTMLInputElement).value).toBe('')
     // Owner is prefilled from the source.
     expect((screen.getByPlaceholderText('AD userkey') as HTMLInputElement).value).toBe('alice')
+  })
+
+  it('opens on the Profile step with nothing selected when no profile matches the source, and holds Create', async () => {
+    mockUseComponent.mockReturnValue({
+      data: makeSource({ solution: true, distributionExternal: false, distributionExplicit: false }),
+      isLoading: false,
+      error: null,
+    })
+    renderWizard('/components/new?from=c-1')
+    expect(screen.getByText('Choose component profile')).toBeDefined()
+    for (const tile of screen.getAllByRole('radio', { name: /component|Solution|DMP Bundle/ })) {
+      expect(tile).toHaveAttribute('aria-checked', 'false')
+    }
+    await userEvent.click(screen.getByRole('button', { name: /Review & create/i }))
+    await userEvent.type(screen.getByLabelText(/Jira task key/i), 'ABC-1')
+    expect((screen.getByRole('button', { name: /^create component$/i }) as HTMLButtonElement).disabled).toBe(true)
   })
 })
 

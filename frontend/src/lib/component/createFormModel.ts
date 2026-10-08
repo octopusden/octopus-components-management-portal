@@ -54,24 +54,6 @@ export function flagsForProfile(profile: ComponentProfile, explicitAnswer: boole
   }
 }
 
-// Clone derives the profile from the source's flags + key pattern. Editable
-// afterwards (changing it resets the key + recomputes flags).
-export function profileFromSource(
-  source: ComponentDetail,
-  patterns: readonly string[] | undefined,
-): { profile: ComponentProfile; explicit: boolean } {
-  const key = source.name ?? ''
-  const bundlePattern = patterns?.[1]
-  if (source.solution) {
-    if (bundlePattern && key.includes(bundlePattern)) return { profile: 'dmp-bundle', explicit: true }
-    return { profile: 'solution', explicit: true }
-  }
-  return {
-    profile: source.distributionExternal ? 'regular-external' : 'regular-internal',
-    explicit: !!source.distributionExplicit,
-  }
-}
-
 // Profile-dependent Component-Key requirement message, or null when the key is
 // acceptable for the profile. Base-regex failure is reported first; then the
 // per-profile substring rule.
