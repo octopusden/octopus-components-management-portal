@@ -188,8 +188,11 @@ export function GlobalSearchBox() {
               active === hits.length ? 'bg-accent text-accent-foreground' : 'text-muted-foreground',
             )}
           >
-            <span>
-              {total > hits.length ? `See all ${total} results` : 'Open in Global search'} — regex, archived
+            <span className="flex flex-col">
+              <span className="text-foreground">
+                {total > hits.length ? `See all ${total} results` : 'Open in Global search'}
+              </span>
+              <span className="text-xs">Extended search: regular expressions, archived components</span>
             </span>
             <kbd className="rounded border border-border bg-muted px-1.5 text-[10px] font-medium">↵</kbd>
           </div>
