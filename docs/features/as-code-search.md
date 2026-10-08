@@ -46,7 +46,7 @@ link uses the component **UUID** returned with each hit, not the key: the editor
   which hands the typed text to `/search?q=…`.
 - Component list: while the key/name filter holds ≥ 2 characters, a "Global search →" link
   offers the same text to `/search`.
-- What's new entry `as-code-search-2026-10`, with a spotlight on the header **Global search…** field.
+- What's new entry `as-code-search-2026-10`, with a spotlight on the header **Global search…** field (next to `lighter-ui-2026-10`, the header / filters refresh).
 
 ## Source
 

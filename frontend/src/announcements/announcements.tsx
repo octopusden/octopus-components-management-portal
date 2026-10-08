@@ -32,23 +32,48 @@ export const ANNOUNCEMENTS: Announcement[] = [
     id: 'as-code-search-2026-10',
     version: '1.3',
     title: 'New: search across all components, like grepping the old Groovy files',
-    publishedAt: '2026-10-06',
+    publishedAt: '2026-10-08',
     spotlightTarget: 'as-code-search',
     body: (
       <div className="space-y-2">
         <p>
-          The new <strong>Global search</strong> page looks through the as-code text of{' '}
-          <strong>every</strong> component at once — artifact and group patterns, version ranges,
-          VCS URLs, Jira keys, docker images, owners. Each match shows its line and the version
-          range it belongs to; click it to jump straight to that line in the component&apos;s{' '}
-          <strong>As Code</strong> tab.
+          Type into <strong>Global search…</strong> in the header (or press <strong>/</strong>) to
+          search the as-code text of <strong>every</strong> component at once — artifact and group
+          patterns, version ranges, VCS URLs, Jira keys, docker images, owners. The first matches
+          show right under the field; click one to jump straight to that line in the
+          component&apos;s <strong>As Code</strong> tab.
         </p>
         <p className="text-muted-foreground">
-          Matching is case-insensitive and covers active components by default. Switch to{' '}
-          <strong>Regex</strong> for a regular expression, or to <strong>Archived</strong> /{' '}
-          <strong>All</strong> to include archived ones. To jump straight to a component by name,
-          use <strong>Go to…</strong> (⌘K).
+          Press <strong>Enter</strong> (or <strong>See all</strong>) for the full results page with
+          extended search: regular expressions and archived components. To jump to a component by
+          name, use <strong>Go to…</strong> (⌘K).
         </p>
+      </div>
+    ),
+  },
+  {
+    id: 'lighter-ui-2026-10',
+    version: '1.3',
+    title: 'A lighter, tidier interface',
+    publishedAt: '2026-10-08',
+    body: (
+      <div className="space-y-2">
+        <ul className="list-disc space-y-1 pl-5">
+          <li>
+            <strong>Header:</strong> Admin settings, Validations and Admin mode moved to your
+            avatar menu; help and feedback to the <strong>?</strong> menu.
+          </li>
+          <li>
+            <strong>Components list:</strong> <strong>Status</strong> (Active / Archived / All) and{' '}
+            <strong>Mine</strong> (owner, release manager, security champion) replace the preset
+            tabs; rarer filters live under <strong>+ Filter</strong>, active ones show as chips.
+          </li>
+          <li>
+            <strong>Audit log:</strong> the same compact filter row, with a single{' '}
+            <strong>period</strong> picker.
+          </li>
+        </ul>
+        <p className="text-muted-foreground">Old bookmarks and links keep working.</p>
       </div>
     ),
   },
