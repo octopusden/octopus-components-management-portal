@@ -105,3 +105,22 @@ export function profileRuleErrors(
   }
   return errors
 }
+
+/**
+ * A registry rule failure from a create's error body — `<create-request path>: <message>` — when
+ * the path is one a rule may name. The generic server-error parser reads plain field names only,
+ * so a nested path like `baseConfiguration.jira.projectKey` needs this.
+ */
+export function ruleErrorOf(rawBody: string): { path: string; message: string } | null {
+  let errorMessage: unknown
+  try {
+    errorMessage = (JSON.parse(rawBody) as { errorMessage?: unknown }).errorMessage
+  } catch {
+    return null
+  }
+  if (typeof errorMessage !== 'string') return null
+  const separator = errorMessage.indexOf(': ')
+  if (separator < 0) return null
+  const path = errorMessage.slice(0, separator)
+  return path in READERS ? { path, message: errorMessage.slice(separator + 2).trim() } : null
+}

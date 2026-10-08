@@ -128,16 +128,24 @@
 
 ## 8. Submit and error routing (Decision 6)
 
-- [ ] 8.1 Failing tests:
-  - [ ] 8.1.1 the create request carries `profile` with the selected id
-  - [ ] 8.1.2 `solution` is still sent only when editable, from the profile's classification
-  - [ ] 8.1.3 a 400 on `profile` opens the Profile step with the message
-  - [ ] 8.1.4 a 400 on `name` with a rule message shows under the key on General
-  - [ ] 8.1.5 a 400 `baseConfiguration.jira.projectKey: …` opens Jira and shows under the
+- [x] 8.1 Failing tests:
+  - [x] 8.1.1 the create request carries `profile` with the selected id
+  - [x] 8.1.2 `solution` is still sent only when editable, from the profile's classification
+        (already true before this section; pinned so it stays)
+  - [x] 8.1.3 a 400 on `profile` opens the Profile step with the message
+  - [x] 8.1.4 a 400 on `name` with a rule message shows under the key on General
+  - [x] 8.1.5 a 400 `baseConfiguration.jira.projectKey: …` opens Jira and shows under the
         project key (not General)
-  - [ ] 8.1.6 a 400 on `baseConfiguration.mavenArtifacts[0].groupPattern` opens Distribution
-- [ ] 8.2 Implement in `onSubmit` / `stepOfField`, mapping rule paths through the table from 4.2.
-- [ ] 8.3 Confirm tests pass.
+  - [x] 8.1.6 a 400 on `baseConfiguration.mavenArtifacts[0].groupPattern` opens Distribution
+- [x] 8.2 Implement in `onSubmit` / `stepOfField`, mapping rule paths through the table from 4.2.
+      `ComponentCreateRequest` gains `profile`; `stepOfField` routes `buildTasks` to Build.
+- [x] 8.2a `parseServerFieldErrors` reads plain camelCase names only, so a nested rule path was
+      never parsed: new `ruleErrorOf(rawBody)` in `profileRules.ts` (4 tests) reads
+      `<rule path>: <message>` for the registry's paths. (added on review)
+- [x] 8.2b The server-error banner showed only on Review; a profile rejection now also shows it
+      on the Profile step it opens. (added on review)
+- [x] 8.3 Confirm tests pass. `CreateComponentPage.test.tsx` 69/69 (6 new); `profileRules.test.ts`
+      38/38; full vitest 178 files / 2610 tests; `tsc`, `eslint .` clean.
 
 ## 9. Today's pre-filled values (Decision 7)
 

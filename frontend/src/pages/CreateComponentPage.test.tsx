@@ -800,6 +800,76 @@ describe('CreateComponentPage — profiles from the registry', () => {
   })
 })
 
+describe('CreateComponentPage — create names the profile', () => {
+  // Regular internal with PROVIDED: the shortest flow to a valid Create.
+  async function createRegularInternal() {
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await clickNext()
+    await userEvent.selectOptions(screen.getByLabelText(/^Build System/i), 'PROVIDED')
+    await userEvent.click(screen.getByRole('button', { name: /^Jira$/i }))
+    await userEvent.type(screen.getByLabelText(/^Jira Project Key/i), 'WIDG')
+    await userEvent.click(screen.getByRole('button', { name: /Review & create/i }))
+    await userEvent.type(screen.getByLabelText(/^Jira task key/i), 'ABC-123')
+    await userEvent.click(screen.getByRole('button', { name: /^create component$/i }))
+  }
+  // As lib/api builds it: the message is the body's errorMessage.
+  const rejectWith = (errorMessage: string) =>
+    mockMutateAsync.mockRejectedValueOnce(new ApiError(400, errorMessage, JSON.stringify({ errorMessage })))
+
+  it('sends the chosen profile id', async () => {
+    renderWizard()
+    await createRegularInternal()
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1))
+    expect(mockMutateAsync.mock.calls[0]![0].profile).toBe('regular-internal')
+  })
+
+  it('sends solution from the profile only when the field is editable', async () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: { component: { solution: { visibility: 'readonly' } } },
+      isLoading: false,
+      isError: false,
+    })
+    renderWizard()
+    await createRegularInternal()
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1))
+    expect(mockMutateAsync.mock.calls[0]![0]).not.toHaveProperty('solution')
+  })
+
+  it('opens the Profile step with the message when the registry rejects the profile', async () => {
+    rejectWith("profile: profile 'regular-internal' needs external: false, but the create would store external: true")
+    renderWizard()
+    await createRegularInternal()
+    await waitFor(() => expect(screen.getByText('Choose component profile')).toBeDefined())
+    expect(screen.getAllByText(/needs external: false/).length).toBeGreaterThan(0)
+  })
+
+  it('shows a rule rejection on the key under the key on General', async () => {
+    rejectWith('name: A regular component key cannot contain solution')
+    renderWizard()
+    await createRegularInternal()
+    await waitFor(() => expect(screen.getByPlaceholderText('my-component')).toBeDefined())
+    expect(screen.getAllByText('A regular component key cannot contain solution').length).toBeGreaterThan(0)
+  })
+
+  it('shows a rule rejection on the Jira project key on the Jira step, under the field', async () => {
+    rejectWith('baseConfiguration.jira.projectKey: Use the MDLCUST project')
+    renderWizard()
+    await createRegularInternal()
+    await waitFor(() => expect(screen.getByLabelText(/^Jira Project Key/i)).toBeDefined())
+    expect(screen.getAllByText('Use the MDLCUST project').length).toBeGreaterThan(0)
+  })
+
+  it('opens the Distribution step for a rule rejection on the Maven group', async () => {
+    rejectWith('baseConfiguration.mavenArtifacts[0].groupPattern: Must start with com.acme')
+    renderWizard()
+    await createRegularInternal()
+    await waitFor(() => expect(screen.getByRole('heading', { name: /^Distribution$/ })).toBeDefined())
+  })
+})
+
 describe('CreateComponentPage — client code (external only)', () => {
   it('shows the Client Code field only for external profiles', async () => {
     renderWizard()

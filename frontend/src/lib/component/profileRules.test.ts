@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formFieldOfRulePath, profileRuleErrors, RULE_PATHS } from './profileRules'
+import { formFieldOfRulePath, profileRuleErrors, ruleErrorOf, RULE_PATHS } from './profileRules'
 import type { ComponentProfile, ProfileFieldRule } from '../../hooks/useComponentProfiles'
 import type { ComponentCreateRequest } from '../types'
 import shipped from '../../test-fixtures/component-profiles.contract.json'
@@ -119,3 +119,29 @@ describe('rule paths', () => {
 function rule(path: string, pattern: string): ProfileFieldRule {
   return { path, pattern, message: `${path} breaks ${pattern}` }
 }
+
+describe('ruleErrorOf', () => {
+  const body = (errorMessage: string) => JSON.stringify({ errorMessage })
+
+  it('reads a registry rule failure on a nested path', () => {
+    expect(ruleErrorOf(body('baseConfiguration.jira.projectKey: Use the MDLCUST project'))).toEqual({
+      path: 'baseConfiguration.jira.projectKey',
+      message: 'Use the MDLCUST project',
+    })
+  })
+
+  it('reads an indexed path', () => {
+    expect(ruleErrorOf(body('baseConfiguration.mavenArtifacts[0].groupPattern: Must start with com.acme'))?.path).toBe(
+      'baseConfiguration.mavenArtifacts[0].groupPattern',
+    )
+  })
+
+  it('ignores a message on a path outside the registry list', () => {
+    expect(ruleErrorOf(body('profile: unknown profile \'x\''))).toBeNull()
+    expect(ruleErrorOf(body('Something went wrong'))).toBeNull()
+  })
+
+  it('ignores a body that is not the registry error shape', () => {
+    expect(ruleErrorOf('not json')).toBeNull()
+  })
+})

@@ -4,6 +4,7 @@ import {
   useForm,
   useFieldArray,
   Controller,
+  type FieldPath,
   type UseFormRegisterReturn,
 } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -47,6 +48,7 @@ import {
 } from '../lib/component/buildCreateRequest'
 import { makeCreateSchema, initialValues, type ComponentDefaults } from '../lib/component/createFormModel'
 import { asksExplicit, flagsForProfile, profileFromSource } from '../lib/component/createProfile'
+import { formFieldOfRulePath, ruleErrorOf } from '../lib/component/profileRules'
 import type { ComponentDetail } from '../lib/types'
 import { OWNERSHIP_MODES } from '../lib/artifactOwnership'
 import { validateJiraKey, normalizeJiraKey, normalizeChangeComment } from '../lib/editor/jiraKey'
@@ -86,6 +88,7 @@ function stepOfField(path: string): StepId {
   const head = path.split('.')[0]
   switch (head) {
     case 'buildSystem':
+    case 'buildTasks':
     case 'ownership':
       return 'build'
     case 'vcsUrl':
@@ -535,6 +538,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
         // from; a clone may have changed profile). Only sent when the field is
         // editable — otherwise the builder already stripped it.
         ...(editable('solution') ? { solution: flags.solution } : {}),
+        profile: profile.id,
         jiraTaskKey: normalizeJiraKey(jiraTaskKey),
         changeComment: normalizeChangeComment(changeComment),
       }
@@ -556,6 +560,13 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
       }
       if (err instanceof ApiError && err.status === 400) {
         const fieldErrors = parseServerFieldErrors(err.rawBody)
+        if (fieldErrors.get('profile')) stepId = 'profile'
+        const ruleError = ruleErrorOf(err.rawBody)
+        const ruleField = ruleError && formFieldOfRulePath(ruleError.path)
+        if (ruleError && ruleField) {
+          setError(ruleField as FieldPath<CreateFormValues>, { type: 'server', message: ruleError.message })
+          stepId = stepOfField(ruleField)
+        }
         if (fieldErrors.get('name')) {
           setError('name', { type: 'server', message: fieldErrors.get('name')! })
           stepId = 'general'
@@ -665,6 +676,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
         title="Choose component profile"
         subtitle="The profile sets how the component is classified and how its key is named."
       />
+      {serverError?.stepId === 'profile' && <InlineError message={serverError.message} />}
       <div role="radiogroup" aria-label="Component profile" className="grid gap-3 sm:grid-cols-2">
         {profiles.map((p, idx) => {
           const selected = profileId === p.id
