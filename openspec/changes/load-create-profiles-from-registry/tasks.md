@@ -221,7 +221,13 @@
 
 ## 13. Finalization
 
-- [ ] 13.1 `./gradlew qualityStatic` and the full vitest suite green.
-- [ ] 13.2 Out-of-scope boundaries hold: the editor's Solution toggle and
-      `PortalComponentProperties.solutionKeyPatterns` unchanged (grep); no template tile code.
-- [ ] 13.3 The risks in `design.md` are still accurate.
+- [x] 13.1 Full vitest green (178 files / 2634 tests); `tsc`, `eslint .` and `eslint e2e` clean.
+      `./gradlew qualityStatic`: `detekt` (after wrapping one driver line), `ktlintCheck` and
+      `npmBuild` green; `compileTestKotlin` fails locally on `kotlin-test` resolution, as on `main`
+      (11.5a) — CI.
+- [x] 13.2 Out-of-scope boundaries hold: no diff against `main` in `lib/solutionKey.ts`,
+      `ComponentDetailPage.tsx`, `components/editor/`, `hooks/useInfo.ts` or backend `src/main`
+      (so `PortalComponentProperties.solutionKeyPatterns` is unchanged); no template code.
+- [x] 13.3 The risks in `design.md` are still accurate; the solution-key risk now names TD-006,
+      and one found during implementation is added (the live rule check treats build tasks as
+      editable).

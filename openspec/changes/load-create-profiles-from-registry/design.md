@@ -203,5 +203,10 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
   the registry's profiles would be checked against nothing the user saw.
 - **Two sources for "is this a solution key".** The editor still reads
   `solution-key-patterns`, the wizard reads the profile rules; an administrator changing one
-  must change the other. Accepted until the editor moves to profile rules; recorded as tech
-  debt.
+  must change the other. Accepted until the editor moves to profile rules; recorded as
+  TD-006.
+- **The live rule check treats build tasks as editable.** `makeCreateSchema` builds the request
+  without the page's build-tasks visibility, so a rule on `baseConfiguration.build.buildTasks`
+  is checked against the form value even when field-config hides the field and the create strips
+  it. Accepted: no profile rules on build tasks today, and the create's answer decides.
+  (found during implementation)
