@@ -123,7 +123,8 @@ function stepOfField(path: string): StepId {
 export function CreateComponentButton() {
   const navigate = useNavigate()
   return (
-    <Button onClick={() => navigate('/components/new')}>
+    // Outline, not primary: it sits on a quiet list page and shouldn't outweigh the data.
+    <Button variant="outline" onClick={() => navigate('/components/new')}>
       <Plus className="h-4 w-4" />
       New Component
     </Button>
