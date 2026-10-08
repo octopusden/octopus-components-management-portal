@@ -38,7 +38,7 @@
 - [x] 3.2 `flagsForProfile` and `asksExplicit` over a registry profile, in the new
       `frontend/src/lib/component/createProfile.ts`. Shared fixture: the four shipped profiles as the
       registry lists them, `test-fixtures/component-profiles.contract.json`.
-- [ ] 3.2a Remove the old `flagsForProfile`, `PROFILE_META` and the `ComponentProfile` union from
+- [x] 3.2a Remove the old `flagsForProfile`, `PROFILE_META` and the `ComponentProfile` union from
       `createFormModel.ts` with their last callers, so every commit builds: `PROFILE_META` went with
       the Profile step (6.2); the union and the old `flagsForProfile` go with `profileFromSource`
       (7.2) and `initialValues` (9.2). (added on review)
@@ -149,20 +149,25 @@
 
 ## 9. Today's pre-filled values (Decision 7)
 
-- [ ] 9.1 Failing tests:
-  - [ ] 9.1.1 `initialValues` for scratch with Regular external (`ask`) pre-selected equals
+- [x] 9.1 Failing tests:
+  - [x] 9.1.1 `initialValues` for scratch with Regular external (`ask`) pre-selected equals
         today's scratch values for the same component-defaults (snapshot taken from `main`
-        before the change)
-  - [ ] 9.1.2 a first profile with explicit `true` and external `true` seeds the copyright
+        before the change: recorded from `initialValues(null, FULL)` with every
+        component-defaults key set, before `initialValues` was touched)
+  - [x] 9.1.2 a first profile with explicit `true` and external `true` seeds the copyright
         default
-  - [ ] 9.1.3 no usable profile → explicit/external stay at `SCRATCH_DEFAULTS`
-  - [ ] 9.1.4 clone values unchanged for a solution, a regular external and an internal source
-  - [ ] 9.1.5 the page shows the skeleton until profiles, component-defaults and the source
+  - [x] 9.1.3 no usable profile → explicit/external stay at `SCRATCH_DEFAULTS`
+  - [x] 9.1.4 clone values unchanged for a solution, a regular external and an internal source
+        (the pre-selected profile does not reach a clone's values)
+  - [x] 9.1.5 the page shows the skeleton until profiles, component-defaults and the source
         have loaded
-  - [ ] 9.1.6 owner seeding and the version prefix following the key still work
-- [ ] 9.2 `initialValues` takes the pre-selected profile's flags; add profiles to the page's
-      `ready` gate; remove `DEFAULT_SCRATCH_PROFILE`.
-- [ ] 9.3 Confirm tests pass.
+  - [x] 9.1.6 owner seeding and the version prefix following the key still work (9.1.5 and
+        9.1.6 pass on first run: they pin behaviour that already held; none covered it before)
+- [x] 9.2 `initialValues` takes the pre-selected profile's flags; add profiles to the page's
+      `ready` gate (done in 6.2); remove `DEFAULT_SCRATCH_PROFILE`, the old `flagsForProfile` and
+      the `ComponentProfile` union — `createFormModel.ts` now uses `createProfile.ts`.
+- [x] 9.3 Confirm tests pass. `createFormModel.test.ts` 41/41; `CreateComponentPage.test.tsx` 72/72;
+      full vitest 178 files / 2619 tests; `tsc`, `eslint .` clean.
 
 ## 10. Labels and build tasks (Decision 8)
 

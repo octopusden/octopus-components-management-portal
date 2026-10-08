@@ -109,13 +109,79 @@ describe('initialValues — Full Version Format (config-first with a universal f
 })
 
 describe('initialValues — scratch distribution flags follow the pre-selected profile', () => {
-  it('derives External/Explicit from the default profile, NOT from defaults.distribution', () => {
+  const profile = (id: string) => (shipped.profiles as ComponentProfile[]).find((p) => p.id === id)!
+
+  it('derives External/Explicit from the pre-selected profile, NOT from defaults.distribution', () => {
     // Even if component-defaults say internal/explicit, a scratch component starts
     // as the pre-selected Regular external profile → external=true, explicit=false.
     const defaults: ComponentDefaults = { distribution: { external: false, explicit: true } }
-    const v = initialValues(null, defaults)
+    const v = initialValues(null, defaults, profile('regular-external'))
     expect(v.distributionExternal).toBe(true)
     expect(v.distributionExplicit).toBe(false)
+  })
+})
+
+describe("initialValues — today's pre-filled values are kept (D7)", () => {
+  const profile = (id: string) => (shipped.profiles as ComponentProfile[]).find((p) => p.id === id)!
+  const FULL: ComponentDefaults = {
+    buildSystem: 'GRADLE',
+    componentDisplayName: 'Default Display',
+    copyright: '(c) Default',
+    jira: {
+      projectKey: 'DEFJ',
+      componentVersionFormat: {
+        versionFormat: '$versionPrefix-$baseVersionFormat',
+        lineVersionFormat: '$major',
+        minorVersionFormat: '$major.$minor',
+        releaseVersionFormat: '$major.$minor.$service',
+        buildVersionFormat: '$major.$minor.$service-$fix',
+      },
+    },
+    distribution: { external: false, explicit: true },
+    vcs: { tag: 'v$version', branch: 'develop' },
+    escrow: { generation: 'AUTO' },
+  }
+  // Recorded from initialValues(null, FULL) on main, before the profiles came from the registry.
+  const MAIN_SCRATCH_VALUES = {
+    name: '', displayName: 'Default Display', buildSystem: 'GRADLE', componentOwner: '',
+    distributionExplicit: false, distributionExternal: true, releaseManager: [], securityChampion: [],
+    copyright: '', clientCode: '', jiraProjectKey: 'DEFJ', versionPrefix: '',
+    versionFormat: '$versionPrefix-$baseVersionFormat', minorVersionFormat: '$major.$minor',
+    releaseVersionFormat: '$major.$minor.$service', buildVersionFormat: '$major.$minor.$service-$fix',
+    lineVersionFormat: '$major', minorSeparate: true, buildSeparate: true, vcsUrl: '', vcsTag: 'v$version',
+    vcsBranch: 'develop',
+    coordinate: { type: 'maven', groupPattern: '', artifactPattern: '', imageName: '', flavor: '', packageType: 'DEB', packageName: '' },
+    ownership: [{ groupId: '', mode: 'ALL', tokens: [] }],
+    escrowGeneration: 'AUTO',
+  }
+
+  it('a new component with Regular external pre-selected starts exactly as on main', () => {
+    expect(initialValues(null, FULL, profile('regular-external'))).toEqual(MAIN_SCRATCH_VALUES)
+  })
+
+  it('an explicit external first profile seeds the copyright default', () => {
+    const v = initialValues(null, FULL, profile('solution'))
+    expect(v.distributionExplicit).toBe(true)
+    expect(v.distributionExternal).toBe(true)
+    expect(v.copyright).toBe('(c) Default')
+  })
+
+  it('with no usable profile the flags stay at the scratch defaults (external, not explicit)', () => {
+    const v = initialValues(null, FULL, null)
+    expect(v.distributionExternal).toBe(true)
+    expect(v.distributionExplicit).toBe(false)
+  })
+
+  it.each([
+    ['a solution', { name: 'pay-solution', solution: true, distributionExternal: true, distributionExplicit: true }],
+    ['a regular external', { name: 'pay', distributionExternal: true, distributionExplicit: false }],
+    ['an internal', { name: 'tools', distributionExternal: false, distributionExplicit: true }],
+  ])('a clone of %s source copies the source, whatever profile is pre-selected', (_label, overrides) => {
+    const src = makeSource(overrides as Partial<ComponentDetail>)
+    const fromSource = initialValues(src, FULL, null)
+    expect(fromSource.distributionExternal).toBe(src.distributionExternal)
+    expect(fromSource.distributionExplicit).toBe(src.distributionExplicit)
+    expect(initialValues(src, FULL, profile('regular-internal'))).toEqual(fromSource)
   })
 })
 

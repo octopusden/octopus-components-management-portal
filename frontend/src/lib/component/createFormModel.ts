@@ -4,7 +4,8 @@ import { findUnsupportedGroupId } from '../groupValidation'
 import { isVcsHostSupported, hostOf } from '../vcsHost'
 import { selectBaseRow } from '../api/baseRow'
 import type { ComponentDetail, EscrowAspect } from '../types'
-import type { ProfileFieldRule } from '../../hooks/useComponentProfiles'
+import type { ComponentProfile, ProfileFieldRule } from '../../hooks/useComponentProfiles'
+import { flagsForProfile } from './createProfile'
 import { formFieldOfRulePath, profileRuleErrors } from './profileRules'
 import {
   buildCreateRequest,
@@ -22,41 +23,6 @@ import {
 // pre-existing names) — new components follow the strict convention.
 export const BASE_KEY_REGEX = /^[a-z][a-z0-9-]*$/
 
-// The four component profiles chosen on the wizard's first (scratch) step. The
-// profile is the single source for the solution / external / explicit flags and
-// the Component-Key naming rule (see brief "Choose component profile").
-export type ComponentProfile = 'solution' | 'dmp-bundle' | 'regular-external' | 'regular-internal'
-
-// Scratch pre-selects the most common profile ("Regular external component").
-// Its flags are the source of truth for a from-scratch component's distribution
-// classification — so `initialValues` seeds the RHF flags from this profile, not
-// from `component-defaults`, keeping the pre-selected profile and the payload in
-// lockstep (the wizard only overlays `solution` at submit).
-export const DEFAULT_SCRATCH_PROFILE: ComponentProfile = 'regular-external'
-
-export interface ProfileFlags {
-  solution: boolean
-  distributionExternal: boolean
-  distributionExplicit: boolean
-}
-
-// Solution / DMP Bundle fix external+explicit=true; the two Regular profiles fix
-// external by kind and take explicit from the "Has explicit distribution?" answer.
-export function flagsForProfile(profile: ComponentProfile, explicitAnswer: boolean): ProfileFlags {
-  switch (profile) {
-    case 'solution':
-    case 'dmp-bundle':
-      return { solution: true, distributionExternal: true, distributionExplicit: true }
-    case 'regular-external':
-      return { solution: false, distributionExternal: true, distributionExplicit: explicitAnswer }
-    case 'regular-internal':
-      return { solution: false, distributionExternal: false, distributionExplicit: explicitAnswer }
-  }
-}
-
-// Profile-dependent Component-Key requirement message, or null when the key is
-// acceptable for the profile. Base-regex failure is reported first; then the
-// per-profile substring rule.
 // SYS-095 / CRS ADR-020: an underscore is legal in a Component Key only inside its
 // client-code prefix — the lowercased Client Code of the same component, leading the key
 // and followed by the end of the key or '-' and the usual kebab tail. No Client Code
@@ -414,6 +380,8 @@ export function versionFormatsFromDefaults(defaults: ComponentDefaults): Version
 export function initialValues(
   source: ComponentDetail | null,
   defaults: ComponentDefaults,
+  // The profile the wizard pre-selects; a clone copies its flags from the source instead.
+  profile: ComponentProfile | null = null,
 ): CreateFormValues {
   const vcsDefaults = defaults.vcs ?? {}
   const baseVcs = source ? selectBaseRow(source)?.vcsEntries?.[0] : undefined
@@ -426,10 +394,9 @@ export function initialValues(
     // wizard's source of truth), not from component-defaults — otherwise the
     // pre-selected profile and the seeded flags could disagree and the payload
     // would carry a classification that contradicts the shown profile.
-    const { distributionExplicit, distributionExternal } = flagsForProfile(
-      DEFAULT_SCRATCH_PROFILE,
-      SCRATCH_DEFAULTS.distributionExplicit,
-    )
+    const { distributionExplicit, distributionExternal } = profile
+      ? flagsForProfile(profile, SCRATCH_DEFAULTS.distributionExplicit)
+      : SCRATCH_DEFAULTS
     return {
       ...SCRATCH_DEFAULTS,
       buildSystem:

@@ -280,7 +280,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
     // Live validation so inline field errors surface as the user types (the
     // stepper's cross-step markers use an independent safeParse).
     mode: 'onChange',
-    defaultValues: initialValues(source, defaults),
+    defaultValues: initialValues(source, defaults, profiles.find((p) => p.id === initial.profileId) ?? null),
   })
 
   const values = watch()

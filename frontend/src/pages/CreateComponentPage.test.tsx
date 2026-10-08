@@ -800,6 +800,30 @@ describe('CreateComponentPage — profiles from the registry', () => {
   })
 })
 
+describe("CreateComponentPage — today's pre-filled values", () => {
+  it('shows the skeleton, not the wizard, while the profiles load', () => {
+    mockUseComponentProfiles.mockReturnValue({ ...PROFILES_OK, data: undefined, isLoading: true, isSuccess: false })
+    renderWizard()
+    expect(screen.queryByText('Choose component profile')).toBeNull()
+    expect(screen.queryByText(/could not load the component profiles/i)).toBeNull()
+  })
+
+  it('still seeds the owner from the current user', async () => {
+    mockUseCurrentUser.mockReturnValue({ data: { username: 'bob' }, isLoading: false })
+    renderWizard()
+    await clickNext()
+    await waitFor(() => expect((screen.getByPlaceholderText('AD userkey') as HTMLInputElement).value).toBe('bob'))
+  })
+
+  it('still makes the Jira version prefix follow the key', async () => {
+    renderWizard()
+    await clickNext()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await userEvent.click(screen.getByRole('button', { name: /^Jira$/i }))
+    expect((screen.getByLabelText(/^Jira Version Prefix/i) as HTMLInputElement).value).toBe('widget')
+  })
+})
+
 describe('CreateComponentPage — create names the profile', () => {
   // Regular internal with PROVIDED: the shortest flow to a valid Create.
   async function createRegularInternal() {
