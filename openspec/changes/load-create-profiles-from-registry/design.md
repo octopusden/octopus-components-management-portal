@@ -189,8 +189,9 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
   requires patterns valid in both.
 - **The path list can drift.** The reader and the path → field table copy the registry's fixed
   path list. A path the registry adds later is skipped by the wizard until both learn it; the
-  create still rejects a failing value. Accepted: a test pins the table against the vendored
-  contract's list, and today's profiles only rule on `name`.
+  create still rejects a failing value. Accepted: the contract does not enumerate the
+  paths, so the list is copied from the registry's `CreateRequestPaths`; today's profiles only
+  rule on `name`.
 - **The wizard adds an availability reason the registry does not give.** The registry's `usable`
   knows permissions only; field-config editability of the classification flags is judged by the
   Portal (Decision 4). Accepted: the registry would reject the create anyway; moving the check
