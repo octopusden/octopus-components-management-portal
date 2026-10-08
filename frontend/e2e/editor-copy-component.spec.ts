@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test'
 import {
   mockComponentList,
   mockComponentDefaults,
+  mockComponentProfiles,
   mockFieldConfig,
   mockOwners,
   mockLabels,
@@ -133,6 +134,7 @@ async function setupRoutes(page: Page, sourceOverride: Record<string, unknown> =
   // The create dialog gates its form mount on component-defaults and prefills
   // the VCS tag from it.
   await mockComponentDefaults(page)
+  await mockComponentProfiles(page)
   await mockOwners(page, ['owner-oscar'])
   await mockLabels(page, ['backend'])
   // The unified dialog reads build systems via useFieldOptions('buildSystem');
@@ -382,6 +384,19 @@ test.describe('Clone component — admin smoke', () => {
 })
 
 test.describe('Create component from scratch — admin smoke', () => {
+  test("the registry profile's key rule rejects resolution-service under Regular external", async ({ page }) => {
+    await setupRoutes(page)
+    await page.goto('/components/new')
+    await page.getByRole('radio', { name: 'Regular external component' }).click()
+    await page.getByRole('button', { name: /^next$/i }).click()
+    await page.getByLabel(/^component key/i).fill('resolution-service')
+    await expect(
+      page.getByText(
+        "A regular component's key cannot contain solution or dmp-bundle. Choose the Solution or DMP Bundle profile.",
+      ),
+    ).toBeVisible()
+  })
+
   test('profile gate → explicit external → fill RM/SC + docker coordinate, POST carries them', async ({
     page,
   }) => {

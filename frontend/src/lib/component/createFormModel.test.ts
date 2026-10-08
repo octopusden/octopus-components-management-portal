@@ -8,6 +8,8 @@ import {
 } from './createFormModel'
 import type { CreateFormValues } from './buildCreateRequest'
 import type { ComponentConfiguration, ComponentDetail } from '../types'
+import type { ComponentProfile, ProfileFieldRule } from '../../hooks/useComponentProfiles'
+import shipped from '../../test-fixtures/component-profiles.contract.json'
 
 function makeBaseRow(overrides: Partial<ComponentConfiguration> = {}): ComponentConfiguration {
   return {
@@ -107,13 +109,82 @@ describe('initialValues — Full Version Format (config-first with a universal f
 })
 
 describe('initialValues — scratch distribution flags follow the pre-selected profile', () => {
-  it('derives External/Explicit from the default profile, NOT from defaults.distribution', () => {
+  const profile = (id: string) => (shipped.profiles as ComponentProfile[]).find((p) => p.id === id)!
+
+  it('derives External/Explicit from the pre-selected profile, NOT from defaults.distribution', () => {
     // Even if component-defaults say internal/explicit, a scratch component starts
     // as the pre-selected Regular external profile → external=true, explicit=false.
     const defaults: ComponentDefaults = { distribution: { external: false, explicit: true } }
-    const v = initialValues(null, defaults)
+    const v = initialValues(null, defaults, profile('regular-external'))
     expect(v.distributionExternal).toBe(true)
     expect(v.distributionExplicit).toBe(false)
+  })
+})
+
+describe("initialValues — today's pre-filled values are kept (D7)", () => {
+  const profile = (id: string) => (shipped.profiles as ComponentProfile[]).find((p) => p.id === id)!
+  const FULL: ComponentDefaults = {
+    buildSystem: 'GRADLE',
+    componentDisplayName: 'Default Display',
+    copyright: '(c) Default',
+    jira: {
+      projectKey: 'DEFJ',
+      componentVersionFormat: {
+        versionFormat: '$versionPrefix-$baseVersionFormat',
+        lineVersionFormat: '$major',
+        minorVersionFormat: '$major.$minor',
+        releaseVersionFormat: '$major.$minor.$service',
+        buildVersionFormat: '$major.$minor.$service-$fix',
+      },
+    },
+    distribution: { external: false, explicit: true },
+    vcs: { tag: 'v$version', branch: 'develop' },
+    escrow: { generation: 'AUTO' },
+  }
+  // Recorded from initialValues(null, FULL) on main, before the profiles came from the registry.
+  const MAIN_SCRATCH_VALUES = {
+    name: '', displayName: 'Default Display', buildSystem: 'GRADLE', componentOwner: '',
+    distributionExplicit: false, distributionExternal: true, releaseManager: [], securityChampion: [],
+    copyright: '', clientCode: '', jiraProjectKey: 'DEFJ', versionPrefix: '',
+    versionFormat: '$versionPrefix-$baseVersionFormat', minorVersionFormat: '$major.$minor',
+    releaseVersionFormat: '$major.$minor.$service', buildVersionFormat: '$major.$minor.$service-$fix',
+    lineVersionFormat: '$major', minorSeparate: true, buildSeparate: true, vcsUrl: '', vcsTag: 'v$version',
+    vcsBranch: 'develop',
+    coordinate: { type: 'maven', groupPattern: '', artifactPattern: '', imageName: '', flavor: '', packageType: 'DEB', packageName: '' },
+    ownership: [{ groupId: '', mode: 'ALL', tokens: [] }],
+    escrowGeneration: 'AUTO',
+    // New create fields, empty for a new component.
+    labels: [],
+    buildTasks: '',
+  }
+
+  it('a new component with Regular external pre-selected starts exactly as on main', () => {
+    expect(initialValues(null, FULL, profile('regular-external'))).toEqual(MAIN_SCRATCH_VALUES)
+  })
+
+  it('an explicit external first profile seeds the copyright default', () => {
+    const v = initialValues(null, FULL, profile('solution'))
+    expect(v.distributionExplicit).toBe(true)
+    expect(v.distributionExternal).toBe(true)
+    expect(v.copyright).toBe('(c) Default')
+  })
+
+  it('with no usable profile the flags stay at the scratch defaults (external, not explicit)', () => {
+    const v = initialValues(null, FULL, null)
+    expect(v.distributionExternal).toBe(true)
+    expect(v.distributionExplicit).toBe(false)
+  })
+
+  it.each([
+    ['a solution', { name: 'pay-solution', solution: true, distributionExternal: true, distributionExplicit: true }],
+    ['a regular external', { name: 'pay', distributionExternal: true, distributionExplicit: false }],
+    ['an internal', { name: 'tools', distributionExternal: false, distributionExplicit: true }],
+  ])('a clone of %s source copies the source, whatever profile is pre-selected', (_label, overrides) => {
+    const src = makeSource(overrides as Partial<ComponentDetail>)
+    const fromSource = initialValues(src, FULL, null)
+    expect(fromSource.distributionExternal).toBe(src.distributionExternal)
+    expect(fromSource.distributionExplicit).toBe(src.distributionExplicit)
+    expect(initialValues(src, FULL, profile('regular-internal'))).toEqual(fromSource)
   })
 })
 
@@ -195,17 +266,88 @@ describe('makeCreateSchema — key validated against the client code that is sen
   const allEditable = () => true
 
   it('accepts the key when the form client code is the one that gets sent', () => {
-    expect(keyIssues(makeCreateSchema(allEditable, [], null, 'regular-external', undefined), form())).toHaveLength(0)
+    expect(keyIssues(makeCreateSchema(allEditable, [], null, []), form())).toHaveLength(0)
   })
 
   it('rejects the key when clientCode is not editable, because the payload strips it', () => {
-    const schema = makeCreateSchema((f) => f !== 'clientCode', [], null, 'regular-external', undefined)
+    const schema = makeCreateSchema((f) => f !== 'clientCode', [], null, [])
     expect(keyIssues(schema, form())).toHaveLength(1)
   })
 
   it('rejects the key when the component is not external, because the form value is ignored', () => {
-    const schema = makeCreateSchema(allEditable, [], null, 'regular-internal', undefined)
+    const schema = makeCreateSchema(allEditable, [], null, [])
     expect(keyIssues(schema, form({ distributionExternal: false }))).toHaveLength(1)
+  })
+})
+
+describe('makeCreateSchema — the chosen profile\'s field rules', () => {
+  const rulesOf = (id: string): ProfileFieldRule[] =>
+    (shipped.profiles as ComponentProfile[]).find((p) => p.id === id)!.rules
+  const rule = (path: string, pattern: string): ProfileFieldRule => ({ path, pattern, message: `rule on ${path}` })
+  const allEditable: (field: string) => boolean = () => true
+  function form(overrides: Partial<CreateFormValues> = {}): CreateFormValues {
+    return {
+      ...initialValues(null, {}),
+      name: 'payments',
+      componentOwner: 'alice',
+      buildSystem: 'PROVIDED',
+      jiraProjectKey: 'ABCD',
+      versionFormat: '$major.$minor',
+      ...overrides,
+    }
+  }
+  const issuesOn = (rules: ProfileFieldRule[], values: CreateFormValues, editable = allEditable) => {
+    const result = makeCreateSchema(editable, [], null, rules).safeParse(values)
+    return result.success ? [] : result.error.issues
+  }
+  const messagesAt = (issues: ReturnType<typeof issuesOn>, path: string) =>
+    issues.filter((i) => i.path.join('.') === path).map((i) => i.message)
+
+  it('reports a character failure alone, before any profile rule', () => {
+    const issues = issuesOn(rulesOf('regular-external'), form({ name: 'Solution' }))
+    expect(messagesAt(issues, 'name')).toHaveLength(1)
+    expect(messagesAt(issues, 'name')[0]).toMatch(/Component Key must be/)
+  })
+
+  it('reports a failing profile rule on the key', () => {
+    const issues = issuesOn(rulesOf('regular-external'), form({ name: 'resolution-service' }))
+    expect(messagesAt(issues, 'name')).toEqual([rulesOf('regular-external')[0]!.message])
+  })
+
+  it('reports a rule on build tasks on the build tasks field', () => {
+    const issues = issuesOn([rule('baseConfiguration.build.buildTasks', 'clean build')], form())
+    expect(messagesAt(issues, 'buildTasks')).toEqual(['rule on baseConfiguration.build.buildTasks'])
+  })
+
+  it('applies only today\'s checks without rules', () => {
+    expect(messagesAt(issuesOn([], form({ name: 'resolution-service' })), 'name')).toHaveLength(0)
+  })
+
+  it('no longer applies the built-in solution-substring rule', () => {
+    expect(messagesAt(issuesOn([], form({ name: 'my-solution' })), 'name')).toHaveLength(0)
+  })
+
+  it('checks a Maven-group rule as "" when the coordinate is a Docker image, on the Maven group field', () => {
+    const values = form({
+      distributionExplicit: true,
+      distributionExternal: true,
+      displayName: 'Payments',
+      coordinate: { ...form().coordinate, type: 'docker', imageName: 'acme/payments' },
+    })
+    const issues = issuesOn([rule('baseConfiguration.mavenArtifacts[0].groupPattern', '.+')], values)
+    expect(messagesAt(issues, 'coordinate.groupPattern')).toEqual([
+      'rule on baseConfiguration.mavenArtifacts[0].groupPattern',
+    ])
+  })
+
+  it('checks a rule on a field the user may not edit as "", because the request leaves it out', () => {
+    const issues = issuesOn([rule('displayName', '.+')], form({ displayName: 'Payments' }), (f: string) => f !== 'displayName')
+    expect(messagesAt(issues, 'displayName')).toEqual(['rule on displayName'])
+  })
+
+  it('does not add a rule message to a blank key, which already shows "required"', () => {
+    const issues = issuesOn(rulesOf('solution'), form({ name: '' }))
+    expect(messagesAt(issues, 'name')).toEqual(['Component Key is required'])
   })
 })
 

@@ -6,6 +6,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 import { CreateComponentPage } from './CreateComponentPage'
 import { ApiError } from '../lib/api'
+import type { ComponentProfile } from '../hooks/useComponentProfiles'
+import shippedProfiles from '../test-fixtures/component-profiles.contract.json'
 import { TooltipProvider } from '../components/ui/tooltip'
 import type { ComponentDetail } from '../lib/types'
 
@@ -62,6 +64,16 @@ vi.mock('../hooks/useAdminConfig', () => ({
 }))
 const mockUseCurrentUser = vi.fn(() => ({ data: undefined as unknown, isLoading: false }))
 vi.mock('../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUseCurrentUser() }))
+const PROFILES_OK = {
+  data: shippedProfiles.profiles as ComponentProfile[] | undefined,
+  isLoading: false,
+  isError: false,
+  isSuccess: true,
+  refetch: vi.fn(),
+}
+const mockUseComponentProfiles = vi.fn(() => PROFILES_OK)
+vi.mock('../hooks/useComponentProfiles', () => ({ useComponentProfiles: () => mockUseComponentProfiles() }))
+vi.mock('../hooks/useLabels', () => ({ useLabels: () => ({ data: ['sql', 'backend'], isLoading: false }) }))
 // Layout pulls the nav shell + its own queries; stub to a passthrough.
 vi.mock('../components/Layout', () => ({
   Layout: ({ children }: { children: React.ReactNode }) =>
@@ -162,6 +174,7 @@ beforeEach(() => {
   mockUsePortalLinks.mockReturnValue({ data: undefined })
   mockUsePortalConfig.mockReturnValue({ data: { solutionKeyPatterns: ['-solution', 'dmp-bundle'] } })
   mockUseCurrentUser.mockReturnValue({ data: undefined, isLoading: false })
+  mockUseComponentProfiles.mockReturnValue(PROFILES_OK)
 })
 
 describe('CreateComponentPage — scratch profile default', () => {
@@ -191,12 +204,12 @@ describe('CreateComponentPage — scratch profile default', () => {
     expect(mockMutateAsync).not.toHaveBeenCalled()
   })
 
-  it('a solution key that lacks "-solution" is rejected for the Solution profile', async () => {
+  it('a key the Solution profile rule rejects shows the registry message', async () => {
     renderWizard()
     await userEvent.click(screen.getByRole('radio', { name: /^Solution$/i }))
     await clickNext()
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
-    await waitFor(() => expect(screen.getByText(/must contain "-solution"/i)).toBeDefined())
+    await waitFor(() => expect(screen.getByText('A solution key contains -solution, e.g. payments-solution.')).toBeDefined())
   })
 })
 
@@ -640,7 +653,7 @@ describe('CreateComponentPage — profile radio semantics', () => {
     await userEvent.click(external)
     external.focus()
     await userEvent.keyboard('{ArrowDown}')
-    // Arrow advances to the next profile (Regular internal is last in PROFILE_META).
+    // Arrow advances to the next profile in the registry order.
     await waitFor(() =>
       expect(
         screen.getByRole('radio', { name: /Regular internal component/i }).getAttribute('aria-checked'),
@@ -660,6 +673,308 @@ describe('CreateComponentPage — profile radio semantics', () => {
     // Roving-tabindex: focus must follow the selection to the next profile, not
     // stay stranded on the previous (now tabIndex=-1) radio.
     expect(internal).toHaveFocus()
+  })
+})
+
+describe('CreateComponentPage — profiles from the registry', () => {
+  const shipped = shippedProfiles.profiles as ComponentProfile[]
+  const byId = (id: string) => shipped.find((p) => p.id === id)!
+  const profilesResult = (data: ComponentProfile[] | undefined, overrides: Partial<typeof PROFILES_OK> = {}) => ({
+    ...PROFILES_OK,
+    data,
+    ...overrides,
+  })
+
+  it('renders one tile per registry profile, with its title and description, in the registry order', () => {
+    mockUseComponentProfiles.mockReturnValue(
+      profilesResult([
+        { ...byId('dmp-bundle'), title: 'Bundle (registry title)', description: 'Bundle from the registry.' },
+        { ...byId('regular-external'), title: 'Ordinary external', description: 'External from the registry.' },
+      ]),
+    )
+    renderWizard()
+    const tiles = screen.getAllByRole('radio', { name: /Bundle \(registry title\)|Ordinary external/ })
+    expect(tiles.map((t) => t.getAttribute('aria-label'))).toEqual(['Bundle (registry title)', 'Ordinary external'])
+    expect(screen.getByText('External from the registry.')).toBeDefined()
+    expect(screen.queryByRole('radio', { name: /^Solution$/ })).toBeNull()
+  })
+
+  it('shows an unusable profile disabled with the registry reason; clicking it changes nothing', async () => {
+    mockUseComponentProfiles.mockReturnValue(
+      profilesResult([
+        byId('regular-external'),
+        { ...byId('solution'), usable: false, unusableReason: 'Not for your role' },
+      ]),
+    )
+    renderWizard()
+    const solution = screen.getByRole('radio', { name: /^Solution$/ })
+    expect(solution).toBeDisabled()
+    expect(screen.getByText('Not for your role')).toBeDefined()
+    await userEvent.click(solution)
+    expect(solution.getAttribute('aria-checked')).toBe('false')
+    expect(screen.getByRole('radio', { name: /Regular external component/ }).getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('arrow keys skip an unusable profile', async () => {
+    mockUseComponentProfiles.mockReturnValue(
+      profilesResult([
+        byId('regular-external'),
+        { ...byId('regular-internal'), usable: false, unusableReason: 'No' },
+        byId('solution'),
+      ]),
+    )
+    renderWizard()
+    const external = screen.getByRole('radio', { name: /Regular external component/ })
+    external.focus()
+    await userEvent.keyboard('{ArrowDown}')
+    await waitFor(() => expect(screen.getByRole('radio', { name: /^Solution$/ })).toHaveAttribute('aria-checked', 'true'))
+    expect(screen.getByRole('radio', { name: /Regular internal component/ })).toHaveAttribute('aria-checked', 'false')
+  })
+
+  it('shows the error and Retry instead of the wizard when the listing fails; Retry refetches', async () => {
+    const refetch = vi.fn()
+    mockUseComponentProfiles.mockReturnValue(profilesResult(undefined, { isError: true, isSuccess: false, refetch }))
+    renderWizard()
+    expect(screen.getByText(/could not load the component profiles/i)).toBeDefined()
+    expect(screen.queryByText('Choose component profile')).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: /retry/i }))
+    expect(refetch).toHaveBeenCalled()
+  })
+
+  it('shows the same error when the listing has no regular profile', () => {
+    mockUseComponentProfiles.mockReturnValue(profilesResult([]))
+    renderWizard()
+    expect(screen.getByText(/could not load the component profiles/i)).toBeDefined()
+    expect(screen.queryByText('Choose component profile')).toBeNull()
+  })
+
+  it('shows the same error for a clone whose profiles fail to load', () => {
+    mockUseComponent.mockReturnValue({ data: makeSource(), isLoading: false, error: null })
+    mockUseComponentProfiles.mockReturnValue(profilesResult(undefined, { isError: true, isSuccess: false }))
+    renderWizard('/components/new?from=c-1')
+    expect(screen.getByText(/could not load the component profiles/i)).toBeDefined()
+  })
+
+  it('pre-selects the first usable profile for a new component', () => {
+    mockUseComponentProfiles.mockReturnValue(
+      profilesResult([{ ...byId('regular-external'), usable: false, unusableReason: 'No' }, byId('regular-internal')]),
+    )
+    renderWizard()
+    expect(screen.getByRole('radio', { name: /Regular internal component/ })).toHaveAttribute('aria-checked', 'true')
+  })
+
+  it('selects nothing and holds Next when no profile is usable', () => {
+    mockUseComponentProfiles.mockReturnValue(
+      profilesResult([{ ...byId('regular-external'), usable: false, unusableReason: 'No' }]),
+    )
+    renderWizard()
+    expect(screen.getByRole('radio', { name: /Regular external component/ })).toHaveAttribute('aria-checked', 'false')
+    expect((screen.getByRole('button', { name: /^next$/i }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('asks "Has explicit distribution?" only for a profile whose explicit is ask', async () => {
+    renderWizard()
+    expect(screen.getByText('Has explicit distribution?')).toBeDefined()
+    await userEvent.click(screen.getByRole('radio', { name: /^Solution$/ }))
+    expect(screen.queryByText('Has explicit distribution?')).toBeNull()
+  })
+
+  it('clears the key on a profile change and checks it against the new profile rules', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /^Solution$/ }))
+    await clickNext()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'payments-solution')
+    await userEvent.click(screen.getByRole('button', { name: /^Profile$/i }))
+    await userEvent.click(screen.getByRole('radio', { name: /Regular external component/ }))
+    await clickNext()
+    const key = screen.getByPlaceholderText('my-component') as HTMLInputElement
+    expect(key.value).toBe('')
+    await userEvent.type(key, 'payments-solution')
+    await waitFor(() => expect(screen.getByText(byId('regular-external').rules[0]!.message)).toBeDefined())
+  })
+
+  it('shows the registry message for resolution-service under Regular external', async () => {
+    renderWizard()
+    await clickNext()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'resolution-service')
+    await waitFor(() => expect(screen.getByText(byId('regular-external').rules[0]!.message)).toBeDefined())
+  })
+})
+
+describe("CreateComponentPage — today's pre-filled values", () => {
+  it('shows the skeleton, not the wizard, while the profiles load', () => {
+    mockUseComponentProfiles.mockReturnValue({ ...PROFILES_OK, data: undefined, isLoading: true, isSuccess: false })
+    renderWizard()
+    expect(screen.queryByText('Choose component profile')).toBeNull()
+    expect(screen.queryByText(/could not load the component profiles/i)).toBeNull()
+  })
+
+  it('still seeds the owner from the current user', async () => {
+    mockUseCurrentUser.mockReturnValue({ data: { username: 'bob' }, isLoading: false })
+    renderWizard()
+    await clickNext()
+    await waitFor(() => expect((screen.getByPlaceholderText('AD userkey') as HTMLInputElement).value).toBe('bob'))
+  })
+
+  it('still makes the Jira version prefix follow the key', async () => {
+    renderWizard()
+    await clickNext()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await userEvent.click(screen.getByRole('button', { name: /^Jira$/i }))
+    expect((screen.getByLabelText(/^Jira Version Prefix/i) as HTMLInputElement).value).toBe('widget')
+  })
+})
+
+describe('CreateComponentPage — create names the profile', () => {
+  // Regular internal with PROVIDED: the shortest flow to a valid Create.
+  async function createRegularInternal() {
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await clickNext()
+    await userEvent.selectOptions(screen.getByLabelText(/^Build System/i), 'PROVIDED')
+    await userEvent.click(screen.getByRole('button', { name: /^Jira$/i }))
+    await userEvent.type(screen.getByLabelText(/^Jira Project Key/i), 'WIDG')
+    await userEvent.click(screen.getByRole('button', { name: /Review & create/i }))
+    await userEvent.type(screen.getByLabelText(/^Jira task key/i), 'ABC-123')
+    await userEvent.click(screen.getByRole('button', { name: /^create component$/i }))
+  }
+  // As lib/api builds it: the message is the body's errorMessage.
+  const rejectWith = (errorMessage: string) =>
+    mockMutateAsync.mockRejectedValueOnce(new ApiError(400, errorMessage, JSON.stringify({ errorMessage })))
+
+  it('sends the chosen profile id', async () => {
+    renderWizard()
+    await createRegularInternal()
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1))
+    expect(mockMutateAsync.mock.calls[0]![0].profile).toBe('regular-internal')
+  })
+
+  it('sends solution from the profile only when the field is editable', async () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: { component: { solution: { visibility: 'readonly' } } },
+      isLoading: false,
+      isError: false,
+    })
+    renderWizard()
+    await createRegularInternal()
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1))
+    expect(mockMutateAsync.mock.calls[0]![0]).not.toHaveProperty('solution')
+  })
+
+  it('opens the Profile step with the message when the registry rejects the profile', async () => {
+    rejectWith("profile: profile 'regular-internal' needs external: false, but the create would store external: true")
+    renderWizard()
+    await createRegularInternal()
+    await waitFor(() => expect(screen.getByText('Choose component profile')).toBeDefined())
+    expect(screen.getAllByText(/needs external: false/).length).toBeGreaterThan(0)
+  })
+
+  it('shows a rule rejection on the key under the key on General', async () => {
+    rejectWith('name: A regular component key cannot contain solution')
+    renderWizard()
+    await createRegularInternal()
+    await waitFor(() => expect(screen.getByPlaceholderText('my-component')).toBeDefined())
+    expect(screen.getAllByText('A regular component key cannot contain solution').length).toBeGreaterThan(0)
+  })
+
+  it('shows a rule rejection on the Jira project key on the Jira step, under the field', async () => {
+    rejectWith('baseConfiguration.jira.projectKey: Use the MDLCUST project')
+    renderWizard()
+    await createRegularInternal()
+    await waitFor(() => expect(screen.getByLabelText(/^Jira Project Key/i)).toBeDefined())
+    expect(screen.getAllByText('Use the MDLCUST project').length).toBeGreaterThan(0)
+  })
+
+  it('opens the Distribution step for a rule rejection on the Maven group', async () => {
+    rejectWith('baseConfiguration.mavenArtifacts[0].groupPattern: Must start with com.acme')
+    renderWizard()
+    await createRegularInternal()
+    await waitFor(() => expect(screen.getByRole('heading', { name: /^Distribution$/ })).toBeDefined())
+  })
+})
+
+describe('CreateComponentPage — labels and build tasks', () => {
+  async function createRegularInternal(before?: () => Promise<void>) {
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await before?.()
+    await userEvent.click(screen.getByRole('button', { name: /^Build$/i }))
+    await userEvent.selectOptions(screen.getByLabelText(/^Build System/i), 'PROVIDED')
+    await userEvent.click(screen.getByRole('button', { name: /^Jira$/i }))
+    await userEvent.type(screen.getByLabelText(/^Jira Project Key/i), 'WIDG')
+    await userEvent.click(screen.getByRole('button', { name: /Review & create/i }))
+    await userEvent.type(screen.getByLabelText(/^Jira task key/i), 'ABC-123')
+  }
+  const create = async () => {
+    await userEvent.click(screen.getByRole('button', { name: /^create component$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1))
+    return mockMutateAsync.mock.calls[0]![0]
+  }
+
+  it('offers Labels on General from the labels list only, and sends the picked ones', async () => {
+    renderWizard()
+    await createRegularInternal(async () => {
+      const add = screen.getByRole('combobox', { name: 'Add label' })
+      expect([...(add as HTMLSelectElement).options].map((o) => o.value).filter(Boolean)).toEqual(['sql', 'backend'])
+      await userEvent.selectOptions(add, 'sql')
+    })
+    expect(screen.getByText('+ sql')).toBeDefined()
+    expect((await create()).labels).toEqual(['sql'])
+  })
+
+  it('sends no labels when none are picked', async () => {
+    renderWizard()
+    await createRegularInternal()
+    expect((await create()).labels).toEqual([])
+  })
+
+  it('does not show Labels when field-config hides them', async () => {
+    mockUseFieldConfig.mockReturnValue({ data: { component: { labels: { visibility: 'hidden' } } }, isLoading: false, isError: false })
+    renderWizard()
+    await clickNext()
+    expect(screen.queryByRole('combobox', { name: 'Add label' })).toBeNull()
+  })
+
+  it('offers Build tasks on Build; the value is on Review and in the build configuration', async () => {
+    renderWizard()
+    await createRegularInternal(async () => {
+      await userEvent.click(screen.getByRole('button', { name: /^Build$/i }))
+      await userEvent.type(screen.getByLabelText(/^Build Tasks/i), 'clean build')
+    })
+    expect(screen.getByText('+ clean build')).toBeDefined()
+    expect((await create()).baseConfiguration.build.buildTasks).toBe('clean build')
+  })
+
+  it('does not send blank build tasks', async () => {
+    renderWizard()
+    await createRegularInternal()
+    expect((await create()).baseConfiguration.build).not.toHaveProperty('buildTasks')
+  })
+
+  it('does not show Build tasks when field-config hides them', async () => {
+    mockUseFieldConfig.mockReturnValue({ data: { build: { buildTasks: { visibility: 'hidden' } } }, isLoading: false, isError: false })
+    renderWizard()
+    await userEvent.click(screen.getByRole('button', { name: /^Build$/i }))
+    expect(screen.queryByLabelText(/^Build Tasks/i)).toBeNull()
+  })
+
+  it("a clone starts with the source's labels and build tasks", async () => {
+    mockUseComponent.mockReturnValue({
+      data: makeSource({
+        labels: ['backend'],
+        configurations: [{ ...makeSource().configurations[0]!, build: { buildSystem: 'GRADLE', buildTasks: 'assemble' } }],
+      }),
+      isLoading: false,
+      error: null,
+    })
+    renderWizard('/components/new?from=c-1')
+    expect(screen.getByTestId('chip-backend')).toBeDefined()
+    await userEvent.click(screen.getByRole('button', { name: /^Build$/i }))
+    expect((screen.getByLabelText(/^Build Tasks/i) as HTMLInputElement).value).toBe('assemble')
   })
 })
 
@@ -736,33 +1051,6 @@ describe('CreateComponentPage — clone unsaved-changes guard', () => {
     )
   })
 
-  it('does not engage the guard when late portal-config changes the derived clone profile', async () => {
-    // solutionKeyPatterns arrive only after mount; until then a solution source
-    // derives 'solution', and once the bundle pattern loads it re-derives to
-    // 'dmp-bundle'. That re-derivation must not read as a user profile change.
-    let patternsLoaded = false
-    mockUsePortalConfig.mockImplementation(() => ({
-      data: patternsLoaded ? { solutionKeyPatterns: ['-solution', 'dmp-bundle'] } : undefined,
-    }))
-    mockUseComponent.mockReturnValue({
-      data: makeSource({
-        solution: true,
-        name: 'acme-dmp-bundle',
-        distributionExternal: true,
-        distributionExplicit: true,
-      }),
-      isLoading: false,
-      error: null,
-    })
-    renderWizard('/components/new?from=c-1')
-    expect(screen.getByTestId('unsaved-guard').getAttribute('data-when')).toBe('false')
-    // Patterns load; force a re-render without touching the profile.
-    patternsLoaded = true
-    await userEvent.click(screen.getByRole('button', { name: 'Build' }))
-    await waitFor(() =>
-      expect(screen.getByTestId('unsaved-guard').getAttribute('data-when')).toBe('false'),
-    )
-  })
 })
 
 describe('CreateComponentPage — Escrow step', () => {
@@ -978,6 +1266,22 @@ describe('CreateComponentPage — clone mode', () => {
     expect((screen.getByPlaceholderText('my-component') as HTMLInputElement).value).toBe('')
     // Owner is prefilled from the source.
     expect((screen.getByPlaceholderText('AD userkey') as HTMLInputElement).value).toBe('alice')
+  })
+
+  it('opens on the Profile step with nothing selected when no profile matches the source, and holds Create', async () => {
+    mockUseComponent.mockReturnValue({
+      data: makeSource({ solution: true, distributionExternal: false, distributionExplicit: false }),
+      isLoading: false,
+      error: null,
+    })
+    renderWizard('/components/new?from=c-1')
+    expect(screen.getByText('Choose component profile')).toBeDefined()
+    for (const tile of screen.getAllByRole('radio', { name: /component|Solution|DMP Bundle/ })) {
+      expect(tile).toHaveAttribute('aria-checked', 'false')
+    }
+    await userEvent.click(screen.getByRole('button', { name: /Review & create/i }))
+    await userEvent.type(screen.getByLabelText(/Jira task key/i), 'ABC-1')
+    expect((screen.getByRole('button', { name: /^create component$/i }) as HTMLButtonElement).disabled).toBe(true)
   })
 })
 

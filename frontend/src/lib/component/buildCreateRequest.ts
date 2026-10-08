@@ -2,6 +2,7 @@ import type {
   ArtifactIdMode,
   ArtifactIdRequest,
   BaseConfigurationRequest,
+  BuildAspect,
   ComponentCreateRequest,
   ComponentDetail,
   EscrowAspect,
@@ -123,6 +124,10 @@ export interface CreateFormValues {
   // escrow aspect (form wins) while the rest of the escrow aspect is copied from
   // the source as before — see buildCreateRequest.
   escrowGeneration: string
+  // From the registry's labels list only. A clone starts with the source's labels.
+  labels: string[]
+  // Build aspect `buildTasks`; blank is not sent. A clone starts with the source's.
+  buildTasks: string
 }
 
 // Builds the POST /components payload for both create modes.
@@ -262,6 +267,9 @@ export function buildCreateRequest(
   // not part of a new component's escrow, so its value is stripped even from a
   // cloned source escrow — keeping the payload consistent with the hidden UI.
   escrowGenerationHidden = false,
+  // Field-config visibility of `build.buildTasks`, gated like escrow generation: editable → the
+  // form value wins over a cloned source's; readonly → the source's is kept; hidden → stripped.
+  buildTasksVisibility: 'editable' | 'readonly' | 'hidden' = 'editable',
 ): ComponentCreateRequest {
   const gated = form.distributionExplicit && form.distributionExternal
   const baseRow = source ? selectBaseRow(source) : undefined
@@ -284,7 +292,7 @@ export function buildCreateRequest(
     securityChampion: [...form.securityChampion],
     copyright: form.copyright || undefined,
     releasesInDefaultBranch: source?.releasesInDefaultBranch ?? undefined,
-    labels: [...(source?.labels ?? [])],
+    labels: isFieldEditable('labels') ? [...form.labels] : [...(source?.labels ?? [])],
     // jiraHotfixVersionFormat is intentionally never set on create: the create
     // form has no Hotfix Version Format field (hotfixes are always disabled at
     // creation — no hotfix branch yet), so it is left to the server default and
@@ -309,9 +317,15 @@ export function buildCreateRequest(
   // baseConfiguration is ALWAYS present: the form always supplies buildSystem.
   // In copy mode the build aspect inherits the source's other build fields
   // (e.g. gradleVersion) but the buildSystem comes from the form.
-  const baseConfiguration: BaseConfigurationRequest = {
-    build: { ...(baseRow?.build ?? {}), buildSystem: form.buildSystem },
+  const buildAspect: BuildAspect = { ...(baseRow?.build ?? {}), buildSystem: form.buildSystem }
+  if (buildTasksVisibility === 'editable') {
+    const buildTasks = form.buildTasks.trim()
+    if (buildTasks) buildAspect.buildTasks = buildTasks
+    else delete buildAspect.buildTasks
+  } else if (buildTasksVisibility === 'hidden') {
+    delete buildAspect.buildTasks
   }
+  const baseConfiguration: BaseConfigurationRequest = { build: buildAspect }
   // Escrow aspect: copied from the source BASE row (clone), with the form's
   // `generation` overlaid when the escrow.generation field is editable and a
   // value was chosen (form WINS). The rest of the escrow aspect is preserved as

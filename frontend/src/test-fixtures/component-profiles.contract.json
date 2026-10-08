@@ -1,0 +1,64 @@
+{
+  "profiles": [
+    {
+      "id": "regular-external",
+      "kind": "regular",
+      "title": "Regular external component",
+      "description": "An ordinary component delivered to the client.",
+      "classification": { "external": true, "explicit": "ask", "solution": false },
+      "rules": [
+        {
+          "path": "name",
+          "pattern": "^(?!.*(solution|dmp-bundle)).*$",
+          "message": "A regular component's key cannot contain solution or dmp-bundle. Choose the Solution or DMP Bundle profile."
+        }
+      ],
+      "usable": true
+    },
+    {
+      "id": "regular-internal",
+      "kind": "regular",
+      "title": "Regular internal component",
+      "description": "An ordinary component for internal use only.",
+      "classification": { "external": false, "explicit": "ask", "solution": false },
+      "rules": [
+        {
+          "path": "name",
+          "pattern": "^(?!.*(solution|dmp-bundle)).*$",
+          "message": "A regular component's key cannot contain solution or dmp-bundle. Choose the Solution or DMP Bundle profile."
+        }
+      ],
+      "usable": true
+    },
+    {
+      "id": "solution",
+      "kind": "regular",
+      "title": "Solution",
+      "description": "A top-level component that groups and ships other components together.",
+      "classification": { "external": true, "explicit": "true", "solution": true },
+      "rules": [
+        {
+          "path": "name",
+          "pattern": "^[a-z][a-z0-9-]*-solution(-[a-z0-9-]+)?$",
+          "message": "A solution key contains -solution, e.g. payments-solution."
+        }
+      ],
+      "usable": true
+    },
+    {
+      "id": "dmp-bundle",
+      "kind": "regular",
+      "title": "DMP Bundle",
+      "description": "A bundle component, also a solution, shipped as one distribution.",
+      "classification": { "external": true, "explicit": "true", "solution": true },
+      "rules": [
+        {
+          "path": "name",
+          "pattern": "^[a-z][a-z0-9_-]*dmp-bundle[a-z0-9-]*$",
+          "message": "A DMP bundle key contains dmp-bundle, e.g. payments-dmp-bundle."
+        }
+      ],
+      "usable": true
+    }
+  ]
+}

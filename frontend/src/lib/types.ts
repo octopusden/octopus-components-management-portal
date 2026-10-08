@@ -453,6 +453,9 @@ export interface ComponentCreateRequest {
   securityGroups?: SecurityGroupRequest[]
   teamcityProjects?: TeamcityProjectRequest[]
   baseConfiguration?: BaseConfigurationRequest | null
+  // Id of the registry profile the component is created with; the registry checks the
+  // classification and the profile's field rules against it.
+  profile?: string | null
   // Change metadata recorded on the audit row (not on the component). Both
   // optional; the Jira key, when non-blank, must match a Jira key (see
   // lib/editor/jiraKey). Send a trimmed value or omit — never an empty string.
