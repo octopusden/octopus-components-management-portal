@@ -195,13 +195,21 @@
 ## 11. Registry container (Decision 9) — Gradle
 
 - [ ] 11.1 Bump `crs.version` in `gradle.properties` to the first registry release with profiles.
-- [ ] 11.2 `E2ETestcontainersDriver` passes the four profiles to the registry container as
-      `SPRING_APPLICATION_JSON`; the container starts.
-- [ ] 11.3 `infra/dev/docker-compose.yml` registry service gets the same profiles.
-- [ ] 11.4 Update `frontend/e2e/editor-copy-component.spec.ts` and any create-wizard e2e for the
-      registry's tile titles; add an e2e: create with Regular external and the key
-      `resolution-service` shows the rule message.
-- [ ] 11.5 Run the e2e suite on CI (needs infrastructure; not run locally).
+      Open: no registry release carries profiles yet.
+- [x] 11.2 The e2e registry container loads the four profiles from
+      `src/test/resources/e2e/crs-fixture/component-profiles.yml` via
+      `SPRING_CONFIG_ADDITIONAL_LOCATION` (design Decision 9). The file matches the registry's own
+      `application-dev.yml` profile set (ids, kinds, classifications, order, patterns — compared
+      by script). That the container starts is confirmed only once 11.1 lands, on CI.
+- [x] 11.3 `infra/dev/docker-compose.yml` registry service loads the same file.
+- [x] 11.4 `e2e/visual/_helpers.ts` gains `mockComponentProfiles` (the shared unit-test fixture);
+      `editor-copy-component.spec.ts` uses it — the shipped titles keep the existing radios
+      working — and adds "the registry profile's key rule rejects resolution-service under
+      Regular external". `eslint e2e` clean.
+- [ ] 11.5 Run the e2e suite on CI (needs a running portal and Keycloak; not run locally).
+- [ ] 11.5a `./gradlew compileTestKotlin` fails locally resolving `kotlin-test` 2.3.21
+      (`kotlin-test-framework-junit5` capability) — on `main` too, so an environment issue; the
+      driver change compiles on CI. (added on review)
 
 ## 12. Docs
 

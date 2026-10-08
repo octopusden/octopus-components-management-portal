@@ -173,9 +173,14 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
 ### 9. Registry container in e2e and local dev
 
 - `E2ETestcontainersDriver` runs the registry with `dev-db-automigrate`, which carries no
-  profiles. The driver passes the four profiles as `SPRING_APPLICATION_JSON`, so the test
-  config lives next to the driver and does not depend on the registry image's `dev` profile.
-- `infra/dev` compose gets the same JSON through the registry service's environment.
+  profiles. The four profiles live in `src/test/resources/e2e/crs-fixture/component-profiles.yml`,
+  inside the fixture directory the driver and `infra/dev` compose already mount at
+  `/opt/crs-fixture`; both load it with `SPRING_CONFIG_ADDITIONAL_LOCATION=optional:file:…`.
+  One file for both, no dependency on the registry image's `dev` profile, and a registry version
+  without profiles ignores the subtree. (changed during implementation: a JSON env value in two
+  places was the plan)
+- The route-mocked wizard e2e mocks `GET /component-profiles` with the same fixture the unit
+  tests use (`mockComponentProfiles`).
 - `crs.version` is bumped to the first registry release with profiles in the same commit.
 
 ## Risks / Trade-offs
