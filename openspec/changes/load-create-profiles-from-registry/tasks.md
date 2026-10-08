@@ -29,8 +29,7 @@
   - [ ] 3.1.2 external, explicit `ask`, answer No → explicit `false`
   - [ ] 3.1.3 internal, explicit `ask`, answer Yes → external `false`, explicit `true`
   - [ ] 3.1.4 explicit `false` → `false` regardless of the answer
-  - [ ] 3.1.5 `asksExplicit` is true only for `ask` with `component.distributionExplicit`
-        editable; not editable → answer fixed to No
+  - [ ] 3.1.5 `asksExplicit` is true only for `ask`
 - [ ] 3.2 Rewrite `flagsForProfile` in `createFormModel.ts`; remove `PROFILE_META`, the
       `ComponentProfile` union and `DEFAULT_SCRATCH_PROFILE`.
 - [ ] 3.3 Confirm tests pass.
@@ -70,7 +69,7 @@
       `solutionPatterns`; `componentKeyError` keeps the charset check only.
 - [ ] 5.3 Confirm tests pass; `isSolutionCandidate` and the editor's tests are untouched.
 
-## 6. Profile step (Decisions 1, 4, 6)
+## 6. Profile step (Decisions 1, 5)
 
 - [ ] 6.1 Failing tests in `CreateComponentPage.test.tsx`:
   - [ ] 6.1.1 tiles render the registry's titles and descriptions in order
@@ -83,16 +82,10 @@
   - [ ] 6.1.8 the explicit question shows only for `ask`
   - [ ] 6.1.9 changing profile clears the key and re-checks against the new rules
   - [ ] 6.1.10 typing `resolution-service` under Regular external shows the registry's message
-  - [ ] 6.1.11 `component.solution` not editable → Solution and DMP Bundle disabled, reason
-        names the solution flag; regular tiles selectable
-  - [ ] 6.1.12 `component.distributionExternal` not editable → Regular external disabled,
-        Regular internal selectable
-  - [ ] 6.1.13 `component.distributionExplicit` not editable → no tile disabled, the explicit
-        question hidden, no explicit distribution sent
 - [ ] 6.2 Implement the Profile step over `useComponentProfiles`.
 - [ ] 6.3 Confirm tests pass.
 
-## 7. Clone pre-selection (Decision 5)
+## 7. Clone pre-selection (Decision 4)
 
 - [ ] 7.1 Failing tests for `profileFromSource(source, profiles)`:
   - [ ] 7.1.1 `payments-dmp-bundle` solution → `dmp-bundle`
@@ -105,7 +98,7 @@
       on profiles arrival instead (until the user picks).
 - [ ] 7.3 Confirm tests pass.
 
-## 8. Submit and error routing (Decision 7)
+## 8. Submit and error routing (Decision 6)
 
 - [ ] 8.1 Failing tests:
   - [ ] 8.1.1 the create request carries `profile` with the selected id
@@ -118,7 +111,7 @@
 - [ ] 8.2 Implement in `onSubmit` / `stepOfField`, mapping rule paths through the table from 4.2.
 - [ ] 8.3 Confirm tests pass.
 
-## 9. Today's pre-filled values (Decision 8)
+## 9. Today's pre-filled values (Decision 7)
 
 - [ ] 9.1 Failing tests:
   - [ ] 9.1.1 `initialValues` for scratch with Regular external (`ask`) pre-selected equals
@@ -134,7 +127,7 @@
       `ready` gate; remove `DEFAULT_SCRATCH_PROFILE`.
 - [ ] 9.3 Confirm tests pass.
 
-## 10. Labels and build tasks (Decision 9)
+## 10. Labels and build tasks (Decision 8)
 
 - [ ] 10.1 Failing tests:
   - [ ] 10.1.1 General shows Labels with options from the labels list; free text cannot be added
@@ -150,7 +143,7 @@
       Review.
 - [ ] 10.3 Confirm tests pass.
 
-## 11. Registry container (Decision 10) — Gradle
+## 11. Registry container (Decision 9) — Gradle
 
 - [ ] 11.1 Bump `crs.version` in `gradle.properties` to the first registry release with profiles.
 - [ ] 11.2 `E2ETestcontainersDriver` passes the four profiles to the registry container as

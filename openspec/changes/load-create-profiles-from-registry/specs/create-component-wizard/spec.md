@@ -51,20 +51,12 @@ applies to a clone as well.
 ### Requirement: An unusable profile cannot be picked
 
 A profile the registry marks as not usable SHALL be shown disabled with the registry's reason,
-and SHALL NOT be selectable by click or keyboard. A profile whose classification needs the
-solution flag or external distribution set, when field-config does not let the user edit that
-flag, SHALL be shown disabled the same way, with the flag named as the reason.
+and SHALL NOT be selectable by click or keyboard.
 
 #### Scenario: Disabled tile with reason
 
 - **WHEN** the registry marks the Solution profile as not usable with a reason
 - **THEN** its tile is disabled and shows that reason
-
-#### Scenario: A flag the user may not edit
-
-- **WHEN** field-config does not let the user edit `component.solution`
-- **THEN** the Solution and DMP Bundle tiles are disabled with a reason naming the solution flag,
-  and the regular tiles can be picked
 
 #### Scenario: Keyboard skips it
 
@@ -98,9 +90,7 @@ matches; failing that, none.
 
 The chosen profile's classification SHALL set the component's solution flag, external
 distribution and explicit distribution. The "Has explicit distribution?" question SHALL be
-shown only when the profile's explicit distribution is `ask` and the user may edit
-`component.distributionExplicit`; the answer SHALL then set it. When the user may not edit it,
-the question SHALL NOT be shown and explicit distribution is not sent.
+shown only when the profile's explicit distribution is `ask`, and the answer SHALL then set it.
 
 #### Scenario: A solution profile
 
@@ -112,12 +102,6 @@ the question SHALL NOT be shown and explicit distribution is not sent.
 
 - **WHEN** a profile with explicit distribution `ask` is chosen and the user answers No
 - **THEN** the component is created without explicit distribution
-
-#### Scenario: The question for a user who may not set it
-
-- **WHEN** a profile with explicit distribution `ask` is chosen and field-config does not let the
-  user edit `component.distributionExplicit`
-- **THEN** the question is not shown and the create request carries no explicit distribution
 
 ### Requirement: Today's pre-filled values are kept
 

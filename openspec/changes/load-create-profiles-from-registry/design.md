@@ -86,8 +86,7 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
 - `PROFILE_META`, the string-union type and the hard-coded `flagsForProfile` switch are removed.
 - `flagsForProfile(profile, explicitAnswer)` is rewritten over `classification`: `solution` and
   `external` taken as given; `explicit` is `true`/`false` as given, or the user's answer when
-  `ask`. `asksExplicit` is `classification.explicit === 'ask'` and `component.distributionExplicit`
-  editable; when it is not editable the flag is not sent, so the answer is fixed to No.
+  `ask`. `asksExplicit` is `classification.explicit === 'ask'`.
 
 ### 3. Field rules: checked against the request the wizard would send
 
@@ -111,19 +110,7 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
 - `componentKeyError` keeps only the charset check; the profile rule on `name` is added after
   it, so a key shows one message at a time, charset first.
 
-### 4. A profile the user cannot classify is unusable in the wizard
-
-- For each profile the wizard compares the flags it needs with what the user may send: a flag
-  whose field (`component.solution`, `component.distributionExternal`,
-  `component.distributionExplicit`) is not editable for the user is sent as absent, i.e. `false`.
-- A profile needing such a flag `true` (Solution needs `solution`; Regular external needs
-  `external`) is shown disabled with the reason "Your field settings do not let you set
-  <flag>", next to the registry's own `usable`.
-- `explicit: ask` never disables a profile; the question is just not shown (Decision 2).
-- Today such a user silently creates a component with the flag `false`; the registry now rejects
-  that, so the wizard says it before the user fills in eight steps.
-
-### 5. Clone pre-selection
+### 4. Clone pre-selection
 
 - First usable profile whose classification matches the source (`solution` and `external`
   equal; `explicit` equal or `ask`) and whose `name` rules pass on the source key.
@@ -132,17 +119,17 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
 - The explicit answer is seeded from the source's `distributionExplicit`.
 - Picking another profile resets the key, as today.
 
-### 6. Loading, empty and unusable
+### 5. Loading, empty and unusable
 
 - While loading: the Profile step shows a skeleton and Create is disabled.
 - Error or no `regular` profile: an inline error with Retry replaces the tiles; Create stays
   disabled. Clone behaves the same — it needs a profile to send.
-- A profile unusable by the registry (`usable: false`) or by Decision 4 renders as a disabled
-  radio with its reason below the description; arrow-key navigation skips it.
+- A profile the registry marks `usable: false` renders as a disabled radio with
+  `unusableReason` below the description; arrow-key navigation skips it.
 - Scratch pre-selects the first usable profile; none usable → nothing selected and the step's
   gate blocks Create.
 
-### 7. Submit
+### 6. Submit
 
 - The request gains `profile: <selected id>`; `solution` keeps today's editable-only overlay,
   now from the profile's classification.
@@ -151,7 +138,7 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
   the path → field table (Decision 3) to its field and step. Without it, `stepOfField` would read
   the head `baseConfiguration` and send every such error to General.
 
-### 8. Today's pre-filled values
+### 7. Today's pre-filled values
 
 - `initialValues` keeps every source it reads today: component-defaults (build system, display
   name, Jira project key, version formats, escrow generation, VCS tag and branch, copyright when
@@ -159,13 +146,13 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
   and for a clone the source. The owner is still seeded from the current user and the version
   prefix still follows the key.
 - Only its input changes: scratch's explicit/external come from the pre-selected registry profile
-  (Decision 6) instead of `DEFAULT_SCRATCH_PROFILE`. So `CreateComponentPage` adds the profiles to
+  (Decision 5) instead of `DEFAULT_SCRATCH_PROFILE`. So `CreateComponentPage` adds the profiles to
   its `ready` gate, and the wizard mounts with them, as it already waits for component-defaults.
 - With the shipped profiles the first usable one is Regular external (`explicit: ask`, answer
   No), so a new component's initial values are byte-for-byte today's; a test pins that.
 - Picking another profile changes only what picking does today: the flags and a cleared key.
 
-### 9. Labels and build tasks
+### 8. Labels and build tasks
 
 - Labels: `ChipsInput` in General → Classification, options from `useLabels()`, no free-text
   entries; gated on field-config `component.labels`.
@@ -174,7 +161,7 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
   `buildCreateRequest`; the form value wins over the source's copy.
 - Review lists both under their steps' groups.
 
-### 10. Registry container in e2e and local dev
+### 9. Registry container in e2e and local dev
 
 - `E2ETestcontainersDriver` runs the registry with `dev-db-automigrate`, which carries no
   profiles. The driver passes the four profiles as `SPRING_APPLICATION_JSON`, so the test
@@ -192,10 +179,12 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
   create still rejects a failing value. Accepted: the contract does not enumerate the
   paths, so the list is copied from the registry's `CreateRequestPaths`; today's profiles only
   rule on `name`.
-- **The wizard adds an availability reason the registry does not give.** The registry's `usable`
-  knows permissions only; field-config editability of the classification flags is judged by the
-  Portal (Decision 4). Accepted: the registry would reject the create anyway; moving the check
-  into the registry's availability rule is a later registry change.
+- **Locked classification flags are not handled.** If field-config ever stops a user editing
+  `component.solution`, `distributionExternal` or `distributionExplicit`, the wizard does not send
+  that flag, the registry stores `false`, and a create with a profile needing it `true` is
+  rejected with 400 `profile: …` on the Profile step. The wizard neither disables such a tile
+  nor hides the explicit question. Accepted: the registry's baseline makes all three editable and
+  no installation's field-config locks them; revisit if one does.
 - **Hard dependency on the listing.** No registry answer, no create. Accepted: a create without
   the registry's profiles would be checked against nothing the user saw.
 - **Two sources for "is this a solution key".** The editor still reads

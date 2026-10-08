@@ -27,11 +27,7 @@
 
 **Classification from the profile**
 - The profile's classification sets solution, external and explicit distribution.
-- "Has explicit distribution?" is asked only when the profile's explicit value is `ask` and the
-  user may edit explicit distribution.
-- The registry compares the profile with the flags it would store, and a flag the user may not
-  edit is not sent, so it is stored as `false`. A profile that needs such a flag `true` is shown
-  disabled, with the flag named as the reason, instead of failing on Create.
+- "Has explicit distribution?" is asked only when the profile's explicit value is `ask`.
 
 **Today's pre-filled values are kept**
 - The wizard still pre-fills exactly what it does today, from the same sources: the registry's
