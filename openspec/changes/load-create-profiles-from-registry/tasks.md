@@ -8,9 +8,14 @@
 
 ## 1. Contract
 
-- [ ] 1.1 Re-vendor `frontend/src/lib/api/v4.json` from the registry branch carrying the
-      profiles, and run `npm run generate-types`; re-vendor from registry `main` once it merges.
-- [ ] 1.2 `npm run generate-types:check` passes.
+- [x] 1.1 Re-vendor `frontend/src/lib/api/v4.json` from the registry branch carrying the
+      profiles, and run `npm run generate-types`. Vendored with
+      `CRS_SPEC_REF=component-profiles-from-config bash scripts/vendor-spec.sh`; `schema.d.ts`
+      now has `/rest/api/4/component-profiles`, `ComponentProfileResponse` and the request's
+      `profile`.
+- [ ] 1.1a Re-vendor from registry `main` once the registry change merges. Until then the
+      merge gate's `vendor-spec:check` (pinned to `main`) fails on this branch. (added on review)
+- [x] 1.2 `npm run generate-types:check` passes; `tsc --noEmit` clean.
 
 ## 2. Profiles hook (Decision 1)
 
