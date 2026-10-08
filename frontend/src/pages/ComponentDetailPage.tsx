@@ -1,7 +1,7 @@
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
-import { ArrowLeft, Copy, Trash2, AlertTriangle, LockKeyhole, Boxes, CircleCheck, CircleDashed } from 'lucide-react'
+import { ArrowLeft, Copy, Archive, ArchiveRestore, AlertTriangle, LockKeyhole, Boxes, CircleCheck, CircleDashed } from 'lucide-react'
 import { JiraIcon, BitbucketIcon, TeamCityIcon } from '../components/ui/icons/brand-icons'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Layout } from '../components/Layout'
@@ -956,12 +956,14 @@ function ComponentDetailEditor() {
               </Button>
             )}
             {!component.archived && canArchive && (
+              // Quiet red outline: the solid red belongs to the confirm dialog's final step,
+              // not to a header button that only opens it.
               <Button
-                variant="destructive"
+                variant="destructive-outline"
                 size="sm"
                 onClick={() => setDeleteDialogOpen(true)}
               >
-                <Trash2 className="h-4 w-4" />
+                <Archive className="h-4 w-4" />
                 Archive
               </Button>
             )}
@@ -972,7 +974,7 @@ function ComponentDetailEditor() {
                 onClick={handleUnarchive}
                 disabled={updateMutation.isPending}
               >
-                <Trash2 className="h-4 w-4" />
+                <ArchiveRestore className="h-4 w-4" />
                 Unarchive
               </Button>
             )}

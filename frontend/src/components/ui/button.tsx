@@ -10,6 +10,10 @@ const buttonVariants = cva(
       variant: {
         default: 'bg-primary text-primary-foreground hover:bg-primary/90',
         destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
+        // A page-level entry to a destructive flow (e.g. Archive): red label, quiet outline. The
+        // solid `destructive` stays for the confirm step inside the dialog.
+        'destructive-outline':
+          'border border-input bg-background text-destructive hover:bg-destructive/10 hover:text-destructive',
         outline: 'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
         ghost: 'hover:bg-accent hover:text-accent-foreground',
