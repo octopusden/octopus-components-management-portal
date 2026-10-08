@@ -35,7 +35,7 @@ test.describe('layout conformance — FilterBar', () => {
     await expect(bar).toHaveClass(/items-center/)
   })
 
-  test('/audit filter row uses FilterBar withLabels (items-end) and no card wrapper', async ({
+  test('/audit filter row is a single label-less FilterBar (items-center), no card wrapper', async ({
     page,
   }) => {
     await mockAuditRecent(page, auditFixture)
@@ -47,8 +47,8 @@ test.describe('layout conformance — FilterBar', () => {
 
     await expect(bar).not.toHaveClass(/rounded-md/)
     await expect(bar).not.toHaveClass(/bg-card/)
-    // withLabels=true → items-end so labelled controls bottom-align.
-    await expect(bar).toHaveClass(/items-end/)
+    // Same label-less variant as /components: placeholders and triggers name the filters.
+    await expect(bar).toHaveClass(/items-center/)
   })
 })
 
