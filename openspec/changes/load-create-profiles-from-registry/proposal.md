@@ -20,10 +20,12 @@
 - A profile the registry marks as not usable for the current user is shown disabled, with the
   registry's reason, and cannot be picked.
 - Only profiles of kind `regular` are shown; other kinds are not offered yet.
-- When the profiles cannot be loaded, or none is returned, the wizard shows an error with a
-  retry and offers no way to create.
+- While the profiles load, the wizard waits, as it already waits for the component defaults.
+  When they cannot be loaded, or none is a `regular` profile, it shows an error with a retry
+  instead of the steps, and nothing can be created.
 - Scratch pre-selects the first usable profile. A clone pre-selects the first usable profile
-  whose classification matches the source and whose rules the source's key passes.
+  whose classification matches the source and whose rules the source's key passes; when none
+  matches, the clone opens on the Profile step with nothing selected.
 
 **Classification from the profile**
 - The profile's classification sets solution, external and explicit distribution.
@@ -40,10 +42,14 @@
   one is Regular external, so a new component starts exactly as today.
 
 **The profile's field rules as fast checks**
-- While the user types, every field rule of the chosen profile is checked against the matching
-  wizard field, as a whole-value match, and the rule's message is shown under that field.
-- A rule on a field the wizard does not have, or whose pattern the browser cannot compile, is
+- While the user types, every field rule of the chosen profile is checked, as a whole-value
+  match, against the value the create request would carry for that path (so a field the request
+  leaves out counts as empty, as in the registry), and the rule's message is shown under the
+  wizard field for that path.
+- A rule on a path the wizard does not know, or whose pattern the browser cannot compile, is
   skipped; the registry's answer on create decides.
+- A changed rule takes effect the next time the wizard opens after the registry reloads its
+  configuration, with no Portal change.
 - The key's character check (`component-key-format`) runs first and is unchanged.
 - The wizard's own solution-key check is removed: the hard-coded "a Solution key contains
   `-solution`, a regular key contains neither" rule fed by `portal.component.solution-key-patterns`.
@@ -58,7 +64,8 @@
   for that path, on its step.
 
 **Labels and build tasks**
-- General gains a Labels field (chips, picked from the registry's labels list only).
+- General → Classification gains a Labels field (chips, picked from the registry's labels list
+  only).
 - Build gains a Build tasks field.
 - Both appear on Review and are sent with the create; left empty, the request is as today.
 - Each follows its field-config visibility, like the other wizard fields.

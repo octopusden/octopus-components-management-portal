@@ -18,7 +18,7 @@
   - [ ] 2.1.1 returns the `regular` profiles in the order the registry sends them
   - [ ] 2.1.2 drops entries whose `kind` is not `regular`
   - [ ] 2.1.3 refetches when a new consumer mounts (no cached list served across wizard opens)
-  - [ ] 2.1.4 exposes the error state when the request fails
+  - [ ] 2.1.4 exposes the error state when the request fails, and a refetch for Retry
 - [ ] 2.2 Implement `frontend/src/hooks/useComponentProfiles.ts`.
 - [ ] 2.3 Confirm the hook tests pass.
 
@@ -30,8 +30,8 @@
   - [ ] 3.1.3 internal, explicit `ask`, answer Yes → external `false`, explicit `true`
   - [ ] 3.1.4 explicit `false` → `false` regardless of the answer
   - [ ] 3.1.5 `asksExplicit` is true only for `ask`
-- [ ] 3.2 Rewrite `flagsForProfile` in `createFormModel.ts`; remove `PROFILE_META`, the
-      `ComponentProfile` union and `DEFAULT_SCRATCH_PROFILE`.
+- [ ] 3.2 Rewrite `flagsForProfile` in `createFormModel.ts`; remove `PROFILE_META` and the
+      `ComponentProfile` union (`DEFAULT_SCRATCH_PROFILE` goes in 9.2, with `initialValues`).
 - [ ] 3.3 Confirm tests pass.
 
 ## 4. Field-rule checker (Decision 3)
@@ -75,9 +75,10 @@
   - [ ] 6.1.1 tiles render the registry's titles and descriptions in order
   - [ ] 6.1.2 an unusable profile is disabled and shows its reason; clicking it changes nothing
   - [ ] 6.1.3 arrow keys skip the unusable tile
-  - [ ] 6.1.4 loading shows a skeleton and Create is disabled
-  - [ ] 6.1.5 a failed listing shows the error and Retry; Retry that succeeds shows the tiles
-  - [ ] 6.1.6 a listing with no `regular` profile shows the error and Create is disabled
+  - [ ] 6.1.4 a failed listing shows the error and Retry instead of the wizard; Retry that
+        succeeds opens the wizard with the tiles
+  - [ ] 6.1.5 a listing with no `regular` profile shows the same error instead of the wizard
+  - [ ] 6.1.6 a clone whose profiles fail to load shows the same error
   - [ ] 6.1.7 scratch pre-selects the first usable profile; none usable → nothing selected
   - [ ] 6.1.8 the explicit question shows only for `ask`
   - [ ] 6.1.9 changing profile clears the key and re-checks against the new rules
@@ -94,8 +95,11 @@
   - [ ] 7.1.4 classification matches but no rule passes → first classification match
   - [ ] 7.1.5 no classification match → none
   - [ ] 7.1.6 an unusable profile is never pre-selected
-- [ ] 7.2 Rewrite `profileFromSource`; drop the re-seed on `solutionKeyPatterns` arrival, re-seed
-      on profiles arrival instead (until the user picks).
+  - [ ] 7.1.7 a clone with nothing pre-selected opens on the Profile step and Create stays
+        disabled until a profile is picked
+- [ ] 7.2 Rewrite `profileFromSource`; drop the re-seed on `solutionKeyPatterns` arrival (the
+      profiles are loaded before the wizard mounts, so no re-seed is needed); open a clone on
+      Profile when nothing is pre-selected and extend the Profile gate to clones.
 - [ ] 7.3 Confirm tests pass.
 
 ## 8. Submit and error routing (Decision 6)
@@ -119,10 +123,11 @@
         before the change)
   - [ ] 9.1.2 a first profile with explicit `true` and external `true` seeds the copyright
         default
-  - [ ] 9.1.3 clone values unchanged for a solution, a regular external and an internal source
-  - [ ] 9.1.4 the page shows the skeleton until profiles, component-defaults and the source
+  - [ ] 9.1.3 no usable profile → explicit/external stay at `SCRATCH_DEFAULTS`
+  - [ ] 9.1.4 clone values unchanged for a solution, a regular external and an internal source
+  - [ ] 9.1.5 the page shows the skeleton until profiles, component-defaults and the source
         have loaded
-  - [ ] 9.1.5 owner seeding and the version prefix following the key still work
+  - [ ] 9.1.6 owner seeding and the version prefix following the key still work
 - [ ] 9.2 `initialValues` takes the pre-selected profile's flags; add profiles to the page's
       `ready` gate; remove `DEFAULT_SCRATCH_PROFILE`.
 - [ ] 9.3 Confirm tests pass.

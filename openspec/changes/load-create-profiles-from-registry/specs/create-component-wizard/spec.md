@@ -27,6 +27,12 @@ permission each time the wizard opens.
   opens the wizard afterwards
 - **THEN** its tile is shown
 
+#### Scenario: A changed rule is followed after a reload
+
+- **WHEN** an administrator changes a profile's field rule and reloads the registry
+  configuration, and the user opens the wizard afterwards
+- **THEN** the wizard checks the changed rule, with no Portal change
+
 #### Scenario: A non-regular entry is not offered
 
 - **WHEN** the listing contains an entry whose kind is not `regular`
@@ -34,19 +40,24 @@ permission each time the wizard opens.
 
 ### Requirement: Without profiles the wizard cannot create
 
-When the profile listing cannot be loaded, or contains no `regular` profile, the wizard SHALL
-show an error with a way to retry in place of the tiles, and Create SHALL be disabled. This
-applies to a clone as well.
+While the profile listing loads, the wizard SHALL not be shown. When the listing cannot be
+loaded, or contains no `regular` profile, an error with a way to retry SHALL be shown instead of
+the wizard, and nothing can be created. This applies to a clone as well.
 
 #### Scenario: The registry cannot be reached
 
 - **WHEN** the profile listing request fails
-- **THEN** the Profile step shows the error and a Retry action, and Create is disabled
+- **THEN** the error and a Retry action are shown instead of the wizard
+
+#### Scenario: No regular profile
+
+- **WHEN** the listing contains no `regular` profile
+- **THEN** the error and a Retry action are shown instead of the wizard
 
 #### Scenario: Retry succeeds
 
 - **WHEN** the user presses Retry and the listing now loads
-- **THEN** the tiles are shown and the wizard can proceed
+- **THEN** the wizard opens with the tiles
 
 ### Requirement: An unusable profile cannot be picked
 
@@ -84,7 +95,8 @@ matches; failing that, none.
 #### Scenario: Clone with no matching profile
 
 - **WHEN** no usable profile's classification matches the source
-- **THEN** no profile is selected and Create stays disabled until one is chosen
+- **THEN** the clone opens on the Profile step with no profile selected, and Create stays
+  disabled until one is chosen
 
 ### Requirement: The profile sets the classification
 
@@ -134,10 +146,9 @@ The wizard SHALL check every field rule of the chosen profile, as a match of the
 against the value the create request would carry at the rule's path, while the user types, and
 SHALL show the rule's message under the wizard field for that path. A path the request would
 not carry, such as a field the user may not edit or a coordinate of another type, SHALL be
-checked as an empty value. A rule on a path
-the wizard has no field for, or whose pattern the browser cannot compile, SHALL be skipped. The
-Component Key's character check SHALL run first; the key's profile rule is shown only once the
-character check passes.
+checked as an empty value. A rule on a path the wizard does not know, or whose pattern the
+browser cannot compile, SHALL be skipped. The Component Key's character check SHALL run first;
+the key's profile rule is shown only once the character check passes.
 
 #### Scenario: A regular key containing a solution word
 
@@ -202,7 +213,7 @@ shown under the wizard field for that path, on its step. Creating requires
 
 ### Requirement: Labels can be set on create
 
-The wizard SHALL offer a Labels field on the General step, offering only labels from the
+The wizard SHALL offer a Labels field in the General step's Classification group, offering only labels from the
 registry's labels list, shown on Review and sent with the create. The field SHALL follow the
 field-config visibility of `component.labels`. A clone SHALL start with the source's labels.
 

@@ -102,7 +102,7 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
   `coordinate.groupPattern` / `artifactPattern` / `imageName` / `flavor` / `packageName`.
 - Whole-value match: the pattern is compiled as `^(?:<pattern>)$`, matching Java's `matches()`.
 - A pattern `new RegExp` cannot compile is skipped. Compiled patterns are cached per rule list.
-- An empty field is matched as `""`, so the pattern decides whether it may stay empty, as in
+- An absent value is matched as `""`, so the pattern decides whether it may stay empty, as in
   the registry.
 - `makeCreateSchema` takes the selected profile's rules and a `requestFor(values)` function
   instead of the profile enum and `solutionPatterns`; its `superRefine` adds one issue per failing
@@ -115,15 +115,20 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
 - First usable profile whose classification matches the source (`solution` and `external`
   equal; `explicit` equal or `ask`) and whose `name` rules pass on the source key.
 - Otherwise the first usable profile whose classification matches.
-- Otherwise none is pre-selected and the Profile step must be completed, as scratch's gate.
+- Otherwise none is pre-selected: the clone opens on the Profile step instead of General, and
+  the Profile gate that today applies to scratch only (`!isClone && profile === null`) applies to
+  a clone too.
 - The explicit answer is seeded from the source's `distributionExplicit`.
 - Picking another profile resets the key, as today.
 
 ### 5. Loading, empty and unusable
 
-- While loading: the Profile step shows a skeleton and Create is disabled.
-- Error or no `regular` profile: an inline error with Retry replaces the tiles; Create stays
-  disabled. Clone behaves the same — it needs a profile to send.
+- The profiles join `CreateComponentPage`'s `ready` gate (Decision 7): while they load, the page
+  shows its existing skeleton and the wizard is not mounted.
+- Error, or no `regular` profile: the page shows an inline error with Retry instead of the
+  wizard, as it does today when a clone's source fails to load. Retry refetches; on success the
+  wizard mounts with the profiles. Clone behaves the same — it needs a profile to send.
+- The wizard therefore always mounts with a non-empty profile list.
 - A profile the registry marks `usable: false` renders as a disabled radio with
   `unusableReason` below the description; arrow-key navigation skips it.
 - Scratch pre-selects the first usable profile; none usable → nothing selected and the step's
@@ -146,8 +151,10 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
   and for a clone the source. The owner is still seeded from the current user and the version
   prefix still follows the key.
 - Only its input changes: scratch's explicit/external come from the pre-selected registry profile
-  (Decision 5) instead of `DEFAULT_SCRATCH_PROFILE`. So `CreateComponentPage` adds the profiles to
-  its `ready` gate, and the wizard mounts with them, as it already waits for component-defaults.
+  (Decision 5) instead of `DEFAULT_SCRATCH_PROFILE`; with no usable profile they stay at
+  `SCRATCH_DEFAULTS` (external, not explicit), today's values. So `CreateComponentPage` adds the
+  profiles to its `ready` gate, and the wizard mounts with them, as it already waits for
+  component-defaults.
 - With the shipped profiles the first usable one is Regular external (`explicit: ask`, answer
   No), so a new component's initial values are byte-for-byte today's; a test pins that.
 - Picking another profile changes only what picking does today: the flags and a cleared key.
