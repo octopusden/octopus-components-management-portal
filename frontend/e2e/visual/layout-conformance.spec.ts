@@ -14,7 +14,7 @@ import {
 // PR-4 visual-acceptance: cross-page layout invariants. Filter rows
 // share one wrapper with no card; main container width matches the
 // prototype's max-w-7xl; GeneralTab uses gap-6 between sections; the
-// header Archive button surfaces destructive variant via data-variant.
+// header Archive button surfaces the destructive-outline variant via data-variant.
 
 test.describe('layout conformance — FilterBar', () => {
   test('/components filter row is a single FilterBar with no card wrapper', async ({ page }) => {
@@ -35,7 +35,7 @@ test.describe('layout conformance — FilterBar', () => {
     await expect(bar).toHaveClass(/items-center/)
   })
 
-  test('/audit filter row uses FilterBar withLabels (items-end) and no card wrapper', async ({
+  test('/audit filter row is a single label-less FilterBar (items-center), no card wrapper', async ({
     page,
   }) => {
     await mockAuditRecent(page, auditFixture)
@@ -47,8 +47,8 @@ test.describe('layout conformance — FilterBar', () => {
 
     await expect(bar).not.toHaveClass(/rounded-md/)
     await expect(bar).not.toHaveClass(/bg-card/)
-    // withLabels=true → items-end so labelled controls bottom-align.
-    await expect(bar).toHaveClass(/items-end/)
+    // Same label-less variant as /components: placeholders and triggers name the filters.
+    await expect(bar).toHaveClass(/items-center/)
   })
 })
 
@@ -110,11 +110,11 @@ test.describe('layout conformance — ComponentDetailPage', () => {
     await expect(grid).toHaveCSS('gap', '24px')
   })
 
-  test('Archive button is rendered with data-variant="destructive"', async ({ page }) => {
+  test('Archive button is rendered with data-variant="destructive-outline"', async ({ page }) => {
     await page.goto(`/components/${summary.id}`)
 
     const archive = page.getByRole('button', { name: /^archive$/i })
     await expect(archive).toBeVisible()
-    await expect(archive).toHaveAttribute('data-variant', 'destructive')
+    await expect(archive).toHaveAttribute('data-variant', 'destructive-outline')
   })
 })

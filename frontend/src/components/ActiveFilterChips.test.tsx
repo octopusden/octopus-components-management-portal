@@ -49,16 +49,28 @@ describe('describeFilterChips — derive chips from filter + preset', () => {
     )
   })
 
-  it('emits a preset chip when a preset is active', () => {
-    const chips = describeFilterChips({ archived: false, owner: ['alice'] }, 'mine')
-    const presetChip = chips.find((c) => c.key === 'preset')
-    expect(presetChip).toBeDefined()
-    expect(presetChip!.label).toMatch(/My Components/i)
+  it('emits a "With problems" chip only for the problems preset', () => {
+    expect(describeFilterChips({ archived: false }, 'problems').find((c) => c.key === 'preset')!.label).toBe(
+      'With problems',
+    )
+    // The other presets are plain filters now and carry no preset chip.
+    expect(describeFilterChips({ archived: false }, 'mine')).toEqual([])
   })
 
-  it('does NOT emit a preset chip for the default "all" preset', () => {
-    // "All" is the default state, not an active filter.
-    expect(describeFilterChips({ archived: false }, 'all')).toEqual([])
+  it('emits one "Mine" chip naming the roles (any role when none are narrowed)', () => {
+    expect(describeFilterChips({ archived: false, involves: ['alice'] }, null).map((c) => c.label)).toEqual([
+      'Mine: any role',
+    ])
+    expect(
+      describeFilterChips({ archived: false, involves: ['alice'], involvesRoles: ['owner', 'securityChampion'] }, null)
+        .map((c) => c.label),
+    ).toEqual(['Mine: owner, security champion'])
+  })
+
+  it('emits a Status chip for Archived and for All, none for the Active default', () => {
+    expect(describeFilterChips({ archived: true }, null).map((c) => c.label)).toEqual(['Status: Archived'])
+    expect(describeFilterChips({}, null).map((c) => c.label)).toEqual(['Status: All'])
+    expect(describeFilterChips({ archived: false }, null)).toEqual([])
   })
 
   it('emits chips for scalar string extended filters (vcsPath / productionBranch)', () => {
@@ -121,8 +133,8 @@ describe('ActiveFilterChips component', () => {
   })
 
   it('removing the preset chip calls onRemove with the preset key', async () => {
-    renderChips({ archived: false, owner: ['alice'] }, 'mine')
-    await userEvent.click(screen.getByRole('button', { name: /remove preset/i }))
+    renderChips({ archived: false }, 'problems')
+    await userEvent.click(screen.getByRole('button', { name: /remove with problems/i }))
     expect(onRemove).toHaveBeenCalledWith('preset', undefined)
   })
 })

@@ -60,6 +60,9 @@ export function useComponents({ filter, page = 0, size = 20, sort = 'componentKe
   // shape as owner/system/buildSystem).
   if (filter?.releaseManager?.length) params.set('releaseManager', filter.releaseManager.join(','))
   if (filter?.securityChampion?.length) params.set('securityChampion', filter.securityChampion.join(','))
+  // CRS SYS-101 "Mine": owner OR RM OR SC for the listed user(s), narrowed to the chosen roles.
+  if (filter?.involves?.length) params.set('involves', filter.involves.join(','))
+  if (filter?.involvesRoles?.length) params.set('involvesRoles', filter.involvesRoles.join(','))
   // Distribution boolean filters (SYS-045); `=false` excludes NULL rows server-side.
   if (filter?.distributionExplicit !== undefined) params.set('distributionExplicit', String(filter.distributionExplicit))
   if (filter?.distributionExternal !== undefined) params.set('distributionExternal', String(filter.distributionExternal))

@@ -40,7 +40,7 @@ vi.mock('../hooks/useInfo', () => ({
   // Layout consumes usePortalInfo for the environment banner; return "no data"
   // so these page tests render without a banner.
   usePortalInfo: vi.fn(() => ({ data: undefined })),
-  // Layout's OnboardingVideoButton consumes this; "no data" → not ready → renders nothing.
+  // Layout's HelpMenu (intro-video entry) consumes this; "no data" → not ready → renders nothing.
   useOnboardingVideoStatus: vi.fn(() => ({ data: undefined })),
 }))
 // The always-rendered header labels editor calls useLabelsDictionary; mock it to
@@ -269,6 +269,8 @@ interface RenderPageOptions {
   updateMutation?: Partial<typeof idleMutation>
   deleteMutation?: Partial<typeof idleMutation>
   archiveReadiness?: Partial<ReturnType<typeof useArchiveReadiness>>
+  /** Initial URL; defaults to the plain detail route. */
+  initialEntry?: string
 }
 
 // Default: a ready verdict with no entries — matches "nothing configured on
@@ -334,7 +336,7 @@ function renderPage(component: ComponentDetail, user: User | null, opts: RenderP
       { path: '/components/new', element: <CreateWizardProbe /> },
       { path: '/components/:id', element: <ComponentDetailPage /> },
     ],
-    { initialEntries: ['/components/comp-1'] },
+    { initialEntries: [opts.initialEntry ?? '/components/comp-1'] },
   )
   return {
     client,
@@ -506,13 +508,13 @@ describe('ComponentDetailPage — Archive / Unarchive buttons', () => {
     expect(screen.getByRole('button', { name: /archive/i })).toBeDefined()
   })
 
-  it('(a) Archive button uses Button variant="destructive" (no inline custom classes)', () => {
+  it('(a) Archive button uses Button variant="destructive-outline" (no inline custom classes)', () => {
     const user = makeUser(['ACCESS_COMPONENTS', 'DELETE_COMPONENTS'])
     renderPage(baseComponent, user)
     // Header Archive (not the dialog confirm button) is the only one before
     // any click; assert via data-variant attribute set by Button.
     const archiveBtn = screen.getByRole('button', { name: /^archive$/i })
-    expect(archiveBtn.getAttribute('data-variant')).toBe('destructive')
+    expect(archiveBtn.getAttribute('data-variant')).toBe('destructive-outline')
   })
 
   it('(a) Archive button is hidden for user without DELETE_COMPONENTS', () => {
@@ -847,6 +849,25 @@ describe('ComponentDetailPage — breadcrumb badges', () => {
       user,
     )
     expect(screen.queryByText('GRADLE')).toBeNull()
+  })
+})
+
+describe('ComponentDetailPage — as-code search deep link', () => {
+  it('?tab=as-code&line=N opens the As Code tab (Full view) with line N marked', async () => {
+    // renderPage stubs fetch to answer '{}', which the as-code view renders as a single line.
+    renderPage(baseComponent, makeUser(['ACCESS_COMPONENTS']), { initialEntry: '/components/comp-1?tab=as-code&line=1' })
+    // Two tablists: the editor sidebar, and As Code's own Full/Resolved toggle — present only
+    // because the As Code tab is the one rendered.
+    const sidebar = screen.getAllByRole('tablist')[0]!
+    expect(within(sidebar).getByRole('tab', { name: 'As Code' }).getAttribute('data-state')).toBe('active')
+    expect(screen.getByRole('tab', { name: /full/i }).getAttribute('data-state')).toBe('active')
+    await waitFor(() => expect(document.querySelector('[data-highlighted="true"]')?.textContent).toBe('{}'))
+  })
+
+  it('any other ?tab value keeps opening on General', () => {
+    renderPage(baseComponent, makeUser(['ACCESS_COMPONENTS']), { initialEntry: '/components/comp-1?tab=history' })
+    const general = within(screen.getByRole('tablist')).getByRole('tab', { name: 'General' })
+    expect(general.getAttribute('data-state')).toBe('active')
   })
 })
 

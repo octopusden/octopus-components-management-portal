@@ -37,7 +37,7 @@ Properties:
 
 ## Toggle UI
 
-[`frontend/src/components/AdminPane.tsx`](../../frontend/src/components/AdminPane.tsx) renders the switch in the app footer (`AppFooter`). It is only mounted for users with the `IMPORT_DATA` permission (`RequirePermission`); non-admins never see it.
+[`frontend/src/components/AdminPane.tsx`](../../frontend/src/components/AdminPane.tsx) renders the switch in the header account menu (`UserMenu`, the avatar). It is only mounted for users with the `IMPORT_DATA` permission (`RequirePermission`); non-admins never see it.
 
 ## How features consume it
 
@@ -57,7 +57,7 @@ function MigrationButton() {
 When designing a new destructive feature:
 
 1. Gate the **button enable** on `useAdminMode`.
-2. Render a hint near the disabled button: e.g. "Enable Admin mode in the footer to run migration."
+2. Render a hint near the disabled button: e.g. "Enable Admin mode in the account menu to run migration."
 3. Do **not** rely on this for security. Always make sure the backend rejects the action with 403 if the user lacks the permission, regardless of UX state.
 
 ## What goes behind the gate

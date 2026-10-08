@@ -150,24 +150,40 @@ describe('CommandPalette — navigation', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/audit')
   })
 
-  it('Filter > My Components navigates to /components?owner=…&preset=mine (Phase 1 serialization)', async () => {
+  it('Go to > Global search opens the search page', async () => {
+    const user = userEvent.setup()
+    renderPalette()
+    await user.click(screen.getByText('Global search'))
+    expect(mockNavigate).toHaveBeenCalledWith('/search')
+  })
+
+  it('hands the typed text to the as-code search page', async () => {
+    const user = userEvent.setup()
+    renderPalette()
+    await user.type(screen.getByPlaceholderText(/Go to a component/i), 'org.example')
+    await user.click(await screen.findByText(/Global search for/))
+    expect(mockNavigate).toHaveBeenCalledWith('/search?q=org.example')
+  })
+
+  it('Filter > My Components navigates to the "Mine" filter as owner', async () => {
     const user = userEvent.setup()
     renderPalette()
     await user.click(screen.getByText('My Components'))
     const arg = mockNavigate.mock.calls[0]![0] as string
     const params = new URL(arg, 'http://x').searchParams
-    expect(params.get('owner')).toBe('alice')
-    expect(params.get('preset')).toBe('mine')
+    expect(params.get('involves')).toBe('alice')
+    expect(params.get('involvesRoles')).toBe('owner')
+    expect(params.get('preset')).toBeNull()
   })
 
-  it('Filter > I am Release Manager navigates to /components?releaseManager=…&preset=release-manager (Phase 1b)', async () => {
+  it('Filter > I am Release Manager navigates to the "Mine" filter as release manager', async () => {
     const user = userEvent.setup()
     renderPalette()
     await user.click(screen.getByText('I am Release Manager'))
     const arg = mockNavigate.mock.calls[0]![0] as string
     const params = new URL(arg, 'http://x').searchParams
-    expect(params.get('releaseManager')).toBe('alice')
-    expect(params.get('preset')).toBe('release-manager')
+    expect(params.get('involves')).toBe('alice')
+    expect(params.get('involvesRoles')).toBe('releaseManager')
   })
 
   it('Filter > With problems navigates with the problems preset and no filter footprint', async () => {
@@ -199,7 +215,7 @@ describe('CommandPalette — component search', () => {
   it('debounces the search query then passes it to useComponents', async () => {
     const user = userEvent.setup()
     renderPalette()
-    await user.type(screen.getByPlaceholderText(/Search components/i), 'pay')
+    await user.type(screen.getByPlaceholderText(/Go to a component/i), 'pay')
     await waitFor(() => {
       const lastArg = mockUseComponents.mock.calls.at(-1)![0] as {
         enabled: boolean
@@ -213,13 +229,13 @@ describe('CommandPalette — component search', () => {
   it('clears the typed query when the palette closes (no stale results on reopen)', async () => {
     const user = userEvent.setup()
     renderPalette()
-    const input = screen.getByPlaceholderText(/Search components/i) as HTMLInputElement
+    const input = screen.getByPlaceholderText(/Go to a component/i) as HTMLInputElement
     await user.type(input, 'pay')
     expect(input.value).toBe('pay')
     // Close via Esc, then reopen by flipping the store flag (as ⌘K would).
     await user.keyboard('{Escape}')
     useUiOverlay.setState({ paletteOpen: true })
-    const reopened = await screen.findByPlaceholderText(/Search components/i)
+    const reopened = await screen.findByPlaceholderText(/Go to a component/i)
     expect((reopened as HTMLInputElement).value).toBe('')
   })
 
@@ -239,7 +255,7 @@ describe('CommandPalette — component search', () => {
       },
     ])
     renderPalette()
-    await user.type(screen.getByPlaceholderText(/Search components/i), 'svc')
+    await user.type(screen.getByPlaceholderText(/Go to a component/i), 'svc')
     const item = await screen.findByText('svc-one')
     await user.click(item)
     expect(mockNavigate).toHaveBeenCalledWith('/components/svc-1')
@@ -252,7 +268,7 @@ describe('CommandPalette — component search', () => {
       comp('logbook', 'Log Book'),
     ])
     renderPalette()
-    await user.type(screen.getByPlaceholderText(/Search components/i), 'log')
+    await user.type(screen.getByPlaceholderText(/Go to a component/i), 'log')
 
     // Components surface, ranked prefix (logbook) before boundary (doc_log)…
     const prefix = await screen.findByText('logbook')
@@ -269,7 +285,7 @@ describe('CommandPalette — component search', () => {
     const user = userEvent.setup()
     mockSearch([])
     renderPalette()
-    await user.type(screen.getByPlaceholderText(/Search components/i), 'aud')
+    await user.type(screen.getByPlaceholderText(/Go to a component/i), 'aud')
 
     // Once the debounced query is active, non-matching static entries drop out…
     await waitFor(() => expect(screen.queryByText('With problems')).not.toBeInTheDocument())

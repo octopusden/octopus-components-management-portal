@@ -542,6 +542,13 @@ export interface ComponentFilter {
   releaseManager?: string[]
   /** Exact-match OR across values (a component may have several security champions). CSV on the wire. */
   securityChampion?: string[]
+  /**
+   * CRS SYS-101: components where any listed user is the owner OR a release manager OR a security
+   * champion — the "Mine" filter (the owner/releaseManager/securityChampion filters AND together).
+   */
+  involves?: string[]
+  /** Roles `involves` checks: any of `owner`, `releaseManager`, `securityChampion`; absent = all three. */
+  involvesRoles?: InvolvementRole[]
   /** Exact-match OR across values (a component has exactly one buildSystem). CSV on the wire. */
   buildSystem?: string[]
   /** Exact-match AND across values; sourced from /components/meta/labels. CSV on the wire. */
@@ -1282,3 +1289,52 @@ export interface ArchiveReadinessResponse {
   ready: boolean
   entries: ArchiveReadinessEntry[]
 }
+
+// ---------------------------------------------------------------------------
+// As-code search — GET /components/as-code/search
+// ---------------------------------------------------------------------------
+
+/** One matching line of a component's FULL as-code view. */
+export interface AsCodeSearchLine {
+  /** 1-based line number in the FULL as-code view (the As Code tab, Full mode). */
+  line: number
+  /** The matching line without its indentation. */
+  text: string
+  /** Enclosing block headers, outermost first; `[0]` is the component block itself. */
+  path: string[]
+  /**
+   * Where the query matched within `text` (end exclusive), as found by the server's own matcher —
+   * substring or Java regex — so regex hits are highlighted exactly, not re-run in JS.
+   */
+  ranges: AsCodeMatchRange[]
+}
+
+/** A matched span of {@link AsCodeSearchLine.text}: `start` inclusive, `end` exclusive. */
+export interface AsCodeMatchRange {
+  start: number
+  end: number
+}
+
+/** One matching component. `matches` is capped server-side; `matchCount` is not. */
+export interface AsCodeSearchHit {
+  /** Component UUID — what the editor route and every write endpoint are addressed by. */
+  id: string
+  componentKey: string
+  archived: boolean
+  matchCount: number
+  matches: AsCodeSearchLine[]
+}
+
+export interface AsCodeSearchResponse {
+  query: string
+  regex: boolean
+  /** Matching components BEFORE the `limit` cut. */
+  totalComponents: number
+  truncated: boolean
+  /** Sorted by component key. */
+  results: AsCodeSearchHit[]
+}
+
+/** Roles the "Mine" (CRS `involves`) filter can check. */
+export type InvolvementRole = 'owner' | 'releaseManager' | 'securityChampion'
+export const INVOLVEMENT_ROLES: readonly InvolvementRole[] = ['owner', 'releaseManager', 'securityChampion']

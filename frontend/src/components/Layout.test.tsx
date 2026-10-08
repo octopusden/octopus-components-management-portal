@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
@@ -49,6 +50,11 @@ function renderLayout(portalInfo: Record<string, unknown> = {}) {
   )
 }
 
+/** Opens the avatar (account) menu, where the admin tooling and Log out live. */
+async function openAccountMenu() {
+  await userEvent.click(screen.getByRole('button', { name: /^Account/ }))
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   vi.unstubAllGlobals()
@@ -73,12 +79,14 @@ describe('Layout nav visibility', () => {
 
     renderLayout()
     expect(screen.getByRole('link', { name: /Components/i })).toBeDefined()
+    // Global search (a field in the right-hand group) has no permission gate beyond ACCESS_COMPONENTS.
+    expect(screen.getByRole('combobox', { name: 'Global search' })).toBeDefined()
     expect(screen.queryByRole('link', { name: /Audit/i })).toBeNull()
     expect(screen.queryByRole('link', { name: /Admin/i })).toBeNull()
     expect(screen.queryByRole('link', { name: /Validations/i })).toBeNull()
   })
 
-  it('shows Audit and Admin for F1_ADMIN', () => {
+  it('shows Audit in the nav and Admin settings in the account menu for F1_ADMIN', async () => {
     const admin: User = {
       username: 'alice',
       roles: [
@@ -100,11 +108,14 @@ describe('Layout nav visibility', () => {
     renderLayout()
     expect(screen.getByRole('link', { name: /Components/i })).toBeDefined()
     expect(screen.getByRole('link', { name: /Audit/i })).toBeDefined()
-    expect(screen.getByRole('link', { name: /Admin/i })).toBeDefined()
+    // Admin tooling lives in the account menu, not the top nav.
+    expect(screen.queryByRole('link', { name: /Admin/i })).toBeNull()
+    await openAccountMenu()
     expect(screen.getByText('alice')).toBeDefined()
+    expect(screen.getByRole('menuitem', { name: /Admin settings/i })).toBeDefined()
     // Validations is admin-mode-gated (not just permission-gated); adminMode is
     // false here, so even an IMPORT_DATA holder must not see it.
-    expect(screen.queryByRole('link', { name: /Validations/i })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: /Validations/i })).toBeNull()
   })
 
   it('renders a <footer> region with the brand line so the version label has a host', () => {
@@ -158,7 +169,7 @@ describe('Layout nav visibility', () => {
     expect(main.className).toContain('flex-1')
   })
 
-  it('fails open on auth backend error — shows all nav items and an auth-failed indicator', () => {
+  it('fails open on auth backend error — shows all nav items and an auth-failed indicator', async () => {
     mockedUseCurrentUser.mockReturnValue({
       data: undefined,
       isLoading: false,
@@ -172,9 +183,39 @@ describe('Layout nav visibility', () => {
     // All nav items visible — the server is the authoritative gate.
     expect(screen.getByRole('link', { name: /Components/i })).toBeDefined()
     expect(screen.getByRole('link', { name: /Audit/i })).toBeDefined()
-    expect(screen.getByRole('link', { name: /Admin/i })).toBeDefined()
     // Explicit "auth check failed" signal so the operator sees the cause.
     expect(screen.getByText(/auth check failed/i)).toBeDefined()
+    // Admin settings fails open too (Validations keeps its admin-mode double gate).
+    await openAccountMenu()
+    expect(screen.getByRole('menuitem', { name: /Admin settings/i })).toBeDefined()
+  })
+})
+
+describe('Layout nav — ACCESS_COMPONENTS gate', () => {
+  it('hides Components and Search from a logged-in user without ACCESS_COMPONENTS', () => {
+    mockedUseCurrentUser.mockReturnValue({
+      data: { username: 'nobody', roles: [], groups: [] },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useCurrentUser>)
+    renderLayout()
+    expect(screen.queryByRole('link', { name: /Components/i })).toBeNull()
+    expect(screen.queryByRole('combobox', { name: 'Global search' })).toBeNull()
+  })
+
+  it('keeps them on an auth backend error (fail open, the server still authorizes)', () => {
+    mockedUseCurrentUser.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new Error('500'),
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useCurrentUser>)
+    renderLayout()
+    expect(screen.getByRole('link', { name: /Components/i })).toBeDefined()
+    expect(screen.getByRole('combobox', { name: 'Global search' })).toBeDefined()
   })
 })
 
@@ -280,25 +321,29 @@ describe('Layout Validations nav — adminMode + IMPORT_DATA double-gate', () =>
     } as unknown as ReturnType<typeof useCurrentUser>)
   }
 
-  it('shows Validations for an IMPORT_DATA holder when adminMode is on', () => {
+  it('shows Validations for an IMPORT_DATA holder when adminMode is on', async () => {
     setAdminMode(true)
     mockUser(adminUser)
     renderLayout()
-    expect(screen.getByRole('link', { name: /Validations/i })).toBeDefined()
+    await openAccountMenu()
+    expect(screen.getByRole('menuitem', { name: /Validations/i })).toBeDefined()
   })
 
-  it('hides Validations when adminMode is off (even with IMPORT_DATA)', () => {
+  it('hides Validations when adminMode is off (even with IMPORT_DATA)', async () => {
     setAdminMode(false)
     mockUser(adminUser)
     renderLayout()
-    expect(screen.queryByRole('link', { name: /Validations/i })).toBeNull()
+    await openAccountMenu()
+    expect(screen.queryByRole('menuitem', { name: /Validations/i })).toBeNull()
   })
 
-  it('hides Validations for a viewer even with adminMode forced on (security canary)', () => {
+  it('hides Validations for a viewer even with adminMode forced on (security canary)', async () => {
     setAdminMode(true)
     mockUser(viewerUser)
     renderLayout()
-    expect(screen.queryByRole('link', { name: /Validations/i })).toBeNull()
+    await openAccountMenu()
+    expect(screen.queryByRole('menuitem', { name: /Validations/i })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: /Admin settings/i })).toBeNull()
   })
 })
 
@@ -391,30 +436,34 @@ describe('Layout open-feedback badge — admin-operator only', () => {
     setAdminMode(true)
     mockUser(adminUser)
     renderWithOpenCount(3)
-    const badge = await screen.findByTestId('open-feedback-badge')
-    expect(badge.textContent).toBe('3')
+    // A dot on the avatar is visible from any page; the number sits on "Admin settings".
+    expect(await screen.findByTestId('open-feedback-dot')).toBeDefined()
+    await openAccountMenu()
+    expect(screen.getByTestId('open-feedback-badge').textContent).toBe('3')
   })
 
   it('does not show the badge when adminMode is off', () => {
     setAdminMode(false)
     mockUser(adminUser)
     renderWithOpenCount(3)
-    expect(screen.queryByTestId('open-feedback-badge')).toBeNull()
+    expect(screen.queryByTestId('open-feedback-dot')).toBeNull()
   })
 
   it('does not show the badge for a non-admin even with adminMode on', () => {
     setAdminMode(true)
     mockUser(viewerUser)
     renderWithOpenCount(3)
-    expect(screen.queryByTestId('open-feedback-badge')).toBeNull()
+    expect(screen.queryByTestId('open-feedback-dot')).toBeNull()
   })
 
   it('shows no badge when the open count is zero', async () => {
     setAdminMode(true)
     mockUser(adminUser)
     renderWithOpenCount(0)
-    // The Admin link renders; the badge must not.
-    await screen.findByText('Admin')
+    // "Admin settings" renders; neither the dot nor the badge does.
+    await openAccountMenu()
+    await screen.findByRole('menuitem', { name: /Admin settings/i })
     expect(screen.queryByTestId('open-feedback-badge')).toBeNull()
+    expect(screen.queryByTestId('open-feedback-dot')).toBeNull()
   })
 })

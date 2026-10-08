@@ -16,6 +16,12 @@ import type { ComponentDetail } from '../../lib/types'
 
 interface AsCodeTabProps {
   component: ComponentDetail
+  /**
+   * 1-based line of the FULL view to mark and scroll to (the as-code search deep link,
+   * `?tab=as-code&line=N`). Search line numbers come from the Full view, so the mark is
+   * shown in Full mode only.
+   */
+  highlightLine?: number
 }
 
 /**
@@ -24,7 +30,7 @@ interface AsCodeTabProps {
  * between the all-version-ranges view and a single concrete version (entered in
  * the debounced version box). A Copy button puts the current text on the clipboard.
  */
-export function AsCodeTab({ component }: AsCodeTabProps) {
+export function AsCodeTab({ component, highlightLine }: AsCodeTabProps) {
   const { toast } = useToast()
   const [mode, setMode] = useState<AsCodeMode>('full')
   // Seed the resolve box with the highest configured version (the "current"
@@ -100,6 +106,7 @@ export function AsCodeTab({ component }: AsCodeTabProps) {
         code={code}
         defaultVersion={defaultVersion}
         onUseDefault={() => defaultVersion && setVersionInput(defaultVersion)}
+        highlightLine={mode === 'full' ? highlightLine : undefined}
       />
     </div>
   )
@@ -116,6 +123,7 @@ interface AsCodeBodyProps {
   code: string
   defaultVersion: string | null
   onUseDefault: () => void
+  highlightLine?: number
 }
 
 function AsCodeBody({
@@ -129,6 +137,7 @@ function AsCodeBody({
   code,
   defaultVersion,
   onUseDefault,
+  highlightLine,
 }: AsCodeBodyProps) {
   if (mode === 'resolved' && !hasVersion) {
     return <p className="text-sm text-muted-foreground">Enter a version to resolve the component.</p>
@@ -166,5 +175,5 @@ function AsCodeBody({
     }
     return <InlineError message={errorMessage} />
   }
-  return <CodeBlock code={code} />
+  return <CodeBlock code={code} highlightLine={highlightLine} />
 }

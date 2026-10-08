@@ -4,26 +4,29 @@
 
 Two surfaces consume the audit log:
 
-- **Global feed** at `/audit` (`pages/AuditLogPage.tsx`) — newest changes across all entities, with a filter sidebar (B7.1.3).
+- **Global feed** at `/audit` (`pages/AuditLogPage.tsx`) — newest changes across all entities, with a filter bar (B7.1.3).
 - **Per-component history** as a tab inside the component detail page (B7.1.2). Documented in [`docs/features/component-detail.md`](component-detail.md) §"History tab"; the wire-level details are also covered here.
 
 Both surfaces render through the same [`AuditLogTable`](../../frontend/src/components/AuditLogTable.tsx) + [`AuditDiffViewer`](../../frontend/src/components/AuditDiffViewer.tsx) so the visual contract is identical.
 
 ## Global feed (B7.1.3)
 
-`GET /rest/api/4/audit/recent` accepts seven optional filter params (CRS contract `SYS-036`); combinations are ANDed server-side. The page exposes five of them in the [`AuditLogFilters`](../../frontend/src/components/AuditLogFilters.tsx) sidebar (the remaining two — `entityType` + `entityId` — are owned by the per-component History tab):
+`GET /rest/api/4/audit/recent` accepts optional filter params (CRS contract `SYS-036`); combinations are ANDed server-side. The page exposes them in the [`AuditLogFilters`](../../frontend/src/components/AuditLogFilters.tsx) bar, in the same style as the component list: one label-less row (placeholders and triggers name the filters), secondary dimensions behind **+ Filter**, and active values as removable chips under the row with **Clear all**.
 
-| Filter | UI control | Wire param | Notes |
-|---|---|---|---|
-| **Changed by** | Debounced text input (300 ms) | `changedBy` | Free-text username. `''` → `undefined` (clear). The debounce convention matches `ComponentFilters` so a typist doesn't fire N requests per word. |
-| **Source** | `<Select>` from `[api, git-history]` + "All sources" sentinel | `source` | Today only `api` (default for runtime events) and `git-history` (backfill from `/admin/migrate-history`) are emitted. Other values are reserved for future writers. |
-| **Action** | `<Select>` from `[CREATE, UPDATE, DELETE, RENAME, ARCHIVE]` + "All actions" | `action` | Static enum. CRS could theoretically emit other action strings; if so, `action` is best-effort. |
-| **From** | `<input type="datetime-local">` | `from` (ISO instant) | Browser-local time → `Date#toISOString()` → `Z`-suffixed UTC. CRS parses via `@DateTimeFormat(ISO.DATE_TIME)`. Half-open lower bound. |
-| **To** | `<input type="datetime-local">` | `to` (ISO instant) | Same conversion. Half-open upper bound (`< to`). |
+| Filter | Where | UI control | Wire param | Notes |
+|---|---|---|---|---|
+| **Changed by** | Row | Debounced text input (300 ms), placeholder "Changed by…" | `changedBy` | Free-text username. `''` → `undefined` (clear). |
+| **Action** | Row | `<Select>` "All actions" + `[CREATE, UPDATE, DELETE, RENAME, MIGRATED]` | `action` | Static enum. |
+| **Period** | Row | Button naming the period ("Any time", "Since …", "Until …", "… – …"); its popover holds presets (Last 24 hours / 7 days / 30 days) and **From** / **To** `datetime-local` inputs | `from`, `to` (ISO instants) | Browser-local time → `Date#toISOString()` → `Z`-suffixed UTC. A preset sets `from = now − span` and clears `to`. One chip for the whole period. |
+| **Show migration** | Row (end) | Switch | `includeMigrated` | Git-history baseline rows (`MIGRATED`), hidden by default (SYS-049). No chip — the switch is always visible. |
+| **Source** | + Filter › Change | Single-choice list "All sources" + `[api, git-history]` | `source` | |
+| **Entity type** | + Filter › Change | Single-choice list "All types" + `[Component]` | `entityType` | |
+| **Jira task key** | + Filter › Change metadata | Debounced text input | `jiraTaskKey` | Case-insensitive substring. |
+| **Comment** | + Filter › Change metadata | Debounced text input | `changeComment` | Case-insensitive substring. |
 
 `from`/`to` together form a half-open `[from, to)` window over `audit_log.changed_at`. The [`localToInstant`](../../frontend/src/components/AuditLogFilters.tsx) helper is the conversion boundary — `new Date('2026-04-30T08:30')` (no Z, no offset) is parsed as the user's local time per ECMA-262, which is what we want.
 
-A "Clear filters" button surfaces whenever any filter is active and resets the whole filter object to `{}`. Filter changes also reset the page to 0 to avoid landing the user on an out-of-bounds page when the result set shrinks.
+The text inputs' state and debounce timers live in `AuditLogFilters` itself, not in the "+ Filter" panel, so a pending debounce survives closing the panel; **Clear all** and a text chip's × cancel the pending debounce so a stale value can't reappear. Filter changes also reset the page to 0 to avoid landing the user on an out-of-bounds page when the result set shrinks.
 
 ## Per-component history (B7.1.2)
 
