@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router'
-import { Package, History, AlertTriangle, Search } from 'lucide-react'
+import { Package, History, AlertTriangle } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { usePortalInfo } from '@/hooks/useInfo'
@@ -10,6 +10,7 @@ import { EmployeeIntegrationAlert } from './EmployeeIntegrationAlert'
 import { AnnouncementsButton } from './announcements/AnnouncementsButton'
 import { HelpMenu } from './HelpMenu'
 import { SearchCommandButton } from './SearchCommandButton'
+import { GlobalSearchButton } from './GlobalSearchButton'
 import { UserMenu } from './UserMenu'
 import { StatusBanner } from './ui/status-banner'
 import { useAdminMode } from '@/lib/adminModeStore'
@@ -25,13 +26,11 @@ interface NavItem {
   requires?: string
 }
 
-// Everyday destinations only. Admin tooling (Admin settings, Validations) lives in the account
-// menu (UserMenu); help and feedback in the "?" menu (HelpMenu).
+// Sections only. Global search is a tool and sits with "Go to…" on the right (GlobalSearchButton);
+// admin tooling (Admin settings, Validations) lives in the account menu (UserMenu); help and
+// feedback in the "?" menu (HelpMenu).
 const navItems: NavItem[] = [
   { href: '/components', label: 'Components', icon: Package, requires: PERMISSIONS.ACCESS_COMPONENTS },
-  // Global search (the page is titled so). "Search" is unambiguous here: the list's controls are
-  // filters and ⌘K is "Go to…". Gated like the list: the endpoint needs ACCESS_COMPONENTS.
-  { href: '/search', label: 'Search', icon: Search, requires: PERMISSIONS.ACCESS_COMPONENTS },
   { href: '/audit', label: 'Audit', icon: History, requires: PERMISSIONS.ACCESS_AUDIT },
 ]
 
@@ -60,6 +59,8 @@ export function Layout({ children }: LayoutProps) {
   // they remain clickable and the backend still enforces authorization. A visible
   // indicator tells the operator what's wrong.
   const visibleItems = navItems.filter((it) => isError || !it.requires || hasPermission(user, it.requires))
+  // Global search is gated like the list: the endpoint needs ACCESS_COMPONENTS.
+  const canSearch = isError || hasPermission(user, PERMISSIONS.ACCESS_COMPONENTS)
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -87,7 +88,6 @@ export function Layout({ children }: LayoutProps) {
                 <Link
                   key={href}
                   to={href}
-                  data-spotlight={href === '/search' ? 'as-code-search' : undefined}
                   className={cn(
                     // nowrap + shrink-0: a crowded header must never wrap a label onto two lines
                     // (which also squeezed its icon); it scrolls/overflows instead.
@@ -104,8 +104,9 @@ export function Layout({ children }: LayoutProps) {
             })}
           </nav>
           <div className="ml-auto flex items-center gap-1 text-sm">
-            {/* ⌘K works on every page, so its entry point lives in the global header. */}
-            <div className="mr-2">
+            {/* Both work on every page, so their entry points live in the global header. */}
+            <div className="mr-2 flex items-center gap-2">
+              {canSearch && <GlobalSearchButton active={location.pathname === '/search'} />}
               <SearchCommandButton hintEnabled={location.pathname === '/components'} />
             </div>
             <AnnouncementsButton />

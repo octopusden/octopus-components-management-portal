@@ -79,8 +79,8 @@ describe('Layout nav visibility', () => {
 
     renderLayout()
     expect(screen.getByRole('link', { name: /Components/i })).toBeDefined()
-    // Global search has no permission gate beyond ACCESS_COMPONENTS, and its label never wraps.
-    const search = screen.getByRole('link', { name: 'Search' })
+    // Global search (right-hand group) has no permission gate beyond ACCESS_COMPONENTS, and never wraps.
+    const search = screen.getByRole('link', { name: 'Global search' })
     expect(search.getAttribute('href')).toBe('/search')
     expect(search.className).toContain('whitespace-nowrap')
     expect(screen.queryByRole('link', { name: /Audit/i })).toBeNull()
@@ -204,7 +204,7 @@ describe('Layout nav — ACCESS_COMPONENTS gate', () => {
     } as unknown as ReturnType<typeof useCurrentUser>)
     renderLayout()
     expect(screen.queryByRole('link', { name: /Components/i })).toBeNull()
-    expect(screen.queryByRole('link', { name: 'Search' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Global search' })).toBeNull()
   })
 
   it('keeps them on an auth backend error (fail open, the server still authorizes)', () => {
@@ -217,7 +217,7 @@ describe('Layout nav — ACCESS_COMPONENTS gate', () => {
     } as unknown as ReturnType<typeof useCurrentUser>)
     renderLayout()
     expect(screen.getByRole('link', { name: /Components/i })).toBeDefined()
-    expect(screen.getByRole('link', { name: 'Search' })).toBeDefined()
+    expect(screen.getByRole('link', { name: 'Global search' })).toBeDefined()
   })
 })
 
