@@ -45,22 +45,23 @@
 
 ## 4. Field-rule checker (Decision 3)
 
-- [ ] 4.1 Failing tests for `profileRuleErrors(rules, request)`:
-  - [ ] 4.1.1 a `name` rule that fails returns its message on `name`
-  - [ ] 4.1.2 a passing value returns nothing
-  - [ ] 4.1.3 whole-value match: `[a-z]+` rejects `payments-1`
-  - [ ] 4.1.4 an absent value is matched as `""` (a rule requiring a value fails on it)
-  - [ ] 4.1.5 a path outside the registry's list is skipped
-  - [ ] 4.1.6 an uncompilable pattern is skipped, other rules still checked
-  - [ ] 4.1.7 the regular profiles' rule rejects `resolution-service` and `x-dmp-bundle`,
+- [x] 4.1 Failing tests for `profileRuleErrors(rules, request)`:
+  - [x] 4.1.1 a `name` rule that fails returns its message on `name`
+  - [x] 4.1.2 a passing value returns nothing
+  - [x] 4.1.3 whole-value match: `[a-z]+` rejects `payments-1`
+  - [x] 4.1.4 an absent value is matched as `""` (a rule requiring a value fails on it)
+  - [x] 4.1.5 a path outside the registry's list is skipped
+  - [x] 4.1.6 an uncompilable pattern is skipped, other rules still checked
+  - [x] 4.1.7 the regular profiles' rule rejects `resolution-service` and `x-dmp-bundle`,
         accepts `payments`
-  - [ ] 4.1.8 the Solution rule rejects `payments-dmp-bundle`; the DMP Bundle rule accepts it
-  - [ ] 4.1.9 the reader returns the request value for every path in the registry's list (one
+  - [x] 4.1.8 the Solution rule rejects `payments-dmp-bundle`; the DMP Bundle rule accepts it
+  - [x] 4.1.9 the reader returns the request value for every path in the registry's list (one
         case per path, `[0]` reads the first entry only)
-  - [ ] 4.1.10 the path → form-field table covers every path in the registry's list
-- [ ] 4.2 Implement `frontend/src/lib/component/profileRules.ts` (request reader over the
+  - [x] 4.1.10 the path → form-field table covers every path in the registry's list
+- [x] 4.2 Implement `frontend/src/lib/component/profileRules.ts` (request reader over the
       registry's paths, path → field table, anchored compile, per-rule-list cache).
-- [ ] 4.3 Confirm tests pass.
+- [x] 4.3 Confirm tests pass. `profileRules.test.ts` 34/34 (20 path cases, 7 shipped-rule cases);
+      `tsc`, `eslint` clean.
 
 ## 5. Schema and key check (Decision 3)
 
