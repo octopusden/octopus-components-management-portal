@@ -2,7 +2,7 @@
 
 ## What it does
 
-`/search` (header field **Global search…** next to **Go to…**, page title **Global search**) searches the as-code text of **every** component at once — the
+Global search (header field **Global search…** next to **Go to…**, full page `/search`) searches the as-code text of **every** component at once — the
 replacement for grepping the old Groovy DSL files. Anything the component's **As Code** tab shows
 is searchable: artifact and group patterns, version ranges, VCS URLs, Jira keys, docker images,
 people.
@@ -37,7 +37,11 @@ link uses the component **UUID** returned with each hit, not the key: the editor
 
 ### Entry points
 
-- Nav item **Search** (no permission gate — the endpoint needs `ACCESS_COMPONENTS`, like the list).
+- Header field **Global search…** (shown with `ACCESS_COMPONENTS`, like the list; hidden on `/search`
+  itself). Typing ≥ 2 characters opens a quick-results panel — up to 6 **active** components, the
+  first matching line each (`limit=6&maxMatchesPerComponent=1&archived=false`); a result opens that
+  line in the As Code tab. **Enter** or **See all** opens `/search?q=…` (regex, Archived/All, every
+  result). ↑/↓ pick a result, Esc closes; **/** focuses the field from anywhere.
 - **Go to…** palette (⌘K): **Go to › Global search**, and **Action › Global search for "…"**
   which hands the typed text to `/search?q=…`.
 - Component list: while the key/name filter holds ≥ 2 characters, a "Global search →" link

@@ -1,6 +1,15 @@
 import type { ReactNode } from 'react'
 import type { AsCodeMatchRange } from './types'
 
+/** Components shown in the header's quick-results panel; "See all" opens the full page for the rest. */
+export const QUICK_RESULTS_LIMIT = 6
+
+/** Full Global search page for [query] (the "advanced" mode: regex, Archived/All, every result). */
+export function globalSearchHref(query: string): string {
+  const q = query.trim()
+  return q ? `/search?q=${encodeURIComponent(q)}` : '/search'
+}
+
 /** Detail-page deep link that opens the As Code tab (Full view) scrolled to [line]. */
 export function asCodeLineHref(componentId: string, line: number): string {
   return `/components/${encodeURIComponent(componentId)}?tab=as-code&line=${line}`

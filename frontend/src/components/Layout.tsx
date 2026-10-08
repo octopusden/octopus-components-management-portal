@@ -10,7 +10,7 @@ import { EmployeeIntegrationAlert } from './EmployeeIntegrationAlert'
 import { AnnouncementsButton } from './announcements/AnnouncementsButton'
 import { HelpMenu } from './HelpMenu'
 import { SearchCommandButton } from './SearchCommandButton'
-import { GlobalSearchButton } from './GlobalSearchButton'
+import { GlobalSearchBox } from './GlobalSearchBox'
 import { UserMenu } from './UserMenu'
 import { StatusBanner } from './ui/status-banner'
 import { useAdminMode } from '@/lib/adminModeStore'
@@ -26,7 +26,7 @@ interface NavItem {
   requires?: string
 }
 
-// Sections only. Global search is a tool and sits with "Go to…" on the right (GlobalSearchButton);
+// Sections only. Global search is a tool and sits with "Go to…" on the right (GlobalSearchBox);
 // admin tooling (Admin settings, Validations) lives in the account menu (UserMenu); help and
 // feedback in the "?" menu (HelpMenu).
 const navItems: NavItem[] = [
@@ -106,7 +106,8 @@ export function Layout({ children }: LayoutProps) {
           <div className="ml-auto flex items-center gap-1 text-sm">
             {/* Both work on every page, so their entry points live in the global header. */}
             <div className="mr-2 flex items-center gap-2">
-              {canSearch && <GlobalSearchButton active={location.pathname === '/search'} />}
+              {/* The /search page has its own big field; a second one in the header would only compete. */}
+              {canSearch && location.pathname !== '/search' && <GlobalSearchBox />}
               <SearchCommandButton hintEnabled={location.pathname === '/components'} />
             </div>
             <AnnouncementsButton />

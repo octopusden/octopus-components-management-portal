@@ -11,15 +11,18 @@ export interface AsCodeSearchParams {
   /** `undefined` = archived and active components alike (the server default). */
   archived?: boolean
   limit?: number
+  /** Matching lines returned per component (server default when unset). */
+  maxMatchesPerComponent?: number
 }
 
 /** Builds the `/components/as-code/search` path; exported for tests. */
-export function asCodeSearchPath({ query, regex, archived, limit }: AsCodeSearchParams): string {
+export function asCodeSearchPath({ query, regex, archived, limit, maxMatchesPerComponent }: AsCodeSearchParams): string {
   const params = new URLSearchParams()
   params.set('q', query.trim())
   if (regex) params.set('regex', 'true')
   if (archived !== undefined) params.set('archived', String(archived))
   if (limit !== undefined) params.set('limit', String(limit))
+  if (maxMatchesPerComponent !== undefined) params.set('maxMatchesPerComponent', String(maxMatchesPerComponent))
   return `/components/as-code/search?${params.toString()}`
 }
 
@@ -35,7 +38,14 @@ export function asCodeSearchPath({ query, regex, archived, limit }: AsCodeSearch
 export function useAsCodeSearch(params: AsCodeSearchParams) {
   const trimmed = params.query.trim()
   return useQuery({
-    queryKey: ['as-code-search', trimmed, params.regex, params.archived ?? null, params.limit ?? null],
+    queryKey: [
+      'as-code-search',
+      trimmed,
+      params.regex,
+      params.archived ?? null,
+      params.limit ?? null,
+      params.maxMatchesPerComponent ?? null,
+    ],
     queryFn: () => api.get<AsCodeSearchResponse>(asCodeSearchPath(params)),
     enabled: trimmed.length >= AS_CODE_SEARCH_MIN_QUERY,
     placeholderData: keepPreviousData,
