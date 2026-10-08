@@ -6,6 +6,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 import { CreateComponentPage } from './CreateComponentPage'
 import { ApiError } from '../lib/api'
+import type { ComponentProfile } from '../hooks/useComponentProfiles'
+import shippedProfiles from '../test-fixtures/component-profiles.contract.json'
 import { TooltipProvider } from '../components/ui/tooltip'
 import type { ComponentDetail } from '../lib/types'
 
@@ -62,6 +64,14 @@ vi.mock('../hooks/useAdminConfig', () => ({
 }))
 const mockUseCurrentUser = vi.fn(() => ({ data: undefined as unknown, isLoading: false }))
 vi.mock('../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUseCurrentUser() }))
+const PROFILES_OK = {
+  data: shippedProfiles.profiles as ComponentProfile[] | undefined,
+  isLoading: false,
+  isError: false,
+  refetch: vi.fn(),
+}
+const mockUseComponentProfiles = vi.fn(() => PROFILES_OK)
+vi.mock('../hooks/useComponentProfiles', () => ({ useComponentProfiles: () => mockUseComponentProfiles() }))
 // Layout pulls the nav shell + its own queries; stub to a passthrough.
 vi.mock('../components/Layout', () => ({
   Layout: ({ children }: { children: React.ReactNode }) =>
@@ -162,6 +172,7 @@ beforeEach(() => {
   mockUsePortalLinks.mockReturnValue({ data: undefined })
   mockUsePortalConfig.mockReturnValue({ data: { solutionKeyPatterns: ['-solution', 'dmp-bundle'] } })
   mockUseCurrentUser.mockReturnValue({ data: undefined, isLoading: false })
+  mockUseComponentProfiles.mockReturnValue(PROFILES_OK)
 })
 
 describe('CreateComponentPage — scratch profile default', () => {
@@ -191,12 +202,12 @@ describe('CreateComponentPage — scratch profile default', () => {
     expect(mockMutateAsync).not.toHaveBeenCalled()
   })
 
-  it('a solution key that lacks "-solution" is rejected for the Solution profile', async () => {
+  it('a key the Solution profile rule rejects shows the registry message', async () => {
     renderWizard()
     await userEvent.click(screen.getByRole('radio', { name: /^Solution$/i }))
     await clickNext()
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
-    await waitFor(() => expect(screen.getByText(/must contain "-solution"/i)).toBeDefined())
+    await waitFor(() => expect(screen.getByText('A solution key contains -solution, e.g. payments-solution.')).toBeDefined())
   })
 })
 

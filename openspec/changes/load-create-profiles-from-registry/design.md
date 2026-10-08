@@ -104,9 +104,11 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
 - A pattern `new RegExp` cannot compile is skipped. Compiled patterns are cached per rule list.
 - An absent value is matched as `""`, so the pattern decides whether it may stay empty, as in
   the registry.
-- `makeCreateSchema` takes the selected profile's rules and a `requestFor(values)` function
-  instead of the profile enum and `solutionPatterns`; its `superRefine` adds one issue per failing
-  rule on the mapped field, so the stepper marks the right step without new routing.
+- `makeCreateSchema` takes the selected profile's rules instead of the profile enum and
+  `solutionPatterns`, and builds the request itself with `buildCreateRequest(values, source,
+  editable)` — the escrow arguments it leaves at their defaults touch no rule path. Its
+  `superRefine` adds one issue per failing rule on the mapped field, so the stepper marks the
+  right step without new routing. (changed during implementation: no `requestFor` parameter)
 - `componentKeyError` keeps only the charset check; the profile rule on `name` is added after
   it, so a key shows one message at a time, charset first.
 

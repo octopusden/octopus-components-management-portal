@@ -65,19 +65,24 @@
 
 ## 5. Schema and key check (Decision 3)
 
-- [ ] 5.1 Failing tests for `makeCreateSchema` / `componentKeyError`:
-  - [ ] 5.1.1 a charset failure is reported alone, before any profile rule
-  - [ ] 5.1.2 a profile rule failure on `name` is reported on `name`
-  - [ ] 5.1.3 a rule on `baseConfiguration.build.buildTasks` is reported on `buildTasks`
-  - [ ] 5.1.4 no rules → only today's checks apply
-  - [ ] 5.1.5 the old substring rule is gone: `my-solution` passes a profile with no rules
-  - [ ] 5.1.6 a rule is checked against the built request: a Maven-group rule with a Docker
+- [x] 5.1 Failing tests for `makeCreateSchema` / `componentKeyError`:
+  - [x] 5.1.1 a charset failure is reported alone, before any profile rule
+  - [x] 5.1.2 a profile rule failure on `name` is reported on `name`
+  - [x] 5.1.3 a rule on `baseConfiguration.build.buildTasks` is reported on `buildTasks`
+  - [x] 5.1.4 no rules → only today's checks apply
+  - [x] 5.1.5 the old substring rule is gone: `my-solution` passes a profile with no rules
+  - [x] 5.1.6 a rule is checked against the built request: a Maven-group rule with a Docker
         coordinate fails as `""`, reported on `coordinate.groupPattern`
-  - [ ] 5.1.7 a rule on a field the user may not edit is checked as `""`
-- [ ] 5.2 `makeCreateSchema` takes the selected profile's rules and `requestFor(values)` (the
-      page's `buildCreateRequest` with its editability) instead of the profile enum and
-      `solutionPatterns`; `componentKeyError` keeps the charset check only.
-- [ ] 5.3 Confirm tests pass; `isSolutionCandidate` and the editor's tests are untouched.
+  - [x] 5.1.7 a rule on a field the user may not edit is checked as `""`
+- [x] 5.2 `makeCreateSchema` takes the selected profile's rules and builds the request with
+      `buildCreateRequest` itself (design Decision 3); `componentKeyError` keeps the charset check
+      only; a blank key shows "required" alone. The page passes the rules of the registry
+      profile whose id matches its built-in choice until the Profile step moves over (6.2).
+- [x] 5.2a The page tests mock `useComponentProfiles` with the shipped fixture; the Solution
+      key test now expects the registry's message. (added on review)
+- [x] 5.3 Confirm tests pass; `isSolutionCandidate` and the editor's tests are untouched.
+      `createFormModel.test.ts` 35/35 (8 new); full vitest 178 files / 2583 tests green; `tsc`,
+      `eslint` clean; no diff in `solutionKey.ts`, `ComponentDetailPage.tsx` or `components/editor`.
 
 ## 6. Profile step (Decisions 1, 5)
 

@@ -30,6 +30,7 @@ import { useFieldOptions } from '../hooks/useFieldOptions'
 import { useSupportedGroups } from '../hooks/useSupportedGroups'
 import { usePortalLinks, usePortalConfig } from '../hooks/useInfo'
 import { useFieldConfig, useComponentDefaults } from '../hooks/useAdminConfig'
+import { useComponentProfiles } from '../hooks/useComponentProfiles'
 import { isFieldEditableFor, useFieldEditable, useFieldConfigEntry } from '../hooks/useFieldConfig'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useComponent, useCreateComponent } from '../hooks/useComponent'
@@ -258,10 +259,14 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
   // scratch gate is passed; fall back to the base-regex profile for the schema.
   const effectiveProfile: ComponentProfile = profile ?? 'regular-external'
 
+  const { data: registryProfiles } = useComponentProfiles()
+  const profileRules = useMemo(
+    () => registryProfiles?.find((p) => p.id === effectiveProfile)?.rules ?? [],
+    [registryProfiles, effectiveProfile],
+  )
   const schema = useMemo(
-    () =>
-      makeCreateSchema(editable, supportedGroups, gitBaseUrl, effectiveProfile, solutionPatterns, source ?? undefined),
-    [editable, supportedGroups, gitBaseUrl, effectiveProfile, solutionPatterns, source],
+    () => makeCreateSchema(editable, supportedGroups, gitBaseUrl, profileRules, source ?? undefined),
+    [editable, supportedGroups, gitBaseUrl, profileRules, source],
   )
 
   const {

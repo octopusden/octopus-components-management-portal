@@ -2,10 +2,12 @@ import { z } from 'zod'
 import { isBadToken } from '../artifactOwnership'
 import { findUnsupportedGroupId } from '../groupValidation'
 import { isVcsHostSupported, hostOf } from '../vcsHost'
-import { isSolutionCandidate } from '../solutionKey'
 import { selectBaseRow } from '../api/baseRow'
 import type { ComponentDetail, EscrowAspect } from '../types'
+import type { ProfileFieldRule } from '../../hooks/useComponentProfiles'
+import { formFieldOfRulePath, profileRuleErrors } from './profileRules'
 import {
+  buildCreateRequest,
   effectiveCreateClientCode,
   vcsBlockApplies,
   DEPRECATED_BUILD_SYSTEMS,
@@ -151,31 +153,10 @@ export function renameKeyCharsetError(
   return componentKeyCharsetError(trimmed, clientCode)
 }
 
-export function componentKeyError(
-  key: string,
-  profile: ComponentProfile,
-  patterns: readonly string[] | undefined,
-  clientCode?: string,
-): string | null {
+export function componentKeyError(key: string, clientCode?: string): string | null {
   const trimmed = key.trim()
   if (!trimmed) return null
-  const charsetError = componentKeyCharsetError(trimmed, clientCode)
-  if (charsetError) return charsetError
-  const solutionPattern = patterns?.[0] ?? '-solution'
-  const bundlePattern = patterns?.[1] ?? 'dmp-bundle'
-  if (profile === 'solution' && !trimmed.includes(solutionPattern)) {
-    return `A Solution key must contain "${solutionPattern}"`
-  }
-  if (profile === 'dmp-bundle' && !trimmed.includes(bundlePattern)) {
-    return `A DMP Bundle key must contain "${bundlePattern}"`
-  }
-  if (
-    (profile === 'regular-external' || profile === 'regular-internal') &&
-    isSolutionCandidate(trimmed, patterns)
-  ) {
-    return 'This key matches a solution pattern — choose the Solution or DMP Bundle profile instead'
-  }
-  return null
+  return componentKeyCharsetError(trimmed, clientCode)
 }
 
 // A single Zod object; the explicit+external block is enforced via superRefine
@@ -184,14 +165,13 @@ export function componentKeyError(
 // CRS only requires it when a copyright catalog is configured server-side, which
 // the Portal can't detect — a server 400 is mapped inline instead. The schema is
 // built per-render from field-config visibility (a hidden/readonly field is
-// removed and must not fire its requirement) and from the chosen profile (the
-// Component-Key rule is profile-dependent).
+// removed and must not fire its requirement) and from the chosen profile's field
+// rules, checked against the request the form would send (D3).
 export function makeCreateSchema(
   editable: (field: string) => boolean,
   supportedGroups: readonly string[],
   gitBaseUrl: string | null | undefined,
-  profile: ComponentProfile,
-  solutionPatterns: readonly string[] | undefined,
+  profileRules: readonly ProfileFieldRule[],
   // Needed for the Component-Key rule: a clone that is not external keeps its source's
   // clientCode in the payload, so the key may legally lean on it.
   source?: ComponentDetail,
@@ -245,15 +225,17 @@ export function makeCreateSchema(
       escrowGeneration: z.string(),
     })
     .superRefine((v, ctx) => {
-      // Profile-dependent Component-Key rule (strict for new components).
-      const keyError = componentKeyError(
-        v.name,
-        profile,
-        solutionPatterns,
-        effectiveCreateClientCode(v, source, editable),
-      )
+      const keyError = componentKeyError(v.name, effectiveCreateClientCode(v, source, editable))
       if (keyError) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['name'], message: keyError })
+      }
+      const request = buildCreateRequest(v, source, editable)
+      for (const [rulePath, message] of profileRuleErrors(profileRules, request)) {
+        const field = formFieldOfRulePath(rulePath)
+        // The key shows one message at a time: "required" or the charset rule come first.
+        if (!field || (field === 'name' && (keyError || !v.name.trim()))) continue
+        const path = field.split('.').map((segment) => (/^\d+$/.test(segment) ? Number(segment) : segment))
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path, message })
       }
       // Legacy EscrowConfigValidator rule: a VCS root is mandatory for every
       // build system outside the exempt set.
