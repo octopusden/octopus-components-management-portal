@@ -106,7 +106,7 @@ export function Layout({ children }: LayoutProps) {
           <div className="ml-auto flex items-center gap-1 text-sm">
             {/* ⌘K works on every page, so its entry point lives in the global header. */}
             <div className="mr-2">
-              <SearchCommandButton />
+              <SearchCommandButton hintEnabled={location.pathname === '/components'} />
             </div>
             <AnnouncementsButton />
             <HelpMenu />

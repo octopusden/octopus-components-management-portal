@@ -50,7 +50,8 @@ export function UserMenu({ user, authError, openFeedbackCount }: UserMenuProps) 
         >
           <span
             aria-hidden
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-xs font-medium text-accent-foreground"
+            data-testid="user-avatar"
+            className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-xs font-medium text-accent-foreground"
           >
             {user ? initials(user.username) : '?'}
           </span>

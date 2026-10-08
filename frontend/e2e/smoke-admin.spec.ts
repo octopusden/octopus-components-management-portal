@@ -2,10 +2,12 @@ import { test, expect } from '@playwright/test'
 
 // Admin storageState. Has IMPORT_DATA, so /admin renders.
 test.describe('Components Management Portal – admin smoke', () => {
-  test('admin nav link is visible and lands on /admin', async ({ page }) => {
+  test('account menu "Admin settings" lands on /admin', async ({ page }) => {
     await page.goto('/components')
 
-    await page.getByRole('link', { name: /admin/i }).click()
+    // Admin pages live in the header account menu (avatar).
+    await page.getByRole('button', { name: /^account/i }).click()
+    await page.getByRole('menuitem', { name: /admin settings/i }).click()
     await page.waitForURL('**/admin')
     await expect(page.getByRole('heading', { name: /admin/i })).toBeVisible()
   })

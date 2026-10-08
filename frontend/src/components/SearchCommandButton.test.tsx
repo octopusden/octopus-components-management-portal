@@ -45,6 +45,12 @@ describe('SearchCommandButton', () => {
     expect(screen.queryByTestId('kbd-coachmark')).not.toBeInTheDocument()
   })
 
+  it('does not show the coachmark where the caller disables it (pages other than the list)', () => {
+    render(<SearchCommandButton hintEnabled={false} />)
+    expect(screen.queryByTestId('kbd-coachmark')).not.toBeInTheDocument()
+    expect(localStorage.getItem(COACHMARK_KEY)).toBeNull()
+  })
+
   it('dismissing the coachmark hides it and persists the flag', async () => {
     const user = userEvent.setup()
     render(<SearchCommandButton />)

@@ -30,9 +30,11 @@ test.describe('admin config-as-code — Reload + read-only forms', () => {
 
     const reloadBtn = page.getByRole('button', { name: /^reload$/i })
     await expect(reloadBtn).toBeVisible()
-    // Disabled until Admin mode is enabled (the footer switch).
+    // Disabled until Admin mode is enabled (the switch in the header account menu).
     await expect(reloadBtn).toBeDisabled()
+    await page.getByRole('button', { name: /^account/i }).click()
     await page.getByRole('switch', { name: /admin mode/i }).click()
+    await page.keyboard.press('Escape')
     await expect(reloadBtn).toBeEnabled()
 
     await reloadBtn.click()

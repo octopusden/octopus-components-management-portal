@@ -29,10 +29,12 @@ function dismissCoachmark() {
 
 /**
  * Discoverability entry point for the command palette (spec §1.6): a visible
- * "Go to… ⌘K" button in the list header that opens the palette, plus a
- * one-time dismissible coachmark pointing at it.
+ * "Go to… ⌘K" button in the app header that opens the palette, plus a
+ * one-time dismissible coachmark pointing at it. The header is on every page, so
+ * the caller limits the coachmark (`hintEnabled`) to the list page — elsewhere it
+ * would float over page actions (e.g. the detail page's Clone/Save row).
  */
-export function SearchCommandButton() {
+export function SearchCommandButton({ hintEnabled = true }: { hintEnabled?: boolean }) {
   const openPalette = useUiOverlay((s) => s.openPalette)
   // Yield to the onboarding-video nudge: only one first-run popup at a time. If the intro
   // banner is showing (or still eligible) at mount, suppress this ⌘K coachmark; it can
@@ -46,8 +48,8 @@ export function SearchCommandButton() {
     // banner is (or becomes) visible, and show it once the banner is gone — so a hint shown
     // before onboarding state hydrated doesn't get stuck on screen next to the banner.
     if (coachmarkDismissed()) return
-    setShowHint(!introBannerVisible)
-  }, [introBannerVisible])
+    setShowHint(hintEnabled && !introBannerVisible)
+  }, [hintEnabled, introBannerVisible])
 
   function hideHint() {
     setShowHint(false)
