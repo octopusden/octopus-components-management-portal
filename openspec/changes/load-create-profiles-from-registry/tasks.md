@@ -1,5 +1,5 @@
 > Frontend work runs under npm/vitest (`frontend/`); the e2e driver and `crs.version` under
-> Gradle. Groups 1–9 are frontend, group 10 is backend/infra.
+> Gradle. Groups 1–10 are frontend, group 11 is backend/infra.
 >
 > Depends on the registry change that adds `GET /rest/api/4/component-profiles` and
 > `ComponentCreateRequest.profile` merging and being released first.
@@ -29,26 +29,29 @@
   - [ ] 3.1.2 external, explicit `ask`, answer No → explicit `false`
   - [ ] 3.1.3 internal, explicit `ask`, answer Yes → external `false`, explicit `true`
   - [ ] 3.1.4 explicit `false` → `false` regardless of the answer
-  - [ ] 3.1.5 `asksExplicit` is true only for `ask`
+  - [ ] 3.1.5 `asksExplicit` is true only for `ask` with `component.distributionExplicit`
+        editable; not editable → answer fixed to No
 - [ ] 3.2 Rewrite `flagsForProfile` in `createFormModel.ts`; remove `PROFILE_META`, the
       `ComponentProfile` union and `DEFAULT_SCRATCH_PROFILE`.
 - [ ] 3.3 Confirm tests pass.
 
 ## 4. Field-rule checker (Decision 3)
 
-- [ ] 4.1 Failing tests for `profileRuleErrors`:
+- [ ] 4.1 Failing tests for `profileRuleErrors(rules, request)`:
   - [ ] 4.1.1 a `name` rule that fails returns its message on `name`
   - [ ] 4.1.2 a passing value returns nothing
   - [ ] 4.1.3 whole-value match: `[a-z]+` rejects `payments-1`
-  - [ ] 4.1.4 an empty field is matched as `""` (a rule requiring a value fails on blank)
-  - [ ] 4.1.5 a path not in the table is skipped
+  - [ ] 4.1.4 an absent value is matched as `""` (a rule requiring a value fails on it)
+  - [ ] 4.1.5 a path outside the registry's list is skipped
   - [ ] 4.1.6 an uncompilable pattern is skipped, other rules still checked
   - [ ] 4.1.7 the regular profiles' rule rejects `resolution-service` and `x-dmp-bundle`,
         accepts `payments`
   - [ ] 4.1.8 the Solution rule rejects `payments-dmp-bundle`; the DMP Bundle rule accepts it
-  - [ ] 4.1.9 each table path reads the wizard field it names (one case per mapped path)
-- [ ] 4.2 Implement `frontend/src/lib/component/profileRules.ts` (path table, anchored
-      compile, per-rule-list cache).
+  - [ ] 4.1.9 the reader returns the request value for every path in the registry's list (one
+        case per path, `[0]` reads the first entry only)
+  - [ ] 4.1.10 the path → form-field table covers every path in the registry's list
+- [ ] 4.2 Implement `frontend/src/lib/component/profileRules.ts` (request reader over the
+      registry's paths, path → field table, anchored compile, per-rule-list cache).
 - [ ] 4.3 Confirm tests pass.
 
 ## 5. Schema and key check (Decision 3)
@@ -59,11 +62,15 @@
   - [ ] 5.1.3 a rule on `baseConfiguration.build.buildTasks` is reported on `buildTasks`
   - [ ] 5.1.4 no rules → only today's checks apply
   - [ ] 5.1.5 the old substring rule is gone: `my-solution` passes a profile with no rules
-- [ ] 5.2 `makeCreateSchema` takes the selected profile's rules instead of the profile enum and
+  - [ ] 5.1.6 a rule is checked against the built request: a Maven-group rule with a Docker
+        coordinate fails as `""`, reported on `coordinate.groupPattern`
+  - [ ] 5.1.7 a rule on a field the user may not edit is checked as `""`
+- [ ] 5.2 `makeCreateSchema` takes the selected profile's rules and `requestFor(values)` (the
+      page's `buildCreateRequest` with its editability) instead of the profile enum and
       `solutionPatterns`; `componentKeyError` keeps the charset check only.
 - [ ] 5.3 Confirm tests pass; `isSolutionCandidate` and the editor's tests are untouched.
 
-## 6. Profile step (Decisions 1, 5)
+## 6. Profile step (Decisions 1, 4, 6)
 
 - [ ] 6.1 Failing tests in `CreateComponentPage.test.tsx`:
   - [ ] 6.1.1 tiles render the registry's titles and descriptions in order
@@ -76,10 +83,16 @@
   - [ ] 6.1.8 the explicit question shows only for `ask`
   - [ ] 6.1.9 changing profile clears the key and re-checks against the new rules
   - [ ] 6.1.10 typing `resolution-service` under Regular external shows the registry's message
+  - [ ] 6.1.11 `component.solution` not editable → Solution and DMP Bundle disabled, reason
+        names the solution flag; regular tiles selectable
+  - [ ] 6.1.12 `component.distributionExternal` not editable → Regular external disabled,
+        Regular internal selectable
+  - [ ] 6.1.13 `component.distributionExplicit` not editable → no tile disabled, the explicit
+        question hidden, no explicit distribution sent
 - [ ] 6.2 Implement the Profile step over `useComponentProfiles`.
 - [ ] 6.3 Confirm tests pass.
 
-## 7. Clone pre-selection (Decision 4)
+## 7. Clone pre-selection (Decision 5)
 
 - [ ] 7.1 Failing tests for `profileFromSource(source, profiles)`:
   - [ ] 7.1.1 `payments-dmp-bundle` solution → `dmp-bundle`
@@ -92,53 +105,72 @@
       on profiles arrival instead (until the user picks).
 - [ ] 7.3 Confirm tests pass.
 
-## 8. Submit and error routing (Decision 6)
+## 8. Submit and error routing (Decision 7)
 
 - [ ] 8.1 Failing tests:
   - [ ] 8.1.1 the create request carries `profile` with the selected id
   - [ ] 8.1.2 `solution` is still sent only when editable, from the profile's classification
   - [ ] 8.1.3 a 400 on `profile` opens the Profile step with the message
   - [ ] 8.1.4 a 400 on `name` with a rule message shows under the key on General
-- [ ] 8.2 Implement in `onSubmit` / `stepOfField`.
+  - [ ] 8.1.5 a 400 `baseConfiguration.jira.projectKey: …` opens Jira and shows under the
+        project key (not General)
+  - [ ] 8.1.6 a 400 on `baseConfiguration.mavenArtifacts[0].groupPattern` opens Distribution
+- [ ] 8.2 Implement in `onSubmit` / `stepOfField`, mapping rule paths through the table from 4.2.
 - [ ] 8.3 Confirm tests pass.
 
-## 9. Labels and build tasks (Decision 7)
+## 9. Today's pre-filled values (Decision 8)
 
 - [ ] 9.1 Failing tests:
-  - [ ] 9.1.1 General shows Labels with options from the labels list; free text cannot be added
-  - [ ] 9.1.2 picked labels are on Review and in the request
-  - [ ] 9.1.3 no labels → request as today
-  - [ ] 9.1.4 Labels hidden by field-config is not shown
-  - [ ] 9.1.5 Build shows Build tasks; a value is on Review and in
-        `baseConfiguration.build.buildTasks`
-  - [ ] 9.1.6 blank build tasks are not sent
-  - [ ] 9.1.7 `build.buildTasks` hidden by field-config is not shown
-  - [ ] 9.1.8 clone starts with the source's labels and build tasks; editing them wins
-- [ ] 9.2 Add both to `CreateFormValues`, `initialValues`, `buildCreateRequest`, the steps and
-      Review.
+  - [ ] 9.1.1 `initialValues` for scratch with Regular external (`ask`) pre-selected equals
+        today's scratch values for the same component-defaults (snapshot taken from `main`
+        before the change)
+  - [ ] 9.1.2 a first profile with explicit `true` and external `true` seeds the copyright
+        default
+  - [ ] 9.1.3 clone values unchanged for a solution, a regular external and an internal source
+  - [ ] 9.1.4 the page shows the skeleton until profiles, component-defaults and the source
+        have loaded
+  - [ ] 9.1.5 owner seeding and the version prefix following the key still work
+- [ ] 9.2 `initialValues` takes the pre-selected profile's flags; add profiles to the page's
+      `ready` gate; remove `DEFAULT_SCRATCH_PROFILE`.
 - [ ] 9.3 Confirm tests pass.
 
-## 10. Registry container (Decision 8) — Gradle
+## 10. Labels and build tasks (Decision 9)
 
-- [ ] 10.1 Bump `crs.version` in `gradle.properties` to the first registry release with profiles.
-- [ ] 10.2 `E2ETestcontainersDriver` passes the four profiles to the registry container as
+- [ ] 10.1 Failing tests:
+  - [ ] 10.1.1 General shows Labels with options from the labels list; free text cannot be added
+  - [ ] 10.1.2 picked labels are on Review and in the request
+  - [ ] 10.1.3 no labels → request as today
+  - [ ] 10.1.4 Labels hidden by field-config is not shown
+  - [ ] 10.1.5 Build shows Build tasks; a value is on Review and in
+        `baseConfiguration.build.buildTasks`
+  - [ ] 10.1.6 blank build tasks are not sent
+  - [ ] 10.1.7 `build.buildTasks` hidden by field-config is not shown
+  - [ ] 10.1.8 clone starts with the source's labels and build tasks; editing them wins
+- [ ] 10.2 Add both to `CreateFormValues`, `initialValues`, `buildCreateRequest`, the steps and
+      Review.
+- [ ] 10.3 Confirm tests pass.
+
+## 11. Registry container (Decision 10) — Gradle
+
+- [ ] 11.1 Bump `crs.version` in `gradle.properties` to the first registry release with profiles.
+- [ ] 11.2 `E2ETestcontainersDriver` passes the four profiles to the registry container as
       `SPRING_APPLICATION_JSON`; the container starts.
-- [ ] 10.3 `infra/dev/docker-compose.yml` registry service gets the same profiles.
-- [ ] 10.4 Update `frontend/e2e/editor-copy-component.spec.ts` and any create-wizard e2e for the
+- [ ] 11.3 `infra/dev/docker-compose.yml` registry service gets the same profiles.
+- [ ] 11.4 Update `frontend/e2e/editor-copy-component.spec.ts` and any create-wizard e2e for the
       registry's tile titles; add an e2e: create with Regular external and the key
       `resolution-service` shows the rule message.
-- [ ] 10.5 Run the e2e suite on CI (needs infrastructure; not run locally).
+- [ ] 11.5 Run the e2e suite on CI (needs infrastructure; not run locally).
 
-## 11. Docs
+## 12. Docs
 
-- [ ] 11.1 `docs/tech-debt/`: the editor's Solution toggle still reads
+- [ ] 12.1 `docs/tech-debt/`: the editor's Solution toggle still reads
       `portal.component.solution-key-patterns`, a second source next to the profile rules.
-- [ ] 11.2 `AGENTS.md` feature list / `docs/features/` — note the Profile step reads the
+- [ ] 12.2 `AGENTS.md` feature list / `docs/features/` — note the Profile step reads the
       registry's profiles.
 
-## 12. Finalization
+## 13. Finalization
 
-- [ ] 12.1 `./gradlew qualityStatic` and the full vitest suite green.
-- [ ] 12.2 Out-of-scope boundaries hold: the editor's Solution toggle and
+- [ ] 13.1 `./gradlew qualityStatic` and the full vitest suite green.
+- [ ] 13.2 Out-of-scope boundaries hold: the editor's Solution toggle and
       `PortalComponentProperties.solutionKeyPatterns` unchanged (grep); no template tile code.
-- [ ] 12.3 The risks in `design.md` are still accurate.
+- [ ] 13.3 The risks in `design.md` are still accurate.

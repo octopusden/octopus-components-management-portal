@@ -27,7 +27,21 @@
 
 **Classification from the profile**
 - The profile's classification sets solution, external and explicit distribution.
-- "Has explicit distribution?" is asked only when the profile's explicit value is `ask`.
+- "Has explicit distribution?" is asked only when the profile's explicit value is `ask` and the
+  user may edit explicit distribution.
+- The registry compares the profile with the flags it would store, and a flag the user may not
+  edit is not sent, so it is stored as `false`. A profile that needs such a flag `true` is shown
+  disabled, with the flag named as the reason, instead of failing on Create.
+
+**Today's pre-filled values are kept**
+- The wizard still pre-fills exactly what it does today, from the same sources: the registry's
+  component defaults (build system, display name, Jira project key and version formats, escrow
+  generation, VCS tag and branch, copyright for an explicit external component), the Portal's
+  fallbacks (full version format, VCS branch), the current user as owner, and the version prefix
+  following the key. A clone still copies the source.
+- The only change: the explicit and external flags those defaults depend on come from the
+  pre-selected registry profile instead of the built-in one. With the shipped profiles the first
+  one is Regular external, so a new component starts exactly as today.
 
 **The profile's field rules as fast checks**
 - While the user types, every field rule of the chosen profile is checked against the matching
@@ -35,13 +49,17 @@
 - A rule on a field the wizard does not have, or whose pattern the browser cannot compile, is
   skipped; the registry's answer on create decides.
 - The key's character check (`component-key-format`) runs first and is unchanged.
-- The Portal's own solution-key check on create is removed. The `solution-key-patterns` setting
-  stays: the component editor still uses it to offer the Solution toggle.
+- The wizard's own solution-key check is removed: the hard-coded "a Solution key contains
+  `-solution`, a regular key contains neither" rule fed by `portal.component.solution-key-patterns`.
+  The profile rules replace it.
+- The setting itself stays, for one other reader: the component editor shows its Solution toggle
+  only for a key containing one of those patterns. The wizard stops reading it.
 
 **Create names the profile**
 - Create sends the chosen profile's id with today's create request.
-- A rejection that names `profile` is shown on the Profile step; a rule rejection is shown under
-  the field it names, as other field errors are today.
+- A rejection that names `profile` is shown on the Profile step. A rule rejection names the full
+  create-request path (`baseConfiguration.jira.projectKey: …`); it is shown under the wizard field
+  for that path, on its step.
 
 **Labels and build tasks**
 - General gains a Labels field (chips, picked from the registry's labels list only).
@@ -76,9 +94,12 @@
   profiles only.
 - **Delivery & Support restriction** — the registry decides which profiles a user may use; the
   Portal only shows its answer.
-- **The component editor** — renames and the Solution toggle keep today's behavior, still driven
-  by `portal.component.solution-key-patterns`; the registry does not check renames against
-  profile rules either.
+- **The component editor** — nothing in the editor changes:
+  - a rename is checked as today (the key's character rule only); no profile rule applies,
+    because a component does not remember the profile it was created with, and the registry does
+    not check renames against profile rules either;
+  - the Solution toggle is still offered only for a key containing one of
+    `portal.component.solution-key-patterns`, and setting it is checked by the registry as today.
 - **The other Portal-only create rules** (Jira key and version format, VCS path, branch and tag,
   `ssh://` host, group-ID prefix, complete coordinate) — stay in the Portal, unchanged.
 - **Removing `portal.component.solution-key-patterns`** — still needed by the editor.
