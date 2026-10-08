@@ -132,6 +132,8 @@ export function makeCreateSchema(
       // Free-form: an enum value or ''. Never blocks submit (the escrow
       // generation is optional at create and validated server-side).
       escrowGeneration: z.string(),
+      labels: z.array(z.string()),
+      buildTasks: z.string(),
     })
     .superRefine((v, ctx) => {
       const keyError = componentKeyError(v.name, effectiveCreateClientCode(v, source, editable))
@@ -291,6 +293,8 @@ export const SCRATCH_DEFAULTS: CreateFormValues = {
   coordinate: EMPTY_COORDINATE,
   ownership: [{ groupId: '', mode: 'ALL', tokens: [] }],
   escrowGeneration: '',
+  labels: [],
+  buildTasks: '',
 }
 
 // vcs.tag / vcs.branch read from GET /config/component-defaults.
@@ -443,5 +447,7 @@ export function initialValues(
     escrowGeneration: selectBaseRow(source)?.escrow?.generation ?? '',
     vcsTag,
     vcsBranch,
+    labels: [...(source.labels ?? [])],
+    buildTasks: selectBaseRow(source)?.build?.buildTasks ?? '',
   }
 }

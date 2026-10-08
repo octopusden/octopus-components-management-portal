@@ -32,6 +32,8 @@ import { useSupportedGroups } from '../hooks/useSupportedGroups'
 import { usePortalLinks } from '../hooks/useInfo'
 import { useFieldConfig, useComponentDefaults } from '../hooks/useAdminConfig'
 import { useComponentProfiles, type ComponentProfile } from '../hooks/useComponentProfiles'
+import { useLabels } from '../hooks/useLabels'
+import { ChipsInput } from '../components/ui/ChipsInput'
 import { isFieldEditableFor, useFieldEditable, useFieldConfigEntry } from '../hooks/useFieldConfig'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useComponent, useCreateComponent } from '../hooks/useComponent'
@@ -308,6 +310,20 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
   const escrowGenerationHidden =
     escrowFcLoading || escrowFcError || escrowGenerationEntry.visibility === 'hidden'
   const escrowGenerationEditable = useFieldEditable('escrow.generation')
+  const {
+    entry: buildTasksEntry,
+    isLoading: buildTasksFcLoading,
+    isError: buildTasksFcError,
+  } = useFieldConfigEntry('build.buildTasks')
+  const buildTasksEditable = useFieldEditable('build.buildTasks')
+  // Fail closed while field-config loads, as for escrow generation.
+  const buildTasksVisibility: 'editable' | 'readonly' | 'hidden' =
+    buildTasksFcLoading || buildTasksFcError || buildTasksEntry.visibility === 'hidden'
+      ? 'hidden'
+      : buildTasksEditable
+        ? 'editable'
+        : 'readonly'
+  const { data: labelOptions = [], isLoading: labelsLoading } = useLabels({ enabled: editable('labels') })
   // Skip the escrow-generations meta fetch when the field is hidden — the control
   // isn't rendered and generation isn't sent, so the vocabulary is never needed.
   const { options: escrowGenerations } = useFieldOptions('generation', {
@@ -529,6 +545,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
         editable,
         escrowGenerationEditable,
         escrowGenerationHidden,
+        buildTasksVisibility,
       )
       if (!profile) return
       const flags = flagsForProfile(profile, explicitAnswer)
@@ -875,6 +892,20 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
           <FieldError message={errors.clientCode?.message} />
         </Field>
       )}
+      {editable('labels') && (
+        <Field label="Labels" htmlFor="create-labels" path="component.labels">
+          <ChipsInput
+            id="create-labels"
+            noun="label"
+            placeholder="Add label"
+            value={values.labels}
+            onChange={(next) => setValue('labels', next, { shouldValidate: true, shouldDirty: true })}
+            options={labelOptions}
+            isLoading={labelsLoading}
+          />
+          <FieldError message={errors.labels?.message} />
+        </Field>
+      )}
     </div>
   )
 
@@ -899,6 +930,17 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
         </select>
         <FieldError message={errors.buildSystem?.message} />
       </Field>
+      {buildTasksVisibility !== 'hidden' && (
+        <Field label="Build Tasks" htmlFor="create-buildTasks" path="build.buildTasks">
+          <Input
+            id="create-buildTasks"
+            placeholder="clean build"
+            disabled={buildTasksVisibility === 'readonly'}
+            {...register('buildTasks')}
+          />
+          <FieldError message={errors.buildTasks?.message} />
+        </Field>
+      )}
 
       <SectionHeader title="Produced Artifacts" subtitle="Artifacts this component produces." />
       <div className="space-y-2" data-testid="create-ownership">
@@ -1355,6 +1397,8 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
 
       <SummaryDiff
         values={values}
+        labels={editable('labels') ? values.labels : []}
+        buildTasks={buildTasksVisibility === 'hidden' ? '' : values.buildTasks}
         gated={gated}
         vcsApplies={vcsApplies}
         classification={classificationRecap()}
@@ -1680,8 +1724,12 @@ function SummaryDiff({
   vcsApplies,
   classification,
   escrowGeneration,
+  labels,
+  buildTasks,
 }: {
   values: CreateFormValues
+  labels: string[]
+  buildTasks: string
   gated: boolean
   vcsApplies: boolean
   classification: string
@@ -1701,6 +1749,7 @@ function SummaryDiff({
     ['Security Champions', values.securityChampion.join(', ')],
     ['Copyright', values.copyright],
     ['Classification', classification],
+    ['Labels', labels.join(', ')],
   ])
   const ownershipSummary = values.ownership
     .filter((r) => r.groupId.trim())
@@ -1711,6 +1760,7 @@ function SummaryDiff({
     .join('\n')
   push('Build', [
     ['Build System', values.buildSystem],
+    ['Build Tasks', buildTasks],
     ['Produced Artifacts', ownershipSummary],
   ])
   if (vcsApplies) {

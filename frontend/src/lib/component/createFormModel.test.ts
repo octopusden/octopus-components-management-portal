@@ -153,6 +153,9 @@ describe("initialValues — today's pre-filled values are kept (D7)", () => {
     coordinate: { type: 'maven', groupPattern: '', artifactPattern: '', imageName: '', flavor: '', packageType: 'DEB', packageName: '' },
     ownership: [{ groupId: '', mode: 'ALL', tokens: [] }],
     escrowGeneration: 'AUTO',
+    // New create fields, empty for a new component.
+    labels: [],
+    buildTasks: '',
   }
 
   it('a new component with Regular external pre-selected starts exactly as on main', () => {

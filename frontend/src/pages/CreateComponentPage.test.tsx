@@ -73,6 +73,7 @@ const PROFILES_OK = {
 }
 const mockUseComponentProfiles = vi.fn(() => PROFILES_OK)
 vi.mock('../hooks/useComponentProfiles', () => ({ useComponentProfiles: () => mockUseComponentProfiles() }))
+vi.mock('../hooks/useLabels', () => ({ useLabels: () => ({ data: ['sql', 'backend'], isLoading: false }) }))
 // Layout pulls the nav shell + its own queries; stub to a passthrough.
 vi.mock('../components/Layout', () => ({
   Layout: ({ children }: { children: React.ReactNode }) =>
@@ -891,6 +892,89 @@ describe('CreateComponentPage — create names the profile', () => {
     renderWizard()
     await createRegularInternal()
     await waitFor(() => expect(screen.getByRole('heading', { name: /^Distribution$/ })).toBeDefined())
+  })
+})
+
+describe('CreateComponentPage — labels and build tasks', () => {
+  async function createRegularInternal(before?: () => Promise<void>) {
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await before?.()
+    await userEvent.click(screen.getByRole('button', { name: /^Build$/i }))
+    await userEvent.selectOptions(screen.getByLabelText(/^Build System/i), 'PROVIDED')
+    await userEvent.click(screen.getByRole('button', { name: /^Jira$/i }))
+    await userEvent.type(screen.getByLabelText(/^Jira Project Key/i), 'WIDG')
+    await userEvent.click(screen.getByRole('button', { name: /Review & create/i }))
+    await userEvent.type(screen.getByLabelText(/^Jira task key/i), 'ABC-123')
+  }
+  const create = async () => {
+    await userEvent.click(screen.getByRole('button', { name: /^create component$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1))
+    return mockMutateAsync.mock.calls[0]![0]
+  }
+
+  it('offers Labels on General from the labels list only, and sends the picked ones', async () => {
+    renderWizard()
+    await createRegularInternal(async () => {
+      const add = screen.getByRole('combobox', { name: 'Add label' })
+      expect([...(add as HTMLSelectElement).options].map((o) => o.value).filter(Boolean)).toEqual(['sql', 'backend'])
+      await userEvent.selectOptions(add, 'sql')
+    })
+    expect(screen.getByText('+ sql')).toBeDefined()
+    expect((await create()).labels).toEqual(['sql'])
+  })
+
+  it('sends no labels when none are picked', async () => {
+    renderWizard()
+    await createRegularInternal()
+    expect((await create()).labels).toEqual([])
+  })
+
+  it('does not show Labels when field-config hides them', async () => {
+    mockUseFieldConfig.mockReturnValue({ data: { component: { labels: { visibility: 'hidden' } } }, isLoading: false, isError: false })
+    renderWizard()
+    await clickNext()
+    expect(screen.queryByRole('combobox', { name: 'Add label' })).toBeNull()
+  })
+
+  it('offers Build tasks on Build; the value is on Review and in the build configuration', async () => {
+    renderWizard()
+    await createRegularInternal(async () => {
+      await userEvent.click(screen.getByRole('button', { name: /^Build$/i }))
+      await userEvent.type(screen.getByLabelText(/^Build Tasks/i), 'clean build')
+    })
+    expect(screen.getByText('+ clean build')).toBeDefined()
+    expect((await create()).baseConfiguration.build.buildTasks).toBe('clean build')
+  })
+
+  it('does not send blank build tasks', async () => {
+    renderWizard()
+    await createRegularInternal()
+    expect((await create()).baseConfiguration.build).not.toHaveProperty('buildTasks')
+  })
+
+  it('does not show Build tasks when field-config hides them', async () => {
+    mockUseFieldConfig.mockReturnValue({ data: { build: { buildTasks: { visibility: 'hidden' } } }, isLoading: false, isError: false })
+    renderWizard()
+    await userEvent.click(screen.getByRole('button', { name: /^Build$/i }))
+    expect(screen.queryByLabelText(/^Build Tasks/i)).toBeNull()
+  })
+
+  it("a clone starts with the source's labels and build tasks", async () => {
+    mockUseComponent.mockReturnValue({
+      data: makeSource({
+        labels: ['backend'],
+        configurations: [{ ...makeSource().configurations[0]!, build: { buildSystem: 'GRADLE', buildTasks: 'assemble' } }],
+      }),
+      isLoading: false,
+      error: null,
+    })
+    renderWizard('/components/new?from=c-1')
+    expect(screen.getByTestId('chip-backend')).toBeDefined()
+    await userEvent.click(screen.getByRole('button', { name: /^Build$/i }))
+    expect((screen.getByLabelText(/^Build Tasks/i) as HTMLInputElement).value).toBe('assemble')
   })
 })
 

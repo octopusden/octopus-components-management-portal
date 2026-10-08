@@ -171,19 +171,26 @@
 
 ## 10. Labels and build tasks (Decision 8)
 
-- [ ] 10.1 Failing tests:
-  - [ ] 10.1.1 General shows Labels with options from the labels list; free text cannot be added
-  - [ ] 10.1.2 picked labels are on Review and in the request
-  - [ ] 10.1.3 no labels → request as today
-  - [ ] 10.1.4 Labels hidden by field-config is not shown
-  - [ ] 10.1.5 Build shows Build tasks; a value is on Review and in
+- [x] 10.1 Failing tests:
+  - [x] 10.1.1 General shows Labels with options from the labels list; free text cannot be added
+  - [x] 10.1.2 picked labels are on Review and in the request
+  - [x] 10.1.3 no labels → request as today
+  - [x] 10.1.4 Labels hidden by field-config is not shown
+  - [x] 10.1.5 Build shows Build tasks; a value is on Review and in
         `baseConfiguration.build.buildTasks`
-  - [ ] 10.1.6 blank build tasks are not sent
-  - [ ] 10.1.7 `build.buildTasks` hidden by field-config is not shown
-  - [ ] 10.1.8 clone starts with the source's labels and build tasks; editing them wins
-- [ ] 10.2 Add both to `CreateFormValues`, `initialValues`, `buildCreateRequest`, the steps and
-      Review.
-- [ ] 10.3 Confirm tests pass.
+  - [x] 10.1.6 blank build tasks are not sent
+  - [x] 10.1.7 `build.buildTasks` hidden by field-config is not shown
+  - [x] 10.1.8 clone starts with the source's labels and build tasks; editing them wins
+- [x] 10.2 Add both to `CreateFormValues`, `initialValues`, `buildCreateRequest`, the steps and
+      Review. Labels: `ChipsInput` over `useLabels()` (no free text by design), sent from the form
+      when `component.labels` is editable, else the source's as before. Build tasks: gated like
+      escrow generation — editable → form wins (blank drops a copied value), readonly → source's
+      kept, hidden → stripped (`buildCreateRequest` gains `buildTasksVisibility`).
+- [x] 10.2a Request-shape cases in `buildCreateRequest.test.ts` (8 new); the clone general-fields
+      test now seeds labels as `initialValues` does; the `main` snapshot (9.1.1) gains the two
+      new empty fields. (added on review)
+- [x] 10.3 Confirm tests pass. `buildCreateRequest.test.ts` 74/74; `CreateComponentPage.test.tsx`
+      79/79 (7 new); full vitest 178 files / 2634 tests; `tsc`, `eslint .` clean.
 
 ## 11. Registry container (Decision 9) — Gradle
 
