@@ -55,7 +55,7 @@ export function GlobalSearchBox() {
     setOpen(false)
     setInput('')
     inputRef.current?.blur()
-    navigate(href)
+    void navigate(href)
   }
 
   function choose(index: number) {
@@ -65,6 +65,14 @@ export function GlobalSearchBox() {
       go(line ? asCodeLineHref(hit.id, line) : `/components/${encodeURIComponent(hit.id)}`)
     } else {
       go(globalSearchHref(input))
+    }
+  }
+
+  // Focus stays in the field (aria-activedescendant), so this only fires if an option gets focus some other way.
+  function onOptionKeyDown(e: React.KeyboardEvent<HTMLDivElement>, index: number) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      choose(index)
     }
   }
 
@@ -125,7 +133,7 @@ export function GlobalSearchBox() {
       <button
         type="button"
         aria-label="Global search"
-        onClick={() => navigate('/search')}
+        onClick={() => void navigate('/search')}
         className="flex h-9 w-9 items-center justify-center rounded-md border border-input bg-background text-muted-foreground hover:bg-accent/50 hover:text-foreground md:hidden"
       >
         <Search className="h-4 w-4" />
@@ -155,8 +163,10 @@ export function GlobalSearchBox() {
                   id={optionId(i)}
                   role="option"
                   aria-selected={active === i}
+                  tabIndex={-1}
                   onPointerDown={(e) => e.preventDefault()}
                   onClick={() => choose(i)}
+                  onKeyDown={(e) => onOptionKeyDown(e, i)}
                   onMouseEnter={() => setActive(i)}
                   className={cn('cursor-pointer px-3 py-2', active === i && 'bg-accent text-accent-foreground')}
                 >
@@ -180,8 +190,10 @@ export function GlobalSearchBox() {
             id={optionId(hits.length)}
             role="option"
             aria-selected={active === hits.length}
+            tabIndex={-1}
             onPointerDown={(e) => e.preventDefault()}
             onClick={() => choose(hits.length)}
+            onKeyDown={(e) => onOptionKeyDown(e, hits.length)}
             onMouseEnter={() => setActive(hits.length)}
             className={cn(
               'flex cursor-pointer items-center justify-between border-t px-3 py-2 text-sm',

@@ -224,6 +224,13 @@ function MineFilter({ filter, onChange }: { filter: ComponentFilter; onChange: (
   )
 }
 
+/** Current-value text for a "+ Filter" entry: the single value, "N selected", or Yes / No. */
+function filterSummary(v: unknown): string {
+  if (Array.isArray(v)) return v.length === 1 ? String(v[0]) : `${v.length} selected`
+  if (typeof v === 'boolean') return v ? 'Yes' : 'No'
+  return String(v)
+}
+
 // Topic groups for the "+ Filter" menu, in display order.
 const FILTER_GROUPS = ['Classification', 'Ownership', 'Build & VCS', 'Jira', 'Distribution', 'Structure'] as const
 type FilterGroup = (typeof FILTER_GROUPS)[number]
@@ -514,8 +521,7 @@ export function ComponentFilters({
   // Current-value text for the "+ Filter" list.
   for (const d of defs) {
     if (!d.active) continue
-    const v = filter[d.id as keyof ComponentFilter]
-    d.summary = Array.isArray(v) ? (v.length === 1 ? String(v[0]) : `${v.length} selected`) : typeof v === 'boolean' ? (v ? 'Yes' : 'No') : String(v)
+    d.summary = filterSummary(filter[d.id as keyof ComponentFilter])
   }
 
   const mainDefs = defs.filter((d) => d.place === 'Main')
