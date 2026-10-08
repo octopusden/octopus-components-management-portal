@@ -213,10 +213,11 @@
 
 ## 12. Docs
 
-- [ ] 12.1 `docs/tech-debt/`: the editor's Solution toggle still reads
-      `portal.component.solution-key-patterns`, a second source next to the profile rules.
-- [ ] 12.2 `AGENTS.md` feature list / `docs/features/` — note the Profile step reads the
-      registry's profiles.
+- [x] 12.1 `docs/tech-debt/TD-006-solution-key-patterns-second-source.md`: the editor's Solution
+      toggle still reads `portal.component.solution-key-patterns`, a second source next to the
+      profile rules; listed in `AGENTS.md` and `README.md`.
+- [x] 12.2 New `docs/features/create-component.md` (the wizard had no feature doc): Profile step,
+      checks and create, the two new fields; linked from the `AGENTS.md` feature list.
 
 ## 13. Finalization
 
