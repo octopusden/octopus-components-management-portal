@@ -639,6 +639,6 @@ describe('TeamCityPlacementPanel — unknown status', () => {
     renderPanel()
     expect(screen.getByText('app-unknown')).toBeDefined()
     expect(screen.getAllByText('SOMETHING_NEW').length).toBeGreaterThan(0)
-    expect(screen.queryByRole('checkbox', { name: 'Select app-unknown' })).toBeNull()
+    expect(screen.getByRole('checkbox', { name: 'Select app-unknown' })).toBeDisabled()
   })
 })

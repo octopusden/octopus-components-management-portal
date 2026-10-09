@@ -25,19 +25,31 @@ const STATUS_INFO: Record<
   IN_SYNC: { tone: 'secondary', label: 'Already in sync', bucket: 'nothingToDo' },
 }
 
+/**
+ * CRS deploys independently of the Portal, so a status this build doesn't know
+ * can arrive: show its raw code, neutral, under "Needs a look"; never selectable.
+ */
+function statusInfo(status: string) {
+  return (STATUS_INFO as Record<string, (typeof STATUS_INFO)[PlacementDiffRowStatus]>)[status] ?? {
+    tone: 'secondary' as const,
+    label: status,
+    bucket: 'needsLook' as const,
+  }
+}
+
 /** Badge tone per Diff row status (`PlacementDiffRowStatus`, ADR-002's eleven outcomes). */
-export function getPlacementStatusTone(status: PlacementDiffRowStatus) {
-  return STATUS_INFO[status].tone
+export function getPlacementStatusTone(status: string) {
+  return statusInfo(status).tone
 }
 
 /** Human-readable label. The raw `status` code stays available as a tooltip/title. */
-export function getPlacementStatusLabel(status: PlacementDiffRowStatus): string {
-  return STATUS_INFO[status].label
+export function getPlacementStatusLabel(status: string): string {
+  return statusInfo(status).label
 }
 
 /** Which of the four summary buckets (Ready / Needs a look / Can't derive / Nothing to do) a status falls into. */
-export function getPlacementStatusBucket(status: PlacementDiffRowStatus): PlacementStatusBucket {
-  return STATUS_INFO[status].bucket
+export function getPlacementStatusBucket(status: string): PlacementStatusBucket {
+  return statusInfo(status).bucket
 }
 
 /** The four summary-bar buckets, in display order, each with its plain-English label. */
@@ -49,6 +61,6 @@ export const PLACEMENT_STATUS_BUCKETS: { id: PlacementStatusBucket; label: strin
 ]
 
 /** Only RESOLVED + BASE rows are ever selectable for Sync (per-range `vcs.settings` rows are report-only). */
-export function isPlacementRowSelectable(row: { status: PlacementDiffRowStatus; rowLabel: string }): boolean {
+export function isPlacementRowSelectable(row: { status: string; rowLabel: string }): boolean {
   return row.status === 'RESOLVED' && row.rowLabel === 'BASE'
 }
