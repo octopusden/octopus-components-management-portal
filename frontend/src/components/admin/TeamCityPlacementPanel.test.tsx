@@ -558,21 +558,30 @@ describe('TeamCityPlacementPanel — Sync selected', () => {
     expect(within(dialog).getByText(/and 2 more/i)).toBeDefined()
   })
 
-  it('sends the diffId of the report on screen, not of a newer job whose report has not loaded yet', async () => {
+  it('disables Sync while the report on screen is from an older Diff than the latest job', () => {
     mockUseDiffJob.mockReturnValue(
       buildQuery({ ...COMPLETED_DIFF_JOB, id: 'diff-2' }) as unknown as ReturnType<typeof usePlacementDiffJob>,
     )
-    const { base, mutateAsync } = buildMutation()
-    mockUseRunSync.mockReturnValue(base as unknown as ReturnType<typeof useRunPlacementSync>)
+    useAdminMode.setState({ enabled: true })
 
     renderPanel()
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select app-alpha' }))
-    fireEvent.click(screen.getByRole('button', { name: /sync selected/i }))
-    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: /confirm/i }))
 
-    await waitFor(() =>
-      expect(mutateAsync).toHaveBeenCalledWith({ diffId: 'diff-1', componentIds: ['comp-a'] }),
+    expect(screen.getByRole('button', { name: /sync selected/i })).toBeDisabled()
+  })
+
+  it('clears the selection when a new Diff job id appears', () => {
+    useAdminMode.setState({ enabled: true })
+    const { rerender, client } = renderPanel()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select app-alpha' }))
+    expect(screen.getByRole('checkbox', { name: 'Select app-alpha' })).toBeChecked()
+
+    mockUseDiffJob.mockReturnValue(
+      buildQuery({ ...COMPLETED_DIFF_JOB, id: 'diff-2' }) as unknown as ReturnType<typeof usePlacementDiffJob>,
     )
+    rerender(React.createElement(QueryClientProvider, { client }, <TeamCityPlacementPanel />))
+
+    expect(screen.getByRole('checkbox', { name: 'Select app-alpha' })).not.toBeChecked()
   })
 
   it('shows "Diff was replaced" and clears the selection on a diff-replaced 409', async () => {
@@ -640,5 +649,37 @@ describe('TeamCityPlacementPanel — unknown status', () => {
     expect(screen.getByText('app-unknown')).toBeDefined()
     expect(screen.getAllByText('SOMETHING_NEW').length).toBeGreaterThan(0)
     expect(screen.getByRole('checkbox', { name: 'Select app-unknown' })).toBeDisabled()
+  })
+})
+
+describe('TeamCityPlacementPanel — query errors', () => {
+  const failing = (message: string) => ({
+    ...buildQuery(null),
+    isError: true,
+    isSuccess: false,
+    error: new ApiError(500, message, JSON.stringify({ errorMessage: message })),
+  })
+
+  it('shows a destructive banner when the report fails to load', () => {
+    mockUseReport.mockReturnValue(failing('report exploded') as unknown as ReturnType<typeof usePlacementDiffReport>)
+    renderPanel()
+    expect(screen.getByText(/report exploded/)).toBeDefined()
+  })
+
+  it('shows a destructive banner when the Diff job poll fails', () => {
+    mockUseDiffJob.mockReturnValue(failing('diff poll exploded') as unknown as ReturnType<typeof usePlacementDiffJob>)
+    renderPanel()
+    expect(screen.getByText(/diff poll exploded/)).toBeDefined()
+  })
+
+  it('shows a destructive banner when the Sync job poll fails', () => {
+    mockUseSyncJob.mockReturnValue(failing('sync poll exploded') as unknown as ReturnType<typeof usePlacementSyncJob>)
+    renderPanel()
+    expect(screen.getByText(/sync poll exploded/)).toBeDefined()
+  })
+
+  it('still treats "no report yet" (data null, no error) as the empty state', () => {
+    renderPanel()
+    expect(screen.getByText(/run diff to see the current/i)).toBeDefined()
   })
 })
