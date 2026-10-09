@@ -538,9 +538,11 @@ export function TeamCityPlacementPanel() {
   // A previously selected component id can point at a row that no longer
   // exists (or no longer resolves) once a new Diff report lands — drop the
   // stale selection so Sync can never be asked to act on it.
+  // A new Diff job id (this client's or another admin's) invalidates it too,
+  // before the new report has landed.
   useEffect(() => {
     setSelected(new Set())
-  }, [report.data?.generatedAt])
+  }, [report.data?.generatedAt, diffJobData?.id])
 
   // Refresh the report + component caches once each job reaches COMPLETED —
   // covers the normal (poll-detected) path; the mutations' own onSuccess
@@ -645,10 +647,11 @@ export function TeamCityPlacementPanel() {
     diffRunning ||
     selected.size === 0 ||
     !report.data?.diffId ||
-    // The report + selection can still show a previous COMPLETED Diff's rows
-    // while /diff/job now names a newer run — only a COMPLETED job has a
-    // result CRS's own 409 guard will accept a Sync against (review finding).
-    diffJobData?.state !== 'COMPLETED'
+    // CRS serves the report from the last COMPLETED run even while a newer
+    // Diff is running, so the report's own diffId is the source of truth: Sync
+    // only when it is the latest job and that job has completed.
+    diffJobData?.state !== 'COMPLETED' ||
+    diffJobData.id !== report.data?.diffId
 
   const runningOtherLabel = describeOtherRunningJob({ componentsRunning, historyRunning, resyncRunning, validationRunning })
 
@@ -671,6 +674,15 @@ export function TeamCityPlacementPanel() {
         startDiffIsError={startDiff.isError}
         startDiffError={startDiff.error}
       />
+
+      {[report, diffJob, syncJob].map(
+        (q, i) =>
+          q.isError && (
+            <StatusBanner key={i} variant="destructive">
+              {formatMigrationError(q.error)}
+            </StatusBanner>
+          ),
+      )}
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1">
