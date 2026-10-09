@@ -62,7 +62,11 @@ describe('useVcsSection', () => {
     const { result } = renderHook(() => useVcsSection(makeComponent()))
     act(() => result.current.addEntry())
     act(() => result.current.updateEntry(0, 'name', 'has-no-path'))
-    expect(result.current.slice.request.baseConfiguration?.vcsEntries).toEqual([])
+    // Only blank rows: the roots did not change, so none are sent at all.
+    expect(result.current.slice.request.baseConfiguration).toBeUndefined()
+    act(() => result.current.addEntry())
+    act(() => result.current.updateEntry(1, 'vcsPath', 'ssh://git@example.com/x.git'))
+    expect(result.current.slice.request.baseConfiguration?.vcsEntries).toHaveLength(1)
   })
 
   // P1-4: dirty must be computed from the CLEANED projection (what diff + request

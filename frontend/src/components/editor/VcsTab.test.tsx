@@ -104,9 +104,11 @@ function renderTab(component: ComponentDetail, canEdit = true) {
 }
 
 describe('VcsTab — slice (combined save)', () => {
-  it('carries external registry + entries in the slice', () => {
+  it('carries the external registry, and the entries only once they change', () => {
     renderTab(makeComponent({ vcsExternalRegistry: 'reg' }))
     expect(captured.section!.slice.request.vcsExternalRegistry).toBe('reg')
+    expect(captured.section!.slice.request.baseConfiguration).toBeUndefined()
+    act(() => captured.section!.updateEntry(0, 'branch', 'develop'))
     expect(captured.section!.slice.request.baseConfiguration?.vcsEntries?.[0]?.vcsPath).toBe('ssh://git@example.com/repo.git')
   })
 })
@@ -494,7 +496,7 @@ describe('VcsTab — Build Working Directory with no entries sent', () => {
     renderTab(makeComponent({}, makeBaseRow({ vcsEntries: [] })))
     act(() => captured.section!.addEntry())
     fireEvent.change(screen.getByLabelText('Build Working Directory'), { target: { value: 'core' } })
-    expect(captured.section!.slice.request.baseConfiguration!.buildWorkingDirectory).toBe('')
+    expect(captured.section!.slice.request.baseConfiguration).toBeUndefined()
     expect(captured.section!.slice.isDirty).toBe(false)
   })
 })

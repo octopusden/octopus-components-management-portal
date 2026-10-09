@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { ComponentDetail, VcsEntry } from '../../lib/types'
 import { selectBaseRow } from '../../lib/api/baseRow'
 import type { SectionSlice, DiffEntry } from '../../lib/editor/combineRequest'
-import { scalarDiff } from '../../lib/editor/diffUtil'
+import { deepEqual, scalarDiff } from '../../lib/editor/diffUtil'
 import { useSectionSnapshot } from './useSectionSnapshot'
 import { useFieldEditable } from '../../hooks/useFieldConfig'
 import { omitNonEditable } from '../../lib/editor/payloadGating'
@@ -269,31 +269,42 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
     }
   }
 
+  // CRS treats any vcsEntries/buildWorkingDirectory as a VCS write: it warns that
+  // the TeamCity chain must be recreated and re-validates every stored root. So an
+  // External-Registry-only (or other-tab) save must not echo them.
+  const rootsChanged =
+    !deepEqual(cleanedEntries, cleanedPriorEntries) || buildWorkingDirectory !== priorBuildWorkingDirectory
+
   const request = {
     // ""-clear (CRS-A): send '' to clear (null = no-op). Empty state == server
     // null (seeded from detail), so an untouched-empty send of '' is a no-op.
     // Only included when the field is visible (Whiskey) — a hidden field never
     // participates in the PATCH (mirrors BuildTab's hidden tool-version fields).
     ...(showExternalRegistry ? { vcsExternalRegistry: state.externalRegistry || '' } : {}),
-    baseConfiguration: {
-      vcsEntries: cleanedEntries.map((e) => ({
-        name: e.name || null,
-        vcsPath: e.vcsPath,
-        branch: e.branch || null,
-        tag: e.tag || null,
-        hotfixBranch: e.hotfixBranch || null,
-        repositoryType: e.repositoryType || null,
-        sourcePath: e.sourcePath || null,
-        checkoutDirectory: e.checkoutDirectory || null,
-      })),
-      // ""-clear: a base-row null would leave the stored value.
-      buildWorkingDirectory,
-    },
+    ...(rootsChanged
+      ? {
+          baseConfiguration: {
+            vcsEntries: cleanedEntries.map((e) => ({
+              name: e.name || null,
+              vcsPath: e.vcsPath,
+              branch: e.branch || null,
+              tag: e.tag || null,
+              hotfixBranch: e.hotfixBranch || null,
+              repositoryType: e.repositoryType || null,
+              sourcePath: e.sourcePath || null,
+              checkoutDirectory: e.checkoutDirectory || null,
+            })),
+            // ""-clear: a base-row null would leave the stored value.
+            buildWorkingDirectory,
+          },
+        }
+      : {}),
   }
 
   // Payload-gating (P-1): drop vcsExternalRegistry from the PATCH when the
   // current user may not edit it (adminOnly without EDIT_ANY_COMPONENT). Keyed
-  // by the write-side path; baseConfiguration has no mapped path so it is kept.
+  // by the write-side path; baseConfiguration has no mapped path so it is kept
+  // whenever the roots changed.
   const slice: SectionSlice = {
     isDirty,
     diff,
