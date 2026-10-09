@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseServerFieldErrors } from './serverErrors'
+import { parseServerFieldErrors, parseVcsEntryErrorPath } from './serverErrors'
 
 // Confirmed CRS 400 format from ControllerExceptionHandler.kt:56-69:
 //   { "errorMessage": "Validation failed: field: msg, ..." }  (MethodArgumentNotValidException)
@@ -108,5 +108,44 @@ describe('parseServerFieldErrors — non-GeneralTab fields parse but rely on cal
     const body = JSON.stringify({ errorMessage: 'Validation failed: buildSystem: must not be blank' })
     const result = parseServerFieldErrors(body)
     expect(result.get('buildSystem')).toBe('must not be blank')
+  })
+})
+
+describe('parseServerFieldErrors — indexed VCS entry paths', () => {
+  it('keys a base-row placement error by its indexed path', () => {
+    const body = JSON.stringify({ errorMessage: 'vcsEntries[1].checkoutDirectory: required on a secondary VCS entry' })
+    expect([...parseServerFieldErrors(body)]).toEqual([['vcsEntries[1].checkoutDirectory', 'required on a secondary VCS entry']])
+  })
+
+  it('keys a per-range row error by its fieldOverrides-prefixed path', () => {
+    const body = JSON.stringify({ errorMessage: 'fieldOverrides[2].vcsEntries[0].sourcePath: must be relative' })
+    expect([...parseServerFieldErrors(body)]).toEqual([['fieldOverrides[2].vcsEntries[0].sourcePath', 'must be relative']])
+  })
+})
+
+describe('parseVcsEntryErrorPath', () => {
+  it('reads the entry index and field of a base-row path', () => {
+    expect(parseVcsEntryErrorPath('vcsEntries[1].checkoutDirectory')).toEqual({ entry: 1, field: 'checkoutDirectory' })
+  })
+
+  it('reads the override-row index of a prefixed path', () => {
+    expect(parseVcsEntryErrorPath('fieldOverrides[2].vcsEntries[0].sourcePath')).toEqual({ overrideIndex: 2, entry: 0, field: 'sourcePath' })
+  })
+
+  it('reads a base-row Build Working Directory path (no entry index)', () => {
+    expect(parseVcsEntryErrorPath('buildWorkingDirectory')).toEqual({ field: 'buildWorkingDirectory' })
+  })
+
+  it('reads a per-range Build Working Directory path', () => {
+    expect(parseVcsEntryErrorPath('fieldOverrides[2].buildWorkingDirectory')).toEqual({ overrideIndex: 2, field: 'buildWorkingDirectory' })
+  })
+
+  it('keys a Build Working Directory 400 by its field', () => {
+    const body = JSON.stringify({ errorMessage: 'buildWorkingDirectory: required when every VCS entry has a Checkout Directory' })
+    expect([...parseServerFieldErrors(body)]).toEqual([['buildWorkingDirectory', 'required when every VCS entry has a Checkout Directory']])
+  })
+
+  it.each(['vcsEntries', 'vcsEntries[1].branch', 'docs[0].majorVersion', 'fieldOverrides[1].value'])('ignores %s', (path) => {
+    expect(parseVcsEntryErrorPath(path)).toBeNull()
   })
 })
