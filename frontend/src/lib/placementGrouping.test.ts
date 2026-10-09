@@ -93,18 +93,42 @@ describe('buildProposedChangeLines', () => {
 })
 
 describe('wasRowDerived', () => {
-  it('is false when nothing was derived (e.g. a report-only row)', () => {
-    expect(wasRowDerived(row())).toBe(false)
+  // Shaped like real CRS JSON: every nullable field is present, explicitly null
+  // (no NON_NULL on the DTOs), so null cannot signal "not derived".
+  const wire = (status: PlacementRowDiff['status']): PlacementRowDiff =>
+    row({
+      status,
+      entries: [
+        {
+          name: 'main',
+          vcsPath: 'ssh://git/x.git',
+          branch: null,
+          tag: null,
+          hotfixBranch: null,
+          repositoryType: 'GIT',
+          currentCheckoutDirectory: null,
+          currentSourcePath: null,
+          derivedCheckoutDirectory: null,
+          derivedSourcePath: null,
+        },
+      ],
+      currentBuildWorkingDirectory: null,
+      derivedBuildWorkingDirectory: null,
+    })
+
+  it.each(['RESOLVED', 'IN_SYNC', 'MANUAL_EDIT', 'INVALID'] as const)('is true for %s, even when every derived field is null', (status) => {
+    expect(wasRowDerived(wire(status))).toBe(true)
   })
 
-  it('is true when the row-level Build Working Directory was derived, even if unchanged', () => {
-    expect(wasRowDerived(row({ derivedBuildWorkingDirectory: 'app-alpha' }))).toBe(true)
-  })
+  it.each(['CONFLICT', 'UNEXPRESSIBLE', 'NO_CHAIN', 'OUTSIDE_TEMPLATES', 'COMPILE_PAUSED', 'TC_ERROR', 'ROOTS_MISMATCH'] as const)(
+    'is false for %s (report-only), even though its derived fields are null on the wire',
+    (status) => {
+      expect(wasRowDerived(wire(status))).toBe(false)
+    },
+  )
 
-  it('is true when any entry has a derived Checkout Directory or Source Path, even if unchanged', () => {
-    expect(
-      wasRowDerived(row({ entries: [{ name: 'main', vcsPath: '.', derivedSourcePath: 'src' }] })),
-    ).toBe(true)
+  it('is false for a status this Portal does not know', () => {
+    expect(wasRowDerived(wire('SOMETHING_NEW' as PlacementRowDiff['status']))).toBe(false)
   })
 })
 
