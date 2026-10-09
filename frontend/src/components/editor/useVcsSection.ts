@@ -107,6 +107,31 @@ function projectVcs(s: VcsState) {
   }
 }
 
+type VcsProjection = ReturnType<typeof projectVcs>
+
+// CRS treats any vcsEntries/buildWorkingDirectory as a VCS write: it warns that
+// the TeamCity chain must be recreated and re-validates every stored root. So an
+// External-Registry-only (or other-tab) save must not echo them.
+function baseConfigurationIfChanged(now: VcsProjection, before: VcsProjection) {
+  if (deepEqual(now.entries, before.entries) && now.buildWorkingDirectory === before.buildWorkingDirectory) return {}
+  return {
+    baseConfiguration: {
+      vcsEntries: now.entries.map((e) => ({
+        name: e.name || null,
+        vcsPath: e.vcsPath,
+        branch: e.branch || null,
+        tag: e.tag || null,
+        hotfixBranch: e.hotfixBranch || null,
+        repositoryType: e.repositoryType || null,
+        sourcePath: e.sourcePath || null,
+        checkoutDirectory: e.checkoutDirectory || null,
+      })),
+      // ""-clear: a base-row null would leave the stored value.
+      buildWorkingDirectory: now.buildWorkingDirectory,
+    },
+  }
+}
+
 export interface VcsSection {
   externalRegistry: string
   setExternalRegistry: (v: string) => void
@@ -269,36 +294,13 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
     }
   }
 
-  // CRS treats any vcsEntries/buildWorkingDirectory as a VCS write: it warns that
-  // the TeamCity chain must be recreated and re-validates every stored root. So an
-  // External-Registry-only (or other-tab) save must not echo them.
-  const rootsChanged =
-    !deepEqual(cleanedEntries, cleanedPriorEntries) || buildWorkingDirectory !== priorBuildWorkingDirectory
-
   const request = {
     // ""-clear (CRS-A): send '' to clear (null = no-op). Empty state == server
     // null (seeded from detail), so an untouched-empty send of '' is a no-op.
     // Only included when the field is visible (Whiskey) — a hidden field never
     // participates in the PATCH (mirrors BuildTab's hidden tool-version fields).
     ...(showExternalRegistry ? { vcsExternalRegistry: state.externalRegistry || '' } : {}),
-    ...(rootsChanged
-      ? {
-          baseConfiguration: {
-            vcsEntries: cleanedEntries.map((e) => ({
-              name: e.name || null,
-              vcsPath: e.vcsPath,
-              branch: e.branch || null,
-              tag: e.tag || null,
-              hotfixBranch: e.hotfixBranch || null,
-              repositoryType: e.repositoryType || null,
-              sourcePath: e.sourcePath || null,
-              checkoutDirectory: e.checkoutDirectory || null,
-            })),
-            // ""-clear: a base-row null would leave the stored value.
-            buildWorkingDirectory,
-          },
-        }
-      : {}),
+    ...baseConfigurationIfChanged(projectVcs(state), projectVcs(prior)),
   }
 
   // Payload-gating (P-1): drop vcsExternalRegistry from the PATCH when the

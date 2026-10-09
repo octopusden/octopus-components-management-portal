@@ -1147,13 +1147,13 @@ export interface PlacementEntryDiff {
   name: string
   vcsPath: string
   branch?: string | null
-  tag?: string
+  tag?: string | null
   hotfixBranch?: string | null
-  repositoryType?: string
+  repositoryType?: string | null
   currentCheckoutDirectory?: string | null
-  currentSourcePath?: string
+  currentSourcePath?: string | null
   derivedCheckoutDirectory?: string | null
-  derivedSourcePath?: string
+  derivedSourcePath?: string | null
 }
 
 /** One base or marker (`vcs.settings`) configuration row's diff. */
@@ -1167,7 +1167,7 @@ export interface PlacementRowDiff {
   status: PlacementDiffRowStatus
   entries: PlacementEntryDiff[]
   currentBuildWorkingDirectory?: string | null
-  derivedBuildWorkingDirectory?: string
+  derivedBuildWorkingDirectory?: string | null
   sourceBuildTypeIds: string[]
   notes: string[]
 }
