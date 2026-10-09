@@ -7,15 +7,21 @@ function conflict409(body: unknown) {
 }
 
 describe('isDiffReplacedConflict', () => {
-  it('is true for the actual CRS body (plain error, no kind, "diff replaced" message)', () => {
-    const err = conflict409({
-      timestamp: '2026-09-30T10:00:00Z',
-      status: 409,
-      error: 'Conflict',
-      message: 'diff replaced, re-run Diff',
-      path: '/rest/api/4/admin/teamcity-placement/sync',
-    })
+  it('is true for the actual CRS body (errorCode placement-diff-stale)', () => {
+    const err = conflict409({ errorMessage: 'diff replaced, re-run Diff', errorCode: 'placement-diff-stale' })
     expect(isDiffReplacedConflict(err)).toBe(true)
+  })
+
+  it('is true on errorCode alone, whatever the message says', () => {
+    expect(isDiffReplacedConflict(conflict409({ errorCode: 'placement-diff-stale', errorMessage: 'reworded' }))).toBe(true)
+  })
+
+  it('falls back to errorMessage for a CRS without errorCode', () => {
+    expect(isDiffReplacedConflict(conflict409({ errorMessage: 'diff replaced, re-run Diff' }))).toBe(true)
+  })
+
+  it('falls back to a Spring-default message body', () => {
+    expect(isDiffReplacedConflict(conflict409({ status: 409, message: 'diff replaced, re-run Diff' }))).toBe(true)
   })
 
   it('is false for a cross-kind conflict (kind: "conflict")', () => {
@@ -37,13 +43,7 @@ describe('isDiffReplacedConflict', () => {
   it('is false for an unrelated plain 409 body without a "diff replaced" message', () => {
     // Guards against treating every kind-less 409 as "diff replaced" — only
     // this endpoint's specific message should match.
-    const err = conflict409({
-      timestamp: '2026-09-30T10:00:00Z',
-      status: 409,
-      error: 'Conflict',
-      message: 'some other conflict entirely',
-      path: '/rest/api/4/admin/teamcity-placement/sync',
-    })
+    const err = conflict409({ errorMessage: 'some other conflict entirely' })
     expect(isDiffReplacedConflict(err)).toBe(false)
   })
 

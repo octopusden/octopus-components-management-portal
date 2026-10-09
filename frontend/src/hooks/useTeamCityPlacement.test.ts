@@ -233,7 +233,7 @@ describe('useRunPlacementSync', () => {
       new ApiError(
         409,
         'diff replaced, re-run Diff',
-        JSON.stringify({ timestamp: '2026-09-30T10:00:00Z', status: 409, error: 'Conflict', message: 'diff replaced, re-run Diff', path: '/rest/api/4/admin/teamcity-placement/sync' }),
+        JSON.stringify({ errorMessage: 'diff replaced, re-run Diff', errorCode: 'placement-diff-stale' }),
       ),
     )
     const { wrapper } = makeWrapper()

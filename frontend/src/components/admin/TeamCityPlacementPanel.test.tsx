@@ -579,7 +579,7 @@ describe('TeamCityPlacementPanel — Sync selected', () => {
     const conflict = new ApiError(
       409,
       'diff replaced, re-run Diff',
-      JSON.stringify({ timestamp: 'now', status: 409, error: 'Conflict', message: 'diff replaced, re-run Diff', path: '/x' }),
+      JSON.stringify({ errorMessage: 'diff replaced, re-run Diff', errorCode: 'placement-diff-stale' }),
     )
     const mutateAsync = vi.fn().mockRejectedValue(conflict)
     mockUseRunSync.mockReturnValue({
