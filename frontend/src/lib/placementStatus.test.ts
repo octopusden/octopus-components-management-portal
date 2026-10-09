@@ -99,3 +99,15 @@ describe('PLACEMENT_STATUS_BUCKETS', () => {
     ])
   })
 })
+
+describe('an unknown status (CRS deploys independently of the Portal)', () => {
+  it('falls back to a neutral needs-a-look badge labelled with the raw code', () => {
+    expect(getPlacementStatusTone('SOMETHING_NEW')).toBe('secondary')
+    expect(getPlacementStatusLabel('SOMETHING_NEW')).toBe('SOMETHING_NEW')
+    expect(getPlacementStatusBucket('SOMETHING_NEW')).toBe('needsLook')
+  })
+
+  it('is never selectable', () => {
+    expect(isPlacementRowSelectable({ status: 'SOMETHING_NEW', rowLabel: 'BASE' })).toBe(false)
+  })
+})

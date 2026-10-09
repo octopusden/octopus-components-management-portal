@@ -627,3 +627,18 @@ describe('TeamCityPlacementPanel — cross-kind disable', () => {
     expect(screen.getByText(/Components migration is running/i)).toBeDefined()
   })
 })
+
+describe('TeamCityPlacementPanel — unknown status', () => {
+  it('renders a row with a status this Portal does not know, without crashing', () => {
+    const unknown = { ...REPORT.rows[1], componentId: 'comp-u', componentKey: 'app-unknown', status: 'SOMETHING_NEW' }
+    mockUseReport.mockReturnValue(
+      buildQuery({ ...REPORT, rows: [unknown] } as unknown as PlacementDiffResult) as unknown as ReturnType<
+        typeof usePlacementDiffReport
+      >,
+    )
+    renderPanel()
+    expect(screen.getByText('app-unknown')).toBeDefined()
+    expect(screen.getAllByText('SOMETHING_NEW').length).toBeGreaterThan(0)
+    expect(screen.queryByRole('checkbox', { name: 'Select app-unknown' })).toBeNull()
+  })
+})
