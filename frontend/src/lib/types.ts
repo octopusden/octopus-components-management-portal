@@ -1146,13 +1146,13 @@ export type PlacementDiffRowStatus =
 export interface PlacementEntryDiff {
   name: string
   vcsPath: string
-  branch?: string
+  branch?: string | null
   tag?: string
-  hotfixBranch?: string
+  hotfixBranch?: string | null
   repositoryType?: string
-  currentCheckoutDirectory?: string
+  currentCheckoutDirectory?: string | null
   currentSourcePath?: string
-  derivedCheckoutDirectory?: string
+  derivedCheckoutDirectory?: string | null
   derivedSourcePath?: string
 }
 
@@ -1166,7 +1166,7 @@ export interface PlacementRowDiff {
   rowLabel: string
   status: PlacementDiffRowStatus
   entries: PlacementEntryDiff[]
-  currentBuildWorkingDirectory?: string
+  currentBuildWorkingDirectory?: string | null
   derivedBuildWorkingDirectory?: string
   sourceBuildTypeIds: string[]
   notes: string[]

@@ -30,10 +30,15 @@ export function buildProposedChangeLines(row: PlacementRowDiff): string[] {
   return lines
 }
 
-/** Whether TeamCity derived anything at all for this row (vs. a report-only row where nothing was derived). */
+const DERIVED_STATUSES: ReadonlySet<string> = new Set(['RESOLVED', 'IN_SYNC', 'MANUAL_EDIT', 'INVALID'])
+
+/**
+ * Whether TeamCity derived anything at all for this row (vs. a report-only row).
+ * Decided from the status: on the wire every derived field is present, and
+ * `null` is also a real derived value ("checkout root"), so the fields can't say.
+ */
 export function wasRowDerived(row: PlacementRowDiff): boolean {
-  if (row.derivedBuildWorkingDirectory !== undefined) return true
-  return row.entries.some((e) => e.derivedCheckoutDirectory !== undefined || e.derivedSourcePath !== undefined)
+  return DERIVED_STATUSES.has(row.status)
 }
 
 /** "Base", or "Override for versions <range>" — the raw "vcs.settings" marker name is never shown. */
