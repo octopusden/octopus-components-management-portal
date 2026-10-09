@@ -106,8 +106,6 @@ describe('useVcsSection — admin-gated editability', () => {
     mockUseCurrentUser.mockReturnValue({ data: regularUser } as unknown as ReturnType<typeof useCurrentUser>)
     const { result } = render(makeComponent({ vcsExternalRegistry: 'reg' }))
     expect('vcsExternalRegistry' in result.current.slice.request).toBe(false)
-    // baseConfiguration (unmapped) is always kept.
-    expect(result.current.slice.request.baseConfiguration).toBeDefined()
   })
 
   it('includes vcsExternalRegistry for an admin under adminOnly', () => {
@@ -158,5 +156,35 @@ describe('useVcsSection — effective Build Working Directory (what the Build ta
     expect(result.current.effectiveBuildWorkingDirectory).toBe('core')
     act(() => result.current.removeEntry(0))
     expect(result.current.effectiveBuildWorkingDirectory).toBe('')
+  })
+})
+
+describe('useVcsSection — roots are sent only when they changed', () => {
+  it('an External-Registry-only save sends no vcsEntries and no Build Working Directory', () => {
+    const { result } = render(makeComponent({ vcsExternalRegistry: 'reg' }))
+    act(() => result.current.setExternalRegistry('other'))
+    expect(result.current.slice.request.vcsExternalRegistry).toBe('other')
+    expect(result.current.slice.request.baseConfiguration).toBeUndefined()
+  })
+
+  it('a clean section sends no baseConfiguration', () => {
+    const { result } = render(makeComponent())
+    expect(result.current.slice.request.baseConfiguration).toBeUndefined()
+  })
+
+  it('a changed root sends the whole entry list', () => {
+    const { result } = render(makeComponent())
+    act(() => result.current.updateEntry(0, 'branch', 'develop'))
+    const base = result.current.slice.request.baseConfiguration
+    expect(base?.vcsEntries).toHaveLength(1)
+    expect(base?.vcsEntries?.[0]?.branch).toBe('develop')
+  })
+
+  it('a changed Build Working Directory sends the entries too', () => {
+    const { result } = render(makeComponent())
+    act(() => result.current.setBuildWorkingDirectory('core'))
+    const base = result.current.slice.request.baseConfiguration
+    expect(base?.buildWorkingDirectory).toBe('core')
+    expect(base?.vcsEntries).toHaveLength(1)
   })
 })
