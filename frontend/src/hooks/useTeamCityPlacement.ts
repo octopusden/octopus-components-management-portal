@@ -89,8 +89,9 @@ export function usePlacementDiffReport() {
  * Two distinct 409s share this endpoint:
  *  - same-kind attach (a Sync is already RUNNING) — same job-response body,
  *    `parseSameKindAttach` resolves it as success like every other job hook.
- *  - "diff replaced" (the `diffId` no longer names the latest Diff) — a plain
- *    `ResponseStatusException` body with no `id`/`state`/`kind`.
+ *  - "diff replaced" (the `diffId` no longer names the latest Diff) — CRS
+ *    `ErrorResponse` body (`errorMessage` + `errorCode: placement-diff-stale`)
+ *    with no `id`/`state`/`kind`.
  *    `parseSameKindAttach` returns null for it (correctly — it is not an
  *    attach), so it rethrows; the panel tells this apart from a genuine
  *    cross-kind conflict with `isDiffReplacedConflict` (`lib/migrationConflict.ts`).

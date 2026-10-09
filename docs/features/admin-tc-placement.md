@@ -89,8 +89,9 @@ them apart (`isDiffReplacedConflict` in [`lib/migrationConflict.ts`](../../front
 
 - a same-kind attach (Sync is already RUNNING) — full job-response body, resolved as success like
   every other admin job hook.
-- "diff replaced" (`diffId` no longer names the latest Diff) — CRS's plain `ResponseStatusException`
-  body, no `id`/`state`/`kind`. The panel shows "The Diff was replaced — re-run Diff." and clears
+- "diff replaced" (`diffId` no longer names the latest Diff) — CRS's `ErrorResponse` body
+  `{"errorMessage":"diff replaced, re-run Diff","errorCode":"placement-diff-stale"}`, no
+  `id`/`state`/`kind`; matched on `errorCode`, falling back to the message text. The panel shows "The Diff was replaced — re-run Diff." and clears
   the selection, rather than the generic destructive banner a cross-kind conflict gets.
 
 On completion the panel renders `requested` / `applied` / `skipped` / `failed` tiles from
