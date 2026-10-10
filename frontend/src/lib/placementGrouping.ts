@@ -16,6 +16,8 @@ export function fieldChange(current: string | null | undefined, derived: string 
 
 /** One "Field name: before → after" line per changed field, in the "Proposed change" column. */
 export function buildProposedChangeLines(row: PlacementRowDiff): string[] {
+  // A report-only row's derived fields are null by absence, not "checkout root": nothing to propose.
+  if (!wasRowDerived(row)) return []
   const prefixRoot = row.entries.length > 1
   const lines: string[] = []
   for (const entry of row.entries) {
