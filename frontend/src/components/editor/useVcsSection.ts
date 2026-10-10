@@ -112,11 +112,11 @@ type VcsProjection = ReturnType<typeof projectVcs>
 // CRS treats any vcsEntries/buildWorkingDirectory as a VCS write: it warns that
 // the TeamCity chain must be recreated and re-validates every stored root. So an
 // External-Registry-only (or other-tab) save must not echo them.
-function baseConfigurationIfChanged(now: VcsProjection, before: VcsProjection) {
-  if (deepEqual(now.entries, before.entries) && now.buildWorkingDirectory === before.buildWorkingDirectory) return {}
+function baseConfigurationIfChanged(edited: VcsProjection, saved: VcsProjection) {
+  if (deepEqual(edited.entries, saved.entries) && edited.buildWorkingDirectory === saved.buildWorkingDirectory) return {}
   return {
     baseConfiguration: {
-      vcsEntries: now.entries.map((e) => ({
+      vcsEntries: edited.entries.map((e) => ({
         name: e.name || null,
         vcsPath: e.vcsPath,
         branch: e.branch || null,
@@ -127,7 +127,7 @@ function baseConfigurationIfChanged(now: VcsProjection, before: VcsProjection) {
         checkoutDirectory: e.checkoutDirectory || null,
       })),
       // ""-clear: a base-row null would leave the stored value.
-      buildWorkingDirectory: now.buildWorkingDirectory,
+      buildWorkingDirectory: edited.buildWorkingDirectory,
     },
   }
 }
@@ -246,9 +246,9 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
   }
 
   // The request + diff + dirty all run off this one projection (projectVcs).
-  const { entries: cleanedEntries, buildWorkingDirectory } = projectVcs(state)
   const prior = snapshotRef.current
-  const { entries: cleanedPriorEntries, buildWorkingDirectory: priorBuildWorkingDirectory } = projectVcs(prior)
+  const edited = projectVcs(state)
+  const saved = projectVcs(prior)
 
   const diff: DiffEntry[] = []
   const push = (d: DiffEntry | null) => { if (d) diff.push(d) }
@@ -256,7 +256,7 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
     // vcsExternalRegistry clears via '' (CRS-A ""-clear); the prior null-clear was
     // a silent no-op (prep §1.6). Not flagged as a no-op — the clear now persists.
     push(scalarDiff('VCS · External Registry', prior.externalRegistry, state.externalRegistry))
-    push(scalarDiff('VCS · Build Working Directory', priorBuildWorkingDirectory, buildWorkingDirectory))
+    push(scalarDiff('VCS · Build Working Directory', saved.buildWorkingDirectory, edited.buildWorkingDirectory))
     // Field-level entry diff (P1-2): the request persists name/branch/tag/
     // hotfixBranch/repositoryType, so editing ANY of them must surface a row —
     // not just a vcsPath change. Compare index-by-index over the normalized
@@ -264,7 +264,7 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
     // entry is a collection child (REPLACE semantics) so no scalar-aspect no-op.
     // NOTE: positional compare can mislabel a mid-list insertion as "edit + add"
     // — cosmetic only; the request payload (whole-list REPLACE) is still correct.
-    const ENTRY_FIELDS: { key: keyof (typeof cleanedEntries)[number]; label: string }[] = [
+    const ENTRY_FIELDS: { key: keyof CleanVcsEntry; label: string }[] = [
       { key: 'vcsPath', label: 'Path' },
       { key: 'name', label: 'Name' },
       { key: 'branch', label: 'Branch' },
@@ -274,22 +274,23 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
       { key: 'sourcePath', label: 'Source Path' },
       { key: 'checkoutDirectory', label: 'Checkout Directory' },
     ]
-    const maxLen = Math.max(cleanedPriorEntries.length, cleanedEntries.length)
+    const maxLen = Math.max(saved.entries.length, edited.entries.length)
     for (let i = 0; i < maxLen; i++) {
-      const before = cleanedPriorEntries[i]
-      const after = cleanedEntries[i]
-      const rowLabel = (field: string) => `VCS · ${after?.vcsPath || before?.vcsPath || `VCS Root ${i + 1}`} · ${field}`
-      if (before && !after) {
-        push({ label: `VCS · ${before.vcsPath}`, oldValue: 'present', newValue: '—' })
+      const savedEntry = saved.entries[i]
+      const editedEntry = edited.entries[i]
+      const rowLabel = (field: string) =>
+        `VCS · ${editedEntry?.vcsPath || savedEntry?.vcsPath || `VCS Root ${i + 1}`} · ${field}`
+      if (savedEntry && !editedEntry) {
+        push({ label: `VCS · ${savedEntry.vcsPath}`, oldValue: 'present', newValue: '—' })
         continue
       }
-      if (!before && after) {
-        push({ label: `VCS · ${after.vcsPath}`, oldValue: '—', newValue: 'added' })
+      if (!savedEntry && editedEntry) {
+        push({ label: `VCS · ${editedEntry.vcsPath}`, oldValue: '—', newValue: 'added' })
         continue
       }
-      if (!before || !after) continue
+      if (!savedEntry || !editedEntry) continue
       for (const { key, label } of ENTRY_FIELDS) {
-        push(scalarDiff(rowLabel(label), before[key], after[key]))
+        push(scalarDiff(rowLabel(label), savedEntry[key], editedEntry[key]))
       }
     }
   }
@@ -300,7 +301,7 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
     // Only included when the field is visible (Whiskey) — a hidden field never
     // participates in the PATCH (mirrors BuildTab's hidden tool-version fields).
     ...(showExternalRegistry ? { vcsExternalRegistry: state.externalRegistry || '' } : {}),
-    ...baseConfigurationIfChanged(projectVcs(state), projectVcs(prior)),
+    ...baseConfigurationIfChanged(edited, saved),
   }
 
   // Payload-gating (P-1): drop vcsExternalRegistry from the PATCH when the
@@ -327,7 +328,7 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
     externalRegistryEditable,
     entries: state.entries,
     buildWorkingDirectory: state.buildWorkingDirectory,
-    effectiveBuildWorkingDirectory: buildWorkingDirectory,
+    effectiveBuildWorkingDirectory: edited.buildWorkingDirectory,
     setBuildWorkingDirectory,
     updateEntry,
     addEntry,
