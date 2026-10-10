@@ -54,17 +54,9 @@ export function parseSameKindAttach<T>(err: ApiError): T | null {
 }
 
 /**
- * True when a `POST /admin/teamcity-placement/sync` 409 means "the diffId no
- * longer matches the latest Diff" (`TeamcityPlacementControllerV4.startSync`'s
- * own guard). CRS's `ErrorResponse` body for it is
- * `{"errorMessage":"diff replaced, re-run Diff","errorCode":"placement-diff-stale"}`
- * — no `kind` field, so it is neither a same-kind attach
- * (`parseSameKindAttach` returns null: no `id`/`state`) nor a cross-kind
- * `MigrationConflictResponse` (`kind: 'conflict'`).
- *
- * Matches `errorCode` first; an older CRS without it falls back to the
- * `errorMessage` text (then Spring's `message`, as `api.ts` does), so a future
- * plain 409 on this endpoint is not swallowed under the "diff replaced" banner.
+ * True when a `POST /admin/teamcity-placement/sync` 409 means the diffId is no
+ * longer the latest Diff: a kind-less CRS `ErrorResponse` with `errorCode`
+ * `placement-diff-stale` (or, failing that, an `errorMessage` of "diff replaced").
  */
 export function isDiffReplacedConflict(err: unknown): boolean {
   if (!(err instanceof ApiError) || err.status !== 409) return false
@@ -74,7 +66,7 @@ export function isDiffReplacedConflict(err: unknown): boolean {
     const obj = parsed as Record<string, unknown>
     if ('kind' in obj) return false
     if (obj['errorCode'] === 'placement-diff-stale') return true
-    const text = obj['errorMessage'] ?? obj['message']
+    const text = obj['errorMessage']
     return typeof text === 'string' && text.toLowerCase().includes('diff replaced')
   } catch {
     return false
