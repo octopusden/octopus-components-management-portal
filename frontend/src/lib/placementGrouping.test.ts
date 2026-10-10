@@ -54,6 +54,26 @@ describe('buildProposedChangeLines', () => {
     expect(buildProposedChangeLines(row())).toEqual([])
   })
 
+  it('proposes nothing for a report-only row whose current values are set but nothing was derived', () => {
+    // CRS sends the current values on every row; on NO_CHAIN / TC_ERROR the derived ones are null.
+    const r = row({
+      status: 'NO_CHAIN',
+      entries: [
+        {
+          name: 'app',
+          vcsPath: 'ssh://h/prj/app-one.git',
+          currentCheckoutDirectory: 'app',
+          derivedCheckoutDirectory: null,
+          currentSourcePath: null,
+          derivedSourcePath: null,
+        } as PlacementRowDiff['entries'][number],
+      ],
+      currentBuildWorkingDirectory: 'app/build',
+      derivedBuildWorkingDirectory: null,
+    })
+    expect(buildProposedChangeLines(r)).toEqual([])
+  })
+
   it('lists a changed Checkout Directory and Source Path with full field names, unprefixed for a single root', () => {
     const r = row({
       entries: [
