@@ -675,11 +675,17 @@ export function TeamCityPlacementPanel() {
         startDiffError={startDiff.error}
       />
 
-      {[report, diffJob, syncJob].map(
-        (q, i) =>
+      {(
+        [
+          ['Report', report],
+          ['Diff job', diffJob],
+          ['Sync job', syncJob],
+        ] as const
+      ).map(
+        ([label, q]) =>
           q.isError && (
-            <StatusBanner key={i} variant="destructive">
-              {formatMigrationError(q.error)}
+            <StatusBanner key={label} variant="destructive">
+              {label}: {formatMigrationError(q.error)}
             </StatusBanner>
           ),
       )}
