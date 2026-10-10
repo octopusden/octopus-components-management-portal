@@ -4,7 +4,9 @@ import {
   getPlacementStatusLabel,
   getPlacementStatusTone,
   isPlacementRowSelectable,
+  isPlacementStatusDerived,
   PLACEMENT_STATUS_BUCKETS,
+  toKnownStatus,
 } from './placementStatus'
 
 describe('getPlacementStatusTone', () => {
@@ -109,5 +111,27 @@ describe('an unknown status (CRS deploys independently of the Portal)', () => {
 
   it('is never selectable', () => {
     expect(isPlacementRowSelectable({ status: 'SOMETHING_NEW', rowLabel: 'BASE' })).toBe(false)
+  })
+})
+
+describe('toKnownStatus', () => {
+  it('passes a known status through and rejects anything else, incl. Object.prototype keys', () => {
+    expect(toKnownStatus('RESOLVED')).toBe('RESOLVED')
+    expect(toKnownStatus('NEW_STATUS')).toBeNull()
+    expect(toKnownStatus('toString')).toBeNull()
+  })
+})
+
+describe('unknown status fallback', () => {
+  it('is neutral, raw-labelled, needs a look, not derived and not selectable', () => {
+    expect(getPlacementStatusTone('NEW_STATUS')).toBe('secondary')
+    expect(getPlacementStatusLabel('NEW_STATUS')).toBe('NEW_STATUS')
+    expect(getPlacementStatusBucket('NEW_STATUS')).toBe('needsLook')
+    expect(isPlacementStatusDerived('NEW_STATUS')).toBe(false)
+    expect(isPlacementRowSelectable({ status: 'NEW_STATUS', rowLabel: 'BASE' })).toBe(false)
+  })
+
+  it.each(['RESOLVED', 'IN_SYNC', 'MANUAL_EDIT', 'INVALID'])('treats %s as derived', (s) => {
+    expect(isPlacementStatusDerived(s)).toBe(true)
   })
 })

@@ -10,19 +10,30 @@ export type PlacementStatusBucket = 'ready' | 'needsLook' | 'cantDerive' | 'noth
  */
 const STATUS_INFO: Record<
   PlacementDiffRowStatus,
-  { tone: 'success' | 'secondary' | 'warning' | 'destructive'; label: string; bucket: PlacementStatusBucket }
+  {
+    tone: 'success' | 'secondary' | 'warning' | 'destructive'
+    label: string
+    bucket: PlacementStatusBucket
+    /** TeamCity derived values for the row (vs. a report-only row). */
+    derived: boolean
+  }
 > = {
-  RESOLVED: { tone: 'success', label: 'Ready to sync', bucket: 'ready' },
-  CONFLICT: { tone: 'destructive', label: 'TeamCity configurations disagree', bucket: 'needsLook' },
-  INVALID: { tone: 'destructive', label: 'Derived value fails validation', bucket: 'needsLook' },
-  TC_ERROR: { tone: 'destructive', label: 'TeamCity error', bucket: 'needsLook' },
-  MANUAL_EDIT: { tone: 'warning', label: 'Edited manually — kept', bucket: 'needsLook' },
-  UNEXPRESSIBLE: { tone: 'warning', label: "Checkout rule can't be represented", bucket: 'cantDerive' },
-  NO_CHAIN: { tone: 'warning', label: 'No TeamCity chain found', bucket: 'cantDerive' },
-  OUTSIDE_TEMPLATES: { tone: 'warning', label: 'Not on a supported template', bucket: 'cantDerive' },
-  COMPILE_PAUSED: { tone: 'warning', label: 'Compile configurations paused', bucket: 'cantDerive' },
-  ROOTS_MISMATCH: { tone: 'warning', label: 'VCS roots differ from the registry', bucket: 'cantDerive' },
-  IN_SYNC: { tone: 'secondary', label: 'Already in sync', bucket: 'nothingToDo' },
+  RESOLVED: { tone: 'success', label: 'Ready to sync', bucket: 'ready', derived: true },
+  CONFLICT: { tone: 'destructive', label: 'TeamCity configurations disagree', bucket: 'needsLook', derived: false },
+  INVALID: { tone: 'destructive', label: 'Derived value fails validation', bucket: 'needsLook', derived: true },
+  TC_ERROR: { tone: 'destructive', label: 'TeamCity error', bucket: 'needsLook', derived: false },
+  MANUAL_EDIT: { tone: 'warning', label: 'Edited manually — kept', bucket: 'needsLook', derived: true },
+  UNEXPRESSIBLE: { tone: 'warning', label: "Checkout rule can't be represented", bucket: 'cantDerive', derived: false },
+  NO_CHAIN: { tone: 'warning', label: 'No TeamCity chain found', bucket: 'cantDerive', derived: false },
+  OUTSIDE_TEMPLATES: { tone: 'warning', label: 'Not on a supported template', bucket: 'cantDerive', derived: false },
+  COMPILE_PAUSED: { tone: 'warning', label: 'Compile configurations paused', bucket: 'cantDerive', derived: false },
+  ROOTS_MISMATCH: { tone: 'warning', label: 'VCS roots differ from the registry', bucket: 'cantDerive', derived: false },
+  IN_SYNC: { tone: 'secondary', label: 'Already in sync', bucket: 'nothingToDo', derived: true },
+}
+
+/** Narrows a wire status to one this build knows; null for anything newer. */
+export function toKnownStatus(s: string): PlacementDiffRowStatus | null {
+  return Object.hasOwn(STATUS_INFO, s) ? (s as PlacementDiffRowStatus) : null
 }
 
 /**
@@ -30,11 +41,9 @@ const STATUS_INFO: Record<
  * can arrive: show its raw code, neutral, under "Needs a look"; never selectable.
  */
 function statusInfo(status: string) {
-  return (STATUS_INFO as Record<string, (typeof STATUS_INFO)[PlacementDiffRowStatus]>)[status] ?? {
-    tone: 'secondary' as const,
-    label: status,
-    bucket: 'needsLook' as const,
-  }
+  const known = toKnownStatus(status)
+  if (known) return STATUS_INFO[known]
+  return { tone: 'secondary' as const, label: status, bucket: 'needsLook' as const, derived: false }
 }
 
 /** Badge tone per Diff row status (`PlacementDiffRowStatus`, ADR-002's eleven outcomes). */
@@ -50,6 +59,11 @@ export function getPlacementStatusLabel(status: string): string {
 /** Which of the four summary buckets (Ready / Needs a look / Can't derive / Nothing to do) a status falls into. */
 export function getPlacementStatusBucket(status: string): PlacementStatusBucket {
   return statusInfo(status).bucket
+}
+
+/** Whether TeamCity derived values for a row with this status. */
+export function isPlacementStatusDerived(status: string): boolean {
+  return statusInfo(status).derived
 }
 
 /** The four summary-bar buckets, in display order, each with its plain-English label. */
