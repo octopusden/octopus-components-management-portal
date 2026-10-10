@@ -91,8 +91,14 @@ them apart (`isDiffReplacedConflict` in [`lib/migrationConflict.ts`](../../front
   every other admin job hook.
 - "diff replaced" (`diffId` no longer names the latest Diff) — CRS's `ErrorResponse` body
   `{"errorMessage":"diff replaced, re-run Diff","errorCode":"placement-diff-stale"}`, no
-  `id`/`state`/`kind`; matched on `errorCode`, falling back to the message text. The panel shows "The Diff was replaced — re-run Diff." and clears
-  the selection, rather than the generic destructive banner a cross-kind conflict gets.
+  `id`/`state`/`kind`; matched on `errorCode`, falling back to the message text. The panel shows
+  "The Diff was replaced — re-run Diff." and clears the selection, rather than the generic
+  destructive banner a cross-kind conflict gets.
+
+Sync is enabled only while the report on screen is the latest Diff's (the latest Diff job is
+COMPLETED and its id equals the report's `diffId`). Otherwise the reason is shown next to the
+button: the latest Diff failed (the report is from the previous run), or the report is not from
+the latest Diff.
 
 On completion the panel renders `requested` / `applied` / `skipped` / `failed` tiles from
 `PlacementSyncResult` and a "Download rollback trace (CSV)" link to
