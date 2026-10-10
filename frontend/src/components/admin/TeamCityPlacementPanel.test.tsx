@@ -663,19 +663,19 @@ describe('TeamCityPlacementPanel — query errors', () => {
   it('shows a destructive banner when the report fails to load', () => {
     mockUseReport.mockReturnValue(failing('report exploded') as unknown as ReturnType<typeof usePlacementDiffReport>)
     renderPanel()
-    expect(screen.getByText(/report exploded/)).toBeDefined()
+    expect(screen.getByText(/Report: .*report exploded/)).toBeDefined()
   })
 
   it('shows a destructive banner when the Diff job poll fails', () => {
     mockUseDiffJob.mockReturnValue(failing('diff poll exploded') as unknown as ReturnType<typeof usePlacementDiffJob>)
     renderPanel()
-    expect(screen.getByText(/diff poll exploded/)).toBeDefined()
+    expect(screen.getByText(/Diff job: .*diff poll exploded/)).toBeDefined()
   })
 
   it('shows a destructive banner when the Sync job poll fails', () => {
     mockUseSyncJob.mockReturnValue(failing('sync poll exploded') as unknown as ReturnType<typeof usePlacementSyncJob>)
     renderPanel()
-    expect(screen.getByText(/sync poll exploded/)).toBeDefined()
+    expect(screen.getByText(/Sync job: .*sync poll exploded/)).toBeDefined()
   })
 
   it('still treats "no report yet" (data null, no error) as the empty state', () => {
