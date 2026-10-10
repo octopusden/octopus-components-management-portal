@@ -375,6 +375,7 @@ function PlacementResultsArea({
 function PlacementSyncControls({
   adminMode,
   syncButtonDisabled,
+  syncBlockedReason,
   syncRunning,
   syncPending,
   onRequestRun,
@@ -389,6 +390,7 @@ function PlacementSyncControls({
 }: {
   adminMode: boolean
   syncButtonDisabled: boolean
+  syncBlockedReason: string | null
   syncRunning: boolean
   syncPending: boolean
   onRequestRun: () => void
@@ -414,6 +416,7 @@ function PlacementSyncControls({
           {(syncRunning || syncPending) && <Loader2 className="animate-spin" aria-hidden="true" />}
           {syncRunning ? 'Syncing…' : syncPending ? 'Starting…' : `Sync selected (${selectedCount})`}
         </Button>
+        {syncBlockedReason && <span className="text-xs text-muted-foreground">{syncBlockedReason}</span>}
         {syncFinishedAt && !syncRunning && (
           <span className="text-xs text-muted-foreground">
             Last sync <RelativeTime ts={syncFinishedAt} />
@@ -535,14 +538,20 @@ export function TeamCityPlacementPanel() {
   const validationRunning = validationJob.data?.state === 'RUNNING'
   const otherKindRunning = componentsRunning || historyRunning || resyncRunning || validationRunning
 
+  // CRS serves the report from the last COMPLETED run even while a newer Diff
+  // is running or has failed, so the report's own diffId is the source of
+  // truth: Sync only when the latest Diff job is the one that produced it.
+  const isReportCurrent =
+    !!report.data?.diffId && diffJobData?.state === 'COMPLETED' && diffJobData.id === report.data.diffId
   // A previously selected component id can point at a row that no longer
   // exists (or no longer resolves) once a new Diff report lands — drop the
   // stale selection so Sync can never be asked to act on it.
-  // A new Diff job id (this client's or another admin's) invalidates it too,
-  // before the new report has landed.
+  // A new Diff job (this client's or another admin's) makes the report on
+  // screen not current, which invalidates the selection before the new report
+  // has landed.
   useEffect(() => {
     setSelected(new Set())
-  }, [report.data?.generatedAt, diffJobData?.id])
+  }, [isReportCurrent, report.data?.diffId])
 
   // Refresh the report + component caches once each job reaches COMPLETED —
   // covers the normal (poll-detected) path; the mutations' own onSuccess
@@ -639,6 +648,12 @@ export function TeamCityPlacementPanel() {
   }
 
   const diffButtonDisabled = !adminMode || diffRunning || startDiff.isPending || otherKindRunning || syncRunning
+  const syncBlockedReason =
+    diffRunning || !report.data?.diffId || !diffJobData || isReportCurrent
+      ? null
+      : diffJobData.state === 'FAILED'
+        ? 'The latest Diff failed — the report shown is from the previous run; re-run Diff to sync.'
+        : 'The report shown is not from the latest Diff; re-run Diff to sync.'
   const syncButtonDisabled =
     !adminMode ||
     syncRunning ||
@@ -646,12 +661,7 @@ export function TeamCityPlacementPanel() {
     otherKindRunning ||
     diffRunning ||
     selected.size === 0 ||
-    !report.data?.diffId ||
-    // CRS serves the report from the last COMPLETED run even while a newer
-    // Diff is running, so the report's own diffId is the source of truth: Sync
-    // only when it is the latest job and that job has completed.
-    diffJobData?.state !== 'COMPLETED' ||
-    diffJobData.id !== report.data?.diffId
+    !isReportCurrent
 
   const runningOtherLabel = describeOtherRunningJob({ componentsRunning, historyRunning, resyncRunning, validationRunning })
 
@@ -745,6 +755,7 @@ export function TeamCityPlacementPanel() {
       <PlacementSyncControls
         adminMode={adminMode}
         syncButtonDisabled={syncButtonDisabled}
+        syncBlockedReason={syncBlockedReason}
         syncRunning={syncRunning}
         syncPending={startSync.isPending}
         onRequestRun={() => setConfirmSyncOpen(true)}
