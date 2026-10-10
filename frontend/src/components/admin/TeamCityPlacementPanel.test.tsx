@@ -20,6 +20,7 @@ import type {
   TeamcityPlacementSyncJobResponse,
 } from '@/lib/types'
 import { TeamCityPlacementPanel } from './TeamCityPlacementPanel'
+import { CRS_SHAPED_REPORT } from './placementReport.crs-shaped.fixture'
 
 // Hooks are mocked so this test focuses on panel behaviour — admin-mode gate,
 // confirm dialogs, RUNNING/COMPLETED/FAILED rendering, the grouped result
@@ -440,6 +441,19 @@ describe('TeamCityPlacementPanel — result table', () => {
     expect(screen.queryByText(/^CD:/)).toBeNull()
     expect(screen.queryByText(/^SP:/)).toBeNull()
     expect(screen.queryByText(/^BWD:/)).toBeNull()
+  })
+
+  it('renders the Proposed change column from a CRS-shaped report with explicit nulls', () => {
+    mockUseReport.mockReturnValue(buildQuery(CRS_SHAPED_REPORT) as unknown as ReturnType<typeof usePlacementDiffReport>)
+    renderPanel()
+    fireEvent.click(screen.getByRole('button', { name: /^Show all \(3\)$/ }))
+    const proposed = (key: string) =>
+      screen.getByRole('checkbox', { name: `Select ${key}` }).closest('tr')?.nextElementSibling?.children[2]?.textContent
+    // RESOLVED: derived Build Working Directory null is a real value, "(root)".
+    expect(proposed('app-resolved')).toBe('Checkout Directory: (root) → app-resolvedBuild Working Directory: old/dir → (root)')
+    // Report-only rows derive nothing: no "no change", no "→ (root)".
+    expect(proposed('app-nochain')).toBe('')
+    expect(proposed('app-tcerror')).toBe('')
   })
 
   it('"Applies to" shows Base / Override for versions <range>; the literal "vcs.settings" never appears', () => {
