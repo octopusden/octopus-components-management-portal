@@ -20,8 +20,8 @@ describe('isDiffReplacedConflict', () => {
     expect(isDiffReplacedConflict(conflict409({ errorMessage: 'diff replaced, re-run Diff' }))).toBe(true)
   })
 
-  it('falls back to a Spring-default message body', () => {
-    expect(isDiffReplacedConflict(conflict409({ status: 409, message: 'diff replaced, re-run Diff' }))).toBe(true)
+  it('does not match a Spring-default `message` body', () => {
+    expect(isDiffReplacedConflict(conflict409({ status: 409, message: 'diff replaced, re-run Diff' }))).toBe(false)
   })
 
   it('is false for a cross-kind conflict (kind: "conflict")', () => {
