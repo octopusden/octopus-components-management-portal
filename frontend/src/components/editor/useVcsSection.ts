@@ -132,6 +132,44 @@ function baseConfigurationIfChanged(edited: VcsProjection, saved: VcsProjection)
   }
 }
 
+const ENTRY_FIELDS: { key: keyof CleanVcsEntry; label: string }[] = [
+  { key: 'vcsPath', label: 'Path' },
+  { key: 'name', label: 'Name' },
+  { key: 'branch', label: 'Branch' },
+  { key: 'tag', label: 'Tag' },
+  { key: 'hotfixBranch', label: 'Hotfix Branch' },
+  { key: 'repositoryType', label: 'Repository Type' },
+  { key: 'sourcePath', label: 'Source Path' },
+  { key: 'checkoutDirectory', label: 'Checkout Directory' },
+]
+
+// Field-level entry diff (P1-2): the request persists name/branch/tag/
+// hotfixBranch/repositoryType, so editing ANY of them must surface a row —
+// not just a vcsPath change. Compare index-by-index over the normalized
+// entries; emit one row per changed field, plus added/removed rows. A vcs
+// entry is a collection child (REPLACE semantics) so no scalar-aspect no-op.
+// NOTE: positional compare can mislabel a mid-list insertion as "edit + add"
+// — cosmetic only; the request payload (whole-list REPLACE) is still correct.
+function diffVcsEntries(saved: CleanVcsEntry[], edited: CleanVcsEntry[]): DiffEntry[] {
+  const diff: DiffEntry[] = []
+  const push = (d: DiffEntry | null) => { if (d) diff.push(d) }
+  const maxLen = Math.max(saved.length, edited.length)
+  for (let i = 0; i < maxLen; i++) {
+    const savedEntry = saved[i]
+    const editedEntry = edited[i]
+    if (savedEntry && !editedEntry) {
+      push({ label: `VCS · ${savedEntry.vcsPath}`, oldValue: 'present', newValue: '—' })
+    } else if (!savedEntry && editedEntry) {
+      push({ label: `VCS · ${editedEntry.vcsPath}`, oldValue: '—', newValue: 'added' })
+    } else if (savedEntry && editedEntry) {
+      for (const { key, label } of ENTRY_FIELDS) {
+        push(scalarDiff(`VCS · ${editedEntry.vcsPath} · ${label}`, savedEntry[key], editedEntry[key]))
+      }
+    }
+  }
+  return diff
+}
+
 export interface VcsSection {
   externalRegistry: string
   setExternalRegistry: (v: string) => void
@@ -257,42 +295,7 @@ export function useVcsSection(component: ComponentDetail): VcsSection {
     // a silent no-op (prep §1.6). Not flagged as a no-op — the clear now persists.
     push(scalarDiff('VCS · External Registry', prior.externalRegistry, state.externalRegistry))
     push(scalarDiff('VCS · Build Working Directory', saved.buildWorkingDirectory, edited.buildWorkingDirectory))
-    // Field-level entry diff (P1-2): the request persists name/branch/tag/
-    // hotfixBranch/repositoryType, so editing ANY of them must surface a row —
-    // not just a vcsPath change. Compare index-by-index over the normalized
-    // entries; emit one row per changed field, plus added/removed rows. A vcs
-    // entry is a collection child (REPLACE semantics) so no scalar-aspect no-op.
-    // NOTE: positional compare can mislabel a mid-list insertion as "edit + add"
-    // — cosmetic only; the request payload (whole-list REPLACE) is still correct.
-    const ENTRY_FIELDS: { key: keyof CleanVcsEntry; label: string }[] = [
-      { key: 'vcsPath', label: 'Path' },
-      { key: 'name', label: 'Name' },
-      { key: 'branch', label: 'Branch' },
-      { key: 'tag', label: 'Tag' },
-      { key: 'hotfixBranch', label: 'Hotfix Branch' },
-      { key: 'repositoryType', label: 'Repository Type' },
-      { key: 'sourcePath', label: 'Source Path' },
-      { key: 'checkoutDirectory', label: 'Checkout Directory' },
-    ]
-    const maxLen = Math.max(saved.entries.length, edited.entries.length)
-    for (let i = 0; i < maxLen; i++) {
-      const savedEntry = saved.entries[i]
-      const editedEntry = edited.entries[i]
-      const rowLabel = (field: string) =>
-        `VCS · ${editedEntry?.vcsPath || savedEntry?.vcsPath || `VCS Root ${i + 1}`} · ${field}`
-      if (savedEntry && !editedEntry) {
-        push({ label: `VCS · ${savedEntry.vcsPath}`, oldValue: 'present', newValue: '—' })
-        continue
-      }
-      if (!savedEntry && editedEntry) {
-        push({ label: `VCS · ${editedEntry.vcsPath}`, oldValue: '—', newValue: 'added' })
-        continue
-      }
-      if (!savedEntry || !editedEntry) continue
-      for (const { key, label } of ENTRY_FIELDS) {
-        push(scalarDiff(rowLabel(label), savedEntry[key], editedEntry[key]))
-      }
-    }
+    diff.push(...diffVcsEntries(saved.entries, edited.entries))
   }
 
   const request = {
