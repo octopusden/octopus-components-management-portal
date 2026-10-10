@@ -516,6 +516,35 @@ describe('TeamCityPlacementPanel — Sync selected', () => {
     expect(screen.getByRole('button', { name: /sync selected/i })).toBeDisabled()
   })
 
+  it('explains next to Sync why it is disabled when the latest Diff failed', () => {
+    mockUseDiffJob.mockReturnValue(
+      buildQuery({ ...COMPLETED_DIFF_JOB, id: 'diff-2', state: 'FAILED', errorMessage: 'TC unreachable' }) as unknown as ReturnType<
+        typeof usePlacementDiffJob
+      >,
+    )
+    renderPanel()
+    expect(screen.getByText(/latest Diff failed.*previous run.*re-run Diff to sync/i)).toBeDefined()
+  })
+
+  it('explains next to Sync why it is disabled when the report is from an older Diff', () => {
+    mockUseDiffJob.mockReturnValue(
+      buildQuery({ ...COMPLETED_DIFF_JOB, id: 'diff-2' }) as unknown as ReturnType<typeof usePlacementDiffJob>,
+    )
+    renderPanel()
+    expect(screen.getByText(/report shown is not from the latest Diff/i)).toBeDefined()
+  })
+
+  it('shows no blocked-Sync reason when the report is current', () => {
+    renderPanel()
+    expect(screen.queryByText(/re-run Diff to sync/i)).toBeNull()
+  })
+
+  it('enables Sync selected when the ids match, the job is COMPLETED and a row is selected', () => {
+    renderPanel()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select app-alpha' }))
+    expect(screen.getByRole('button', { name: /sync selected/i })).not.toBeDisabled()
+  })
+
   it('confirm dialog lists the selected component keys, the field count, and the base-configuration note', async () => {
     const { base, mutateAsync } = buildMutation()
     mockUseRunSync.mockReturnValue(base as unknown as ReturnType<typeof useRunPlacementSync>)
