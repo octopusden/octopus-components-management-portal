@@ -10,9 +10,10 @@ people.
 - **Query box** — debounced (300 ms); nothing is sent below 2 characters (the server minimum),
   so typing never produces a 400.
 - **Text / Regex** — Text is a case-insensitive substring match with regex metacharacters taken
-  literally; Regex sends the query as a case-insensitive (Java) regular expression. Matched text
-  is highlighted in both modes from the `ranges` the server returns per line — the pattern is
-  never re-run in the browser, whose JS `RegExp` would not reproduce Java regex semantics.
+  literally; Regex sends the query as a case-insensitive regular expression in RE2 syntax (no
+  lookarounds or backreferences — the server matches in linear time). Matched text is highlighted
+  in both modes from the `ranges` the server returns per line — the pattern is never re-run in the
+  browser, whose JS `RegExp` would not reproduce RE2 semantics.
 - **Active / Archived / All** — defaults to **Active** (no `archived` param in the URL);
   `archived=true` is archived only, `archived=all` both.
 - **Results** — grouped by component (sorted by key, archived ones badged). Each line shows its

@@ -17,7 +17,7 @@ export function asCodeLineHref(componentId: string, line: number): string {
 
 /**
  * Wraps the server-reported matched spans of [text] in <mark>. The spans come from the server's
- * own matcher (substring or Java regex), so regex hits are highlighted exactly — no JS RegExp is
+ * own matcher (substring or RE2 regex), so regex hits are highlighted exactly — no JS RegExp is
  * ever run on the pattern. Out-of-range, empty or overlapping spans are ignored defensively.
  */
 export function highlightRanges(text: string, ranges: readonly AsCodeMatchRange[]): ReactNode[] {

@@ -1304,7 +1304,7 @@ export interface AsCodeSearchLine {
   path: string[]
   /**
    * Where the query matched within `text` (end exclusive), as found by the server's own matcher —
-   * substring or Java regex — so regex hits are highlighted exactly, not re-run in JS.
+   * substring or RE2 regex — so regex hits are highlighted exactly, not re-run in JS.
    */
   ranges: AsCodeMatchRange[]
 }

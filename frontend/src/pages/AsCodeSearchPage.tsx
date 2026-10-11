@@ -151,7 +151,7 @@ function SearchBody({ tooShort, regex, data, error, canRaiseLimit, onRaiseLimit 
     return (
       <p className="text-sm text-muted-foreground">
         Type at least {AS_CODE_SEARCH_MIN_QUERY} characters. Matching is case-insensitive
-        {regex ? '; the query is a regular expression.' : '; the text is matched literally.'}
+        {regex ? '; the query is a regular expression (RE2 syntax: no lookarounds or backreferences).' : '; the text is matched literally.'}
       </p>
     )
   }
