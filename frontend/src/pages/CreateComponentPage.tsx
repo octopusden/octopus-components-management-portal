@@ -913,7 +913,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
             checked={manual.solution}
             onChange={(e) => applyManual({ solution: e.target.checked })}
           />
-          Solution — a top-level component that groups and ships other components
+          <span>Solution — a top-level component that groups and ships other components</span>
         </label>
       )}
     </>
