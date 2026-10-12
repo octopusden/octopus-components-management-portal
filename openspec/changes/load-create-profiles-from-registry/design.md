@@ -182,11 +182,13 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
 ### 8. Labels and build tasks
 
 - Labels: `ChipsInput` in General → Classification, options from `useLabels()` (fetched only
-  when the field is shown), no free-text entries; shown when `component.labels` is editable for
-  the user. Not editable → not shown, and a clone sends the source's labels.
+  when editable), no free-text entries; `useFieldVisibility('component.labels')`: editable → the
+  form's labels; readonly → shown disabled, a clone keeps the source's labels; hidden → not
+  shown and none sent.
 - Build tasks: an `Input` on Build, with `useFieldVisibility('build.buildTasks')`: editable →
   trimmed, omitted when blank; readonly → shown disabled, a clone keeps the source's value;
-  hidden → not shown and stripped (`buildCreateRequest`'s `buildTasksVisibility`).
+  hidden → not shown and stripped. `buildCreateRequest` takes both as
+  `{ labels, buildTasks }` visibilities.
 - Both added to `CreateFormValues`, `initialValues` (clone seeds from the source) and
   `buildCreateRequest`; when editable the form value wins over the source's copy.
 - Review lists each under its step's group when the field is shown.

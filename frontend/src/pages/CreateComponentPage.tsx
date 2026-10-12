@@ -381,7 +381,8 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
     escrowFcLoading || escrowFcError || escrowGenerationEntry.visibility === 'hidden'
   const escrowGenerationEditable = useFieldEditable('escrow.generation')
   const buildTasksVisibility = useFieldVisibility('build.buildTasks')
-  const { data: labelOptions = [], isLoading: labelsLoading } = useLabels({ enabled: editable('labels') })
+  const labelsVisibility = useFieldVisibility('component.labels')
+  const { data: labelOptions = [], isLoading: labelsLoading } = useLabels({ enabled: labelsVisibility === 'editable' })
   // Skip the escrow-generations meta fetch when the field is hidden — the control
   // isn't rendered and generation isn't sent, so the vocabulary is never needed.
   const { options: escrowGenerations } = useFieldOptions('generation', {
@@ -620,7 +621,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
         editable,
         escrowGenerationEditable,
         escrowGenerationHidden,
-        buildTasksVisibility,
+        { labels: labelsVisibility, buildTasks: buildTasksVisibility },
       )
       if (!flags) return
       const request = {
@@ -1011,9 +1012,10 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
           <FieldError message={errors.clientCode?.message} />
         </Field>
       )}
-      {editable('labels') && (
+      {labelsVisibility !== 'hidden' && (
         <Field label="Labels" htmlFor="create-labels" path="component.labels">
           <ChipsInput
+            disabled={labelsVisibility === 'readonly'}
             id="create-labels"
             noun="label"
             placeholder="Add label"
@@ -1516,7 +1518,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
 
       <SummaryDiff
         values={values}
-        showLabels={editable('labels')}
+        showLabels={labelsVisibility !== 'hidden'}
         showBuildTasks={buildTasksVisibility !== 'hidden'}
         gated={gated}
         vcsApplies={vcsApplies}

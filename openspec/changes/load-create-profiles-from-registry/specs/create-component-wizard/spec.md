@@ -249,8 +249,9 @@ shown under the wizard field for that path, on its step. Creating requires
 
 The wizard SHALL offer a Labels field in the General step's Classification group, offering only
 labels from the registry's labels list, shown on Review and sent with the create. The field SHALL
-be offered only when field-config lets the user edit `component.labels`; otherwise it is not
-shown and a clone sends the source's labels. A clone SHALL start with the source's labels.
+follow the field-config visibility of `component.labels`: editable, shown disabled when readonly
+(a clone keeps the source's labels), or not shown and no labels sent when hidden. A clone SHALL
+start with the source's labels.
 
 #### Scenario: Labels are created with the component
 
@@ -267,10 +268,15 @@ shown and a clone sends the source's labels. A clone SHALL start with the source
 - **WHEN** the user picks no labels
 - **THEN** the create request carries an empty label list
 
-#### Scenario: Not editable
+#### Scenario: Readonly
 
-- **WHEN** field-config does not let the user edit `component.labels`
-- **THEN** the field is not shown
+- **WHEN** field-config makes `component.labels` readonly for the user and a component is cloned
+- **THEN** the field is shown disabled with the source's labels, and they are sent unchanged
+
+#### Scenario: Hidden
+
+- **WHEN** field-config hides `component.labels` and a component is cloned
+- **THEN** the field is not shown and no labels are sent, not even the source's
 
 ### Requirement: Build tasks can be set on create
 

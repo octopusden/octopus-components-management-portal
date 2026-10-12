@@ -1067,11 +1067,12 @@ describe('CreateComponentPage — labels and build tasks', () => {
     expect((await create()).labels).toEqual([])
   })
 
-  it('does not show Labels when the user may not edit them', async () => {
+  it('shows readonly labels disabled with the source labels in a clone', async () => {
     mockUseFieldConfig.mockReturnValue({ data: { component: { labels: { visibility: 'readonly' } } }, isLoading: false, isError: false })
-    renderWizard()
-    await clickNext()
-    expect(screen.queryByRole('combobox', { name: 'Add label' })).toBeNull()
+    mockUseComponent.mockReturnValue({ data: makeSource({ labels: ['backend'] }), isLoading: false, error: null })
+    renderWizard('/components/new?from=c-1')
+    expect(screen.getByTestId('chip-backend')).toBeDefined()
+    expect(screen.getByRole('combobox', { name: 'Add label' })).toBeDisabled()
   })
 
   it('shows readonly build tasks disabled with the source value in a clone', async () => {

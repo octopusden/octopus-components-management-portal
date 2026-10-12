@@ -302,3 +302,8 @@
 - [x] 16.4 A rule rejection on a field the step does not show opened the step with no message.
       Every step a rejection routes to now shows it at the top (`StepServerError`), replacing the
       Profile-only banner; the Maven-group rejection test asserts the message on Distribution.
+- [x] 16.5 A hidden Labels field still sent a clone source's labels, and readonly Labels were hidden
+      rather than shown disabled like Build Tasks. Labels now follow `useFieldVisibility` the same
+      way (readonly: disabled, source's kept; hidden: none sent). `buildCreateRequest` takes
+      `{ labels, buildTasks }` visibilities; the build-tasks branch moved to `buildAspectFor`,
+      keeping the function at `main`'s cognitive complexity (30).

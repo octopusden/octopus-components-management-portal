@@ -9,6 +9,7 @@ import type {
   JiraAspect,
 } from '../types'
 import { selectBaseRow } from '../api/baseRow'
+import type { FieldVisibility } from '../../hooks/useFieldConfig'
 
 // Distribution-coordinate enum for the package family — CRS validatePackageType
 // accepts only these (EnumValidValues.kt), so the form constrains them rather
@@ -252,6 +253,28 @@ export function effectiveCreateClientCode(
   return form.distributionExternal ? form.clientCode || undefined : (source?.clientCode ?? undefined)
 }
 
+export interface CreateFieldVisibility {
+  labels?: FieldVisibility
+  buildTasks?: FieldVisibility
+}
+
+function buildAspectFor(
+  sourceBuild: BuildAspect | null | undefined,
+  form: CreateFormValues,
+  buildTasksVisibility: FieldVisibility,
+): BuildAspect {
+  const build: BuildAspect = { ...(sourceBuild ?? {}), buildSystem: form.buildSystem }
+  const buildTasks = form.buildTasks.trim()
+  if (buildTasksVisibility === 'editable' && buildTasks) build.buildTasks = buildTasks
+  else if (buildTasksVisibility !== 'readonly') delete build.buildTasks
+  return build
+}
+
+function labelsFor(visibility: FieldVisibility, form: CreateFormValues, source?: ComponentDetail): string[] {
+  if (visibility === 'editable') return [...form.labels]
+  return visibility === 'readonly' ? [...(source?.labels ?? [])] : []
+}
+
 export function buildCreateRequest(
   form: CreateFormValues,
   source?: ComponentDetail,
@@ -267,10 +290,13 @@ export function buildCreateRequest(
   // not part of a new component's escrow, so its value is stripped even from a
   // cloned source escrow — keeping the payload consistent with the hidden UI.
   escrowGenerationHidden = false,
-  // Field-config visibility of `build.buildTasks`, gated like escrow generation: editable → the
-  // form value wins over a cloned source's; readonly → the source's is kept; hidden → stripped.
-  buildTasksVisibility: 'editable' | 'readonly' | 'hidden' = 'editable',
+  // Field-config visibility of the fields added at create, gated like escrow generation:
+  // editable → the form value wins over a cloned source's; readonly → the source's is kept;
+  // hidden → nothing is sent.
+  visibility: CreateFieldVisibility = {},
 ): ComponentCreateRequest {
+  const labelsVisibility = visibility.labels ?? 'editable'
+  const buildTasksVisibility = visibility.buildTasks ?? 'editable'
   const gated = form.distributionExplicit && form.distributionExternal
   const baseRow = source ? selectBaseRow(source) : undefined
 
@@ -292,7 +318,7 @@ export function buildCreateRequest(
     securityChampion: [...form.securityChampion],
     copyright: form.copyright || undefined,
     releasesInDefaultBranch: source?.releasesInDefaultBranch ?? undefined,
-    labels: isFieldEditable('labels') ? [...form.labels] : [...(source?.labels ?? [])],
+    labels: labelsFor(labelsVisibility, form, source),
     // jiraHotfixVersionFormat is intentionally never set on create: the create
     // form has no Hotfix Version Format field (hotfixes are always disabled at
     // creation — no hotfix branch yet), so it is left to the server default and
@@ -317,15 +343,9 @@ export function buildCreateRequest(
   // baseConfiguration is ALWAYS present: the form always supplies buildSystem.
   // In copy mode the build aspect inherits the source's other build fields
   // (e.g. gradleVersion) but the buildSystem comes from the form.
-  const buildAspect: BuildAspect = { ...(baseRow?.build ?? {}), buildSystem: form.buildSystem }
-  if (buildTasksVisibility === 'editable') {
-    const buildTasks = form.buildTasks.trim()
-    if (buildTasks) buildAspect.buildTasks = buildTasks
-    else delete buildAspect.buildTasks
-  } else if (buildTasksVisibility === 'hidden') {
-    delete buildAspect.buildTasks
+  const baseConfiguration: BaseConfigurationRequest = {
+    build: buildAspectFor(baseRow?.build, form, buildTasksVisibility),
   }
-  const baseConfiguration: BaseConfigurationRequest = { build: buildAspect }
   // Escrow aspect: copied from the source BASE row (clone), with the form's
   // `generation` overlaid when the escrow.generation field is editable and a
   // value was chosen (form WINS). The rest of the escrow aspect is preserved as

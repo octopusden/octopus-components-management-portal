@@ -819,13 +819,11 @@ describe('buildCreateRequest — labels and build tasks', () => {
     expect(req.labels).toEqual(['sql'])
   })
 
-  it('keeps the source labels when labels are not editable', () => {
-    const req = buildCreateRequest(
-      makeForm({ labels: ['sql'] }),
-      makeSource({ labels: ['backend'] }),
-      (f) => f !== 'labels',
-    )
-    expect(req.labels).toEqual(['backend'])
+  it('keeps the source labels when labels are readonly, and sends none when hidden', () => {
+    const src = makeSource({ labels: ['backend'] })
+    const form = makeForm({ labels: ['sql'] })
+    expect(buildCreateRequest(form, src, undefined, true, false, { labels: 'readonly' }).labels).toEqual(['backend'])
+    expect(buildCreateRequest(form, src, undefined, true, false, { labels: 'hidden' }).labels).toEqual([])
   })
 
   it('sends trimmed build tasks', () => {
@@ -849,9 +847,13 @@ describe('buildCreateRequest — labels and build tasks', () => {
   })
 
   it('keeps the source build tasks when readonly, and strips them when hidden', () => {
-    const readonly = buildCreateRequest(makeForm({ buildTasks: 'x' }), withBuildTasks('build'), undefined, true, false, 'readonly')
+    const readonly = buildCreateRequest(makeForm({ buildTasks: 'x' }), withBuildTasks('build'), undefined, true, false, {
+      buildTasks: 'readonly',
+    })
     expect(readonly.baseConfiguration?.build?.buildTasks).toBe('build')
-    const hidden = buildCreateRequest(makeForm({ buildTasks: 'x' }), withBuildTasks('build'), undefined, true, false, 'hidden')
+    const hidden = buildCreateRequest(makeForm({ buildTasks: 'x' }), withBuildTasks('build'), undefined, true, false, {
+      buildTasks: 'hidden',
+    })
     expect(hidden.baseConfiguration?.build).not.toHaveProperty('buildTasks')
   })
 })
