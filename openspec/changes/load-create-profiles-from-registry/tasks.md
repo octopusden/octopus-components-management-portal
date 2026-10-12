@@ -309,3 +309,9 @@
       keeping the function at `main`'s cognitive complexity (30).
 - [x] 16.6 General said "Derived from the profile" when no profile was in use; with the
       classification set directly it now says "Set on the Profile step".
+- [x] 16.7 A profile rule failing while typing on a field the step shows no error for (a hidden or
+      non-editable field, a VCS field without a VCS block, the version prefix and formats, a
+      coordinate when not explicit external) blocked Create with no message. The schema tags rule
+      issues (`params.profileRule`); `StepRuleMessages` lists those whose field shows no error
+      (`fieldShowsError`) at the top of the step. Rules on shown fields keep their message under
+      the field only. Tests: a version-prefix rule shows on Jira; a project-key rule shows once.

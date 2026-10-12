@@ -35,7 +35,13 @@ import { useFieldConfig, useComponentDefaults } from '../hooks/useAdminConfig'
 import { useComponentProfiles, type ComponentProfile } from '../hooks/useComponentProfiles'
 import { useLabels } from '../hooks/useLabels'
 import { ChipsInput } from '../components/ui/ChipsInput'
-import { isFieldEditableFor, useFieldEditable, useFieldConfigEntry, useFieldVisibility } from '../hooks/useFieldConfig'
+import {
+  isFieldEditableFor,
+  useFieldEditable,
+  useFieldConfigEntry,
+  useFieldVisibility,
+  type FieldVisibility,
+} from '../hooks/useFieldConfig'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useComponent, useCreateComponent } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
@@ -549,10 +555,12 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
   // the stepper can mark ANY step invalid, not just the current one.
   const parseIssues = useMemo(() => {
     const result = schema.safeParse(values)
-    if (result.success) return [] as { message: string; step: StepId }[]
+    if (result.success) return [] as ParseIssue[]
     return result.error.issues.map((issue) => ({
       message: issue.message,
+      field: issue.path.join('.'),
       step: stepOfField(issue.path.join('.')),
+      profileRule: issue.code === 'custom' && issue.params?.profileRule === true,
     }))
   }, [schema, values])
 
@@ -1732,6 +1740,15 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
             )}
             {/* A rejection routed here shows on the step too: its field may be hidden. Review has its own. */}
             <StepServerError serverError={serverError} current={current} />
+            <StepRuleMessages
+              messages={ruleMessagesNotShown(parseIssues, current, {
+                external,
+                gated,
+                vcsApplies,
+                buildTasksVisibility,
+                editable,
+              })}
+            />
             {stepBody[current]()}
           </div>
         </div>
@@ -1842,6 +1859,73 @@ function ReenterPill({ id }: { id?: string }) {
 function FieldError({ message }: { message?: string }) {
   if (!message) return null
   return <p className="text-xs text-destructive">{message}</p>
+}
+
+interface ParseIssue {
+  message: string
+  field: string
+  step: StepId
+  profileRule: boolean
+}
+
+interface FieldDisplay {
+  external: boolean
+  gated: boolean
+  vcsApplies: boolean
+  buildTasksVisibility: FieldVisibility
+  editable: (field: string) => boolean
+}
+
+// Whether the wizard renders this field's error under it. Fields not listed (the version prefix
+// and formats, the Docker flavor) never do.
+function fieldShowsError(field: string, display: FieldDisplay): boolean {
+  switch (field) {
+    case 'name':
+    case 'ownership.0.groupId':
+    case 'jiraProjectKey':
+    case 'versionFormat':
+      return true
+    case 'displayName':
+      return display.editable('displayName')
+    case 'clientCode':
+      return display.external && display.editable('clientCode')
+    case 'buildTasks':
+      return display.buildTasksVisibility !== 'hidden'
+    case 'vcsUrl':
+    case 'vcsBranch':
+    case 'vcsTag':
+      return display.vcsApplies
+    case 'coordinate.groupPattern':
+    case 'coordinate.artifactPattern':
+    case 'coordinate.imageName':
+    case 'coordinate.packageName':
+      return display.gated
+    default:
+      return false
+  }
+}
+
+// Profile rules that fail on the current step on a field that shows no message of its own, so
+// the step can list them instead of blocking Create silently.
+function ruleMessagesNotShown(issues: ParseIssue[], current: StepId, display: FieldDisplay): string[] {
+  return issues
+    .filter((i) => i.profileRule && i.step === current && !fieldShowsError(i.field, display))
+    .map((i) => i.message)
+}
+
+function StepRuleMessages({ messages }: { messages: string[] }) {
+  if (messages.length === 0) return null
+  return (
+    <InlineError
+      message={
+        <ul className="space-y-0.5">
+          {messages.map((m) => (
+            <li key={m}>{m}</li>
+          ))}
+        </ul>
+      }
+    />
+  )
 }
 
 function StepServerError({ serverError, current }: { serverError: { message: string; stepId: StepId } | null; current: StepId }) {

@@ -959,6 +959,33 @@ describe('CreateComponentPage — the registry has no profiles', () => {
   })
 })
 
+describe('CreateComponentPage — profile rules on fields the step does not show', () => {
+  const withRule = (path: string, pattern: string, message: string) => {
+    const external = (shippedProfiles.profiles as ComponentProfile[]).find((p) => p.id === 'regular-external')!
+    mockUseComponentProfiles.mockReturnValue({
+      ...PROFILES_OK,
+      data: [{ ...external, rules: [...external.rules, { path, pattern, message }] }],
+    })
+  }
+
+  it('lists a failing rule at the top of the step when its field shows no message there', async () => {
+    withRule('baseConfiguration.jira.versionPrefix', 'pfx-.*', 'Version prefix must start with pfx-')
+    renderWizard()
+    await clickNext()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await userEvent.click(screen.getByRole('button', { name: /^Jira$/i }))
+    expect(screen.getByText(/Version prefix must start with pfx-/)).toBeDefined()
+  })
+
+  it('shows a failing rule on a shown field under the field only', async () => {
+    withRule('baseConfiguration.jira.projectKey', 'ABC', 'Use the ABC project')
+    renderWizard()
+    await userEvent.click(screen.getByRole('button', { name: /^Jira$/i }))
+    await userEvent.type(screen.getByLabelText(/^Jira Project Key/i), 'WIDG')
+    await waitFor(() => expect(screen.getAllByText('Use the ABC project')).toHaveLength(1))
+  })
+})
+
 describe('CreateComponentPage — create names the profile', () => {
   // Regular internal with PROVIDED: the shortest flow to a valid Create.
   async function createRegularInternal() {

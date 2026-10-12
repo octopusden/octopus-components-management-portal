@@ -146,7 +146,7 @@ export function makeCreateSchema(
         // The key shows one message at a time: "required" or the charset rule come first.
         if (!field || (field === 'name' && (keyError || !v.name.trim()))) continue
         const path = field.split('.').map((segment) => (/^\d+$/.test(segment) ? Number(segment) : segment))
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path, message })
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path, message, params: { profileRule: true } })
       }
       // Legacy EscrowConfigValidator rule: a VCS root is mandatory for every
       // build system outside the exempt set.
