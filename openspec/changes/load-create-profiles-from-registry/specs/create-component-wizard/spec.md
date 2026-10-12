@@ -54,11 +54,12 @@ created. This applies to a clone as well.
 - **WHEN** the user presses Retry and the listing now loads
 - **THEN** the wizard opens with the tiles
 
-### Requirement: With no profiles the classification is chosen directly
+### Requirement: The classification is chosen directly
 
-When the listing loads but contains no `regular` profile, the Profile step SHALL say that the
-registry has no profiles configured and SHALL offer the classification instead of tiles: External
-or Internal, "Has explicit distribution?", and Solution, which is offered only for an explicit
+When the listing loads but contains no `regular` profile, or a clone's source matches no usable
+profile, the Profile step SHALL say so — the registry has no profiles configured, or no profile
+matches this component — and SHALL offer the classification instead of tiles: External or
+Internal, "Has explicit distribution?", and Solution, which is offered only for an explicit
 external component. The create SHALL carry that classification, SHALL NOT name a profile, and no
 field rules SHALL apply. A new component starts external and not explicit; a clone starts with
 the source's classification and opens on General.
@@ -111,7 +112,8 @@ and SHALL NOT be selectable by click or keyboard.
 A new component SHALL start with the first usable profile selected. A clone SHALL start with
 the first usable profile whose classification matches the source and whose field rules the
 source's Component Key passes; failing that, the first usable profile whose classification
-matches; failing that, none.
+matches; failing that, the clone sets its classification directly, starting from the source's
+(see "The classification is chosen directly").
 
 #### Scenario: Scratch selects the first usable profile
 
@@ -127,8 +129,8 @@ matches; failing that, none.
 #### Scenario: Clone with no matching profile
 
 - **WHEN** no usable profile's classification matches the source
-- **THEN** the clone opens on the Profile step with no profile selected, and Create stays
-  disabled until one is chosen
+- **THEN** the clone opens on General; its Profile step says no profile matches and offers the
+  classification choices, starting from the source's; no profile is sent
 
 ### Requirement: The profile sets the classification
 

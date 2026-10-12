@@ -140,13 +140,17 @@ function manualChanged(manual: { external: boolean; solution: boolean }, source:
   return manual.external !== start.external || manual.solution !== start.solution
 }
 
+function isManualClassification(noProfiles: boolean, isClone: boolean, initialProfileId: string | null): boolean {
+  return noProfiles || (isClone && initialProfileId === null)
+}
+
 function classificationFlags(
-  noProfiles: boolean,
+  manualMode: boolean,
   profile: ComponentProfile | null,
   explicitAnswer: boolean,
   manual: { external: boolean; solution: boolean },
 ): ProfileFlags | null {
-  if (noProfiles) return manualFlags(manual.external, explicitAnswer, manual.solution)
+  if (manualMode) return manualFlags(manual.external, explicitAnswer, manual.solution)
   return profile ? flagsForProfile(profile, explicitAnswer) : null
 }
 
@@ -315,11 +319,13 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
   const [profileId, setProfileId] = useState<string | null>(initial.profileId)
   const [explicitAnswer, setExplicitAnswer] = useState<boolean>(initial.explicit)
   const profile = profiles.find((p) => p.id === profileId) ?? null
-  // With no registry profiles the user sets the classification directly (D10).
+  // The user sets the classification directly when the registry has no profiles, or when a
+  // clone's source matches none of them (D10).
   const noProfiles = profiles.length === 0
+  const manualMode = isManualClassification(noProfiles, isClone, initial.profileId)
   const [manual, setManual] = useState(() => initialManualClassification(source))
-  const flags = classificationFlags(noProfiles, profile, explicitAnswer, manual)
-  const profileMissing = profileId === null && !noProfiles
+  const flags = classificationFlags(manualMode, profile, explicitAnswer, manual)
+  const profileMissing = profileId === null && !manualMode
 
   const profileRules = useMemo(() => profile?.rules ?? [], [profile])
   const schema = useMemo(
@@ -447,7 +453,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
     [manual, explicitAnswer, setValue],
   )
   const chooseExplicit = (value: boolean) => {
-    if (noProfiles) applyManual({ explicit: value })
+    if (manualMode) applyManual({ explicit: value })
     else if (profile) applyProfile(profile, value)
   }
 
@@ -521,7 +527,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
 
   // ---- Steps + cross-step validity ------------------------------------------
   const steps = isClone ? CLONE_STEPS : SCRATCH_STEPS
-  const startStep = startStepFor(isClone, initial.profileId !== null || noProfiles)
+  const startStep = startStepFor(isClone, initial.profileId !== null || manualMode)
   const [current, setCurrent] = useState<StepId>(startStep)
   // Steps the user has landed on, plus whether a Create was attempted. Together
   // they gate the rail's invalid/done markers so nothing is flagged eagerly on
@@ -754,8 +760,8 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
         subtitle="The profile sets how the component is classified and how its key is named."
       />
       {serverError?.stepId === 'profile' && <InlineError message={serverError.message} />}
-      {noProfiles ? renderManualClassification() : renderProfileTiles()}
-      {(profile || noProfiles) && (
+      {manualMode ? renderManualClassification() : renderProfileTiles()}
+      {(profile || manualMode) && (
         <p className="text-sm text-muted-foreground">
           This component will be:{' '}
           <span className="font-medium text-foreground">{external ? 'External' : 'Internal'}</span>
@@ -765,14 +771,16 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
           </span>
         </p>
       )}
-      {((profile && asksExplicit(profile)) || noProfiles) && renderExplicitQuestion()}
+      {((profile && asksExplicit(profile)) || manualMode) && renderExplicitQuestion()}
     </div>
   )
 
   const renderManualClassification = () => (
     <div className="space-y-3">
       <p className="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-        The registry has no profiles configured. Set the classification yourself.
+        {noProfiles
+          ? 'The registry has no profiles configured. Set the classification yourself.'
+          : "No profile matches this component's classification. Set it directly; it starts as the source's."}
       </p>
       <div role="radiogroup" aria-label="Distribution" className="flex gap-2">
         {[
@@ -895,7 +903,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
           })}
         </div>
       </fieldset>
-      {noProfiles && manual.external && explicitAnswer && (
+      {manualMode && manual.external && explicitAnswer && (
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"

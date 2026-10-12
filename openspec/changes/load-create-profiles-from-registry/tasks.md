@@ -118,8 +118,8 @@
   - [x] 7.1.4 classification matches but no rule passes → first classification match
   - [x] 7.1.5 no classification match → none
   - [x] 7.1.6 an unusable profile is never pre-selected
-  - [x] 7.1.7 a clone with nothing pre-selected opens on the Profile step and Create stays
-        disabled until a profile is picked
+  - [x] 7.1.7 (superseded by 16.2) a clone with nothing pre-selected now sets its
+        classification directly and opens on General
 - [x] 7.2 Rewrite `profileFromSource` (now in `createProfile.ts`, the old one removed from
       `createFormModel.ts`); drop the re-seed on `solutionKeyPatterns` arrival (the
       profiles are loaded before the wizard mounts, so no re-seed is needed); open a clone on
@@ -284,3 +284,15 @@
       and manual classification changes.
 - [x] 15.2 Tests for scenarios that had none: Labels not editable, readonly Build tasks in a clone,
       answering No clears Solution (`CreateComponentPage.test.tsx` 87/87).
+
+## 16. Fixes from the alignment pass (added on review)
+
+- [x] 16.1 A reopened wizard opened on the cached listing, and a failed background refetch replaced
+      the open form with the error panel. `useProfilesForWizard` (page) waits for a listing
+      fetched after mount, keeps it while the wizard is open, and reports the error only while
+      none has arrived. Tests: waits for a fresh listing; keeps the open wizard when a later
+      refetch fails (store-backed hook result).
+- [x] 16.2 A clone whose source matches no usable profile opened on Profile and had to pick one,
+      changing its classification. It now sets the classification directly, starting from the
+      source's, with a "no profile matches" notice; opens on General and sends no profile
+      (`isManualClassification`, design Decisions 4 and 10).

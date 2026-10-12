@@ -30,7 +30,8 @@
 - Scratch pre-selects the first usable profile. A clone pre-selects the first usable profile
   whose classification matches the source and whose rules the source's key passes; failing that,
   the first usable one whose classification matches; when no classification matches, the clone
-  opens on the Profile step with nothing selected.
+  sets its classification directly, as when the registry has no profiles, starting from the
+  source's, and sends no profile.
 
 **Classification from the profile**
 - The profile's classification sets solution, external and explicit distribution.

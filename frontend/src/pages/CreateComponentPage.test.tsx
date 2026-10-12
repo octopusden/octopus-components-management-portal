@@ -1410,21 +1410,26 @@ describe('CreateComponentPage — clone mode', () => {
     expect((screen.getByPlaceholderText('AD userkey') as HTMLInputElement).value).toBe('alice')
   })
 
-  it('opens on the Profile step with nothing selected when no profile matches the source, and holds Create', async () => {
+  it("sets the classification directly when no profile matches the source, starting from the source's", async () => {
+    // Only Regular external is offered, so an internal source matches no profile.
+    mockUseComponentProfiles.mockReturnValue({
+      ...PROFILES_OK,
+      data: (shippedProfiles.profiles as ComponentProfile[]).filter((p) => p.id === 'regular-external'),
+    })
     mockUseComponent.mockReturnValue({
-      data: makeSource({ solution: true, distributionExternal: false, distributionExplicit: false }),
+      data: makeSource({ distributionExternal: false, distributionExplicit: false }),
       isLoading: false,
       error: null,
     })
     renderWizard('/components/new?from=c-1')
-    expect(screen.getByText('Choose component profile')).toBeDefined()
-    for (const tile of screen.getAllByRole('radio', { name: /component|Solution|DMP Bundle/ })) {
-      expect(tile).toHaveAttribute('aria-checked', 'false')
-    }
-    await userEvent.click(screen.getByRole('button', { name: /Review & create/i }))
-    await userEvent.type(screen.getByLabelText(/Jira task key/i), 'ABC-1')
-    expect((screen.getByRole('button', { name: /^create component$/i }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.queryByText('Choose component profile')).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    expect(screen.getByText(/no profile matches this component/i)).toBeDefined()
+    expect(screen.queryByRole('radio', { name: /Regular external component/ })).toBeNull()
+    expect(screen.getByRole('radio', { name: 'Internal' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('radio', { name: 'No' })).toHaveAttribute('aria-checked', 'true')
   })
+
 })
 
 // SYS-095: '_' is legal in the Component Key only inside the client-code prefix.

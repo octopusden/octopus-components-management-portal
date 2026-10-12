@@ -126,9 +126,10 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
 - First usable profile whose classification matches the source (`solution` and `external`
   equal; `explicit` equal or `ask`) and whose `name` rules pass on the source key.
 - Otherwise the first usable profile whose classification matches.
-- Otherwise none is pre-selected: the clone opens on the Profile step instead of General, and
-  the Profile gate that today applies to scratch only (`!isClone && profile === null`) applies to
-  a clone too.
+- Otherwise none is pre-selected and the clone sets its classification directly, starting from
+  the source's (Decision 10): it opens on General and sends no profile. The Profile gate
+  (`profileMissing`) applies whenever profiles are offered and none is selected. (changed on
+  review: the clone first opened on Profile and had to pick one, changing its classification)
 - The explicit answer is seeded from the source's `distributionExplicit`.
 - Picking another profile resets the key, as today.
 
@@ -203,7 +204,9 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
 
 ### 10. No profiles: the classification is chosen directly
 
-- With an empty list the Profile step shows a notice and three controls instead of tiles:
+- With an empty list, or for a clone whose source matches no usable profile
+  (`isManualClassification`), the Profile step shows a notice saying which and three controls
+  instead of tiles:
   External / Internal, "Has explicit distribution?" (the existing Yes/No control), and a Solution
   checkbox shown only for External + Yes. Leaving explicit external clears Solution.
 - `manualFlags(external, explicit, solution)` in `createProfile.ts` gives the flags, with
