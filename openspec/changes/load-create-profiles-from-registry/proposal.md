@@ -28,8 +28,9 @@
   Internal, "Has explicit distribution?", and Solution for an explicit external component. No
   profile is sent and no field rules apply — the create is checked as today.
 - Scratch pre-selects the first usable profile. A clone pre-selects the first usable profile
-  whose classification matches the source and whose rules the source's key passes; when none
-  matches, the clone opens on the Profile step with nothing selected.
+  whose classification matches the source and whose rules the source's key passes; failing that,
+  the first usable one whose classification matches; when no classification matches, the clone
+  opens on the Profile step with nothing selected.
 
 **Classification from the profile**
 - The profile's classification sets solution, external and explicit distribution.
@@ -72,14 +73,17 @@
   only).
 - Build gains a Build tasks field.
 - Both appear on Review and are sent with the create; left empty, the request is as today.
-- Each follows its field-config visibility, like the other wizard fields.
+- Labels are offered when the user may edit `component.labels`; otherwise the field is not shown
+  and a clone keeps the source's labels. Build tasks follow `build.buildTasks`: editable, shown
+  disabled when readonly (a clone keeps the source's value), absent when hidden.
 
 ### A note on the registry dependency
 
 - The registry change that adds the profile listing and the `profile` field must merge and be
   released first. Without profiles in service-config that registry starts with none, and the
   Portal falls back to choosing the classification directly.
-- This change re-vendors the registry's v4 contract and bumps `crs.version` to that release; the
+- This change re-vendors the registry's v4 contract — from the registry change's branch until it
+  merges, then from `main` — and bumps `crs.version` to the first release carrying it. The
   end-to-end and local-dev registry containers get the shipped profile set, so the profile path
   is the one they exercise.
 
@@ -88,11 +92,18 @@
 - `frontend/src/pages/CreateComponentPage.tsx` — Profile step, clone pre-selection, submit,
   error routing, the two new fields.
 - `frontend/src/lib/component/createFormModel.ts` — the built-in profile list, the flags
-  function and the solution-key part of the key check are replaced by profile-driven logic.
-- New: a profiles hook over `GET /rest/api/4/component-profiles`, and a pure field-rule checker.
+  function and the solution-key part of the key check are removed; the schema checks the
+  profile's rules and `initialValues` takes the pre-selected profile.
+- New: `hooks/useComponentProfiles.ts` (the listing), `lib/component/createProfile.ts`
+  (classification, pre-selection, the no-profiles flags) and `lib/component/profileRules.ts`
+  (the field-rule checker and the rule-error parser).
+- `lib/component/buildCreateRequest.ts` (labels, build tasks), `hooks/useFieldConfig.ts`
+  (`useFieldVisibility`), `lib/types.ts` (`profile` on the create request).
 - `frontend/src/lib/api/v4.json` + `schema.d.ts` — re-vendored from the registry.
-- `gradle.properties` (`crs.version`), the e2e Testcontainers driver and `infra/dev` compose —
-  give the registry container a profile set.
+- `gradle.properties` (`crs.version`, once the registry is released), the e2e Testcontainers
+  driver, `infra/dev` compose and the profiles fixture — give the registry container a profile
+  set; the route-mocked wizard e2e mocks the listing.
+- Docs: `docs/features/create-component.md`, TD-006, `AGENTS.md`, `README.md`.
 - **Behavior change for users:** the start page shows whatever the registry is configured with;
   the key rule messages are the registry's, not the Portal's.
 - No BFF code change: `/rest/**` is proxied as today.

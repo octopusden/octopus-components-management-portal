@@ -872,6 +872,16 @@ describe('CreateComponentPage — the registry has no profiles', () => {
     expect(screen.getByRole('checkbox', { name: /solution/i })).not.toBeChecked()
   })
 
+  it('answering No hides and clears Solution', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: 'Yes' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /solution/i }))
+    await userEvent.click(screen.getByRole('radio', { name: 'No' }))
+    expect(screen.queryByRole('checkbox', { name: /solution/i })).toBeNull()
+    await userEvent.click(screen.getByRole('radio', { name: 'Yes' }))
+    expect(screen.getByRole('checkbox', { name: /solution/i })).not.toBeChecked()
+  })
+
   it('classifies a ticked Solution as an explicit external solution', async () => {
     renderWizard()
     await userEvent.click(screen.getByRole('radio', { name: 'Yes' }))
@@ -1007,6 +1017,29 @@ describe('CreateComponentPage — labels and build tasks', () => {
     renderWizard()
     await createRegularInternal()
     expect((await create()).labels).toEqual([])
+  })
+
+  it('does not show Labels when the user may not edit them', async () => {
+    mockUseFieldConfig.mockReturnValue({ data: { component: { labels: { visibility: 'readonly' } } }, isLoading: false, isError: false })
+    renderWizard()
+    await clickNext()
+    expect(screen.queryByRole('combobox', { name: 'Add label' })).toBeNull()
+  })
+
+  it('shows readonly build tasks disabled with the source value in a clone', async () => {
+    mockUseFieldConfig.mockReturnValue({ data: { build: { buildTasks: { visibility: 'readonly' } } }, isLoading: false, isError: false })
+    mockUseComponent.mockReturnValue({
+      data: makeSource({
+        configurations: [{ ...makeSource().configurations[0]!, build: { buildSystem: 'GRADLE', buildTasks: 'assemble' } }],
+      }),
+      isLoading: false,
+      error: null,
+    })
+    renderWizard('/components/new?from=c-1')
+    await userEvent.click(screen.getByRole('button', { name: /^Build$/i }))
+    const input = screen.getByLabelText(/^Build Tasks/i) as HTMLInputElement
+    expect(input).toBeDisabled()
+    expect(input.value).toBe('assemble')
   })
 
   it('does not show Labels when field-config hides them', async () => {

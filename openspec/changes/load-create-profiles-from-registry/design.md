@@ -78,15 +78,18 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
 ### 1. One query, fetched fresh per wizard
 
 - `useComponentProfiles()` in `frontend/src/hooks/`, TanStack Query over
-  `GET /rest/api/4/component-profiles`, typed from the re-vendored `schema.d.ts`.
-- `staleTime: 0` with refetch on mount, so a profile change applied by a reload shows up the
-  next time the wizard opens.
+  `GET /rest/api/4/component-profiles`, typed from the re-vendored `schema.d.ts` (vendored from
+  the registry change's branch until it merges).
+- `staleTime: 0` and `refetchOnMount: 'always'`, so a profile change applied by a reload shows up
+  the next time the wizard opens; `retry: false`, so a failure shows the error at once.
 - Entries whose `kind` is not `regular` are filtered out in the hook; the page never sees them.
 
 ### 2. The profile is the registry's object, not a Portal enum
 
-- `ComponentProfile` becomes the registry's profile shape; the page holds the selected `id`.
-- `PROFILE_META`, the string-union type and the hard-coded `flagsForProfile` switch are removed.
+- `ComponentProfile` is the registry's profile shape, exported by `useComponentProfiles.ts`; the
+  page holds the selected `id`.
+- `PROFILE_META`, the string-union type and the hard-coded `flagsForProfile` switch are removed
+  from `createFormModel.ts`; the profile logic lives in `lib/component/createProfile.ts`.
 - `flagsForProfile(profile, explicitAnswer)` is rewritten over `classification`: `solution` and
   `external` taken as given; `explicit` is `true`/`false` as given, or the user's answer when
   `ask`. `asksExplicit` is `classification.explicit === 'ask'`.
@@ -104,7 +107,9 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
   `vcsTag`, `jiraProjectKey`, `versionPrefix`, the version-format fields, and
   `coordinate.groupPattern` / `artifactPattern` / `imageName` / `flavor` / `packageName`.
 - Whole-value match: the pattern is compiled as `^(?:<pattern>)$`, matching Java's `matches()`.
-- A pattern `new RegExp` cannot compile is skipped. Compiled patterns are cached per rule list.
+- A pattern `new RegExp` cannot compile is skipped. Compiled patterns are cached per rule object
+  (a `WeakMap`).
+- When several rules on one path fail, the first one's message is shown.
 - An absent value is matched as `""`, so the pattern decides whether it may stay empty, as in
   the registry.
 - `makeCreateSchema` takes the selected profile's rules instead of the profile enum and
@@ -113,7 +118,8 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
   `superRefine` adds one issue per failing rule on the mapped field, so the stepper marks the
   right step without new routing. (changed during implementation: no `requestFor` parameter)
 - `componentKeyError` keeps only the charset check; the profile rule on `name` is added after
-  it, so a key shows one message at a time, charset first.
+  it, so a key shows one message at a time: "required" while blank, then the charset rule, then
+  the profile rule.
 
 ### 4. Clone pre-selection
 
@@ -130,9 +136,9 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
 
 - The profiles join `CreateComponentPage`'s `ready` gate (Decision 7): while they load, the page
   shows its existing skeleton and the wizard is not mounted.
-- Error: the page shows an inline error with Retry instead of the wizard, as it does today when a
-  clone's source fails to load. Retry refetches; on success the wizard mounts with the profiles.
-  Clone behaves the same.
+- Error: the page shows an inline error with Retry instead of the wizard. Retry refetches; on
+  success the wizard mounts with the profiles. Clone behaves the same; a clone whose source fails
+  to load shows that error first, as today.
 - No `regular` profile is not an error: the wizard mounts with an empty list (Decision 10).
   (changed on review: the registry now starts without profiles)
 - A profile the registry marks `usable: false` renders as a disabled radio with
@@ -142,12 +148,17 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
 
 ### 6. Submit
 
-- The request gains `profile: <selected id>`; `solution` keeps today's editable-only overlay,
-  now from the profile's classification.
-- A 400 whose field is `profile` routes to the Profile step with its message.
+- `solution` keeps today's editable-only overlay, now from the profile's classification.
+- The request gains `profile: profile?.id` — with no registry profiles it is undefined and
+  dropped from the JSON body.
+- A 400 whose field is `profile` routes to the Profile step, which shows the message above the
+  tiles (the error banner is otherwise on Review only).
 - A 400 whose field is a rule path (`baseConfiguration.jira.projectKey`, …) is mapped through
   the path → field table (Decision 3) to its field and step. Without it, `stepOfField` would read
-  the head `baseConfiguration` and send every such error to General.
+  the head `baseConfiguration` and send every such error to General. Both live in
+  `routeProfileRejection`, outside `onSubmit`.
+- A profile change, an explicit-answer change, or a manual classification change marks the
+  wizard as touched for the unsaved-changes guard, as a profile-only change did before.
 
 ### 7. Today's pre-filled values
 
@@ -167,12 +178,15 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
 
 ### 8. Labels and build tasks
 
-- Labels: `ChipsInput` in General → Classification, options from `useLabels()`, no free-text
-  entries; gated on field-config `component.labels`.
-- Build tasks: an `Input` on Build, gated on `build.buildTasks`; trimmed, omitted when blank.
+- Labels: `ChipsInput` in General → Classification, options from `useLabels()` (fetched only
+  when the field is shown), no free-text entries; shown when `component.labels` is editable for
+  the user. Not editable → not shown, and a clone sends the source's labels.
+- Build tasks: an `Input` on Build, with `useFieldVisibility('build.buildTasks')`: editable →
+  trimmed, omitted when blank; readonly → shown disabled, a clone keeps the source's value;
+  hidden → not shown and stripped (`buildCreateRequest`'s `buildTasksVisibility`).
 - Both added to `CreateFormValues`, `initialValues` (clone seeds from the source) and
-  `buildCreateRequest`; the form value wins over the source's copy.
-- Review lists both under their steps' groups.
+  `buildCreateRequest`; when editable the form value wins over the source's copy.
+- Review lists each under its step's group when the field is shown.
 
 ### 9. Registry container in e2e and local dev
 

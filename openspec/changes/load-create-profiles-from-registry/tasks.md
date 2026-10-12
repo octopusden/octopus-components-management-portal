@@ -94,8 +94,8 @@
   - [x] 6.1.4 a failed listing shows the error and Retry instead of the wizard; Retry refetches.
         That a successful refetch opens the wizard is covered by the hook test (2.1.4): the page
         test mocks the hook, so it cannot observe a real refetch.
-  - [x] 6.1.5 a listing with no `regular` profile shows the same error instead of the wizard
-        (superseded by 14: the registry now starts without profiles)
+  - [x] 6.1.5 (superseded by 14.2.2) an empty listing is no longer an error; this test was
+        replaced by the no-profiles notice test
   - [x] 6.1.6 a clone whose profiles fail to load shows the same error
   - [x] 6.1.7 scratch pre-selects the first usable profile; none usable → nothing selected
   - [x] 6.1.8 the explicit question shows only for `ask`
@@ -105,6 +105,7 @@
       profiles (skeleton, or the error with Retry); the wizard takes them as a prop, holds the
       selected id, disables unusable tiles with their reason, and arrow keys skip them. A clone
       still derives the built-in id and takes the registry profile with that id until section 7.
+      (Since 14, only a failed listing gates; an empty one mounts the wizard.)
 - [x] 6.3 Confirm tests pass. `CreateComponentPage.test.tsx` 63/63 (11 new); full vitest
       178 files / 2594 tests; `tsc`, `eslint .` clean.
 
@@ -201,9 +202,10 @@
       `src/test/resources/e2e/crs-fixture/component-profiles.yml` via
       `SPRING_CONFIG_ADDITIONAL_LOCATION` (design Decision 9). The file matches the registry's own
       `application-dev.yml` profile set (ids, kinds, classifications, order, patterns — compared
-      by script). That the container starts is confirmed only once 11.1 lands, on CI.
+      by script). The file is optional, so the container starts either way; that it serves the
+      profiles is confirmed only once 11.1 lands, on CI.
 - [x] 11.3 `infra/dev/docker-compose.yml` registry service loads the same file.
-- [x] 11.4 `e2e/visual/_helpers.ts` gains `mockComponentProfiles` (the shared unit-test fixture);
+- [x] 11.4 `frontend/e2e/visual/_helpers.ts` gains `mockComponentProfiles` (the shared unit-test fixture);
       `editor-copy-component.spec.ts` uses it — the shipped titles keep the existing radios
       working — and adds "the registry profile's key rule rejects resolution-service under
       Regular external". `eslint e2e` clean.
@@ -268,3 +270,17 @@
 - [x] 14.5 Confirm tests pass. `createProfile.test.ts` 16/16; `CreateComponentPage.test.tsx` 84/84
       (6 new, the no-`regular`-profile error test removed); full vitest 178 files / 2648 tests;
       `tsc`, `eslint .`, `detekt`, `ktlintCheck` clean.
+
+## 15. Alignment pass (added on review)
+
+- [x] 15.1 Docs brought in line with the code: the clone's classification-only fallback
+      (proposal, feature doc); Affected areas list `createProfile.ts`, `useFieldVisibility`,
+      `buildCreateRequest`, `types.ts`, the e2e helper and docs; `crs.version` is bumped only once
+      the registry is released; the contract is vendored from the registry branch until it
+      merges; Labels follow editability (not shown when not editable) and Build tasks follow
+      visibility (readonly shown disabled); the query's `retry: false`; the rule cache is per rule
+      object; the first failing rule per path wins; the Retry wording no longer claims the clone
+      source error has one; the Profile step shows a profile rejection; the guard covers profile
+      and manual classification changes.
+- [x] 15.2 Tests for scenarios that had none: Labels not editable, readonly Build tasks in a clone,
+      answering No clears Solution (`CreateComponentPage.test.tsx` 87/87).

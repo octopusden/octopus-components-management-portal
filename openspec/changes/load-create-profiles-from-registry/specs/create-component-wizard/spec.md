@@ -245,9 +245,10 @@ shown under the wizard field for that path, on its step. Creating requires
 
 ### Requirement: Labels can be set on create
 
-The wizard SHALL offer a Labels field in the General step's Classification group, offering only labels from the
-registry's labels list, shown on Review and sent with the create. The field SHALL follow the
-field-config visibility of `component.labels`. A clone SHALL start with the source's labels.
+The wizard SHALL offer a Labels field in the General step's Classification group, offering only
+labels from the registry's labels list, shown on Review and sent with the create. The field SHALL
+be offered only when field-config lets the user edit `component.labels`; otherwise it is not
+shown and a clone sends the source's labels. A clone SHALL start with the source's labels.
 
 #### Scenario: Labels are created with the component
 
@@ -256,19 +257,25 @@ field-config visibility of `component.labels`. A clone SHALL start with the sour
 
 #### Scenario: Only listed labels
 
-- **WHEN** the user types a label that is not in the registry's labels list
-- **THEN** it cannot be added
+- **WHEN** the user opens the label picker
+- **THEN** only labels from the registry's labels list are offered; there is no free-text entry
 
 #### Scenario: No labels
 
 - **WHEN** the user picks no labels
-- **THEN** the create request carries no labels
+- **THEN** the create request carries an empty label list
+
+#### Scenario: Not editable
+
+- **WHEN** field-config does not let the user edit `component.labels`
+- **THEN** the field is not shown
 
 ### Requirement: Build tasks can be set on create
 
 The wizard SHALL offer a Build tasks field on the Build step, shown on Review and sent with the
 create; a blank value SHALL NOT be sent. The field SHALL follow the field-config visibility of
-`build.buildTasks`. A clone SHALL start with the source's build tasks.
+`build.buildTasks`: editable, shown disabled when readonly (a clone keeps the source's build
+tasks), or not shown and not sent when hidden. A clone SHALL start with the source's build tasks.
 
 #### Scenario: Build tasks are created with the component
 
@@ -283,4 +290,9 @@ create; a blank value SHALL NOT be sent. The field SHALL follow the field-config
 #### Scenario: Hidden by field-config
 
 - **WHEN** field-config hides `build.buildTasks`
-- **THEN** the field is not shown and no build tasks are sent from it
+- **THEN** the field is not shown and no build tasks are sent, not even a clone source's
+
+#### Scenario: Readonly
+
+- **WHEN** field-config makes `build.buildTasks` readonly for the user and a component is cloned
+- **THEN** the field is shown disabled with the source's build tasks, and they are sent unchanged

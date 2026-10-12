@@ -16,8 +16,9 @@ rule is [`component-key-format`](../../openspec/specs/component-key-format/spec.
   and offers External / Internal, "Has explicit distribution?" and Solution (explicit external
   only). The create then names no profile and no field rules apply.
 - Scratch pre-selects the first usable profile. A clone pre-selects the first usable profile whose
-  classification matches the source and whose key rule the source's key passes; with no match it
-  opens on the Profile step.
+  classification matches the source and whose key rule the source's key passes, else the first
+  usable one whose classification matches; with no classification match it opens on the Profile
+  step.
 - The profile sets solution, external and explicit distribution; "Has explicit distribution?" is
   asked only when the profile's explicit value is `ask`.
 
