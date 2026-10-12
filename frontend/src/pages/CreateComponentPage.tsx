@@ -95,7 +95,8 @@ const STEP_SUBTITLES: Record<StepId, string> = {
 const SCRATCH_STEPS: StepId[] = ['profile', 'general', 'build', 'vcs', 'jira', 'distribution', 'escrow', 'review']
 // Clone keeps the Profile step too: the profile is pre-derived from the source
 // but stays editable (changing it resets the Component Key + recomputes flags).
-// When no registry profile matches the source, the clone opens on it instead.
+// A clone always opens on General: with no matching profile it sets its classification there
+// directly, starting from the source's.
 const CLONE_STEPS: StepId[] = ['profile', 'general', 'build', 'vcs', 'jira', 'distribution', 'escrow', 'review']
 
 // A registry rejection of the profile (`profile: …`) belongs to the Profile step; one of a

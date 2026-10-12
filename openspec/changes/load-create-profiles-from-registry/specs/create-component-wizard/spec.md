@@ -12,7 +12,8 @@ editor, or template tiles.
 The Profile step SHALL show one tile per profile of kind `regular` returned by the registry's
 profile listing, in the order returned, each with the registry's title and description. Profiles
 of any other kind SHALL NOT be shown. The listing is read with the user's `ACCESS_COMPONENTS`
-permission each time the wizard opens.
+permission each time the wizard opens; the wizard SHALL wait for that fresh listing rather than
+open on a cached one, and SHALL keep it while open.
 
 #### Scenario: Tiles follow the registry's order
 
@@ -41,8 +42,9 @@ permission each time the wizard opens.
 ### Requirement: Without the listing the wizard cannot create
 
 While the profile listing loads, the wizard SHALL not be shown. When the listing cannot be
-loaded, an error with a way to retry SHALL be shown instead of the wizard, and nothing can be
-created. This applies to a clone as well.
+loaded before the wizard opens, an error with a way to retry SHALL be shown instead of the
+wizard, and nothing can be created. A failed refetch after the wizard has opened SHALL NOT close
+it. This applies to a clone as well.
 
 #### Scenario: The registry cannot be reached
 
@@ -54,6 +56,11 @@ created. This applies to a clone as well.
 - **WHEN** the user presses Retry and the listing now loads
 - **THEN** the wizard opens with the tiles
 
+#### Scenario: A later refetch fails
+
+- **WHEN** the wizard is open and a refetch of the listing fails
+- **THEN** the wizard stays open with the profiles it opened with
+
 ### Requirement: The classification is chosen directly
 
 When the listing loads but contains no `regular` profile, or a clone's source matches no usable
@@ -62,7 +69,8 @@ matches this component — and SHALL offer the classification instead of tiles: 
 Internal, "Has explicit distribution?", and Solution, which is offered only for an explicit
 external component. The create SHALL carry that classification, SHALL NOT name a profile, and no
 field rules SHALL apply. A new component starts external and not explicit; a clone starts with
-the source's classification and opens on General.
+the source's classification and opens on General. General's classification line SHALL say it
+was set on the Profile step rather than derived from a profile.
 
 #### Scenario: The registry has no profiles
 
@@ -135,7 +143,8 @@ matches; failing that, the clone sets its classification directly, starting from
 ### Requirement: The profile sets the classification
 
 The chosen profile's classification SHALL set the component's solution flag, external
-distribution and explicit distribution. The "Has explicit distribution?" question SHALL be
+distribution and explicit distribution; the solution flag is sent only when field-config lets the
+user edit `component.solution`, as before this change. The "Has explicit distribution?" question SHALL be
 shown only when the profile's explicit distribution is `ask`, and the answer SHALL then set it.
 
 #### Scenario: A solution profile
@@ -178,7 +187,9 @@ depend on SHALL come from the pre-selected profile.
 
 The wizard SHALL check every field rule of the chosen profile, as a match of the whole value,
 against the value the create request would carry at the rule's path, while the user types, and
-SHALL show the rule's message under the wizard field for that path. A path the request would
+SHALL show the rule's message under the wizard field for that path; when that field shows no
+error on its step (a field the user may not edit, a coordinate of another type, the version
+prefix and formats), the message SHALL be shown at the top of that step. A path the request would
 not carry, such as a field the user may not edit or a coordinate of another type, SHALL be
 checked as an empty value. A rule on a path the wizard does not know, or whose pattern the
 browser cannot compile, SHALL be skipped. The Component Key's character check SHALL run first;
@@ -216,7 +227,13 @@ the key's profile rule is shown only once the character check passes.
 - **WHEN** the chosen profile has a rule requiring a value at
   `baseConfiguration.mavenArtifacts[0].groupPattern` and the distribution coordinate is a Docker
   image
-- **THEN** the rule's message is shown, under the Maven group field
+- **THEN** the rule's message is shown on the Distribution step, and Create is held
+
+#### Scenario: A rule on a field the step shows no error for
+
+- **WHEN** the chosen profile has a rule on `baseConfiguration.jira.versionPrefix` that the
+  prefix breaks
+- **THEN** the Jira step shows the rule's message at its top
 
 #### Scenario: An unusable pattern is skipped
 
@@ -227,7 +244,8 @@ the key's profile rule is shown only once the character check passes.
 
 Create SHALL send the chosen profile's id with the create request. A rejection naming the
 profile SHALL be shown on the Profile step; a rejection naming a create-request path SHALL be
-shown under the wizard field for that path, on its step. Creating requires
+shown under the wizard field for that path, on its step. The step a rejection opens SHALL show
+its message at the top, so it stays visible when the field is not shown. Creating requires
 `CREATE_COMPONENTS`, as today.
 
 #### Scenario: The profile is sent

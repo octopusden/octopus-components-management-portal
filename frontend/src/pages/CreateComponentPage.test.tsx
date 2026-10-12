@@ -750,6 +750,29 @@ describe('CreateComponentPage — profiles from the registry', () => {
     expect(screen.queryByText(/could not load the component profiles/i)).toBeNull()
   })
 
+  it('opens the wizard with the tiles once Retry loads the listing', async () => {
+    let result: typeof PROFILES_OK = { ...PROFILES_OK, data: undefined, isError: true, isSuccess: false }
+    const listeners = new Set<() => void>()
+    const refetch = vi.fn(() => {
+      result = PROFILES_OK
+      listeners.forEach((listener) => listener())
+    })
+    mockUseComponentProfiles.mockImplementation(() => ({
+      ...React.useSyncExternalStore(
+        (listener) => {
+          listeners.add(listener)
+          return () => listeners.delete(listener)
+        },
+        () => result,
+      ),
+      refetch,
+    }))
+    renderWizard()
+    await userEvent.click(screen.getByRole('button', { name: /retry/i }))
+    await waitFor(() => expect(screen.getByText('Choose component profile')).toBeDefined())
+    expect(screen.getByRole('radio', { name: /Regular external component/ })).toBeDefined()
+  })
+
   it('keeps the open wizard when a later refetch fails', async () => {
     // A store-backed hook result, so changing it re-renders the page as a real query would.
     let result: typeof PROFILES_OK = PROFILES_OK
@@ -1442,7 +1465,7 @@ describe('CreateComponentPage — Escrow step', () => {
 })
 
 describe('CreateComponentPage — clone mode', () => {
-  it('prefills from the source, skips the Profile step and shows the Included/Excluded banner', async () => {
+  it('prefills from the source, opens on General and shows the Included/Excluded banner', async () => {
     mockUseComponent.mockReturnValue({ data: makeSource(), isLoading: false, error: null })
     renderWizard('/components/new?from=c-1')
 

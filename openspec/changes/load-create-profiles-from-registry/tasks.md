@@ -37,7 +37,7 @@
   - [x] 3.1.5 `asksExplicit` is true only for `ask`
 - [x] 3.2 `flagsForProfile` and `asksExplicit` over a registry profile, in the new
       `frontend/src/lib/component/createProfile.ts`. Shared fixture: the four shipped profiles as the
-      registry lists them, `test-fixtures/component-profiles.contract.json`.
+      registry lists them, `frontend/src/test-fixtures/component-profiles.contract.json`.
 - [x] 3.2a Remove the old `flagsForProfile`, `PROFILE_META` and the `ComponentProfile` union from
       `createFormModel.ts` with their last callers, so every commit builds: `PROFILE_META` went with
       the Profile step (6.2); the union and the old `flagsForProfile` go with `profileFromSource`
@@ -123,7 +123,8 @@
 - [x] 7.2 Rewrite `profileFromSource` (now in `createProfile.ts`, the old one removed from
       `createFormModel.ts`); drop the re-seed on `solutionKeyPatterns` arrival (the
       profiles are loaded before the wizard mounts, so no re-seed is needed); open a clone on
-      Profile when nothing is pre-selected and extend the Profile gate to clones.
+      Profile when nothing is pre-selected and extend the Profile gate to clones. (superseded by
+      16.2: such a clone now sets its classification directly and opens on General)
 - [x] 7.3 Confirm tests pass. `createProfile.test.ts` 11/11; `CreateComponentPage.test.tsx`
       63/63 — the clone test for a late `solutionKeyPatterns` re-seed is removed with the
       re-seed; the wizard no longer reads portal-config. `tsc`, `eslint .` clean.
@@ -145,7 +146,8 @@
       never parsed: new `ruleErrorOf(rawBody)` in `profileRules.ts` (4 tests) reads
       `<rule path>: <message>` for the registry's paths. (added on review)
 - [x] 8.2b The server-error banner showed only on Review; a profile rejection now also shows it
-      on the Profile step it opens. (added on review)
+      on the Profile step it opens. (added on review; superseded by 16.4: every step a rejection
+      opens shows it)
 - [x] 8.3 Confirm tests pass. `CreateComponentPage.test.tsx` 69/69 (6 new); `profileRules.test.ts`
       38/38; full vitest 178 files / 2610 tests; `tsc`, `eslint .` clean.
 
@@ -187,7 +189,8 @@
       Review. Labels: `ChipsInput` over `useLabels()` (no free text by design), sent from the form
       when `component.labels` is editable, else the source's as before. Build tasks: gated like
       escrow generation — editable → form wins (blank drops a copied value), readonly → source's
-      kept, hidden → stripped (`buildCreateRequest` gains `buildTasksVisibility`).
+      kept, hidden → stripped (`buildCreateRequest` gains `buildTasksVisibility`). (changed by
+      16.5: Labels follow visibility like Build tasks; both are passed as `{ labels, buildTasks }`)
 - [x] 10.2a Request-shape cases in `buildCreateRequest.test.ts` (8 new); the clone general-fields
       test now seeds labels as `initialValues` does; the `main` snapshot (9.1.1) gains the two
       new empty fields. (added on review)
@@ -277,13 +280,14 @@
       (proposal, feature doc); Affected areas list `createProfile.ts`, `useFieldVisibility`,
       `buildCreateRequest`, `types.ts`, the e2e helper and docs; `crs.version` is bumped only once
       the registry is released; the contract is vendored from the registry branch until it
-      merges; Labels follow editability (not shown when not editable) and Build tasks follow
+      merges; Labels follow editability (not shown when not editable; superseded by 16.5) and Build tasks follow
       visibility (readonly shown disabled); the query's `retry: false`; the rule cache is per rule
       object; the first failing rule per path wins; the Retry wording no longer claims the clone
       source error has one; the Profile step shows a profile rejection; the guard covers profile
       and manual classification changes.
-- [x] 15.2 Tests for scenarios that had none: Labels not editable, readonly Build tasks in a clone,
-      answering No clears Solution (`CreateComponentPage.test.tsx` 87/87).
+- [x] 15.2 Tests for scenarios that had none: Labels not editable (now "shows readonly labels
+      disabled with the source labels in a clone", 16.5), readonly Build tasks in a clone,
+      answering No clears Solution (`CreateComponentPage.test.tsx` 87/87 then).
 
 ## 16. Fixes from the alignment pass (added on review)
 
@@ -315,3 +319,19 @@
       issues (`params.profileRule`); `StepRuleMessages` lists those whose field shows no error
       (`fieldShowsError`) at the top of the step. Rules on shown fields keep their message under
       the field only. Tests: a version-prefix rule shows on Jira; a project-key rule shows once.
+
+## 17. Second alignment pass (added on review)
+
+- [x] 17.1 Docs: the fresh listing kept while open (spec, design Decision 1, proposal, feature
+      doc) and a later failed refetch scenario; "Create another" reuses the listing; the clone
+      falls back to direct classification when no *usable* profile matches; rule messages shown at
+      the top of the step when the field shows none (spec, Decision 3) and for rejections
+      (spec, feature doc); the solution flag is sent only when editable (spec), from `manualFlags`
+      in direct classification (Decision 6); the build-tasks exception to "checked against the
+      request" (proposal, Decision 3; labels unaffected, Risks); `crs.version` still open
+      (Decision 9); General's "Set on the Profile step" wording (spec). Superseded notes on 7.2,
+      8.2b, 10.2, 15.1, 15.2; fixture path in 3.2.
+- [x] 17.2 Stale code comments and test titles: the clone step comment, `profileFromSource` KDoc,
+      the `buildCreateRequest` header, "skips the Profile step" (page test, e2e comment).
+- [x] 17.3 Test for "Retry succeeds": the wizard opens with the tiles (store-backed hook result).
+      `CreateComponentPage.test.tsx` 93/93.

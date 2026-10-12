@@ -22,15 +22,16 @@
 - Only profiles of kind `regular` are shown; other kinds are not offered yet.
 - While the profiles load, the wizard waits, as it already waits for the component defaults.
   When they cannot be loaded, it shows an error with a retry instead of the steps, and nothing
-  can be created.
+  can be created. It opens on a listing fetched for this opening, never a cached one, and keeps
+  it while open.
 - When the registry has no `regular` profile (it starts with none when service-config carries no
   profiles), the Profile step says so and offers the classification directly: External or
   Internal, "Has explicit distribution?", and Solution for an explicit external component. No
   profile is sent and no field rules apply — the create is checked as today.
 - Scratch pre-selects the first usable profile. A clone pre-selects the first usable profile
   whose classification matches the source and whose rules the source's key passes; failing that,
-  the first usable one whose classification matches; when no classification matches, the clone
-  sets its classification directly, as when the registry has no profiles, starting from the
+  the first usable one whose classification matches; when no usable profile's classification
+  matches, the clone sets its classification directly, as when the registry has no profiles, starting from the
   source's, and sends no profile.
 
 **Classification from the profile**
@@ -50,8 +51,9 @@
 **The profile's field rules as fast checks**
 - While the user types, every field rule of the chosen profile is checked, as a whole-value
   match, against the value the create request would carry for that path (so a field the request
-  leaves out counts as empty, as in the registry), and the rule's message is shown under the
-  wizard field for that path.
+  leaves out counts as empty, as in the registry; hidden build tasks are the one exception, see
+  the design's Risks), and the rule's message is shown under the wizard field for that path, or
+  at the top of the step when that field shows no error there.
 - A rule on a path the wizard does not know, or whose pattern the browser cannot compile, is
   skipped; the registry's answer on create decides.
 - A changed rule takes effect the next time the wizard opens after the registry reloads its

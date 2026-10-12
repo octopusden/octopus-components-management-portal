@@ -75,13 +75,18 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
 
 ## Decisions
 
-### 1. One query, fetched fresh per wizard
+### 1. One query, fetched fresh per page and kept while open
 
 - `useComponentProfiles()` in `frontend/src/hooks/`, TanStack Query over
   `GET /rest/api/4/component-profiles`, typed from the re-vendored `schema.d.ts` (vendored from
   the registry change's branch until it merges).
-- `staleTime: 0` and `refetchOnMount: 'always'`, so a profile change applied by a reload shows up
-  the next time the wizard opens; `retry: false`, so a failure shows the error at once.
+- `staleTime: 0`, `refetchOnMount: 'always'` and `retry: false`: each page mount fetches, and a
+  failure shows at once.
+- `useProfilesForWizard` (page) takes only a listing fetched after the page mounted
+  (`isFetchedAfterMount`, not fetching), so a reopened wizard never starts from the cached list,
+  and keeps it while the page is open: a later refetch that fails cannot tear down a form in
+  progress. The error shows only while no listing has arrived.
+- "Create another" remounts the wizard on the same page and reuses that listing.
 - Entries whose `kind` is not `regular` are filtered out in the hook; the page never sees them.
 
 ### 2. The profile is the registry's object, not a Portal enum
@@ -99,8 +104,8 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
 - `lib/component/profileRules.ts`: `profileRuleErrors(rules, request) → Map<path, message>`, pure.
 - The value checked is read from the request `buildCreateRequest` builds for the current form
   values, with the page's editability — not from the raw form. So a stripped field, a coordinate
-  of another type, or a version format left on "same as" all read as `""`, exactly as the
-  registry sees them.
+  of another type, or a version format left on "same as" all read as `""`, as the registry sees
+  them — except build tasks under field-config, see Risks.
 - The reader covers the registry's path list (Context); a rule on any other path is skipped.
 - A second table maps each path to the wizard field that shows its message: `name`,
   `displayName`, `clientCode`, `ownership.0.groupId`, `buildTasks`, `vcsUrl`, `vcsBranch`,
@@ -114,9 +119,14 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
   the registry.
 - `makeCreateSchema` takes the selected profile's rules instead of the profile enum and
   `solutionPatterns`, and builds the request itself with `buildCreateRequest(values, source,
-  editable)` — the escrow arguments it leaves at their defaults touch no rule path. Its
-  `superRefine` adds one issue per failing rule on the mapped field, so the stepper marks the
-  right step without new routing. (changed during implementation: no `requestFor` parameter)
+  editable)` — the escrow arguments it leaves at their defaults touch no rule path; the
+  `{ labels, buildTasks }` visibilities default to editable (see Risks). `addProfileRuleIssues`
+  adds one issue per failing rule on the mapped field, tagged `params.profileRule`, so the stepper
+  marks the right step without new routing.
+- A tagged issue whose field shows no error on its step (`fieldShowsError`: a field the user may
+  not edit, a VCS field without a VCS block, the version prefix and formats, a coordinate when not
+  explicit external) is listed at the top of that step (`StepRuleMessages`), so Create is never
+  held without a visible reason. (changed during implementation: no `requestFor` parameter)
 - `componentKeyError` keeps only the charset check; the profile rule on `name` is added after
   it, so a key shows one message at a time: "required" while blank, then the charset rule, then
   the profile rule.
@@ -149,7 +159,8 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
 
 ### 6. Submit
 
-- `solution` keeps today's editable-only overlay, now from the profile's classification.
+- `solution` keeps today's editable-only overlay, now from the profile's classification, or from
+  `manualFlags` when the classification is chosen directly (Decision 10).
 - The request gains `profile: profile?.id` — with no registry profiles it is undefined and
   dropped from the JSON body.
 - A 400 whose field is `profile` routes to the Profile step.
@@ -204,7 +215,7 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
   places was the plan)
 - The route-mocked wizard e2e mocks `GET /component-profiles` with the same fixture the unit
   tests use (`mockComponentProfiles`).
-- `crs.version` is bumped to the first registry release with profiles in the same commit.
+- `crs.version` is bumped to the first registry release with profiles once it exists (open).
 
 ### 10. No profiles: the classification is chosen directly
 
@@ -248,5 +259,6 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
 - **The live rule check treats build tasks as editable.** `makeCreateSchema` builds the request
   without the page's build-tasks visibility, so a rule on `baseConfiguration.build.buildTasks`
   is checked against the form value even when field-config hides the field and the create strips
-  it. Accepted: no profile rules on build tasks today, and the create's answer decides.
+  it. Accepted: no profile rules on build tasks today, and the create's answer decides. Labels
+  are unaffected: no rule path reads them.
   (found during implementation)

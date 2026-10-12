@@ -55,8 +55,8 @@ function keyPassesRules(profile: ComponentProfile, key: string): boolean {
 /**
  * The profile a clone of [source] starts with: the first usable profile whose classification
  * matches the source and whose key rules the source's key passes; else the first usable one whose
- * classification matches; else none, and the user picks on the Profile step. The explicit answer
- * is seeded from the source either way.
+ * classification matches; else none, and the clone sets its classification directly. The explicit
+ * answer is seeded from the source either way.
  */
 export function profileFromSource(
   source: ComponentDetail,

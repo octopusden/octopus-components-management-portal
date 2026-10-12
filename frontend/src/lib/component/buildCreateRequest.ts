@@ -146,8 +146,10 @@ export interface CreateFormValues {
 //     from the source BASE row. Readonly falls back to the source escrow
 //     generation (form value ignored); HIDDEN strips generation from the copied
 //     escrow entirely (not part of a new component);
+//   - labels and the build aspect's buildTasks follow their field-config visibility:
+//     editable → the form wins, readonly → the source's, hidden → none;
 //   - copied from source: productType, systems, solution,
-//     parentComponentName, labels, docs, securityGroups, releasesInDefaultBranch,
+//     parentComponentName, docs, securityGroups, releasesInDefaultBranch,
 //     jiraHotfixVersionFormat, vcsExternalRegistry, and from the BASE row the
 //     escrow aspect (generation overlaid from the form — see above), jira aspect (source projectKey stripped — the form supplies jiraProjectKey
 //     and versionPrefix, which win), requiredTools, and the build aspect (merged with the form's

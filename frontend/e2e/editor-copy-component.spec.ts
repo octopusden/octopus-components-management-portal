@@ -228,7 +228,7 @@ test.describe('Clone component — admin smoke', () => {
     await page.waitForURL('**/components/new?from=*')
     await expect(page.getByRole('heading', { name: 'Clone svc-copy-source' })).toBeVisible()
 
-    // Clone skips the Profile step and opens on General. Display Name is NOT
+    // Clone opens on General (Profile stays reachable). Display Name is NOT
     // prefilled from the source (it is unique); Component Key starts empty; the
     // owner IS prefilled. (^-anchored labels skip the FieldInfo buttons.)
     await expect(page.getByLabel(/^display name/i)).toHaveValue('')
