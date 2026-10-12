@@ -107,6 +107,23 @@ function routeProfileRejection(
   return stepOfField(field)
 }
 
+/**
+ * The profiles the wizard opens with: a listing fetched after the page mounted, never a cached
+ * one, kept from then on so a later refetch that fails cannot tear down a form in progress.
+ * `unavailable` holds only while no listing has arrived and the fetch failed.
+ */
+function useProfilesForWizard() {
+  const profiles = useComponentProfiles()
+  const [openedWith, setOpenedWith] = useState<ComponentProfile[] | null>(null)
+  const fresh = profiles.isSuccess && profiles.isFetchedAfterMount && !profiles.isFetching
+  if (openedWith === null && fresh) setOpenedWith(profiles.data ?? [])
+  return {
+    openedWith,
+    unavailable: openedWith === null && profiles.isError,
+    retry: () => void profiles.refetch(),
+  }
+}
+
 // A clone that already has a classification skips to General; otherwise the Profile step comes first.
 function startStepFor(isClone: boolean, hasClassification: boolean): StepId {
   return isClone && hasClassification ? 'general' : 'profile'
@@ -200,13 +217,8 @@ export function CreateComponentPage() {
   const { data: source, error } = useComponent(sourceId)
   const defaults = useComponentDefaults({ retry: false })
   const componentDefaults = (defaults.data ?? {}) as ComponentDefaults
-  const profiles = useComponentProfiles()
-  const profilesUnavailable = profiles.isError
-  const ready =
-    (!isClone || (!!source && !error)) &&
-    (defaults.isSuccess || defaults.isError) &&
-    profiles.isSuccess &&
-    !profilesUnavailable
+  const { openedWith, unavailable: profilesUnavailable, retry: retryProfiles } = useProfilesForWizard()
+  const ready = (!isClone || (!!source && !error)) && (defaults.isSuccess || defaults.isError) && openedWith !== null
 
   return (
     <Dialog
@@ -241,7 +253,7 @@ export function CreateComponentPage() {
               message="Could not load the component profiles from the registry, so no component can be created right now."
             />
             <div>
-              <Button type="button" variant="outline" onClick={() => void profiles.refetch()}>
+              <Button type="button" variant="outline" onClick={retryProfiles}>
                 Retry
               </Button>
             </div>
@@ -259,7 +271,7 @@ export function CreateComponentPage() {
             source={source ?? null}
             isClone={isClone}
             defaults={componentDefaults}
-            profiles={profiles.data ?? []}
+            profiles={openedWith ?? []}
             onCreateAnother={() => setRemountKey((k) => k + 1)}
           />
         )}

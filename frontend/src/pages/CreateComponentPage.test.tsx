@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -69,6 +69,8 @@ const PROFILES_OK = {
   isLoading: false,
   isError: false,
   isSuccess: true,
+  isFetching: false,
+  isFetchedAfterMount: true,
   refetch: vi.fn(),
 }
 const mockUseComponentProfiles = vi.fn(() => PROFILES_OK)
@@ -739,6 +741,36 @@ describe('CreateComponentPage — profiles from the registry', () => {
     expect(screen.queryByText('Choose component profile')).toBeNull()
     await userEvent.click(screen.getByRole('button', { name: /retry/i }))
     expect(refetch).toHaveBeenCalled()
+  })
+
+  it('waits for a fresh listing instead of opening on a cached one', () => {
+    mockUseComponentProfiles.mockReturnValue({ ...PROFILES_OK, isFetching: true, isFetchedAfterMount: false })
+    renderWizard()
+    expect(screen.queryByText('Choose component profile')).toBeNull()
+    expect(screen.queryByText(/could not load the component profiles/i)).toBeNull()
+  })
+
+  it('keeps the open wizard when a later refetch fails', async () => {
+    // A store-backed hook result, so changing it re-renders the page as a real query would.
+    let result: typeof PROFILES_OK = PROFILES_OK
+    const listeners = new Set<() => void>()
+    mockUseComponentProfiles.mockImplementation(() =>
+      React.useSyncExternalStore(
+        (listener) => {
+          listeners.add(listener)
+          return () => listeners.delete(listener)
+        },
+        () => result,
+      ),
+    )
+    renderWizard()
+    expect(screen.getByText('Choose component profile')).toBeDefined()
+    act(() => {
+      result = { ...PROFILES_OK, isError: true, isSuccess: false }
+      listeners.forEach((listener) => listener())
+    })
+    expect(screen.getByText('Choose component profile')).toBeDefined()
+    expect(screen.queryByText(/could not load the component profiles/i)).toBeNull()
   })
 
   it('shows the same error for a clone whose profiles fail to load', () => {
