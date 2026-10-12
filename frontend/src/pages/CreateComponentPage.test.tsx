@@ -741,13 +741,6 @@ describe('CreateComponentPage — profiles from the registry', () => {
     expect(refetch).toHaveBeenCalled()
   })
 
-  it('shows the same error when the listing has no regular profile', () => {
-    mockUseComponentProfiles.mockReturnValue(profilesResult([]))
-    renderWizard()
-    expect(screen.getByText(/could not load the component profiles/i)).toBeDefined()
-    expect(screen.queryByText('Choose component profile')).toBeNull()
-  })
-
   it('shows the same error for a clone whose profiles fail to load', () => {
     mockUseComponent.mockReturnValue({ data: makeSource(), isLoading: false, error: null })
     mockUseComponentProfiles.mockReturnValue(profilesResult(undefined, { isError: true, isSuccess: false }))
@@ -822,6 +815,90 @@ describe("CreateComponentPage — today's pre-filled values", () => {
     await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
     await userEvent.click(screen.getByRole('button', { name: /^Jira$/i }))
     expect((screen.getByLabelText(/^Jira Version Prefix/i) as HTMLInputElement).value).toBe('widget')
+  })
+})
+
+describe('CreateComponentPage — the registry has no profiles', () => {
+  beforeEach(() => mockUseComponentProfiles.mockReturnValue({ ...PROFILES_OK, data: [] }))
+
+  async function createWith(classify: () => Promise<void>) {
+    await classify()
+    await clickNext()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await userEvent.click(screen.getByRole('button', { name: /^Build$/i }))
+    await userEvent.selectOptions(screen.getByLabelText(/^Build System/i), 'PROVIDED')
+    await userEvent.click(screen.getByRole('button', { name: /^Jira$/i }))
+    await userEvent.type(screen.getByLabelText(/^Jira Project Key/i), 'WIDG')
+    await userEvent.click(screen.getByRole('button', { name: /Review & create/i }))
+    await userEvent.type(screen.getByLabelText(/^Jira task key/i), 'ABC-123')
+    await userEvent.click(screen.getByRole('button', { name: /^create component$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1))
+    return mockMutateAsync.mock.calls[0]![0]
+  }
+
+  it('shows the notice and the classification choices, with no tiles and no error', () => {
+    renderWizard()
+    expect(screen.getByText(/no profiles configured/i)).toBeDefined()
+    expect(screen.getByRole('radio', { name: 'External' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('radio', { name: 'Internal' })).toHaveAttribute('aria-checked', 'false')
+    expect(screen.queryByRole('radio', { name: /Regular external component/ })).toBeNull()
+    expect(screen.queryByText(/could not load the component profiles/i)).toBeNull()
+    expect((screen.getByRole('button', { name: /^next$/i }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('creates with the chosen classification and no profile', async () => {
+    renderWizard()
+    const payload = await createWith(async () => {
+      await userEvent.click(screen.getByRole('radio', { name: 'Internal' }))
+      await userEvent.click(screen.getByRole('radio', { name: 'No' }))
+    })
+    expect(payload.distributionExternal).toBe(false)
+    expect(payload.distributionExplicit).toBe(false)
+    expect(payload.solution).toBe(false)
+    expect(JSON.parse(JSON.stringify(payload))).not.toHaveProperty('profile')
+  })
+
+  it('offers Solution only for an explicit external component, and clears it on leaving', async () => {
+    renderWizard()
+    expect(screen.queryByRole('checkbox', { name: /solution/i })).toBeNull()
+    await userEvent.click(screen.getByRole('radio', { name: 'Yes' }))
+    const solution = screen.getByRole('checkbox', { name: /solution/i })
+    await userEvent.click(solution)
+    expect(solution).toBeChecked()
+    await userEvent.click(screen.getByRole('radio', { name: 'Internal' }))
+    expect(screen.queryByRole('checkbox', { name: /solution/i })).toBeNull()
+    await userEvent.click(screen.getByRole('radio', { name: 'External' }))
+    expect(screen.getByRole('checkbox', { name: /solution/i })).not.toBeChecked()
+  })
+
+  it('classifies a ticked Solution as an explicit external solution', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: 'Yes' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /solution/i }))
+    await clickNext()
+    expect(screen.getByText('External, explicit distribution, solution')).toBeDefined()
+  })
+
+  it('applies no key rule', async () => {
+    renderWizard()
+    await clickNext()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'resolution-service')
+    expect(screen.queryByText(/cannot contain solution or dmp-bundle/)).toBeNull()
+  })
+
+  it("a clone opens on General with the source's classification", async () => {
+    mockUseComponent.mockReturnValue({
+      data: makeSource({ solution: true, distributionExternal: true, distributionExplicit: true }),
+      isLoading: false,
+      error: null,
+    })
+    renderWizard('/components/new?from=c-1')
+    expect(screen.queryByText('Choose component profile')).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    expect(screen.getByRole('radio', { name: 'External' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('radio', { name: 'Yes' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('checkbox', { name: /solution/i })).toBeChecked()
   })
 })
 

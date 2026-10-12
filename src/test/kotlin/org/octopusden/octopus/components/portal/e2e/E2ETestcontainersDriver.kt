@@ -397,7 +397,7 @@ open class E2ETestcontainersDriver {
                         put("COMPONENTS_REGISTRY_PRODUCT_TYPE_DDB", "PT_D_DB")
                         put("COMPONENTS_REGISTRY_VCS_ENABLED", "false")
                         put("COMPONENTS_REGISTRY_AUTO_MIGRATE", "true")
-                        // The registry does not start without Create-component profiles.
+                        // The shipped Create-component profiles; without them the registry offers none.
                         put(
                             "SPRING_CONFIG_ADDITIONAL_LOCATION",
                             "optional:file:/opt/crs-fixture/component-profiles.yml",

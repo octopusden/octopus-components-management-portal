@@ -50,7 +50,13 @@ import {
   type CreateFormValues,
 } from '../lib/component/buildCreateRequest'
 import { makeCreateSchema, initialValues, type ComponentDefaults } from '../lib/component/createFormModel'
-import { asksExplicit, flagsForProfile, initialProfile } from '../lib/component/createProfile'
+import {
+  asksExplicit,
+  flagsForProfile,
+  initialProfile,
+  manualFlags,
+  type ProfileFlags,
+} from '../lib/component/createProfile'
 import { formFieldOfRulePath, ruleErrorOf } from '../lib/component/profileRules'
 import type { ComponentDetail } from '../lib/types'
 import { OWNERSHIP_MODES } from '../lib/artifactOwnership'
@@ -101,9 +107,30 @@ function routeProfileRejection(
   return stepOfField(field)
 }
 
-// A clone with a pre-selected profile skips to General; otherwise the Profile step comes first.
-function startStepFor(isClone: boolean, profileId: string | null): StepId {
-  return isClone && profileId !== null ? 'general' : 'profile'
+// A clone that already has a classification skips to General; otherwise the Profile step comes first.
+function startStepFor(isClone: boolean, hasClassification: boolean): StepId {
+  return isClone && hasClassification ? 'general' : 'profile'
+}
+
+// The classification the user sets directly when the registry has no profiles: a new component
+// starts external and not a solution (SCRATCH_DEFAULTS), a clone as its source.
+function initialManualClassification(source: ComponentDetail | null): { external: boolean; solution: boolean } {
+  return source ? { external: !!source.distributionExternal, solution: !!source.solution } : { external: true, solution: false }
+}
+
+function manualChanged(manual: { external: boolean; solution: boolean }, source: ComponentDetail | null): boolean {
+  const start = initialManualClassification(source)
+  return manual.external !== start.external || manual.solution !== start.solution
+}
+
+function classificationFlags(
+  noProfiles: boolean,
+  profile: ComponentProfile | null,
+  explicitAnswer: boolean,
+  manual: { external: boolean; solution: boolean },
+): ProfileFlags | null {
+  if (noProfiles) return manualFlags(manual.external, explicitAnswer, manual.solution)
+  return profile ? flagsForProfile(profile, explicitAnswer) : null
 }
 
 // Map a zod-issue / RHF-error field path to the wizard step that owns it.
@@ -174,7 +201,7 @@ export function CreateComponentPage() {
   const defaults = useComponentDefaults({ retry: false })
   const componentDefaults = (defaults.data ?? {}) as ComponentDefaults
   const profiles = useComponentProfiles()
-  const profilesUnavailable = profiles.isError || (profiles.isSuccess && (profiles.data ?? []).length === 0)
+  const profilesUnavailable = profiles.isError
   const ready =
     (!isClone || (!!source && !error)) &&
     (defaults.isSuccess || defaults.isError) &&
@@ -245,7 +272,7 @@ interface WizardProps {
   source: ComponentDetail | null
   isClone: boolean
   defaults: ComponentDefaults
-  /** The registry's `regular` profiles, in its order; never empty (the page gates on it). */
+  /** The registry's `regular` profiles, in its order; empty when the registry has none configured. */
   profiles: ComponentProfile[]
   /** Remount the wizard as a fresh form instance after a successful create (same
    *  mode — scratch stays scratch, a clone restarts as another clone of the source). */
@@ -276,6 +303,11 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
   const [profileId, setProfileId] = useState<string | null>(initial.profileId)
   const [explicitAnswer, setExplicitAnswer] = useState<boolean>(initial.explicit)
   const profile = profiles.find((p) => p.id === profileId) ?? null
+  // With no registry profiles the user sets the classification directly (D10).
+  const noProfiles = profiles.length === 0
+  const [manual, setManual] = useState(() => initialManualClassification(source))
+  const flags = classificationFlags(noProfiles, profile, explicitAnswer, manual)
+  const profileMissing = profileId === null && !noProfiles
 
   const profileRules = useMemo(() => profile?.rules ?? [], [profile])
   const schema = useMemo(
@@ -390,6 +422,23 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
     [profileId, setValue, getValues, clearErrors, trigger],
   )
 
+  const applyManual = useCallback(
+    (next: { external?: boolean; explicit?: boolean; solution?: boolean }) => {
+      const external = next.external ?? manual.external
+      const explicit = next.explicit ?? explicitAnswer
+      const solution = (next.solution ?? manual.solution) && external && explicit
+      setManual({ external, solution })
+      setExplicitAnswer(explicit)
+      setValue('distributionExternal', external, { shouldValidate: false, shouldDirty: true })
+      setValue('distributionExplicit', explicit, { shouldValidate: false, shouldDirty: true })
+    },
+    [manual, explicitAnswer, setValue],
+  )
+  const chooseExplicit = (value: boolean) => {
+    if (noProfiles) applyManual({ explicit: value })
+    else if (profile) applyProfile(profile, value)
+  }
+
   // Scratch: seed the owner from the current user once (brief §Ownership).
   const ownerSeeded = useRef(false)
   useEffect(() => {
@@ -460,7 +509,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
 
   // ---- Steps + cross-step validity ------------------------------------------
   const steps = isClone ? CLONE_STEPS : SCRATCH_STEPS
-  const startStep = startStepFor(isClone, initial.profileId)
+  const startStep = startStepFor(isClone, initial.profileId !== null || noProfiles)
   const [current, setCurrent] = useState<StepId>(startStep)
   // Steps the user has landed on, plus whether a Create was attempted. Together
   // they gate the rail's invalid/done markers so nothing is flagged eagerly on
@@ -488,11 +537,11 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
   const invalidSteps = useMemo(() => {
     const set = new Set<StepId>()
     for (const issue of parseIssues) set.add(issue.step)
-    if (profileId === null) set.add('profile')
+    if (profileMissing) set.add('profile')
     if (jiraKeyError) set.add('review')
     if (serverError) set.add(serverError.stepId)
     return set
-  }, [parseIssues, profileId, jiraKeyError, serverError])
+  }, [parseIssues, profileMissing, jiraKeyError, serverError])
 
   // Invalid steps actually shown as such: only those visited (or all, once a
   // Create was attempted), and never the step you are currently on until you
@@ -552,15 +601,15 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
         escrowGenerationHidden,
         buildTasksVisibility,
       )
-      if (!profile) return
-      const flags = flagsForProfile(profile, explicitAnswer)
+      if (!flags) return
       const request = {
         ...base,
         // Solution comes from the profile (scratch has no source to copy it
         // from; a clone may have changed profile). Only sent when the field is
         // editable — otherwise the builder already stripped it.
         ...(editable('solution') ? { solution: flags.solution } : {}),
-        profile: profile.id,
+        // Without registry profiles nothing is named; undefined is dropped from the JSON body.
+        profile: profile?.id,
         jiraTaskKey: normalizeJiraKey(jiraTaskKey),
         changeComment: normalizeChangeComment(changeComment),
       }
@@ -644,7 +693,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
     // user edits). Prevents bypassing the Profile gate by jumping straight to
     // Review via the stepper.
     parseIssues.length > 0 ||
-    profileId === null
+    profileMissing
 
   // ---- Rendering helpers ----------------------------------------------------
 
@@ -693,62 +742,8 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
         subtitle="The profile sets how the component is classified and how its key is named."
       />
       {serverError?.stepId === 'profile' && <InlineError message={serverError.message} />}
-      <div role="radiogroup" aria-label="Component profile" className="grid gap-3 sm:grid-cols-2">
-        {profiles.map((p, idx) => {
-          const selected = profileId === p.id
-          const tabbable = selected || (profileId === null && idx === profiles.findIndex((q) => q.usable))
-          return (
-            <button
-              key={p.id}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              aria-label={p.title}
-              aria-describedby={p.usable ? undefined : `profile-${p.id}-reason`}
-              disabled={!p.usable}
-              tabIndex={tabbable ? 0 : -1}
-              onClick={() => applyProfile(p, explicitAnswer)}
-              onKeyDown={(e) =>
-                moveRadio(
-                  e,
-                  profiles.length,
-                  idx,
-                  (i) => {
-                    const next = profiles[i]
-                    if (next) applyProfile(next, explicitAnswer)
-                  },
-                  (i) => !!profiles[i]?.usable,
-                )
-              }
-              className={cn(
-                'flex gap-3 rounded-md border p-3 text-left transition-colors',
-                selected ? 'border-ring bg-muted' : 'border-border hover:bg-muted/50',
-                !p.usable && 'cursor-not-allowed opacity-60 hover:bg-transparent',
-              )}
-            >
-              <span
-                aria-hidden
-                className={cn(
-                  'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border',
-                  selected ? 'border-ring' : 'border-muted-foreground/40',
-                )}
-              >
-                {selected && <span className="h-2 w-2 rounded-full bg-foreground" />}
-              </span>
-              <span className="flex flex-col">
-                <span className="font-medium">{p.title}</span>
-                <span className="mt-1 text-sm text-muted-foreground">{p.description}</span>
-                {!p.usable && p.unusableReason && (
-                  <span id={`profile-${p.id}-reason`} className="mt-1 text-sm text-muted-foreground">
-                    {p.unusableReason}
-                  </span>
-                )}
-              </span>
-            </button>
-          )
-        })}
-      </div>
-      {profile && (
+      {noProfiles ? renderManualClassification() : renderProfileTiles()}
+      {(profile || noProfiles) && (
         <p className="text-sm text-muted-foreground">
           This component will be:{' '}
           <span className="font-medium text-foreground">{external ? 'External' : 'Internal'}</span>
@@ -758,44 +753,147 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
           </span>
         </p>
       )}
-      {profile && asksExplicit(profile) && (
-        <fieldset className="space-y-2 rounded-md border border-border p-4">
-          <legend className="px-1 text-sm font-medium">Has explicit distribution?</legend>
-          <p className="text-sm text-muted-foreground">
-            Does the component have its own distribution — can it be shipped as a separate unit? No
-            → it is shipped inside a packaging component&apos;s distribution.
-          </p>
-          <div role="radiogroup" aria-label="Has explicit distribution" className="flex gap-2 pt-1">
-            {[
-              { label: 'Yes', value: true },
-              { label: 'No', value: false },
-            ].map((opt, idx, arr) => {
-              const selected = explicitAnswer === opt.value
-              return (
-                <Button
-                  key={opt.label}
-                  type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  tabIndex={selected ? 0 : -1}
-                  variant={selected ? 'default' : 'outline'}
-                  size="sm"
-                  onKeyDown={(e) =>
-                    moveRadio(e, arr.length, idx, (i) => {
-                      const opt = arr[i]
-                      if (opt) applyProfile(profile, opt.value)
-                    })
-                  }
-                  onClick={() => applyProfile(profile, opt.value)}
-                >
-                  {opt.label}
-                </Button>
-              )
-            })}
-          </div>
-        </fieldset>
-      )}
+      {((profile && asksExplicit(profile)) || noProfiles) && renderExplicitQuestion()}
     </div>
+  )
+
+  const renderManualClassification = () => (
+    <div className="space-y-3">
+      <p className="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+        The registry has no profiles configured. Set the classification yourself.
+      </p>
+      <div role="radiogroup" aria-label="Distribution" className="flex gap-2">
+        {[
+          { label: 'External', value: true },
+          { label: 'Internal', value: false },
+        ].map((opt, idx, arr) => {
+          const selected = manual.external === opt.value
+          return (
+            <Button
+              key={opt.label}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              tabIndex={selected ? 0 : -1}
+              variant={selected ? 'default' : 'outline'}
+              size="sm"
+              onKeyDown={(e) => moveRadio(e, arr.length, idx, (i) => applyManual({ external: arr[i]?.value }))}
+              onClick={() => applyManual({ external: opt.value })}
+            >
+              {opt.label}
+            </Button>
+          )
+        })}
+      </div>
+    </div>
+  )
+
+  const renderProfileTiles = () => (
+    <div role="radiogroup" aria-label="Component profile" className="grid gap-3 sm:grid-cols-2">
+      {profiles.map((p, idx) => {
+        const selected = profileId === p.id
+        const tabbable = selected || (profileId === null && idx === profiles.findIndex((q) => q.usable))
+        return (
+          <button
+            key={p.id}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            aria-label={p.title}
+            aria-describedby={p.usable ? undefined : `profile-${p.id}-reason`}
+            disabled={!p.usable}
+            tabIndex={tabbable ? 0 : -1}
+            onClick={() => applyProfile(p, explicitAnswer)}
+            onKeyDown={(e) =>
+              moveRadio(
+                e,
+                profiles.length,
+                idx,
+                (i) => {
+                  const next = profiles[i]
+                  if (next) applyProfile(next, explicitAnswer)
+                },
+                (i) => !!profiles[i]?.usable,
+              )
+            }
+            className={cn(
+              'flex gap-3 rounded-md border p-3 text-left transition-colors',
+              selected ? 'border-ring bg-muted' : 'border-border hover:bg-muted/50',
+              !p.usable && 'cursor-not-allowed opacity-60 hover:bg-transparent',
+            )}
+          >
+            <span
+              aria-hidden
+              className={cn(
+                'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border',
+                selected ? 'border-ring' : 'border-muted-foreground/40',
+              )}
+            >
+              {selected && <span className="h-2 w-2 rounded-full bg-foreground" />}
+            </span>
+            <span className="flex flex-col">
+              <span className="font-medium">{p.title}</span>
+              <span className="mt-1 text-sm text-muted-foreground">{p.description}</span>
+              {!p.usable && p.unusableReason && (
+                <span id={`profile-${p.id}-reason`} className="mt-1 text-sm text-muted-foreground">
+                  {p.unusableReason}
+                </span>
+              )}
+            </span>
+          </button>
+        )
+      })}
+    </div>
+  )
+
+  const renderExplicitQuestion = () => (
+    <>
+      <fieldset className="space-y-2 rounded-md border border-border p-4">
+        <legend className="px-1 text-sm font-medium">Has explicit distribution?</legend>
+        <p className="text-sm text-muted-foreground">
+          Does the component have its own distribution — can it be shipped as a separate unit? No
+          → it is shipped inside a packaging component&apos;s distribution.
+        </p>
+        <div role="radiogroup" aria-label="Has explicit distribution" className="flex gap-2 pt-1">
+          {[
+            { label: 'Yes', value: true },
+            { label: 'No', value: false },
+          ].map((opt, idx, arr) => {
+            const selected = explicitAnswer === opt.value
+            return (
+              <Button
+                key={opt.label}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                tabIndex={selected ? 0 : -1}
+                variant={selected ? 'default' : 'outline'}
+                size="sm"
+                onKeyDown={(e) =>
+                  moveRadio(e, arr.length, idx, (i) => {
+                    const opt = arr[i]
+                    if (opt) chooseExplicit(opt.value)
+                  })
+                }
+                onClick={() => chooseExplicit(opt.value)}
+              >
+                {opt.label}
+              </Button>
+            )
+          })}
+        </div>
+      </fieldset>
+      {noProfiles && manual.external && explicitAnswer && (
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={manual.solution}
+            onChange={(e) => applyManual({ solution: e.target.checked })}
+          />
+          Solution — a top-level component that groups and ships other components
+        </label>
+      )}
+    </>
   )
 
   const classificationRecap = () => {
@@ -803,7 +901,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
       external ? 'External' : 'Internal',
       explicit ? 'explicit distribution' : 'implicit distribution',
     ]
-    if (profile?.classification.solution) parts.push('solution')
+    if (flags?.solution) parts.push('solution')
     return parts.join(', ')
   }
 
@@ -1466,7 +1564,10 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
   // The profile lives outside RHF and drives submitted flags (incl. `solution`,
   // which is not an RHF field), so isDirty alone misses a profile-only change:
   // compare against the profile and answer the wizard opened with.
-  const profileTouched = profileId !== initial.profileId || explicitAnswer !== initial.explicit
+  const profileTouched =
+    profileId !== initial.profileId ||
+    explicitAnswer !== initial.explicit ||
+    manualChanged(manual, source)
 
   // Post-create success panel — replaces the wizard body once the component is
   // created. `submitted` is already true, so no unsaved-changes guard is needed.

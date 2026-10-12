@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { asksExplicit, flagsForProfile, initialProfile, profileFromSource } from './createProfile'
+import { asksExplicit, flagsForProfile, initialProfile, manualFlags, profileFromSource } from './createProfile'
 import type { ComponentDetail } from '../types'
 import type { ComponentProfile } from '../../hooks/useComponentProfiles'
 import shipped from '../../test-fixtures/component-profiles.contract.json'
@@ -111,5 +111,17 @@ describe('initialProfile', () => {
       profile: null,
       explicit: false,
     })
+  })
+})
+
+describe('manualFlags', () => {
+  it('keeps solution only for an explicit external component', () => {
+    expect(manualFlags(true, true, true)).toEqual({ solution: true, distributionExternal: true, distributionExplicit: true })
+    expect(manualFlags(true, false, true).solution).toBe(false)
+    expect(manualFlags(false, true, true).solution).toBe(false)
+  })
+
+  it('carries external and explicit as chosen', () => {
+    expect(manualFlags(false, true, false)).toEqual({ solution: false, distributionExternal: false, distributionExplicit: true })
   })
 })

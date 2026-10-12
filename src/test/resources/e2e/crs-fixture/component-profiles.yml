@@ -1,6 +1,7 @@
-# Create-component profiles for the e2e and local-dev registry. A registry with profiles does not
-# start without at least one valid regular profile; the shipped installation reads the same subtree
-# from service-config. Loaded with SPRING_CONFIG_ADDITIONAL_LOCATION; older registry versions ignore it.
+# Create-component profiles for the e2e and local-dev registry, the set the shipped installation
+# reads from service-config. Without them the registry starts with no profiles and the wizard asks
+# for the classification instead. Loaded with SPRING_CONFIG_ADDITIONAL_LOCATION; older registry
+# versions ignore it.
 components-registry:
   component-profiles:
     regular-external:

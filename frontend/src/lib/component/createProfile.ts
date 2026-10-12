@@ -22,6 +22,18 @@ export function flagsForProfile(profile: ComponentProfile, explicitAnswer: boole
   }
 }
 
+/**
+ * The classification a create carries when the registry offers no profiles and the user sets it
+ * directly. Only an explicit external component can be a solution, as the registry requires.
+ */
+export function manualFlags(external: boolean, explicit: boolean, solution: boolean): ProfileFlags {
+  return {
+    solution: solution && external && explicit,
+    distributionExternal: external,
+    distributionExplicit: explicit,
+  }
+}
+
 export function asksExplicit(profile: ComponentProfile): boolean {
   return profile.classification.explicit === 'ask'
 }

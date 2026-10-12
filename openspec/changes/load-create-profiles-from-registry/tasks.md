@@ -247,17 +247,24 @@
 
 - [x] 14.1 Re-vendor `v4.json` from the registry branch head (typed reload-config responses; the
       Portal's `useReloadConfig` reads the body as a plain record, unaffected).
-- [ ] 14.2 Failing tests:
-  - [ ] 14.2.1 `manualFlags`: solution only with external and explicit; otherwise `false`
-  - [ ] 14.2.2 an empty listing shows the notice and the classification choices, no tiles, no
+- [x] 14.2 Failing tests:
+  - [x] 14.2.1 `manualFlags`: solution only with external and explicit; otherwise `false`
+  - [x] 14.2.2 an empty listing shows the notice and the classification choices, no tiles, no
         error
-  - [ ] 14.2.3 a create without profiles carries the chosen classification and no `profile`
-  - [ ] 14.2.4 Solution is shown only for External + Yes; leaving it clears Solution
-  - [ ] 14.2.5 no rule message for `resolution-service` without profiles
-  - [ ] 14.2.6 a clone without profiles opens on General with the source's classification
-- [ ] 14.3 Implement the empty-list path: the page no longer treats it as an error; the wizard
-      shows the classification controls, drops the Profile gate and sends no `profile`.
-- [ ] 14.4 Docs and comments: the e2e driver, `infra/dev` compose and the profiles fixture no
+  - [x] 14.2.3 a create without profiles carries the chosen classification and no `profile`
+  - [x] 14.2.4 Solution is shown only for External + Yes; leaving it clears Solution (a ticked
+        Solution is checked through the classification recap: an explicit external create needs
+        the gated fields, which this test does not fill; `manualFlags` covers the flag)
+  - [x] 14.2.5 no rule message for `resolution-service` without profiles
+  - [x] 14.2.6 a clone without profiles opens on General with the source's classification
+- [x] 14.3 Implement the empty-list path: the page no longer treats it as an error; the wizard
+      shows the classification controls, drops the Profile gate and sends no `profile`
+      (`profile: profile?.id`, dropped from the JSON body when undefined). Helpers kept outside the
+      wizard so it stays within the cognitive-complexity limit (`eslint-plugin-sonarjs`);
+      `onSubmit` stays at 47, as after 13.4.
+- [x] 14.4 Docs and comments: the e2e driver, `infra/dev` compose and the profiles fixture no
       longer say the registry cannot start without profiles; `docs/features/create-component.md`
       describes the no-profiles step.
-- [ ] 14.5 Confirm tests pass.
+- [x] 14.5 Confirm tests pass. `createProfile.test.ts` 16/16; `CreateComponentPage.test.tsx` 84/84
+      (6 new, the no-`regular`-profile error test removed); full vitest 178 files / 2648 tests;
+      `tsc`, `eslint .`, `detekt`, `ktlintCheck` clean.

@@ -10,8 +10,11 @@ rule is [`component-key-format`](../../openspec/specs/component-key-format/spec.
   with its titles and descriptions. Administrators change them in service-config and reload the
   registry; the Portal has no profile list of its own.
 - A profile the registry marks unusable is disabled with the registry's reason.
-- While the profiles load the page shows a skeleton; when they cannot be loaded, or none is
-  `regular`, it shows an error with Retry instead of the wizard.
+- While the profiles load the page shows a skeleton; when they cannot be loaded it shows an error
+  with Retry instead of the wizard.
+- When the registry has no `regular` profile (none configured in service-config), the step says so
+  and offers External / Internal, "Has explicit distribution?" and Solution (explicit external
+  only). The create then names no profile and no field rules apply.
 - Scratch pre-selects the first usable profile. A clone pre-selects the first usable profile whose
   classification matches the source and whose key rule the source's key passes; with no match it
   opens on the Profile step.
