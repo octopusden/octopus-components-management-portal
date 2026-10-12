@@ -296,3 +296,6 @@
       changing its classification. It now sets the classification directly, starting from the
       source's, with a "no profile matches" notice; opens on General and sends no profile
       (`isManualClassification`, design Decisions 4 and 10).
+- [x] 16.3 A clone of a solution that is not explicit external kept `solution` in its direct
+      classification; it was hidden and not sent, but came back ticked once the user chose
+      External + Yes. `initialManualClassification` now seeds Solution through `manualFlags`.

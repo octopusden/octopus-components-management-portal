@@ -129,10 +129,13 @@ function startStepFor(isClone: boolean, hasClassification: boolean): StepId {
   return isClone && hasClassification ? 'general' : 'profile'
 }
 
-// The classification the user sets directly when the registry has no profiles: a new component
-// starts external and not a solution (SCRATCH_DEFAULTS), a clone as its source.
+// The classification the user sets directly: a new component starts external and not a
+// solution (SCRATCH_DEFAULTS), a clone as its source — a solution only when explicit external,
+// so an unsent Solution cannot come back ticked when the user switches to explicit external.
 function initialManualClassification(source: ComponentDetail | null): { external: boolean; solution: boolean } {
-  return source ? { external: !!source.distributionExternal, solution: !!source.solution } : { external: true, solution: false }
+  if (!source) return { external: true, solution: false }
+  const { solution } = manualFlags(!!source.distributionExternal, !!source.distributionExplicit, !!source.solution)
+  return { external: !!source.distributionExternal, solution }
 }
 
 function manualChanged(manual: { external: boolean; solution: boolean }, source: ComponentDetail | null): boolean {

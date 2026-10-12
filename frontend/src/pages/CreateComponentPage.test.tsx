@@ -929,6 +929,19 @@ describe('CreateComponentPage — the registry has no profiles', () => {
     expect(screen.queryByText(/cannot contain solution or dmp-bundle/)).toBeNull()
   })
 
+  it('a clone of a solution that is not explicit external does not bring Solution back ticked', async () => {
+    mockUseComponent.mockReturnValue({
+      data: makeSource({ solution: true, distributionExternal: true, distributionExplicit: false }),
+      isLoading: false,
+      error: null,
+    })
+    renderWizard('/components/new?from=c-1')
+    await userEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    expect(screen.queryByRole('checkbox', { name: /solution/i })).toBeNull()
+    await userEvent.click(screen.getByRole('radio', { name: 'Yes' }))
+    expect(screen.getByRole('checkbox', { name: /solution/i })).not.toBeChecked()
+  })
+
   it("a clone opens on General with the source's classification", async () => {
     mockUseComponent.mockReturnValue({
       data: makeSource({ solution: true, distributionExternal: true, distributionExplicit: true }),
