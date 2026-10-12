@@ -3,7 +3,7 @@ import { isBadToken } from '../artifactOwnership'
 import { findUnsupportedGroupId } from '../groupValidation'
 import { isVcsHostSupported, hostOf } from '../vcsHost'
 import { selectBaseRow } from '../api/baseRow'
-import type { ComponentDetail, EscrowAspect } from '../types'
+import type { ComponentCreateRequest, ComponentDetail, EscrowAspect } from '../types'
 import type { ComponentProfile, ProfileFieldRule } from '../../hooks/useComponentProfiles'
 import { flagsForProfile } from './createProfile'
 import { formFieldOfRulePath, profileRuleErrors } from './profileRules'
@@ -76,6 +76,23 @@ export function componentKeyError(key: string, clientCode?: string): string | nu
 // built per-render from field-config visibility (a hidden/readonly field is
 // removed and must not fire its requirement) and from the chosen profile's field
 // rules, checked against the request the form would send (D3).
+// One issue per failing profile rule, on the form field for its path, tagged so the page can
+// list the ones whose field shows no error. The key shows one message at a time: "required" or
+// the charset rule come first, so a key rule waits while either applies.
+function addProfileRuleIssues(
+  ctx: z.RefinementCtx,
+  rules: readonly ProfileFieldRule[],
+  request: ComponentCreateRequest,
+  keyHasOtherError: boolean,
+) {
+  for (const [rulePath, message] of profileRuleErrors(rules, request)) {
+    const field = formFieldOfRulePath(rulePath)
+    if (!field || (field === 'name' && keyHasOtherError)) continue
+    const path = field.split('.').map((segment) => (/^\d+$/.test(segment) ? Number(segment) : segment))
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path, message, params: { profileRule: true } })
+  }
+}
+
 export function makeCreateSchema(
   editable: (field: string) => boolean,
   supportedGroups: readonly string[],
@@ -140,14 +157,7 @@ export function makeCreateSchema(
       if (keyError) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['name'], message: keyError })
       }
-      const request = buildCreateRequest(v, source, editable)
-      for (const [rulePath, message] of profileRuleErrors(profileRules, request)) {
-        const field = formFieldOfRulePath(rulePath)
-        // The key shows one message at a time: "required" or the charset rule come first.
-        if (!field || (field === 'name' && (keyError || !v.name.trim()))) continue
-        const path = field.split('.').map((segment) => (/^\d+$/.test(segment) ? Number(segment) : segment))
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path, message, params: { profileRule: true } })
-      }
+      addProfileRuleIssues(ctx, profileRules, buildCreateRequest(v, source, editable), !!keyError || !v.name.trim())
       // Legacy EscrowConfigValidator rule: a VCS root is mandatory for every
       // build system outside the exempt set.
       if (vcsBlockApplies(v.buildSystem)) {
