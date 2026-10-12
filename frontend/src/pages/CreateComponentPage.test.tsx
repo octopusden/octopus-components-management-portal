@@ -1024,6 +1024,9 @@ describe('CreateComponentPage — create names the profile', () => {
     renderWizard()
     await createRegularInternal()
     await waitFor(() => expect(screen.getByRole('heading', { name: /^Distribution$/ })).toBeDefined())
+    // The Maven group field is not shown for an internal component, so the step shows the message.
+    expect(screen.queryByLabelText('groupId')).toBeNull()
+    expect(screen.getByText(/Must start with com\.acme/)).toBeDefined()
   })
 })
 

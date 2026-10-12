@@ -762,7 +762,6 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
         title="Choose component profile"
         subtitle="The profile sets how the component is classified and how its key is named."
       />
-      {serverError?.stepId === 'profile' && <InlineError message={serverError.message} />}
       {manualMode ? renderManualClassification() : renderProfileTiles()}
       {(profile || manualMode) && (
         <p className="text-sm text-muted-foreground">
@@ -1728,6 +1727,8 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
                 </ul>
               </StatusBanner>
             )}
+            {/* A rejection routed here shows on the step too: its field may be hidden. Review has its own. */}
+            <StepServerError serverError={serverError} current={current} />
             {stepBody[current]()}
           </div>
         </div>
@@ -1838,6 +1839,11 @@ function ReenterPill({ id }: { id?: string }) {
 function FieldError({ message }: { message?: string }) {
   if (!message) return null
   return <p className="text-xs text-destructive">{message}</p>
+}
+
+function StepServerError({ serverError, current }: { serverError: { message: string; stepId: StepId } | null; current: StepId }) {
+  if (!serverError || serverError.stepId !== current || current === 'review') return null
+  return <InlineError message={serverError.message} />
 }
 
 // A summary row with an empty value is left out (see `push` in SummaryDiff).

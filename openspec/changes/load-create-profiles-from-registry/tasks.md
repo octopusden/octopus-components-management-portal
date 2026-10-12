@@ -299,3 +299,6 @@
 - [x] 16.3 A clone of a solution that is not explicit external kept `solution` in its direct
       classification; it was hidden and not sent, but came back ticked once the user chose
       External + Yes. `initialManualClassification` now seeds Solution through `manualFlags`.
+- [x] 16.4 A rule rejection on a field the step does not show opened the step with no message.
+      Every step a rejection routes to now shows it at the top (`StepServerError`), replacing the
+      Profile-only banner; the Maven-group rejection test asserts the message on Distribution.

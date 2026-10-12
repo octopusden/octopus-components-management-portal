@@ -152,8 +152,10 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
 - `solution` keeps today's editable-only overlay, now from the profile's classification.
 - The request gains `profile: profile?.id` — with no registry profiles it is undefined and
   dropped from the JSON body.
-- A 400 whose field is `profile` routes to the Profile step, which shows the message above the
-  tiles (the error banner is otherwise on Review only).
+- A 400 whose field is `profile` routes to the Profile step.
+- The step a rejection routes to shows its message at the top (`StepServerError`); Review keeps
+  its own banner. So a rule rejection on a field the step does not show (a hidden field, a
+  coordinate of another type) is still visible.
 - A 400 whose field is a rule path (`baseConfiguration.jira.projectKey`, …) is mapped through
   the path → field table (Decision 3) to its field and step. Without it, `stepOfField` would read
   the head `baseConfiguration` and send every such error to General. Both live in
