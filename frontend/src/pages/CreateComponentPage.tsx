@@ -998,7 +998,8 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
 
       <SectionHeader title="Classification" />
       <p className="text-sm text-muted-foreground">
-        Derived from the profile: <span className="font-medium text-foreground">{classificationRecap()}</span>.
+        {manualMode ? 'Set on the Profile step' : 'Derived from the profile'}:{' '}
+        <span className="font-medium text-foreground">{classificationRecap()}</span>.
       </p>
       {external && editable('clientCode') && (
         <Field label="Client Code" htmlFor="create-clientCode" path="component.clientCode">

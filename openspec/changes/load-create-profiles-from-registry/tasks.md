@@ -307,3 +307,5 @@
       way (readonly: disabled, source's kept; hidden: none sent). `buildCreateRequest` takes
       `{ labels, buildTasks }` visibilities; the build-tasks branch moved to `buildAspectFor`,
       keeping the function at `main`'s cognitive complexity (30).
+- [x] 16.6 General said "Derived from the profile" when no profile was in use; with the
+      classification set directly it now says "Set on the Profile step".

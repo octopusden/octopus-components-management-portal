@@ -920,6 +920,8 @@ describe('CreateComponentPage — the registry has no profiles', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: /solution/i }))
     await clickNext()
     expect(screen.getByText('External, explicit distribution, solution')).toBeDefined()
+    expect(screen.getByText(/Set on the Profile step/)).toBeDefined()
+    expect(screen.queryByText(/Derived from the profile/)).toBeNull()
   })
 
   it('applies no key rule', async () => {
