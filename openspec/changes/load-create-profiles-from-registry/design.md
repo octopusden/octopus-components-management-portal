@@ -14,6 +14,9 @@
   in configured order. `ComponentCreateRequest` gains an optional `profile`; when given, the
   registry checks the profile is live and usable, the stored classification matches, and every
   rule as a whole-value Java regex match against the stored value (`""` when absent).
+- The listing may be empty: the registry starts with no profiles when service-config carries no
+  profile subtree, and its functional spec has the create dialog say so and let the user set the
+  classification, sending no `profile`.
 - The registry checks the classification against the flags it would store: a flag hidden by
   field-config is stripped, an absent flag is `false`, and a flag the user may not edit is
   rejected if sent (`enforceEditabilityOnCreate`). A rule failure answers 400
@@ -127,10 +130,11 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
 
 - The profiles join `CreateComponentPage`'s `ready` gate (Decision 7): while they load, the page
   shows its existing skeleton and the wizard is not mounted.
-- Error, or no `regular` profile: the page shows an inline error with Retry instead of the
-  wizard, as it does today when a clone's source fails to load. Retry refetches; on success the
-  wizard mounts with the profiles. Clone behaves the same — it needs a profile to send.
-- The wizard therefore always mounts with a non-empty profile list.
+- Error: the page shows an inline error with Retry instead of the wizard, as it does today when a
+  clone's source fails to load. Retry refetches; on success the wizard mounts with the profiles.
+  Clone behaves the same.
+- No `regular` profile is not an error: the wizard mounts with an empty list (Decision 10).
+  (changed on review: the registry now starts without profiles)
 - A profile the registry marks `usable: false` renders as a disabled radio with
   `unusableReason` below the description; arrow-key navigation skips it.
 - Scratch pre-selects the first usable profile; none usable → nothing selected and the step's
@@ -182,6 +186,21 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
 - The route-mocked wizard e2e mocks `GET /component-profiles` with the same fixture the unit
   tests use (`mockComponentProfiles`).
 - `crs.version` is bumped to the first registry release with profiles in the same commit.
+
+### 10. No profiles: the classification is chosen directly
+
+- With an empty list the Profile step shows a notice and three controls instead of tiles:
+  External / Internal, "Has explicit distribution?" (the existing Yes/No control), and a Solution
+  checkbox shown only for External + Yes. Leaving explicit external clears Solution.
+- `manualFlags(external, explicit, solution)` in `createProfile.ts` gives the flags, with
+  solution forced `false` unless external and explicit — the registry's own rule for a solution.
+- No profile is selected, so the Profile gate does not apply, the request carries no `profile`,
+  and the schema gets no rules: only today's checks run.
+- A new component starts as `SCRATCH_DEFAULTS` (external, not explicit, not a solution), the
+  values `initialValues` already gives without a profile. A clone starts with the source's
+  solution, external and explicit flags and opens on General.
+- Rejected alternative: falling back to the four built-in profiles without rules — it would bring
+  back the hard-coded list this change removes, as a second source.
 
 ## Risks / Trade-offs
 

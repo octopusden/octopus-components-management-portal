@@ -38,26 +38,58 @@ permission each time the wizard opens.
 - **WHEN** the listing contains an entry whose kind is not `regular`
 - **THEN** no tile is shown for it
 
-### Requirement: Without profiles the wizard cannot create
+### Requirement: Without the listing the wizard cannot create
 
 While the profile listing loads, the wizard SHALL not be shown. When the listing cannot be
-loaded, or contains no `regular` profile, an error with a way to retry SHALL be shown instead of
-the wizard, and nothing can be created. This applies to a clone as well.
+loaded, an error with a way to retry SHALL be shown instead of the wizard, and nothing can be
+created. This applies to a clone as well.
 
 #### Scenario: The registry cannot be reached
 
 - **WHEN** the profile listing request fails
 - **THEN** the error and a Retry action are shown instead of the wizard
 
-#### Scenario: No regular profile
-
-- **WHEN** the listing contains no `regular` profile
-- **THEN** the error and a Retry action are shown instead of the wizard
-
 #### Scenario: Retry succeeds
 
 - **WHEN** the user presses Retry and the listing now loads
 - **THEN** the wizard opens with the tiles
+
+### Requirement: With no profiles the classification is chosen directly
+
+When the listing loads but contains no `regular` profile, the Profile step SHALL say that the
+registry has no profiles configured and SHALL offer the classification instead of tiles: External
+or Internal, "Has explicit distribution?", and Solution, which is offered only for an explicit
+external component. The create SHALL carry that classification, SHALL NOT name a profile, and no
+field rules SHALL apply. A new component starts external and not explicit; a clone starts with
+the source's classification and opens on General.
+
+#### Scenario: The registry has no profiles
+
+- **WHEN** the listing returns no `regular` profile
+- **THEN** the Profile step shows the notice and the classification choices, no tiles and no
+  error
+
+#### Scenario: A create without profiles
+
+- **WHEN** the user chooses Internal, answers No, and creates the component
+- **THEN** the create request carries external and explicit distribution `false`, solution
+  `false`, and no profile
+
+#### Scenario: Solution only for an explicit external component
+
+- **WHEN** the user chooses External and answers Yes
+- **THEN** Solution can be ticked; switching to Internal or answering No clears and hides it
+
+#### Scenario: No key rule without profiles
+
+- **WHEN** the registry has no profiles and the user types `resolution-service`
+- **THEN** no rule message is shown
+
+#### Scenario: A clone without profiles
+
+- **WHEN** a solution with external, explicit distribution is cloned and the registry has no
+  profiles
+- **THEN** the clone opens on General with External, Yes and Solution chosen
 
 ### Requirement: An unusable profile cannot be picked
 

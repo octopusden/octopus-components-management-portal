@@ -21,8 +21,12 @@
   registry's reason, and cannot be picked.
 - Only profiles of kind `regular` are shown; other kinds are not offered yet.
 - While the profiles load, the wizard waits, as it already waits for the component defaults.
-  When they cannot be loaded, or none is a `regular` profile, it shows an error with a retry
-  instead of the steps, and nothing can be created.
+  When they cannot be loaded, it shows an error with a retry instead of the steps, and nothing
+  can be created.
+- When the registry has no `regular` profile (it starts with none when service-config carries no
+  profiles), the Profile step says so and offers the classification directly: External or
+  Internal, "Has explicit distribution?", and Solution for an explicit external component. No
+  profile is sent and no field rules apply — the create is checked as today.
 - Scratch pre-selects the first usable profile. A clone pre-selects the first usable profile
   whose classification matches the source and whose rules the source's key passes; when none
   matches, the clone opens on the Profile step with nothing selected.
@@ -73,9 +77,11 @@
 ### A note on the registry dependency
 
 - The registry change that adds the profile listing and the `profile` field must merge and be
-  released first. A registry version with profiles does not start without them.
+  released first. Without profiles in service-config that registry starts with none, and the
+  Portal falls back to choosing the classification directly.
 - This change re-vendors the registry's v4 contract and bumps `crs.version` to that release; the
-  end-to-end and local-dev registry containers get a profile set so they keep starting.
+  end-to-end and local-dev registry containers get the shipped profile set, so the profile path
+  is the one they exercise.
 
 ## Affected areas
 
@@ -109,7 +115,8 @@
 
 ## Rollout note
 
-- Deploy order: service-config profiles → registry with profiles → this Portal version.
+- Deploy order: registry with profiles → this Portal version. The service-config profiles may come
+  before or after; until they are reloaded the Portal offers the classification step.
 - A Portal from this change against a registry without the profile listing shows the "profiles
   could not be loaded" error and cannot create components; do not deploy it ahead of the
   registry.

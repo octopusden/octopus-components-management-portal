@@ -95,6 +95,7 @@
         That a successful refetch opens the wizard is covered by the hook test (2.1.4): the page
         test mocks the hook, so it cannot observe a real refetch.
   - [x] 6.1.5 a listing with no `regular` profile shows the same error instead of the wizard
+        (superseded by 14: the registry now starts without profiles)
   - [x] 6.1.6 a clone whose profiles fail to load shows the same error
   - [x] 6.1.7 scratch pre-selects the first usable profile; none usable → nothing selected
   - [x] 6.1.8 the explicit question shows only for `ask`
@@ -238,3 +239,25 @@
       `routeProfileRejection`. Checked with `eslint-plugin-sonarjs`: the wizard and `SummaryDiff`
       are within 15; `onSubmit` is 47 against 46 on `main` (an existing issue). Full vitest 178
       files / 2641 tests. (added on review)
+
+## 14. The registry starts without profiles (Decision 10) (added on review)
+
+> The registry change now starts with no profiles when service-config has none, and its
+> functional spec has the create dialog fall back to choosing the classification.
+
+- [x] 14.1 Re-vendor `v4.json` from the registry branch head (typed reload-config responses; the
+      Portal's `useReloadConfig` reads the body as a plain record, unaffected).
+- [ ] 14.2 Failing tests:
+  - [ ] 14.2.1 `manualFlags`: solution only with external and explicit; otherwise `false`
+  - [ ] 14.2.2 an empty listing shows the notice and the classification choices, no tiles, no
+        error
+  - [ ] 14.2.3 a create without profiles carries the chosen classification and no `profile`
+  - [ ] 14.2.4 Solution is shown only for External + Yes; leaving it clears Solution
+  - [ ] 14.2.5 no rule message for `resolution-service` without profiles
+  - [ ] 14.2.6 a clone without profiles opens on General with the source's classification
+- [ ] 14.3 Implement the empty-list path: the page no longer treats it as an error; the wizard
+      shows the classification controls, drops the Profile gate and sends no `profile`.
+- [ ] 14.4 Docs and comments: the e2e driver, `infra/dev` compose and the profiles fixture no
+      longer say the registry cannot start without profiles; `docs/features/create-component.md`
+      describes the no-profiles step.
+- [ ] 14.5 Confirm tests pass.
