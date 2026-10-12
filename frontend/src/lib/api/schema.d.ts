@@ -1340,6 +1340,11 @@ export interface components {
             unusableReason?: string;
             usable: boolean;
         };
+        ComponentProfilesReloadResponse: {
+            entries: components["schemas"]["Entry"][];
+            problems: string[];
+            status: string;
+        };
         ComponentProfilesResponse: {
             profiles: components["schemas"]["ComponentProfileResponse"][];
         };
@@ -1463,6 +1468,12 @@ export interface components {
         EmployeeMatchResponse: {
             active: boolean;
             username: string;
+        };
+        Entry: {
+            id: string;
+            kind?: string;
+            problems: string[];
+            status: string;
         };
         ErrorResponse: {
             errorCode?: string;
@@ -1910,6 +1921,16 @@ export interface components {
             javaWarnings: components["schemas"]["ActualDisagreement"][];
             mavenActualRanges: components["schemas"]["ActualRange"][];
             mavenWarnings: components["schemas"]["ActualDisagreement"][];
+        };
+        ReloadConfigFailureResponse: {
+            componentProfiles?: components["schemas"]["ComponentProfilesReloadResponse"];
+            error: string;
+            message: string;
+        };
+        ReloadConfigResponse: {
+            changedKeys: string[];
+            componentProfiles: components["schemas"]["ComponentProfilesReloadResponse"];
+            status: string;
         };
         Role: {
             name: string;
@@ -4125,15 +4146,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Configuration refreshed and component profiles applied */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": {
-                        [key: string]: Record<string, never>;
-                    };
+                    "*/*": components["schemas"]["ReloadConfigResponse"];
                 };
             };
             /** @description Bad Request */
@@ -4172,6 +4191,15 @@ export interface operations {
                     "*/*": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description `config-validation`: a service-config value is invalid. `component-profiles`: the component profiles are not usable and the profiles in use are kept. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ReloadConfigFailureResponse"];
+                };
+            };
             /** @description Too Early */
             425: {
                 headers: {
@@ -4181,13 +4209,13 @@ export interface operations {
                     "*/*": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Internal Server Error */
+            /** @description `config-refresh`: the refresh failed for another reason; the component profiles were reloaded all the same. */
             500: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ErrorResponse"];
+                    "*/*": components["schemas"]["ReloadConfigFailureResponse"];
                 };
             };
             /** @description Not Implemented */
