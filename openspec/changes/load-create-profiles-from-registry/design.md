@@ -82,7 +82,7 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
   the registry change's branch until it merges).
 - `staleTime: 0`, `refetchOnMount: 'always'` and `retry: false`: each page mount fetches, and a
   failure shows at once.
-- `useProfilesForWizard` (page) takes only a listing fetched after the page mounted
+- `useProfilesForWizard` (`hooks/useProfilesForWizard.ts`) takes only a listing fetched after the page mounted
   (`isFetchedAfterMount`, not fetching), so a reopened wizard never starts from the cached list,
   and keeps it while the page is open: a later refetch that fails cannot tear down a form in
   progress. The error shows only while no listing has arrived.

@@ -1119,7 +1119,9 @@ describe('CreateComponentPage — create names the profile', () => {
     renderWizard()
     await createRegularInternal()
     await waitFor(() => expect(screen.getByPlaceholderText('my-component')).toBeDefined())
-    expect(screen.getAllByText('A regular component key cannot contain solution').length).toBeGreaterThan(0)
+    // Exact text is the message under the field; the step banner carries the full `name: …` message.
+    expect(screen.getAllByText('A regular component key cannot contain solution')).toHaveLength(1)
+    expect(screen.getByText(/^name: A regular component key cannot contain solution$/)).toBeDefined()
   })
 
   it('shows a rule rejection on the Jira project key on the Jira step, under the field', async () => {
@@ -1127,7 +1129,8 @@ describe('CreateComponentPage — create names the profile', () => {
     renderWizard()
     await createRegularInternal()
     await waitFor(() => expect(screen.getByLabelText(/^Jira Project Key/i)).toBeDefined())
-    expect(screen.getAllByText('Use the MDLCUST project').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Use the MDLCUST project')).toHaveLength(1)
+    expect(screen.getByText(/^baseConfiguration\.jira\.projectKey: Use the MDLCUST project$/)).toBeDefined()
   })
 
   it('opens the Distribution step for a rule rejection on the Maven group', async () => {

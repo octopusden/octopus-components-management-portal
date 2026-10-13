@@ -33,7 +33,8 @@ import { useFieldOptions } from '../hooks/useFieldOptions'
 import { useSupportedGroups } from '../hooks/useSupportedGroups'
 import { usePortalLinks } from '../hooks/useInfo'
 import { useFieldConfig, useComponentDefaults } from '../hooks/useAdminConfig'
-import { useComponentProfiles, type ComponentProfile } from '../hooks/useComponentProfiles'
+import type { ComponentProfile } from '../hooks/useComponentProfiles'
+import { useProfilesForWizard } from '../hooks/useProfilesForWizard'
 import { useLabels } from '../hooks/useLabels'
 import { ChipsInput } from '../components/ui/ChipsInput'
 import {
@@ -113,23 +114,6 @@ function routeProfileRejection(
   if (!ruleError || !field) return null
   setError(field as FieldPath<CreateFormValues>, { type: 'server', message: ruleError.message })
   return stepOfField(field)
-}
-
-/**
- * The profiles the wizard opens with: a listing fetched after the page mounted, never a cached
- * one, kept from then on so a later refetch that fails cannot tear down a form in progress.
- * `unavailable` holds only while no listing has arrived and the fetch failed.
- */
-function useProfilesForWizard() {
-  const profiles = useComponentProfiles()
-  const [openedWith, setOpenedWith] = useState<ComponentProfile[] | null>(null)
-  const fresh = profiles.isSuccess && profiles.isFetchedAfterMount && !profiles.isFetching
-  if (openedWith === null && fresh) setOpenedWith(profiles.data ?? [])
-  return {
-    openedWith,
-    unavailable: openedWith === null && profiles.isError,
-    retry: () => void profiles.refetch(),
-  }
 }
 
 // A clone that already has a classification skips to General; otherwise the Profile step comes first.

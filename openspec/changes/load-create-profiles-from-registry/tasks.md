@@ -364,3 +364,8 @@
       classification, now clears a Profile-step rejection (1 test).
 - [x] 18.8 An unusable tile without a reason pointed `aria-describedby` at an element that did not
       exist. It now does so only when the registry gives a reason (1 test).
+- [x] 18.9 Tests that passed for the wrong reason or mocked the guarantee away: the two
+      rule-rejection tests now prove the message under the field (exact text once) and the step
+      banner (full `path: message`); `useProfilesForWizard` moved to its own hook file and is tested
+      against a real QueryClient — a seeded cache does not open the wizard, the fetched listing
+      does; Retry clears "unavailable" (2 tests).
