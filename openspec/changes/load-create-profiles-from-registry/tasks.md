@@ -359,3 +359,6 @@
       field could show an error but RHF held none for it. `StepRuleMessages` now also lists a rule
       whose field holds no error (`hasError`). A profile switch revalidates fields showing a rule
       message, so a stale one clears. 3 page tests.
+- [x] 18.7 After a `profile:` rejection the server error kept the Profile step invalid, so Next stayed
+      disabled until the next submit. Choosing another profile, or changing the direct
+      classification, now clears a Profile-step rejection (1 test).

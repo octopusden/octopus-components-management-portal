@@ -1091,6 +1091,16 @@ describe('CreateComponentPage — create names the profile', () => {
     expect(screen.getAllByText(/needs external: false/).length).toBeGreaterThan(0)
   })
 
+  it('clears a profile rejection once another profile is chosen', async () => {
+    rejectWith("profile: profile 'regular-internal' needs external: false")
+    renderWizard()
+    await createRegularInternal()
+    await waitFor(() => expect(screen.getByText('Choose component profile')).toBeDefined())
+    await userEvent.click(screen.getByRole('radio', { name: /Regular external component/ }))
+    expect(screen.queryByText(/needs external: false/)).toBeNull()
+    expect((screen.getByRole('button', { name: /^next$/i }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
   it('shows a rule rejection on the key under the key on General', async () => {
     rejectWith('name: A regular component key cannot contain solution')
     renderWizard()

@@ -442,6 +442,8 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
   const applyProfile = useCallback(
     (next: ComponentProfile, nextExplicit: boolean) => {
       if (!next.usable) return
+      // A rejection of the old choice no longer applies, and must not keep the step blocked.
+      setServerError((current) => (current?.stepId === 'profile' ? null : current))
       const changed = next.id !== profileId
       setProfileId(next.id)
       setExplicitAnswer(nextExplicit)
@@ -472,6 +474,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
       const external = next.external ?? manual.external
       const explicit = next.explicit ?? explicitAnswer
       const solution = (next.solution ?? manual.solution) && external && explicit
+      setServerError((current) => (current?.stepId === 'profile' ? null : current))
       setManual({ external, solution })
       setExplicitAnswer(explicit)
       setValue('distributionExternal', external, { shouldValidate: false, shouldDirty: true })
