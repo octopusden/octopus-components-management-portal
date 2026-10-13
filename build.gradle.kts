@@ -120,31 +120,6 @@ repositories {
     maven {
         url = uri("https://repo.gradle.org/gradle/libs-releases")
     }
-    exclusiveContent {
-        forRepository {
-            ivy {
-                name = "nodejs"
-                url = uri(
-                    providers.gradleProperty("node.distBaseUrl")
-                        .orElse("https://nodejs.org/dist")
-                        .get()
-                )
-                patternLayout {
-                    artifact("v[revision]/[artifact]-v[revision]-[classifier].[ext]")
-                }
-                metadataSources {
-                    artifact()
-                }
-                credentials {
-                    username = providers.gradleProperty("artifactoryUser").orNull
-                    password = providers.gradleProperty("artifactoryPassword").orNull
-                }
-            }
-        }
-        filter {
-            includeGroup("org.nodejs")
-        }
-    }
 }
 
 dependencies {
@@ -220,10 +195,10 @@ springBoot {
 node {
     nodeProjectDir.set(project.rootDir.resolve("frontend"))
     version.set("24.16.0")
-    download.set(true)
-    distBaseUrl.set(
-        providers.gradleProperty("node.distBaseUrl")
-            .orElse("https://nodejs.org/dist")
+    download.set(
+        providers.gradleProperty("node.download")
+            .map(String::toBoolean)
+            .orElse(true)
     )
 }
 
