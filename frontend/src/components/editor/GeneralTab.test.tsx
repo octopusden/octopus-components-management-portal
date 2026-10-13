@@ -31,8 +31,9 @@ vi.mock('../../hooks/useComponents', () => ({
 // with its own dict (rendered in the header, not GeneralTab).
 const mockUseSystemsDictionary = vi.fn(() => ({ data: ['SYS1', 'SYS2', 'SYS_NEW_DICT_ONLY'], isLoading: false, isError: false }))
 const mockUseLabelsDictionary = vi.fn(() => ({ data: ['backend', 'internal', 'frontend'], isLoading: false, isError: false }))
-// SYS-099 test-component key patterns; [] (default) = no restriction known.
-const mockTestPatterns = vi.fn((): { data?: string[] } => ({ data: [] }))
+// SYS-099 test-component key patterns. Default `null` = endpoint missing (no
+// restriction known → fail-open); a real [] means nothing may be flagged.
+const mockTestPatterns = vi.fn((): { data?: string[] | null } => ({ data: null }))
 vi.mock('../../hooks/useTestComponentNamePatterns', async () => {
   const actual = await vi.importActual<typeof import('../../hooks/useTestComponentNamePatterns')>(
     '../../hooks/useTestComponentNamePatterns',
@@ -205,7 +206,7 @@ describe('GeneralTab test component switch — key patterns (SYS-099)', () => {
     mockTestPatterns.mockReturnValue({ data: PATTERNS })
     renderWithProviders(<Harness component={baseComponent({ name: 'cvelab-app' })} />)
     expect(sw().disabled).toBe(false)
-    mockTestPatterns.mockReturnValue({ data: [] })
+    mockTestPatterns.mockReturnValue({ data: null })
   })
 
   it('disabled with a hint naming the patterns when the key matches none and the flag is off', () => {
@@ -215,21 +216,43 @@ describe('GeneralTab test component switch — key patterns (SYS-099)', () => {
     expect(
       screen.getByText('Only components whose key matches ^test-, ^cvelab- can be test components.'),
     ).toBeDefined()
-    mockTestPatterns.mockReturnValue({ data: [] })
+    mockTestPatterns.mockReturnValue({ data: null })
   })
 
   it('stays enabled when the flag is already on, so it can be unset', () => {
     mockTestPatterns.mockReturnValue({ data: PATTERNS })
     renderWithProviders(<Harness component={baseComponent({ name: 'payments', testComponent: true })} />)
     expect(sw().disabled).toBe(false)
-    mockTestPatterns.mockReturnValue({ data: [] })
+    mockTestPatterns.mockReturnValue({ data: null })
   })
 
-  it('fails open while patterns are unavailable (loading / error)', () => {
-    mockTestPatterns.mockReturnValue({ data: undefined })
+  it.each([
+    ['loading / error', undefined],
+    ['endpoint missing (404/501)', null],
+  ])('fails open while patterns are unknown: %s', (_label, data) => {
+    mockTestPatterns.mockReturnValue({ data })
     renderWithProviders(<Harness component={baseComponent({ name: 'payments' })} />)
     expect(sw().disabled).toBe(false)
+    mockTestPatterns.mockReturnValue({ data: null })
+  })
+
+  it('a configured [] blocks every key with the "no patterns configured" hint', () => {
     mockTestPatterns.mockReturnValue({ data: [] })
+    renderWithProviders(<Harness component={baseComponent({ name: 'test-x' })} />)
+    expect(sw().disabled).toBe(true)
+    expect(
+      screen.getByText(
+        'No test-component name patterns are configured, so no component can be marked as a test component.',
+      ),
+    ).toBeDefined()
+    mockTestPatterns.mockReturnValue({ data: null })
+  })
+
+  it('does not block when a pattern uses Java-only syntax JS cannot compile (CRS decides)', () => {
+    mockTestPatterns.mockReturnValue({ data: ['(?i)^TEST-'] })
+    renderWithProviders(<Harness component={baseComponent({ name: 'test-x' })} />)
+    expect(sw().disabled).toBe(false)
+    mockTestPatterns.mockReturnValue({ data: null })
   })
 })
 

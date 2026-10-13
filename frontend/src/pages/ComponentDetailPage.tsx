@@ -814,6 +814,7 @@ function ComponentDetailEditor() {
 
   const baseRow = selectBaseRow(component)
   const profilePct = completenessPercent(component)
+  const warnings = component.warnings ?? []
 
   return (
     <Layout>
@@ -1058,10 +1059,10 @@ function ComponentDetailEditor() {
           </StatusBanner>
         )}
 
-        {(component.warnings ?? []).length > 0 && (
+        {warnings.length > 0 && (
           <StatusBanner variant="warning" data-testid="component-warnings">
             <ul className="space-y-1">
-              {component.warnings!.map((w) => (
+              {warnings.map((w) => (
                 <li key={w}>{w}</li>
               ))}
             </ul>

@@ -59,6 +59,14 @@ export const GENERAL_TAB_FIELDS = [
   'testComponent',
 ] as const
 
+function testComponentHint(blocked: boolean, patterns: readonly string[] | undefined): string {
+  if (!blocked) return 'Synthetic component for testing; hidden from component lists by default.'
+  if (!patterns?.length) {
+    return 'No test-component name patterns are configured, so no component can be marked as a test component.'
+  }
+  return `Only components whose key matches ${patterns.join(', ')} can be test components.`
+}
+
 export interface GeneralFormValues {
   /**
    * Component name. Editable only by users with RENAME_COMPONENTS (today
@@ -171,10 +179,13 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
   // SYS-099: the flag may only be SET on a key matching a configured pattern
   // (checked against the live form key, so a pending rename counts). Unsetting
   // is always allowed, so the switch stays enabled while the flag is on.
-  // Fail-open while loading / on error: CRS 400 stays authoritative.
-  const testPatterns = useTestComponentNamePatterns().data ?? []
+  // Fail-open while loading / on error / on a CRS without the endpoint (no
+  // patterns known): CRS 400 stays authoritative. A real `[]` blocks every key.
+  const testPatterns = useTestComponentNamePatterns().data ?? undefined
   const testComponentBlocked =
-    !testComponent && !keyMatchesTestPatterns((watchedKey ?? '').trim(), testPatterns)
+    !testComponent &&
+    testPatterns !== undefined &&
+    !keyMatchesTestPatterns((watchedKey ?? '').trim(), testPatterns)
 
   // Systems dictionary powers the ChipsInput options — see the note next to its
   // render block. 404/501 → [] (handled by the hook).
@@ -351,9 +362,7 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
             />
             <Label htmlFor="testComponent" className="cursor-pointer">Test component</Label>
             <span id="testComponent-help" className="text-xs text-muted-foreground">
-              {testComponentBlocked
-                ? `Only components whose key matches ${testPatterns.join(', ')} can be test components.`
-                : 'Synthetic component for testing; hidden from component lists by default.'}
+              {testComponentHint(testComponentBlocked, testPatterns)}
             </span>
             {errors.testComponent && (
               <p className="text-xs text-destructive">{errors.testComponent.message}</p>
