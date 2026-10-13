@@ -277,6 +277,17 @@ its message at the top, so it stays visible when the field is not shown. Creatin
 - **WHEN** the create is rejected with an error on `profile`
 - **THEN** the wizard opens the Profile step and shows the message
 
+### Requirement: Create waits for the field settings
+
+Create SHALL be disabled while the field settings (field-config) load, and when they cannot be
+loaded, with Review saying they could not be loaded; without them every field counts as not
+editable and its value would be dropped silently.
+
+#### Scenario: Field settings fail to load
+
+- **WHEN** field-config cannot be loaded
+- **THEN** Review says the field settings could not be loaded and Create stays disabled
+
 ### Requirement: Labels can be set on create
 
 The wizard SHALL offer a Labels field in the General step's Classification group, offering only

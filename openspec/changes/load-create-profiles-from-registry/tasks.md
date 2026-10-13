@@ -380,3 +380,6 @@
       copyright; switching to a profile that is not explicit external kept and sent it. The
       wizard now clears a copyright still equal to its starting value when the classification
       leaves explicit external; one the user entered is kept. 2 page tests.
+- [x] 19.3 With field-config failed to load, every field counted as not editable and Create still
+      went ahead, silently dropping values (a clone's labels and build tasks among them). Create is
+      now held on a field-config error too, and Review says why (1 page test).

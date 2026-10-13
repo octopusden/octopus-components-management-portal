@@ -1095,6 +1095,17 @@ describe('CreateComponentPage — the default copyright follows explicit externa
   })
 })
 
+describe('CreateComponentPage — field settings fail to load', () => {
+  it('holds Create and says why', async () => {
+    mockUseFieldConfig.mockReturnValue({ data: undefined, isLoading: false, isError: true })
+    renderWizard()
+    await userEvent.click(screen.getByRole('button', { name: /Review & create/i }))
+    await userEvent.type(screen.getByLabelText(/Jira task key/i), 'ABC-1')
+    expect(screen.getByText(/field settings could not be loaded/i)).toBeDefined()
+    expect((screen.getByRole('button', { name: /^create component$/i }) as HTMLButtonElement).disabled).toBe(true)
+  })
+})
+
 describe('CreateComponentPage — create names the profile', () => {
   // Regular internal with PROVIDED: the shortest flow to a valid Create.
   async function createRegularInternal() {

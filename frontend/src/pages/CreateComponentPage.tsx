@@ -736,6 +736,8 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
     ownerValidating ||
     !!jiraKeyError ||
     fcLoading ||
+    // Without field settings every field counts as not editable and would be silently dropped.
+    fcError ||
     userLoading ||
     // Client-side blocking issues: any invalid field (schema parse) or an unchosen
     // Profile. Excludes serverError (so a failed submit can be retried after the
@@ -1539,6 +1541,9 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
           </button>
         </div>
       </div>
+      {fcError && (
+        <InlineError message="Field settings could not be loaded, so the component cannot be created right now. Reload the page to try again." />
+      )}
       {serverError && (
         <InlineError message={serverError.message} />
       )}

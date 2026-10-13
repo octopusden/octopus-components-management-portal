@@ -222,6 +222,10 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
   `buildCreateRequest`; when editable the form value wins over the source's copy.
 - Review lists each under its step's group when the field is shown.
 
+- Create is held while field-config is loading, as before, and now also when it failed to load:
+  every field would count as not editable and be dropped silently (labels and build tasks among
+  them). Review says why. (added on review)
+
 ### 9. Registry container in e2e and local dev
 
 - `E2ETestcontainersDriver` runs the registry with `dev-db-automigrate`, which carries no
