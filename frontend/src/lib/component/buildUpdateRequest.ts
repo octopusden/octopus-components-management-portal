@@ -175,39 +175,21 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
     // against the persisted value: a real change is sent (a clear as "" — the server stores null,
     // or 400s for an explicit+external component, routed inline), an unchanged value is omitted.
     // Not "interacted" (e.g. pre-hydration) → omitted, so no form-default clobber.
-    displayName: ((): string | undefined => {
-      if (visibilities.displayName === 'hidden' || dirtyFields.displayName !== true) return undefined
-      const next = values.displayName.trim()
-      const prior = component.displayName ?? ''
-      return next === prior ? undefined : next
-    })(),
+    displayName: changedScalar(visibilities.displayName, dirtyFields.displayName, values.displayName.trim(), component.displayName),
     // componentOwner / clientCode / copyright: nullable top-level scalars. Mirror displayName —
     // interacted-gated (dirty OR touched, passed by the page) value-compare against the persisted
     // value: a real change is sent (a clear as "" — the server stores null), an unchanged value or
     // a pre-hydration form is omitted. The old `values.X || undefined` silently dropped clears
     // (`'' || undefined` → undefined → JSON-merge-patch "don't touch").
-    componentOwner: ((): string | undefined => {
-      if (visibilities.componentOwner === 'hidden' || dirtyFields.componentOwner !== true) return undefined
-      const next = (values.componentOwner ?? '').trim()
-      const prior = component.componentOwner ?? ''
-      return next === prior ? undefined : next
-    })(),
+    componentOwner: changedScalar(visibilities.componentOwner, dirtyFields.componentOwner, (values.componentOwner ?? '').trim(), component.componentOwner),
     // productType is owned by EscrowTab — never sent from the General save.
     // `systems` mirrors `labels` exactly: dirty-gated REPLACE with explicit-
     // empty-clear. !dirty → omit (blocks the pre-hydration form-default `[]`
     // from wiping server data before GeneralTab hydrates); dirty + [] → emit
     // [] (clear all — systems is OPTIONAL server-side); dirty + non-empty →
     // emit the canonicalized list.
-    systems:
-      visibilities.systems === 'hidden' || dirtyFields.systems !== true
-        ? undefined
-        : systemsArray,
-    clientCode: ((): string | undefined => {
-      if (visibilities.clientCode === 'hidden' || dirtyFields.clientCode !== true) return undefined
-      const next = (values.clientCode ?? '').trim()
-      const prior = component.clientCode ?? ''
-      return next === prior ? undefined : next
-    })(),
+    systems: dirtyList(visibilities.systems, dirtyFields.systems, systemsArray),
+    clientCode: changedScalar(visibilities.clientCode, dirtyFields.clientCode, (values.clientCode ?? '').trim(), component.clientCode),
     solution: solutionChanged ? values.solution : undefined,
     archived: archivedChanged ? values.archived : undefined,
     testComponent: testComponentChanged ? values.testComponent : undefined,
@@ -221,32 +203,40 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
     // [] (clear); dirty + non-empty → emit the ordered, canonicalized list.
     // The old `|| undefined` string-falsy collapse is gone (arrays are never
     // falsy, and [] is now a meaningful clear).
-    releaseManager:
-      visibilities.releaseManager === 'hidden' || dirtyFields.releaseManager !== true
-        ? undefined
-        : releaseManagerArray,
-    securityChampion:
-      visibilities.securityChampion === 'hidden' || dirtyFields.securityChampion !== true
-        ? undefined
-        : securityChampionArray,
-    copyright: ((): string | undefined => {
-      if (visibilities.copyright === 'hidden' || dirtyFields.copyright !== true) return undefined
-      const next = (values.copyright ?? '').trim()
-      const prior = component.copyright ?? ''
-      return next === prior ? undefined : next
-    })(),
+    releaseManager: dirtyList(visibilities.releaseManager, dirtyFields.releaseManager, releaseManagerArray),
+    securityChampion: dirtyList(visibilities.securityChampion, dirtyFields.securityChampion, securityChampionArray),
+    copyright: changedScalar(visibilities.copyright, dirtyFields.copyright, (values.copyright ?? '').trim(), component.copyright),
     // labels + systems share the same contract (both OPTIONAL server-side):
     //   - Pre-hydration guard: !dirty → omit, so the form-default `[]` doesn't
     //     wipe server data before GeneralTab hydrates.
     //   - Explicit clear IS supported: `dirty + empty` emits `[]` (REPLACE-
     //     empty) rather than omitting, so unchecking every value persists.
-    labels:
-      visibilities.labels === 'hidden' || dirtyFields.labels !== true
-        ? undefined
-        : labelsArray,
+    labels: dirtyList(visibilities.labels, dirtyFields.labels, labelsArray),
     ...docsPatch,
     ...artifactIdsPatch,
   }
+}
+
+// Interacted-gated nullable scalar: omitted when hidden, not interacted, or equal to the
+// persisted value; otherwise the trimmed value ('' = clear, the server stores null).
+function changedScalar(
+  visibility: FieldVisibility,
+  interacted: boolean | undefined,
+  next: string,
+  prior: string | null | undefined,
+): string | undefined {
+  if (visibility === 'hidden' || interacted !== true) return undefined
+  return next === (prior ?? '') ? undefined : next
+}
+
+// Dirty-gated REPLACE list: omitted when hidden or not dirty; otherwise the list
+// (an empty list is an explicit clear).
+function dirtyList(
+  visibility: FieldVisibility,
+  dirty: boolean | undefined,
+  list: string[],
+): string[] | undefined {
+  return visibility === 'hidden' || dirty !== true ? undefined : list
 }
 
 function buildDocsPatch(

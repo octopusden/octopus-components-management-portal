@@ -98,6 +98,20 @@ export function applyPreset(
   return { ...DEFAULT_FILTER }
 }
 
+// Personal presets: a single-value people filter equal to the current user.
+const PERSONAL_PRESETS = [
+  ['mine', 'owner'],
+  ['release-manager', 'releaseManager'],
+  ['security-champion', 'securityChampion'],
+] as const satisfies readonly (readonly [PresetId, keyof ComponentFilter])[]
+
+// True when `filter` sets nothing beyond `allowed` — any extra filter means "custom".
+function onlyKeys(filter: ComponentFilter, allowed: readonly (keyof ComponentFilter)[]): boolean {
+  return (Object.keys(filter) as (keyof ComponentFilter)[]).every(
+    (k) => allowed.includes(k) || filter[k] === undefined,
+  )
+}
+
 /**
  * Derive which preset (if any) a filter currently represents, so a URL with a
  * bare filter (no explicit `preset=`) still lights up the matching segment.
@@ -108,49 +122,26 @@ export function matchPreset(
   filter: ComponentFilter,
   currentUsername: string | null,
 ): PresetId | null {
-  // Any extra filter beyond the ones a preset sets means "custom" → no match.
-  const onlyKeys = (allowed: (keyof ComponentFilter)[]): boolean =>
-    (Object.keys(filter) as (keyof ComponentFilter)[]).every(
-      (k) => allowed.includes(k) || filter[k] === undefined,
-    )
+  const base = ['archived', 'testComponent'] as const
 
   // Test components are only ever listed by the `test-components` preset; any
   // other combo that includes them is custom.
   if (filter.testComponent === true) {
-    return filter.archived !== true && onlyKeys(['archived', 'testComponent'])
-      ? 'test-components'
-      : null
+    return filter.archived !== true && onlyKeys(filter, base) ? 'test-components' : null
   }
+  if (filter.archived === true) return onlyKeys(filter, base) ? 'archived' : null
 
-  if (filter.archived === true && onlyKeys(['archived', 'testComponent'])) return 'archived'
+  const personal = PERSONAL_PRESETS.find(([, key]) => {
+    const values = filter[key]
+    return (
+      !!currentUsername &&
+      Array.isArray(values) &&
+      values.length === 1 &&
+      values[0] === currentUsername &&
+      onlyKeys(filter, [...base, key])
+    )
+  })
+  if (personal) return personal[0]
 
-  if (filter.archived === false || filter.archived === undefined) {
-    if (
-      currentUsername &&
-      filter.owner?.length === 1 &&
-      filter.owner[0] === currentUsername &&
-      onlyKeys(['archived', 'testComponent', 'owner'])
-    ) {
-      return 'mine'
-    }
-    if (
-      currentUsername &&
-      filter.releaseManager?.length === 1 &&
-      filter.releaseManager[0] === currentUsername &&
-      onlyKeys(['archived', 'testComponent', 'releaseManager'])
-    ) {
-      return 'release-manager'
-    }
-    if (
-      currentUsername &&
-      filter.securityChampion?.length === 1 &&
-      filter.securityChampion[0] === currentUsername &&
-      onlyKeys(['archived', 'testComponent', 'securityChampion'])
-    ) {
-      return 'security-champion'
-    }
-    if (onlyKeys(['archived', 'testComponent'])) return 'all'
-  }
-
-  return null
+  return onlyKeys(filter, base) ? 'all' : null
 }
