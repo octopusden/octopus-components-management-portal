@@ -717,6 +717,19 @@ describe('CreateComponentPage — profiles from the registry', () => {
     expect(screen.getByRole('radio', { name: /Regular external component/ }).getAttribute('aria-checked')).toBe('true')
   })
 
+  it('describes an unusable tile by its reason only when the registry gives one', () => {
+    mockUseComponentProfiles.mockReturnValue(
+      profilesResult([
+        byId('regular-external'),
+        { ...byId('solution'), usable: false, unusableReason: 'Not for your role' },
+        { ...byId('dmp-bundle'), usable: false },
+      ]),
+    )
+    renderWizard()
+    expect(screen.getByRole('radio', { name: /^Solution$/ })).toHaveAccessibleDescription('Not for your role')
+    expect(screen.getByRole('radio', { name: /^DMP Bundle$/ })).not.toHaveAttribute('aria-describedby')
+  })
+
   it('arrow keys skip an unusable profile', async () => {
     mockUseComponentProfiles.mockReturnValue(
       profilesResult([

@@ -851,7 +851,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
             role="radio"
             aria-checked={selected}
             aria-label={p.title}
-            aria-describedby={p.usable ? undefined : `profile-${p.id}-reason`}
+            aria-describedby={!p.usable && p.unusableReason ? `profile-${p.id}-reason` : undefined}
             disabled={!p.usable}
             tabIndex={tabbable ? 0 : -1}
             onClick={() => applyProfile(p, explicitAnswer)}

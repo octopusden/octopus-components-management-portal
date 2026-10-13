@@ -362,3 +362,5 @@
 - [x] 18.7 After a `profile:` rejection the server error kept the Profile step invalid, so Next stayed
       disabled until the next submit. Choosing another profile, or changing the direct
       classification, now clears a Profile-step rejection (1 test).
+- [x] 18.8 An unusable tile without a reason pointed `aria-describedby` at an element that did not
+      exist. It now does so only when the registry gives a reason (1 test).
