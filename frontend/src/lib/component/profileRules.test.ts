@@ -32,6 +32,11 @@ describe('profileRuleErrors', () => {
     expect(profileRuleErrors(rules, request()).has('displayName')).toBe(true)
   })
 
+  it('reads the first group of a multi-group ownership pattern, as the registry stores it', () => {
+    const req = request({ artifactIds: [{ groupPattern: 'org.a, org.b|org.c', mode: 'ALL', artifactTokens: [] }] })
+    expect(profileRuleErrors([rule('artifactIds[0].groupPattern', 'org\\.a')], req).size).toBe(0)
+  })
+
   it('skips a rule on a path outside the registry list', () => {
     expect(profileRuleErrors([rule('componentOwner', 'x')], request()).size).toBe(0)
   })

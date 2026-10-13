@@ -1,8 +1,10 @@
 import type { ProfileFieldRule } from '../../hooks/useComponentProfiles'
 import type { ComponentCreateRequest } from '../types'
+import { splitGroupIds } from '../groupValidation'
 
 type Reader = (request: ComponentCreateRequest) => string | null | undefined
 
+const firstGroup = (pattern: string | undefined) => (pattern === undefined ? undefined : splitGroupIds(pattern)[0])
 const jira = (r: ComponentCreateRequest) => r.baseConfiguration?.jira
 const firstVcs = (r: ComponentCreateRequest) => r.baseConfiguration?.vcsEntries?.[0]
 const firstMaven = (r: ComponentCreateRequest) => r.baseConfiguration?.mavenArtifacts?.[0]
@@ -18,7 +20,8 @@ const READERS: Record<string, Reader> = {
   name: (r) => r.name,
   displayName: (r) => r.displayName,
   clientCode: (r) => r.clientCode,
-  'artifactIds[0].groupPattern': (r) => r.artifactIds?.[0]?.groupPattern,
+  // The registry stores one mapping per group of a `,`/`|`-separated pattern and reads the first.
+  'artifactIds[0].groupPattern': (r) => firstGroup(r.artifactIds?.[0]?.groupPattern),
   'baseConfiguration.build.buildTasks': (r) => r.baseConfiguration?.build?.buildTasks,
   'baseConfiguration.vcsEntries[0].vcsPath': (r) => firstVcs(r)?.vcsPath,
   'baseConfiguration.vcsEntries[0].branch': (r) => firstVcs(r)?.branch,

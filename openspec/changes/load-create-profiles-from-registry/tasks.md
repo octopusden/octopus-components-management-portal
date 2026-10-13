@@ -348,3 +348,7 @@
 - [x] 18.3 Without the `u` flag JavaScript compiled Java-only escapes (`\p{Lower}`, `\Q…\E`,
       `\A`) as literal text, so such a rule failed every key in the browser. `regexOf` compiles in
       Unicode mode; those patterns are skipped and left to the registry (3 tests).
+- [x] 18.4 The ownership rule read the whole `org.a,org.b` input while the registry checks the
+      first stored group, and its message landed on form row 0 even when that row was blank and
+      not sent. The reader takes `splitGroupIds(...)[0]`; `addProfileRuleIssues` targets the first
+      non-blank row (2 tests).

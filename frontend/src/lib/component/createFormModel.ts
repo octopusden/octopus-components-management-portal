@@ -85,11 +85,14 @@ function addProfileRuleIssues(
   rules: readonly ProfileFieldRule[],
   request: ComponentCreateRequest,
   keyHasOtherError: boolean,
+  // The request drops blank ownership rows, so its first mapping is the first non-blank row.
+  firstSentOwnershipRow: number,
 ) {
   for (const [rulePath, message] of profileRuleErrors(rules, request)) {
     const field = formFieldOfRulePath(rulePath)
     if (!field || (field === 'name' && keyHasOtherError)) continue
-    const path = field.split('.').map((segment) => (/^\d+$/.test(segment) ? Number(segment) : segment))
+    const rowField = field.replace(/^ownership\.0\./, `ownership.${firstSentOwnershipRow}.`)
+    const path = rowField.split('.').map((segment) => (/^\d+$/.test(segment) ? Number(segment) : segment))
     ctx.addIssue({ code: z.ZodIssueCode.custom, path, message, params: { profileRule: true } })
   }
 }
@@ -160,7 +163,13 @@ export function makeCreateSchema(
       if (keyError) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['name'], message: keyError })
       }
-      addProfileRuleIssues(ctx, profileRules, buildCreateRequest(v, source, editable, true, false, visibility), !!keyError || !v.name.trim())
+      addProfileRuleIssues(
+        ctx,
+        profileRules,
+        buildCreateRequest(v, source, editable, true, false, visibility),
+        !!keyError || !v.name.trim(),
+        Math.max(0, v.ownership.findIndex((row) => row.groupId.trim() !== '')),
+      )
       // Legacy EscrowConfigValidator rule: a VCS root is mandatory for every
       // build system outside the exempt set.
       if (vcsBlockApplies(v.buildSystem)) {

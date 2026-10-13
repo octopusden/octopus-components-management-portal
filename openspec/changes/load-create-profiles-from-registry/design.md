@@ -107,6 +107,9 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
   of another type, or a version format left on "same as" all read as `""`, as the registry sees
   them.
 - The reader covers the registry's path list (Context); a rule on any other path is skipped.
+  `artifactIds[0].groupPattern` reads the first group of a `,`/`|`-separated pattern, since the
+  registry stores one mapping per group; its message goes to the first non-blank ownership row,
+  since blank rows are not sent.
 - A second table maps each path to the wizard field that shows its message: `name`,
   `displayName`, `clientCode`, `ownership.0.groupId`, `buildTasks`, `vcsUrl`, `vcsBranch`,
   `vcsTag`, `jiraProjectKey`, `versionPrefix`, the version-format fields, and

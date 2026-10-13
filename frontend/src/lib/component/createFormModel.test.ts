@@ -354,6 +354,18 @@ describe('makeCreateSchema — the chosen profile\'s field rules', () => {
     expect(messagesAt(issues, 'buildTasks')).toEqual(['rule on baseConfiguration.build.buildTasks'])
   })
 
+  it('puts an ownership rule on the first row that is sent, skipping a blank first row', () => {
+    const values = form({
+      ownership: [
+        { groupId: '', mode: 'ALL', tokens: [] },
+        { groupId: 'com.foo', mode: 'ALL', tokens: [] },
+      ],
+    })
+    const issues = issuesOn([rule('artifactIds[0].groupPattern', 'org\\..*')], values)
+    expect(messagesAt(issues, 'ownership.1.groupId')).toEqual(['rule on artifactIds[0].groupPattern'])
+    expect(messagesAt(issues, 'ownership.0.groupId')).toEqual([])
+  })
+
   it('does not add a rule message to a blank key, which already shows "required"', () => {
     const issues = issuesOn(rulesOf('solution'), form({ name: '' }))
     expect(messagesAt(issues, 'name')).toEqual(['Component Key is required'])
