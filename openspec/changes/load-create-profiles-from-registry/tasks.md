@@ -203,8 +203,8 @@
 
 ## 11. Registry container (Decision 9) — Gradle
 
-- [ ] 11.1 Bump `crs.version` in `gradle.properties` to the first registry release with profiles.
-      Open: no registry release carries profiles yet.
+- [x] 11.1 Bump `crs.version` in `gradle.properties` to the first registry release with profiles.
+      `3.0.16` (the #520 merge commit).
 - [x] 11.2 The e2e registry container loads the four profiles from
       `src/test/resources/e2e/crs-fixture/component-profiles.yml` via
       `SPRING_CONFIG_ADDITIONAL_LOCATION` (design Decision 9). The file matches the registry's own
@@ -407,3 +407,6 @@
       Affected areas; superseded notes on 7.1.7, 7.2, 10.2, 15.1, 15.2, 16.1, 16.2, 16.5, 17.1.
 - [x] 20.3 Tests: clearing a clone's copied copyright from the direct classification (1 page
       test); the stale `usePortalConfig` mock and the "No Profile step in clone" comment removed.
+- [x] 20.4 The e2e Playwright container mounts only `frontend/e2e`, so the specs' import of
+      `src/test-fixtures/component-profiles.contract.json` failed on CI and every spec file
+      errored. `PlaywrightContainer` now also mounts `frontend/src/test-fixtures` read-only.

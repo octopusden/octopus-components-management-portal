@@ -243,7 +243,7 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
   places was the plan)
 - The route-mocked wizard e2e mocks `GET /component-profiles` with the same fixture the unit
   tests use (`mockComponentProfiles`).
-- `crs.version` is bumped to the first registry release with profiles once it exists (open).
+- `crs.version` is bumped to the first registry release with profiles: `3.0.16`.
 
 ### 10. No profiles: the classification is chosen directly
 
