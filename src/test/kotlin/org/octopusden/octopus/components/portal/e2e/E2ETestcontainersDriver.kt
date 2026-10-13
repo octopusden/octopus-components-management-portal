@@ -397,6 +397,12 @@ open class E2ETestcontainersDriver {
                         put("COMPONENTS_REGISTRY_PRODUCT_TYPE_DDB", "PT_D_DB")
                         put("COMPONENTS_REGISTRY_VCS_ENABLED", "false")
                         put("COMPONENTS_REGISTRY_AUTO_MIGRATE", "true")
+                        // Mandatory since registry 3.0.x; placeholders, as TeamCity is not configured here.
+                        put("TEAMCITY_VALIDATION_GRADLEBUILDTEMPLATEID", "E2E_GRADLE_TEMPLATE")
+                        put("TEAMCITY_VALIDATION_MAVENBUILDTEMPLATEID", "E2E_MAVEN_TEMPLATE")
+                        put("TEAMCITY_VALIDATION_RELEASEFAMILYTEMPLATEIDS", "E2E_RELEASE_TEMPLATE")
+                        put("TEAMCITY_VALIDATION_GRADLEDEFAULTBUILDSTEPID", "E2E_GRADLE_STEP")
+                        put("TEAMCITY_VALIDATION_MAVENDEFAULTBUILDSTEPID", "E2E_MAVEN_STEP")
                         // The shipped Create-component profiles; without them the registry offers none.
                         put(
                             "SPRING_CONFIG_ADDITIONAL_LOCATION",

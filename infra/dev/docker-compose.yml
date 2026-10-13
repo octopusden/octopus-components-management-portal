@@ -130,7 +130,7 @@ services:
 
   crs:
     # Set CRS_DOCKER_REGISTRY to your internal registry (e.g. via .env file or shell export).
-    image: ${CRS_DOCKER_REGISTRY}/octopusden/components-registry-service:${CRS_VERSION:-2.0.88-3913}
+    image: ${CRS_DOCKER_REGISTRY}/octopusden/components-registry-service:${CRS_VERSION:-3.0.16}
     platform: linux/amd64
     depends_on:
       postgres:
@@ -167,6 +167,12 @@ services:
       COMPONENTS_REGISTRY_PRODUCT_TYPE_DDB: PT_D_DB
       COMPONENTS_REGISTRY_VCS_ENABLED: "false"
       COMPONENTS_REGISTRY_AUTO_MIGRATE: "true"
+      # Mandatory since registry 3.0.x; placeholders, as TeamCity is not configured here.
+      TEAMCITY_VALIDATION_GRADLEBUILDTEMPLATEID: DEV_GRADLE_TEMPLATE
+      TEAMCITY_VALIDATION_MAVENBUILDTEMPLATEID: DEV_MAVEN_TEMPLATE
+      TEAMCITY_VALIDATION_RELEASEFAMILYTEMPLATEIDS: DEV_RELEASE_TEMPLATE
+      TEAMCITY_VALIDATION_GRADLEDEFAULTBUILDSTEPID: DEV_GRADLE_STEP
+      TEAMCITY_VALIDATION_MAVENDEFAULTBUILDSTEPID: DEV_MAVEN_STEP
       # The shipped Create-component profiles; without them the registry offers none.
       SPRING_CONFIG_ADDITIONAL_LOCATION: optional:file:/opt/crs-fixture/component-profiles.yml
     ports:

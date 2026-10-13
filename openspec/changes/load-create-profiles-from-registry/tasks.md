@@ -410,3 +410,7 @@
 - [x] 20.4 The e2e Playwright container mounts only `frontend/e2e`, so the specs' import of
       `src/test-fixtures/component-profiles.contract.json` failed on CI and every spec file
       errored. `PlaywrightContainer` now also mounts `frontend/src/test-fixtures` read-only.
+- [x] 20.5 Registry 3.0.16 refuses to start without `teamcity.validation.*` (mandatory since the
+      pinned 3.0.2 build), so the e2e registry container exited. The driver and `infra/dev` compose
+      pass placeholder template and step ids; compose and `.env.example` default to `3.0.16`, so
+      local dev serves the profiles too.
