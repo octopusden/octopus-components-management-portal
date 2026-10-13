@@ -51,8 +51,7 @@
 **The profile's field rules as fast checks**
 - While the user types, every field rule of the chosen profile is checked, as a whole-value
   match, against the value the create request would carry for that path (so a field the request
-  leaves out counts as empty, as in the registry; hidden build tasks are the one exception, see
-  the design's Risks), and the rule's message is shown under the wizard field for that path, or
+  leaves out counts as empty, as in the registry), and the rule's message is shown under the wizard field for that path, or
   at the top of the step when that field shows no error there.
 - A rule on a path the wizard does not know, or whose pattern the browser cannot compile, is
   skipped; the registry's answer on create decides.

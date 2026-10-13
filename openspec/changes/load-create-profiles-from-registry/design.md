@@ -105,7 +105,7 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
 - The value checked is read from the request `buildCreateRequest` builds for the current form
   values, with the page's editability — not from the raw form. So a stripped field, a coordinate
   of another type, or a version format left on "same as" all read as `""`, as the registry sees
-  them — except build tasks under field-config, see Risks.
+  them.
 - The reader covers the registry's path list (Context); a rule on any other path is skipped.
 - A second table maps each path to the wizard field that shows its message: `name`,
   `displayName`, `clientCode`, `ownership.0.groupId`, `buildTasks`, `vcsUrl`, `vcsBranch`,
@@ -120,7 +120,7 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
 - `makeCreateSchema` takes the selected profile's rules instead of the profile enum and
   `solutionPatterns`, and builds the request itself with `buildCreateRequest(values, source,
   editable)` — the escrow arguments it leaves at their defaults touch no rule path; the
-  `{ labels, buildTasks }` visibilities default to editable (see Risks). `addProfileRuleIssues`
+  page passes the same `{ labels, buildTasks }` visibilities the submit uses. `addProfileRuleIssues`
   adds one issue per failing rule on the mapped field, tagged `params.profileRule`, so the stepper
   marks the right step without new routing.
 - A tagged issue whose field shows no error on its step (`fieldShowsError`: a field the user may
@@ -257,9 +257,6 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
   `solution-key-patterns`, the wizard reads the profile rules; an administrator changing one
   must change the other. Accepted until the editor moves to profile rules; recorded as
   TD-006.
-- **The live rule check treats build tasks as editable.** `makeCreateSchema` builds the request
-  without the page's build-tasks visibility, so a rule on `baseConfiguration.build.buildTasks`
-  is checked against the form value even when field-config hides the field and the create strips
-  it. Accepted: no profile rules on build tasks today, and the create's answer decides. Labels
-  are unaffected: no rule path reads them.
-  (found during implementation)
+- **The live rule check treats build tasks as editable.** No longer applies: `makeCreateSchema`
+  now receives the page's field visibilities, so the rule reads the request that is sent.
+  (resolved on review)

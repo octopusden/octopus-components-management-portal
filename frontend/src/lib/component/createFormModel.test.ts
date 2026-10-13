@@ -345,6 +345,15 @@ describe('makeCreateSchema — the chosen profile\'s field rules', () => {
     expect(messagesAt(issues, 'displayName')).toEqual(['rule on displayName'])
   })
 
+  it('checks a build-tasks rule against the request the create sends, with the field hidden', () => {
+    const rules = [rule('baseConfiguration.build.buildTasks', '.+')]
+    const result = makeCreateSchema(allEditable, [], null, rules, undefined, { buildTasks: 'hidden' }).safeParse(
+      form({ buildTasks: 'clean build' }),
+    )
+    const issues = result.success ? [] : result.error.issues
+    expect(messagesAt(issues, 'buildTasks')).toEqual(['rule on baseConfiguration.build.buildTasks'])
+  })
+
   it('does not add a rule message to a blank key, which already shows "required"', () => {
     const issues = issuesOn(rulesOf('solution'), form({ name: '' }))
     expect(messagesAt(issues, 'name')).toEqual(['Component Key is required'])

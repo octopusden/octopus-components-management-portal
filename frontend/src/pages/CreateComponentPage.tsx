@@ -337,10 +337,16 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
   const flags = classificationFlags(manualMode, profile, explicitAnswer, manual)
   const profileMissing = profileId === null && !manualMode
 
+  const buildTasksVisibility = useFieldVisibility('build.buildTasks')
+  const labelsVisibility = useFieldVisibility('component.labels')
   const profileRules = useMemo(() => profile?.rules ?? [], [profile])
   const schema = useMemo(
-    () => makeCreateSchema(editable, supportedGroups, gitBaseUrl, profileRules, source ?? undefined),
-    [editable, supportedGroups, gitBaseUrl, profileRules, source],
+    () =>
+      makeCreateSchema(editable, supportedGroups, gitBaseUrl, profileRules, source ?? undefined, {
+        labels: labelsVisibility,
+        buildTasks: buildTasksVisibility,
+      }),
+    [editable, supportedGroups, gitBaseUrl, profileRules, source, labelsVisibility, buildTasksVisibility],
   )
 
   const {
@@ -387,8 +393,6 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
   const escrowGenerationHidden =
     escrowFcLoading || escrowFcError || escrowGenerationEntry.visibility === 'hidden'
   const escrowGenerationEditable = useFieldEditable('escrow.generation')
-  const buildTasksVisibility = useFieldVisibility('build.buildTasks')
-  const labelsVisibility = useFieldVisibility('component.labels')
   const { data: labelOptions = [], isLoading: labelsLoading } = useLabels({ enabled: labelsVisibility === 'editable' })
   // Skip the escrow-generations meta fetch when the field is hidden — the control
   // isn't rendered and generation isn't sent, so the vocabulary is never needed.

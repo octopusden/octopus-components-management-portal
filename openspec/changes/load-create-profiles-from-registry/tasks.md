@@ -341,3 +341,7 @@
 - [x] 18.1 A clone with readonly Build tasks kept the source's value, which the registry rejects
       (`enforceEditabilityOnCreate`: any value for a field the user may not edit). Build tasks are
       now shown and sent only when editable (`buildAspectFor`); readonly behaves as hidden.
+- [x] 18.2 The live rule check built the request with every field visibility editable, so a rule
+      on hidden build tasks read a value the create never sends. `makeCreateSchema` now takes
+      the page's `{ labels, buildTasks }` visibilities (test: a build-tasks rule with the field
+      hidden fails); the matching risk in `design.md` is marked resolved.

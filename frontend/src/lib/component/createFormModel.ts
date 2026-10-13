@@ -9,6 +9,7 @@ import { flagsForProfile } from './createProfile'
 import { formFieldOfRulePath, profileRuleErrors } from './profileRules'
 import {
   buildCreateRequest,
+  type CreateFieldVisibility,
   effectiveCreateClientCode,
   vcsBlockApplies,
   DEPRECATED_BUILD_SYSTEMS,
@@ -101,6 +102,8 @@ export function makeCreateSchema(
   // Needed for the Component-Key rule: a clone that is not external keeps its source's
   // clientCode in the payload, so the key may legally lean on it.
   source?: ComponentDetail,
+  // The same field visibilities the submit uses, so profile rules read the request that is sent.
+  visibility: CreateFieldVisibility = {},
 ) {
   return z
     .object({
@@ -157,7 +160,7 @@ export function makeCreateSchema(
       if (keyError) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['name'], message: keyError })
       }
-      addProfileRuleIssues(ctx, profileRules, buildCreateRequest(v, source, editable), !!keyError || !v.name.trim())
+      addProfileRuleIssues(ctx, profileRules, buildCreateRequest(v, source, editable, true, false, visibility), !!keyError || !v.name.trim())
       // Legacy EscrowConfigValidator rule: a VCS root is mandatory for every
       // build system outside the exempt set.
       if (vcsBlockApplies(v.buildSystem)) {
