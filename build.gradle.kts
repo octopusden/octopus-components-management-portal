@@ -196,6 +196,10 @@ node {
     nodeProjectDir.set(project.rootDir.resolve("frontend"))
     version.set("24.16.0")
     download.set(true)
+    distBaseUrl.set(
+        providers.gradleProperty("node.distBaseUrl")
+            .orElse("https://nodejs.org/dist")
+    )
 }
 
 val npmCi = tasks.register<NpmTask>("npmCi") {
