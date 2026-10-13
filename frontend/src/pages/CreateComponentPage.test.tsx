@@ -1058,6 +1058,43 @@ describe('CreateComponentPage — profile rules on fields the step does not show
   })
 })
 
+describe('CreateComponentPage — the default copyright follows explicit external', () => {
+  beforeEach(() => {
+    const shipped = shippedProfiles.profiles as ComponentProfile[]
+    // Solution first, so a new component starts explicit external with the copyright seeded.
+    mockUseComponentProfiles.mockReturnValue({
+      ...PROFILES_OK,
+      data: [shipped.find((p) => p.id === 'solution')!, shipped.find((p) => p.id === 'regular-internal')!],
+    })
+    mockUseComponentDefaults.mockReturnValue({
+      ...COMPONENT_DEFAULTS_OK,
+      data: { ...(COMPONENT_DEFAULTS_OK.data as object), copyright: '(c) Default' } as unknown,
+    })
+  })
+  const copyright = () => screen.getByLabelText(/^Copyright/i) as HTMLInputElement
+
+  it('clears the untouched default copyright when the classification stops being explicit external', async () => {
+    renderWizard()
+    await clickNext()
+    expect(copyright().value).toBe('(c) Default')
+    await userEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/ }))
+    await clickNext()
+    expect(copyright().value).toBe('')
+  })
+
+  it('keeps a copyright the user entered', async () => {
+    renderWizard()
+    await clickNext()
+    await userEvent.clear(copyright())
+    await userEvent.type(copyright(), '(c) Mine')
+    await userEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/ }))
+    await clickNext()
+    expect(copyright().value).toBe('(c) Mine')
+  })
+})
+
 describe('CreateComponentPage — create names the profile', () => {
   // Regular internal with PROVIDED: the shortest flow to a valid Create.
   async function createRegularInternal() {

@@ -376,3 +376,7 @@
       sent no profile, and so sidestepped the restriction. Direct classification now applies only
       when no profile has the classification (`profileFromSource` reports `matchesAny`); otherwise
       the clone opens on Profile with the tiles disabled and Create held. 2 unit tests, 1 page test.
+- [x] 19.2 With an explicit external profile first, a new component started with the default
+      copyright; switching to a profile that is not explicit external kept and sent it. The
+      wizard now clears a copyright still equal to its starting value when the classification
+      leaves explicit external; one the user entered is kept. 2 page tests.

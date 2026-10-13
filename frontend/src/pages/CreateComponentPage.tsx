@@ -313,6 +313,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
   // Profile: scratch pre-selects the first usable registry profile; clone derives it from
   // the source (editable afterwards). Frozen at mount — the profiles arrive with the wizard.
   const [initial] = useState(() => initialProfile(source, profiles))
+  const [formDefaults] = useState(() => initialValues(source, defaults, initial.profile))
   const [profileId, setProfileId] = useState<string | null>(initial.profileId)
   const [explicitAnswer, setExplicitAnswer] = useState<boolean>(initial.explicit)
   const profile = profiles.find((p) => p.id === profileId) ?? null
@@ -354,7 +355,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
     // Live validation so inline field errors surface as the user types (the
     // stepper's cross-step markers use an independent safeParse).
     mode: 'onChange',
-    defaultValues: initialValues(source, defaults, initial.profile),
+    defaultValues: formDefaults,
   })
   // A profile switch changes the rules: revalidate the fields showing a message, so one from a
   // rule the new profile lacks clears.
@@ -425,6 +426,16 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
 
   // Apply the chosen profile: set the derived flags and (on a real change) reset
   // the Component Key so the profile-dependent rule is re-entered (brief).
+  // The default copyright is seeded only for an explicit external component; once the
+  // classification leaves that, clear it unless the user changed it.
+  const clearDefaultCopyrightUnless = useCallback(
+    (explicitExternal: boolean) => {
+      if (explicitExternal || !formDefaults.copyright) return
+      if (getValues('copyright') === formDefaults.copyright) setValue('copyright', '', { shouldValidate: false })
+    },
+    [formDefaults, getValues, setValue],
+  )
+
   const applyProfile = useCallback(
     (next: ComponentProfile, nextExplicit: boolean) => {
       if (!next.usable) return
@@ -434,6 +445,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
       setProfileId(next.id)
       setExplicitAnswer(nextExplicit)
       const flags = flagsForProfile(next, nextExplicit)
+      clearDefaultCopyrightUnless(flags.distributionExternal && flags.distributionExplicit)
       // Mark the form dirty when the profile OR its derived distribution flags
       // change — e.g. toggling the explicit-distribution answer for the SAME
       // profile still changes submitted values. A profile-only change that leaves
@@ -452,7 +464,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
       }
       void trigger('name')
     },
-    [profileId, setValue, getValues, clearErrors, trigger],
+    [profileId, setValue, getValues, clearErrors, trigger, clearDefaultCopyrightUnless],
   )
 
   const applyManual = useCallback(
@@ -465,8 +477,9 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
       setExplicitAnswer(explicit)
       setValue('distributionExternal', external, { shouldValidate: false, shouldDirty: true })
       setValue('distributionExplicit', explicit, { shouldValidate: false, shouldDirty: true })
+      clearDefaultCopyrightUnless(external && explicit)
     },
-    [manual, explicitAnswer, setValue],
+    [manual, explicitAnswer, setValue, clearDefaultCopyrightUnless],
   )
   const chooseExplicit = (value: boolean) => {
     if (manualMode) applyManual({ explicit: value })

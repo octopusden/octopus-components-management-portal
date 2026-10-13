@@ -202,7 +202,10 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
   component-defaults.
 - With the shipped profiles the first usable one is Regular external (`explicit: ask`, answer
   No), so a new component's initial values are byte-for-byte today's; a test pins that.
-- Picking another profile changes only what picking does today: the flags and a cleared key.
+- Picking another profile changes the flags and clears the key, as before; and when the
+  classification stops being explicit external, a copyright still equal to the one the wizard
+  started with is cleared (`clearDefaultCopyrightUnless`), since that default applies only to an
+  explicit external component. A copyright the user entered is kept. (added on review)
 
 ### 8. Labels and build tasks
 
