@@ -75,7 +75,9 @@ fails.
 ### Requirement: Next runs one dry run
 
 Next SHALL ask the registry for one dry run with the parameter values and open Review & create with
-its result. Review SHALL show every field of the rendered component, grouped as in the regular
+its result. A dry run SHALL send only the parameter values and overrides; the Jira task key and
+comment are sent only by Create. Review SHALL be reached only through Next: changing a parameter
+discards the shown result, so Review never shows a component built from older values. Review SHALL show every field of the rendered component, grouped as in the regular
 wizard's Review, and every problem. While a dry run runs, Create SHALL be disabled.
 
 #### Scenario: Valid parameters
@@ -83,10 +85,15 @@ wizard's Review, and every problem. While a dry run runs, Create SHALL be disabl
 - **WHEN** every parameter passes and the user presses Next
 - **THEN** one dry run is sent and Review shows the rendered component
 
+#### Scenario: A changed parameter needs a new run
+
+- **WHEN** the user is on Review, goes back to Parameters and changes a value
+- **THEN** Review cannot be opened from the step list, and Next runs a new dry run
+
 #### Scenario: A parameter problem from the registry
 
 - **WHEN** the dry run reports a parameter problem, such as an employee who is no longer active
-- **THEN** the wizard returns to Parameters with the message under that parameter
+- **THEN** the wizard stays on Parameters with the message under that parameter
 
 ### Requirement: Problems name their parameters
 
@@ -127,7 +134,7 @@ stands.
 
 Fields the template marks overridable SHALL be editable on Review; every other field SHALL be
 read-only. An edited field SHALL be marked "changed from template" and checked as the user types
-with the Portal-only rules and the profile field rules. Leaving an edited field SHALL run a new dry
+with the Portal-only rules and the template's field rules from the profile listing. Leaving an edited field SHALL run a new dry
 run with the edit as an override. Clearing the edit SHALL remove the override and show the
 template's value again.
 

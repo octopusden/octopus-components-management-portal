@@ -122,8 +122,11 @@
         before
   - [ ] 7.2.4 template load failure → error with Retry, Next disabled
   - [ ] 7.2.5 Next disabled while a check fails; enabled when all pass
-  - [ ] 7.2.6 Next sends exactly one dry run; a parameter problem from it returns to Parameters
-        with the message on that input
+  - [ ] 7.2.6 Next sends exactly one dry run, with values and overrides and no Jira task key or
+        comment; a parameter problem from it keeps the wizard on Parameters with the message on
+        that input
+  - [ ] 7.2.6a after Review, changing a parameter discards the run: Review cannot be opened from
+        the step list until Next runs again
   - [ ] 7.2.7 a clone shows no template tiles
   - [ ] 7.2.8 templates but no regular profile → template tiles beside the classification
         choices
@@ -142,8 +145,9 @@
   - [ ] 8.1.4 the rendered VCS path off the ecosystem host shows the Portal message naming the
         source parameter; Create disabled
   - [ ] 8.1.5 only overridable fields are editable, each with the input for its field kind
-  - [ ] 8.1.6 an edited field is marked "changed from template" and checked while typing; no
-        dry run while typing; one dry run on leaving the field, with the override
+  - [ ] 8.1.6 an edited field is marked "changed from template" and checked while typing with the
+        Portal rules and the template's field rules from its listing entry; no dry run while
+        typing; one dry run on leaving the field, with the override
   - [ ] 8.1.7 clearing the edit removes the override and shows the template's value
   - [ ] 8.1.8 Create disabled while a run is in flight, while any problem stands, or while the
         Jira task key is empty or malformed
@@ -162,8 +166,8 @@
 
 - [ ] 9.1 Failing tests for `useAdminComponentProfiles` (fetch per tab open, error state).
 - [ ] 9.2 Failing component tests for `TemplatesPanel`:
-  - [ ] 9.2.1 every entry with id, title, kind, version, status; a failed entry lists its
-        problems
+  - [ ] 9.2.1 every entry with id, kind ("unknown" when absent), status, and title and version when live; a failed
+        entry lists its problems and shows its configuration text
   - [ ] 9.2.2 last load status and problems, configuration version, and the "how templates
         change" note
   - [ ] 9.2.3 a live template's details: parameters with settings, classification, overridable

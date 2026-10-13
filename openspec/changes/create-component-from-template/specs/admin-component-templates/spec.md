@@ -24,15 +24,17 @@ rest of the page. Users without it SHALL NOT reach the tab or its data.
 ### Requirement: Every profile and template with its status
 
 The tab SHALL list every profile and template the registry has configured, live or failed, with
-id, title, kind, version and status. A failed entry SHALL show every problem the registry
-reported. Above the list the tab SHALL show the last configuration load's result and problems, the
-configuration version, and that templates change by a reviewed change to service-config followed
-by a configuration reload. The list SHALL be read again each time the tab opens.
+id, kind ("unknown" when the registry could not read it) and status, and for a live entry its
+title and version. A failed entry SHALL show every problem the registry reported and its
+configuration text, so an administrator can see what was read. Above the list the tab SHALL show
+the last configuration load's result and problems, the configuration version, and that templates
+change by a reviewed change to service-config followed by a configuration reload. The list SHALL
+be read again each time the tab opens.
 
 #### Scenario: A failed template
 
 - **WHEN** a template failed to load with two problems
-- **THEN** it is listed as failed and shows both problems
+- **THEN** it is listed as failed and shows both problems and its configuration text
 
 #### Scenario: The last load failed
 

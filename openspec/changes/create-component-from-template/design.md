@@ -88,6 +88,9 @@ Overridable: `baseConfiguration.vcsEntries[0].vcsPath`, `baseConfiguration.jira.
 ### 3. When the dry run runs
 
 - On Next from Parameters, when the user leaves an edited overridable field, and on Try it.
+- A dry run sends the parameter values and overrides only. The registry validates the Jira task
+  key's format before anything else, so sending a half-typed key would fail every run with a 400.
+- Changing a parameter discards the last run; Review is reached only through Next.
 - Never on a keystroke. Each run replaces the shown result; a response that arrives after a newer
   run started is discarded.
 - While a run is in flight, Create is disabled and Review shows that checks are running.
@@ -128,6 +131,8 @@ Overridable: `baseConfiguration.vcsEntries[0].vcsPath`, `baseConfiguration.jira.
   override, and the field shows the template's value again.
 - While typing, the field is checked by `portalCreateRules` and the profile-rule checker on the
   request with the edit applied, so the user sees a Portal rule failure before leaving the field.
+  The template's field rules come from its entry in the profile listing; the template description
+  carries none.
 
 ### 7. Create and its failures
 
@@ -142,7 +147,8 @@ Overridable: `baseConfiguration.vcsEntries[0].vcsPath`, `baseConfiguration.jira.
 
 - `components/admin/TemplatesPanel.tsx`, a tab of Admin settings, reading
   `GET /admin/component-profiles` each time the tab opens.
-- The list: id, title, kind, version, status; failed entries expand to their problems. Above it:
+- The list: id, kind, status, and title and version for a live entry; failed entries expand to their problems and their
+  configuration text — the registry returns it for every entry, live or failed. Above it:
   the last load's status and problems, the configuration version, and how templates change.
 - Details of a live template: parameters with settings, classification, overridable paths, the
   configuration text in the existing `CodeBlock` with copy.
