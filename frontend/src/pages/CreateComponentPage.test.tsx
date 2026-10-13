@@ -1540,6 +1540,28 @@ describe('CreateComponentPage — clone mode', () => {
     expect((screen.getByPlaceholderText('AD userkey') as HTMLInputElement).value).toBe('alice')
   })
 
+  it('opens on the Profile step and holds Create when only profiles the user may not use match the source', async () => {
+    mockUseComponentProfiles.mockReturnValue({
+      ...PROFILES_OK,
+      data: (shippedProfiles.profiles as ComponentProfile[]).map((p) =>
+        p.classification.solution ? { ...p, usable: false, unusableReason: 'Not for your role' } : p,
+      ),
+    })
+    mockUseComponent.mockReturnValue({
+      data: makeSource({ name: 'pay-solution', solution: true, distributionExternal: true, distributionExplicit: true }),
+      isLoading: false,
+      error: null,
+    })
+    renderWizard('/components/new?from=c-1')
+    expect(screen.getByText('Choose component profile')).toBeDefined()
+    expect(screen.queryByText(/no profile matches/i)).toBeNull()
+    expect(screen.getByRole('radio', { name: /^Solution$/ })).toBeDisabled()
+    expect(screen.getAllByText('Not for your role').length).toBeGreaterThan(0)
+    await userEvent.click(screen.getByRole('button', { name: /Review & create/i }))
+    await userEvent.type(screen.getByLabelText(/Jira task key/i), 'ABC-1')
+    expect((screen.getByRole('button', { name: /^create component$/i }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
   it("sets the classification directly when no profile matches the source, starting from the source's", async () => {
     // Only Regular external is offered, so an internal source matches no profile.
     mockUseComponentProfiles.mockReturnValue({

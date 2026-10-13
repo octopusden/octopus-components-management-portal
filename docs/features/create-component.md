@@ -18,8 +18,9 @@ rule is [`component-key-format`](../../openspec/specs/component-key-format/spec.
   only). The create then names no profile and no field rules apply.
 - Scratch pre-selects the first usable profile. A clone pre-selects the first usable profile whose
   classification matches the source and whose key rule the source's key passes, else the first
-  usable one whose classification matches; when no usable profile matches it sets the
-  classification directly, starting from the source's, and names no profile.
+  usable one whose classification matches; when no profile has the classification it sets it
+  directly, starting from the source's, and names no profile; when only profiles the user may not
+  use have it, it opens on the Profile step and cannot be created.
 - The profile sets solution, external and explicit distribution; "Has explicit distribution?" is
   asked only when the profile's explicit value is `ask`.
 

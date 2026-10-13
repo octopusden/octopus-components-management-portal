@@ -146,8 +146,12 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
 - First usable profile whose classification matches the source (`solution` and `external`
   equal; `explicit` equal or `ask`) and whose `name` rules pass on the source key.
 - Otherwise the first usable profile whose classification matches.
-- Otherwise none is pre-selected and the clone sets its classification directly, starting from
-  the source's (Decision 10): it opens on General and sends no profile. The Profile gate
+- When only profiles the user may not use have the classification, none is selected: the clone
+  opens on Profile with them disabled and the Profile gate holds Create, as for a new component
+  with no usable profile. (changed on review: it fell back to direct classification, which sent
+  no profile and so sidestepped the restriction)
+- Otherwise — no profile has the classification — none is pre-selected and the clone sets its
+  classification directly, starting from the source's (Decision 10): it opens on General and sends no profile. The Profile gate
   (`profileMissing`) applies whenever profiles are offered and none is selected. (changed on
   review: the clone first opened on Profile and had to pick one, changing its classification)
 - The explicit answer is seeded from the source's `distributionExplicit`.
@@ -230,8 +234,8 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
 
 ### 10. No profiles: the classification is chosen directly
 
-- With an empty list, or for a clone whose source matches no usable profile
-  (`isManualClassification`), the Profile step shows a notice saying which and three controls
+- With an empty list, or for a clone whose classification no profile has, usable or not
+  (`isManualClassification`, `matchesAny` from `profileFromSource`), the Profile step shows a notice saying which and three controls
   instead of tiles:
   External / Internal, "Has explicit distribution?" (the existing Yes/No control), and a Solution
   checkbox shown only for External + Yes. Leaving explicit external clears Solution.

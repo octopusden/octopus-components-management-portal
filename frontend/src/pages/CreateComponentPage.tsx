@@ -135,8 +135,10 @@ function manualChanged(manual: { external: boolean; solution: boolean }, source:
   return manual.external !== start.external || manual.solution !== start.solution
 }
 
-function isManualClassification(noProfiles: boolean, isClone: boolean, initialProfileId: string | null): boolean {
-  return noProfiles || (isClone && initialProfileId === null)
+// A clone sets its classification directly only when no profile has it; when only profiles the
+// user may not use have it, the clone must pick a profile and cannot, as a new component cannot.
+function isManualClassification(noProfiles: boolean, isClone: boolean, matchesAny: boolean): boolean {
+  return noProfiles || (isClone && !matchesAny)
 }
 
 function classificationFlags(
@@ -314,10 +316,10 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
   const [profileId, setProfileId] = useState<string | null>(initial.profileId)
   const [explicitAnswer, setExplicitAnswer] = useState<boolean>(initial.explicit)
   const profile = profiles.find((p) => p.id === profileId) ?? null
-  // The user sets the classification directly when the registry has no profiles, or when a
-  // clone's source matches none of them (D10).
+  // The user sets the classification directly when the registry has no profiles, or when no
+  // profile has a clone's classification (D10).
   const noProfiles = profiles.length === 0
-  const manualMode = isManualClassification(noProfiles, isClone, initial.profileId)
+  const manualMode = isManualClassification(noProfiles, isClone, initial.matchesAny)
   const [manual, setManual] = useState(() => initialManualClassification(source))
   const flags = classificationFlags(manualMode, profile, explicitAnswer, manual)
   const profileMissing = profileId === null && !manualMode

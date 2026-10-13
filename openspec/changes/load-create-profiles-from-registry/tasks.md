@@ -369,3 +369,10 @@
       banner (full `path: message`); `useProfilesForWizard` moved to its own hook file and is tested
       against a real QueryClient — a seeded cache does not open the wizard, the fetched listing
       does; Retry clears "unavailable" (2 tests).
+
+## 19. Decisions on the re-review (added on review)
+
+- [x] 19.1 A clone whose matching profiles were all unusable fell back to direct classification,
+      sent no profile, and so sidestepped the restriction. Direct classification now applies only
+      when no profile has the classification (`profileFromSource` reports `matchesAny`); otherwise
+      the clone opens on Profile with the tiles disabled and Create held. 2 unit tests, 1 page test.

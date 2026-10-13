@@ -30,9 +30,10 @@
   profile is sent and no field rules apply — the create is checked as today.
 - Scratch pre-selects the first usable profile. A clone pre-selects the first usable profile
   whose classification matches the source and whose rules the source's key passes; failing that,
-  the first usable one whose classification matches; when no usable profile's classification
-  matches, the clone sets its classification directly, as when the registry has no profiles, starting from the
-  source's, and sends no profile.
+  the first usable one whose classification matches; when no profile has the classification, the
+  clone sets it directly, as when the registry has no profiles, starting from the source's, and
+  sends no profile. When only profiles the user may not use have it, the clone opens on the
+  Profile step with them disabled and cannot be created, as a new component cannot.
 
 **Classification from the profile**
 - The profile's classification sets solution, external and explicit distribution.

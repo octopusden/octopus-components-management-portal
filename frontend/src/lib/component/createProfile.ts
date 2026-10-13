@@ -55,16 +55,18 @@ function keyPassesRules(profile: ComponentProfile, key: string): boolean {
 /**
  * The profile a clone of [source] starts with: the first usable profile whose classification
  * matches the source and whose key rules the source's key passes; else the first usable one whose
- * classification matches; else none, and the clone sets its classification directly. The explicit
- * answer is seeded from the source either way.
+ * classification matches; else none. `matchesAny` tells "no profile has this classification" (the
+ * clone sets it directly) from "only profiles the user may not use have it" (the clone must pick
+ * one, and cannot). The explicit answer is seeded from the source either way.
  */
 export function profileFromSource(
   source: ComponentDetail,
   profiles: readonly ComponentProfile[],
-): { profileId: string | null; explicit: boolean } {
-  const candidates = profiles.filter((p) => p.usable && matchesClassification(p, source))
+): { profileId: string | null; explicit: boolean; matchesAny: boolean } {
+  const matching = profiles.filter((p) => matchesClassification(p, source))
+  const candidates = matching.filter((p) => p.usable)
   const chosen = candidates.find((p) => keyPassesRules(p, source.name ?? '')) ?? candidates[0]
-  return { profileId: chosen?.id ?? null, explicit: !!source.distributionExplicit }
+  return { profileId: chosen?.id ?? null, explicit: !!source.distributionExplicit, matchesAny: matching.length > 0 }
 }
 
 /**
@@ -74,9 +76,9 @@ export function profileFromSource(
 export function initialProfile(
   source: ComponentDetail | null,
   profiles: readonly ComponentProfile[],
-): { profileId: string | null; profile: ComponentProfile | null; explicit: boolean } {
-  const { profileId, explicit } = source
+): { profileId: string | null; profile: ComponentProfile | null; explicit: boolean; matchesAny: boolean } {
+  const { profileId, explicit, matchesAny } = source
     ? profileFromSource(source, profiles)
-    : { profileId: profiles.find((p) => p.usable)?.id ?? null, explicit: false }
-  return { profileId, profile: profiles.find((p) => p.id === profileId) ?? null, explicit }
+    : { profileId: profiles.find((p) => p.usable)?.id ?? null, explicit: false, matchesAny: profiles.length > 0 }
+  return { profileId, profile: profiles.find((p) => p.id === profileId) ?? null, explicit, matchesAny }
 }

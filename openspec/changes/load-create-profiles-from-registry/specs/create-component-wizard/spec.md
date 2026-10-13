@@ -63,8 +63,8 @@ it. This applies to a clone as well.
 
 ### Requirement: The classification is chosen directly
 
-When the listing loads but contains no `regular` profile, or a clone's source matches no usable
-profile, the Profile step SHALL say so — the registry has no profiles configured, or no profile
+When the listing loads but contains no `regular` profile, or no profile — usable or not — has a
+clone's classification, the Profile step SHALL say so — the registry has no profiles configured, or no profile
 matches this component — and SHALL offer the classification instead of tiles: External or
 Internal, "Has explicit distribution?", and Solution, which is offered only for an explicit
 external component. The create SHALL carry that classification, SHALL NOT name a profile, and no
@@ -120,8 +120,9 @@ and SHALL NOT be selectable by click or keyboard.
 A new component SHALL start with the first usable profile selected. A clone SHALL start with
 the first usable profile whose classification matches the source and whose field rules the
 source's Component Key passes; failing that, the first usable profile whose classification
-matches; failing that, the clone sets its classification directly, starting from the source's
-(see "The classification is chosen directly").
+matches. When no profile has the source's classification, the clone sets it directly, starting
+from the source's (see "The classification is chosen directly"); when only profiles the user may
+not use have it, none is selected and the clone cannot be created.
 
 #### Scenario: Scratch selects the first usable profile
 
@@ -136,9 +137,16 @@ matches; failing that, the clone sets its classification directly, starting from
 
 #### Scenario: Clone with no matching profile
 
-- **WHEN** no usable profile's classification matches the source
+- **WHEN** no profile's classification matches the source
 - **THEN** the clone opens on General; its Profile step says no profile matches and offers the
   classification choices, starting from the source's; no profile is sent
+
+#### Scenario: Clone whose matching profiles the user may not use
+
+- **WHEN** a solution is cloned and the Solution and DMP Bundle profiles are not usable for the
+  user
+- **THEN** the clone opens on the Profile step with those tiles disabled and their reason, and
+  Create stays disabled
 
 ### Requirement: The profile sets the classification
 

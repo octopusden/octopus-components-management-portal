@@ -58,7 +58,7 @@ describe('profileFromSource', () => {
 
   it('picks DMP Bundle for a solution whose key the Solution rule rejects', () => {
     const src = source({ name: 'payments-dmp-bundle', solution: true, distributionExternal: true, distributionExplicit: true })
-    expect(profileFromSource(src, profiles)).toEqual({ profileId: 'dmp-bundle', explicit: true })
+    expect(profileFromSource(src, profiles)).toMatchObject({ profileId: 'dmp-bundle', explicit: true })
   })
 
   it('picks Solution for a solution with a -solution key', () => {
@@ -68,7 +68,7 @@ describe('profileFromSource', () => {
 
   it('picks Regular internal for an internal component, seeding explicit from the source', () => {
     const src = source({ name: 'tools', distributionExternal: false, distributionExplicit: true })
-    expect(profileFromSource(src, profiles)).toEqual({ profileId: 'regular-internal', explicit: true })
+    expect(profileFromSource(src, profiles)).toMatchObject({ profileId: 'regular-internal', explicit: true })
   })
 
   it('falls back to the first classification match when no key rule passes', () => {
@@ -79,6 +79,17 @@ describe('profileFromSource', () => {
   it('selects none when no profile has the source classification', () => {
     const src = source({ name: 'odd', solution: true, distributionExternal: false, distributionExplicit: false })
     expect(profileFromSource(src, profiles).profileId).toBeNull()
+  })
+
+  it('selects none but reports a match when every matching profile is unusable', () => {
+    const src = source({ name: 'pay-solution', solution: true, distributionExternal: true, distributionExplicit: true })
+    const blocked = profiles.map((p) => (p.classification.solution ? { ...p, usable: false } : p))
+    expect(profileFromSource(src, blocked)).toEqual({ profileId: null, explicit: true, matchesAny: true })
+  })
+
+  it('reports no match when no profile has the source classification, usable or not', () => {
+    const src = source({ name: 'odd', solution: true, distributionExternal: false, distributionExplicit: false })
+    expect(profileFromSource(src, profiles).matchesAny).toBe(false)
   })
 
   it('never pre-selects an unusable profile', () => {
@@ -93,7 +104,7 @@ describe('initialProfile', () => {
 
   it('a new component opens with the first usable profile', () => {
     const withFirstUnusable = profiles.map((p, i) => (i === 0 ? { ...p, usable: false } : p))
-    expect(initialProfile(null, withFirstUnusable)).toEqual({
+    expect(initialProfile(null, withFirstUnusable)).toMatchObject({
       profileId: 'regular-internal',
       profile: byId('regular-internal'),
       explicit: false,
@@ -106,7 +117,7 @@ describe('initialProfile', () => {
   })
 
   it('opens with nothing selected when no profile is usable', () => {
-    expect(initialProfile(null, profiles.map((p) => ({ ...p, usable: false })))).toEqual({
+    expect(initialProfile(null, profiles.map((p) => ({ ...p, usable: false })))).toMatchObject({
       profileId: null,
       profile: null,
       explicit: false,
