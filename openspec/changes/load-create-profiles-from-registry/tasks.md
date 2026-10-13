@@ -13,8 +13,10 @@
       `CRS_SPEC_REF=component-profiles-from-config bash scripts/vendor-spec.sh`; `schema.d.ts`
       now has `/rest/api/4/component-profiles`, `ComponentProfileResponse` and the request's
       `profile`.
-- [ ] 1.1a Re-vendor from registry `main` once the registry change merges. Until then the
+- [x] 1.1a Re-vendor from registry `main` once the registry change merges. Until then the
       merge gate's `vendor-spec:check` (pinned to `main`) fails on this branch. (added on review)
+      Done after the registry change merged: `npm run vendor-spec` against `main` leaves
+      `v4.json` and `schema.d.ts` unchanged, and `vendor-spec:check` passes.
 - [x] 1.2 `npm run generate-types:check` passes; `tsc --noEmit` clean.
 
 ## 2. Profiles hook (Decision 1)
