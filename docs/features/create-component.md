@@ -38,7 +38,8 @@ rule is [`component-key-format`](../../openspec/specs/component-key-format/spec.
 ## Fields added at create
 
 - **Labels** (General → Classification): picked from the registry's labels list.
-- **Build Tasks** (Build): blank is not sent.
-- Both follow field-config (`component.labels`, `build.buildTasks`): readonly shows the field
-  disabled and a clone keeps the source's value; hidden removes the field and sends nothing.
+- **Build Tasks** (Build): blank is not sent; offered and sent only when `build.buildTasks` is
+  editable for the user (the registry rejects build tasks the user may not edit).
+- Labels follow `component.labels`: readonly shows them disabled and a clone keeps the source's;
+  hidden removes the field and sends none.
 - A clone starts with the source's labels and build tasks.

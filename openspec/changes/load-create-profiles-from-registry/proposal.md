@@ -76,9 +76,10 @@
   only).
 - Build gains a Build tasks field.
 - Both appear on Review and are sent with the create; left empty, the request is as today.
-- Both follow their field-config visibility (`component.labels`, `build.buildTasks`): editable,
-  shown disabled when readonly (a clone keeps the source's value), absent and not sent when
-  hidden.
+- Labels follow `component.labels`: editable, shown disabled when readonly (a clone keeps the
+  source's labels), absent and not sent when hidden. Build tasks are offered and sent only when
+  `build.buildTasks` is editable: the registry rejects build tasks the user may not edit, even
+  a clone source's.
 
 ### A note on the registry dependency
 

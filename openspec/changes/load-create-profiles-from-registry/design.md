@@ -197,8 +197,9 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
   form's labels; readonly → shown disabled, a clone keeps the source's labels; hidden → not
   shown and none sent.
 - Build tasks: an `Input` on Build, with `useFieldVisibility('build.buildTasks')`: editable →
-  trimmed, omitted when blank; readonly → shown disabled, a clone keeps the source's value;
-  hidden → not shown and stripped. `buildCreateRequest` takes both as
+  trimmed, omitted when blank; readonly or hidden → not shown and stripped, even a clone
+  source's: the registry's `enforceEditabilityOnCreate` rejects any build tasks the user may not
+  edit. (changed on review: readonly first kept the source's value, which the registry rejects) `buildCreateRequest` takes both as
   `{ labels, buildTasks }` visibilities.
 - Both added to `CreateFormValues`, `initialValues` (clone seeds from the source) and
   `buildCreateRequest`; when editable the form value wins over the source's copy.

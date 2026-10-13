@@ -846,14 +846,11 @@ describe('buildCreateRequest — labels and build tasks', () => {
     )
   })
 
-  it('keeps the source build tasks when readonly, and strips them when hidden', () => {
-    const readonly = buildCreateRequest(makeForm({ buildTasks: 'x' }), withBuildTasks('build'), undefined, true, false, {
-      buildTasks: 'readonly',
-    })
-    expect(readonly.baseConfiguration?.build?.buildTasks).toBe('build')
-    const hidden = buildCreateRequest(makeForm({ buildTasks: 'x' }), withBuildTasks('build'), undefined, true, false, {
-      buildTasks: 'hidden',
-    })
-    expect(hidden.baseConfiguration?.build).not.toHaveProperty('buildTasks')
+  it('sends no build tasks when readonly or hidden: the registry rejects a value the user may not edit', () => {
+    for (const buildTasks of ['readonly', 'hidden'] as const) {
+      const req = buildCreateRequest(makeForm({ buildTasks: 'x' }), withBuildTasks('build'), undefined, true, false, { buildTasks })
+      expect(req.baseConfiguration?.build).not.toHaveProperty('buildTasks')
+    }
   })
+
 })

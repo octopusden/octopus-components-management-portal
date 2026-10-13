@@ -300,8 +300,10 @@ start with the source's labels.
 
 The wizard SHALL offer a Build tasks field on the Build step, shown on Review and sent with the
 create; a blank value SHALL NOT be sent. The field SHALL follow the field-config visibility of
-`build.buildTasks`: editable, shown disabled when readonly (a clone keeps the source's build
-tasks), or not shown and not sent when hidden. A clone SHALL start with the source's build tasks.
+`build.buildTasks`: it SHALL be shown and sent only when editable for the user, since the
+registry rejects build tasks the user may not edit; readonly or hidden, it is not shown and no
+build tasks are sent, not even a clone source's. A clone SHALL start with the source's build tasks
+when the field is editable.
 
 #### Scenario: Build tasks are created with the component
 
@@ -320,5 +322,6 @@ tasks), or not shown and not sent when hidden. A clone SHALL start with the sour
 
 #### Scenario: Readonly
 
-- **WHEN** field-config makes `build.buildTasks` readonly for the user and a component is cloned
-- **THEN** the field is shown disabled with the source's build tasks, and they are sent unchanged
+- **WHEN** field-config makes `build.buildTasks` readonly for the user and a component with build
+  tasks is cloned
+- **THEN** the field is not shown and no build tasks are sent

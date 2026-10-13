@@ -1061,12 +1061,11 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
         </select>
         <FieldError message={errors.buildSystem?.message} />
       </Field>
-      {buildTasksVisibility !== 'hidden' && (
+      {buildTasksVisibility === 'editable' && (
         <Field label="Build Tasks" htmlFor="create-buildTasks" path="build.buildTasks">
           <Input
             id="create-buildTasks"
             placeholder="clean build"
-            disabled={buildTasksVisibility === 'readonly'}
             {...register('buildTasks')}
           />
           <FieldError message={errors.buildTasks?.message} />
@@ -1529,7 +1528,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
       <SummaryDiff
         values={values}
         showLabels={labelsVisibility !== 'hidden'}
-        showBuildTasks={buildTasksVisibility !== 'hidden'}
+        showBuildTasks={buildTasksVisibility === 'editable'}
         gated={gated}
         vcsApplies={vcsApplies}
         classification={classificationRecap()}
@@ -1891,7 +1890,7 @@ function fieldShowsError(field: string, display: FieldDisplay): boolean {
     case 'clientCode':
       return display.external && display.editable('clientCode')
     case 'buildTasks':
-      return display.buildTasksVisibility !== 'hidden'
+      return display.buildTasksVisibility === 'editable'
     case 'vcsUrl':
     case 'vcsBranch':
     case 'vcsTag':

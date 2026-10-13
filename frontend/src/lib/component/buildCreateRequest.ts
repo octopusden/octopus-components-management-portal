@@ -146,8 +146,8 @@ export interface CreateFormValues {
 //     from the source BASE row. Readonly falls back to the source escrow
 //     generation (form value ignored); HIDDEN strips generation from the copied
 //     escrow entirely (not part of a new component);
-//   - labels and the build aspect's buildTasks follow their field-config visibility:
-//     editable → the form wins, readonly → the source's, hidden → none;
+//   - labels follow their field-config visibility: editable → the form wins, readonly → the
+//     source's, hidden → none; the build aspect's buildTasks is sent only when editable;
 //   - copied from source: productType, systems, solution,
 //     parentComponentName, docs, securityGroups, releasesInDefaultBranch,
 //     jiraHotfixVersionFormat, vcsExternalRegistry, and from the BASE row the
@@ -266,9 +266,11 @@ function buildAspectFor(
   buildTasksVisibility: FieldVisibility,
 ): BuildAspect {
   const build: BuildAspect = { ...(sourceBuild ?? {}), buildSystem: form.buildSystem }
+  // Only an editable field is sent: the registry rejects any build tasks the user may not edit,
+  // even ones copied from a clone's source.
   const buildTasks = form.buildTasks.trim()
   if (buildTasksVisibility === 'editable' && buildTasks) build.buildTasks = buildTasks
-  else if (buildTasksVisibility !== 'readonly') delete build.buildTasks
+  else delete build.buildTasks
   return build
 }
 
@@ -292,9 +294,9 @@ export function buildCreateRequest(
   // not part of a new component's escrow, so its value is stripped even from a
   // cloned source escrow — keeping the payload consistent with the hidden UI.
   escrowGenerationHidden = false,
-  // Field-config visibility of the fields added at create, gated like escrow generation:
-  // editable → the form value wins over a cloned source's; readonly → the source's is kept;
-  // hidden → nothing is sent.
+  // Field-config visibility of the fields added at create: editable → the form value wins over a
+  // cloned source's. Labels: readonly → the source's is kept, hidden → none. Build tasks: only
+  // editable ones are sent.
   visibility: CreateFieldVisibility = {},
 ): ComponentCreateRequest {
   const labelsVisibility = visibility.labels ?? 'editable'

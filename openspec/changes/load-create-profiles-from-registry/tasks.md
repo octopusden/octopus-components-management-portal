@@ -335,3 +335,9 @@
       the `buildCreateRequest` header, "skips the Profile step" (page test, e2e comment).
 - [x] 17.3 Test for "Retry succeeds": the wizard opens with the tiles (store-backed hook result).
       `CreateComponentPage.test.tsx` 93/93.
+
+## 18. Re-review fixes (added on review)
+
+- [x] 18.1 A clone with readonly Build tasks kept the source's value, which the registry rejects
+      (`enforceEditabilityOnCreate`: any value for a field the user may not edit). Build tasks are
+      now shown and sent only when editable (`buildAspectFor`); readonly behaves as hidden.

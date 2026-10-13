@@ -1127,7 +1127,7 @@ describe('CreateComponentPage — labels and build tasks', () => {
     expect(screen.getByRole('combobox', { name: 'Add label' })).toBeDisabled()
   })
 
-  it('shows readonly build tasks disabled with the source value in a clone', async () => {
+  it('does not show readonly build tasks, which the registry would reject', async () => {
     mockUseFieldConfig.mockReturnValue({ data: { build: { buildTasks: { visibility: 'readonly' } } }, isLoading: false, isError: false })
     mockUseComponent.mockReturnValue({
       data: makeSource({
@@ -1138,10 +1138,9 @@ describe('CreateComponentPage — labels and build tasks', () => {
     })
     renderWizard('/components/new?from=c-1')
     await userEvent.click(screen.getByRole('button', { name: /^Build$/i }))
-    const input = screen.getByLabelText(/^Build Tasks/i) as HTMLInputElement
-    expect(input).toBeDisabled()
-    expect(input.value).toBe('assemble')
+    expect(screen.queryByLabelText(/^Build Tasks/i)).toBeNull()
   })
+
 
   it('does not show Labels when field-config hides them', async () => {
     mockUseFieldConfig.mockReturnValue({ data: { component: { labels: { visibility: 'hidden' } } }, isLoading: false, isError: false })
