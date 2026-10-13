@@ -48,6 +48,9 @@
 - The only change: the explicit and external flags those defaults depend on come from the
   pre-selected registry profile instead of the built-in one. With the shipped profiles the first
   one is Regular external, so a new component starts exactly as today.
+- When the classification stops being explicit external, a copyright the user has not changed
+  (the default, or a clone's copied one) is cleared, since only an explicit external component
+  carries one.
 
 **The profile's field rules as fast checks**
 - While the user types, every field rule of the chosen profile is checked, as a whole-value
@@ -76,6 +79,8 @@
   only).
 - Build gains a Build tasks field.
 - Both appear on Review and are sent with the create; left empty, the request is as today.
+- Create stays disabled when the field settings fail to load, not only while they load, and
+  Review says why: every field would otherwise count as not editable and be dropped silently.
 - Labels follow `component.labels`: editable, shown disabled when readonly (a clone keeps the
   source's labels), absent and not sent when hidden. Build tasks are offered and sent only when
   `build.buildTasks` is editable: the registry rejects build tasks the user may not edit, even
@@ -98,7 +103,8 @@
 - `frontend/src/lib/component/createFormModel.ts` — the built-in profile list, the flags
   function and the solution-key part of the key check are removed; the schema checks the
   profile's rules and `initialValues` takes the pre-selected profile.
-- New: `hooks/useComponentProfiles.ts` (the listing), `lib/component/createProfile.ts`
+- New: `hooks/useComponentProfiles.ts` (the listing), `hooks/useProfilesForWizard.ts` (the
+  listing the wizard opens on), `lib/component/createProfile.ts`
   (classification, pre-selection, the no-profiles flags) and `lib/component/profileRules.ts`
   (the field-rule checker and the rule-error parser).
 - `lib/component/buildCreateRequest.ts` (labels, build tasks), `hooks/useFieldConfig.ts`

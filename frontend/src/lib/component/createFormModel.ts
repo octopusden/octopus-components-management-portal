@@ -77,6 +77,16 @@ export function componentKeyError(key: string, clientCode?: string): string | nu
 // built per-render from field-config visibility (a hidden/readonly field is
 // removed and must not fire its requirement) and from the chosen profile's field
 // rules, checked against the request the form would send (D3).
+/**
+ * The wizard field that shows a rule failure on [rulePath]. The request drops blank ownership
+ * rows, so its first mapping is the first non-blank row.
+ */
+export function formFieldOfRule(rulePath: string, ownership: readonly { groupId: string }[]): string | undefined {
+  const field = formFieldOfRulePath(rulePath)
+  const firstSentRow = Math.max(0, ownership.findIndex((row) => row.groupId.trim() !== ''))
+  return field?.replace(/^ownership\.0\./, `ownership.${firstSentRow}.`)
+}
+
 // One issue per failing profile rule, on the form field for its path, tagged so the page can
 // list the ones whose field shows no error. The key shows one message at a time: "required" or
 // the charset rule come first, so a key rule waits while either applies.
@@ -85,14 +95,12 @@ function addProfileRuleIssues(
   rules: readonly ProfileFieldRule[],
   request: ComponentCreateRequest,
   keyHasOtherError: boolean,
-  // The request drops blank ownership rows, so its first mapping is the first non-blank row.
-  firstSentOwnershipRow: number,
+  ownership: readonly { groupId: string }[],
 ) {
   for (const [rulePath, message] of profileRuleErrors(rules, request)) {
-    const field = formFieldOfRulePath(rulePath)
+    const field = formFieldOfRule(rulePath, ownership)
     if (!field || (field === 'name' && keyHasOtherError)) continue
-    const rowField = field.replace(/^ownership\.0\./, `ownership.${firstSentOwnershipRow}.`)
-    const path = rowField.split('.').map((segment) => (/^\d+$/.test(segment) ? Number(segment) : segment))
+    const path = field.split('.').map((segment) => (/^\d+$/.test(segment) ? Number(segment) : segment))
     ctx.addIssue({ code: z.ZodIssueCode.custom, path, message, params: { profileRule: true } })
   }
 }
@@ -168,7 +176,7 @@ export function makeCreateSchema(
         profileRules,
         buildCreateRequest(v, source, editable, true, false, visibility),
         !!keyError || !v.name.trim(),
-        Math.max(0, v.ownership.findIndex((row) => row.groupId.trim() !== '')),
+        v.ownership,
       )
       // Legacy EscrowConfigValidator rule: a VCS root is mandatory for every
       // build system outside the exempt set.

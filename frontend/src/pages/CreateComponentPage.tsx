@@ -57,7 +57,7 @@ import {
   DEPRECATED_BUILD_SYSTEMS,
   type CreateFormValues,
 } from '../lib/component/buildCreateRequest'
-import { makeCreateSchema, initialValues, type ComponentDefaults } from '../lib/component/createFormModel'
+import { formFieldOfRule, makeCreateSchema, initialValues, type ComponentDefaults } from '../lib/component/createFormModel'
 import {
   asksExplicit,
   flagsForProfile,
@@ -65,7 +65,7 @@ import {
   manualFlags,
   type ProfileFlags,
 } from '../lib/component/createProfile'
-import { formFieldOfRulePath, ruleErrorOf, RULE_FORM_FIELDS } from '../lib/component/profileRules'
+import { ruleErrorOf, RULE_FORM_FIELDS } from '../lib/component/profileRules'
 import type { ComponentDetail } from '../lib/types'
 import { OWNERSHIP_MODES } from '../lib/artifactOwnership'
 import { validateJiraKey, normalizeJiraKey, normalizeChangeComment } from '../lib/editor/jiraKey'
@@ -97,8 +97,8 @@ const STEP_SUBTITLES: Record<StepId, string> = {
 const SCRATCH_STEPS: StepId[] = ['profile', 'general', 'build', 'vcs', 'jira', 'distribution', 'escrow', 'review']
 // Clone keeps the Profile step too: the profile is pre-derived from the source
 // but stays editable (changing it resets the Component Key + recomputes flags).
-// A clone always opens on General: with no matching profile it sets its classification there
-// directly, starting from the source's.
+// A clone opens on General unless only unusable profiles have its classification; with no matching
+// profile it sets its classification there directly, starting from the source's.
 const CLONE_STEPS: StepId[] = ['profile', 'general', 'build', 'vcs', 'jira', 'distribution', 'escrow', 'review']
 
 // A registry rejection of the profile (`profile: …`) belongs to the Profile step; one of a
@@ -107,10 +107,11 @@ function routeProfileRejection(
   rawBody: string,
   fieldErrors: Map<string, string>,
   setError: UseFormSetError<CreateFormValues>,
+  ownership: readonly { groupId: string }[],
 ): StepId | null {
   if (fieldErrors.get('profile')) return 'profile'
   const ruleError = ruleErrorOf(rawBody)
-  const field = ruleError && formFieldOfRulePath(ruleError.path)
+  const field = ruleError && formFieldOfRule(ruleError.path, ownership)
   if (!ruleError || !field) return null
   setError(field as FieldPath<CreateFormValues>, { type: 'server', message: ruleError.message })
   return stepOfField(field)
@@ -680,7 +681,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
       }
       if (err instanceof ApiError && err.status === 400) {
         const fieldErrors = parseServerFieldErrors(err.rawBody)
-        stepId = routeProfileRejection(err.rawBody, fieldErrors, setError) ?? stepId
+        stepId = routeProfileRejection(err.rawBody, fieldErrors, setError, formValues.ownership) ?? stepId
         if (fieldErrors.get('name')) {
           setError('name', { type: 'server', message: fieldErrors.get('name')! })
           stepId = 'general'
@@ -1903,12 +1904,12 @@ interface FieldDisplay {
   hasError: (field: string) => boolean
 }
 
-// Whether the wizard renders this field's error under it. Fields not listed (the version prefix
-// and formats, the Docker flavor) never do.
+// Whether the wizard renders this field's error under it. Fields not listed (the version prefix,
+// the line/minor/release/build formats, the Docker flavor) never do.
 function fieldShowsError(field: string, display: FieldDisplay): boolean {
-  switch (field) {
+  switch (field.replace(/^ownership\.\d+\./, 'ownership.')) {
     case 'name':
-    case 'ownership.0.groupId':
+    case 'ownership.groupId':
     case 'jiraProjectKey':
     case 'versionFormat':
       return true

@@ -108,8 +108,10 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
   them.
 - The reader covers the registry's path list (Context); a rule on any other path is skipped.
   `artifactIds[0].groupPattern` reads the first group of a `,`/`|`-separated pattern, since the
-  registry stores one mapping per group; its message goes to the first non-blank ownership row,
-  since blank rows are not sent.
+  registry stores one mapping per group. `displayName` is read trimmed, as the registry stores
+  it. Its message — live or from a rejection (`formFieldOfRule`) — goes to the first non-blank
+  ownership row, since blank rows are not sent. (changed on review: a rejection went to row 0
+  and the live message showed twice when row 0 was blank)
 - A second table maps each path to the wizard field that shows its message: `name`,
   `displayName`, `clientCode`, `ownership.0.groupId`, `buildTasks`, `vcsUrl`, `vcsBranch`,
   `vcsTag`, `jiraProjectKey`, `versionPrefix`, the version-format fields, and
@@ -132,7 +134,8 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
 - A tagged issue with no message under its field is listed at the top of its step
   (`StepRuleMessages`), so Create is never held without a visible reason. That covers a field the
   step shows no error for (`fieldShowsError`: a field the user may not edit, a VCS field without a
-  VCS block, the version prefix and formats, a coordinate when not explicit external) and a field
+  VCS block, the version prefix, the line/minor/release/build formats, the Docker flavor, a
+  coordinate when not explicit external) and a field
   the form holds no error for yet: RHF validates only the field being changed, so a rule failing
   on a seeded or untouched value has nothing under it.
 - A profile switch revalidates the rule-mapped fields showing a message (`RULE_FORM_FIELDS`), so
@@ -152,7 +155,7 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
   no profile and so sidestepped the restriction)
 - Otherwise — no profile has the classification — none is pre-selected and the clone sets its
   classification directly, starting from the source's (Decision 10): it opens on General and sends no profile. The Profile gate
-  (`profileMissing`) applies whenever profiles are offered and none is selected. (changed on
+  (`profileMissing`) applies whenever tiles are shown and none is selected. (changed on
   review: the clone first opened on Profile and had to pick one, changing its classification)
 - The explicit answer is seeded from the source's `distributionExplicit`.
 - Picking another profile resets the key, as today.
@@ -187,6 +190,11 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
   `routeProfileRejection`, outside `onSubmit`.
 - A profile change, an explicit-answer change, or a manual classification change marks the
   wizard as touched for the unsaved-changes guard, as a profile-only change did before.
+- A profile or manual classification change clears a Profile-step rejection, so Next is free
+  again.
+- Create is held while field-config is loading, as before, and now also when it failed to load:
+  every field would count as not editable and be dropped silently (labels and build tasks among
+  them). Review says why. (added on review)
 
 ### 7. Today's pre-filled values
 
@@ -204,8 +212,10 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
   No), so a new component's initial values are byte-for-byte today's; a test pins that.
 - Picking another profile changes the flags and clears the key, as before; and when the
   classification stops being explicit external, a copyright still equal to the one the wizard
-  started with is cleared (`clearDefaultCopyrightUnless`), since that default applies only to an
-  explicit external component. A copyright the user entered is kept. (added on review)
+  started with — the component default, or a clone's copied value — is cleared
+  (`clearDefaultCopyrightUnless`), since a copyright applies only to an explicit external
+  component. The same holds for a classification set directly. A copyright the user entered is
+  kept. (added on review)
 
 ### 8. Labels and build tasks
 
@@ -221,10 +231,6 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
 - Both added to `CreateFormValues`, `initialValues` (clone seeds from the source) and
   `buildCreateRequest`; when editable the form value wins over the source's copy.
 - Review lists each under its step's group when the field is shown.
-
-- Create is held while field-config is loading, as before, and now also when it failed to load:
-  every field would count as not editable and be dropped silently (labels and build tasks among
-  them). Review says why. (added on review)
 
 ### 9. Registry container in e2e and local dev
 

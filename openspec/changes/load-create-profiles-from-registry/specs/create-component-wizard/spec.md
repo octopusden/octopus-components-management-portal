@@ -117,7 +117,8 @@ and SHALL NOT be selectable by click or keyboard.
 
 ### Requirement: A profile is pre-selected
 
-A new component SHALL start with the first usable profile selected. A clone SHALL start with
+A new component SHALL start with the first usable profile selected; when no profile is usable,
+none is selected and it cannot be created. A clone SHALL start with
 the first usable profile whose classification matches the source and whose field rules the
 source's Component Key passes; failing that, the first usable profile whose classification
 matches. When no profile has the source's classification, the clone sets it directly, starting
@@ -128,6 +129,11 @@ not use have it, none is selected and the clone cannot be created.
 
 - **WHEN** a new component is started and the first profile is usable
 - **THEN** it is selected
+
+#### Scenario: No usable profile
+
+- **WHEN** a new component is started and the registry marks every profile as not usable
+- **THEN** no profile is selected and Next and Create stay disabled
 
 #### Scenario: Clone selects the profile whose rules the key passes
 
@@ -203,7 +209,10 @@ The wizard SHALL check every field rule of the chosen profile, as a match of the
 against the value the create request would carry at the rule's path, while the user types, and
 SHALL show the rule's message under the wizard field for that path; when that field shows no
 error on its step (a field the user may not edit, a coordinate of another type, the version
-prefix and formats), the message SHALL be shown at the top of that step. A path the request would
+prefix, the line, minor, release or build format), or has none to show yet (a value the user
+has not changed), the message SHALL be shown at the top of that step. As the registry stores
+them, the Display Name SHALL be checked trimmed and the ownership pattern by its first group,
+with the message under the first Group ID row that is filled in. A path the request would
 not carry, such as a field the user may not edit or a coordinate of another type, SHALL be
 checked as an empty value. A rule on a path the wizard does not know, or whose pattern the
 browser cannot compile, SHALL be skipped. The Component Key's character check SHALL run first;
@@ -248,6 +257,12 @@ the key's profile rule is shown only once the character check passes.
 - **WHEN** the chosen profile has a rule on `baseConfiguration.jira.versionPrefix` that the
   prefix breaks
 - **THEN** the Jira step shows the rule's message at its top
+
+#### Scenario: An ownership rule with a blank first row
+
+- **WHEN** the chosen profile has a rule on `artifactIds[0].groupPattern`, the first Group ID row
+  is blank and the second breaks the rule
+- **THEN** the message is shown once, under the second row
 
 #### Scenario: An unusable pattern is skipped
 

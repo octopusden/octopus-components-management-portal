@@ -23,6 +23,8 @@ rule is [`component-key-format`](../../openspec/specs/component-key-format/spec.
   use have it, it opens on the Profile step and cannot be created.
 - The profile sets solution, external and explicit distribution; "Has explicit distribution?" is
   asked only when the profile's explicit value is `ask`.
+- When the classification stops being explicit external, a copyright the user has not changed
+  (the default, or a clone's copied one) is cleared.
 
 ## Checks and create
 
@@ -33,6 +35,7 @@ rule is [`component-key-format`](../../openspec/specs/component-key-format/spec.
 - Create sends the profile id. A rejection on `profile` opens the Profile step; a rule rejection on
   a create-request path (e.g. `baseConfiguration.jira.projectKey`) opens that field's step, which
   shows the message at its top.
+- Create stays disabled while field settings load or when they fail to load; Review says why.
 - The editor's Solution toggle does not use the profile rules yet
   ([TD-006](../tech-debt/TD-006-solution-key-patterns-second-source.md)).
 
@@ -43,4 +46,4 @@ rule is [`component-key-format`](../../openspec/specs/component-key-format/spec.
   editable for the user (the registry rejects build tasks the user may not edit).
 - Labels follow `component.labels`: readonly shows them disabled and a clone keeps the source's;
   hidden removes the field and sends none.
-- A clone starts with the source's labels and build tasks.
+- A clone starts with the source's labels, and with its build tasks when the user may edit them.

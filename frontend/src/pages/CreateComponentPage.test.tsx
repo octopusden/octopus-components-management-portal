@@ -38,10 +38,8 @@ vi.mock('../hooks/useFieldOptions', () => ({
 const mockUseSupportedGroups = vi.fn(() => ({ groups: [] as string[], isLoading: false }))
 vi.mock('../hooks/useSupportedGroups', () => ({ useSupportedGroups: () => mockUseSupportedGroups() }))
 const mockUsePortalLinks = vi.fn(() => ({ data: undefined as unknown }))
-const mockUsePortalConfig = vi.fn(() => ({ data: { solutionKeyPatterns: ['-solution', 'dmp-bundle'] } as unknown }))
 vi.mock('../hooks/useInfo', () => ({
   usePortalLinks: () => mockUsePortalLinks(),
-  usePortalConfig: () => mockUsePortalConfig(),
 }))
 vi.mock('../hooks/useEmployees', () => ({
   lookupEmployee: mockLookupEmployee,
@@ -174,7 +172,6 @@ beforeEach(() => {
   mockUseComponentDefaults.mockReturnValue(COMPONENT_DEFAULTS_OK)
   mockUseSupportedGroups.mockReturnValue({ groups: [], isLoading: false })
   mockUsePortalLinks.mockReturnValue({ data: undefined })
-  mockUsePortalConfig.mockReturnValue({ data: { solutionKeyPatterns: ['-solution', 'dmp-bundle'] } })
   mockUseCurrentUser.mockReturnValue({ data: undefined, isLoading: false })
   mockUseComponentProfiles.mockReturnValue(PROFILES_OK)
 })
@@ -1013,6 +1010,21 @@ describe('CreateComponentPage — profile rules on fields the step does not show
     expect(screen.getByText(/Version prefix must start with pfx-/)).toBeDefined()
   })
 
+  it('shows an ownership rule once, under the first filled row, when the first row is blank', async () => {
+    withRule('artifactIds[0].groupPattern', 'org\\..*', 'Group must start with org.')
+    renderWizard()
+    await clickNext()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await clickNext()
+    await userEvent.type(screen.getByLabelText('Group ID 1'), 'org.first')
+    await userEvent.click(screen.getByRole('button', { name: /Add one more groupId/ }))
+    await userEvent.type(screen.getByLabelText('Group ID 2'), 'com.fo')
+    await userEvent.clear(screen.getByLabelText('Group ID 1'))
+    await userEvent.type(screen.getByLabelText('Group ID 2'), 'o')
+    await waitFor(() => expect(screen.getAllByText('Group must start with org.')).toHaveLength(1))
+  })
+
   it('lists a rule failing on a seeded value the user has not touched', async () => {
     withRule('baseConfiguration.jira.versionFormat', 'X', 'Full version format must be X')
     renderWizard()
@@ -1092,6 +1104,25 @@ describe('CreateComponentPage — the default copyright follows explicit externa
     await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/ }))
     await clickNext()
     expect(copyright().value).toBe('(c) Mine')
+  })
+
+  it("clears a clone's copied copyright when the classification set directly stops being explicit external", async () => {
+    // Only Regular internal is offered, so an explicit external source matches no profile.
+    mockUseComponentProfiles.mockReturnValue({
+      ...PROFILES_OK,
+      data: (shippedProfiles.profiles as ComponentProfile[]).filter((p) => p.id === 'regular-internal'),
+    })
+    mockUseComponent.mockReturnValue({
+      data: makeSource({ distributionExternal: true, distributionExplicit: true, copyright: '(c) Source' }),
+      isLoading: false,
+      error: null,
+    })
+    renderWizard('/components/new?from=c-1')
+    expect(copyright().value).toBe('(c) Source')
+    await userEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Internal' }))
+    await clickNext()
+    expect(copyright().value).toBe('')
   })
 })
 
@@ -1579,7 +1610,7 @@ describe('CreateComponentPage — clone mode', () => {
     renderWizard('/components/new?from=c-1')
 
     expect(screen.getByText('Clone svc-alpha')).toBeDefined()
-    // No Profile step in clone.
+    // A clone whose profile is pre-selected skips the Profile step.
     expect(screen.queryByText('Choose component profile')).toBeNull()
     expect(screen.getByText(/Excluded \(re-enter\):/i)).toBeDefined()
     // Component Key (unique) is cleared, not copied.

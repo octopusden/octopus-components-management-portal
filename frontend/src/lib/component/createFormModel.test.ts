@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   componentKeyCharsetError,
+  formFieldOfRule,
   renameKeyCharsetError,
   initialValues,
   makeCreateSchema,
@@ -364,6 +365,16 @@ describe('makeCreateSchema — the chosen profile\'s field rules', () => {
     const issues = issuesOn([rule('artifactIds[0].groupPattern', 'org\\..*')], values)
     expect(messagesAt(issues, 'ownership.1.groupId')).toEqual(['rule on artifactIds[0].groupPattern'])
     expect(messagesAt(issues, 'ownership.0.groupId')).toEqual([])
+  })
+
+  it('maps a rule rejection on the ownership pattern to the first row that is sent', () => {
+    const rows = [
+      { groupId: ' ', mode: 'ALL', tokens: [] },
+      { groupId: 'com.foo', mode: 'ALL', tokens: [] },
+    ]
+    expect(formFieldOfRule('artifactIds[0].groupPattern', rows)).toBe('ownership.1.groupId')
+    expect(formFieldOfRule('artifactIds[0].groupPattern', [])).toBe('ownership.0.groupId')
+    expect(formFieldOfRule('baseConfiguration.jira.projectKey', rows)).toBe('jiraProjectKey')
   })
 
   it('does not add a rule message to a blank key, which already shows "required"', () => {

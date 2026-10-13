@@ -118,13 +118,14 @@
   - [x] 7.1.4 classification matches but no rule passes → first classification match
   - [x] 7.1.5 no classification match → none
   - [x] 7.1.6 an unusable profile is never pre-selected
-  - [x] 7.1.7 (superseded by 16.2) a clone with nothing pre-selected now sets its
+  - [x] 7.1.7 (superseded by 16.2, narrowed by 19.1) a clone with nothing pre-selected now sets its
         classification directly and opens on General
 - [x] 7.2 Rewrite `profileFromSource` (now in `createProfile.ts`, the old one removed from
       `createFormModel.ts`); drop the re-seed on `solutionKeyPatterns` arrival (the
       profiles are loaded before the wizard mounts, so no re-seed is needed); open a clone on
       Profile when nothing is pre-selected and extend the Profile gate to clones. (superseded by
-      16.2: such a clone now sets its classification directly and opens on General)
+      16.2: such a clone now sets its classification directly and opens on General; narrowed by
+      19.1: only when no profile has the classification, unusable-only matches open on Profile)
 - [x] 7.3 Confirm tests pass. `createProfile.test.ts` 11/11; `CreateComponentPage.test.tsx`
       63/63 — the clone test for a late `solutionKeyPatterns` re-seed is removed with the
       re-seed; the wizard no longer reads portal-config. `tsc`, `eslint .` clean.
@@ -190,7 +191,8 @@
       when `component.labels` is editable, else the source's as before. Build tasks: gated like
       escrow generation — editable → form wins (blank drops a copied value), readonly → source's
       kept, hidden → stripped (`buildCreateRequest` gains `buildTasksVisibility`). (changed by
-      16.5: Labels follow visibility like Build tasks; both are passed as `{ labels, buildTasks }`)
+      16.5: Labels follow visibility; both are passed as `{ labels, buildTasks }`. Readonly build
+      tasks changed by 18.1: not shown, not sent)
 - [x] 10.2a Request-shape cases in `buildCreateRequest.test.ts` (8 new); the clone general-fields
       test now seeds labels as `initialValues` does; the `main` snapshot (9.1.1) gains the two
       new empty fields. (added on review)
@@ -281,12 +283,13 @@
       `buildCreateRequest`, `types.ts`, the e2e helper and docs; `crs.version` is bumped only once
       the registry is released; the contract is vendored from the registry branch until it
       merges; Labels follow editability (not shown when not editable; superseded by 16.5) and Build tasks follow
-      visibility (readonly shown disabled); the query's `retry: false`; the rule cache is per rule
+      visibility (readonly shown disabled; superseded by 18.1); the query's `retry: false`; the rule cache is per rule
       object; the first failing rule per path wins; the Retry wording no longer claims the clone
       source error has one; the Profile step shows a profile rejection; the guard covers profile
       and manual classification changes.
 - [x] 15.2 Tests for scenarios that had none: Labels not editable (now "shows readonly labels
-      disabled with the source labels in a clone", 16.5), readonly Build tasks in a clone,
+      disabled with the source labels in a clone", 16.5), readonly Build tasks in a clone (now
+      "does not show readonly build tasks, which the registry would reject", 18.1),
       answering No clears Solution (`CreateComponentPage.test.tsx` 87/87 then).
 
 ## 16. Fixes from the alignment pass (added on review)
@@ -294,12 +297,13 @@
 - [x] 16.1 A reopened wizard opened on the cached listing, and a failed background refetch replaced
       the open form with the error panel. `useProfilesForWizard` (page) waits for a listing
       fetched after mount, keeps it while the wizard is open, and reports the error only while
-      none has arrived. Tests: waits for a fresh listing; keeps the open wizard when a later
+      none has arrived (moved to `hooks/useProfilesForWizard.ts` by 18.9). Tests: waits for a fresh listing; keeps the open wizard when a later
       refetch fails (store-backed hook result).
 - [x] 16.2 A clone whose source matches no usable profile opened on Profile and had to pick one,
       changing its classification. It now sets the classification directly, starting from the
       source's, with a "no profile matches" notice; opens on General and sends no profile
-      (`isManualClassification`, design Decisions 4 and 10).
+      (`isManualClassification`, design Decisions 4 and 10). (narrowed by 19.1: only when no
+      profile has the classification; unusable-only matches open on Profile)
 - [x] 16.3 A clone of a solution that is not explicit external kept `solution` in its direct
       classification; it was hidden and not sent, but came back ticked once the user chose
       External + Yes. `initialManualClassification` now seeds Solution through `manualFlags`.
@@ -307,7 +311,7 @@
       Every step a rejection routes to now shows it at the top (`StepServerError`), replacing the
       Profile-only banner; the Maven-group rejection test asserts the message on Distribution.
 - [x] 16.5 A hidden Labels field still sent a clone source's labels, and readonly Labels were hidden
-      rather than shown disabled like Build Tasks. Labels now follow `useFieldVisibility` the same
+      rather than shown disabled like Build Tasks (whose readonly case 18.1 later dropped). Labels now follow `useFieldVisibility` the same
       way (readonly: disabled, source's kept; hidden: none sent). `buildCreateRequest` takes
       `{ labels, buildTasks }` visibilities; the build-tasks branch moved to `buildAspectFor`,
       keeping the function at `main`'s cognitive complexity (30).
@@ -324,7 +328,8 @@
 
 - [x] 17.1 Docs: the fresh listing kept while open (spec, design Decision 1, proposal, feature
       doc) and a later failed refetch scenario; "Create another" reuses the listing; the clone
-      falls back to direct classification when no *usable* profile matches; rule messages shown at
+      falls back to direct classification when no *usable* profile matches (superseded by 19.1:
+      when no profile has the classification); rule messages shown at
       the top of the step when the field shows none (spec, Decision 3) and for rejections
       (spec, feature doc); the solution flag is sent only when editable (spec), from `manualFlags`
       in direct classification (Decision 6); the build-tasks exception to "checked against the
@@ -383,3 +388,20 @@
 - [x] 19.3 With field-config failed to load, every field counted as not editable and Create still
       went ahead, silently dropping values (a clone's labels and build tasks among them). Create is
       now held on a field-config error too, and Review says why (1 page test).
+
+## 20. Third alignment pass (added on review)
+
+- [x] 20.1 With the first ownership row blank, the rule's message showed both under the first
+      filled row and at the top of Build, and a rejection on `artifactIds[0].groupPattern` went to
+      row 0. `formFieldOfRule` maps the path to the first filled row for both, and
+      `fieldShowsError` accepts any row. 1 unit test, 1 page test (fails without the fix).
+- [x] 20.2 Docs: the Profile gate applies when tiles are shown (Decision 4); the field-config
+      bullet moved to Submit (Decision 6), which also notes a profile change clears a Profile-step
+      rejection; the fields that show no error (Decision 3, spec); the trimmed Display Name and
+      the ownership pattern's first group (spec); a new component with no usable profile (spec);
+      the copyright clearing also covers a clone's copied value and direct classification
+      (Decision 7, proposal, feature doc); field-config failure holds Create (proposal, feature
+      doc); a clone's build tasks only when editable (feature doc); `useProfilesForWizard.ts` in
+      Affected areas; superseded notes on 7.1.7, 7.2, 10.2, 15.1, 15.2, 16.1, 16.2, 16.5, 17.1.
+- [x] 20.3 Tests: clearing a clone's copied copyright from the direct classification (1 page
+      test); the stale `usePortalConfig` mock and the "No Profile step in clone" comment removed.
