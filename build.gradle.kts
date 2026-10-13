@@ -135,6 +135,10 @@ repositories {
                 metadataSources {
                     artifact()
                 }
+                credentials {
+                    username = providers.gradleProperty("artifactoryUser").orNull
+                    password = providers.gradleProperty("artifactoryPassword").orNull
+                }
             }
         }
         filter {
