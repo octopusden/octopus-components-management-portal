@@ -120,6 +120,27 @@ repositories {
     maven {
         url = uri("https://repo.gradle.org/gradle/libs-releases")
     }
+    exclusiveContent {
+        forRepository {
+            ivy {
+                name = "nodejs"
+                url = uri(
+                    providers.gradleProperty("node.distBaseUrl")
+                        .orElse("https://nodejs.org/dist")
+                        .get()
+                )
+                patternLayout {
+                    artifact("v[revision]/[artifact]-v[revision]-[classifier].[ext]")
+                }
+                metadataSources {
+                    artifact()
+                }
+            }
+        }
+        filter {
+            includeGroup("org.nodejs")
+        }
+    }
 }
 
 dependencies {
