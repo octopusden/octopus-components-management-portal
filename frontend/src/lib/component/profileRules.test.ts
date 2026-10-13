@@ -36,6 +36,13 @@ describe('profileRuleErrors', () => {
     expect(profileRuleErrors([rule('componentOwner', 'x')], request()).size).toBe(0)
   })
 
+  it.each([['\\p{Lower}[\\p{Alnum}-]*'], ['\\Qpay\\E.*'], ['\\Apayments\\z']])(
+    'skips the Java-only pattern %s instead of reading its escapes as literal text',
+    (pattern) => {
+      expect(profileRuleErrors([rule('name', pattern)], request({ name: 'payments' })).size).toBe(0)
+    },
+  )
+
   it('skips a pattern the browser cannot compile and still checks the others', () => {
     const rules = [rule('displayName', '\\p{Lu}++'), rule('name', 'x')]
     const errors = profileRuleErrors(rules, request({ displayName: 'ABC' }))

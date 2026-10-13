@@ -111,7 +111,10 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
   `displayName`, `clientCode`, `ownership.0.groupId`, `buildTasks`, `vcsUrl`, `vcsBranch`,
   `vcsTag`, `jiraProjectKey`, `versionPrefix`, the version-format fields, and
   `coordinate.groupPattern` / `artifactPattern` / `imageName` / `flavor` / `packageName`.
-- Whole-value match: the pattern is compiled as `^(?:<pattern>)$`, matching Java's `matches()`.
+- Whole-value match: the pattern is compiled as `^(?:<pattern>)$`, matching Java's `matches()`,
+  in Unicode mode (`u`), so an escape JavaScript does not know (`\p{Lower}`, `\Q…\E`, `\A`)
+  fails to compile and the rule is skipped rather than matched as literal text. (changed on
+  review)
 - A pattern `new RegExp` cannot compile is skipped. Compiled patterns are cached per rule object
   (a `WeakMap`).
 - When several rules on one path fail, the first one's message is shown.

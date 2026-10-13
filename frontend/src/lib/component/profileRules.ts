@@ -75,7 +75,9 @@ function regexOf(rule: ProfileFieldRule): RegExp | null {
   if (!compiled.has(rule)) {
     let regex: RegExp | null
     try {
-      regex = new RegExp(`^(?:${rule.pattern})$`)
+      // Unicode mode makes escapes JavaScript does not know (Java's \p{Lower}, \Q…\E, \A) fail to
+      // compile, so the rule is skipped instead of matching them as literal text.
+      regex = new RegExp(`^(?:${rule.pattern})$`, 'u')
     } catch {
       regex = null
     }

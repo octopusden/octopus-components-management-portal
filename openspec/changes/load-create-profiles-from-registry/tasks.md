@@ -345,3 +345,6 @@
       on hidden build tasks read a value the create never sends. `makeCreateSchema` now takes
       the page's `{ labels, buildTasks }` visibilities (test: a build-tasks rule with the field
       hidden fails); the matching risk in `design.md` is marked resolved.
+- [x] 18.3 Without the `u` flag JavaScript compiled Java-only escapes (`\p{Lower}`, `\Q…\E`,
+      `\A`) as literal text, so such a rule failed every key in the browser. `regexOf` compiles in
+      Unicode mode; those patterns are skipped and left to the registry (3 tests).
