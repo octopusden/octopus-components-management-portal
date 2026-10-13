@@ -7,6 +7,7 @@ import {
   type FieldPath,
   type UseFormRegisterReturn,
   type UseFormSetError,
+  get,
 } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Check, ChevronLeft, ChevronRight, Plus, X, AlertCircle, Loader2 } from 'lucide-react'
@@ -63,7 +64,7 @@ import {
   manualFlags,
   type ProfileFlags,
 } from '../lib/component/createProfile'
-import { formFieldOfRulePath, ruleErrorOf } from '../lib/component/profileRules'
+import { formFieldOfRulePath, ruleErrorOf, RULE_FORM_FIELDS } from '../lib/component/profileRules'
 import type { ComponentDetail } from '../lib/types'
 import { OWNERSHIP_MODES } from '../lib/artifactOwnership'
 import { validateJiraKey, normalizeJiraKey, normalizeChangeComment } from '../lib/editor/jiraKey'
@@ -340,6 +341,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
   const buildTasksVisibility = useFieldVisibility('build.buildTasks')
   const labelsVisibility = useFieldVisibility('component.labels')
   const profileRules = useMemo(() => profile?.rules ?? [], [profile])
+  const previousRules = useRef(profileRules)
   const schema = useMemo(
     () =>
       makeCreateSchema(editable, supportedGroups, gitBaseUrl, profileRules, source ?? undefined, {
@@ -359,6 +361,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
     clearErrors,
     control,
     trigger,
+    getFieldState,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<CreateFormValues>({
     resolver: zodResolver(schema),
@@ -367,6 +370,15 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
     mode: 'onChange',
     defaultValues: initialValues(source, defaults, initial.profile),
   })
+  // A profile switch changes the rules: revalidate the fields showing a message, so one from a
+  // rule the new profile lacks clears.
+  useEffect(() => {
+    if (previousRules.current === profileRules) return
+    previousRules.current = profileRules
+    const shown = RULE_FORM_FIELDS.filter((field) => getFieldState(field as FieldPath<CreateFormValues>).error)
+    if (shown.length > 0) void trigger(shown as FieldPath<CreateFormValues>[])
+  }, [profileRules, trigger, getFieldState])
+
 
   const values = watch()
 
@@ -1751,6 +1763,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
                 vcsApplies,
                 buildTasksVisibility,
                 editable,
+                hasError: (field) => !!get(errors, field),
               })}
             />
             {stepBody[current]()}
@@ -1878,6 +1891,9 @@ interface FieldDisplay {
   vcsApplies: boolean
   buildTasksVisibility: FieldVisibility
   editable: (field: string) => boolean
+  // Whether the form currently holds an error for the field; RHF validates only the field being
+  // changed, so a rule failing on an untouched or seeded value has none to show under it.
+  hasError: (field: string) => boolean
 }
 
 // Whether the wizard renders this field's error under it. Fields not listed (the version prefix
@@ -1909,11 +1925,12 @@ function fieldShowsError(field: string, display: FieldDisplay): boolean {
   }
 }
 
-// Profile rules that fail on the current step on a field that shows no message of its own, so
-// the step can list them instead of blocking Create silently.
+// Profile rules that fail on the current step without a message under their field — the field
+// shows no error, or the form holds none for it yet — so the step lists them instead of blocking
+// Create silently.
 function ruleMessagesNotShown(issues: ParseIssue[], current: StepId, display: FieldDisplay): string[] {
   return issues
-    .filter((i) => i.profileRule && i.step === current && !fieldShowsError(i.field, display))
+    .filter((i) => i.profileRule && i.step === current && !(fieldShowsError(i.field, display) && display.hasError(i.field)))
     .map((i) => i.message)
 }
 

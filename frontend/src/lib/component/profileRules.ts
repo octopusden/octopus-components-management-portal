@@ -66,6 +66,11 @@ const FIELDS: Record<string, string> = {
 
 export const RULE_PATHS: readonly string[] = Object.keys(READERS)
 
+/** The form fields a rule can put a message on; ownership rows as the whole `ownership` array. */
+export const RULE_FORM_FIELDS: readonly string[] = [
+  ...new Set(Object.values(FIELDS).map((field) => (field.startsWith('ownership.') ? 'ownership' : field))),
+]
+
 /** The wizard form field for a create-request path, or `undefined` for a path it does not know. */
 export function formFieldOfRulePath(path: string): string | undefined {
   return FIELDS[path]

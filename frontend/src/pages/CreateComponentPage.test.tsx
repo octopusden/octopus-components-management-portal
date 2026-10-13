@@ -1000,6 +1000,42 @@ describe('CreateComponentPage — profile rules on fields the step does not show
     expect(screen.getByText(/Version prefix must start with pfx-/)).toBeDefined()
   })
 
+  it('lists a rule failing on a seeded value the user has not touched', async () => {
+    withRule('baseConfiguration.jira.versionFormat', 'X', 'Full version format must be X')
+    renderWizard()
+    await userEvent.click(screen.getByRole('button', { name: /^Jira$/i }))
+    expect(screen.getByText('Full version format must be X')).toBeDefined()
+  })
+
+  it('lists a Maven-group rule for an explicit external component whose coordinate is Docker', async () => {
+    const solution = (shippedProfiles.profiles as ComponentProfile[]).find((p) => p.id === 'solution')!
+    mockUseComponentProfiles.mockReturnValue({
+      ...PROFILES_OK,
+      data: [{ ...solution, rules: [{ path: 'baseConfiguration.mavenArtifacts[0].groupPattern', pattern: '.+', message: 'A Maven group is required' }] }],
+    })
+    renderWizard()
+    await userEvent.click(screen.getByRole('button', { name: /^Distribution$/ }))
+    await userEvent.selectOptions(screen.getByLabelText(/Distribution coordinate/i), 'docker')
+    expect(screen.getByText('A Maven group is required')).toBeDefined()
+  })
+
+  it('clears a rule message under a field when the new profile has no such rule', async () => {
+    const external = (shippedProfiles.profiles as ComponentProfile[]).find((p) => p.id === 'regular-external')!
+    const internal = (shippedProfiles.profiles as ComponentProfile[]).find((p) => p.id === 'regular-internal')!
+    mockUseComponentProfiles.mockReturnValue({
+      ...PROFILES_OK,
+      data: [{ ...external, rules: [{ path: 'baseConfiguration.jira.projectKey', pattern: 'ABC', message: 'Use the ABC project' }] }, internal],
+    })
+    renderWizard()
+    await userEvent.click(screen.getByRole('button', { name: /^Jira$/i }))
+    await userEvent.type(screen.getByLabelText(/^Jira Project Key/i), 'WIDG')
+    await waitFor(() => expect(screen.getByText('Use the ABC project')).toBeDefined())
+    await userEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^Jira$/i }))
+    await waitFor(() => expect(screen.queryByText('Use the ABC project')).toBeNull())
+  })
+
   it('shows a failing rule on a shown field under the field only', async () => {
     withRule('baseConfiguration.jira.projectKey', 'ABC', 'Use the ABC project')
     renderWizard()

@@ -129,10 +129,14 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
   page passes the same `{ labels, buildTasks }` visibilities the submit uses. `addProfileRuleIssues`
   adds one issue per failing rule on the mapped field, tagged `params.profileRule`, so the stepper
   marks the right step without new routing.
-- A tagged issue whose field shows no error on its step (`fieldShowsError`: a field the user may
-  not edit, a VCS field without a VCS block, the version prefix and formats, a coordinate when not
-  explicit external) is listed at the top of that step (`StepRuleMessages`), so Create is never
-  held without a visible reason. (changed during implementation: no `requestFor` parameter)
+- A tagged issue with no message under its field is listed at the top of its step
+  (`StepRuleMessages`), so Create is never held without a visible reason. That covers a field the
+  step shows no error for (`fieldShowsError`: a field the user may not edit, a VCS field without a
+  VCS block, the version prefix and formats, a coordinate when not explicit external) and a field
+  the form holds no error for yet: RHF validates only the field being changed, so a rule failing
+  on a seeded or untouched value has nothing under it.
+- A profile switch revalidates the rule-mapped fields showing a message (`RULE_FORM_FIELDS`), so
+  a message from a rule the new profile lacks clears. (changed during implementation: no `requestFor` parameter)
 - `componentKeyError` keeps only the charset check; the profile rule on `name` is added after
   it, so a key shows one message at a time: "required" while blank, then the charset rule, then
   the profile rule.

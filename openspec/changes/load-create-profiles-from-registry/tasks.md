@@ -354,3 +354,8 @@
       non-blank row (2 tests).
 - [x] 18.5 The registry trims the display name before its rule check; the reader read it raw, so
       `" Foo"` failed `^[A-Z].*` in the browser only. The reader trims it (1 test).
+- [x] 18.6 A rule failing on a seeded or untouched value (a default full version format, a blank
+      ownership row, a Maven group under a Docker coordinate) held Create with no message: the
+      field could show an error but RHF held none for it. `StepRuleMessages` now also lists a rule
+      whose field holds no error (`hasError`). A profile switch revalidates fields showing a rule
+      message, so a stale one clears. 3 page tests.
