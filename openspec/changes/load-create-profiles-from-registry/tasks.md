@@ -352,3 +352,5 @@
       first stored group, and its message landed on form row 0 even when that row was blank and
       not sent. The reader takes `splitGroupIds(...)[0]`; `addProfileRuleIssues` targets the first
       non-blank row (2 tests).
+- [x] 18.5 The registry trims the display name before its rule check; the reader read it raw, so
+      `" Foo"` failed `^[A-Z].*` in the browser only. The reader trims it (1 test).

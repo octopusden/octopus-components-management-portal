@@ -32,6 +32,11 @@ describe('profileRuleErrors', () => {
     expect(profileRuleErrors(rules, request()).has('displayName')).toBe(true)
   })
 
+  it('reads the display name trimmed, as the registry stores it', () => {
+    expect(profileRuleErrors([rule('displayName', '[A-Z].*')], request({ displayName: ' Payments' })).size).toBe(0)
+    expect(profileRuleErrors([rule('displayName', '.+')], request({ displayName: '   ' })).has('displayName')).toBe(true)
+  })
+
   it('reads the first group of a multi-group ownership pattern, as the registry stores it', () => {
     const req = request({ artifactIds: [{ groupPattern: 'org.a, org.b|org.c', mode: 'ALL', artifactTokens: [] }] })
     expect(profileRuleErrors([rule('artifactIds[0].groupPattern', 'org\\.a')], req).size).toBe(0)

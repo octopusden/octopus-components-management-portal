@@ -18,7 +18,7 @@ const firstPackage = (r: ComponentCreateRequest) => r.baseConfiguration?.package
  */
 const READERS: Record<string, Reader> = {
   name: (r) => r.name,
-  displayName: (r) => r.displayName,
+  displayName: (r) => r.displayName?.trim(),
   clientCode: (r) => r.clientCode,
   // The registry stores one mapping per group of a `,`/`|`-separated pattern and reads the first.
   'artifactIds[0].groupPattern': (r) => firstGroup(r.artifactIds?.[0]?.groupPattern),
