@@ -104,7 +104,7 @@ test.describe('Create component from a template — admin smoke', () => {
 
     await page.getByLabel(/jira task key/i).fill('CD-1234')
     await page.getByRole('button', { name: /create component/i }).click()
-    await expect(page.getByText('Component created')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Component created' })).toBeVisible()
     expect(runs[1]).toEqual({
       dryRun: false,
       body: { parameters: { CLIENT_CODE: ['ABC'], PLUGIN_CODE: ['PAY'] }, overrides: {}, jiraTaskKey: 'CD-1234' },
