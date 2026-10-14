@@ -233,8 +233,10 @@
 
 ## 12. Docs
 
-- [ ] 12.1 `docs/features/create-component.md`: template tiles, Parameters, Review & create.
-- [ ] 12.2 New `docs/features/admin-templates.md`; linked from `AGENTS.md`'s feature list.
+- [x] 12.1 `docs/features/create-component.md`: template tiles, Parameters, Review & create, and the
+      shared Portal-only rules.
+- [x] 12.2 New `docs/features/admin-templates.md`; linked from `AGENTS.md`'s feature list and the
+      `README.md` docs line.
 
 ## 13. Finalization
 
