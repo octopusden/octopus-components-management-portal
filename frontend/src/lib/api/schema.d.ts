@@ -836,6 +836,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/rest/api/4/components/meta/test-component-name-patterns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getTestComponentNamePatterns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rest/api/4/components/{idOrName}/editors": {
         parameters: {
             query?: never;
@@ -1268,6 +1284,7 @@ export interface components {
             solution?: boolean;
             systems?: string[];
             teamcityProjects?: components["schemas"]["TeamcityProjectRequest"][];
+            testComponent?: boolean;
             /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. */
             vcsExternalRegistry?: string;
         };
@@ -1304,6 +1321,7 @@ export interface components {
             solution?: boolean;
             systems: string[];
             teamcityProjects: components["schemas"]["TeamcityProjectResponse"][];
+            testComponent: boolean;
             /** Format: date-time */
             updatedAt?: string;
             vcsExternalRegistry?: string;
@@ -1372,6 +1390,7 @@ export interface components {
             systems: string[];
             teamcityProjectId?: string;
             teamcityProjectUrl?: string;
+            testComponent: boolean;
             /** Format: date-time */
             updatedAt?: string;
             vcsPath?: string;
@@ -1423,6 +1442,7 @@ export interface components {
             solution?: boolean;
             systems?: string[];
             teamcityProjects?: components["schemas"]["TeamcityProjectRequest"][];
+            testComponent?: boolean;
             /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. */
             vcsExternalRegistry?: string;
             /** Format: int64 */
@@ -5613,6 +5633,7 @@ export interface operations {
                 system?: string[];
                 productType?: string;
                 archived?: boolean;
+                testComponent?: boolean;
                 search?: string;
                 owner?: string[];
                 releaseManager?: string[];
@@ -7663,6 +7684,107 @@ export interface operations {
         };
     };
     getAllSystems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string[];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Early */
+            425: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getTestComponentNamePatterns: {
         parameters: {
             query?: never;
             header?: never;
