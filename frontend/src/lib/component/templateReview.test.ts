@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { reviewProblems } from './templateReview'
+import { reviewFieldGroups, reviewProblems } from './templateReview'
 import type { TemplateRun } from '../../hooks/useTemplateRun'
 
 const VCS_PATH = 'baseConfiguration.vcsEntries[0].vcsPath'
@@ -80,5 +80,62 @@ describe('reviewProblems', () => {
       [{ path: VCS_PATH, message: 'Tag is required' }],
     )
     expect(problems.map((p) => p.path)).toEqual(['name', VCS_PATH])
+  })
+})
+
+describe('reviewFieldGroups', () => {
+  const component = {
+    name: 'abc-plugin-pay',
+    componentOwner: 'jdoe',
+    releaseManager: ['jdoe', 'asmith'],
+    labels: [],
+    distributionExplicit: false,
+    distributionExternal: true,
+    archived: false,
+    artifactIds: [{ groupPattern: 'org.example.abc', mode: 'EXPLICIT', artifactTokens: ['pay'] }],
+    baseConfiguration: {
+      build: { buildSystem: 'GRADLE' },
+      vcsEntries: [{ vcsPath: 'ssh://git@git.example.com/abc/plugin.git', branch: 'master' }],
+      jira: { projectKey: 'ABC', versionFormat: '$versionPrefix-$baseVersionFormat' },
+      requiredTools: ['jdk21'],
+    },
+  } as unknown as NonNullable<TemplateRun['component']>
+
+  const groups = (extra: string[] = []) => reviewFieldGroups(component, extra)
+  const rowsOf = (heading: string) => groups().find((g) => g.heading === heading)?.rows ?? []
+
+  it('groups the rendered fields as the regular Review does, with its labels', () => {
+    expect(groups().map((g) => g.heading)).toEqual(['General', 'Build', 'VCS', 'Jira', 'Other fields'])
+    expect(rowsOf('General').map((r) => [r.label, r.value])).toEqual([
+      ['Component Key', ['abc-plugin-pay']],
+      ['Component Owner', ['jdoe']],
+      ['Release Managers', ['jdoe', 'asmith']],
+      ['Classification', ['External · not explicit']],
+    ])
+  })
+
+  it('keys each row by its create-request path', () => {
+    expect(rowsOf('VCS').map((r) => r.path)).toEqual([
+      'baseConfiguration.vcsEntries[0].vcsPath',
+      'baseConfiguration.vcsEntries[0].branch',
+    ])
+  })
+
+  it('shows each produced-artifact row', () => {
+    expect(rowsOf('Build').map((r) => [r.path, r.value])).toEqual([
+      ['baseConfiguration.build.buildSystem', ['GRADLE']],
+      ['artifactIds[0].groupPattern', ['org.example.abc — Specific artifacts only (pay)']],
+    ])
+  })
+
+  it('lists a field the grouping does not know under Other fields, rather than dropping it', () => {
+    expect(groups().find((g) => g.heading === 'Other fields')?.rows).toEqual([
+      { path: 'baseConfiguration.requiredTools', label: 'baseConfiguration.requiredTools', value: ['jdk21'] },
+    ])
+  })
+
+  it('keeps an empty field a problem or an override needs, so its message has a row', () => {
+    const general = groups(['displayName']).find((g) => g.heading === 'General')!
+    expect(general.rows.find((r) => r.path === 'displayName')).toEqual({ path: 'displayName', label: 'Display Name', value: [] })
   })
 })
