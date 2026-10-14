@@ -167,7 +167,7 @@ export function TemplateReview({
     <div className="space-y-4">
       {unplaced.length > 0 && (
         <div role="alert">
-          <StatusBanner variant="destructive">{unplaced.map(problemLine)}</StatusBanner>
+          <StatusBanner variant="destructive">{unplaced.map((problem, i) => problemLine(problem, i))}</StatusBanner>
         </div>
       )}
       {problems.some((p) => !p.templateProblem) && (
@@ -214,7 +214,7 @@ export function TemplateReview({
                       </p>
                     )}
                     {overrideErrors[field.path] && <p className="text-sm text-destructive">{overrideErrors[field.path]}</p>}
-                    {problems.filter((p) => p.path === field.path).map(problemLine)}
+                    {problems.filter((p) => p.path === field.path).map((problem, i) => problemLine(problem, i))}
                   </div>
                 </div>
               )

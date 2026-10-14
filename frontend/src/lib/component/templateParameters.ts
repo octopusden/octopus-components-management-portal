@@ -32,21 +32,33 @@ function regexOf(pattern: string): RegExp | null {
   return compiled.get(pattern) ?? null
 }
 
-function errorOf(parameter: TemplateParameter, entered: string[]): string | undefined {
+function countError(parameter: TemplateParameter, entered: string[]): string | undefined {
   // An empty parameter takes its default in the registry; a default was checked when it loaded.
   if (entered.length === 0) {
     return parameter.required && parameter.default.length === 0 ? `${parameter.label} is required` : undefined
   }
   if (!takesSeveral(parameter) && entered.length > 1) return `${parameter.label} takes one value`
+  return undefined
+}
+
+function valueError(parameter: TemplateParameter, value: string): string | undefined {
+  if (parameter.maxLength !== undefined && value.length > parameter.maxLength) {
+    return `At most ${parameter.maxLength} characters`
+  }
+  const regex = parameter.pattern ? regexOf(parameter.pattern) : null
+  if (regex && !regex.test(value)) return parameter.message ?? `Must match ${parameter.pattern}`
+  if (parameter.type === 'select' && !(parameter.options ?? []).includes(value)) {
+    return `"${value}" is not one of the options`
+  }
+  return undefined
+}
+
+function errorOf(parameter: TemplateParameter, entered: string[]): string | undefined {
+  const countFailure = countError(parameter, entered)
+  if (countFailure || entered.length === 0) return countFailure
   for (const value of entered) {
-    if (parameter.maxLength !== undefined && value.length > parameter.maxLength) {
-      return `At most ${parameter.maxLength} characters`
-    }
-    const regex = parameter.pattern ? regexOf(parameter.pattern) : null
-    if (regex && !regex.test(value)) return parameter.message ?? `Must match ${parameter.pattern}`
-    if (parameter.type === 'select' && !(parameter.options ?? []).includes(value)) {
-      return `"${value}" is not one of the options`
-    }
+    const error = valueError(parameter, value)
+    if (error) return error
   }
   if (parameter.maxSelection !== undefined && entered.length > parameter.maxSelection) {
     return `At most ${parameter.maxSelection} may be chosen`

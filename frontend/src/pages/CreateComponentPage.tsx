@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import {
   useForm,
@@ -255,6 +255,7 @@ export function CreateComponentPage() {
   const componentDefaults = (defaults.data ?? {}) as ComponentDefaults
   const { openedWith, unavailable: profilesUnavailable, retry: retryProfiles } = useProfilesForWizard()
   const ready = (!isClone || (!!source && !error)) && (defaults.isSuccess || defaults.isError) && openedWith !== null
+  const regularProfiles = (openedWith ?? []).filter(isRegular)
 
   return (
     <Dialog
@@ -270,51 +271,86 @@ export function CreateComponentPage() {
         <DialogDescription className="sr-only">
           Fill in the steps to create a new component.
         </DialogDescription>
-        {isClone && error ? (
-          <div className="flex flex-1 flex-col gap-4 p-6">
-            <DialogTitle>Clone component</DialogTitle>
-            <InlineError
-              message={
-                <>
-                  Failed to load the source component:{' '}
-                  {error instanceof Error ? error.message : String(error)}
-                </>
-              }
-            />
-          </div>
-        ) : profilesUnavailable ? (
-          <div className="flex flex-1 flex-col gap-4 p-6">
-            <DialogTitle>{isClone ? 'Clone component' : 'Create component'}</DialogTitle>
-            <InlineError
-              message="Could not load the component profiles from the registry, so no component can be created right now."
-            />
-            <div>
-              <Button type="button" variant="outline" onClick={retryProfiles}>
-                Retry
-              </Button>
-            </div>
-          </div>
-        ) : !ready ? (
-          <div className="flex flex-1 flex-col gap-4 p-6">
-            <DialogTitle className="sr-only">Create component</DialogTitle>
-            <SkeletonBlock className="h-9 w-64" />
-            <SkeletonBlock className="h-9 w-full" />
-            <SkeletonBlock className="h-9 w-full" />
-          </div>
-        ) : (
+        <CreateDialogBody
+          isClone={isClone}
+          sourceError={error}
+          profilesUnavailable={profilesUnavailable}
+          onRetryProfiles={retryProfiles}
+          ready={ready}
+        >
           <CreateComponentWizard
             key={`${source?.id ?? 'scratch'}-${remountKey}`}
             source={source ?? null}
             isClone={isClone}
             defaults={componentDefaults}
-            profiles={(openedWith ?? []).filter(isRegular)}
-            entries={isClone ? (openedWith ?? []).filter(isRegular) : (openedWith ?? [])}
+            profiles={regularProfiles}
+            entries={isClone ? regularProfiles : (openedWith ?? [])}
             onCreateAnother={() => setRemountKey((k) => k + 1)}
           />
-        )}
+        </CreateDialogBody>
       </DialogContent>
     </Dialog>
   )
+}
+
+// What the dialog shows: the source's load error, the profiles' load error, a skeleton while
+// anything loads, else the wizard.
+function CreateDialogBody({
+  isClone,
+  sourceError,
+  profilesUnavailable,
+  onRetryProfiles,
+  ready,
+  children,
+}: {
+  isClone: boolean
+  sourceError: unknown
+  profilesUnavailable: boolean
+  onRetryProfiles: () => void
+  ready: boolean
+  children: ReactNode
+}) {
+  if (isClone && sourceError) {
+    return (
+      <div className="flex flex-1 flex-col gap-4 p-6">
+        <DialogTitle>Clone component</DialogTitle>
+        <InlineError
+          message={
+            <>
+              Failed to load the source component:{' '}
+              {sourceError instanceof Error ? sourceError.message : String(sourceError)}
+            </>
+          }
+        />
+      </div>
+    )
+  }
+  if (profilesUnavailable) {
+    return (
+      <div className="flex flex-1 flex-col gap-4 p-6">
+        <DialogTitle>{isClone ? 'Clone component' : 'Create component'}</DialogTitle>
+        <InlineError
+          message="Could not load the component profiles from the registry, so no component can be created right now."
+        />
+        <div>
+          <Button type="button" variant="outline" onClick={onRetryProfiles}>
+            Retry
+          </Button>
+        </div>
+      </div>
+    )
+  }
+  if (!ready) {
+    return (
+      <div className="flex flex-1 flex-col gap-4 p-6">
+        <DialogTitle className="sr-only">Create component</DialogTitle>
+        <SkeletonBlock className="h-9 w-64" />
+        <SkeletonBlock className="h-9 w-full" />
+        <SkeletonBlock className="h-9 w-full" />
+      </div>
+    )
+  }
+  return <>{children}</>
 }
 
 interface WizardProps {
