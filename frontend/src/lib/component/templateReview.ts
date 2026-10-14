@@ -185,13 +185,13 @@ function setPath(target: Mutable, path: string, value: unknown) {
  * [component] with the creator's edits applied, so an edit can be checked while it is typed,
  * before a dry run has rendered it. [component] itself is not changed.
  */
-export function applyOverrides(
-  component: RenderedComponent,
+export function applyOverrides<T extends object>(
+  component: T,
   overrides: Readonly<Record<string, readonly string[]>>,
-): RenderedComponent {
+): T {
   const edited = structuredClone(component) as unknown as Mutable
   for (const [path, values] of Object.entries(overrides)) {
     setPath(edited, path, LIST_PATHS.has(path) ? [...values] : (values[0] ?? ''))
   }
-  return edited as unknown as RenderedComponent
+  return edited as unknown as T
 }

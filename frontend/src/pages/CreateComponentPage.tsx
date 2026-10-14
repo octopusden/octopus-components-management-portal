@@ -30,6 +30,7 @@ import { UnsavedChangesGuard } from '../components/editor/UnsavedChangesGuard'
 import { WizardStepRail } from '../components/wizard/WizardStepRail'
 import { CreatedPanel } from '../components/wizard/CreatedPanel'
 import { ChangeMetadataFields } from '../components/wizard/ChangeMetadataFields'
+import { TemplateWizard } from '../components/template/TemplateWizard'
 import { cn } from '../lib/utils'
 import { hostOf } from '../lib/vcsHost'
 import { useFieldOptions } from '../hooks/useFieldOptions'
@@ -66,6 +67,7 @@ import {
   flagsForProfile,
   initialProfile,
   isRegular,
+  isTemplate,
   manualFlags,
   type ProfileFlags,
 } from '../lib/component/createProfile'
@@ -278,6 +280,7 @@ export function CreateComponentPage() {
             isClone={isClone}
             defaults={componentDefaults}
             profiles={(openedWith ?? []).filter(isRegular)}
+            entries={isClone ? (openedWith ?? []).filter(isRegular) : (openedWith ?? [])}
             onCreateAnother={() => setRemountKey((k) => k + 1)}
           />
         )}
@@ -292,12 +295,14 @@ interface WizardProps {
   defaults: ComponentDefaults
   /** The registry's `regular` profiles, in its order; empty when the registry has none configured. */
   profiles: ComponentProfile[]
+  /** The tiles the Profile step offers, in the registry's order: the profiles, and for a new component the templates. */
+  entries: ComponentProfile[]
   /** Remount the wizard as a fresh form instance after a successful create (same
    *  mode — scratch stays scratch, a clone restarts as another clone of the source). */
   onCreateAnother: () => void
 }
 
-function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAnother }: WizardProps) {
+function CreateComponentWizard({ source, isClone, defaults, profiles, entries, onCreateAnother }: WizardProps) {
   const navigate = useNavigate()
   const createMutation = useCreateComponent()
   const { toast } = useToast()
@@ -329,6 +334,13 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
   const [manual, setManual] = useState(() => initialManualClassification(source))
   const flags = classificationFlags(manualMode, profile, explicitAnswer, manual)
   const profileMissing = profileId === null && !manualMode
+  // A template picked on the Profile step takes over the wizard with its own steps; the regular
+  // form stays mounted behind it, so picking a regular profile again finds it as it was left.
+  const [templateId, setTemplateId] = useState<string | null>(null)
+  const [withdrawn, setWithdrawn] = useState<{ ids: string[]; message: string | null }>({ ids: [], message: null })
+  const tiles = entries.filter((e) => !withdrawn.ids.includes(e.id))
+  const templateTiles = tiles.filter(isTemplate)
+  const templateEntry = tiles.find((e) => e.id === templateId) ?? null
 
   const buildTasksVisibility = useFieldVisibility('build.buildTasks')
   const labelsVisibility = useFieldVisibility('component.labels')
@@ -486,6 +498,16 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
     },
     [manual, explicitAnswer, setValue, clearDefaultCopyrightUnless],
   )
+  const chooseEntry = (next: ComponentProfile) => {
+    if (!next.usable) return
+    setWithdrawn((w) => ({ ...w, message: null }))
+    if (isTemplate(next)) {
+      setTemplateId(next.id)
+      return
+    }
+    setTemplateId(null)
+    applyProfile(next, explicitAnswer)
+  }
   const chooseExplicit = (value: boolean) => {
     if (manualMode) applyManual({ explicit: value })
     else if (profile) applyProfile(profile, value)
@@ -796,8 +818,16 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
         title="Choose component profile"
         subtitle="The profile sets how the component is classified and how its key is named."
       />
-      {manualMode ? renderManualClassification() : renderProfileTiles()}
-      {(profile || manualMode) && (
+      {withdrawn.message && <StatusBanner variant="destructive">{withdrawn.message}</StatusBanner>}
+      {manualMode ? (
+        <>
+          {renderManualClassification()}
+          {templateTiles.length > 0 && renderProfileTiles(templateTiles)}
+        </>
+      ) : (
+        renderProfileTiles(tiles)
+      )}
+      {!templateEntry && (profile || manualMode) && (
         <p className="text-sm text-muted-foreground">
           This component will be:{' '}
           <span className="font-medium text-foreground">{external ? 'External' : 'Internal'}</span>
@@ -807,7 +837,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
           </span>
         </p>
       )}
-      {((profile && asksExplicit(profile)) || manualMode) && renderExplicitQuestion()}
+      {!templateEntry && ((profile && asksExplicit(profile)) || manualMode) && renderExplicitQuestion()}
     </div>
   )
 
@@ -844,11 +874,12 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
     </div>
   )
 
-  const renderProfileTiles = () => (
+  const renderProfileTiles = (list: ComponentProfile[]) => (
     <div role="radiogroup" aria-label="Component profile" className="grid gap-3 sm:grid-cols-2">
-      {profiles.map((p, idx) => {
-        const selected = profileId === p.id
-        const tabbable = selected || (profileId === null && idx === profiles.findIndex((q) => q.usable))
+      {list.map((p, idx) => {
+        const selected = templateEntry ? templateEntry.id === p.id : profileId === p.id
+        const noneSelected = templateEntry === null && profileId === null
+        const tabbable = selected || (noneSelected && idx === list.findIndex((q) => q.usable))
         return (
           <button
             key={p.id}
@@ -859,17 +890,17 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
             aria-describedby={!p.usable && p.unusableReason ? `profile-${p.id}-reason` : undefined}
             disabled={!p.usable}
             tabIndex={tabbable ? 0 : -1}
-            onClick={() => applyProfile(p, explicitAnswer)}
+            onClick={() => chooseEntry(p)}
             onKeyDown={(e) =>
               moveRadio(
                 e,
-                profiles.length,
+                list.length,
                 idx,
                 (i) => {
-                  const next = profiles[i]
-                  if (next) applyProfile(next, explicitAnswer)
+                  const next = list[i]
+                  if (next) chooseEntry(next)
                 },
-                (i) => !!profiles[i]?.usable,
+                (i) => !!list[i]?.usable,
               )
             }
             className={cn(
@@ -888,8 +919,14 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
               {selected && <span className="h-2 w-2 rounded-full bg-foreground" />}
             </span>
             <span className="flex flex-col">
-              <span className="font-medium">{p.title}</span>
+              <span className="flex items-center gap-2 font-medium">
+                {p.title}
+                {isTemplate(p) && <Badge variant="secondary">Template</Badge>}
+              </span>
               <span className="mt-1 text-sm text-muted-foreground">{p.description}</span>
+              {isTemplate(p) && p.version !== undefined && (
+                <span className="mt-1 text-xs text-muted-foreground">Version {p.version}</span>
+              )}
               {!p.usable && p.unusableReason && (
                 <span id={`profile-${p.id}-reason`} className="mt-1 text-sm text-muted-foreground">
                   {p.unusableReason}
@@ -1605,6 +1642,23 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
 
   // Post-create success panel — replaces the wizard body once the component is
   // created. `submitted` is already true, so no unsaved-changes guard is needed.
+  if (templateEntry) {
+    return (
+      <TemplateWizard
+        key={templateEntry.id}
+        entry={templateEntry}
+        headerTitle={headerTitle}
+        profileStep={renderProfileStep()}
+        onCreateAnother={onCreateAnother}
+        onTemplateGone={(message) => {
+          setWithdrawn((w) => ({ ids: [...w.ids, templateEntry.id], message }))
+          setTemplateId(null)
+          enterStep('profile')
+        }}
+      />
+    )
+  }
+
   if (created) {
     return (
       <CreatedPanel

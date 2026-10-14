@@ -122,61 +122,75 @@
 
 ## 7. Parameters step (Decisions 1, 2)
 
-- [ ] 7.1 Failing component tests for `TemplateParameterForm`:
-  - [ ] 7.1.1 one input per parameter in order, label, hint, required / optional marker
-  - [ ] 7.1.2 text → input; single select / crs-list → dropdown; multi select and `labels` →
+- [x] 7.1 Failing component tests for `TemplateParameterForm`:
+  - [x] 7.1.1 one input per parameter in order, label, hint, required / optional marker
+  - [x] 7.1.2 text → input; single select / crs-list → dropdown; multi select and `labels` →
         chips with "Add" offering only the options; person → people picker (people list when
         `multiple`)
-  - [ ] 7.1.3 defaults pre-filled; a person default shows that user
-  - [ ] 7.1.4 a pattern failure shows the template's message under the input while typing
-  - [ ] 7.1.5 no request is sent while typing
-- [ ] 7.2 Failing wizard tests in `CreateComponentPage.test.tsx`:
-  - [ ] 7.2.1 template tile renders with version and "Template" marker; disabled with reason when
+  - [x] 7.1.3 defaults pre-filled; a person default shows that user
+  - [x] 7.1.4 a pattern failure shows the template's message under the input while typing
+  - [x] 7.1.5 no request is sent while typing
+- [x] 7.2 Failing wizard tests in `CreateComponentPage.test.tsx`:
+  - [x] 7.2.1 template tile renders with version and "Template" marker; disabled with reason when
         not usable
-  - [ ] 7.2.2 picking it shows the steps Profile, Parameters, Review & create
-  - [ ] 7.2.3 picking a regular tile afterwards restores the regular steps and the key typed
+  - [x] 7.2.2 picking it shows the steps Profile, Parameters, Review & create
+  - [x] 7.2.3 picking a regular tile afterwards restores the regular steps and the key typed
         before
-  - [ ] 7.2.4 template load failure → error with Retry, Next disabled
-  - [ ] 7.2.5 Next disabled while a check fails; enabled when all pass
-  - [ ] 7.2.6 Next sends exactly one dry run, with values and overrides and no Jira task key or
+  - [x] 7.2.4 template load failure → error with Retry, Next disabled
+  - [x] 7.2.5 Next disabled while a check fails; enabled when all pass
+  - [x] 7.2.6 Next sends exactly one dry run, with values and overrides and no Jira task key or
         comment; a parameter problem from it keeps the wizard on Parameters with the message on
         that input
-  - [ ] 7.2.6a after Review, changing a parameter discards the run: Review cannot be opened from
+  - [x] 7.2.6a after Review, changing a parameter discards the run: Review cannot be opened from
         the step list until Next runs again
-  - [ ] 7.2.7 a clone shows no template tiles
-  - [ ] 7.2.8 templates but no regular profile → template tiles beside the classification
+  - [x] 7.2.7 a clone shows no template tiles
+  - [x] 7.2.8 templates but no regular profile → template tiles beside the classification
         choices
-- [ ] 7.3 Implement `components/template/TemplateParameterForm.tsx` and the wizard's template
+- [x] 7.3 Implement `components/template/TemplateParameterForm.tsx` and the wizard's template
       path in `CreateComponentPage.tsx`.
-- [ ] 7.4 Confirm tests pass.
+- [x] 7.3a `WizardStepRail`, `CreatedPanel` and `ChangeMetadataFields` moved out of the page into
+      `components/wizard/`, so both paths show the same rail, success panel and change metadata;
+      `CreateComponentPage.test.tsx` 104/104 unchanged. (added on review)
+- [x] 7.3b `TemplateWizard` owns the template path; the regular wizard stays mounted behind it, so
+      its values survive a switch back. (added on review)
+- [x] 7.4 Confirm tests pass. `CreateComponentPage.templates.test.tsx` (new file) 19/19,
+      `TemplateParameterForm.test.tsx` 9/9.
 
 ## 8. Review & create (Decisions 5, 6, 7)
 
-- [ ] 8.1 Failing component tests for `TemplateReview`:
-  - [ ] 8.1.1 every rendered field shown, grouped as in the regular Review; an unknown path
+- [x] 8.1 Failing component tests for `TemplateReview`:
+  - [x] 8.1.1 every rendered field shown, grouped as in the regular Review; an unknown path
         under "Other fields"
-  - [ ] 8.1.2 problems show with their parameter links; a link returns to Parameters with that
+  - [x] 8.1.2 problems show with their parameter links; a link returns to Parameters with that
         input focused
-  - [ ] 8.1.3 a template problem names the template id and version, no link
-  - [ ] 8.1.4 the rendered VCS path off the ecosystem host shows the Portal message naming the
+  - [x] 8.1.3 a template problem names the template id and version, no link
+  - [x] 8.1.4 the rendered VCS path off the ecosystem host shows the Portal message naming the
         source parameter; Create disabled
-  - [ ] 8.1.5 only overridable fields are editable, each with the input for its field kind
-  - [ ] 8.1.6 an edited field is marked "changed from template" and checked while typing with the
+  - [x] 8.1.5 only overridable fields are editable, each with the input for its field kind
+  - [x] 8.1.6 an edited field is marked "changed from template" and checked while typing with the
         Portal rules and the template's field rules from its listing entry; no dry run while
         typing; one dry run on leaving the field, with the override
-  - [ ] 8.1.7 clearing the edit removes the override and shows the template's value
-  - [ ] 8.1.8 Create disabled while a run is in flight, while any problem stands, or while the
+  - [x] 8.1.7 clearing the edit removes the override and shows the template's value
+  - [x] 8.1.8 Create disabled while a run is in flight, while any problem stands, or while the
         Jira task key is empty or malformed
-  - [ ] 8.1.9 "more problems may follow" note when a create-rule problem is shown
-- [ ] 8.2 Failing wizard tests for Create:
-  - [ ] 8.2.1 Create posts `dryRun=false` with values, overrides, Jira task key and comment;
+  - [x] 8.1.9 "more problems may follow" note when a create-rule problem is shown
+- [x] 8.2 Failing wizard tests for Create:
+  - [x] 8.2.1 Create posts `dryRun=false` with values, overrides, Jira task key and comment;
         201 → the success panel linking to the component
-  - [ ] 8.2.2 422 → stays on Review with the returned problems
-  - [ ] 8.2.3 404 → back to Profile with the message, listing refetched
-  - [ ] 8.2.4 403 / 400 → message at the top of Review
-- [ ] 8.3 Implement `components/template/TemplateReview.tsx`, `TemplateOverrideField.tsx`, and
+  - [x] 8.2.2 422 → stays on Review with the returned problems
+  - [x] 8.2.3 404 → back to Profile with the message, the withdrawn template no longer offered (the
+        wizard keeps the listing it opened with rather than refetching it mid-flow)
+  - [x] 8.2.4 403 / 400 → message at the top of Review
+- [x] 8.3 Implement `components/template/TemplateReview.tsx`, `TemplateOverrideField.tsx`, and
       the create wiring.
-- [ ] 8.4 Confirm tests pass.
+- [x] 8.3a `reviewFieldGroups` (rows keyed by create-request path, unknown set fields under "Other
+      fields") and `applyOverrides` (an edit checked before its dry run), with tests; `dryRun`
+      returns its result. (added on review)
+- [x] 8.3b Found while wiring: after a successful dry run Next stepped to Review through a guard
+      that read the previous render's "no run yet", so Review never opened; it now enters Review
+      from the result itself. (added on review)
+- [x] 8.4 Confirm tests pass. `TemplateReview.test.tsx` 10/10, `templateReview.test.ts` 16/16,
+      `useTemplateRun.test.ts` 14/14. Full vitest 186 files / 2799 tests; `tsc`, `eslint .` clean.
 
 ## 9. Templates tab (Decision 8)
 

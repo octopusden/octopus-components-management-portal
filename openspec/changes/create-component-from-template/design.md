@@ -142,7 +142,8 @@ Overridable: `baseConfiguration.vcsEntries[0].vcsPath`, `baseConfiguration.jira.
 - The Jira task key is required by the Portal, with the regular wizard's validation and message.
 - 201 → the existing success panel. 422 → the body replaces the shown run, the user stays on Review.
 - 404 → the template was removed or failed on a reload; the wizard returns to the Profile step
-  with that message and refetches the listing.
+  with that message and stops offering that template. It keeps the listing it opened with rather
+  than refetching it, which would reset a form in progress.
 - 403 and 400 → the message at the top of Review; nothing else changes.
 
 ### 8. Administrators' Templates tab

@@ -178,4 +178,5 @@ the new component. On a rejection the wizard SHALL stay on Review with the probl
 #### Scenario: The template was withdrawn
 
 - **WHEN** the registry answers that the template no longer exists
-- **THEN** the wizard returns to the Profile step with that message and shows the current tiles
+- **THEN** the wizard returns to the Profile step with that message, and that template is no
+  longer offered
