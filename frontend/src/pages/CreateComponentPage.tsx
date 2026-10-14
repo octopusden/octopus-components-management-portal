@@ -154,6 +154,18 @@ function classificationFlags(
   return profile ? flagsForProfile(profile, explicitAnswer) : null
 }
 
+// A classification set directly that a profile covers takes that profile, so its rules and
+// usability apply as if its tile were picked.
+function profileSelection(
+  manualMode: boolean,
+  flags: ProfileFlags | null,
+  profiles: readonly ComponentProfile[],
+  profileId: string | null,
+): { covering: ComponentProfile[]; profileMissing: boolean } {
+  const covering = manualMode && flags ? profilesCovering(flags, profiles) : []
+  return { covering, profileMissing: profileId === null && (!manualMode || covering.length > 0) }
+}
+
 // Map a zod-issue / RHF-error field path to the wizard step that owns it.
 function stepOfField(path: string): StepId {
   const head = path.split('.')[0]
@@ -326,10 +338,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
   const manualMode = isManualClassification(noProfiles, isClone, initial.matchesAny)
   const [manual, setManual] = useState(() => initialManualClassification(source))
   const flags = classificationFlags(manualMode, profile, explicitAnswer, manual)
-  // A classification set directly that a profile covers takes that profile, so its rules and
-  // usability apply as if its tile were picked.
-  const covering = manualMode && flags ? profilesCovering(flags, profiles) : []
-  const profileMissing = profileId === null && (!manualMode || covering.length > 0)
+  const { covering, profileMissing } = profileSelection(manualMode, flags, profiles, profileId)
 
   const buildTasksVisibility = useFieldVisibility('build.buildTasks')
   const labelsVisibility = useFieldVisibility('component.labels')
