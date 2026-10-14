@@ -93,15 +93,17 @@
 
 ## 5. Template API hooks (Decisions 3, 7)
 
-- [ ] 5.1 Failing tests:
-  - [ ] 5.1.1 `useComponentTemplate(id)` fetches `/component-templates/{id}`, not cached across
+- [x] 5.1 Failing tests:
+  - [x] 5.1.1 `useComponentTemplate(id)` fetches `/component-templates/{id}`, not cached across
         wizard opens, exposes error and refetch
-  - [ ] 5.1.2 `useTemplateRun` dry run posts `dryRun=true` with the body and returns the run
-  - [ ] 5.1.3 a response for a run superseded by a newer one is discarded
-  - [ ] 5.1.4 create posts `dryRun=false`; 201 returns the component; 422 returns the run as a
+  - [x] 5.1.2 `useTemplateRun` dry run posts `dryRun=true` with the body and returns the run
+  - [x] 5.1.3 a response for a run superseded by a newer one is discarded
+  - [x] 5.1.4 create posts `dryRun=false`; 201 returns the component; 422 returns the run as a
         rejection; 404 / 403 / 400 surface `errorMessage` with the status
-- [ ] 5.2 Implement `hooks/useComponentTemplate.ts`, `hooks/useTemplateRun.ts`.
-- [ ] 5.3 Confirm tests pass.
+- [x] 5.2 Implement `hooks/useComponentTemplate.ts`, `hooks/useTemplateRun.ts`.
+- [x] 5.1.5 `discard` drops the shown run and ignores a run still in flight (added on review: the
+        "changing a parameter discards the run" rule needs it)
+- [x] 5.3 Confirm tests pass. `useTemplateRun.test.ts` 13/13; `tsc`, `eslint src/hooks` clean.
 
 ## 6. Problem attribution (Decision 5)
 
