@@ -58,11 +58,6 @@ function keyPassesRules(profile: ComponentProfile, key: string): boolean {
 }
 
 /**
- * The profile that covers [classification]: the first usable one whose key rules [key] passes,
- * else the first usable one. `matchesAny` tells "no profile has it" from "only profiles the user
- * may not use have it".
- */
-/**
  * The regular profiles whose classification is [classification], usable or not, in the registry's
  * order. A template never covers a classification: it is picked, never derived.
  */
@@ -73,6 +68,11 @@ export function profilesCovering(
   return profiles.filter((p) => isRegular(p) && matchesClassification(p, classification))
 }
 
+/**
+ * The profile that covers [classification]: the first usable one whose key rules [key] passes,
+ * else the first usable one. `matchesAny` tells "no profile has it" from "only profiles the user
+ * may not use have it".
+ */
 export function profileForClassification(
   classification: Classification,
   key: string,

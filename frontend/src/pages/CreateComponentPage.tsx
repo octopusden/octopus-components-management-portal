@@ -160,6 +160,20 @@ function classificationFlags(
   return profile ? flagsForProfile(profile, explicitAnswer) : null
 }
 
+// The wizard's starting classification is not always the source's (a solution that is not explicit
+// external starts as not a solution), so a profile may cover it although none matched the source.
+function initialProfileId(
+  initial: { profileId: string | null; explicit: boolean },
+  manualMode: boolean,
+  manual: { external: boolean; solution: boolean },
+  key: string,
+  profiles: readonly ComponentProfile[],
+): string | null {
+  if (!manualMode) return initial.profileId
+  const flags = manualFlags(manual.external, initial.explicit, manual.solution)
+  return profileForClassification(flags, key, profiles).profile?.id ?? null
+}
+
 // A classification set directly that a profile covers takes that profile, so its rules and
 // usability apply as if its tile were picked.
 function profileSelection(
@@ -338,14 +352,16 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
   // the source (editable afterwards). Frozen at mount — the profiles arrive with the wizard.
   const [initial] = useState(() => initialProfile(source, profiles))
   const [formDefaults] = useState(() => initialValues(source, defaults, initial.profile))
-  const [profileId, setProfileId] = useState<string | null>(initial.profileId)
-  const [explicitAnswer, setExplicitAnswer] = useState<boolean>(initial.explicit)
-  const profile = profiles.find((p) => p.id === profileId) ?? null
   // The user sets the classification directly when the registry has no profiles, or when no
   // profile has a clone's classification (D10).
   const noProfiles = profiles.length === 0
   const manualMode = isManualClassification(noProfiles, isClone, initial.matchesAny)
   const [manual, setManual] = useState(() => initialManualClassification(source))
+  const [profileId, setProfileId] = useState<string | null>(() =>
+    initialProfileId(initial, manualMode, manual, formDefaults.name, profiles),
+  )
+  const [explicitAnswer, setExplicitAnswer] = useState<boolean>(initial.explicit)
+  const profile = profiles.find((p) => p.id === profileId) ?? null
   const flags = classificationFlags(manualMode, profile, explicitAnswer, manual)
   const { covering, profileMissing } = profileSelection(manualMode, flags, profiles, profileId)
   // A template picked on the Profile step takes over the wizard with its own steps; the regular

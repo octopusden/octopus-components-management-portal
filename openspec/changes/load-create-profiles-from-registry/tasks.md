@@ -435,3 +435,12 @@
 - [x] 21.4 `.release-line` moves to `1.1`.
 - [x] 21.5 Rule patterns that compile in Java and plain JavaScript but not in Unicode mode
       (`\-`, `\_`, `a{1,`) skip the live check; the create still rejects. Left as is, by decision.
+
+## 22. Fifth review (added on review)
+
+- [x] 22.1 21.3 selected the covering profile only when the user changed the classification. A
+      clone whose source matches no profile but whose starting classification one covers (a
+      solution that is not explicit external starts as not a solution, which Regular external
+      covers) opened with no tile selected and Create held. The starting profile now comes from
+      the starting classification too (`initialProfileId`). 1 page test (fails without the fix).
+- [x] 22.2 `profileForClassification`'s KDoc moved from above `profilesCovering` to its function.
