@@ -90,3 +90,8 @@ export function templateRunBody(values: ParameterValues, overrides: ParameterVal
   }
   return { parameters, overrides: Object.fromEntries(Object.entries(overrides).map(([path, v]) => [path, [...v]])) }
 }
+
+/** The values the Parameters form opens with: each parameter's default. */
+export function initialParameterValues(parameters: readonly TemplateParameter[]): Record<string, string[]> {
+  return Object.fromEntries(parameters.map((p) => [p.name, [...p.default]]))
+}

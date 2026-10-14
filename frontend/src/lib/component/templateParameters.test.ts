@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { templateParameterErrors, templateRunBody, type TemplateParameter } from './templateParameters'
+import { initialParameterValues, templateParameterErrors, templateRunBody, type TemplateParameter } from './templateParameters'
 
 function param(name: string, overrides: Partial<TemplateParameter> = {}): TemplateParameter {
   return { name, label: name, type: 'text', required: true, multiple: false, default: [], ...overrides }
@@ -115,5 +115,16 @@ describe('templateRunBody', () => {
 
   it('carries no Jira task key or comment: only Create sends those', () => {
     expect(Object.keys(templateRunBody({ CODE: ['PAY'] }, {}))).toEqual(['parameters', 'overrides'])
+  })
+})
+
+describe('initialParameterValues', () => {
+  it('opens every parameter on its default, the person default already the logged-in user', () => {
+    const parameters = [
+      param('CODE'),
+      param('OWNER', { type: 'person', default: ['jdoe'] }),
+      param('LABELS', { type: 'crs-list', list: 'labels', default: ['sql', 'ui'] }),
+    ]
+    expect(initialParameterValues(parameters)).toEqual({ CODE: [], OWNER: ['jdoe'], LABELS: ['sql', 'ui'] })
   })
 })
