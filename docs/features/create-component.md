@@ -15,11 +15,14 @@ rule is [`component-key-format`](../../openspec/specs/component-key-format/spec.
   with Retry instead of the wizard. The wizard opens on a freshly fetched list and keeps it while
   open, so a later failed refetch does not close it.
 - When the registry has no `regular` profile (none configured in service-config), the step says so
-  and offers the template tiles, if any, beside External / Internal, "Has explicit distribution?" and Solution (explicit external
-  only). The create then names no profile and no field rules apply.
+  and offers the template tiles, if any, beside External / Internal, "Has explicit distribution?"
+  and Solution (explicit external only). The create then names no profile and no field rules apply
+  — unless a profile has the chosen classification: its tile is then shown and selected, and the
+  create uses it.
 - Picking a template replaces the steps with Parameters and Review & create (see "From a
   template"); picking a regular profile again returns to the regular steps with what was typed.
-- Scratch pre-selects the first usable regular profile; a template is never pre-selected. A clone pre-selects the first usable profile whose
+- Scratch pre-selects the first usable regular profile; a template is never pre-selected. A clone
+  pre-selects the first usable profile whose
   classification matches the source and whose key rule the source's key passes, else the first
   usable one whose classification matches; when no profile has the classification it sets it
   directly, starting from the source's, and names no profile; when only profiles the user may not

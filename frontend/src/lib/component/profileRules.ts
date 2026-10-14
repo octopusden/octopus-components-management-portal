@@ -66,6 +66,9 @@ const FIELDS: Record<string, string> = {
 
 export const RULE_PATHS: readonly string[] = Object.keys(READERS)
 
+// Own keys only, so a path such as `constructor` is unknown rather than an inherited member.
+const readerOf = (path: string): Reader | undefined => (Object.hasOwn(READERS, path) ? READERS[path] : undefined)
+
 /** The form fields a rule can put a message on; ownership rows as the whole `ownership` array. */
 export const RULE_FORM_FIELDS: readonly string[] = [
   ...new Set(Object.values(FIELDS).map((field) => (field.startsWith('ownership.') ? 'ownership' : field))),
@@ -73,7 +76,7 @@ export const RULE_FORM_FIELDS: readonly string[] = [
 
 /** The wizard form field for a create-request path, or `undefined` for a path it does not know. */
 export function formFieldOfRulePath(path: string): string | undefined {
-  return FIELDS[path]
+  return Object.hasOwn(FIELDS, path) ? FIELDS[path] : undefined
 }
 
 const compiled = new WeakMap<ProfileFieldRule, RegExp | null>()
@@ -108,7 +111,7 @@ export function profileRuleErrors(
 ): Map<string, string> {
   const errors = new Map<string, string>()
   for (const rule of rules) {
-    const read = READERS[rule.path]
+    const read = readerOf(rule.path)
     const regex = regexOf(rule)
     if (!read || !regex) continue
     if (!regex.test(read(request) ?? '') && !errors.has(rule.path)) errors.set(rule.path, rule.message)
@@ -132,5 +135,5 @@ export function ruleErrorOf(rawBody: string): { path: string; message: string } 
   const separator = errorMessage.indexOf(': ')
   if (separator < 0) return null
   const path = errorMessage.slice(0, separator)
-  return path in READERS ? { path, message: errorMessage.slice(separator + 2).trim() } : null
+  return readerOf(path) ? { path, message: errorMessage.slice(separator + 2).trim() } : null
 }

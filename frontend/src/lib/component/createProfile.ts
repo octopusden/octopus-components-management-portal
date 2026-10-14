@@ -41,18 +41,47 @@ export function asksExplicit(profile: ComponentProfile): boolean {
   return profile.classification.explicit === 'ask'
 }
 
-function matchesClassification(profile: ComponentProfile, source: ComponentDetail): boolean {
+type Classification = Pick<ComponentDetail, 'solution' | 'distributionExternal' | 'distributionExplicit'>
+
+function matchesClassification(profile: ComponentProfile, classification: Classification): boolean {
   const { solution, external, explicit } = profile.classification
   return (
-    solution === !!source.solution &&
-    external === !!source.distributionExternal &&
-    (explicit === 'ask' || (explicit === 'true') === !!source.distributionExplicit)
+    solution === !!classification.solution &&
+    external === !!classification.distributionExternal &&
+    (explicit === 'ask' || (explicit === 'true') === !!classification.distributionExplicit)
   )
 }
 
 function keyPassesRules(profile: ComponentProfile, key: string): boolean {
   const keyRules = profile.rules.filter((r) => r.path === 'name')
   return profileRuleErrors(keyRules, { name: key }).size === 0
+}
+
+/**
+ * The profile that covers [classification]: the first usable one whose key rules [key] passes,
+ * else the first usable one. `matchesAny` tells "no profile has it" from "only profiles the user
+ * may not use have it".
+ */
+/**
+ * The regular profiles whose classification is [classification], usable or not, in the registry's
+ * order. A template never covers a classification: it is picked, never derived.
+ */
+export function profilesCovering(
+  classification: Classification,
+  profiles: readonly ComponentProfile[],
+): ComponentProfile[] {
+  return profiles.filter((p) => isRegular(p) && matchesClassification(p, classification))
+}
+
+export function profileForClassification(
+  classification: Classification,
+  key: string,
+  profiles: readonly ComponentProfile[],
+): { profile: ComponentProfile | null; matchesAny: boolean } {
+  const matching = profilesCovering(classification, profiles)
+  const candidates = matching.filter((p) => p.usable)
+  const chosen = candidates.find((p) => keyPassesRules(p, key)) ?? candidates[0]
+  return { profile: chosen ?? null, matchesAny: matching.length > 0 }
 }
 
 /**
@@ -66,10 +95,8 @@ export function profileFromSource(
   source: ComponentDetail,
   profiles: readonly ComponentProfile[],
 ): { profileId: string | null; explicit: boolean; matchesAny: boolean } {
-  const matching = profiles.filter((p) => isRegular(p) && matchesClassification(p, source))
-  const candidates = matching.filter((p) => p.usable)
-  const chosen = candidates.find((p) => keyPassesRules(p, source.name ?? '')) ?? candidates[0]
-  return { profileId: chosen?.id ?? null, explicit: !!source.distributionExplicit, matchesAny: matching.length > 0 }
+  const { profile, matchesAny } = profileForClassification(source, source.name ?? '', profiles)
+  return { profileId: profile?.id ?? null, explicit: !!source.distributionExplicit, matchesAny }
 }
 
 /**

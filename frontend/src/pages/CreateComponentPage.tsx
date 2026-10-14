@@ -69,6 +69,8 @@ import {
   isRegular,
   isTemplate,
   manualFlags,
+  profileForClassification,
+  profilesCovering,
   type ProfileFlags,
 } from '../lib/component/createProfile'
 import { ruleErrorOf, RULE_FORM_FIELDS } from '../lib/component/profileRules'
@@ -156,6 +158,18 @@ function classificationFlags(
 ): ProfileFlags | null {
   if (manualMode) return manualFlags(manual.external, explicitAnswer, manual.solution)
   return profile ? flagsForProfile(profile, explicitAnswer) : null
+}
+
+// A classification set directly that a profile covers takes that profile, so its rules and
+// usability apply as if its tile were picked.
+function profileSelection(
+  manualMode: boolean,
+  flags: ProfileFlags | null,
+  profiles: readonly ComponentProfile[],
+  profileId: string | null,
+): { covering: ComponentProfile[]; profileMissing: boolean } {
+  const covering = manualMode && flags ? profilesCovering(flags, profiles) : []
+  return { covering, profileMissing: profileId === null && (!manualMode || covering.length > 0) }
 }
 
 // Map a zod-issue / RHF-error field path to the wizard step that owns it.
@@ -333,14 +347,14 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
   const manualMode = isManualClassification(noProfiles, isClone, initial.matchesAny)
   const [manual, setManual] = useState(() => initialManualClassification(source))
   const flags = classificationFlags(manualMode, profile, explicitAnswer, manual)
-  const profileMissing = profileId === null && !manualMode
+  const { covering, profileMissing } = profileSelection(manualMode, flags, profiles, profileId)
   // A template picked on the Profile step takes over the wizard with its own steps; the regular
   // form stays mounted behind it, so picking a regular profile again finds it as it was left.
   const [templateId, setTemplateId] = useState<string | null>(null)
   const [withdrawn, setWithdrawn] = useState<{ ids: string[]; message: string | null }>({ ids: [], message: null })
-  const tiles = entries.filter((e) => !withdrawn.ids.includes(e.id))
-  const templateTiles = tiles.filter(isTemplate)
-  const templateEntry = tiles.find((e) => e.id === templateId) ?? null
+  const offered = entries.filter((e) => !withdrawn.ids.includes(e.id))
+  const templateTiles = offered.filter(isTemplate)
+  const templateEntry = offered.find((e) => e.id === templateId) ?? null
 
   const buildTasksVisibility = useFieldVisibility('build.buildTasks')
   const labelsVisibility = useFieldVisibility('component.labels')
@@ -444,10 +458,12 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
   // Apply the chosen profile: set the derived flags and (on a real change) reset
   // the Component Key so the profile-dependent rule is re-entered (brief).
   // The default copyright is seeded only for an explicit external component; once the
-  // classification leaves that, clear it unless the user changed it.
+  // classification leaves that, clear it unless the user changed it. Read before the new flags
+  // are set: a classification that was never explicit external keeps a clone's copied copyright.
   const clearDefaultCopyrightUnless = useCallback(
     (explicitExternal: boolean) => {
       if (explicitExternal || !formDefaults.copyright) return
+      if (!(getValues('distributionExternal') && getValues('distributionExplicit'))) return
       if (getValues('copyright') === formDefaults.copyright) setValue('copyright', '', { shouldValidate: false })
     },
     [formDefaults, getValues, setValue],
@@ -492,11 +508,13 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
       setServerError((current) => (current?.stepId === 'profile' ? null : current))
       setManual({ external, solution })
       setExplicitAnswer(explicit)
+      clearDefaultCopyrightUnless(external && explicit)
       setValue('distributionExternal', external, { shouldValidate: false, shouldDirty: true })
       setValue('distributionExplicit', explicit, { shouldValidate: false, shouldDirty: true })
-      clearDefaultCopyrightUnless(external && explicit)
+      const covered = profileForClassification(manualFlags(external, explicit, solution), getValues('name'), profiles)
+      setProfileId(covered.profile?.id ?? null)
     },
-    [manual, explicitAnswer, setValue, clearDefaultCopyrightUnless],
+    [manual, explicitAnswer, setValue, getValues, profiles, clearDefaultCopyrightUnless],
   )
   const chooseEntry = (next: ComponentProfile) => {
     if (!next.usable) return
@@ -507,6 +525,12 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
     }
     setTemplateId(null)
     applyProfile(next, explicitAnswer)
+  }
+  const pickCovering = (next: ComponentProfile) => {
+    if (!next.usable) return
+    setTemplateId(null)
+    setServerError((current) => (current?.stepId === 'profile' ? null : current))
+    setProfileId(next.id)
   }
   const chooseExplicit = (value: boolean) => {
     if (manualMode) applyManual({ explicit: value })
@@ -822,10 +846,18 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
       {manualMode ? (
         <>
           {renderManualClassification()}
-          {templateTiles.length > 0 && renderProfileTiles(templateTiles)}
+          {templateTiles.length > 0 && renderProfileTiles(templateTiles, chooseEntry)}
         </>
       ) : (
-        renderProfileTiles(tiles)
+        renderProfileTiles(offered, chooseEntry)
+      )}
+      {!templateEntry && covering.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            This classification belongs to a profile, so its rules apply.
+          </p>
+          {renderProfileTiles(covering, pickCovering)}
+        </div>
       )}
       {!templateEntry && (profile || manualMode) && (
         <p className="text-sm text-muted-foreground">
@@ -874,12 +906,12 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
     </div>
   )
 
-  const renderProfileTiles = (list: ComponentProfile[]) => (
+  const renderProfileTiles = (tiles: readonly ComponentProfile[], pick: (profile: ComponentProfile) => void) => (
     <div role="radiogroup" aria-label="Component profile" className="grid gap-3 sm:grid-cols-2">
-      {list.map((p, idx) => {
+      {tiles.map((p, idx) => {
         const selected = templateEntry ? templateEntry.id === p.id : profileId === p.id
         const noneSelected = templateEntry === null && profileId === null
-        const tabbable = selected || (noneSelected && idx === list.findIndex((q) => q.usable))
+        const tabbable = selected || (noneSelected && idx === tiles.findIndex((q) => q.usable))
         return (
           <button
             key={p.id}
@@ -890,17 +922,17 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
             aria-describedby={!p.usable && p.unusableReason ? `profile-${p.id}-reason` : undefined}
             disabled={!p.usable}
             tabIndex={tabbable ? 0 : -1}
-            onClick={() => chooseEntry(p)}
+            onClick={() => pick(p)}
             onKeyDown={(e) =>
               moveRadio(
                 e,
-                list.length,
+                tiles.length,
                 idx,
                 (i) => {
-                  const next = list[i]
-                  if (next) chooseEntry(next)
+                  const next = tiles[i]
+                  if (next) pick(next)
                 },
-                (i) => !!list[i]?.usable,
+                (i) => !!tiles[i]?.usable,
               )
             }
             className={cn(

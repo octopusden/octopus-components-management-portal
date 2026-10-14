@@ -27,7 +27,9 @@
 - When the registry has no `regular` profile (it starts with none when service-config carries no
   profiles), the Profile step says so and offers the classification directly: External or
   Internal, "Has explicit distribution?", and Solution for an explicit external component. No
-  profile is sent and no field rules apply — the create is checked as today.
+  profile is sent and no field rules apply — the create is checked as today. When the chosen
+  classification is one a profile has, that profile is used instead, as if its tile were picked:
+  its rules apply, and a profile the user may not use blocks the create.
 - Scratch pre-selects the first usable profile. A clone pre-selects the first usable profile
   whose classification matches the source and whose rules the source's key passes; failing that,
   the first usable one whose classification matches; when no profile has the classification, the

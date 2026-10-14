@@ -256,6 +256,11 @@ classification but its rule fails on the key; `dmp-bundle` matches both → pre-
   solution forced `false` unless external and explicit — the registry's own rule for a solution.
 - No profile is selected, so the Profile gate does not apply, the request carries no `profile`,
   and the schema gets no rules: only today's checks run.
+- Unless the chosen classification is one a profile has (`profilesCovering`): then those
+  profiles show as tiles and `profileForClassification` selects one by the key, as a clone's
+  pre-selection does. The create names it, its rules apply, and the Profile gate holds when none
+  is usable. Otherwise the controls would let a clone reach, say, a solution without the Solution
+  profile's key rule, or a profile the user may not use. (added on review)
 - A new component starts as `SCRATCH_DEFAULTS` (external, not explicit, not a solution), the
   values `initialValues` already gives without a profile. A clone starts with the source's
   solution, external and explicit flags and opens on General.

@@ -68,9 +68,30 @@ clone's classification, the Profile step SHALL say so — the registry has no pr
 matches this component — and SHALL offer the classification instead of tiles: External or
 Internal, "Has explicit distribution?", and Solution, which is offered only for an explicit
 external component. The create SHALL carry that classification, SHALL NOT name a profile, and no
-field rules SHALL apply. A new component starts external and not explicit; a clone starts with
+field rules SHALL apply — unless a profile has the classification chosen. Then the step SHALL show
+the profiles that have it as tiles, the first usable one whose key rule the key passes selected
+(else the first usable one), and the create SHALL be treated as if that tile were picked: it names
+the profile, its field rules apply, and when none of those profiles is usable nothing can be
+created. A new component starts external and not explicit; a clone starts with
 the source's classification and opens on General. General's classification line SHALL say it
 was set on the Profile step rather than derived from a profile.
+
+#### Scenario: A classification a profile covers takes that profile
+
+- **WHEN** a clone's classification matches no profile, and the user sets it to external,
+  explicit and Solution while the Solution profile exists
+- **THEN** the Solution tile is shown selected, the create names `solution`, and its key rule
+  applies
+
+#### Scenario: Covered only by a profile the user may not use
+
+- **WHEN** the user sets a classification that only profiles they may not use have
+- **THEN** those tiles are shown disabled with their reason, and nothing can be created
+
+#### Scenario: Leaving the covered classification
+
+- **WHEN** the user then sets a classification no profile has
+- **THEN** the tiles are hidden, no profile is named and no field rules apply
 
 #### Scenario: The registry has no profiles
 

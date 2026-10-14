@@ -46,6 +46,13 @@ describe('profileRuleErrors', () => {
     expect(profileRuleErrors([rule('componentOwner', 'x')], request()).size).toBe(0)
   })
 
+  it.each([['constructor'], ['toString'], ['__proto__']])(
+    'skips a rule on %s, a name every object inherits, as an unknown path',
+    (path) => {
+      expect(profileRuleErrors([rule(path, '[a-z]+')], request()).size).toBe(0)
+    },
+  )
+
   it.each([['\\p{Lower}[\\p{Alnum}-]*'], ['\\Qpay\\E.*'], ['\\Apayments\\z']])(
     'skips the Java-only pattern %s instead of reading its escapes as literal text',
     (pattern) => {
@@ -73,6 +80,10 @@ describe('profileRuleErrors', () => {
 })
 
 describe('rule paths', () => {
+  it.each([['constructor'], ['toString'], ['__proto__']])('has no form field for %s', (path) => {
+    expect(formFieldOfRulePath(path)).toBeUndefined()
+  })
+
   const full: ComponentCreateRequest = {
     name: 'v-name',
     displayName: 'v-display',
@@ -156,6 +167,11 @@ describe('ruleErrorOf', () => {
   it('ignores a message on a path outside the registry list', () => {
     expect(ruleErrorOf(body('profile: unknown profile \'x\''))).toBeNull()
     expect(ruleErrorOf(body('Something went wrong'))).toBeNull()
+  })
+
+  it('ignores a message on a name every object inherits', () => {
+    expect(ruleErrorOf(body('toString: bad'))).toBeNull()
+    expect(ruleErrorOf(body('constructor: bad'))).toBeNull()
   })
 
   it('ignores a body that is not the registry error shape', () => {
