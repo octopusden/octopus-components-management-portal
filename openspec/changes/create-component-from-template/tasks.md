@@ -194,23 +194,25 @@
 
 ## 9. Templates tab (Decision 8)
 
-- [ ] 9.1 Failing tests for `useAdminComponentProfiles` (fetch per tab open, error state).
-- [ ] 9.2 Failing component tests for `TemplatesPanel`:
-  - [ ] 9.2.1 every entry with id, kind ("unknown" when absent), status, and title and version when live; a failed
+- [x] 9.1 Failing tests for `useAdminComponentProfiles` (fetch per tab open, error state).
+- [x] 9.2 Failing component tests for `TemplatesPanel`:
+  - [x] 9.2.1 every entry with id, kind ("unknown" when absent), status, and title and version when live; a failed
         entry lists its problems and shows its configuration text
-  - [ ] 9.2.2 last load status and problems, configuration version, and the "how templates
+  - [x] 9.2.2 last load status and problems, configuration version, and the "how templates
         change" note
-  - [ ] 9.2.3 a live template's details: parameters with settings, classification, overridable
+  - [x] 9.2.3 a live template's details: parameters with settings, classification, overridable
         fields, configuration text with Copy
-  - [ ] 9.2.4 Try it: parameter form with local checks; Run sends one dry run; the result shows
+  - [x] 9.2.4 Try it: parameter form with local checks; Run sends one dry run; the result shows
         each field's source parameters and every problem, including Portal rules; no Create,
         no editable field
-- [ ] 9.3 Failing test in `AdminSettingsPage.test.tsx`: the Templates tab is offered under the
+- [x] 9.3 Failing test in `AdminSettingsPage.test.tsx`: the Templates tab is offered under the
       page's `IMPORT_DATA` gate.
-- [ ] 9.4 Implement `hooks/useAdminComponentProfiles.ts`, `components/admin/TemplatesPanel.tsx`,
+- [x] 9.4 Implement `hooks/useAdminComponentProfiles.ts`, `components/admin/TemplatesPanel.tsx`,
       the tab in `AdminSettingsPage.tsx`; Try it reuses `TemplateParameterForm` and
       `TemplateReview` in read-only mode.
-- [ ] 9.5 Confirm tests pass.
+- [x] 9.5 Confirm tests pass. `TemplatesPanel.test.tsx` 9/9, `AdminSettingsPage.test.tsx` 10/10;
+      `tsc`, `eslint src` clean. The details read the live template from the admin listing itself;
+      no second request.
 
 ## 10. e2e (route-mocked)
 
