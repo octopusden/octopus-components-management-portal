@@ -10,7 +10,7 @@ import {
   get,
 } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Check, ChevronLeft, ChevronRight, Plus, X, AlertCircle, Loader2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, X, Loader2 } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../components/ui/dialog'
 import { Input } from '../components/ui/input'
@@ -27,6 +27,8 @@ import { FieldLabelText } from '../components/ui/FieldLabelText'
 import { FieldInfo } from '../components/ui/FieldInfo'
 import { JiraVersionPreview } from '../components/editor/JiraVersionPreview'
 import { UnsavedChangesGuard } from '../components/editor/UnsavedChangesGuard'
+import { WizardStepRail } from '../components/wizard/WizardStepRail'
+import { CreatedPanel } from '../components/wizard/CreatedPanel'
 import { cn } from '../lib/utils'
 import { hostOf } from '../lib/vcsHost'
 import { useFieldOptions } from '../hooks/useFieldOptions'
@@ -1631,27 +1633,11 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
   // created. `submitted` is already true, so no unsaved-changes guard is needed.
   if (created) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-5 p-10 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
-          <Check className="h-7 w-7" aria-hidden />
-        </div>
-        <div className="space-y-1">
-          <DialogTitle className="text-xl font-semibold">Component created</DialogTitle>
-          <p className="text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">{created.name}</span> was added to the registry.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center justify-center gap-3">
-          <Button type="button" variant="outline" onClick={onCreateAnother}>
-            <Plus className="h-4 w-4" />
-            Create another
-          </Button>
-          <Button type="button" onClick={() => navigate(`/components/${created.id}`)}>
-            Go to component
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+      <CreatedPanel
+        name={created.name}
+        onCreateAnother={onCreateAnother}
+        onOpen={() => navigate(`/components/${created.id}`)}
+      />
     )
   }
 
@@ -1667,71 +1653,17 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
 
       {/* Body row: vertical stepper rail + scrollable content */}
       <div className="flex min-h-0 flex-1">
-        <nav
-          aria-label="Wizard steps"
-          className="flex w-64 shrink-0 flex-col gap-1 overflow-y-auto border-r bg-card p-4"
-        >
-          {steps.map((step, i) => {
+        <WizardStepRail
+          steps={steps.map((step) => {
             const active = step === current
-            const showInvalid = shownInvalidSteps.has(step)
             const done = !active && visitedSteps.has(step) && !invalidSteps.has(step)
-            // `invalid` wins over `active`: the current step can also be invalid
-            // once a Create attempt marks every step attempted, and that must stay
-            // distinguishable (data-status + destructive styling). aria-current
-            // still conveys "active" independently.
-            const status = showInvalid ? 'invalid' : active ? 'active' : done ? 'done' : 'todo'
-            // Announce the icon-only status to assistive tech (the circle is
-            // aria-hidden). `active` is already conveyed by aria-current="step".
-            const statusText = showInvalid ? 'has errors' : done ? 'completed' : null
-            return (
-              <button
-                key={step}
-                type="button"
-                aria-label={STEP_LABELS[step]}
-                aria-describedby={statusText ? `step-status-${step}` : undefined}
-                data-status={status}
-                onClick={() => goToStep(step)}
-                aria-current={active ? 'step' : undefined}
-                className={cn(
-                  'flex items-start gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors',
-                  active ? 'bg-muted font-medium' : 'hover:bg-muted',
-                  showInvalid && 'text-destructive',
-                )}
-              >
-                <span
-                  aria-hidden
-                  className={cn(
-                    'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs',
-                    showInvalid
-                      ? 'border-destructive/50 text-destructive'
-                      : active
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : done
-                          ? 'border-emerald-600/40 bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
-                          : 'border-border text-muted-foreground',
-                  )}
-                >
-                  {showInvalid ? (
-                    <AlertCircle className="h-3.5 w-3.5" />
-                  ) : done ? (
-                    <Check className="h-3.5 w-3.5" />
-                  ) : (
-                    i + 1
-                  )}
-                </span>
-                <span className="flex flex-col">
-                  <span>{STEP_LABELS[step]}</span>
-                  <span className="text-xs font-normal text-muted-foreground">{STEP_SUBTITLES[step]}</span>
-                </span>
-                {statusText && (
-                  <span id={`step-status-${step}`} className="sr-only">
-                    {statusText}
-                  </span>
-                )}
-              </button>
-            )
+            // `invalid` wins over `active`: the current step can also be invalid once a Create
+            // attempt marks every step attempted, and that must stay distinguishable.
+            const status = shownInvalidSteps.has(step) ? 'invalid' : active ? 'active' : done ? 'done' : 'todo'
+            return { id: step, label: STEP_LABELS[step], subtitle: STEP_SUBTITLES[step], status, current: active }
           })}
-        </nav>
+          onSelect={goToStep}
+        />
 
         <div className="flex-1 overflow-y-auto p-6">
           <div className="mx-auto max-w-2xl space-y-6">
