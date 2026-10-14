@@ -348,9 +348,8 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
   const noProfiles = profiles.length === 0
   const manualMode = isManualClassification(noProfiles, isClone, initial.matchesAny)
   const [manual, setManual] = useState(() => initialManualClassification(source))
-  const [profileId, setProfileId] = useState<string | null>(() =>
-    initialProfileId(initial, manualMode, manual, formDefaults.name, profiles),
-  )
+  const [startProfileId] = useState(() => initialProfileId(initial, manualMode, manual, formDefaults.name, profiles))
+  const [profileId, setProfileId] = useState<string | null>(startProfileId)
   const [explicitAnswer, setExplicitAnswer] = useState<boolean>(initial.explicit)
   const profile = profiles.find((p) => p.id === profileId) ?? null
   const flags = classificationFlags(manualMode, profile, explicitAnswer, manual)
@@ -1669,7 +1668,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
   // which is not an RHF field), so isDirty alone misses a profile-only change:
   // compare against the profile and answer the wizard opened with.
   const profileTouched =
-    profileId !== initial.profileId ||
+    profileId !== startProfileId ||
     explicitAnswer !== initial.explicit ||
     manualChanged(manual, source)
 

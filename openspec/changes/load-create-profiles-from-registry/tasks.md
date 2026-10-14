@@ -444,3 +444,7 @@
       covers) opened with no tile selected and Create held. The starting profile now comes from
       the starting classification too (`initialProfileId`). 1 page test (fails without the fix).
 - [x] 22.2 `profileForClassification`'s KDoc moved from above `profilesCovering` to its function.
+- [x] 22.3 22.1 left the unsaved-changes check comparing against the source's profile (none), so
+      such a clone counted as changed when it opened and Cancel asked to discard. The check now
+      compares against the profile the wizard opened with. The 22.1 page test asserts the guard
+      is off (fails without the fix).

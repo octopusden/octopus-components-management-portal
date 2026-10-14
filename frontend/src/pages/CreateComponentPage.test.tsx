@@ -1687,6 +1687,7 @@ describe('CreateComponentPage — clone mode', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Profile' }))
     expect(screen.getByRole('radio', { name: /Regular external component/ })).toHaveAttribute('aria-checked', 'true')
     expect((screen.getByRole('button', { name: /^next$/i }) as HTMLButtonElement).disabled).toBe(false)
+    expect(screen.getByTestId('unsaved-guard').getAttribute('data-when')).toBe('false')
   })
 
   it("sets the classification directly when no profile matches the source, starting from the source's", async () => {
