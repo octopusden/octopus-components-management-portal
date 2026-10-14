@@ -3,7 +3,7 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 import { api, ApiError } from '../lib/api'
-import { keyMatchesTestPatterns, useTestComponentNamePatterns } from './useTestComponentNamePatterns'
+import { cloneTestComponent, keyMatchesTestPatterns, useTestComponentNamePatterns } from './useTestComponentNamePatterns'
 
 vi.mock('../lib/api', async () => {
   const actual = await vi.importActual<typeof import('../lib/api')>('../lib/api')
@@ -24,6 +24,22 @@ describe('keyMatchesTestPatterns', () => {
   it('fails open when ANY pattern does not compile in JS (Java-only syntax) — CRS decides', () => {
     expect(keyMatchesTestPatterns('payments', ['('])).toBe(true)
     expect(keyMatchesTestPatterns('payments', ['(', '^test-'])).toBe(true)
+    // Java-only escapes compile as literals without the `u` flag and would match nothing.
+    expect(keyMatchesTestPatterns('test-x', ['\\Atest-'])).toBe(true)
+    expect(keyMatchesTestPatterns('test-x', ['\\Qtest-\\E'])).toBe(true)
+  })
+})
+
+describe('cloneTestComponent', () => {
+  const P = ['^test-', '^cvelab-']
+  it('keeps the flag when the new key matches, or the patterns are unknown', () => {
+    expect(cloneTestComponent({ testComponent: true }, 'cvelab-copy', P)).toBe(true)
+    expect(cloneTestComponent({ testComponent: true }, 'cvelab-copy', null)).toBe(true)
+  })
+  it('drops it for a non-matching key and never adds it to a real source', () => {
+    expect(cloneTestComponent({ testComponent: true }, 'payments', P)).toBe(false)
+    expect(cloneTestComponent({ testComponent: false }, 'cvelab-copy', P)).toBe(false)
+    expect(cloneTestComponent(undefined, 'cvelab-copy', P)).toBe(false)
   })
 })
 
