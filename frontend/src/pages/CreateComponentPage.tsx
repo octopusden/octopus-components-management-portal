@@ -62,6 +62,7 @@ import {
   asksExplicit,
   flagsForProfile,
   initialProfile,
+  isRegular,
   manualFlags,
   type ProfileFlags,
 } from '../lib/component/createProfile'
@@ -273,7 +274,7 @@ export function CreateComponentPage() {
             source={source ?? null}
             isClone={isClone}
             defaults={componentDefaults}
-            profiles={openedWith ?? []}
+            profiles={(openedWith ?? []).filter(isRegular)}
             onCreateAnother={() => setRemountKey((k) => k + 1)}
           />
         )}

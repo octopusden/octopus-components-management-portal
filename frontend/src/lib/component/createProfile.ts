@@ -2,6 +2,9 @@ import type { ComponentProfile } from '../../hooks/useComponentProfiles'
 import type { ComponentDetail } from '../types'
 import { profileRuleErrors } from './profileRules'
 
+export const isRegular = (p: ComponentProfile) => p.kind === 'regular'
+export const isTemplate = (p: ComponentProfile) => p.kind === 'template'
+
 export interface ProfileFlags {
   solution: boolean
   distributionExternal: boolean
@@ -63,7 +66,7 @@ export function profileFromSource(
   source: ComponentDetail,
   profiles: readonly ComponentProfile[],
 ): { profileId: string | null; explicit: boolean; matchesAny: boolean } {
-  const matching = profiles.filter((p) => matchesClassification(p, source))
+  const matching = profiles.filter((p) => isRegular(p) && matchesClassification(p, source))
   const candidates = matching.filter((p) => p.usable)
   const chosen = candidates.find((p) => keyPassesRules(p, source.name ?? '')) ?? candidates[0]
   return { profileId: chosen?.id ?? null, explicit: !!source.distributionExplicit, matchesAny: matching.length > 0 }
@@ -71,7 +74,8 @@ export function profileFromSource(
 
 /**
  * The profile the wizard opens with: a clone's from [profileFromSource], a new component's the
- * first usable profile. `profile` is the object for `profileId`, or `null` when none is selected.
+ * first usable regular profile. A template is never pre-selected. `profile` is the object for
+ * `profileId`, or `null` when none is selected.
  */
 export function initialProfile(
   source: ComponentDetail | null,
@@ -79,6 +83,10 @@ export function initialProfile(
 ): { profileId: string | null; profile: ComponentProfile | null; explicit: boolean; matchesAny: boolean } {
   const { profileId, explicit, matchesAny } = source
     ? profileFromSource(source, profiles)
-    : { profileId: profiles.find((p) => p.usable)?.id ?? null, explicit: false, matchesAny: profiles.length > 0 }
+    : {
+        profileId: profiles.find((p) => isRegular(p) && p.usable)?.id ?? null,
+        explicit: false,
+        matchesAny: profiles.some(isRegular),
+      }
   return { profileId, profile: profiles.find((p) => p.id === profileId) ?? null, explicit, matchesAny }
 }

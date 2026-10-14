@@ -55,16 +55,19 @@
 
 ## 3. Profile listing keeps templates (Decision 1)
 
-- [ ] 3.1 Failing tests for `useComponentProfiles`:
-  - [ ] 3.1.1 returns `regular` and `template` entries in the registry's order
-  - [ ] 3.1.2 drops any other kind
-- [ ] 3.2 Failing tests for `initialProfile`:
-  - [ ] 3.2.1 a template listed first is never pre-selected; the first usable regular one is
-  - [ ] 3.2.2 only templates usable → nothing pre-selected
-  - [ ] 3.2.3 a clone never matches a template
-- [ ] 3.3 Implement; existing call sites that assume `regular` only (`noProfiles`, clone matching)
+- [x] 3.1 Failing tests for `useComponentProfiles`:
+  - [x] 3.1.1 returns `regular` and `template` entries in the registry's order
+  - [x] 3.1.2 drops any other kind
+- [x] 3.2 Failing tests for `initialProfile`:
+  - [x] 3.2.1 a template listed first is never pre-selected; the first usable regular one is
+  - [x] 3.2.2 only templates usable → nothing pre-selected
+  - [x] 3.2.3 a clone never matches a template
+- [x] 3.3 Implement; existing call sites that assume `regular` only (`noProfiles`, clone matching)
       filter by kind.
-- [ ] 3.4 Confirm tests pass.
+- [x] 3.4 Confirm tests pass. `isRegular` / `isTemplate` live in `createProfile.ts` (the page test
+      mocks the hooks module); until group 7 the page hands the wizard the regular entries only,
+      so it behaves as before. `src/lib/component`, `src/hooks`, `CreateComponentPage.test.tsx`
+      37 files / 649 tests; `tsc`, `eslint` clean.
 
 ## 4. Local parameter checks (Decision 2)
 
