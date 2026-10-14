@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { asksExplicit, flagsForProfile, initialProfile, manualFlags, profileFromSource } from './createProfile'
+import {
+  asksExplicit,
+  flagsForProfile,
+  initialProfile,
+  manualFlags,
+  profileForClassification,
+  profileFromSource,
+} from './createProfile'
 import type { ComponentDetail } from '../types'
 import type { ComponentProfile } from '../../hooks/useComponentProfiles'
 import shipped from '../../test-fixtures/component-profiles.contract.json'
@@ -96,6 +103,38 @@ describe('profileFromSource', () => {
     const src = source({ name: 'payments-dmp-bundle', solution: true, distributionExternal: true, distributionExplicit: true })
     const withBundleUnusable = profiles.map((p) => (p.id === 'dmp-bundle' ? { ...p, usable: false } : p))
     expect(profileFromSource(src, withBundleUnusable).profileId).toBe('solution')
+  })
+})
+
+describe('profileForClassification', () => {
+  const all = shipped.profiles as ComponentProfile[]
+  const solutionFlags = { solution: true, distributionExternal: true, distributionExplicit: true }
+
+  it('picks the usable profile whose key rule the key passes', () => {
+    expect(profileForClassification(solutionFlags, 'pay-dmp-bundle', all)).toEqual({
+      profile: byId('dmp-bundle'),
+      matchesAny: true,
+    })
+  })
+
+  it('falls back to the first usable matching profile when the key passes none', () => {
+    expect(profileForClassification(solutionFlags, '', all).profile).toEqual(byId('solution'))
+  })
+
+  it('matches a profile that asks for explicit distribution whichever the answer', () => {
+    const flags = { solution: false, distributionExternal: true, distributionExplicit: false }
+    expect(profileForClassification(flags, 'payments', all).profile).toEqual(byId('regular-external'))
+  })
+
+  it('returns no profile when none has the classification', () => {
+    const flags = { solution: false, distributionExternal: true, distributionExplicit: true }
+    const solutionsOnly = all.filter((p) => p.classification.solution)
+    expect(profileForClassification(flags, 'payments', solutionsOnly)).toEqual({ profile: null, matchesAny: false })
+  })
+
+  it('returns no profile, but a match, when only profiles the user may not use have it', () => {
+    const unusable = all.map((p) => ({ ...p, usable: false }))
+    expect(profileForClassification(solutionFlags, '', unusable)).toEqual({ profile: null, matchesAny: true })
   })
 })
 

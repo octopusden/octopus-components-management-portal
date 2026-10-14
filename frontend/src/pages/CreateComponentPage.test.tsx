@@ -1124,6 +1124,39 @@ describe('CreateComponentPage — the default copyright follows explicit externa
     await clickNext()
     expect(copyright().value).toBe('')
   })
+
+  it("keeps a clone's copied copyright when the already-selected profile is clicked again", async () => {
+    mockUseComponent.mockReturnValue({
+      data: makeSource({ distributionExternal: false, distributionExplicit: false, copyright: '(c) Source' }),
+      isLoading: false,
+      error: null,
+    })
+    renderWizard('/components/new?from=c-1')
+    expect(copyright().value).toBe('(c) Source')
+    await userEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/ }))
+    await clickNext()
+    expect(copyright().value).toBe('(c) Source')
+  })
+
+  it("keeps a clone's copied copyright when the already-chosen classification is clicked again", async () => {
+    // Only Solution is offered, so an internal source matches no profile and sets it directly.
+    mockUseComponentProfiles.mockReturnValue({
+      ...PROFILES_OK,
+      data: (shippedProfiles.profiles as ComponentProfile[]).filter((p) => p.id === 'solution'),
+    })
+    mockUseComponent.mockReturnValue({
+      data: makeSource({ distributionExternal: false, distributionExplicit: false, copyright: '(c) Source' }),
+      isLoading: false,
+      error: null,
+    })
+    renderWizard('/components/new?from=c-1')
+    expect(copyright().value).toBe('(c) Source')
+    await userEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Internal' }))
+    await clickNext()
+    expect(copyright().value).toBe('(c) Source')
+  })
 })
 
 describe('CreateComponentPage — field settings fail to load', () => {
@@ -1661,6 +1694,60 @@ describe('CreateComponentPage — clone mode', () => {
     expect(screen.getByRole('radio', { name: 'No' })).toHaveAttribute('aria-checked', 'true')
   })
 
+  describe('a classification set directly that a profile covers', () => {
+    const solutions = () => (shippedProfiles.profiles as ComponentProfile[]).filter((p) => p.classification.solution)
+    const solutionKeyMessage = () =>
+      solutions().find((p) => p.id === 'solution')!.rules.find((r) => r.path === 'name')!.message
+
+    // Only Solution and DMP Bundle are offered, so an external, not explicit source matches none.
+    async function openDirectClassification(profiles: ComponentProfile[]) {
+      mockUseComponentProfiles.mockReturnValue({ ...PROFILES_OK, data: profiles })
+      mockUseComponent.mockReturnValue({
+        data: makeSource({ distributionExternal: true, distributionExplicit: false }),
+        isLoading: false,
+        error: null,
+      })
+      renderWizard('/components/new?from=c-1')
+      await userEvent.click(screen.getByRole('button', { name: 'Profile' }))
+      await userEvent.click(screen.getByRole('radio', { name: 'Yes' }))
+      await userEvent.click(screen.getByRole('checkbox', { name: /solution/i }))
+    }
+
+    it('uses that profile, so its key rule applies', async () => {
+      await openDirectClassification(solutions())
+      expect(screen.getByRole('radio', { name: /^Solution$/ })).toHaveAttribute('aria-checked', 'true')
+      await clickNext()
+      await userEvent.type(screen.getByPlaceholderText('my-component'), 'pay-core')
+      await waitFor(() => expect(screen.getByText(solutionKeyMessage())).toBeDefined())
+    })
+
+    it('lets the user pick another profile that covers it', async () => {
+      await openDirectClassification(solutions())
+      await userEvent.click(screen.getByRole('radio', { name: /^DMP Bundle$/ }))
+      expect(screen.getByRole('radio', { name: /^DMP Bundle$/ })).toHaveAttribute('aria-checked', 'true')
+      expect(screen.getByRole('checkbox', { name: /solution/i })).toBeChecked()
+    })
+
+    it('holds Create when the user may not use any profile that covers it', async () => {
+      await openDirectClassification(
+        solutions().map((p) => ({ ...p, usable: false, unusableReason: 'Not for your role' })),
+      )
+      expect(screen.getByRole('radio', { name: /^Solution$/ })).toBeDisabled()
+      await userEvent.click(screen.getByRole('button', { name: /Review & create/i }))
+      await userEvent.type(screen.getByLabelText(/Jira task key/i), 'ABC-1')
+      expect((screen.getByRole('button', { name: /^create component$/i }) as HTMLButtonElement).disabled).toBe(true)
+    })
+
+    it('drops the profile again when the classification leaves it', async () => {
+      await openDirectClassification(solutions())
+      await userEvent.click(screen.getByRole('checkbox', { name: /solution/i }))
+      expect(screen.queryByRole('radio', { name: /^Solution$/ })).toBeNull()
+      await clickNext()
+      await userEvent.type(screen.getByPlaceholderText('my-component'), 'pay-core')
+      await new Promise((r) => setTimeout(r, 50))
+      expect(screen.queryByText(solutionKeyMessage())).toBeNull()
+    })
+  })
 })
 
 // SYS-095: '_' is legal in the Component Key only inside the client-code prefix.

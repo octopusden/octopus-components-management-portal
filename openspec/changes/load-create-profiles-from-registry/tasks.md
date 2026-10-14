@@ -414,3 +414,24 @@
       pinned 3.0.2 build), so the e2e registry container exited. The driver and `infra/dev` compose
       pass placeholder template and step ids; compose and `.env.example` default to `3.0.16`, so
       local dev serves the profiles too.
+
+## 21. Fourth review (added on review)
+
+- [x] 21.1 Clicking the already-selected profile, answer or classification cleared a clone's
+      copied copyright although the classification never was explicit external. The copyright is
+      now cleared only when the classification was explicit external before the change;
+      `applyManual` checks before setting the new flags. 2 page tests (fail without the fix).
+- [x] 21.2 A rule path named like an inherited object member (`constructor`, `toString`) found
+      that member in the path tables: the rule failed, and `formFieldOfRule` threw inside the
+      schema. Lookups now read own keys only, so such a path is unknown and skipped. 7 unit tests
+      (fail without the fix).
+- [x] 21.3 A clone whose classification no profile has could set it directly to one a profile
+      has — e.g. external, explicit and Solution — and create without that profile's key rule,
+      even when the user may not use it. A classification set directly that a profile has now
+      takes that profile (`profilesCovering`, `profileForClassification` in `createProfile.ts`):
+      its tiles show, it is named on create, its rules apply, and an unusable one blocks Create.
+      5 unit tests, 4 page tests (3 fail without the fix). Spec, design Decision 10, proposal and
+      the feature doc updated.
+- [x] 21.4 `.release-line` moves to `1.1`.
+- [x] 21.5 Rule patterns that compile in Java and plain JavaScript but not in Unicode mode
+      (`\-`, `\_`, `a{1,`) skip the live check; the create still rejects. Left as is, by decision.
