@@ -106,6 +106,8 @@ Overridable: `baseConfiguration.vcsEntries[0].vcsPath`, `baseConfiguration.jira.
 - The wizard already requires the Jira project key and full version format at field level in its
   Zod object; it skips those two rules from the function so a blank field shows one message, not
   two.
+- The wizard also passes the coordinate type the user chose: it sends no Docker image while the
+  name is blank, so the request alone cannot tell "Docker, name missing" from "no coordinate".
 - Template review calls it on the dry run's `component` with every field editable — the template,
   not field-config, decides what is set.
 - Why one function: the rule set and its messages must be the same on both paths, and a request

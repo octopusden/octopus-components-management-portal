@@ -20,32 +20,38 @@
 
 ## 2. Portal-only rules over a create request (Decision 4)
 
-- [ ] 2.1 Failing tests for `portalCreateRules(request, options)`, one per rule, each asserting
+- [x] 2.1 Failing tests for `portalCreateRules(request, options)`, one per rule, each asserting
       the create-request path and today's exact message:
-  - [ ] 2.1.1 blank `baseConfiguration.jira.projectKey` → "Jira Project Key is required"
-  - [ ] 2.1.2 blank full version format → "Full Version Format is required"
-  - [ ] 2.1.3 build system needing VCS, no VCS path → "VCS Path is required for this build system"
-  - [ ] 2.1.4 non-`ssh://` VCS path → the `ssh://` message; `ssh://` on another host → the host
+  - [x] 2.1.1 blank `baseConfiguration.jira.projectKey` → "Jira Project Key is required"
+  - [x] 2.1.2 blank full version format → "Full Version Format is required"
+  - [x] 2.1.3 build system needing VCS, no VCS path → "VCS Path is required for this build system"
+  - [x] 2.1.4 non-`ssh://` VCS path → the `ssh://` message; `ssh://` on another host → the host
         message naming the ecosystem host
-  - [ ] 2.1.5 missing tag / branch → "Tag is required" / "Production branch is required"
-  - [ ] 2.1.6 build system needing no VCS (`PROVIDED` and the rest of the exempt set) → no VCS
+  - [x] 2.1.5 missing tag / branch → "Tag is required" / "Production branch is required"
+  - [x] 2.1.6 build system needing no VCS (`PROVIDED` and the rest of the exempt set) → no VCS
         issue
-  - [ ] 2.1.7 ownership group ID with a bad token, an unsupported prefix, EXPLICIT mode with no
+  - [x] 2.1.7 ownership group ID with a bad token, an unsupported prefix, EXPLICIT mode with no
         tokens → one issue each on that row's path
-  - [ ] 2.1.8 explicit external without display name / release manager / security champion →
+  - [x] 2.1.8 explicit external without display name / release manager / security champion →
         one issue each; skipped when `editable` says the field is not editable
-  - [ ] 2.1.9 explicit external maven / docker / package coordinate incomplete or with an
+  - [x] 2.1.9 explicit external maven / docker / package coordinate incomplete or with an
         unsupported group prefix → issue on that coordinate path
-  - [ ] 2.1.10 not explicit external → no display-name, people or coordinate issue
-  - [ ] 2.1.11 a fully valid request → no issues
-- [ ] 2.2 Implement `frontend/src/lib/component/portalCreateRules.ts`, reusing
+  - [x] 2.1.10 not explicit external → no display-name, people or coordinate issue
+  - [x] 2.1.11 a fully valid request → no issues
+- [x] 2.2 Implement `frontend/src/lib/component/portalCreateRules.ts`, reusing
       `vcsBlockApplies`, `SSH_VCS_URL_REGEX`, `isVcsHostSupported`, `findUnsupportedGroupId`,
       `isBadToken`.
-- [ ] 2.3 Rewire `makeCreateSchema` to call it on the request it builds and map each path with
+- [x] 2.3 Rewire `makeCreateSchema` to call it on the request it builds and map each path with
       `formFieldOfRule`, skipping the Jira project key and full version format rules that the
       Zod object already requires at field level. Before and after: the full `createFormModel.test.ts` and
       `CreateComponentPage.test.tsx` suites pass unchanged — no test edited.
-- [ ] 2.4 Confirm tests pass. <record suite and counts>
+- [x] 2.1.12 a coordinate type the creator chose but the request does not carry (a blank Docker
+        image is not sent) is read from `coordinateType`; with neither, one issue asks for a
+        coordinate. (added on review: the request alone cannot tell "Docker, name missing" from
+        "no coordinate")
+- [x] 2.4 Confirm tests pass. `portalCreateRules.test.ts` 26/26; `src/lib/component` +
+      `CreateComponentPage.test.tsx` 378/378 before and after the rewire, no test edited; `tsc`
+      and `eslint src/lib/component` clean.
 
 ## 3. Profile listing keeps templates (Decision 1)
 
