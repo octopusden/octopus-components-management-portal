@@ -107,16 +107,18 @@
 
 ## 6. Problem attribution (Decision 5)
 
-- [ ] 6.1 Failing tests for `reviewProblems(run, portalIssues)`:
-  - [ ] 6.1.1 a registry problem keeps its fields, parameters and `templateProblem`
-  - [ ] 6.1.2 a Portal issue on a path with sources names those parameters
-  - [ ] 6.1.3 a Portal issue on a path with no sources and not overridden is a template problem
-  - [ ] 6.1.4 a Portal issue on an overridden path names no parameter and is not a template
+- [x] 6.1 Failing tests for `reviewProblems(run, portalIssues)`:
+  - [x] 6.1.1 a registry problem keeps its fields, parameters and `templateProblem`
+  - [x] 6.1.2 a Portal issue on a path with sources names those parameters
+  - [x] 6.1.3 a Portal issue on a path with no sources and not overridden is a template problem
+  - [x] 6.1.4 a Portal issue on an overridden path names no parameter and is not a template
         problem
-  - [ ] 6.1.5 a `name: …` prefixed message is placed on that field; an unprefixed one at the top
-  - [ ] 6.1.6 the same path and message from both sides is shown once
-- [ ] 6.2 Implement `frontend/src/lib/component/templateReview.ts`.
-- [ ] 6.3 Confirm tests pass.
+  - [x] 6.1.5 a `name: …` prefixed message is placed on that field; an unprefixed one at the top
+  - [x] 6.1.6 the same path and message from both sides is shown once
+- [x] 6.2 Implement `frontend/src/lib/component/templateReview.ts`.
+- [x] 6.1.7 a registry problem with neither field nor prefix is shown at the top; registry
+        problems are listed before the Portal's (added on review)
+- [x] 6.3 Confirm tests pass. `templateReview.test.ts` 8/8; `tsc`, `eslint` clean.
 
 ## 7. Parameters step (Decisions 1, 2)
 
