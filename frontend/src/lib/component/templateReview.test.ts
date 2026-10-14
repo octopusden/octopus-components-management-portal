@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { reviewFieldGroups, reviewProblems } from './templateReview'
+import { applyOverrides, reviewFieldGroups, reviewProblems } from './templateReview'
 import type { TemplateRun } from '../../hooks/useTemplateRun'
 
 const VCS_PATH = 'baseConfiguration.vcsEntries[0].vcsPath'
@@ -137,5 +137,28 @@ describe('reviewFieldGroups', () => {
   it('keeps an empty field a problem or an override needs, so its message has a row', () => {
     const general = groups(['displayName']).find((g) => g.heading === 'General')!
     expect(general.rows.find((r) => r.path === 'displayName')).toEqual({ path: 'displayName', label: 'Display Name', value: [] })
+  })
+})
+
+describe('applyOverrides', () => {
+  const component = {
+    name: 'abc-plugin-pay',
+    releaseManager: ['jdoe'],
+    baseConfiguration: { jira: { projectKey: 'ABC' } },
+  } as unknown as NonNullable<TemplateRun['component']>
+
+  it('sets a single-value field to the edited value, leaving the rendered component untouched', () => {
+    const edited = applyOverrides(component, { 'baseConfiguration.jira.projectKey': ['XYZ'] })
+    expect(edited.baseConfiguration?.jira?.projectKey).toBe('XYZ')
+    expect(component.baseConfiguration?.jira?.projectKey).toBe('ABC')
+  })
+
+  it('creates the entry an indexed path needs', () => {
+    const edited = applyOverrides(component, { 'baseConfiguration.vcsEntries[0].vcsPath': ['ssh://git@git.example.com/x.git'] })
+    expect(edited.baseConfiguration?.vcsEntries?.[0]?.vcsPath).toBe('ssh://git@git.example.com/x.git')
+  })
+
+  it('keeps a list field a list', () => {
+    expect(applyOverrides(component, { releaseManager: ['asmith', 'jdoe'] }).releaseManager).toEqual(['asmith', 'jdoe'])
   })
 })

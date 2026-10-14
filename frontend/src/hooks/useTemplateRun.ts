@@ -38,7 +38,7 @@ function runOf(e: unknown): TemplateRun | null {
  * Dry runs and the create for one template, with the run Review shows.
  *
  * Only the newest dry run's answer is kept: an answer to a run that a newer one replaced, or that
- * [discard] dropped, is ignored. [create] does not go through that ordering; the caller waits for it.
+ * [discard] dropped, is ignored, and [dryRun] resolves to `null` for it. [create] does not go through that ordering; the caller waits for it.
  */
 export function useTemplateRun(templateId: string) {
   const [run, setRun] = useState<TemplateRun | null>(null)
@@ -48,18 +48,20 @@ export function useTemplateRun(templateId: string) {
   const path = `/component-templates/${encodeURIComponent(templateId)}/components`
 
   const dryRun = useCallback(
-    async (body: TemplateRunBody) => {
+    async (body: TemplateRunBody): Promise<TemplateRun | null> => {
       const seq = ++latest.current
       setRunning(true)
       try {
         const result = await api.post<TemplateRun>(`${path}?dryRun=true`, body)
-        if (seq !== latest.current) return
+        if (seq !== latest.current) return null
         setRun(result)
         setError(null)
+        return result
       } catch (e) {
-        if (seq !== latest.current) return
+        if (seq !== latest.current) return null
         setRun(null)
         setError(failureOf(e))
+        return null
       } finally {
         if (seq === latest.current) setRunning(false)
       }

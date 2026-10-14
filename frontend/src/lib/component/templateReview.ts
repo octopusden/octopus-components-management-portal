@@ -160,3 +160,38 @@ export function reviewFieldGroups(component: RenderedComponent, keepPaths: reado
   otherLeaves(component, '', known).forEach((r) => add(OTHER, r))
   return [...GROUPS, OTHER].flatMap((heading) => (rows.get(heading) ? [{ heading, rows: rows.get(heading)! }] : []))
 }
+
+const LIST_PATHS = new Set(['releaseManager', 'securityChampion', 'labels'])
+
+type Mutable = Record<string, unknown>
+
+function setPath(target: Mutable, path: string, value: unknown) {
+  const keys = path.split(/\.|\[(\d+)\]/).filter((k) => k !== undefined && k !== '')
+  let node: Mutable = target
+  keys.forEach((key, i) => {
+    if (i === keys.length - 1) {
+      node[key] = value
+      return
+    }
+    const nextIsIndex = /^\d+$/.test(keys[i + 1]!)
+    const child = node[key]
+    const copy = Array.isArray(child) ? [...child] : child && typeof child === 'object' ? { ...child } : nextIsIndex ? [] : {}
+    node[key] = copy
+    node = copy as Mutable
+  })
+}
+
+/**
+ * [component] with the creator's edits applied, so an edit can be checked while it is typed,
+ * before a dry run has rendered it. [component] itself is not changed.
+ */
+export function applyOverrides(
+  component: RenderedComponent,
+  overrides: Readonly<Record<string, readonly string[]>>,
+): RenderedComponent {
+  const edited = structuredClone(component) as unknown as Mutable
+  for (const [path, values] of Object.entries(overrides)) {
+    setPath(edited, path, LIST_PATHS.has(path) ? [...values] : (values[0] ?? ''))
+  }
+  return edited as unknown as RenderedComponent
+}

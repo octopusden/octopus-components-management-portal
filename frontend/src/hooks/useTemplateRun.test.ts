@@ -66,6 +66,23 @@ describe('useTemplateRun', () => {
     expect(result.current.running).toBe(false)
   })
 
+  it('returns the run it kept, and nothing for one a newer run replaced', async () => {
+    const older = deferred<TemplateRun>()
+    mockApi.post.mockReturnValueOnce(older.promise).mockResolvedValueOnce(run())
+    const { result } = renderHook(() => useTemplateRun('client-plugin'))
+    let first: Promise<TemplateRun | null> | undefined
+    act(() => {
+      first = result.current.dryRun(BODY)
+    })
+    let second: TemplateRun | null | undefined
+    await act(async () => {
+      second = await result.current.dryRun(BODY)
+    })
+    await act(async () => older.resolve(run()))
+    expect(second).toEqual(run())
+    expect(await first).toBeNull()
+  })
+
   it('reports that a dry run is in flight', async () => {
     const pending = deferred<TemplateRun>()
     mockApi.post.mockReturnValue(pending.promise)
