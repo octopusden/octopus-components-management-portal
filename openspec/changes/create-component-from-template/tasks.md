@@ -216,10 +216,13 @@
 
 ## 10. e2e (route-mocked)
 
-- [ ] 10.1 `frontend/e2e/visual/_helpers.ts` gains a template entry in `mockComponentProfiles`,
-      and mocks for the template description, dry run and create.
-- [ ] 10.2 Spec: pick the template, fill parameters, Next, Review shows the component, Create →
-      success. `eslint e2e` clean.
+- [x] 10.1 `frontend/e2e/visual/_helpers.ts` gains `mockComponentTemplate` (description, dry run
+      and create); the spec passes the shipped profiles plus a template entry to
+      `mockComponentProfiles`, and mocks `/portal/links` so the rendered VCS host matches.
+- [x] 10.2 Spec `editor-create-from-template.spec.ts` (the `editor-` prefix puts it in the
+      chromium-admin project): pick the template, fill parameters, Next, Review shows the
+      component, Create → success. `eslint e2e` clean; not run locally — the e2e stack runs on CI
+      (11.3).
 
 ## 11. Registry container — Gradle
 
