@@ -8,15 +8,15 @@
 
 ## 1. Contract
 
-- [ ] 1.1 Re-vendor `frontend/src/lib/api/v4.json` from the registry branch carrying templates
+- [x] 1.1 Re-vendor `frontend/src/lib/api/v4.json` from the registry branch carrying templates
       (`CRS_SPEC_REF=component-templates bash scripts/vendor-spec.sh`) and run
       `npm run generate-types`. `schema.d.ts` has `/rest/api/4/component-templates/{id}`,
       `/rest/api/4/component-templates/{id}/components`, `/rest/api/4/admin/component-profiles`,
       `ComponentTemplateResponse`, `TemplateComponentRequest`, `TemplateRunResponse`,
-      `AdminComponentProfilesResponse`.
+      `AdminComponentProfilesResponse`. Vendored from the registry branch at `d4aa615b`.
 - [ ] 1.2 Re-vendor from registry `main` once the registry change merges; `vendor-spec:check`
       passes.
-- [ ] 1.3 `npm run generate-types:check` passes; `tsc --noEmit` clean.
+- [x] 1.3 `npm run generate-types:check` passes; `tsc --noEmit` clean.
 
 ## 2. Portal-only rules over a create request (Decision 4)
 
