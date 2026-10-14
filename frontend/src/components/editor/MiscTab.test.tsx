@@ -8,6 +8,7 @@ import { MiscTab } from './MiscTab'
 import type { GeneralFormValues } from './GeneralTab'
 import { TooltipProvider } from '../ui/tooltip'
 import type { ComponentDetail } from '../../lib/types'
+import { useComponents } from '../../hooks/useComponents'
 
 // ComponentSelect (parent picker) pulls its option list from useComponents.
 vi.mock('../../hooks/useComponents', () => ({
@@ -65,6 +66,7 @@ function Harness({
       clientCode: component.clientCode ?? '',
       solution: component.solution ?? false,
       archived: component.archived,
+      testComponent: component.testComponent ?? false,
       parentComponentName: component.parentComponentName ?? '',
       canBeParent: component.canBeParent ?? false,
       releaseManager: component.releaseManager ?? [],
@@ -110,6 +112,22 @@ describe('MiscTab parentComponentName', () => {
     await userEvent.clear(input)
     await userEvent.type(input, 'new-parent')
     await waitFor(() => expect(input.value).toBe('new-parent'))
+  })
+})
+
+describe('MiscTab parent picker vs test components', () => {
+  it('a real component is offered only non-test parents; a test component sees all', () => {
+    const lastFilter = () =>
+      (vi.mocked(useComponents).mock.calls.at(-1)![0] as { filter?: Record<string, unknown> }).filter
+    const { unmount } = renderWithProviders(
+      <Harness component={baseComponent({ parentComponentName: 'platform-core' })} />,
+    )
+    expect(lastFilter()).toMatchObject({ canBeParent: true, testComponent: false })
+    unmount()
+    renderWithProviders(
+      <Harness component={baseComponent({ parentComponentName: 'platform-core', testComponent: true })} />,
+    )
+    expect(lastFilter()!.testComponent).toBeUndefined()
   })
 })
 

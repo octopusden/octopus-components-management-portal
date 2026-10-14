@@ -628,6 +628,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/rest/api/4/component-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listProfiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rest/api/4/components": {
         parameters: {
             query?: never;
@@ -638,6 +654,22 @@ export interface paths {
         get: operations["listComponents"];
         put?: never;
         post: operations["createComponent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rest/api/4/components/as-code/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["searchAsCode"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -948,6 +980,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/rest/api/4/components/meta/test-component-name-patterns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getTestComponentNamePatterns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rest/api/4/components/{idOrName}/editors": {
         parameters: {
             query?: never;
@@ -1219,6 +1267,36 @@ export interface components {
             mode: string;
             versionRange?: string;
         };
+        AsCodeMatchRange: {
+            /** Format: int32 */
+            end: number;
+            /** Format: int32 */
+            start: number;
+        };
+        AsCodeSearchHit: {
+            archived: boolean;
+            componentKey: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: int32 */
+            matchCount: number;
+            matches: components["schemas"]["AsCodeSearchLine"][];
+        };
+        AsCodeSearchLine: {
+            /** Format: int32 */
+            line: number;
+            path: string[];
+            ranges: components["schemas"]["AsCodeMatchRange"][];
+            text: string;
+        };
+        AsCodeSearchResponse: {
+            query: string;
+            regex: boolean;
+            results: components["schemas"]["AsCodeSearchHit"][];
+            /** Format: int32 */
+            totalComponents: number;
+            truncated: boolean;
+        };
         AuditLogResponse: {
             action: string;
             changeComment?: string;
@@ -1319,6 +1397,12 @@ export interface components {
             toolType?: string;
             versionPattern?: string;
         };
+        Classification: {
+            /** @enum {string} */
+            explicit: "true" | "false" | "ask";
+            external: boolean;
+            solution: boolean;
+        };
         ComponentConfigurationResponse: {
             build?: components["schemas"]["BuildAspectResponse"];
             buildToolBeans: components["schemas"]["BuildToolBeanResponse"][];
@@ -1363,6 +1447,8 @@ export interface components {
             name: string;
             parentComponentName?: string;
             productType?: string;
+            /** @description Id of the Create-component profile this component is created with (GET /rest/api/4/component-profiles). When given, the create is rejected unless the profile is live, the caller may use it, the stored classification matches it and every field rule of the profile holds. Blank is the same as absent. */
+            profile?: string;
             releaseManager?: string[];
             releasesInDefaultBranch?: boolean;
             securityChampion?: string[];
@@ -1372,6 +1458,7 @@ export interface components {
             solution?: boolean;
             systems?: string[];
             teamcityProjects?: components["schemas"]["TeamcityProjectRequest"][];
+            testComponent?: boolean;
             /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. */
             vcsExternalRegistry?: string;
         };
@@ -1408,6 +1495,7 @@ export interface components {
             solution?: boolean;
             systems: string[];
             teamcityProjects: components["schemas"]["TeamcityProjectResponse"][];
+            testComponent: boolean;
             /** Format: date-time */
             updatedAt?: string;
             vcsExternalRegistry?: string;
@@ -1430,6 +1518,27 @@ export interface components {
             isFake: boolean;
             /** @enum {string} */
             role: "AGGREGATOR" | "MEMBER";
+        };
+        ComponentProfileResponse: {
+            classification: components["schemas"]["Classification"];
+            description: string;
+            id: string;
+            /** @description `regular`; templates are listed with their own kind once supported. */
+            kind: string;
+            /** @description Rules a create naming this profile is checked against; empty when the profile has none. */
+            rules: components["schemas"]["FieldRule"][];
+            title: string;
+            /** @description Why the current user may not use the profile; absent when usable. */
+            unusableReason?: string;
+            usable: boolean;
+        };
+        ComponentProfilesReloadResponse: {
+            entries: components["schemas"]["Entry"][];
+            problems: string[];
+            status: string;
+        };
+        ComponentProfilesResponse: {
+            profiles: components["schemas"]["ComponentProfileResponse"][];
         };
         ComponentRegistryVersion: {
             jiraVersion: string;
@@ -1455,6 +1564,7 @@ export interface components {
             systems: string[];
             teamcityProjectId?: string;
             teamcityProjectUrl?: string;
+            testComponent: boolean;
             /** Format: date-time */
             updatedAt?: string;
             vcsPath?: string;
@@ -1506,6 +1616,7 @@ export interface components {
             solution?: boolean;
             systems?: string[];
             teamcityProjects?: components["schemas"]["TeamcityProjectRequest"][];
+            testComponent?: boolean;
             /** @description Write tri-state: omit or null = leave unchanged; "" (or blank) = clear to null; non-blank = set verbatim. On create, "" is treated as null. */
             vcsExternalRegistry?: string;
             /** Format: int64 */
@@ -1551,6 +1662,12 @@ export interface components {
         EmployeeMatchResponse: {
             active: boolean;
             username: string;
+        };
+        Entry: {
+            id: string;
+            kind?: string;
+            problems: string[];
+            status: string;
         };
         ErrorResponse: {
             errorCode?: string;
@@ -1669,6 +1786,14 @@ export interface components {
             /** @description For a string-typed scalar attribute a blank value ("" or whitespace) is rejected (400): an override row stores its value verbatim and has no clear semantics — use DELETE /field-overrides/{id} to remove it. */
             value?: Record<string, never>;
             versionRange: string;
+        };
+        /** @description Rules a create naming this profile is checked against; empty when the profile has none. */
+        FieldRule: {
+            message: string;
+            /** @description Create-request path, e.g. `name` or `baseConfiguration.jira.projectKey`. */
+            path: string;
+            /** @description Regular expression the whole value must match, in syntax both Java (the registry) and JavaScript accept. A client that cannot compile it skips its own check; the create decides. */
+            pattern: string;
         };
         FileUrlArtifactRequest: {
             artifactId?: string;
@@ -2057,6 +2182,16 @@ export interface components {
             javaWarnings: components["schemas"]["ActualDisagreement"][];
             mavenActualRanges: components["schemas"]["ActualRange"][];
             mavenWarnings: components["schemas"]["ActualDisagreement"][];
+        };
+        ReloadConfigFailureResponse: {
+            componentProfiles?: components["schemas"]["ComponentProfilesReloadResponse"];
+            error: string;
+            message: string;
+        };
+        ReloadConfigResponse: {
+            changedKeys: string[];
+            componentProfiles: components["schemas"]["ComponentProfilesReloadResponse"];
+            status: string;
         };
         Role: {
             name: string;
@@ -4301,15 +4436,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Configuration refreshed and component profiles applied */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": {
-                        [key: string]: Record<string, never>;
-                    };
+                    "*/*": components["schemas"]["ReloadConfigResponse"];
                 };
             };
             /** @description Bad Request */
@@ -4348,6 +4481,15 @@ export interface operations {
                     "*/*": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description `config-validation`: a service-config value is invalid. `component-profiles`: the component profiles are not usable and the profiles in use are kept. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ReloadConfigFailureResponse"];
+                };
+            };
             /** @description Too Early */
             425: {
                 headers: {
@@ -4357,13 +4499,13 @@ export interface operations {
                     "*/*": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Internal Server Error */
+            /** @description `config-refresh`: the refresh failed for another reason; the component profiles were reloaded all the same. */
             500: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ErrorResponse"];
+                    "*/*": components["schemas"]["ReloadConfigFailureResponse"];
                 };
             };
             /** @description Not Implemented */
@@ -6466,16 +6608,120 @@ export interface operations {
             };
         };
     };
+    listProfiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ComponentProfilesResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Early */
+            425: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     listComponents: {
         parameters: {
             query: {
                 system?: string[];
                 productType?: string;
                 archived?: boolean;
+                testComponent?: boolean;
                 search?: string;
                 owner?: string[];
                 releaseManager?: string[];
                 securityChampion?: string[];
+                involves?: string[];
+                involvesRoles?: string[];
                 buildSystem?: string[];
                 javaVersion?: string[];
                 labels?: string[];
@@ -6610,6 +6856,113 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ComponentDetailResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Early */
+            425: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    searchAsCode: {
+        parameters: {
+            query: {
+                q: string;
+                regex?: boolean;
+                archived?: boolean;
+                limit?: number;
+                maxMatchesPerComponent?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AsCodeSearchResponse"];
                 };
             };
             /** @description Bad Request */
@@ -8522,6 +8875,107 @@ export interface operations {
         };
     };
     getAllSystems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string[];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Early */
+            425: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getTestComponentNamePatterns: {
         parameters: {
             query?: never;
             header?: never;

@@ -22,7 +22,7 @@ import { PRESETS, type PresetId } from '@/lib/listPresets'
 
 // Filter presets the palette can apply. Mirrors ListPresetBar: "problems" is
 // admin-only; the personal RM/SC presets scope to the current user's own roles.
-// "all"/"archived" are reachable from the list itself and omitted here to keep
+// "all"/"archived"/"test-components" are reachable from the list itself and omitted here to keep
 // the palette focused on the common scoped views.
 const PALETTE_FILTER_IDS = [
   'problems',
@@ -66,7 +66,8 @@ export function CommandPalette() {
   const debounced = useDebouncedValue(query.trim(), 250)
   const searchActive = debounced.length > 0
   const { data: results, isFetching } = useComponents({
-    filter: { archived: false, search: debounced },
+    // Test components are hidden like archived ones; a deep link still opens them.
+    filter: { archived: false, testComponent: false, search: debounced },
     size: PALETTE_FETCH_SIZE,
     enabled: searchActive,
   })

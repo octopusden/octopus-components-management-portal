@@ -384,6 +384,38 @@ describe('ComponentListPage — presets + active-filter chips (spec §1.1/1.2)',
     expect(screen.getByText(/Status: Archived/i)).toBeDefined()
   })
 
+  it('hides test components by default: the list query carries testComponent=false', () => {
+    mockUser(editorUser)
+    renderPage()
+    expect(mockedUseComponents.mock.calls.at(-1)![0]!.filter).toMatchObject({
+      archived: false,
+      testComponent: false,
+    })
+  })
+
+  it('selecting "Test components" lists only test components and shows a Status chip', async () => {
+    mockUser(editorUser)
+    renderPage()
+    await userEvent.click(screen.getByRole('button', { name: 'Test components' }))
+    expect(
+      screen.getByRole('button', { name: 'Test components' }).getAttribute('aria-pressed'),
+    ).toBe('true')
+    expect(screen.getByText(/Status: Test components/i)).toBeDefined()
+    expect(mockedUseComponents.mock.calls.at(-1)![0]!.filter).toMatchObject({ testComponent: true })
+    const search = screen.getByTestId('loc-search').textContent ?? ''
+    expect(search).toContain('preset=test-components')
+    expect(search).toContain('testComponent=true')
+  })
+
+  it('"Clear all" from the Test components preset hides test components again', async () => {
+    mockUser(editorUser)
+    renderPage(['/components?preset=test-components&testComponent=true'])
+    await userEvent.click(screen.getByRole('button', { name: /clear all/i }))
+    expect(screen.getByRole('button', { name: 'All' }).getAttribute('aria-pressed')).toBe('true')
+    expect(mockedUseComponents.mock.calls.at(-1)![0]!.filter).toMatchObject({ testComponent: false })
+    expect(screen.getByTestId('loc-search').textContent).toBe('')
+  })
+
   it('removing the owner chip drops just that value and returns to the All preset', async () => {
     mockUser(editorUser) // username: bob
     renderPage(['/components?preset=mine&owner=bob'])

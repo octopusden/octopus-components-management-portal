@@ -49,6 +49,16 @@ describe('describeFilterChips — derive chips from filter + preset', () => {
     )
   })
 
+  it('emits a testComponent chip only when testComponent=true (hidden default is not a chip)', () => {
+    const chip = describeFilterChips({ archived: false, testComponent: true }, null).find(
+      (c) => c.key === 'testComponent',
+    )
+    expect(chip!.label).toBe('Status: Test components')
+    expect(
+      describeFilterChips({ archived: false, testComponent: false }, null).map((c) => c.key),
+    ).not.toContain('testComponent')
+  })
+
   it('emits a preset chip when a preset is active', () => {
     const chips = describeFilterChips({ archived: false, owner: ['alice'] }, 'mine')
     const presetChip = chips.find((c) => c.key === 'preset')
