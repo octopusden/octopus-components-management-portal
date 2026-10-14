@@ -54,11 +54,6 @@ function keyPassesRules(profile: ComponentProfile, key: string): boolean {
   return profileRuleErrors(keyRules, { name: key }).size === 0
 }
 
-/**
- * The profile that covers [classification]: the first usable one whose key rules [key] passes,
- * else the first usable one. `matchesAny` tells "no profile has it" from "only profiles the user
- * may not use have it".
- */
 /** The profiles whose classification is [classification], usable or not, in the registry's order. */
 export function profilesCovering(
   classification: Classification,
@@ -67,6 +62,11 @@ export function profilesCovering(
   return profiles.filter((p) => matchesClassification(p, classification))
 }
 
+/**
+ * The profile that covers [classification]: the first usable one whose key rules [key] passes,
+ * else the first usable one. `matchesAny` tells "no profile has it" from "only profiles the user
+ * may not use have it".
+ */
 export function profileForClassification(
   classification: Classification,
   key: string,

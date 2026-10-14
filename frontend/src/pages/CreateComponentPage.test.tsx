@@ -1674,6 +1674,21 @@ describe('CreateComponentPage — clone mode', () => {
     expect((screen.getByRole('button', { name: /^create component$/i }) as HTMLButtonElement).disabled).toBe(true)
   })
 
+  it('selects the profile covering the starting classification when the source matches none', async () => {
+    // A solution that is not explicit external matches no shipped profile, and starts as not a
+    // solution, which Regular external covers.
+    mockUseComponent.mockReturnValue({
+      data: makeSource({ solution: true, distributionExternal: true, distributionExplicit: false }),
+      isLoading: false,
+      error: null,
+    })
+    renderWizard('/components/new?from=c-1')
+    expect(screen.queryByText('Choose component profile')).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    expect(screen.getByRole('radio', { name: /Regular external component/ })).toHaveAttribute('aria-checked', 'true')
+    expect((screen.getByRole('button', { name: /^next$/i }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
   it("sets the classification directly when no profile matches the source, starting from the source's", async () => {
     // Only Regular external is offered, so an internal source matches no profile.
     mockUseComponentProfiles.mockReturnValue({
