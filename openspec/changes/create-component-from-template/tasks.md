@@ -71,22 +71,25 @@
 
 ## 4. Local parameter checks (Decision 2)
 
-- [ ] 4.1 Failing tests for `templateParameterErrors(parameters, values)`:
-  - [ ] 4.1.1 required parameter empty → required message; optional empty → none
-  - [ ] 4.1.2 an empty parameter with a default takes the default, so required passes
-  - [ ] 4.1.3 blank values dropped; the same value twice counts once
-  - [ ] 4.1.4 two values for a single-value parameter → number-of-values message
-  - [ ] 4.1.5 text longer than `maxLength` → length message
-  - [ ] 4.1.6 pattern fails with `message` → that message; without `message` → a generic one
+- [x] 4.1 Failing tests for `templateParameterErrors(parameters, values)`:
+  - [x] 4.1.1 required parameter empty → required message; optional empty → none
+  - [x] 4.1.2 an empty parameter with a default takes the default, so required passes
+  - [x] 4.1.3 blank values dropped; the same value twice counts once
+  - [x] 4.1.4 two values for a single-value parameter → number-of-values message
+  - [x] 4.1.5 text longer than `maxLength` → length message
+  - [x] 4.1.6 pattern fails with `message` → that message; without `message` → a generic one
         naming the pattern
-  - [ ] 4.1.7 pattern that does not compile → skipped
-  - [ ] 4.1.8 select value not in `options` → option message
-  - [ ] 4.1.9 multi select over `maxSelection` → maximum-selection message
-  - [ ] 4.1.10 `crs-list` and `person` → only required and number of values; `labels` list takes
+  - [x] 4.1.7 pattern that does not compile → skipped
+  - [x] 4.1.8 select value not in `options` → option message
+  - [x] 4.1.9 multi select over `maxSelection` → maximum-selection message
+  - [x] 4.1.10 `crs-list` and `person` → only required and number of values; `labels` list takes
         several values
-- [ ] 4.2 Implement `frontend/src/lib/component/templateParameters.ts`, plus
-      `templateRequestBody(values, overrides)` building `{parameters: {NAME: string[]}, overrides}`.
-- [ ] 4.3 Confirm tests pass.
+- [x] 4.2 Implement `frontend/src/lib/component/templateParameters.ts`, plus
+      `templateRunBody(values, overrides)` building `{parameters: {NAME: string[]}, overrides}`;
+      an empty parameter is left out so the registry fills its default.
+- [x] 4.3 Confirm tests pass. `templateParameters.test.ts` 20/20. The checks were written before
+      their first red run; two mutations (unanchored pattern, `labels` not taking several values)
+      each failed exactly the test that names them.
 
 ## 5. Template API hooks (Decisions 3, 7)
 
