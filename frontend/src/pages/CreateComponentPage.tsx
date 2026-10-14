@@ -29,6 +29,7 @@ import { JiraVersionPreview } from '../components/editor/JiraVersionPreview'
 import { UnsavedChangesGuard } from '../components/editor/UnsavedChangesGuard'
 import { WizardStepRail } from '../components/wizard/WizardStepRail'
 import { CreatedPanel } from '../components/wizard/CreatedPanel'
+import { ChangeMetadataFields } from '../components/wizard/ChangeMetadataFields'
 import { cn } from '../lib/utils'
 import { hostOf } from '../lib/vcsHost'
 import { useFieldOptions } from '../hooks/useFieldOptions'
@@ -71,7 +72,7 @@ import {
 import { ruleErrorOf, RULE_FORM_FIELDS } from '../lib/component/profileRules'
 import type { ComponentDetail } from '../lib/types'
 import { OWNERSHIP_MODES } from '../lib/artifactOwnership'
-import { validateJiraKey, normalizeJiraKey, normalizeChangeComment } from '../lib/editor/jiraKey'
+import { createJiraKeyError, normalizeJiraKey, normalizeChangeComment } from '../lib/editor/jiraKey'
 
 type StepId = 'profile' | 'general' | 'build' | 'vcs' | 'jira' | 'distribution' | 'escrow' | 'review'
 
@@ -552,8 +553,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
   // Cross-highlight link between the Jira version-format fields and the live
   // Version Preview rows (same control the editor uses).
   const [jiraHoveredField, setJiraHoveredField] = useState<string | null>(null)
-  const jiraFormatError = validateJiraKey(jiraTaskKey)
-  const jiraKeyError = jiraFormatError ?? (jiraTaskKey.trim() === '' ? 'Jira task key is required' : null)
+  const jiraKeyError = createJiraKeyError(jiraTaskKey)
 
   // Server error, routed to its step (banner + stepper marker + click-to-step).
   const [serverError, setServerError] = useState<{ message: string; stepId: StepId } | null>(null)
@@ -1571,38 +1571,12 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
         }
       />
 
-      <fieldset className="space-y-4 rounded-md border border-border p-3">
-        <legend className="px-1 text-xs font-medium text-muted-foreground">Change metadata</legend>
-        <div className="space-y-1.5">
-          <Label htmlFor="create-jira-key">
-            Jira task key <span className="text-destructive">*</span>
-          </Label>
-          <Input
-            id="create-jira-key"
-            placeholder="ABC-123"
-            value={jiraTaskKey}
-            onChange={(e) => setJiraTaskKey(e.target.value)}
-            aria-invalid={!!jiraKeyError}
-            aria-describedby={jiraKeyError ? 'create-jira-key-error' : undefined}
-          />
-          {jiraKeyError && (
-            <p id="create-jira-key-error" className="text-xs text-destructive">
-              {jiraFormatError ?? jiraKeyError}
-            </p>
-          )}
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="create-change-comment">Comment (optional)</Label>
-          <textarea
-            id="create-change-comment"
-            placeholder="What changed and why"
-            value={changeComment}
-            onChange={(e) => setChangeComment(e.target.value)}
-            rows={3}
-            className="flex min-h-[64px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          />
-        </div>
-      </fieldset>
+      <ChangeMetadataFields
+        jiraTaskKey={jiraTaskKey}
+        onJiraTaskKey={setJiraTaskKey}
+        changeComment={changeComment}
+        onChangeComment={setChangeComment}
+      />
     </div>
   )
 
