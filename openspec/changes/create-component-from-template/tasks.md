@@ -240,7 +240,14 @@
 
 ## 13. Finalization
 
-- [ ] 13.1 Full vitest green; `tsc`, `eslint .` and `eslint e2e` clean; `./gradlew qualityStatic`.
-- [ ] 13.2 Out-of-scope boundaries hold: no diff in `components/editor/`, `ComponentDetailPage.tsx`,
-      `lib/solutionKey.ts` or backend `src/main`; the regular wizard's tests unchanged by group 2.
-- [ ] 13.3 The risks in `design.md` are still accurate.
+- [x] 13.1 Full vitest green (187 files / 2809 tests); `tsc`, `eslint . --max-warnings 0` and
+      `eslint e2e` clean. `./gradlew qualityStatic`: `npmBuild`, `detekt`, `ktlintCheck` green;
+      `compileTestKotlin` fails locally resolving `kotlin-test` 2.3.21, as on `main` — CI.
+- [x] 13.2 Out-of-scope boundaries hold: no diff against the base branch in `components/editor/`,
+      `ComponentDetailPage.tsx`, `lib/solutionKey.ts` or backend `src/main`. The regular wizard's
+      tests were not edited by group 2 or by the component extractions (7.3a).
+- [x] 13.3 The risks in `design.md` are still accurate. Decision 7's 404 handling now says the
+      wizard drops the withdrawn template instead of refetching the listing.
+- [ ] 13.4 Open until the registry change is released: 1.2 (re-vendor from `main`) and group 11
+      (`crs.version`, the starter template in the e2e and dev registry, the e2e run on CI). A
+      template in the fixture before then would be read by a registry that does not know the kind.
