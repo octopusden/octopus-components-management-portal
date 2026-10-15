@@ -65,6 +65,11 @@ function TextFilter({
 }) {
   const [local, setLocal] = useState(value)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // The timer calls the latest onCommit, so a filter changed meanwhile (e.g. Status) is kept.
+  const onCommitRef = useRef(onCommit)
+  useEffect(() => {
+    onCommitRef.current = onCommit
+  })
   useEffect(() => setLocal(value), [value])
   // Cancel a pending debounce if the control unmounts (e.g. the filter is removed
   // or an admin flips the field to searchable: None) so the timer can't fire
@@ -83,7 +88,7 @@ function TextFilter({
         const next = e.target.value
         setLocal(next)
         if (debounceRef.current) clearTimeout(debounceRef.current)
-        debounceRef.current = setTimeout(() => onCommit(next), 300)
+        debounceRef.current = setTimeout(() => onCommitRef.current(next), 300)
       }}
     />
   )
@@ -296,7 +301,8 @@ function withoutKey<T extends object>(o: T, key: keyof T): T {
  * Text edits made in the "+ Filter" panel. The panel unmounts its editors on close, so the draft
  * and its debounce live here instead: a value typed just before closing still commits. Leaving
  * the page cancels them, so a late commit never writes list filters into another route's URL;
- * a value cleared from outside (chip, Clear all) drops its stale draft.
+ * a value cleared from outside (chip) drops its stale draft. Clear all remounts the filters
+ * (ComponentListPage), which cancels every pending edit, including one for a value never set.
  */
 function usePanelTextDrafts(filter: ComponentFilter, onFilterChange: (f: ComponentFilter) => void) {
   const [drafts, setDrafts] = useState<Partial<Record<PanelTextKey, string>>>({})
@@ -351,6 +357,11 @@ export function ComponentFilters({
 }: ComponentFiltersProps) {
   const [searchValue, setSearchValue] = useState(filter.search ?? '')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // The key/name commit merges into the filter as it is when the timer fires, not when typed.
+  const latest = useRef({ filter, onFilterChange })
+  useEffect(() => {
+    latest.current = { filter, onFilterChange }
+  })
   // Sync external filter.search into local state when it changes from outside
   useEffect(() => {
     setSearchValue(filter.search ?? '')
@@ -369,7 +380,7 @@ export function ComponentFilters({
     setSearchValue(value)
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
-      onFilterChange({ ...filter, search: value || undefined })
+      latest.current.onFilterChange({ ...latest.current.filter, search: value || undefined })
     }, 300)
   }
 

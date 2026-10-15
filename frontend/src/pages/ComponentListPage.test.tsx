@@ -40,8 +40,10 @@ vi.mock('../components/Layout', () => ({
 // Filters stub: surfaces the page→filters contract — whether problems-only is on,
 // the admin "With problems" toggle (rendered only when the page allows it), and a
 // "Mine (stub)" button that emits a filter change the way the real Mine picker does.
+// Counts mounts of the filters: Clear all remounts them to drop their pending text edits.
+const filtersMounts = vi.hoisted(() => ({ count: 0 }))
 vi.mock('../components/ComponentFilters', () => ({
-  ComponentFilters: ({
+  ComponentFilters: function ComponentFiltersStub({
     filter,
     onFilterChange,
     problemsOnly,
@@ -53,8 +55,11 @@ vi.mock('../components/ComponentFilters', () => ({
     problemsOnly?: boolean
     canFilterProblems?: boolean
     onProblemsOnlyChange?: (on: boolean) => void
-  }) =>
-    React.createElement(
+  }) {
+    React.useEffect(() => {
+      filtersMounts.count++
+    }, [])
+    return React.createElement(
       'div',
       { 'data-testid': 'filters', 'data-problems-only': problemsOnly ? 'yes' : 'no' },
       canFilterProblems &&
@@ -64,7 +69,8 @@ vi.mock('../components/ComponentFilters', () => ({
         { onClick: () => onFilterChange({ ...filter, involves: ['bob'], involvesRoles: ['owner'] }) },
         'Mine (stub)',
       ),
-    ),
+    )
+  },
 }))
 // The table stub surfaces the page→table `onCopy` contract: when the page
 // passes the callback (CREATE_COMPONENTS holders only) the stub renders a
@@ -480,6 +486,16 @@ describe('ComponentListPage — Status / Mine filters + active-filter chips', ()
     await userEvent.click(screen.getByRole('button', { name: /clear all/i }))
     expect(screen.queryByTestId('active-filter-chips')).toBeNull()
     expect(search()).toBe('')
+  })
+
+  it('"Clear all" remounts the filters, so a text edit still in its debounce is dropped', async () => {
+    mockUser(editorUser)
+    renderPage(['/components?search=foo'])
+    const before = filtersMounts.count
+    await userEvent.click(screen.getByRole('button', { name: 'Mine (stub)' }))
+    expect(filtersMounts.count).toBe(before)
+    await userEvent.click(screen.getByRole('button', { name: /clear all/i }))
+    expect(filtersMounts.count).toBe(before + 1)
   })
 
   it('hydrates a Health "people" deep-link (?releaseManager=<u>) into the list filter on mount (Phase 1b)', () => {

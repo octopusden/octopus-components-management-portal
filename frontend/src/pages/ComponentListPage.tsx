@@ -185,10 +185,13 @@ export function ComponentListPage() {
   }
 
   // Clear all → back to the default (active only, test components hidden, no
-  // preset, bare URL).
+  // preset, bare URL). It also remounts the filters, so a text edit still in its
+  // debounce is dropped instead of committing into the cleared filter.
+  const [filtersGeneration, setFiltersGeneration] = useState(0)
   const handleClearAll = () => {
     setState({ filter: DEFAULT_FILTER, preset: null })
     setPage(0)
+    setFiltersGeneration((g) => g + 1)
   }
 
   // Remove a single active-filter chip. The `preset` chip ("With problems") turns that mode
@@ -258,6 +261,7 @@ export function ComponentListPage() {
         </div>
 
         <ComponentFilters
+          key={filtersGeneration}
           filter={filter}
           onFilterChange={handleFilterChange}
           problemsOnly={showProblemsOnly}

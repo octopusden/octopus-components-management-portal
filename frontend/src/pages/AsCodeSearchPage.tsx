@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router'
+import { useLocation, useSearchParams } from 'react-router'
 import { Layout } from '../components/Layout'
 import { AsCodeSearchResults } from '../components/AsCodeSearchResults'
 import { Button } from '../components/ui/button'
@@ -40,16 +40,29 @@ function parseLimit(raw: string | null): number | undefined {
   return Number.isInteger(n) && n > 0 ? n : undefined
 }
 
+/** Tags each URL write of this page (in the location state), so it can be told from incoming navigation. */
+let lastWriteId = 0
+
+function writeIdOf(state: unknown): number | undefined {
+  return (state as { asCodeSearchWrite?: number } | null)?.asCodeSearchWrite
+}
+
 /**
  * The search state, kept in the URL so a search is shareable: `?q=&regex=true&archived=all|true&limit=`
  * (no `archived` = active components only).
  * Every write replaces the history entry (one entry per page visit, not per keystroke), and any
  * change other than `limit` itself drops a previously raised `limit`.
+ * `incoming` is true for a location this page did not write itself (palette, header search,
+ * a link, back/forward), even when it carries the same `q`.
  */
 function useAsCodeSearchUrlState() {
   const [params, setParams] = useSearchParams()
+  const location = useLocation()
+  const [ownWrite, setOwnWrite] = useState<number | null>(null)
   const setParam = useCallback(
-    (key: string, value: string | null) =>
+    (key: string, value: string | null) => {
+      const id = ++lastWriteId
+      setOwnWrite(id)
       setParams(
         (prev) => {
           const next = new URLSearchParams(prev)
@@ -58,8 +71,9 @@ function useAsCodeSearchUrlState() {
           if (key !== 'limit') next.delete('limit')
           return next
         },
-        { replace: true },
-      ),
+        { replace: true, state: { asCodeSearchWrite: id } },
+      )
+    },
     [setParams],
   )
   return {
@@ -67,6 +81,8 @@ function useAsCodeSearchUrlState() {
     regex: params.get('regex') === 'true',
     scope: parseScope(params.get('archived')),
     limit: parseLimit(params.get('limit')),
+    locationKey: location.key,
+    incoming: ownWrite === null || writeIdOf(location.state) !== ownWrite,
     setParam,
   }
 }
@@ -76,22 +92,17 @@ function useAsCodeSearchUrlState() {
  * Groovy DSL files. The input is debounced; the URL and the request follow the debounced value.
  */
 export function AsCodeSearchPage() {
-  const { query: urlQuery, regex, scope, limit, setParam } = useAsCodeSearchUrlState()
+  const { query: urlQuery, regex, scope, limit, locationKey, incoming, setParam } = useAsCodeSearchUrlState()
   const [input, setInput] = useState(urlQuery)
   const debounced = useDebouncedValue(input, 300)
 
-  // The `q` this page last wrote itself; any other `q` arrived from outside (palette, header
-  // search, back/forward).
-  const [ownWrite, setOwnWrite] = useState<string | null>(null)
-  // An outside `q` while the page stays mounted replaces the input, pending keystrokes included
-  // (setting the input restarts the debounce, so the superseded text is never written).
-  const [seenQuery, setSeenQuery] = useState(urlQuery)
-  if (urlQuery !== seenQuery) {
-    setSeenQuery(urlQuery)
-    if (urlQuery !== ownWrite) {
-      setOwnWrite(null)
-      setInput(urlQuery)
-    }
+  // Incoming navigation while the page stays mounted replaces the input, pending keystrokes
+  // included, even when its `q` equals the current one (setting the input restarts the
+  // debounce, so the superseded text is never written).
+  const [seenKey, setSeenKey] = useState(locationKey)
+  if (locationKey !== seenKey) {
+    setSeenKey(locationKey)
+    if (incoming) setInput(urlQuery)
   }
 
   // Typing writes the URL — only when the debounced text itself changes, so a stale value
@@ -100,10 +111,7 @@ export function AsCodeSearchPage() {
   useEffect(() => {
     if (debounced === writtenRef.current) return
     writtenRef.current = debounced
-    if (debounced !== urlQuery) {
-      setOwnWrite(debounced)
-      setParam('q', debounced)
-    }
+    if (debounced !== urlQuery) setParam('q', debounced)
   }, [debounced, urlQuery, setParam])
 
   const search = useAsCodeSearch({ query: urlQuery, regex, archived: archivedParam(scope), limit })

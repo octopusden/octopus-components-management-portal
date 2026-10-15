@@ -60,6 +60,25 @@ describe('AsCodeSearchPage — navigation while mounted', () => {
     expect(field().value).toBe('gamma')
   })
 
+  it('incoming navigation with the same q still replaces text typed before the debounce', async () => {
+    const router = renderAt('/search?q=alpha')
+    fireEvent.change(field(), { target: { value: 'beta' } })
+    await act(async () => { await router.navigate('/search?q=alpha&regex=true&archived=all&limit=1000') })
+    await act(async () => { vi.advanceTimersByTime(500) })
+    expect(url(router)).toBe('/search?q=alpha&regex=true&archived=all&limit=1000')
+    expect(field().value).toBe('alpha')
+  })
+
+  it("the page's own writes (Regex) keep text typed before the debounce", async () => {
+    const router = renderAt('/search?q=alpha')
+    fireEvent.change(field(), { target: { value: 'beta' } })
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Regex' }))
+    expect(url(router)).toBe('/search?q=alpha&regex=true')
+    await act(async () => { vi.advanceTimersByTime(500) })
+    expect(url(router)).toBe('/search?q=beta&regex=true')
+    expect(field().value).toBe('beta')
+  })
+
   it('keeps the other params of the incoming URL', async () => {
     const router = renderAt('/search?q=alpha')
     await act(async () => { await router.navigate('/search?q=beta&limit=1000') })

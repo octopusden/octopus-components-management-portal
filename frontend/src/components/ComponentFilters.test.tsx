@@ -91,6 +91,7 @@ import { useFieldOptions } from '../hooks/useFieldOptions'
 const mockUseFieldOptions = vi.mocked(useFieldOptions)
 
 import type { FieldConfigEntry } from '../hooks/useFieldConfig'
+import type { ComponentFilter } from '../lib/types'
 
 // Per-fieldPath option seeds. Defaults to [] for any field not explicitly
 // set; mockFieldOptions(field, opts) overrides for one field at a time.
@@ -949,6 +950,52 @@ describe('ComponentFilters — problems-only dimming + hint', () => {
     // Hint shows, but no found-count yet.
     expect(screen.getByText(/don.t apply while .With problems. is on/i)).toBeDefined()
     expect(screen.queryByText(/with validation problems\./i)).toBeNull()
+  })
+})
+
+/** The page's side: the committed filter is fed back as the prop, the way useFilterUrlState does. */
+function StatefulFilters({ initial, spy }: { initial: ComponentFilter; spy: (f: ComponentFilter) => void }) {
+  const [filter, setFilter] = React.useState(initial)
+  return (
+    <>
+      <ComponentFilters filter={filter} onFilterChange={(f) => { spy(f); setFilter(f) }} />
+      <pre data-testid="filter">{JSON.stringify(filter)}</pre>
+    </>
+  )
+}
+
+describe('ComponentFilters — a pending text edit commits into the newest filter', () => {
+  const onFilterChange = vi.fn()
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    for (const k of Object.keys(fieldOptionSeeds)) delete fieldOptionSeeds[k]
+    applyFieldOptionsMock()
+    mockLabels()
+    mockCurrentUser('testuser')
+    mockFieldConfig([])
+  })
+
+  const current = () => JSON.parse(screen.getByTestId('filter').textContent!) as ComponentFilter
+
+  it('a Main-placed VCS path typed before a Status change keeps that Status', async () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: { vcs: { vcsPath: { searchable: 'Main' } } },
+      isLoading: false,
+    } as unknown as ReturnType<typeof useFieldConfig>)
+    render(<StatefulFilters initial={{ archived: false, testComponent: false }} spy={onFilterChange} />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'VCS path' }), { target: { value: 'repo/new' } })
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Status' })).getByRole('radio', { name: 'Archived' }))
+    await waitFor(() => expect(current().vcsPath).toBe('repo/new'))
+    expect(current()).toEqual({ archived: true, testComponent: false, vcsPath: 'repo/new' })
+  })
+
+  it('a key/name edit typed before a Status change keeps that Status', async () => {
+    render(<StatefulFilters initial={{ archived: false, testComponent: false }} spy={onFilterChange} />)
+    fireEvent.change(screen.getByPlaceholderText(/filter by key or name/i), { target: { value: 'abc' } })
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Status' })).getByRole('radio', { name: 'Archived' }))
+    await waitFor(() => expect(current().search).toBe('abc'))
+    expect(current()).toEqual({ archived: true, testComponent: false, search: 'abc' })
   })
 })
 
