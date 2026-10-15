@@ -6,6 +6,44 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { asCodeLineHref, globalSearchHref, highlightRanges, QUICK_RESULTS_LIMIT } from '../lib/asCodeSearch'
 import { isTypingInFormField } from '../lib/keyboard'
 import { cn } from '../lib/utils'
+import type { AsCodeSearchResponse } from '../lib/types'
+
+/** A quick result opens its first matching line in the As Code tab (or the component itself). */
+type AsCodeSearchHit = AsCodeSearchResponse['results'][number]
+
+function hitHref(hit: AsCodeSearchHit): string {
+  const line = hit.matches[0]?.line
+  return line ? asCodeLineHref(hit.id, line) : `/components/${encodeURIComponent(hit.id)}`
+}
+
+/** "/" focuses the field from anywhere, unless the user is typing in a form field. */
+function useSlashFocus(inputRef: React.RefObject<HTMLInputElement | null>) {
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey || isTypingInFormField(e.target)) return
+      e.preventDefault()
+      inputRef.current?.focus()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [inputRef])
+}
+
+/** While `active`, a pointer press outside `rootRef` calls `onOutside`. */
+function useOutsidePointerDown(rootRef: React.RefObject<HTMLElement | null>, active: boolean, onOutside: () => void) {
+  const onOutsideRef = useRef(onOutside)
+  useEffect(() => {
+    onOutsideRef.current = onOutside
+  })
+  useEffect(() => {
+    if (!active) return
+    function onPointerDown(e: PointerEvent) {
+      if (!rootRef.current?.contains(e.target as Node)) onOutsideRef.current()
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [rootRef, active])
+}
 
 /**
  * Header Global search: a real field with a quick-results panel (the simple mode). Typing shows
@@ -40,24 +78,8 @@ export function GlobalSearchBox() {
   const optionCount = ready && fresh ? hits.length + 1 : 0
   const showPanel = open && ready
 
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey || isTypingInFormField(e.target)) return
-      e.preventDefault()
-      inputRef.current?.focus()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
-
-  useEffect(() => {
-    if (!open) return
-    function onPointerDown(e: PointerEvent) {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('pointerdown', onPointerDown)
-    return () => document.removeEventListener('pointerdown', onPointerDown)
-  }, [open])
+  useSlashFocus(inputRef)
+  useOutsidePointerDown(rootRef, open, () => setOpen(false))
 
   function go(href: string) {
     setOpen(false)
@@ -69,12 +91,7 @@ export function GlobalSearchBox() {
 
   function choose(index: number) {
     const hit = hits[index]
-    if (hit) {
-      const line = hit.matches[0]?.line
-      go(line ? asCodeLineHref(hit.id, line) : `/components/${encodeURIComponent(hit.id)}`)
-    } else {
-      go(globalSearchHref(input))
-    }
+    go(hit ? hitHref(hit) : globalSearchHref(input))
   }
 
   // Focus stays in the field (aria-activedescendant), so this only fires if an option gets focus some other way.
@@ -156,46 +173,16 @@ export function GlobalSearchBox() {
           aria-label="Global search results"
           className="absolute right-0 top-full z-50 mt-1 w-[32rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md"
         >
-          {search.isError ? (
-            <p className="px-3 py-2 text-sm text-destructive">{(search.error as Error).message}</p>
-          ) : search.isPending || (search.isFetching && !search.data) ? (
-            <p className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Searching…
-            </p>
-          ) : hits.length === 0 ? (
-            <p className="px-3 py-2 text-sm text-muted-foreground">No active component mentions “{debounced.trim()}”.</p>
-          ) : (
-            hits.map((hit, i) => {
-              const m = hit.matches[0]
-              return (
-                <div
-                  key={hit.id}
-                  id={optionId(i)}
-                  role="option"
-                  aria-selected={active === i}
-                  tabIndex={-1}
-                  onPointerDown={(e) => e.preventDefault()}
-                  onClick={() => choose(i)}
-                  onKeyDown={(e) => onOptionKeyDown(e, i)}
-                  onMouseEnter={() => setActive(i)}
-                  className={cn('cursor-pointer px-3 py-2', active === i && 'bg-accent text-accent-foreground')}
-                >
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="truncate text-sm font-medium">{hit.componentKey}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {hit.matchCount} {hit.matchCount === 1 ? 'match' : 'matches'}
-                    </span>
-                  </div>
-                  {m && (
-                    <div className="truncate font-mono text-xs text-muted-foreground">
-                      <span className="mr-2 tabular-nums">{m.line}</span>
-                      {highlightRanges(m.text, m.ranges ?? [])}
-                    </div>
-                  )}
-                </div>
-              )
-            })
-          )}
+          <QuickResults
+            search={search}
+            hits={hits}
+            query={debounced.trim()}
+            active={active}
+            optionId={optionId}
+            onChoose={choose}
+            onOptionKeyDown={onOptionKeyDown}
+            onHover={setActive}
+          />
           <div
             id={optionId(hits.length)}
             role="option"
@@ -222,4 +209,60 @@ export function GlobalSearchBox() {
       )}
     </div>
   )
+}
+
+interface QuickResultsProps {
+  search: ReturnType<typeof useAsCodeSearch>
+  hits: AsCodeSearchHit[]
+  query: string
+  active: number
+  optionId: (i: number) => string
+  onChoose: (i: number) => void
+  onOptionKeyDown: (e: React.KeyboardEvent<HTMLDivElement>, i: number) => void
+  onHover: (i: number) => void
+}
+
+/** The quick-results options (or the error / loading / empty line) above "See all". */
+function QuickResults({ search, hits, query, active, optionId, onChoose, onOptionKeyDown, onHover }: QuickResultsProps) {
+  if (search.isError) return <p className="px-3 py-2 text-sm text-destructive">{(search.error as Error).message}</p>
+  if (search.isPending || (search.isFetching && !search.data)) {
+    return (
+      <p className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" /> Searching…
+      </p>
+    )
+  }
+  if (hits.length === 0) {
+    return <p className="px-3 py-2 text-sm text-muted-foreground">No active component mentions “{query}”.</p>
+  }
+  return hits.map((hit, i) => {
+    const m = hit.matches[0]
+    return (
+      <div
+        key={hit.id}
+        id={optionId(i)}
+        role="option"
+        aria-selected={active === i}
+        tabIndex={-1}
+        onPointerDown={(e) => e.preventDefault()}
+        onClick={() => onChoose(i)}
+        onKeyDown={(e) => onOptionKeyDown(e, i)}
+        onMouseEnter={() => onHover(i)}
+        className={cn('cursor-pointer px-3 py-2', active === i && 'bg-accent text-accent-foreground')}
+      >
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="truncate text-sm font-medium">{hit.componentKey}</span>
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {hit.matchCount} {hit.matchCount === 1 ? 'match' : 'matches'}
+          </span>
+        </div>
+        {m && (
+          <div className="truncate font-mono text-xs text-muted-foreground">
+            <span className="mr-2 tabular-nums">{m.line}</span>
+            {highlightRanges(m.text, m.ranges ?? [])}
+          </div>
+        )}
+      </div>
+    )
+  })
 }
