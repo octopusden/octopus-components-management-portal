@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { act, fireEvent, render, screen } from '@testing-library/react'
-import { createMemoryRouter, RouterProvider } from 'react-router'
+import { createBrowserRouter, createMemoryRouter, RouterProvider } from 'react-router'
 import React from 'react'
 import { AsCodeSearchPage } from './AsCodeSearchPage'
 import { useAsCodeSearch } from '../hooks/useAsCodeSearch'
@@ -118,3 +118,69 @@ describe('AsCodeSearchPage — navigation while mounted', () => {
     expect(field().value).toBe('gamma')
   })
 })
+
+// The data router moves its location at once and renders it in a transition: a debounce expiring
+// in that window must neither overwrite the incoming location nor drop the page's own params.
+describe('AsCodeSearchPage — writes racing a location the page has not rendered yet', () => {
+  const INCOMING = '/search?q=incoming&archived=all&limit=1000'
+  const routes = [{ path: '/search', element: <AsCodeSearchPage /> }]
+  const factories = {
+    memory: (entry: string) => createMemoryRouter(routes, { initialEntries: [entry] }),
+    browser: (entry: string) => {
+      window.history.replaceState(null, '', entry)
+      return createBrowserRouter(routes)
+    },
+  }
+  let router: ReturnType<typeof createMemoryRouter> | undefined
+  afterEach(() => {
+    router?.dispose()
+    router = undefined
+    window.history.replaceState(null, '', '/')
+  })
+  const start = (kind: keyof typeof factories, entry: string) => {
+    router = factories[kind](entry)
+    render(<RouterProvider router={router} />)
+    return router
+  }
+  const at = (r: NonNullable<typeof router>) => r.state.location.pathname + r.state.location.search
+
+  describe.each(['memory', 'browser'] as const)('%s router', (kind) => {
+    it('debounce expiry, then incoming navigation, before either renders: the navigation wins', async () => {
+      const r = start(kind, '/search?q=alpha')
+      fireEvent.change(field(), { target: { value: 'draft' } })
+      await act(async () => {
+        vi.advanceTimersByTime(300)
+        await r.navigate(INCOMING)
+      })
+      await act(async () => { vi.advanceTimersByTime(500) })
+      expect(at(r)).toBe(INCOMING)
+      expect(field().value).toBe('incoming')
+    })
+
+    it('incoming navigation, then debounce expiry, before either renders: the navigation wins', async () => {
+      const r = start(kind, '/search?q=alpha')
+      fireEvent.change(field(), { target: { value: 'draft' } })
+      await act(async () => {
+        vi.advanceTimersByTime(299)
+        await r.navigate(INCOMING)
+        vi.advanceTimersByTime(1)
+      })
+      await act(async () => { vi.advanceTimersByTime(500) })
+      expect(at(r)).toBe(INCOMING)
+      expect(field().value).toBe('incoming')
+    })
+
+    it('two own writes before the first renders keep both params', async () => {
+      const r = start(kind, '/search?q=alpha')
+      fireEvent.change(field(), { target: { value: 'draft' } })
+      await act(async () => {
+        vi.advanceTimersByTime(300)
+        fireEvent.mouseDown(screen.getByRole('tab', { name: 'All' }))
+      })
+      await act(async () => { vi.advanceTimersByTime(500) })
+      expect(at(r)).toBe('/search?q=draft&archived=all')
+      expect(field().value).toBe('draft')
+    })
+  })
+})
+
