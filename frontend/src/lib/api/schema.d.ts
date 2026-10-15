@@ -532,6 +532,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/rest/api/4/components/as-code/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["searchAsCode"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rest/api/4/components/meta/build-systems": {
         parameters: {
             query?: never;
@@ -1122,6 +1138,36 @@ export interface components {
             legacyArtifactIdPattern?: string;
             mode: string;
             versionRange?: string;
+        };
+        AsCodeMatchRange: {
+            /** Format: int32 */
+            end: number;
+            /** Format: int32 */
+            start: number;
+        };
+        AsCodeSearchHit: {
+            archived: boolean;
+            componentKey: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: int32 */
+            matchCount: number;
+            matches: components["schemas"]["AsCodeSearchLine"][];
+        };
+        AsCodeSearchLine: {
+            /** Format: int32 */
+            line: number;
+            path: string[];
+            ranges: components["schemas"]["AsCodeMatchRange"][];
+            text: string;
+        };
+        AsCodeSearchResponse: {
+            query: string;
+            regex: boolean;
+            results: components["schemas"]["AsCodeSearchHit"][];
+            /** Format: int32 */
+            totalComponents: number;
+            truncated: boolean;
         };
         AuditLogResponse: {
             action: string;
@@ -5638,6 +5684,8 @@ export interface operations {
                 owner?: string[];
                 releaseManager?: string[];
                 securityChampion?: string[];
+                involves?: string[];
+                involvesRoles?: string[];
                 buildSystem?: string[];
                 javaVersion?: string[];
                 labels?: string[];
@@ -5772,6 +5820,113 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ComponentDetailResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Early */
+            425: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    searchAsCode: {
+        parameters: {
+            query: {
+                q: string;
+                regex?: boolean;
+                archived?: boolean;
+                limit?: number;
+                maxMatchesPerComponent?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AsCodeSearchResponse"];
                 };
             };
             /** @description Bad Request */

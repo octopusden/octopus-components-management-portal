@@ -13,7 +13,10 @@ import type { ComponentFilter } from '../lib/types'
 describe('parseFilterParams', () => {
   it('returns active-only defaults for an empty query', () => {
     const state = parseFilterParams(new URLSearchParams(''))
-    expect(state).toEqual<FilterUrlState>({ filter: { archived: false }, preset: null })
+    expect(state).toEqual<FilterUrlState>({
+      filter: { archived: false, testComponent: false },
+      preset: null,
+    })
   })
 
   it('parses a CSV array param into a string array', () => {
@@ -51,6 +54,11 @@ describe('parseFilterParams', () => {
     expect(parseFilterParams(new URLSearchParams('archived=true')).filter.archived).toBe(true)
   })
 
+  it('parses testComponent=true (anything else is the hidden default)', () => {
+    expect(parseFilterParams(new URLSearchParams('testComponent=true')).filter.testComponent).toBe(true)
+    expect(parseFilterParams(new URLSearchParams('testComponent=false')).filter.testComponent).toBe(false)
+  })
+
   it('parses the preset param', () => {
     expect(parseFilterParams(new URLSearchParams('preset=mine')).preset).toBe('mine')
   })
@@ -85,6 +93,19 @@ describe('serializeFilterState', () => {
     expect(params.get('archived')).toBe('true')
   })
 
+  it('writes testComponent=true only when set (false is the default)', () => {
+    expect(
+      serializeFilterState({ filter: { archived: false, testComponent: true }, preset: null }).get(
+        'testComponent',
+      ),
+    ).toBe('true')
+    expect(
+      serializeFilterState({ filter: { archived: false, testComponent: false }, preset: null }).has(
+        'testComponent',
+      ),
+    ).toBe(false)
+  })
+
   it('writes tri-state booleans only when defined', () => {
     const params = serializeFilterState({
       filter: { archived: false, solution: true, jiraTechnical: false },
@@ -103,11 +124,13 @@ describe('serializeFilterState', () => {
 
 describe('round-trip', () => {
   const cases: FilterUrlState[] = [
-    { filter: { archived: false }, preset: null },
-    { filter: { archived: true }, preset: 'archived' },
+    { filter: { archived: false, testComponent: false }, preset: null },
+    { filter: { archived: true, testComponent: false }, preset: 'archived' },
+    { filter: { archived: false, testComponent: true }, preset: 'test-components' },
     {
       filter: {
         archived: false,
+        testComponent: false,
         owner: ['alice', 'bob'],
         system: ['S1'],
         labels: ['core', 'infra'],
@@ -156,7 +179,7 @@ describe('useFilterUrlState hook', () => {
     const { result } = renderHook(() => useFilterUrlState(), {
       wrapper: wrapper(['/components']),
     })
-    expect(result.current.filter).toEqual<ComponentFilter>({ archived: false })
+    expect(result.current.filter).toEqual<ComponentFilter>({ archived: false, testComponent: false })
     expect(result.current.preset).toBeNull()
   })
 

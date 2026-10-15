@@ -46,6 +46,7 @@ import {
 } from '../hooks/useFieldConfig'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useComponent, useCreateComponent } from '../hooks/useComponent'
+import { cloneTestComponent, useTestComponentNamePatterns } from '../hooks/useTestComponentNamePatterns'
 import { useToast } from '../hooks/use-toast'
 import { ApiError } from '../lib/api'
 import { classifyConflictBody } from '../lib/conflict'
@@ -676,6 +677,8 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
   const [submitted, setSubmitted] = useState(false)
   const [created, setCreated] = useState<{ id: string; name: string } | null>(null)
 
+  const testPatterns = useTestComponentNamePatterns().data
+
   async function onSubmit(formValues: CreateFormValues) {
     setAttempted(true)
     if (jiraKeyError) return
@@ -698,6 +701,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
         ...(editable('solution') ? { solution: flags.solution } : {}),
         // Without registry profiles nothing is named; undefined is dropped from the JSON body.
         profile: profile?.id,
+        ...(cloneTestComponent(source ?? undefined, formValues.name, testPatterns) ? { testComponent: true } : {}),
         jiraTaskKey: normalizeJiraKey(jiraTaskKey),
         changeComment: normalizeChangeComment(changeComment),
       }

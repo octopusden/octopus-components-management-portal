@@ -204,7 +204,7 @@
 ## 11. Registry container (Decision 9) — Gradle
 
 - [x] 11.1 Bump `crs.version` in `gradle.properties` to the first registry release with profiles.
-      `3.0.16` (the #520 merge commit).
+      `3.0.16` (the #520 merge commit); `main` has since moved it to `3.1.0`, as has `infra/dev`.
 - [x] 11.2 The e2e registry container loads the four profiles from
       `src/test/resources/e2e/crs-fixture/component-profiles.yml` via
       `SPRING_CONFIG_ADDITIONAL_LOCATION` (design Decision 9). The file matches the registry's own

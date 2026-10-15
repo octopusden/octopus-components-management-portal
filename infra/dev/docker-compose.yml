@@ -130,7 +130,7 @@ services:
 
   crs:
     # Set CRS_DOCKER_REGISTRY to your internal registry (e.g. via .env file or shell export).
-    image: ${CRS_DOCKER_REGISTRY}/octopusden/components-registry-service:${CRS_VERSION:-3.0.16}
+    image: ${CRS_DOCKER_REGISTRY}/octopusden/components-registry-service:${CRS_VERSION:-3.1.0}
     platform: linux/amd64
     depends_on:
       postgres:

@@ -99,3 +99,51 @@ test.describe('state primitives — list with data', () => {
     await expect(tr).toHaveCSS('opacity', '0.5')
   })
 })
+
+test.describe('state primitives — test components', () => {
+  test('list hides test components by default and shows them with a "Test" badge under the preset', async ({
+    page,
+  }) => {
+    // Route-mocked: one test component added to the shared fixture (kept
+    // inline so the other specs' row counts are untouched). The handler
+    // honours ?testComponent= like CRS, so the absent/present asserts below
+    // prove the SPA sends the right filter.
+    const rows = [
+      ...componentsFixture.content,
+      {
+        id: '7d3f9a2e-5b1c-4e8f-9a6d-2c4b8e1f0a37',
+        name: 'cvelab-test',
+        displayName: null,
+        componentOwner: 'alice',
+        systems: [],
+        productType: null,
+        archived: false,
+        testComponent: true,
+        updatedAt: '2026-01-15T10:00:00Z',
+      },
+    ]
+    await page.route('**/rest/api/4/components?**', (route) => {
+      const flag = new URL(route.request().url()).searchParams.get('testComponent')
+      const content =
+        flag === null
+          ? rows
+          : rows.filter((r) => (('testComponent' in r && r.testComponent) || false) === (flag === 'true'))
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ...componentsFixture, content, totalElements: content.length }),
+      })
+    })
+    await mockLabels(page, [])
+
+    await page.goto('/components')
+    await expect(page.getByText('alpha', { exact: true }).first()).toBeVisible()
+    await expect(page.getByText('cvelab-test', { exact: true })).toHaveCount(0)
+
+    await page.getByRole('button', { name: 'Test components' }).click()
+    const name = page.getByText('cvelab-test', { exact: true }).first()
+    await expect(name).toBeVisible()
+    await expect(page.getByText('alpha', { exact: true })).toHaveCount(0)
+    await expect(name.locator('xpath=ancestor::tr[1]').getByText('Test', { exact: true })).toBeVisible()
+  })
+})
