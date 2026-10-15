@@ -52,13 +52,22 @@ function writeIdOf(state: unknown): number | undefined {
  * (no `archived` = active components only).
  * Every write replaces the history entry (one entry per page visit, not per keystroke), and any
  * change other than `limit` itself drops a previously raised `limit`.
- * `incoming` is true for a location this page did not write itself (palette, header search,
- * a link, back/forward), even when it carries the same `q`.
+ * `arrivals` counts locations this page did not write itself (palette, header search, a link,
+ * back/forward — also to an entry it wrote earlier), even ones carrying the same `q`.
  */
 function useAsCodeSearchUrlState() {
   const [params, setParams] = useSearchParams()
   const location = useLocation()
+  // The id of a write whose location has not rendered yet; consumed by that location, so a later
+  // Back/Forward to the same entry counts as an arrival.
   const [ownWrite, setOwnWrite] = useState<number | null>(null)
+  const [seenKey, setSeenKey] = useState(location.key)
+  const [arrivals, setArrivals] = useState(0)
+  if (location.key !== seenKey) {
+    setSeenKey(location.key)
+    if (ownWrite === null || writeIdOf(location.state) !== ownWrite) setArrivals((n) => n + 1)
+    setOwnWrite(null)
+  }
   const setParam = useCallback(
     (key: string, value: string | null) => {
       const id = ++lastWriteId
@@ -81,8 +90,7 @@ function useAsCodeSearchUrlState() {
     regex: params.get('regex') === 'true',
     scope: parseScope(params.get('archived')),
     limit: parseLimit(params.get('limit')),
-    locationKey: location.key,
-    incoming: ownWrite === null || writeIdOf(location.state) !== ownWrite,
+    arrivals,
     setParam,
   }
 }
@@ -92,17 +100,17 @@ function useAsCodeSearchUrlState() {
  * Groovy DSL files. The input is debounced; the URL and the request follow the debounced value.
  */
 export function AsCodeSearchPage() {
-  const { query: urlQuery, regex, scope, limit, locationKey, incoming, setParam } = useAsCodeSearchUrlState()
+  const { query: urlQuery, regex, scope, limit, arrivals, setParam } = useAsCodeSearchUrlState()
   const [input, setInput] = useState(urlQuery)
   const debounced = useDebouncedValue(input, 300)
 
   // Incoming navigation while the page stays mounted replaces the input, pending keystrokes
   // included, even when its `q` equals the current one (setting the input restarts the
   // debounce, so the superseded text is never written).
-  const [seenKey, setSeenKey] = useState(locationKey)
-  if (locationKey !== seenKey) {
-    setSeenKey(locationKey)
-    if (incoming) setInput(urlQuery)
+  const [seenArrivals, setSeenArrivals] = useState(arrivals)
+  if (arrivals !== seenArrivals) {
+    setSeenArrivals(arrivals)
+    setInput(urlQuery)
   }
 
   // Typing writes the URL — only when the debounced text itself changes, so a stale value

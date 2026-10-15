@@ -79,6 +79,29 @@ describe('AsCodeSearchPage — navigation while mounted', () => {
     expect(field().value).toBe('beta')
   })
 
+  it.each([
+    ['Back', -1, '/search?q=beta'],
+    ['Forward', 1, '/search?q=alpha'],
+  ])('%s to an entry this page wrote restores its query', async (_how, delta, other) => {
+    const router = renderAt('/search?q=alpha')
+    if (delta === 1) {
+      await act(async () => { await router.navigate('/search?q=beta') })
+      await act(async () => { vi.advanceTimersByTime(500) })
+    }
+    fireEvent.change(field(), { target: { value: 'gamma' } })
+    await act(async () => { vi.advanceTimersByTime(300) })
+    expect(url(router)).toBe('/search?q=gamma')
+    // Leave the tagged entry, then return to it through history.
+    if (delta === -1) await act(async () => { await router.navigate(other) })
+    else await act(async () => { await router.navigate(-1) })
+    await act(async () => { vi.advanceTimersByTime(100) })
+    expect(url(router)).toBe(other)
+    await act(async () => { await router.navigate(delta) })
+    await act(async () => { vi.advanceTimersByTime(500) })
+    expect(url(router)).toBe('/search?q=gamma')
+    expect(field().value).toBe('gamma')
+  })
+
   it('keeps the other params of the incoming URL', async () => {
     const router = renderAt('/search?q=alpha')
     await act(async () => { await router.navigate('/search?q=beta&limit=1000') })
