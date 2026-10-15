@@ -1,4 +1,4 @@
-import { useParams, useNavigate, useSearchParams, Link } from 'react-router'
+import { useParams, useNavigate, useSearchParams, useLocation, Link } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { ArrowLeft, Copy, Archive, ArchiveRestore, AlertTriangle, LockKeyhole, Boxes, CircleCheck, CircleDashed } from 'lucide-react'
@@ -203,10 +203,23 @@ function ComponentDetailEditor() {
   // scrolled to line N. Only `as-code` is honoured: every other tab keeps opening on
   // General, as before.
   const [searchParams] = useSearchParams()
+  const location = useLocation()
   const [activeTab, setActiveTab] = useState(() =>
     searchParams.get('tab') === AS_CODE_TAB ? AS_CODE_TAB : 'general',
   )
   const asCodeLine = parsePositiveInt(searchParams.get('line'))
+  // The same deep link can also arrive while this page is mounted (a header search hit on
+  // the component already open): switch to As Code again and remount it on the full view,
+  // so the line is shown and scrolled to even if the tab was on another view.
+  const [seenLocationKey, setSeenLocationKey] = useState(location.key)
+  const [asCodeKey, setAsCodeKey] = useState(0)
+  if (location.key !== seenLocationKey) {
+    setSeenLocationKey(location.key)
+    if (searchParams.get('tab') === AS_CODE_TAB) {
+      setActiveTab(AS_CODE_TAB)
+      setAsCodeKey((k) => k + 1)
+    }
+  }
   // GeneralTab's owner PeopleInput commits a typed value only after its async
   // directory lookup resolves. Hold Save while that is in flight.
   const [ownerValidating, setOwnerValidating] = useState(false)
@@ -1266,7 +1279,7 @@ function ComponentDetailEditor() {
             </TabsContent>
 
             <TabsContent value={AS_CODE_TAB}>
-              <AsCodeTab component={component} highlightLine={asCodeLine} />
+              <AsCodeTab key={asCodeKey} component={component} highlightLine={asCodeLine} />
             </TabsContent>
 
             <TabsContent value="overrides">

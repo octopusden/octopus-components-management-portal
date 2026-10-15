@@ -1,12 +1,12 @@
 import { Link } from 'react-router'
 import { LogOut, Settings, ShieldCheck } from 'lucide-react'
-import { initials } from '../lib/utils'
+import { cn, initials } from '../lib/utils'
 import { hasPermission, logout, PERMISSIONS, type User } from '@/lib/auth'
 import { useAdminMode } from '@/lib/adminModeStore'
-import { AdminPane } from './AdminPane'
 import { Badge } from './ui/badge'
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -32,6 +32,9 @@ interface UserMenuProps {
  */
 export function UserMenu({ user, authError, openFeedbackCount }: UserMenuProps) {
   const adminMode = useAdminMode((s) => s.enabled)
+  // Radix hands over the next checked value: write it, rather than toggling, so a
+  // same-state callback can never flip the mode.
+  const setAdminMode = useAdminMode((s) => s.set)
   const canImport = hasPermission(user, PERMISSIONS.IMPORT_DATA)
   const isAdminOperator = adminMode && canImport
   const showAdminSettings = authError || canImport
@@ -68,10 +71,30 @@ export function UserMenu({ user, authError, openFeedbackCount }: UserMenuProps) 
       <DropdownMenuContent className="w-64">
         {user && <DropdownMenuLabel className="truncate">{user.username}</DropdownMenuLabel>}
         {canImport && (
-          // A plain row, not a menu item: flipping the switch must not close the menu.
-          <div className="px-2 py-1.5">
-            <AdminPane />
-          </div>
+          // A checkbox item, so the arrow keys reach it like the other rows; selecting it
+          // (click, Enter, Space) flips the mode and keeps the menu open.
+          <DropdownMenuCheckboxItem
+            checked={adminMode}
+            onCheckedChange={setAdminMode}
+            onSelect={(e) => e.preventDefault()}
+          >
+            Admin mode
+            <span
+              aria-hidden
+              data-state={adminMode ? 'checked' : 'unchecked'}
+              className={cn(
+                'ml-auto inline-flex h-5 w-9 shrink-0 items-center rounded-full border-2 border-transparent transition-colors',
+                adminMode ? 'bg-primary' : 'bg-muted-foreground/25',
+              )}
+            >
+              <span
+                className={cn(
+                  'block h-4 w-4 rounded-full bg-background shadow-sm transition-transform',
+                  adminMode ? 'translate-x-4' : 'translate-x-0',
+                )}
+              />
+            </span>
+          </DropdownMenuCheckboxItem>
         )}
         {(showAdminSettings || showValidations) && <DropdownMenuSeparator />}
         {showAdminSettings && (

@@ -13,7 +13,7 @@ Triggers a full Git → DB migration of the legacy components-registry DSL (Groo
 - **Where:** `/admin` (`AdminSettingsPage`) → "Migration" tab. Visible only to users carrying the `IMPORT_DATA` permission (`RequirePermission`).
 - **Components:**
   - [`frontend/src/components/admin/MigrationPanel.tsx`](../../frontend/src/components/admin/MigrationPanel.tsx) — main UI: idle / running / completed / failed states, "Run migration" button, four result tiles, per-component progress.
-  - [`frontend/src/components/AdminPane.tsx`](../../frontend/src/components/AdminPane.tsx) — Admin-mode footer toggle that gates the destructive button. See [`admin-mode.md`](admin-mode.md).
+  - [`frontend/src/components/UserMenu.tsx`](../../frontend/src/components/UserMenu.tsx) — the account menu's Admin mode item that gates the destructive button. See [`admin-mode.md`](admin-mode.md).
 
 ## Backend contract (CRS, owned by MIG-027)
 

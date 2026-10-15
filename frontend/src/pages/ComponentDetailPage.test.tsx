@@ -885,6 +885,24 @@ describe('ComponentDetailPage — as-code search deep link', () => {
     await waitFor(() => expect(document.querySelector('[data-highlighted="true"]')?.textContent).toBe('{}'))
   })
 
+  it('a deep link arriving while the page is open on General switches to As Code with the line', async () => {
+    const { router } = renderPage(baseComponent, makeUser(['ACCESS_COMPONENTS']))
+    const sidebar = () => screen.getAllByRole('tablist')[0]!
+    expect(within(sidebar()).getByRole('tab', { name: 'General' }).getAttribute('data-state')).toBe('active')
+    await act(async () => { await router.navigate('/components/comp-1?tab=as-code&line=1') })
+    expect(within(sidebar()).getByRole('tab', { name: 'As Code' }).getAttribute('data-state')).toBe('active')
+    await waitFor(() => expect(document.querySelector('[data-highlighted="true"]')?.textContent).toBe('{}'))
+  })
+
+  it('a new deep link returns As Code from the Resolved view to the Full view', async () => {
+    const { router } = renderPage(baseComponent, makeUser(['ACCESS_COMPONENTS']), { initialEntry: '/components/comp-1?tab=as-code&line=1' })
+    await userEvent.click(screen.getByRole('tab', { name: /resolved/i }))
+    expect(screen.getByRole('tab', { name: /resolved/i }).getAttribute('data-state')).toBe('active')
+    await act(async () => { await router.navigate('/components/comp-1?tab=as-code&line=1') })
+    expect(screen.getByRole('tab', { name: /full/i }).getAttribute('data-state')).toBe('active')
+    await waitFor(() => expect(document.querySelector('[data-highlighted="true"]')?.textContent).toBe('{}'))
+  })
+
   it('any other ?tab value keeps opening on General', () => {
     renderPage(baseComponent, makeUser(['ACCESS_COMPONENTS']), { initialEntry: '/components/comp-1?tab=history' })
     const general = within(screen.getByRole('tablist')).getByRole('tab', { name: 'General' })

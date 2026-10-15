@@ -56,22 +56,37 @@ function TextFilter({
   value,
   placeholder,
   onCommit,
+  commitOnUnmount = false,
 }: {
   id: string
   label: string
   value: string
   placeholder?: string
   onCommit: (v: string) => void
+  /**
+   * Commit a pending edit when the control unmounts — for the "+ Filter" panel, which
+   * unmounts its editor on close or Back, so a value typed just before is not lost.
+   */
+  commitOnUnmount?: boolean
 }) {
   const [local, setLocal] = useState(value)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingRef = useRef<string | null>(null)
+  const onCommitRef = useRef(onCommit)
+  useEffect(() => {
+    onCommitRef.current = onCommit
+  })
   useEffect(() => setLocal(value), [value])
-  // Cancel a pending debounce if the control unmounts (e.g. the filter is removed
-  // or an admin flips the field to searchable: None) so the timer can't fire
+  // On unmount, a pending debounce is either committed (panel editor) or cancelled (the bar
+  // control, e.g. when an admin flips the field to searchable: None) so the timer can't fire
   // onCommit against a stale closure after unmount.
-  useEffect(() => () => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-  }, [])
+  useEffect(
+    () => () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      if (commitOnUnmount && pendingRef.current !== null) onCommitRef.current(pendingRef.current)
+    },
+    [commitOnUnmount],
+  )
   return (
     <Input
       id={id}
@@ -82,8 +97,12 @@ function TextFilter({
       onChange={(e) => {
         const next = e.target.value
         setLocal(next)
+        pendingRef.current = next
         if (debounceRef.current) clearTimeout(debounceRef.current)
-        debounceRef.current = setTimeout(() => onCommit(next), 300)
+        debounceRef.current = setTimeout(() => {
+          pendingRef.current = null
+          onCommitRef.current(next)
+        }, 300)
       }}
     />
   )
@@ -414,9 +433,10 @@ export function ComponentFilters({
     <TriStateFilter label={label} value={filter[key]} onChange={(v) => onFilterChange({ ...filter, [key]: v })} />
   )
 
-  const text = (key: 'vcsPath' | 'productionBranch', label: string, placeholder: string) => (
+  const text = (key: 'vcsPath' | 'productionBranch', label: string, placeholder: string, inPanel = false) => (
     <TextFilter
       id={`filter-${key}`}
+      commitOnUnmount={inPanel}
       label={label}
       placeholder={placeholder}
       value={filter[key] ?? ''}
@@ -494,13 +514,13 @@ export function ComponentFilters({
       id: 'vcsPath', label: 'VCS path', group: 'Build & VCS', place: place('vcs.vcsPath', vcsPathEntry),
       active: !!filter.vcsPath, cleared: { vcsPath: undefined }, controlId: 'filter-vcsPath',
       control: text('vcsPath', 'VCS path', 'contains…'),
-      editor: text('vcsPath', 'VCS path', 'contains…'),
+      editor: text('vcsPath', 'VCS path', 'contains…', true),
     },
     {
       id: 'productionBranch', label: 'Production branch', group: 'Build & VCS', place: place('vcs.branch', productionBranchEntry),
       active: !!filter.productionBranch, cleared: { productionBranch: undefined }, controlId: 'filter-productionBranch',
       control: text('productionBranch', 'Production branch', 'contains…'),
-      editor: text('productionBranch', 'Production branch', 'contains…'),
+      editor: text('productionBranch', 'Production branch', 'contains…', true),
     },
     {
       id: 'jiraProjectKey', label: 'Jira project key', group: 'Jira', place: place('jira.projectKey', jiraProjectKeyEntry),

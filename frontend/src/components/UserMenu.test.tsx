@@ -7,7 +7,7 @@ import { useAdminMode } from '@/lib/adminModeStore'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { logout, type User } from '@/lib/auth'
 
-// AdminPane (rendered inside the menu) reads the current user itself.
+// The tests pass the user as a prop; the mock keeps any hook consumer quiet.
 vi.mock('@/hooks/useCurrentUser', () => ({ useCurrentUser: vi.fn() }))
 vi.mock('@/lib/auth', async () => {
   const actual = await vi.importActual<typeof import('@/lib/auth')>('@/lib/auth')
@@ -49,16 +49,16 @@ describe('UserMenu', () => {
     renderMenu(viewer)
     await openMenu()
     expect(screen.getByText('carol')).toBeDefined()
-    expect(screen.queryByRole('switch', { name: /admin mode/i })).toBeNull()
+    expect(screen.queryByRole('menuitemcheckbox', { name: /admin mode/i })).toBeNull()
     expect(screen.queryByRole('menuitem', { name: /admin settings/i })).toBeNull()
     await userEvent.click(screen.getByRole('menuitem', { name: /log out/i }))
     expect(logout).toHaveBeenCalled()
   })
 
-  it('an IMPORT_DATA holder gets the Admin-mode switch and Admin settings', async () => {
+  it('an IMPORT_DATA holder gets the Admin-mode item (off) and Admin settings', async () => {
     renderMenu(admin)
     await openMenu()
-    expect(screen.getByRole('switch', { name: /admin mode/i })).toBeDefined()
+    expect(screen.getByRole('menuitemcheckbox', { name: /admin mode/i }).getAttribute('aria-checked')).toBe('false')
     expect(screen.getByRole('menuitem', { name: /admin settings/i }).getAttribute('href')).toBe('/admin')
   })
 
@@ -66,10 +66,35 @@ describe('UserMenu', () => {
     renderMenu(admin)
     await openMenu()
     expect(screen.queryByRole('menuitem', { name: /validations/i })).toBeNull()
-    await userEvent.click(screen.getByRole('switch', { name: /admin mode/i }))
+    await userEvent.click(screen.getByRole('menuitemcheckbox', { name: /admin mode/i }))
     expect(useAdminMode.getState().enabled).toBe(true)
+    expect(screen.getByRole('menuitemcheckbox', { name: /admin mode/i }).getAttribute('aria-checked')).toBe('true')
     expect(screen.getByRole('menuitem', { name: /validations/i }).getAttribute('href')).toBe('/validations')
     expect(screen.getByText('ADMIN')).toBeDefined()
+    // A second click switches it off again.
+    await userEvent.click(screen.getByRole('menuitemcheckbox', { name: /admin mode/i }))
+    expect(useAdminMode.getState().enabled).toBe(false)
+  })
+
+  it('Admin mode is reachable and switchable from the keyboard', async () => {
+    renderMenu(admin)
+    screen.getByRole('button', { name: /^Account/ }).focus()
+    await userEvent.keyboard('{Enter}')
+    const item = screen.getByRole('menuitemcheckbox', { name: /admin mode/i })
+    // Home lands on the first row — Admin mode (the name above it is a label, not an item).
+    await userEvent.keyboard('{End}{Home}')
+    expect(document.activeElement).toBe(item)
+    await userEvent.keyboard('{Enter}')
+    expect(useAdminMode.getState().enabled).toBe(true)
+    // The menu stays open, and Space flips it back.
+    expect(document.activeElement).toBe(screen.getByRole('menuitemcheckbox', { name: /admin mode/i }))
+    await userEvent.keyboard(' ')
+    expect(useAdminMode.getState().enabled).toBe(false)
+    // The arrow keys walk past it like any row.
+    await userEvent.keyboard('{ArrowDown}')
+    expect(document.activeElement?.textContent).toMatch(/admin settings/i)
+    await userEvent.keyboard('{ArrowUp}')
+    expect(document.activeElement).toBe(screen.getByRole('menuitemcheckbox', { name: /admin mode/i }))
   })
 
   it('a viewer with admin mode forced on gets neither badge nor Validations (security canary)', async () => {

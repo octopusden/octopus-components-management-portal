@@ -17,7 +17,7 @@ test.describe('Admin migration – viewer redirect', () => {
 
     // No migration UI rendered.
     await expect(page.getByRole('tab', { name: /migration/i })).toHaveCount(0)
-    // No Admin mode switch anywhere (AdminPane returns null without IMPORT_DATA).
-    await expect(page.getByRole('switch', { name: /admin mode/i })).toHaveCount(0)
+    // No Admin mode item anywhere (the account menu renders it only with IMPORT_DATA).
+    await expect(page.getByRole('menuitemcheckbox', { name: /admin mode/i })).toHaveCount(0)
   })
 })

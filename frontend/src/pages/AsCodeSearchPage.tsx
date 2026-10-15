@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { Layout } from '../components/Layout'
 import { AsCodeSearchResults } from '../components/AsCodeSearchResults'
@@ -80,7 +80,20 @@ export function AsCodeSearchPage() {
   const [input, setInput] = useState(urlQuery)
   const debounced = useDebouncedValue(input, 300)
 
+  // A new `q` from outside (palette, header search, back/forward) while the page stays mounted:
+  // adopt it. Our own debounced write comes back as `debounced`, so it leaves the input alone.
+  const [seenQuery, setSeenQuery] = useState(urlQuery)
+  if (urlQuery !== seenQuery) {
+    setSeenQuery(urlQuery)
+    if (urlQuery !== debounced) setInput(urlQuery)
+  }
+
+  // Typing writes the URL — only when the debounced text itself changes, so a stale value
+  // never overwrites a query that arrived by navigation.
+  const writtenRef = useRef(debounced)
   useEffect(() => {
+    if (debounced === writtenRef.current) return
+    writtenRef.current = debounced
     if (debounced !== urlQuery) setParam('q', debounced)
   }, [debounced, urlQuery, setParam])
 

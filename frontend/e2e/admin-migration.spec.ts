@@ -16,10 +16,10 @@ test.describe('Admin migration – admin journeys', () => {
 
     // The inline arm bar is checked first: the open account menu below would cover the tab.
     await expect(page.getByRole('switch', { name: 'Arm admin mode', exact: true })).toBeVisible()
-    // Admin-mode switch in the header account menu (exact name — the Migration tab also has
+    // Admin-mode item in the header account menu (exact name — the Migration tab also has
     // an "Arm admin mode" switch, so /admin mode/i would be ambiguous).
     await page.getByRole('button', { name: /^account/i }).click()
-    await expect(page.getByRole('switch', { name: 'Admin mode', exact: true })).toBeVisible()
+    await expect(page.getByRole('menuitemcheckbox', { name: 'Admin mode', exact: true })).toBeVisible()
   })
 
   test('admin without Admin mode toggled sees disabled button + helper text', async ({ page }) => {

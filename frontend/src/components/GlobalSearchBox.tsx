@@ -26,8 +26,11 @@ export function GlobalSearchBox() {
 
   const search = useAsCodeSearch({ query: debounced, regex: false, archived: false, limit: QUICK_RESULTS_LIMIT, maxMatchesPerComponent: 1 })
   const hits = ready ? (search.data?.results ?? []) : []
+  // Until the debounce catches up, the panel still shows the previous query's results:
+  // they cannot be picked with the keyboard, so Enter always searches the text as typed.
+  const fresh = input === debounced
   // Options: each hit, then "See all" — keyboard selection walks them in this order.
-  const optionCount = ready ? hits.length + 1 : 0
+  const optionCount = ready && fresh ? hits.length + 1 : 0
   const showPanel = open && ready
 
   useEffect(() => {
@@ -49,11 +52,10 @@ export function GlobalSearchBox() {
     return () => document.removeEventListener('pointerdown', onPointerDown)
   }, [open])
 
-  useEffect(() => setActive(-1), [debounced])
-
   function go(href: string) {
     setOpen(false)
     setInput('')
+    setActive(-1)
     inputRef.current?.blur()
     void navigate(href)
   }
@@ -86,7 +88,7 @@ export function GlobalSearchBox() {
       setActive((i) => (i <= 0 ? optionCount - 1 : i - 1))
     } else if (e.key === 'Enter') {
       e.preventDefault()
-      if (active >= 0 && showPanel) choose(active)
+      if (active >= 0 && showPanel && fresh) choose(active)
       else go(globalSearchHref(input))
     } else if (e.key === 'Escape') {
       if (open) setOpen(false)
@@ -117,6 +119,7 @@ export function GlobalSearchBox() {
           value={input}
           onChange={(e) => {
             setInput(e.target.value)
+            setActive(-1)
             setOpen(true)
           }}
           onFocus={() => setOpen(true)}

@@ -672,6 +672,22 @@ describe('ComponentFilters "+ Filter" panel (extended dimensions)', () => {
     )
   })
 
+  it.each([
+    ['Escape', async () => { await userEvent.keyboard('{Escape}') }],
+    ['Back', async () => { await userEvent.click(within(screen.getByRole('group', { name: 'VCS path' })).getByRole('button', { name: 'VCS path' })) }],
+  ])('a text edit pending when the panel editor closes (%s) is committed, not lost', async (_how, close) => {
+    render(<ComponentFilters filter={{ archived: false, owner: ['x'] }} onFilterChange={onFilterChange} />)
+    const panel = await openFilter('VCS path')
+    fireEvent.change(panel.getByLabelText('VCS path'), { target: { value: 'github.com/example' } })
+    await close()
+    expect(screen.queryByRole('textbox', { name: 'VCS path' })).toBeNull()
+    expect(onFilterChange).toHaveBeenCalledTimes(1)
+    expect(onFilterChange).toHaveBeenCalledWith({ archived: false, owner: ['x'], vcsPath: 'github.com/example' })
+    // The debounce does not fire a second time afterwards.
+    await new Promise((r) => setTimeout(r, 400))
+    expect(onFilterChange).toHaveBeenCalledTimes(1)
+  })
+
   it('selecting a Java version emits a javaVersion filter (extended, multi-value, inline list)', async () => {
     mockFieldOptions('build.javaVersion', ['17', '21'])
     render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)

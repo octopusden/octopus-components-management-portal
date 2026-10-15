@@ -37,7 +37,7 @@ Properties:
 
 ## Toggle UI
 
-[`frontend/src/components/AdminPane.tsx`](../../frontend/src/components/AdminPane.tsx) renders the switch in the header account menu (`UserMenu`, the avatar). It is only mounted for users with the `IMPORT_DATA` permission (`RequirePermission`); non-admins never see it.
+The header account menu ([`UserMenu`](../../frontend/src/components/UserMenu.tsx), the avatar) holds an **Admin mode** row: a menu checkbox item (`menuitemcheckbox`) drawn as a switch, so the arrow keys reach it like the other rows. Click, Enter or Space flips it and keeps the menu open. It is only rendered for users with the `IMPORT_DATA` permission; non-admins never see it.
 
 ## How features consume it
 
@@ -75,7 +75,7 @@ Today the only thing behind Admin mode is "Run migration" in [`docs/features/adm
 ## Tests
 
 - `frontend/src/lib/adminModeStore.test.ts` — store behavior + localStorage persistence.
-- `frontend/src/components/AdminPane.test.tsx` — toggle visibility (only for admins) + interaction.
+- `frontend/src/components/UserMenu.test.tsx` — toggle visibility (only for admins), pointer and keyboard interaction.
 - Cross-feature: `frontend/src/components/admin/MigrationPanel.test.tsx` asserts the button is disabled when `enabled === false`.
 
 ## Known gaps

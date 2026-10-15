@@ -7,14 +7,14 @@ import { cn } from '@/lib/utils'
  * Inline safety toggle at the top of the Migration tab that arms the destructive
  * Run actions below (components migration, history migration, TeamCity resync) and
  * the config Reload. It binds to the SAME `useAdminMode` store as the account-menu
- * AdminPane, so arming here, arming in the account menu, and the ADMIN badge all stay in
+ * Admin mode item, so arming here, arming in the account menu, and the ADMIN badge all stay in
  * sync — there is no second source of truth. Armed → those buttons enable with
  * destructive styling; disarmed → they stay disabled.
  */
 export function AdminModeArmBar() {
   const armed = useAdminMode((s) => s.enabled)
   // Radix passes the next checked value; wire the explicit setter (not a toggle)
-  // so it can never flip the wrong way — same pattern as AdminPane.
+  // so it can never flip the wrong way — same pattern as the account menu's Admin mode item.
   const setArmed = useAdminMode((s) => s.set)
 
   return (
@@ -44,7 +44,7 @@ export function AdminModeArmBar() {
             : 'Arm to enable the destructive Run actions on this tab.'}
         </span>
       </div>
-      {/* Distinct accessible name from the account-menu AdminPane switch ("Admin mode")
+      {/* Distinct accessible name from the account-menu Admin mode item
           so both can coexist on /admin without an ambiguous role lookup. */}
       <Switch checked={armed} onCheckedChange={setArmed} aria-label="Arm admin mode" />
     </div>
