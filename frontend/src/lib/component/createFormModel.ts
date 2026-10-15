@@ -1,20 +1,16 @@
 import { z } from 'zod'
-import { isBadToken } from '../artifactOwnership'
-import { findUnsupportedGroupId } from '../groupValidation'
-import { isVcsHostSupported, hostOf } from '../vcsHost'
 import { selectBaseRow } from '../api/baseRow'
 import type { ComponentCreateRequest, ComponentDetail, EscrowAspect } from '../types'
 import type { ComponentProfile, ProfileFieldRule } from '../../hooks/useComponentProfiles'
 import { flagsForProfile } from './createProfile'
 import { formFieldOfRulePath, profileRuleErrors } from './profileRules'
+import { portalCreateRules, type PortalRuleOptions } from './portalCreateRules'
 import {
   buildCreateRequest,
   type CreateFieldVisibility,
   effectiveCreateClientCode,
-  vcsBlockApplies,
   DEPRECATED_BUILD_SYSTEMS,
   FALLBACK_VCS_BRANCH,
-  SSH_VCS_URL_REGEX,
   type CreateFormValues,
 } from './buildCreateRequest'
 
@@ -87,6 +83,9 @@ export function formFieldOfRule(rulePath: string, ownership: readonly { groupId:
   return field?.replace(/^ownership\.0\./, `ownership.${firstSentRow}.`)
 }
 
+const toIssuePath = (field: string) =>
+  field.split('.').map((segment) => (/^\d+$/.test(segment) ? Number(segment) : segment))
+
 // One issue per failing profile rule, on the form field for its path, tagged so the page can
 // list the ones whose field shows no error. The key shows one message at a time: "required" or
 // the charset rule come first, so a key rule waits while either applies.
@@ -100,8 +99,40 @@ function addProfileRuleIssues(
   for (const [rulePath, message] of profileRuleErrors(rules, request)) {
     const field = formFieldOfRule(rulePath, ownership)
     if (!field || (field === 'name' && keyHasOtherError)) continue
-    const path = field.split('.').map((segment) => (/^\d+$/.test(segment) ? Number(segment) : segment))
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path, message, params: { profileRule: true } })
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: toIssuePath(field), message, params: { profileRule: true } })
+  }
+}
+
+// The form field a Portal-only rule's create-request path shows on. Ownership rows the request
+// dropped (blank Group ID) shift the request's indices, so a request row maps back to the k-th
+// non-blank form row.
+function formFieldOfPortalRule(path: string, ownership: readonly { groupId: string }[]): string | undefined {
+  const row = /^artifactIds\[(\d+)\]\.(groupPattern|artifactTokens)$/.exec(path)
+  if (row) {
+    const sentRows = ownership.flatMap((r, i) => (r.groupId.trim() ? [i] : []))
+    const formRow = sentRows[Number(row[1])]
+    return formRow === undefined ? undefined : `ownership.${formRow}.${row[2] === 'groupPattern' ? 'groupId' : 'tokens'}`
+  }
+  if (path === 'releaseManager' || path === 'securityChampion') return path
+  return formFieldOfRulePath(path)
+}
+
+// The wizard requires the Jira project key and full version format on their fields in the object
+// schema, so those two are not asked for again here.
+function addPortalRuleIssues(
+  ctx: z.RefinementCtx,
+  request: ComponentCreateRequest,
+  v: CreateFormValues,
+  options: Omit<PortalRuleOptions, 'checkJiraRequired' | 'coordinateType'>,
+) {
+  for (const { path, message } of portalCreateRules(request, {
+    ...options,
+    checkJiraRequired: false,
+    coordinateType: v.coordinate.type,
+  })) {
+    const field = formFieldOfPortalRule(path, v.ownership)
+    if (!field) continue
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: toIssuePath(field), message })
   }
 }
 
@@ -171,117 +202,9 @@ export function makeCreateSchema(
       if (keyError) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['name'], message: keyError })
       }
-      addProfileRuleIssues(
-        ctx,
-        profileRules,
-        buildCreateRequest(v, source, editable, true, false, visibility),
-        !!keyError || !v.name.trim(),
-        v.ownership,
-      )
-      // Legacy EscrowConfigValidator rule: a VCS root is mandatory for every
-      // build system outside the exempt set.
-      if (vcsBlockApplies(v.buildSystem)) {
-        const url = v.vcsUrl.trim()
-        if (!url) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['vcsUrl'],
-            message: 'VCS Path is required for this build system',
-          })
-        } else if (!SSH_VCS_URL_REGEX.test(url)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['vcsUrl'],
-            message: 'VCS Path must be an ssh:// URL, e.g. ssh://git@host/path/repo.git',
-          })
-        } else if (!isVcsHostSupported(url, gitBaseUrl)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['vcsUrl'],
-            message: `VCS host must be ${hostOf(gitBaseUrl)} (the ecosystem Bitbucket)`,
-          })
-        }
-        if (!v.vcsTag.trim()) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['vcsTag'], message: 'Tag is required' })
-        }
-        if (!v.vcsBranch.trim()) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['vcsBranch'],
-            message: 'Production branch is required',
-          })
-        }
-      }
-      // Base ownership: validate PER ROW (blank Group ID rows are skipped).
-      v.ownership.forEach((row, i) => {
-        const groupId = row.groupId.trim()
-        if (!groupId) return
-        if (isBadToken(groupId)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['ownership', i, 'groupId'],
-            message: `Invalid group "${groupId}" — letters, digits, . _ - only`,
-          })
-        }
-        const unsupported = findUnsupportedGroupId(groupId, supportedGroups)
-        if (unsupported) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['ownership', i, 'groupId'],
-            message: `Group "${unsupported}" must start with a supported prefix (${supportedGroups.join(', ')})`,
-          })
-        }
-        if (row.mode === 'EXPLICIT' && row.tokens.length === 0) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['ownership', i, 'tokens'],
-            message: 'Add at least one artifact, or switch to a catch-all mode',
-          })
-        }
-      })
-      if (!(v.distributionExplicit && v.distributionExternal)) return
-      if (editable('displayName') && !v.displayName.trim()) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['displayName'],
-          message: 'Display Name is required for an explicit + external component',
-        })
-      }
-      if (editable('releaseManager') && v.releaseManager.length === 0) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['releaseManager'],
-          message: 'At least one Release Manager is required for an explicit + external component',
-        })
-      }
-      if (editable('securityChampion') && v.securityChampion.length === 0) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['securityChampion'],
-          message: 'At least one Security Champion is required for an explicit + external component',
-        })
-      }
-      const c = v.coordinate
-      const missing = (field: string, msg: string) =>
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['coordinate', field], message: msg })
-      if (c.type === 'maven') {
-        if (!c.groupPattern.trim()) {
-          missing('groupPattern', 'Group ID is required')
-        } else {
-          const unsupported = findUnsupportedGroupId(c.groupPattern, supportedGroups)
-          if (unsupported) {
-            missing(
-              'groupPattern',
-              `Group ID "${unsupported}" must start with a supported prefix (${supportedGroups.join(', ')})`,
-            )
-          }
-        }
-        if (!c.artifactPattern.trim()) missing('artifactPattern', 'Artifact ID is required')
-      } else if (c.type === 'docker') {
-        if (!c.imageName.trim()) missing('imageName', 'Image name is required')
-      } else {
-        if (!c.packageName.trim()) missing('packageName', 'Package name is required')
-      }
+      const request = buildCreateRequest(v, source, editable, true, false, visibility)
+      addProfileRuleIssues(ctx, profileRules, request, !!keyError || !v.name.trim(), v.ownership)
+      addPortalRuleIssues(ctx, request, v, { supportedGroups, gitBaseUrl, editable })
     })
 }
 

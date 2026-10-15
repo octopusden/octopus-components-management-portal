@@ -12,6 +12,7 @@ import { TeamCityResyncPanel } from '../components/admin/TeamCityResyncPanel'
 import { TeamCityValidationPanel } from '../components/admin/TeamCityValidationPanel'
 import { ServiceEventsPanel } from '../components/admin/ServiceEventsPanel'
 import { FeedbackPanel } from '../components/admin/FeedbackPanel'
+import { TemplatesPanel } from '../components/admin/TemplatesPanel'
 import { AdminModeArmBar } from '../components/admin/AdminModeArmBar'
 import { RuntimeSection } from '../components/RuntimeSection'
 import { useReloadConfig } from '../hooks/useAdminConfig'
@@ -82,6 +83,7 @@ export function AdminSettingsPage() {
           <TabsList>
             <TabsTrigger value="field-config">Field Configuration</TabsTrigger>
             <TabsTrigger value="component-defaults">Component Defaults</TabsTrigger>
+            <TabsTrigger value="templates">Templates</TabsTrigger>
             <TabsTrigger value="migration">Migration</TabsTrigger>
             <TabsTrigger value="events">Events</TabsTrigger>
             <TabsTrigger value="feedback">Feedback</TabsTrigger>
@@ -108,6 +110,19 @@ export function AdminSettingsPage() {
               </p>
               <div className="pt-2">
                 <ComponentDefaultsForm />
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="templates" className="mt-4">
+            <div className="rounded-lg border p-6 space-y-2">
+              <h2 className="text-lg font-semibold">Profiles and templates</h2>
+              <p className="text-sm text-muted-foreground">
+                What the Create component start page offers, what failed to load and why, and a way to try a
+                template without creating anything.
+              </p>
+              <div className="pt-2">
+                <TemplatesPanel />
               </div>
             </div>
           </TabsContent>
