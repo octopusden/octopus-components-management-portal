@@ -78,12 +78,12 @@ export function UserMenu({ user, authError, openFeedbackCount }: UserMenuProps) 
             onCheckedChange={setAdminMode}
             onSelect={(e) => e.preventDefault()}
           >
-            Admin mode
+            <span className="flex-1">Admin mode</span>
             <span
               aria-hidden
               data-state={adminMode ? 'checked' : 'unchecked'}
               className={cn(
-                'ml-auto inline-flex h-5 w-9 shrink-0 items-center rounded-full border-2 border-transparent transition-colors',
+                'inline-flex h-5 w-9 shrink-0 items-center rounded-full border-2 border-transparent transition-colors',
                 adminMode ? 'bg-primary' : 'bg-muted-foreground/25',
               )}
             >
