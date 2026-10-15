@@ -36,6 +36,7 @@ const FIELD_LABELS: Partial<Record<keyof ComponentFilter, string>> = {
   distributionExplicit: 'Distribution explicit',
   distributionExternal: 'Distribution external',
   archived: 'Status',
+  testComponent: 'Status',
 }
 
 const ROLE_LABELS: Record<InvolvementRole, string> = {
@@ -130,6 +131,10 @@ export function describeFilterChips(
     chips.push({ key: 'archived', label: `${FIELD_LABELS.archived}: Archived` })
   } else if (filter.archived === undefined) {
     chips.push({ key: 'archived', label: `${FIELD_LABELS.archived}: All` })
+  }
+  // Same for testComponent: hidden (false) is the default, not a chip.
+  if (filter.testComponent === true) {
+    chips.push({ key: 'testComponent', label: `${FIELD_LABELS.testComponent}: Test components` })
   }
 
   return chips

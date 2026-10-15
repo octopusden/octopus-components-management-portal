@@ -19,7 +19,7 @@ import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '@/lib/auth'
 import { useAdminMode } from '@/lib/adminModeStore'
 import { useFilterUrlState } from '../hooks/useFilterUrlState'
-import { applyPreset, type PresetId } from '../lib/listPresets'
+import { applyPreset, DEFAULT_FILTER, type PresetId } from '../lib/listPresets'
 import { countCheckFailed } from '../lib/validation'
 import { ApiError } from '../lib/api'
 import type { ComponentFilter, ComponentSummary, TeamcityValidationRow } from '../lib/types'
@@ -184,9 +184,10 @@ export function ComponentListPage() {
     setPage(0)
   }
 
-  // Clear all → back to the active-only default (no preset, no filters, bare URL).
+  // Clear all → back to the default (active only, test components hidden, no
+  // preset, bare URL).
   const handleClearAll = () => {
-    setState({ filter: { archived: false }, preset: null })
+    setState({ filter: DEFAULT_FILTER, preset: null })
     setPage(0)
   }
 
@@ -219,8 +220,11 @@ export function ComponentListPage() {
         delete next[key]
       }
     } else if (key === 'archived') {
-      // Removing the Status chip (Archived or All) returns to the Active default.
+      // Removing the Status chip (Archived, All or Test components) returns to the Active default.
       next.archived = false
+      next.testComponent = false
+    } else if (key === 'testComponent') {
+      next.testComponent = false
     } else {
       delete next[key]
     }

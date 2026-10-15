@@ -130,17 +130,27 @@ function TriStateFilter({
   )
 }
 
-type Status = 'active' | 'archived' | 'all'
+type Status = 'active' | 'archived' | 'all' | 'test'
 
 const STATUS_OPTIONS: { value: Status; text: string }[] = [
   { value: 'active', text: 'Active' },
   { value: 'archived', text: 'Archived' },
   { value: 'all', text: 'All' },
+  { value: 'test', text: 'Test' },
 ]
 
-/** Status — Active / Archived / All — as a segmented control (archived false / true / undefined). */
+// Test components are hidden unless "Test" is picked, which lists only the active ones.
+function statusOf(filter: ComponentFilter): Status {
+  if (filter.testComponent === true) return 'test'
+  return filter.archived === true ? 'archived' : filter.archived === false ? 'active' : 'all'
+}
+
+/**
+ * Status — Active / Archived / All / Test — as a segmented control
+ * (archived false / true / undefined; Test = active test components only).
+ */
 function StatusFilter({ filter, onChange }: { filter: ComponentFilter; onChange: (f: ComponentFilter) => void }) {
-  const current: Status = filter.archived === true ? 'archived' : filter.archived === false ? 'active' : 'all'
+  const current = statusOf(filter)
   return (
     <div role="radiogroup" aria-label="Status" className="inline-flex h-9 items-center rounded-md border border-input p-0.5">
       {STATUS_OPTIONS.map((o) => (
@@ -150,7 +160,7 @@ function StatusFilter({ filter, onChange }: { filter: ComponentFilter; onChange:
           role="radio"
           aria-checked={current === o.value}
           onClick={() => {
-            const next: ComponentFilter = { ...filter }
+            const next: ComponentFilter = { ...filter, testComponent: o.value === 'test' }
             if (o.value === 'all') delete next.archived
             else next.archived = o.value === 'archived'
             onChange(next)

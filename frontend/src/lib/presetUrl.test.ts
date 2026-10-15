@@ -24,6 +24,15 @@ describe('presetUrl', () => {
     expect(params.get('archived')).toBeNull()
   })
 
+  it('serializes "test-components" as testComponent=true; other presets omit it', () => {
+    const params = new URL(presetUrl('test-components', 'alice'), 'http://x').searchParams
+    expect(params.get('testComponent')).toBe('true')
+    expect(params.get('preset')).toBeNull()
+    expect(new URL(presetUrl('mine', 'alice'), 'http://x').searchParams.has('testComponent')).toBe(
+      false,
+    )
+  })
+
   it('falls back to the bare list when "mine" has no username', () => {
     expect(presetUrl('mine', null)).toBe('/components')
   })

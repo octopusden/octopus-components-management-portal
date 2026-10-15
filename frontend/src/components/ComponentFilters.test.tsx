@@ -932,6 +932,18 @@ describe('ComponentFilters — Status, Mine and With problems', () => {
     expect(within(screen.getByRole('radiogroup', { name: 'Status' })).getByRole('radio', { name: 'All' }).getAttribute('aria-checked')).toBe('true')
   })
 
+  it('Status: Test lists only active test components; the others hide them', async () => {
+    const { rerender } = render(<ComponentFilters filter={{ archived: false, testComponent: false }} onFilterChange={onFilterChange} />)
+    const status = () => within(screen.getByRole('radiogroup', { name: 'Status' }))
+    await userEvent.click(status().getByRole('radio', { name: 'Test' }))
+    expect(onFilterChange).toHaveBeenLastCalledWith({ archived: false, testComponent: true })
+    rerender(<ComponentFilters filter={{ archived: false, testComponent: true }} onFilterChange={onFilterChange} />)
+    expect(status().getByRole('radio', { name: 'Test' }).getAttribute('aria-checked')).toBe('true')
+    expect(status().getByRole('radio', { name: 'Active' }).getAttribute('aria-checked')).toBe('false')
+    await userEvent.click(status().getByRole('radio', { name: 'Archived' }))
+    expect(onFilterChange).toHaveBeenLastCalledWith({ archived: true, testComponent: false })
+  })
+
   it('Mine: ticking roles builds involves = current user + the ticked roles (OR on the server)', async () => {
     render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
     await userEvent.click(screen.getByRole('button', { name: 'Mine' }))

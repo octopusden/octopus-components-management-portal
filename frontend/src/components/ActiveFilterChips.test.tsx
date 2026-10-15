@@ -57,6 +57,16 @@ describe('describeFilterChips — derive chips from filter + preset', () => {
     expect(describeFilterChips({ archived: false }, 'mine')).toEqual([])
   })
 
+  it('emits a testComponent chip only when testComponent=true (hidden default is not a chip)', () => {
+    const chip = describeFilterChips({ archived: false, testComponent: true }, null).find(
+      (c) => c.key === 'testComponent',
+    )
+    expect(chip!.label).toBe('Status: Test components')
+    expect(
+      describeFilterChips({ archived: false, testComponent: false }, null).map((c) => c.key),
+    ).not.toContain('testComponent')
+  })
+
   it('emits one "Mine" chip naming the roles (any role when none are narrowed)', () => {
     expect(describeFilterChips({ archived: false, involves: ['alice'] }, null).map((c) => c.label)).toEqual([
       'Mine: any role',

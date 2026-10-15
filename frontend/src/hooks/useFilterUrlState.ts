@@ -49,14 +49,20 @@ const TRISTATE_KEYS = [
 
 const PRESET_KEY = 'preset'
 const ARCHIVED_KEY = 'archived'
+// Same shape as archived: defaults to false (test components hidden) and only
+// `true` is written to the URL.
+const TEST_COMPONENT_KEY = 'testComponent'
 
 /** searchParams -> {filter, preset}. Absent/empty params yield active-only defaults. */
 export function parseFilterParams(params: URLSearchParams): FilterUrlState {
   // Status: no param = Active (archived: false, the default — a bare /components URL),
   // archived=true = Archived only, archived=all = both (archived undefined → no CRS param).
+  // testComponent defaults to false (test components hidden); only `true` is in the URL.
   const rawArchived = params.get(ARCHIVED_KEY)
-  const filter: ComponentFilter =
-    rawArchived === 'all' ? {} : { archived: rawArchived === 'true' }
+  const filter: ComponentFilter = {
+    ...(rawArchived === 'all' ? {} : { archived: rawArchived === 'true' }),
+    testComponent: params.get(TEST_COMPONENT_KEY) === 'true',
+  }
 
   for (const key of ARRAY_KEYS) {
     const raw = params.get(key)
@@ -97,6 +103,7 @@ export function serializeFilterState({ filter, preset }: FilterUrlState): URLSea
   // Active (false) is the implicit default; Archived and All are written.
   if (filter.archived === true) params.set(ARCHIVED_KEY, 'true')
   else if (filter.archived === undefined) params.set(ARCHIVED_KEY, 'all')
+  if (filter.testComponent) params.set(TEST_COMPONENT_KEY, 'true')
   if (preset) params.set(PRESET_KEY, preset)
 
   return params

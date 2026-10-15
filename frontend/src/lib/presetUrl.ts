@@ -1,4 +1,4 @@
-import { applyPreset, type PresetId } from './listPresets'
+import { applyPreset, DEFAULT_FILTER, type PresetId } from './listPresets'
 import { serializeFilterState } from '../hooks/useFilterUrlState'
 
 /**
@@ -13,7 +13,7 @@ import { serializeFilterState } from '../hooks/useFilterUrlState'
  * active-only filter; `username` lets the `mine` preset build its owner filter.
  */
 export function presetUrl(id: PresetId, username: string | null): string {
-  const filter = applyPreset(id, { archived: false }, username)
+  const filter = applyPreset(id, DEFAULT_FILTER, username)
   // Only `problems` needs `preset=` (it has no filter footprint); the others are plain filters.
   const params = serializeFilterState({ filter, preset: id === 'problems' ? id : null })
   const qs = params.toString()

@@ -442,6 +442,37 @@ describe('ComponentListPage — Status / Mine filters + active-filter chips', ()
     expect(search()).toBe('')
   })
 
+  it('hides test components by default: the list query carries testComponent=false', () => {
+    mockUser(editorUser)
+    renderPage()
+    expect(mockedUseComponents.mock.calls.at(-1)![0]!.filter).toMatchObject({
+      archived: false,
+      testComponent: false,
+    })
+  })
+
+  it('?testComponent=true lists only active test components and shows a Status chip', () => {
+    mockUser(editorUser)
+    renderPage(['/components?testComponent=true'])
+    expect(screen.getByText(/Status: Test components/i)).toBeDefined()
+    expect(mockedUseComponents.mock.calls.at(-1)![0]!.filter).toMatchObject({ archived: false, testComponent: true })
+  })
+
+  it('a legacy ?preset=test-components link becomes the plain testComponent filter', () => {
+    mockUser(editorUser)
+    renderPage(['/components?preset=test-components&testComponent=true'])
+    expect(search()).toBe('?testComponent=true')
+    expect(mockedUseComponents.mock.calls.at(-1)![0]!.filter).toMatchObject({ archived: false, testComponent: true })
+  })
+
+  it('removing the Test components chip hides test components again', async () => {
+    mockUser(editorUser)
+    renderPage(['/components?testComponent=true'])
+    await userEvent.click(screen.getByRole('button', { name: /remove status: test components/i }))
+    expect(mockedUseComponents.mock.calls.at(-1)![0]!.filter).toMatchObject({ archived: false, testComponent: false })
+    expect(search()).toBe('')
+  })
+
   it('"Clear all" resets every filter back to the Active default', async () => {
     mockUser(editorUser)
     renderPage(['/components?involves=bob&search=foo&archived=true'])

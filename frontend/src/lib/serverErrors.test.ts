@@ -93,6 +93,20 @@ describe('parseServerFieldErrors — colon-prefixed IllegalArgumentException for
     expect(result.get('copyright')).toBe("'X' is not supported")
   })
 
+  it('maps the CRS SYS-099 test-component pattern 400s to testComponent / name, bracket list intact', () => {
+    const tail = 'matches none of the test-component name patterns [^test-, ^cvelab-]'
+    const flag = parseServerFieldErrors(
+      JSON.stringify({ errorMessage: `testComponent: test component key 'x' ${tail}` }),
+    )
+    expect([...flag.keys()]).toEqual(['testComponent'])
+    expect(flag.get('testComponent')).toBe(`test component key 'x' ${tail}`)
+    const rename = parseServerFieldErrors(
+      JSON.stringify({ errorMessage: `name: test component key 'y' ${tail}` }),
+    )
+    expect([...rename.keys()]).toEqual(['name'])
+    expect(rename.get('name')).toBe(`test component key 'y' ${tail}`)
+  })
+
   it('does not mistake a "Validation failed:" envelope for a colon field', () => {
     const result = parseServerFieldErrors(
       JSON.stringify({ errorMessage: 'Validation failed: name: must not be blank' }),

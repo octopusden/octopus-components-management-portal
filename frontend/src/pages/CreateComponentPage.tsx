@@ -33,6 +33,7 @@ import { useFieldConfig, useComponentDefaults } from '../hooks/useAdminConfig'
 import { isFieldEditableFor, useFieldEditable, useFieldConfigEntry } from '../hooks/useFieldConfig'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useComponent, useCreateComponent } from '../hooks/useComponent'
+import { cloneTestComponent, useTestComponentNamePatterns } from '../hooks/useTestComponentNamePatterns'
 import { useToast } from '../hooks/use-toast'
 import { ApiError } from '../lib/api'
 import { classifyConflictBody } from '../lib/conflict'
@@ -518,6 +519,8 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
   const [submitted, setSubmitted] = useState(false)
   const [created, setCreated] = useState<{ id: string; name: string } | null>(null)
 
+  const testPatterns = useTestComponentNamePatterns().data
+
   async function onSubmit(formValues: CreateFormValues) {
     setAttempted(true)
     if (jiraKeyError) return
@@ -537,6 +540,7 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
         // from; a clone may have changed profile). Only sent when the field is
         // editable — otherwise the builder already stripped it.
         ...(editable('solution') ? { solution: flags.solution } : {}),
+        ...(cloneTestComponent(source ?? undefined, formValues.name, testPatterns) ? { testComponent: true } : {}),
         jiraTaskKey: normalizeJiraKey(jiraTaskKey),
         changeComment: normalizeChangeComment(changeComment),
       }

@@ -25,6 +25,7 @@ export type PresetId =
   | 'security-champion'
   | 'problems'
   | 'archived'
+  | 'test-components'
 
 export interface PresetDef {
   id: PresetId
@@ -33,9 +34,11 @@ export interface PresetDef {
   adminOnly?: boolean
 }
 
-// Active-only default — mirrors ComponentListPage's initial filter and
-// parseFilterParams' empty-query result, so "all" round-trips to a bare URL.
-const DEFAULT_FILTER: ComponentFilter = { archived: false }
+// Active-only, test-components-hidden default — mirrors parseFilterParams'
+// empty-query result, so "all" round-trips to a bare URL. Every preset except
+// `test-components` keeps `testComponent: false`, so test components stay hidden
+// unless that preset is picked explicitly.
+export const DEFAULT_FILTER: ComponentFilter = { archived: false, testComponent: false }
 
 export const PRESETS: readonly PresetDef[] = [
   { id: 'all', label: 'All' },
@@ -44,6 +47,7 @@ export const PRESETS: readonly PresetDef[] = [
   { id: 'security-champion', label: 'I am Security Champion' },
   { id: 'problems', label: 'With problems', adminOnly: true },
   { id: 'archived', label: 'Archived' },
+  { id: 'test-components', label: 'Test components' },
 ] as const
 
 export function presetById(id: PresetId): PresetDef | undefined {
@@ -64,23 +68,27 @@ export function applyPreset(
     // the owner filter, so fall back to the default rather than emitting a
     // broken owner: [undefined].
     return currentUsername
-      ? { archived: false, involves: [currentUsername], involvesRoles: ['owner'] }
+      ? { ...DEFAULT_FILTER, involves: [currentUsername], involvesRoles: ['owner'] }
       : { ...DEFAULT_FILTER }
   }
   if (id === 'archived') {
-    return { archived: true }
+    return { archived: true, testComponent: false }
+  }
+  if (id === 'test-components') {
+    // Only (active) test components — the one way to surface them in the list.
+    return { archived: false, testComponent: true }
   }
   if (id === 'release-manager') {
     // Personal preset: components where the current user is the release manager.
     // Without a username we cannot scope, so fall back to the default rather
     // than emitting releaseManager: [undefined].
     return currentUsername
-      ? { archived: false, involves: [currentUsername], involvesRoles: ['releaseManager'] }
+      ? { ...DEFAULT_FILTER, involves: [currentUsername], involvesRoles: ['releaseManager'] }
       : { ...DEFAULT_FILTER }
   }
   if (id === 'security-champion') {
     return currentUsername
-      ? { archived: false, involves: [currentUsername], involvesRoles: ['securityChampion'] }
+      ? { ...DEFAULT_FILTER, involves: [currentUsername], involvesRoles: ['securityChampion'] }
       : { ...DEFAULT_FILTER }
   }
   // Everything else applies only the active-only default footprint:
