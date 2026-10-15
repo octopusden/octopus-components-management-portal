@@ -38,6 +38,28 @@ describe('AsCodeSearchPage — navigation while mounted', () => {
     expect(field().value).toBe('beta')
   })
 
+  it('Back before the debounce restores the previous query (the superseded one is never written)', async () => {
+    const router = renderAt('/search?q=alpha')
+    await act(async () => { await router.navigate('/search?q=beta') })
+    await act(async () => { vi.advanceTimersByTime(100) })
+    await act(async () => { await router.navigate(-1) })
+    await act(async () => { vi.advanceTimersByTime(500) })
+    expect(url(router)).toBe('/search?q=alpha')
+    expect(field().value).toBe('alpha')
+  })
+
+  it('returning to a query this page wrote earlier still follows the URL', async () => {
+    const router = renderAt('/search?q=alpha')
+    fireEvent.change(field(), { target: { value: 'gamma' } })
+    await act(async () => { vi.advanceTimersByTime(300) })
+    expect(url(router)).toBe('/search?q=gamma')
+    await act(async () => { await router.navigate('/search?q=beta') })
+    await act(async () => { await router.navigate('/search?q=gamma') })
+    await act(async () => { vi.advanceTimersByTime(500) })
+    expect(url(router)).toBe('/search?q=gamma')
+    expect(field().value).toBe('gamma')
+  })
+
   it('keeps the other params of the incoming URL', async () => {
     const router = renderAt('/search?q=alpha')
     await act(async () => { await router.navigate('/search?q=beta&limit=1000') })

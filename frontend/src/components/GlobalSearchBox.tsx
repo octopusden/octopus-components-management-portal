@@ -26,9 +26,16 @@ export function GlobalSearchBox() {
 
   const search = useAsCodeSearch({ query: debounced, regex: false, archived: false, limit: QUICK_RESULTS_LIMIT, maxMatchesPerComponent: 1 })
   const hits = ready ? (search.data?.results ?? []) : []
-  // Until the debounce catches up, the panel still shows the previous query's results:
-  // they cannot be picked with the keyboard, so Enter always searches the text as typed.
-  const fresh = input === debounced
+  // Until the debounce catches up and the new response arrives, the panel still shows the
+  // previous query's results (keepPreviousData): they cannot be picked with the keyboard, so
+  // Enter searches the text as typed.
+  const fresh = input === debounced && !search.isPlaceholderData
+  // A new result set never inherits the highlighted row of the previous one.
+  const [seenData, setSeenData] = useState(search.data)
+  if (search.data !== seenData) {
+    setSeenData(search.data)
+    setActive(-1)
+  }
   // Options: each hit, then "See all" — keyboard selection walks them in this order.
   const optionCount = ready && fresh ? hits.length + 1 : 0
   const showPanel = open && ready

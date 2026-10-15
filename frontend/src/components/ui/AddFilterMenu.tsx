@@ -20,9 +20,8 @@ export interface AddFilterItem {
  * removable chips under the bar, so the bar itself never grows. Shared by the component list
  * and the audit log.
  *
- * Editors are rendered by the caller and unmount when the panel closes (or on Back), so a
- * pending edit must either be committed on unmount (the component list's text filters) or live
- * in the caller (the audit log's text debounces).
+ * Editors are rendered by the caller and unmount when the panel closes (or on Back), so any
+ * state that must outlive the panel (e.g. a pending text debounce) belongs to the caller.
  */
 export function AddFilterMenu({
   items,

@@ -1,30 +1,32 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { act, fireEvent, render, screen } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { GlobalSearchBox } from './GlobalSearchBox'
 import { globalSearchHref } from '../lib/asCodeSearch'
 import type { AsCodeSearchResponse } from '../lib/types'
 
-// The real 250 ms debounce: the panel keeps the previous query's results until it catches up.
-const response: AsCodeSearchResponse = {
-  query: 'org.example',
-  regex: false,
-  totalComponents: 1,
-  truncated: false,
-  results: [
-    {
-      id: 'id-a',
-      componentKey: 'alpha',
-      archived: false,
-      matchCount: 1,
-      matches: [{ line: 12, text: 'groupId = "org.example"', path: ['alpha'], ranges: [{ start: 11, end: 22 }] }],
-    },
-  ],
+// The real 250 ms debounce and the real query hook (keepPreviousData): the panel keeps the
+// previous query's results until the new response arrives. Each request waits for `answer`.
+const pending = vi.hoisted(() => new Map<string, (r: unknown) => void>())
+vi.mock('../lib/api', async () => {
+  const actual = await vi.importActual<typeof import('../lib/api')>('../lib/api')
+  return {
+    ...actual,
+    api: { ...actual.api, get: (path: string) => new Promise((resolve) => pending.set(new URL(path, 'http://x').searchParams.get('q')!, resolve)) },
+  }
+})
+
+function hit(id: string, line: number): AsCodeSearchResponse['results'][number] {
+  return { id, componentKey: id, archived: false, matchCount: 1, matches: [{ line, text: id, path: [id], ranges: [{ start: 0, end: 1 }] }] }
 }
-vi.mock('../hooks/useAsCodeSearch', () => ({
-  AS_CODE_SEARCH_MIN_QUERY: 2,
-  useAsCodeSearch: () => ({ data: response, isPending: false, isFetching: false, isError: false, error: null }),
-}))
+const answer = async (q: string, ...results: AsCodeSearchResponse['results']) => {
+  await act(async () => {
+    pending.get(q)!({ query: q, regex: false, totalComponents: results.length, truncated: false, results })
+  })
+  // React Query notifies on a zero-delay timer.
+  await act(async () => { vi.advanceTimersByTime(0) })
+}
 
 function Where() {
   const loc = useLocation()
@@ -33,20 +35,28 @@ function Where() {
 
 const field = () => screen.getByRole('combobox', { name: 'Global search' })
 const loc = () => screen.getByTestId('loc').textContent
+const type = async (text: string) => {
+  fireEvent.change(field(), { target: { value: text } })
+  await act(async () => { vi.advanceTimersByTime(250) })
+}
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.useFakeTimers()
+  pending.clear()
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
-    <MemoryRouter initialEntries={['/components']}>
-      <GlobalSearchBox />
-      <Routes>
-        <Route path="*" element={<Where />} />
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={['/components']}>
+        <GlobalSearchBox />
+        <Routes>
+          <Route path="*" element={<Where />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   )
   fireEvent.focus(field())
-  fireEvent.change(field(), { target: { value: 'org.example' } })
-  act(() => { vi.advanceTimersByTime(250) })
+  await type('alpha')
+  await answer('alpha', hit('id-alpha', 12))
 })
 afterEach(() => vi.useRealTimers())
 
@@ -60,18 +70,35 @@ describe('GlobalSearchBox — selection across queries', () => {
     expect(loc()).toBe(globalSearchHref('different'))
   })
 
-  it('the previous results cannot be picked with the keyboard before the debounce catches up', () => {
-    fireEvent.change(field(), { target: { value: 'different' } })
+  it('before the debounce catches up, the previous results cannot be picked', () => {
+    fireEvent.change(field(), { target: { value: 'beta' } })
     fireEvent.keyDown(field(), { key: 'ArrowDown' })
     fireEvent.keyDown(field(), { key: 'Enter' })
-    expect(loc()).toBe(globalSearchHref('different'))
+    expect(loc()).toBe(globalSearchHref('beta'))
   })
 
-  it('once the debounce catches up, the results are selectable again', () => {
-    fireEvent.change(field(), { target: { value: 'different' } })
-    act(() => { vi.advanceTimersByTime(250) })
+  it('while the new response is pending, the retained results cannot be picked either', async () => {
+    await type('beta')
+    fireEvent.keyDown(field(), { key: 'ArrowDown' })
+    expect(field().getAttribute('aria-activedescendant')).toBeNull()
+    fireEvent.keyDown(field(), { key: 'Enter' })
+    expect(loc()).toBe(globalSearchHref('beta'))
+  })
+
+  it('a selection never carries over into a newly arrived result set', async () => {
+    await type('beta')
+    fireEvent.keyDown(field(), { key: 'ArrowDown' })
+    await answer('beta', hit('id-beta', 4))
+    expect(field().getAttribute('aria-activedescendant')).toBeNull()
+    fireEvent.keyDown(field(), { key: 'Enter' })
+    expect(loc()).toBe(globalSearchHref('beta'))
+  })
+
+  it('once the new results are in, they are selectable', async () => {
+    await type('beta')
+    await answer('beta', hit('id-beta', 4))
     fireEvent.keyDown(field(), { key: 'ArrowDown' })
     fireEvent.keyDown(field(), { key: 'Enter' })
-    expect(loc()).toBe('/components/id-a?tab=as-code&line=12')
+    expect(loc()).toBe('/components/id-beta?tab=as-code&line=4')
   })
 })

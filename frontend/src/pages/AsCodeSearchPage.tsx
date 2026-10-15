@@ -80,12 +80,18 @@ export function AsCodeSearchPage() {
   const [input, setInput] = useState(urlQuery)
   const debounced = useDebouncedValue(input, 300)
 
-  // A new `q` from outside (palette, header search, back/forward) while the page stays mounted:
-  // adopt it. Our own debounced write comes back as `debounced`, so it leaves the input alone.
+  // The `q` this page last wrote itself; any other `q` arrived from outside (palette, header
+  // search, back/forward).
+  const [ownWrite, setOwnWrite] = useState<string | null>(null)
+  // An outside `q` while the page stays mounted replaces the input, pending keystrokes included
+  // (setting the input restarts the debounce, so the superseded text is never written).
   const [seenQuery, setSeenQuery] = useState(urlQuery)
   if (urlQuery !== seenQuery) {
     setSeenQuery(urlQuery)
-    if (urlQuery !== debounced) setInput(urlQuery)
+    if (urlQuery !== ownWrite) {
+      setOwnWrite(null)
+      setInput(urlQuery)
+    }
   }
 
   // Typing writes the URL — only when the debounced text itself changes, so a stale value
@@ -94,7 +100,10 @@ export function AsCodeSearchPage() {
   useEffect(() => {
     if (debounced === writtenRef.current) return
     writtenRef.current = debounced
-    if (debounced !== urlQuery) setParam('q', debounced)
+    if (debounced !== urlQuery) {
+      setOwnWrite(debounced)
+      setParam('q', debounced)
+    }
   }, [debounced, urlQuery, setParam])
 
   const search = useAsCodeSearch({ query: urlQuery, regex, archived: archivedParam(scope), limit })

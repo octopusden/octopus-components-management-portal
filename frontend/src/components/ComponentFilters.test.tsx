@@ -675,17 +675,48 @@ describe('ComponentFilters "+ Filter" panel (extended dimensions)', () => {
   it.each([
     ['Escape', async () => { await userEvent.keyboard('{Escape}') }],
     ['Back', async () => { await userEvent.click(within(screen.getByRole('group', { name: 'VCS path' })).getByRole('button', { name: 'VCS path' })) }],
-  ])('a text edit pending when the panel editor closes (%s) is committed, not lost', async (_how, close) => {
+  ])('a text edit pending when the panel editor closes (%s) still commits, once', async (_how, close) => {
     render(<ComponentFilters filter={{ archived: false, owner: ['x'] }} onFilterChange={onFilterChange} />)
     const panel = await openFilter('VCS path')
     fireEvent.change(panel.getByLabelText('VCS path'), { target: { value: 'github.com/example' } })
     await close()
     expect(screen.queryByRole('textbox', { name: 'VCS path' })).toBeNull()
-    expect(onFilterChange).toHaveBeenCalledTimes(1)
-    expect(onFilterChange).toHaveBeenCalledWith({ archived: false, owner: ['x'], vcsPath: 'github.com/example' })
-    // The debounce does not fire a second time afterwards.
+    await waitFor(() =>
+      expect(onFilterChange).toHaveBeenCalledWith({ archived: false, owner: ['x'], vcsPath: 'github.com/example' }),
+    )
     await new Promise((r) => setTimeout(r, 400))
     expect(onFilterChange).toHaveBeenCalledTimes(1)
+  })
+
+  it('reopening the panel before the commit shows the pending text', async () => {
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    fireEvent.change((await openFilter('VCS path')).getByLabelText('VCS path'), { target: { value: 'repo/x' } })
+    await userEvent.keyboard('{Escape}')
+    expect(((await openFilter('VCS path')).getByLabelText('VCS path') as HTMLInputElement).value).toBe('repo/x')
+  })
+
+  it('leaving the page with a text edit pending commits nothing (no write into the next route)', async () => {
+    const { unmount } = render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    fireEvent.change((await openFilter('VCS path')).getByLabelText('VCS path'), { target: { value: 'github.com/example' } })
+    unmount()
+    await new Promise((r) => setTimeout(r, 400))
+    expect(onFilterChange).not.toHaveBeenCalled()
+  })
+
+  it('a pending key/name edit is dropped too when the page is left', async () => {
+    const { unmount } = render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    fireEvent.change(screen.getByPlaceholderText(/filter by key or name/i), { target: { value: 'abc' } })
+    unmount()
+    await new Promise((r) => setTimeout(r, 400))
+    expect(onFilterChange).not.toHaveBeenCalled()
+  })
+
+  it('a VCS path removed from outside (chip) drops the pending draft for it', async () => {
+    const { rerender } = render(<ComponentFilters filter={{ archived: false, vcsPath: 'old' }} onFilterChange={onFilterChange} />)
+    fireEvent.change((await openFilter('VCS path')).getByLabelText('VCS path'), { target: { value: 'newer' } })
+    rerender(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
+    await new Promise((r) => setTimeout(r, 400))
+    expect(onFilterChange).not.toHaveBeenCalled()
   })
 
   it('selecting a Java version emits a javaVersion filter (extended, multi-value, inline list)', async () => {

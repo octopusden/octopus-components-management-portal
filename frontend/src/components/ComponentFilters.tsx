@@ -56,37 +56,22 @@ function TextFilter({
   value,
   placeholder,
   onCommit,
-  commitOnUnmount = false,
 }: {
   id: string
   label: string
   value: string
   placeholder?: string
   onCommit: (v: string) => void
-  /**
-   * Commit a pending edit when the control unmounts — for the "+ Filter" panel, which
-   * unmounts its editor on close or Back, so a value typed just before is not lost.
-   */
-  commitOnUnmount?: boolean
 }) {
   const [local, setLocal] = useState(value)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pendingRef = useRef<string | null>(null)
-  const onCommitRef = useRef(onCommit)
-  useEffect(() => {
-    onCommitRef.current = onCommit
-  })
   useEffect(() => setLocal(value), [value])
-  // On unmount, a pending debounce is either committed (panel editor) or cancelled (the bar
-  // control, e.g. when an admin flips the field to searchable: None) so the timer can't fire
+  // Cancel a pending debounce if the control unmounts (e.g. the filter is removed
+  // or an admin flips the field to searchable: None) so the timer can't fire
   // onCommit against a stale closure after unmount.
-  useEffect(
-    () => () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-      if (commitOnUnmount && pendingRef.current !== null) onCommitRef.current(pendingRef.current)
-    },
-    [commitOnUnmount],
-  )
+  useEffect(() => () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+  }, [])
   return (
     <Input
       id={id}
@@ -97,12 +82,8 @@ function TextFilter({
       onChange={(e) => {
         const next = e.target.value
         setLocal(next)
-        pendingRef.current = next
         if (debounceRef.current) clearTimeout(debounceRef.current)
-        debounceRef.current = setTimeout(() => {
-          pendingRef.current = null
-          onCommitRef.current(next)
-        }, 300)
+        debounceRef.current = setTimeout(() => onCommit(next), 300)
       }}
     />
   )
@@ -303,6 +284,63 @@ function LabelledFilter({ def }: { def: FilterDef }) {
   )
 }
 
+type PanelTextKey = 'vcsPath' | 'productionBranch'
+
+function withoutKey<T extends object>(o: T, key: keyof T): T {
+  const next = { ...o }
+  delete next[key]
+  return next
+}
+
+/**
+ * Text edits made in the "+ Filter" panel. The panel unmounts its editors on close, so the draft
+ * and its debounce live here instead: a value typed just before closing still commits. Leaving
+ * the page cancels them, so a late commit never writes list filters into another route's URL;
+ * a value cleared from outside (chip, Clear all) drops its stale draft.
+ */
+function usePanelTextDrafts(filter: ComponentFilter, onFilterChange: (f: ComponentFilter) => void) {
+  const [drafts, setDrafts] = useState<Partial<Record<PanelTextKey, string>>>({})
+  const timers = useRef<Partial<Record<PanelTextKey, ReturnType<typeof setTimeout>>>>({})
+  const committed = useRef<Partial<Record<PanelTextKey, string | undefined>>>({
+    vcsPath: filter.vcsPath,
+    productionBranch: filter.productionBranch,
+  })
+  const latest = useRef({ filter, onFilterChange })
+  useEffect(() => {
+    latest.current = { filter, onFilterChange }
+  })
+  useEffect(() => {
+    const pending = timers.current
+    return () => {
+      for (const t of Object.values(pending)) clearTimeout(t)
+    }
+  }, [])
+
+  const { vcsPath, productionBranch } = filter
+  useEffect(() => {
+    for (const [key, value] of [['vcsPath', vcsPath], ['productionBranch', productionBranch]] as const) {
+      if (value === committed.current[key]) continue
+      committed.current[key] = value
+      clearTimeout(timers.current[key])
+      delete timers.current[key]
+      setDrafts((d) => withoutKey(d, key))
+    }
+  }, [vcsPath, productionBranch])
+
+  const edit = (key: PanelTextKey, text: string) => {
+    setDrafts((d) => ({ ...d, [key]: text }))
+    clearTimeout(timers.current[key])
+    timers.current[key] = setTimeout(() => {
+      delete timers.current[key]
+      setDrafts((d) => withoutKey(d, key))
+      committed.current[key] = text || undefined
+      latest.current.onFilterChange({ ...latest.current.filter, [key]: text || undefined })
+    }, 300)
+  }
+
+  return { value: (key: PanelTextKey) => drafts[key] ?? filter[key] ?? '', edit }
+}
+
 export function ComponentFilters({
   filter,
   onFilterChange,
@@ -317,6 +355,15 @@ export function ComponentFilters({
   useEffect(() => {
     setSearchValue(filter.search ?? '')
   }, [filter.search])
+
+  // Leaving the page cancels a pending key/name commit (it would land in the next route's URL).
+  useEffect(
+    () => () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    },
+    [],
+  )
+  const panelText = usePanelTextDrafts(filter, onFilterChange)
 
   const handleSearchChange = (value: string) => {
     setSearchValue(value)
@@ -433,14 +480,24 @@ export function ComponentFilters({
     <TriStateFilter label={label} value={filter[key]} onChange={(v) => onFilterChange({ ...filter, [key]: v })} />
   )
 
-  const text = (key: 'vcsPath' | 'productionBranch', label: string, placeholder: string, inPanel = false) => (
+  const text = (key: PanelTextKey, label: string, placeholder: string) => (
     <TextFilter
       id={`filter-${key}`}
-      commitOnUnmount={inPanel}
       label={label}
       placeholder={placeholder}
       value={filter[key] ?? ''}
       onCommit={(v) => onFilterChange({ ...filter, [key]: v || undefined })}
+    />
+  )
+
+  const panelTextEditor = (key: PanelTextKey, label: string, placeholder: string) => (
+    <Input
+      id={`filter-${key}`}
+      className="h-9 w-44"
+      value={panelText.value(key)}
+      placeholder={placeholder}
+      aria-label={label}
+      onChange={(e) => panelText.edit(key, e.target.value)}
     />
   )
 
@@ -514,13 +571,13 @@ export function ComponentFilters({
       id: 'vcsPath', label: 'VCS path', group: 'Build & VCS', place: place('vcs.vcsPath', vcsPathEntry),
       active: !!filter.vcsPath, cleared: { vcsPath: undefined }, controlId: 'filter-vcsPath',
       control: text('vcsPath', 'VCS path', 'contains…'),
-      editor: text('vcsPath', 'VCS path', 'contains…', true),
+      editor: panelTextEditor('vcsPath', 'VCS path', 'contains…'),
     },
     {
       id: 'productionBranch', label: 'Production branch', group: 'Build & VCS', place: place('vcs.branch', productionBranchEntry),
       active: !!filter.productionBranch, cleared: { productionBranch: undefined }, controlId: 'filter-productionBranch',
       control: text('productionBranch', 'Production branch', 'contains…'),
-      editor: text('productionBranch', 'Production branch', 'contains…', true),
+      editor: panelTextEditor('productionBranch', 'Production branch', 'contains…'),
     },
     {
       id: 'jiraProjectKey', label: 'Jira project key', group: 'Jira', place: place('jira.projectKey', jiraProjectKeyEntry),
