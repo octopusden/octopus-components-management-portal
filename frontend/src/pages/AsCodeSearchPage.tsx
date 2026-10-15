@@ -58,19 +58,24 @@ function writeIdOf(state: unknown): number | undefined {
  * The data router (the app's createBrowserRouter) moves its location at once but renders it in a
  * transition, so a write can run while the page still shows the previous location. Writes
  * therefore start from the router's own location, and are dropped while it is one the page did
- * not write (it arrives as soon as it renders). Under a declarative router they use the
- * rendered params.
+ * not write (it arrives as soon as it renders) or while a navigation is still loading (a route
+ * loader would keep it out of the router's location until then). Under a declarative router
+ * they use the rendered params.
  */
 function useAsCodeSearchUrlState() {
   const [params, setParams] = useSearchParams()
   const location = useLocation()
   const router = useContext(UNSAFE_DataRouterContext)?.router
+  // The id of the latest write until its location renders, read by a write made before that.
+  // Once rendered it is cleared, so a later Back/Forward to that entry is not taken for it.
+  const latestWrite = useRef<number | null>(null)
   const renderedKey = useRef(location.key)
   useEffect(() => {
+    if (renderedKey.current === location.key) return
     renderedKey.current = location.key
+    const id = writeIdOf(location.state)
+    if (id === undefined || latestWrite.current === null || id >= latestWrite.current) latestWrite.current = null
   })
-  // The id of the latest write, read by the next write before React has rendered this one.
-  const latestWrite = useRef<number | null>(null)
   // The id of a write whose location has not rendered yet; consumed by that location, so a later
   // Back/Forward to the same entry counts as an arrival.
   const [ownWrite, setOwnWrite] = useState<number | null>(null)
@@ -84,6 +89,7 @@ function useAsCodeSearchUrlState() {
   const setParam = useCallback(
     (key: string, value: string | null) => {
       const current = router?.state.location
+      if (router && router.state.navigation.state !== 'idle') return
       if (current && current.key !== renderedKey.current && writeIdOf(current.state) !== latestWrite.current) return
       const id = ++lastWriteId
       latestWrite.current = id

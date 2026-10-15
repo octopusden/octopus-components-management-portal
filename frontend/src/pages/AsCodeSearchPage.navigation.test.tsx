@@ -143,6 +143,12 @@ describe('AsCodeSearchPage — writes racing a location the page has not rendere
     return router
   }
   const at = (r: NonNullable<typeof router>) => r.state.location.pathname + r.state.location.search
+  // A history step resolves on popstate, which jsdom dispatches from a (faked) 1 ms timer.
+  const go = async (r: NonNullable<typeof router>, delta: number) => {
+    const done = r.navigate(delta)
+    await vi.advanceTimersByTimeAsync(1)
+    await done
+  }
 
   describe.each(['memory', 'browser'] as const)('%s router', (kind) => {
     it('debounce expiry, then incoming navigation, before either renders: the navigation wins', async () => {
@@ -170,6 +176,34 @@ describe('AsCodeSearchPage — writes racing a location the page has not rendere
       expect(field().value).toBe('incoming')
     })
 
+    it.each([
+      ['Back', 'expiry first', -1, false],
+      ['Back', 'navigation first', -1, true],
+      ['Forward', 'expiry first', 1, false],
+      ['Forward', 'navigation first', 1, true],
+    ] as const)('%s to the entry the page wrote last, %s, before it renders: that entry wins', async (_how, _order, delta, navFirst) => {
+      const r = start(kind, '/search?q=alpha')
+      if (delta === 1) {
+        await act(async () => { await r.navigate('/search?q=beta') })
+        await act(async () => { vi.advanceTimersByTime(500) })
+      }
+      fireEvent.change(field(), { target: { value: 'gamma' } })
+      await act(async () => { vi.advanceTimersByTime(300) })
+      expect(at(r)).toBe('/search?q=gamma')
+      if (delta === -1) await act(async () => { await r.navigate('/search?q=beta') })
+      else await act(async () => { await go(r, -1) })
+      await act(async () => { vi.advanceTimersByTime(500) })
+      fireEvent.change(field(), { target: { value: 'delta' } })
+      await act(async () => {
+        vi.advanceTimersByTime(navFirst ? 298 : 300)
+        await go(r, delta)
+        if (navFirst) vi.advanceTimersByTime(1)
+      })
+      await act(async () => { vi.advanceTimersByTime(500) })
+      expect(at(r)).toBe('/search?q=gamma')
+      expect(field().value).toBe('gamma')
+    })
+
     it('two own writes before the first renders keep both params', async () => {
       const r = start(kind, '/search?q=alpha')
       fireEvent.change(field(), { target: { value: 'draft' } })
@@ -181,6 +215,28 @@ describe('AsCodeSearchPage — writes racing a location the page has not rendere
       expect(at(r)).toBe('/search?q=draft&archived=all')
       expect(field().value).toBe('draft')
     })
+  })
+})
+
+describe('AsCodeSearchPage — a navigation still loading', () => {
+  it('a debounce expiring while a route loader runs does not cancel the navigation away', async () => {
+    const router = createMemoryRouter(
+      [
+        { path: '/search', element: <AsCodeSearchPage /> },
+        { path: '/other', loader: () => new Promise(() => {}), element: <div /> },
+      ],
+      { initialEntries: ['/search?q=alpha'] },
+    )
+    render(<RouterProvider router={router} />)
+    fireEvent.change(field(), { target: { value: 'draft' } })
+    await act(async () => {
+      void router.navigate('/other')
+      vi.advanceTimersByTime(300)
+    })
+    await act(async () => { vi.advanceTimersByTime(500) })
+    expect(router.state.navigation.location?.pathname).toBe('/other')
+    expect(router.state.location.search).toBe('?q=alpha')
+    router.dispose()
   })
 })
 
