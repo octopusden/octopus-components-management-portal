@@ -23,7 +23,7 @@ interface UserMenuProps {
 }
 
 /**
- * Header account menu (avatar trigger): who you are, the Admin-mode switch, the admin tooling
+ * Header account menu (avatar trigger): who you are, the Admin mode item, the admin tooling
  * pages (Admin settings, Validations) and Log out. The admin pages moved here from the top nav,
  * which now carries only the everyday destinations.
  *
