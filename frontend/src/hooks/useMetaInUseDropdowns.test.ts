@@ -7,6 +7,8 @@ import { useClientCodes } from './useClientCodes'
 import { useJiraProjectKeys } from './useJiraProjectKeys'
 import { useParentComponentNames } from './useParentComponentNames'
 import { useGroupKeys } from './useGroupKeys'
+import { useReleaseManagers } from './useReleaseManagers'
+import { useSecurityChampions } from './useSecurityChampions'
 
 vi.mock('../lib/api', async () => {
   const actual = await vi.importActual<typeof import('../lib/api')>('../lib/api')
@@ -22,14 +24,19 @@ function makeWrapper() {
 
 beforeEach(() => vi.clearAllMocks())
 
-// The four in-use meta-option dropdowns (SYS-046) share the useLabels contract:
+// The in-use meta-option dropdowns (SYS-046) share the useLabels contract:
 // a lazy `enabled` gate, and 404/501 → empty vocabulary so the picker still
-// opens against a CRS that has not yet shipped the endpoint.
+// opens against a CRS that has not yet shipped the endpoint. That last part is
+// live for the people pair — the release-manager / security-champion endpoints
+// ship in a companion CRS release, so until it is deployed both pickers must
+// open empty rather than surface an error.
 const cases = [
   { name: 'useClientCodes', hook: useClientCodes, path: '/components/meta/client-codes' },
   { name: 'useJiraProjectKeys', hook: useJiraProjectKeys, path: '/components/meta/jira-project-keys' },
   { name: 'useParentComponentNames', hook: useParentComponentNames, path: '/components/meta/parent-component-names' },
   { name: 'useGroupKeys', hook: useGroupKeys, path: '/components/meta/group-keys' },
+  { name: 'useReleaseManagers', hook: useReleaseManagers, path: '/components/meta/release-managers' },
+  { name: 'useSecurityChampions', hook: useSecurityChampions, path: '/components/meta/security-champions' },
 ]
 
 describe.each(cases)('$name', ({ hook, path }) => {
