@@ -105,7 +105,7 @@ release-only contract tracking and drops the drift-gate.
 - [`docs/adr/`](docs/adr/) — Portal-specific ADRs (canonical decision is in CRS [ADR-012](https://github.com/octopusden/octopus-components-registry-service/blob/main/docs/registry/adr/012-portal-architecture.md)).
 - [`docs/features/`](docs/features/) — feature docs (component-list, component-detail, audit-log, admin-migration, admin-mode, admin-tc-resync, app-footer).
 - [`docs/onboarding/components-management-portal.md`](docs/onboarding/components-management-portal.md) — OKD/Vault/TeamCity deployment checklist.
-- [`docs/tech-debt/`](docs/tech-debt/) — tech-debt items (TD-001 e2e fixture, TD-002 OpenAPI types, TD-003 session store; TD-004 TLS migration — done; TD-005 schema-v2 follow-ups).
+- [`docs/tech-debt/`](docs/tech-debt/) — tech-debt items (TD-001 e2e fixture, TD-002 OpenAPI types, TD-003 session store; TD-004 TLS migration — done; TD-005 schema-v2 follow-ups; TD-006 the editor's own solution-key setting).
 - [`AGENTS.md`](AGENTS.md) — agent / developer build commands and testing notes.
 
 ## License
