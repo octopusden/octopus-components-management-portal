@@ -14,6 +14,7 @@ import { useVcsOverrides, VCS_MARKER_PATH } from './useVcsOverrides'
 import { VcsPerRange } from './VcsPerRange'
 import { coalescePerRangeOverrides, type PerRangeGroup } from './perRangeGrouping'
 import { OverrideRowEditor } from './OverrideRowEditor'
+import { EntryError, fieldErrorProps } from './EntryError'
 import type { FieldOverride } from '../../lib/types'
 import type { VcsSection } from './useVcsSection'
 
@@ -34,11 +35,16 @@ export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
     showExternalRegistry,
     externalRegistryEditable,
     entries,
+    buildWorkingDirectory,
+    setBuildWorkingDirectory,
     updateEntry,
     addEntry,
     removeEntry,
+    entryErrors,
+    overrideEntryErrors,
   } = section
   const allowedHost = hostOf(gitBaseUrl)
+  const errorProps = (index: number, field: string) => fieldErrorProps('vcs', entryErrors, `${index}.${field}`)
 
   // Per-range VCS overrides (the `vcs.settings` marker). Add/edit/delete queue
   // into the same page-level draft the combined Save flushes.
@@ -99,33 +105,34 @@ export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1">
-            <h3 className="text-sm font-semibold"><FieldLabelText path="vcs.entries" fallback="VCS Entries" /></h3>
-            <FieldInfo path="vcs.entries" label="VCS Entries" />
+            <h3 className="text-sm font-semibold"><FieldLabelText path="vcs.entries" fallback="VCS Roots" /></h3>
+            <FieldInfo path="vcs.entries" label="VCS Roots" />
             {perRangeCount > 0 && (
               <Badge variant="secondary" className="ml-1 text-[10px]">{perRangeCount} per-range</Badge>
             )}
           </div>
           <Button variant="outline" size="sm" onClick={addEntry} disabled={!canEdit}>
             <Plus className="h-4 w-4" />
-            Add Entry
+            Add VCS Root
           </Button>
         </div>
 
         {entries.map((entry, index) => (
           <div key={index} className="rounded-md border p-3 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground">Entry {index + 1}</span>
-              <Button variant="ghost" size="sm" onClick={() => removeEntry(index)} disabled={!canEdit} className="h-7 text-destructive hover:text-destructive">
+              <span className="text-xs font-medium text-muted-foreground">VCS Root {index + 1}</span>
+              <Button variant="ghost" size="sm" onClick={() => removeEntry(index)} disabled={!canEdit} aria-label={`Remove VCS Root ${index + 1}`} className="h-7 text-destructive hover:text-destructive">
                 <Trash2 className="h-3 w-3" />
               </Button>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <div className="space-y-1">
                 <div className="flex items-center gap-1">
-                  <Label className="text-xs"><FieldLabelText path="vcs.name" fallback="Name" /></Label>
+                  <Label htmlFor={`vcs-${index}-name`} className="text-xs"><FieldLabelText path="vcs.name" fallback="Name" /></Label>
                   <FieldInfo path="vcs.name" label="Name" />
                 </div>
-                <Input value={entry.name} onChange={(e) => updateEntry(index, 'name', e.target.value)} placeholder="Entry name" />
+                {/* Read-only: the registry derives the name; the stored value is sent unchanged. */}
+                <Input id={`vcs-${index}-name`} value={entry.name} disabled readOnly placeholder="Set by the registry" className="bg-muted" />
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-1">
@@ -166,13 +173,41 @@ export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
                 </div>
                 <Input value={entry.hotfixBranch} onChange={(e) => updateEntry(index, 'hotfixBranch', e.target.value)} placeholder="Hotfix branch pattern" className="font-mono text-xs" />
               </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-1">
+                  <Label htmlFor={`vcs-${index}-sourcePath`} className="text-xs"><FieldLabelText path="vcs.sourcePath" fallback="Source Path" /></Label>
+                  <FieldInfo path="vcs.sourcePath" label="Source Path" />
+                </div>
+                <Input id={`vcs-${index}-sourcePath`} value={entry.sourcePath} onChange={(e) => updateEntry(index, 'sourcePath', e.target.value)} placeholder="Whole repository" className="font-mono text-xs" {...errorProps(index, 'sourcePath')} />
+                <EntryError id={`vcs-${index}-sourcePath-error`} message={entryErrors[`${index}.sourcePath`]} />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-1">
+                  <Label htmlFor={`vcs-${index}-checkoutDirectory`} className="text-xs"><FieldLabelText path="vcs.checkoutDirectory" fallback="Checkout Directory" /></Label>
+                  <FieldInfo path="vcs.checkoutDirectory" label="Checkout Directory" />
+                </div>
+                <Input id={`vcs-${index}-checkoutDirectory`} value={entry.checkoutDirectory} onChange={(e) => updateEntry(index, 'checkoutDirectory', e.target.value)} placeholder="Checkout root" className="font-mono text-xs" {...errorProps(index, 'checkoutDirectory')} />
+                <EntryError id={`vcs-${index}-checkoutDirectory-error`} message={entryErrors[`${index}.checkoutDirectory`]} />
+              </div>
             </div>
           </div>
         ))}
 
         {entries.length === 0 && (
           <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-            No VCS entries. Click "Add Entry" to create one.
+            No VCS Roots. Click "Add VCS Root" to create one.
+          </div>
+        )}
+
+        {/* Row-level, not per entry. Hidden with no entries: it is then sent as "". */}
+        {entries.length > 0 && (
+          <div className="space-y-1 sm:w-1/2">
+            <div className="flex items-center gap-1">
+              <Label htmlFor="vcs-buildWorkingDirectory" className="text-xs"><FieldLabelText path="vcs.buildWorkingDirectory" fallback="Build Working Directory" /></Label>
+              <FieldInfo path="vcs.buildWorkingDirectory" label="Build Working Directory" />
+            </div>
+            <Input id="vcs-buildWorkingDirectory" value={buildWorkingDirectory} onChange={(e) => setBuildWorkingDirectory(e.target.value)} placeholder="Checkout root" className="font-mono text-xs" {...fieldErrorProps('vcs', entryErrors, 'buildWorkingDirectory')} />
+            <EntryError id="vcs-buildWorkingDirectory-error" message={entryErrors.buildWorkingDirectory} />
           </div>
         )}
 
@@ -193,6 +228,12 @@ export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
         presetAttribute={editor && !editor.override ? VCS_MARKER_PATH : undefined}
         override={editor?.override}
         collapseMemberIds={editor?.collapseMemberIds}
+        vcsEntryErrors={
+          // A coalesced group edits as its representative, but the error may sit on any member.
+          editor?.override
+            ? [editor.override.id, ...(editor.collapseMemberIds ?? [])].map((id) => overrideEntryErrors[id]).find(Boolean)
+            : undefined
+        }
         onOpenChange={(o) => { if (!o) setEditor(null) }}
       />
     </div>

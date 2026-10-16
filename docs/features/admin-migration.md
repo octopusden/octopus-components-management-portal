@@ -10,7 +10,7 @@ Triggers a full Git → DB migration of the legacy components-registry DSL (Groo
 
 ## UI surface
 
-- **Where:** `/admin` (`AdminSettingsPage`) → "Migration" tab. Visible only to users carrying the `IMPORT_DATA` permission (`RequirePermission`).
+- **Where:** `/admin` (`AdminSettingsPage`) → "Maintenance" tab (renamed from "Migration" — the tab hosts this plus History, TC resync, TC validation and [`admin-tc-placement.md`](admin-tc-placement.md)). Visible only to users carrying the `IMPORT_DATA` permission (`RequirePermission`).
 - **Components:**
   - [`frontend/src/components/admin/MigrationPanel.tsx`](../../frontend/src/components/admin/MigrationPanel.tsx) — main UI: idle / running / completed / failed states, "Run migration" button, four result tiles, per-component progress.
   - [`frontend/src/components/AdminPane.tsx`](../../frontend/src/components/AdminPane.tsx) — Admin-mode footer toggle that gates the destructive button. See [`admin-mode.md`](admin-mode.md).

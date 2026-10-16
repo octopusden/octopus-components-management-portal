@@ -10,6 +10,7 @@ import { MigrationHistoryPanel } from '../components/admin/MigrationHistoryPanel
 import { MigrationPanel } from '../components/admin/MigrationPanel'
 import { TeamCityResyncPanel } from '../components/admin/TeamCityResyncPanel'
 import { TeamCityValidationPanel } from '../components/admin/TeamCityValidationPanel'
+import { TeamCityPlacementPanel } from '../components/admin/TeamCityPlacementPanel'
 import { ServiceEventsPanel } from '../components/admin/ServiceEventsPanel'
 import { FeedbackPanel } from '../components/admin/FeedbackPanel'
 import { AdminModeArmBar } from '../components/admin/AdminModeArmBar'
@@ -50,7 +51,7 @@ function ConfigReloadBar() {
           variant="outline"
           onClick={() => mutate()}
           disabled={!adminMode || isPending}
-          title={adminMode ? 'Reload config from service-config' : 'Arm Admin mode on the Migration tab to reload'}
+          title={adminMode ? 'Reload config from service-config' : 'Arm Admin mode on the Maintenance tab to reload'}
         >
           <RefreshCw className="h-4 w-4" />
           {isPending ? 'Reloading…' : 'Reload'}
@@ -82,7 +83,7 @@ export function AdminSettingsPage() {
           <TabsList>
             <TabsTrigger value="field-config">Field Configuration</TabsTrigger>
             <TabsTrigger value="component-defaults">Component Defaults</TabsTrigger>
-            <TabsTrigger value="migration">Migration</TabsTrigger>
+            <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
             <TabsTrigger value="events">Events</TabsTrigger>
             <TabsTrigger value="feedback">Feedback</TabsTrigger>
             {showSystem && <TabsTrigger value="system">System</TabsTrigger>}
@@ -112,7 +113,7 @@ export function AdminSettingsPage() {
             </div>
           </TabsContent>
 
-          <TabsContent value="migration" className="mt-4">
+          <TabsContent value="maintenance" className="mt-4">
             <div className="rounded-lg border p-6 space-y-6">
               <AdminModeArmBar />
 
@@ -160,6 +161,20 @@ export function AdminSettingsPage() {
                 </p>
                 <div className="pt-2">
                   <TeamCityValidationPanel />
+                </div>
+              </div>
+
+              <div className="border-t pt-6 space-y-2">
+                <h2 className="text-lg font-semibold">Checkout paths from TeamCity</h2>
+                <p className="text-sm text-muted-foreground">
+                  Where TeamCity checks out each VCS root (Checkout Directory / Source Path) and
+                  where it builds (Build Working Directory). Diff finds where a component's stored
+                  values drifted from what its linked TeamCity compile configuration(s) derive;
+                  Sync writes back only the rows you select. Diff's report is visible to anyone who
+                  can view components; running Diff or Sync needs Admin mode armed above.
+                </p>
+                <div className="pt-2">
+                  <TeamCityPlacementPanel />
                 </div>
               </div>
             </div>
