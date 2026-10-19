@@ -827,7 +827,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
                             <FieldInfo path="vcs.sourcePath" label="Source Path" />
                           </div>
                           <Input id={`ovr-vcs-${i}-sourcePath`} value={entry.sourcePath} onChange={(e) => updateVcs(i, 'sourcePath', e.target.value)} placeholder="Whole repository" className="font-mono text-xs" {...vcsErrorProps(i, 'sourcePath')} />
-                          <EntryError id={`ovr-vcs-${i}-sourcePath-error`} message={vcsEntryErrors[`${i}.sourcePath`]} />
+                          <EntryError prefix="ovr-vcs" errors={vcsEntryErrors} errorKey={`${i}.sourcePath`} />
                         </div>
                         <div className="space-y-1">
                           <div className="flex items-center gap-1">
@@ -835,7 +835,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
                             <FieldInfo path="vcs.checkoutDirectory" label="Checkout Directory" />
                           </div>
                           <Input id={`ovr-vcs-${i}-checkoutDirectory`} value={entry.checkoutDirectory} onChange={(e) => updateVcs(i, 'checkoutDirectory', e.target.value)} placeholder="Checkout root" className="font-mono text-xs" {...vcsErrorProps(i, 'checkoutDirectory')} />
-                          <EntryError id={`ovr-vcs-${i}-checkoutDirectory-error`} message={vcsEntryErrors[`${i}.checkoutDirectory`]} />
+                          <EntryError prefix="ovr-vcs" errors={vcsEntryErrors} errorKey={`${i}.checkoutDirectory`} />
                         </div>
                       </div>
                     </div>
@@ -853,7 +853,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
                       <FieldInfo path="vcs.buildWorkingDirectory" label="Build Working Directory" />
                     </div>
                     <Input id="ovr-vcs-buildWorkingDirectory" value={vcsBuildWorkingDirectory} onChange={(e) => setVcsBuildWorkingDirectory(e.target.value)} placeholder="Checkout root" className="font-mono text-xs" {...fieldErrorProps('ovr-vcs', vcsEntryErrors, 'buildWorkingDirectory')} />
-                    <EntryError id="ovr-vcs-buildWorkingDirectory-error" message={vcsEntryErrors.buildWorkingDirectory} />
+                    <EntryError prefix="ovr-vcs" errors={vcsEntryErrors} errorKey="buildWorkingDirectory" />
                   </div>
                 </div>
               )}

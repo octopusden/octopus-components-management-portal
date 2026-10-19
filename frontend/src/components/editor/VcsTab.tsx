@@ -179,7 +179,7 @@ export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
                   <FieldInfo path="vcs.sourcePath" label="Source Path" />
                 </div>
                 <Input id={`vcs-${index}-sourcePath`} value={entry.sourcePath} onChange={(e) => updateEntry(index, 'sourcePath', e.target.value)} placeholder="Whole repository" className="font-mono text-xs" {...errorProps(index, 'sourcePath')} />
-                <EntryError id={`vcs-${index}-sourcePath-error`} message={entryErrors[`${index}.sourcePath`]} />
+                <EntryError prefix="vcs" errors={entryErrors} errorKey={`${index}.sourcePath`} />
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-1">
@@ -187,7 +187,7 @@ export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
                   <FieldInfo path="vcs.checkoutDirectory" label="Checkout Directory" />
                 </div>
                 <Input id={`vcs-${index}-checkoutDirectory`} value={entry.checkoutDirectory} onChange={(e) => updateEntry(index, 'checkoutDirectory', e.target.value)} placeholder="Checkout root" className="font-mono text-xs" {...errorProps(index, 'checkoutDirectory')} />
-                <EntryError id={`vcs-${index}-checkoutDirectory-error`} message={entryErrors[`${index}.checkoutDirectory`]} />
+                <EntryError prefix="vcs" errors={entryErrors} errorKey={`${index}.checkoutDirectory`} />
               </div>
             </div>
           </div>
@@ -207,7 +207,7 @@ export function VcsTab({ section, canEdit, gitBaseUrl }: VcsTabProps) {
               <FieldInfo path="vcs.buildWorkingDirectory" label="Build Working Directory" />
             </div>
             <Input id="vcs-buildWorkingDirectory" value={buildWorkingDirectory} onChange={(e) => setBuildWorkingDirectory(e.target.value)} placeholder="Checkout root" className="font-mono text-xs" {...fieldErrorProps('vcs', entryErrors, 'buildWorkingDirectory')} />
-            <EntryError id="vcs-buildWorkingDirectory-error" message={entryErrors.buildWorkingDirectory} />
+            <EntryError prefix="vcs" errors={entryErrors} errorKey="buildWorkingDirectory" />
           </div>
         )}
 

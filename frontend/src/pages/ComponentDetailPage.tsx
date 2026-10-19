@@ -149,12 +149,11 @@ function sectionForField(field: string): string | null {
   if (field === 'distributionExplicit' || field === 'distributionExternal') return 'general'
   if ((GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(field)) return 'general'
   if ((MISC_TAB_FIELDS as ReadonlyArray<string>).includes(field)) return 'misc'
-  // The Build Working Directory is edited with the VCS entries, not on the Build tab.
-  if (field === 'buildWorkingDirectory' || /^fieldOverrides\[\d+\]\.buildWorkingDirectory$/.test(field)) return 'vcs'
+  // VCS placement is edited on the VCS tab — the Build Working Directory too, not on the Build tab —
+  // for the base row and for a per-range row (`fieldOverrides[<j>].…`).
+  if (/^(fieldOverrides\[\d+\]\.)?(buildWorkingDirectory$|vcsEntries\[)/.test(field)) return 'vcs'
   if (field.startsWith('build')) return 'build'
   if (field.startsWith('vcs')) return 'vcs'
-  // A per-range VCS row's placement error (`fieldOverrides[<j>].vcsEntries[<i>].<field>`).
-  if (/^fieldOverrides\[\d+\]\.vcsEntries\[/.test(field)) return 'vcs'
   if (field.startsWith('jira')) return 'jira'
   if (field.startsWith('escrow') || field === 'productType') return 'escrow'
   // Docker images are their own tab now (split out of Distribution), so route a
