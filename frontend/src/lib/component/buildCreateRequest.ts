@@ -2,12 +2,14 @@ import type {
   ArtifactIdMode,
   ArtifactIdRequest,
   BaseConfigurationRequest,
+  BuildAspect,
   ComponentCreateRequest,
   ComponentDetail,
   EscrowAspect,
   JiraAspect,
 } from '../types'
 import { selectBaseRow } from '../api/baseRow'
+import type { FieldVisibility } from '../../hooks/useFieldConfig'
 
 // Distribution-coordinate enum for the package family — CRS validatePackageType
 // accepts only these (EnumValidValues.kt), so the form constrains them rather
@@ -123,6 +125,10 @@ export interface CreateFormValues {
   // escrow aspect (form wins) while the rest of the escrow aspect is copied from
   // the source as before — see buildCreateRequest.
   escrowGeneration: string
+  // From the registry's labels list only. A clone starts with the source's labels.
+  labels: string[]
+  // Build aspect `buildTasks`; blank is not sent. A clone starts with the source's.
+  buildTasks: string
 }
 
 // Builds the POST /components payload for both create modes.
@@ -140,8 +146,10 @@ export interface CreateFormValues {
 //     from the source BASE row. Readonly falls back to the source escrow
 //     generation (form value ignored); HIDDEN strips generation from the copied
 //     escrow entirely (not part of a new component);
+//   - labels follow their field-config visibility: editable → the form wins, readonly → the
+//     source's, hidden → none; the build aspect's buildTasks is sent only when editable;
 //   - copied from source: productType, systems, solution,
-//     parentComponentName, labels, docs, securityGroups, releasesInDefaultBranch,
+//     parentComponentName, docs, securityGroups, releasesInDefaultBranch,
 //     jiraHotfixVersionFormat, vcsExternalRegistry, and from the BASE row the
 //     escrow aspect (generation overlaid from the form — see above), jira aspect (source projectKey stripped — the form supplies jiraProjectKey
 //     and versionPrefix, which win), requiredTools, and the build aspect (merged with the form's
@@ -247,6 +255,30 @@ export function effectiveCreateClientCode(
   return form.distributionExternal ? form.clientCode || undefined : (source?.clientCode ?? undefined)
 }
 
+export interface CreateFieldVisibility {
+  labels?: FieldVisibility
+  buildTasks?: FieldVisibility
+}
+
+function buildAspectFor(
+  sourceBuild: BuildAspect | null | undefined,
+  form: CreateFormValues,
+  buildTasksVisibility: FieldVisibility,
+): BuildAspect {
+  const build: BuildAspect = { ...(sourceBuild ?? {}), buildSystem: form.buildSystem }
+  // Only an editable field is sent: the registry rejects any build tasks the user may not edit,
+  // even ones copied from a clone's source.
+  const buildTasks = form.buildTasks.trim()
+  if (buildTasksVisibility === 'editable' && buildTasks) build.buildTasks = buildTasks
+  else delete build.buildTasks
+  return build
+}
+
+function labelsFor(visibility: FieldVisibility, form: CreateFormValues, source?: ComponentDetail): string[] {
+  if (visibility === 'editable') return [...form.labels]
+  return visibility === 'readonly' ? [...(source?.labels ?? [])] : []
+}
+
 export function buildCreateRequest(
   form: CreateFormValues,
   source?: ComponentDetail,
@@ -262,7 +294,13 @@ export function buildCreateRequest(
   // not part of a new component's escrow, so its value is stripped even from a
   // cloned source escrow — keeping the payload consistent with the hidden UI.
   escrowGenerationHidden = false,
+  // Field-config visibility of the fields added at create: editable → the form value wins over a
+  // cloned source's. Labels: readonly → the source's is kept, hidden → none. Build tasks: only
+  // editable ones are sent.
+  visibility: CreateFieldVisibility = {},
 ): ComponentCreateRequest {
+  const labelsVisibility = visibility.labels ?? 'editable'
+  const buildTasksVisibility = visibility.buildTasks ?? 'editable'
   const gated = form.distributionExplicit && form.distributionExternal
   const baseRow = source ? selectBaseRow(source) : undefined
 
@@ -284,7 +322,7 @@ export function buildCreateRequest(
     securityChampion: [...form.securityChampion],
     copyright: form.copyright || undefined,
     releasesInDefaultBranch: source?.releasesInDefaultBranch ?? undefined,
-    labels: [...(source?.labels ?? [])],
+    labels: labelsFor(labelsVisibility, form, source),
     // jiraHotfixVersionFormat is intentionally never set on create: the create
     // form has no Hotfix Version Format field (hotfixes are always disabled at
     // creation — no hotfix branch yet), so it is left to the server default and
@@ -310,7 +348,7 @@ export function buildCreateRequest(
   // In copy mode the build aspect inherits the source's other build fields
   // (e.g. gradleVersion) but the buildSystem comes from the form.
   const baseConfiguration: BaseConfigurationRequest = {
-    build: { ...(baseRow?.build ?? {}), buildSystem: form.buildSystem },
+    build: buildAspectFor(baseRow?.build, form, buildTasksVisibility),
   }
   // Escrow aspect: copied from the source BASE row (clone), with the form's
   // `generation` overlaid when the escrow.generation field is editable and a
