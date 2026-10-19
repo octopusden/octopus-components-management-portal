@@ -20,4 +20,4 @@
       `null` on a VCS override row
 - [x] 2.4 Server-error parser and routing for `buildWorkingDirectory` and
       `fieldOverrides[<j>].buildWorkingDirectory`
-- [ ] 2.5 `./gradlew qualityStatic` and the vitest suite green
+- [x] 2.5 `./gradlew qualityStatic` and the vitest suite green

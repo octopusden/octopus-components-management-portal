@@ -1,7 +1,8 @@
 # Admin: Checkout Paths from TeamCity (Diff / Sync)
 
-> Target users: Diff's report/table — any user who can view components. Running Diff or Sync —
-> registry admins (Keycloak realm role mapped to `IMPORT_DATA` permission, i.e. `ROLE_ADMIN`).
+> Target users: registry admins (Keycloak realm role mapped to `IMPORT_DATA` permission, i.e.
+> `ROLE_ADMIN`). CRS also serves the Diff report to anyone who can view components, but this
+> Portal shows it only on the `IMPORT_DATA`-gated `/admin` route.
 
 > Companion: [`admin-tc-resync.md`](admin-tc-resync.md) / [`admin-migration.md`](admin-migration.md)
 > — this feature is the fifth and sixth async-job admin action and shares their state machine.
@@ -25,8 +26,9 @@ edited by hand. Two CRS jobs, both under `rest/api/4/admin/teamcity-placement`:
   Diff keeps no history — a new run replaces the previous result and id.
 - **Sync** (`POST /sync`, `IMPORT_DATA`) — writes the selected components' `RESOLVED` + `BASE` rows
   through the same validation/name-derivation/audit path a manual PATCH uses. Requires the `diffId`
-  of the Diff the selection came from; refused with 409 if a newer Diff has since replaced it, or if
-  either side (TeamCity or CRS) changed for a component since that Diff ran ("changed since diff").
+  of the Diff the selection came from; refused with 409 if a newer Diff has since replaced it. A
+  component whose TeamCity or CRS side changed since that Diff ran is skipped, with the outcome
+  "changed since diff".
 
 See the spec (`octopus-release-management-program` openspec change
 `onb-001-teamcity-placement-sync`) and ADR-002 for the full rules this UI surfaces, and CRS's
