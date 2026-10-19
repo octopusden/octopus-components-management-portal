@@ -91,6 +91,9 @@ const KEY_TO_SCHEMA = {
   'vcs.branch': ['VcsEntryResponse', 'branch'],
   'vcs.tag': ['VcsEntryResponse', 'tag'],
   'vcs.hotfixBranch': ['VcsEntryResponse', 'hotfixBranch'],
+  'vcs.sourcePath': ['VcsEntryResponse', 'sourcePath'],
+  'vcs.checkoutDirectory': ['VcsEntryResponse', 'checkoutDirectory'],
+  'vcs.buildWorkingDirectory': ['ComponentConfigurationResponse', 'buildWorkingDirectory'],
 
   // ── distribution.* — collection-level keys point at the list property; row keys at the child DTO ──
   'distribution.mavenArtifacts': ['ComponentConfigurationResponse', 'mavenArtifacts'],
