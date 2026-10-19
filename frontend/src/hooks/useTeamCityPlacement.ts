@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '../lib/api'
 import { parseSameKindAttach } from '../lib/migrationConflict'
@@ -8,7 +9,7 @@ import type {
   TeamcityPlacementSyncRequest,
 } from '../lib/types'
 
-// ONB-002: TeamCity -> CRS VCS-placement Diff (read-only) and Sync. Mirrors
+// TeamCity -> CRS VCS-placement Diff (read-only) and Sync. Mirrors
 // useTeamCityResync.ts / useTeamCityValidation.ts — same 202-vs-409 same-kind
 // attach dance, same 404-means-idle polling. See those hooks' doc comments
 // for the full rationale; this file only calls out what differs.
@@ -33,22 +34,19 @@ export function useRunPlacementDiff() {
         throw err
       }
     },
-    onSuccess: (job) => {
-      queryClient.setQueryData(DIFF_JOB_KEY, job)
-      // Fast-path: small registries can finish before the response is built
-      // (SyncTaskExecutor in tests always wins this race) — the RUNNING →
-      // COMPLETED transition the panel listens for never fires in that case,
-      // so refresh the report cache here too.
-      if (job.state === 'COMPLETED') {
-        void queryClient.invalidateQueries({ queryKey: DIFF_REPORT_KEY }).catch(() => {})
-      }
-    },
+    // Seeds the job query, so a start that is already COMPLETED reaches the
+    // job hook's cache refresh like a polled one.
+    onSuccess: (job) => queryClient.setQueryData(DIFF_JOB_KEY, job),
   })
 }
 
-/** Poll `/admin/teamcity-placement/diff/job` for the current async Diff state. */
+/**
+ * Poll `/admin/teamcity-placement/diff/job` for the current async Diff state,
+ * and refresh the report once the job it reads is COMPLETED.
+ */
 export function usePlacementDiffJob() {
-  return useQuery<TeamcityPlacementDiffJobResponse | null>({
+  const queryClient = useQueryClient()
+  const query = useQuery<TeamcityPlacementDiffJobResponse | null>({
     queryKey: DIFF_JOB_KEY,
     queryFn: async () => {
       try {
@@ -58,9 +56,13 @@ export function usePlacementDiffJob() {
         throw err
       }
     },
-    refetchInterval: (query) =>
-      query.state.data?.state === 'RUNNING' ? JOB_POLL_INTERVAL_MS : false,
+    refetchInterval: (q) => (q.state.data?.state === 'RUNNING' ? JOB_POLL_INTERVAL_MS : false),
   })
+  const { state, id } = query.data ?? {}
+  useEffect(() => {
+    if (state === 'COMPLETED') void queryClient.invalidateQueries({ queryKey: DIFF_REPORT_KEY }).catch(() => {})
+  }, [state, id, queryClient])
+  return query
 }
 
 /**
@@ -110,21 +112,17 @@ export function useRunPlacementSync() {
         throw err
       }
     },
-    onSuccess: (job) => {
-      queryClient.setQueryData(SYNC_JOB_KEY, job)
-      if (job.state === 'COMPLETED' && job.result) {
-        void queryClient.invalidateQueries({ queryKey: ['components'] }).catch(() => {})
-        void queryClient
-          .invalidateQueries({ predicate: (query) => query.queryKey[0] === 'component' })
-          .catch(() => {})
-      }
-    },
+    onSuccess: (job) => queryClient.setQueryData(SYNC_JOB_KEY, job),
   })
 }
 
-/** Poll `/admin/teamcity-placement/sync/job` for the current async Sync state. */
+/**
+ * Poll `/admin/teamcity-placement/sync/job` for the current async Sync state,
+ * and refresh the component caches once the Sync it reads has written.
+ */
 export function usePlacementSyncJob() {
-  return useQuery<TeamcityPlacementSyncJobResponse | null>({
+  const queryClient = useQueryClient()
+  const query = useQuery<TeamcityPlacementSyncJobResponse | null>({
     queryKey: SYNC_JOB_KEY,
     queryFn: async () => {
       try {
@@ -134,7 +132,13 @@ export function usePlacementSyncJob() {
         throw err
       }
     },
-    refetchInterval: (query) =>
-      query.state.data?.state === 'RUNNING' ? JOB_POLL_INTERVAL_MS : false,
+    refetchInterval: (q) => (q.state.data?.state === 'RUNNING' ? JOB_POLL_INTERVAL_MS : false),
   })
+  const { state, id, result } = query.data ?? {}
+  useEffect(() => {
+    if (state !== 'COMPLETED' || !result) return
+    void queryClient.invalidateQueries({ queryKey: ['components'] }).catch(() => {})
+    void queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0] === 'component' }).catch(() => {})
+  }, [state, id, result, queryClient])
+  return query
 }

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
-import { useQueryClient } from '@tanstack/react-query'
 import { useAdminMode } from '@/lib/adminModeStore'
 import { useHistoryMigrationJob, useMigrationJob } from '@/hooks/useMigration'
 import { useTeamCityResyncJob } from '@/hooks/useTeamCityResync'
@@ -16,22 +15,8 @@ import { API_BASE } from '@/lib/api'
 import { formatLocalDateTime } from '@/lib/date'
 import { formatMigrationError } from '@/lib/migrationErrors'
 import { isDiffReplacedConflict } from '@/lib/migrationConflict'
-import {
-  appliesToLabel,
-  buildProposedChangeLines,
-  countChangedFields,
-  groupPlacementRows,
-  summarizeKeys,
-  wasRowDerived,
-  type PlacementComponentGroup,
-} from '@/lib/placementGrouping'
-import {
-  getPlacementStatusBucket,
-  getPlacementStatusLabel,
-  getPlacementStatusTone,
-  PLACEMENT_STATUS_BUCKETS,
-  type PlacementStatusBucket,
-} from '@/lib/placementStatus'
+import { buildProposedChangeLines, countChangedFields, summarizeKeys } from '@/lib/placementRows'
+import { PLACEMENT_STATUS_BUCKETS, placementStatusInfo, type PlacementStatusBucket } from '@/lib/placementStatus'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -49,7 +34,11 @@ import {
 } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { StatCard } from './StatCard'
-import type { PlacementRowDiff, PlacementSyncResult } from '@/lib/types'
+import type {
+  PlacementRowDiff,
+  TeamcityPlacementDiffJobResponse,
+  TeamcityPlacementSyncJobResponse,
+} from '@/lib/types'
 
 // The default view (no bucket picked, "Show all" off) — everything that
 // might need an operator's attention, without the "can't derive" /
@@ -57,7 +46,10 @@ import type { PlacementRowDiff, PlacementSyncResult } from '@/lib/types'
 const DEFAULT_BUCKETS: PlacementStatusBucket[] = ['ready', 'needsLook']
 const ALL_BUCKET_IDS: PlacementStatusBucket[] = PLACEMENT_STATUS_BUCKETS.map((b) => b.id)
 
-/** One line of the "Proposed change" cell, or "no change" / nothing per the design brief. */
+/** Only a RESOLVED row has something Sync can write. */
+const isReady = (row: PlacementRowDiff) => row.status === 'RESOLVED'
+
+/** The changed fields, one per line; "no change" for a derived row with none; empty for a report-only row. */
 function ProposedChangeCell({ row }: { row: PlacementRowDiff }) {
   const lines = buildProposedChangeLines(row)
   if (lines.length > 0) {
@@ -69,23 +61,44 @@ function ProposedChangeCell({ row }: { row: PlacementRowDiff }) {
       </ul>
     )
   }
-  if (wasRowDerived(row)) return <span className="text-xs text-muted-foreground">no change</span>
+  if (placementStatusInfo(row.status).derived) return <span className="text-xs text-muted-foreground">no change</span>
   return null
 }
 
 /** Status badge — human label, raw code as the tooltip so it cross-references the CSV/HTML report. */
-function StatusChip({ status, className }: { status: PlacementRowDiff['status']; className?: string }) {
+function StatusChip({ status }: { status: string }) {
+  const { tone, label } = placementStatusInfo(status)
   return (
-    <Badge variant={getPlacementStatusTone(status)} title={status} className={className}>
-      {getPlacementStatusLabel(status)}
+    <Badge variant={tone} title={status}>
+      {label}
     </Badge>
   )
 }
 
-function PlacementDetailRow({ row }: { row: PlacementRowDiff }) {
+function PlacementRow({
+  row,
+  checked,
+  onToggle,
+}: {
+  row: PlacementRowDiff
+  checked: boolean
+  onToggle: (componentId: string, checked: boolean) => void
+}) {
   return (
     <TableRow>
-      <TableCell className="pl-10 text-sm">{appliesToLabel(row)}</TableCell>
+      <TableCell>
+        <label className="flex items-center gap-2 font-medium">
+          <input
+            type="checkbox"
+            aria-label={`Select ${row.componentKey}`}
+            checked={checked}
+            disabled={!isReady(row)}
+            onChange={(e) => onToggle(row.componentId, e.target.checked)}
+            className="h-4 w-4 rounded border-input accent-primary disabled:cursor-not-allowed disabled:opacity-50"
+          />
+          {row.componentKey}
+        </label>
+      </TableCell>
       <TableCell>
         <StatusChip status={row.status} />
       </TableCell>
@@ -97,87 +110,52 @@ function PlacementDetailRow({ row }: { row: PlacementRowDiff }) {
   )
 }
 
-function ComponentGroupRows({
-  group,
-  checked,
-  onToggle,
-}: {
-  group: PlacementComponentGroup
-  checked: boolean
-  onToggle: (componentId: string, checked: boolean) => void
-}) {
+/** The pulsing progress block shown while a job runs. */
+function JobProgress({ testId, message }: { testId: string; message: string }) {
   return (
-    <>
-      <TableRow className="bg-muted/40 hover:bg-muted/40">
-        <TableCell colSpan={4}>
-          <label className="flex items-center gap-2 font-medium">
-            <input
-              type="checkbox"
-              aria-label={`Select ${group.componentKey}`}
-              checked={checked}
-              disabled={!group.selectable}
-              onChange={(e) => onToggle(group.componentId, e.target.checked)}
-              className="h-4 w-4 rounded border-input accent-primary disabled:cursor-not-allowed disabled:opacity-50"
-            />
-            {group.componentKey}
-            {group.statuses.map((status) => (
-              <StatusChip key={status} status={status} className="font-normal" />
-            ))}
-          </label>
-        </TableCell>
-      </TableRow>
-      {group.rows.map((row) => (
-        <PlacementDetailRow key={row.configurationRowId} row={row} />
-      ))}
-    </>
+    <div data-testid={testId} className="rounded-md border bg-card p-3 space-y-2 text-sm" aria-busy="true" aria-live="polite">
+      <div className="font-medium">{message}</div>
+      <div className="h-2 overflow-hidden rounded-full bg-muted">
+        <div className="h-full bg-primary/60 animate-pulse" />
+      </div>
+    </div>
   )
 }
 
-/** Which of the other four async job kinds (if any) is currently running, for the "wait for it" hint. */
-function describeOtherRunningJob(flags: {
-  componentsRunning: boolean
-  historyRunning: boolean
-  resyncRunning: boolean
-  validationRunning: boolean
-}): string {
-  if (flags.componentsRunning) return 'Components migration'
-  if (flags.historyRunning) return 'History migration'
-  if (flags.resyncRunning) return 'TC resync'
-  return 'TC validation'
+/** The other async job kind that is running, if any, for the "wait for it" hint. */
+function describeOtherRunningJob(running: {
+  components: boolean
+  history: boolean
+  resync: boolean
+  validation: boolean
+}): string | null {
+  if (running.components) return 'Components migration'
+  if (running.history) return 'History migration'
+  if (running.resync) return 'TC resync'
+  if (running.validation) return 'TC validation'
+  return null
 }
 
-/**
- * Run Diff button + its progress banner and failure banners. The report
- * links + "Report from" now live in PlacementSummaryBar, below the table
- * filters, so they sit next to what they describe.
- */
+/** Run Diff button, its progress block and its failure banners. */
 function PlacementDiffControls({
   adminMode,
-  diffButtonDisabled,
-  diffRunning,
-  diffPending,
+  disabled,
+  pending,
   onRequestRun,
-  otherKindRunning,
-  runningOtherLabel,
-  diffFinishedAt,
-  diffFailed,
-  diffErrorMessage,
-  startDiffIsError,
-  startDiffError,
+  otherRunningLabel,
+  job,
+  startError,
 }: {
   adminMode: boolean
-  diffButtonDisabled: boolean
-  diffRunning: boolean
-  diffPending: boolean
+  disabled: boolean
+  pending: boolean
   onRequestRun: () => void
-  otherKindRunning: boolean
-  runningOtherLabel: string
-  diffFinishedAt: string | null | undefined
-  diffFailed: boolean
-  diffErrorMessage: string | null | undefined
-  startDiffIsError: boolean
-  startDiffError: unknown
+  /** The other admin job that is running, if any. */
+  otherRunningLabel: string | null
+  job: TeamcityPlacementDiffJobResponse | null
+  startError: unknown
 }) {
+  const running = job?.state === 'RUNNING'
   return (
     <>
       <div className="flex flex-wrap items-center gap-3">
@@ -185,53 +163,42 @@ function PlacementDiffControls({
           type="button"
           variant={adminMode ? 'destructive' : 'default'}
           onClick={onRequestRun}
-          disabled={diffButtonDisabled}
-          aria-busy={diffRunning || diffPending}
+          disabled={disabled}
+          aria-busy={running || pending}
         >
-          {(diffRunning || diffPending) && <Loader2 className="animate-spin" aria-hidden="true" />}
-          {diffRunning ? 'Running Diff…' : diffPending ? 'Starting…' : 'Run Diff'}
+          {(running || pending) && <Loader2 className="animate-spin" aria-hidden="true" />}
+          {running ? 'Running Diff…' : pending ? 'Starting…' : 'Run Diff'}
         </Button>
         {!adminMode && (
           <span className="text-xs text-muted-foreground">Arm Admin mode above to run Diff or Sync.</span>
         )}
-        {adminMode && otherKindRunning && !diffRunning && (
-          <span className="text-xs text-muted-foreground">{runningOtherLabel} is running — wait for it to finish.</span>
+        {adminMode && otherRunningLabel && !running && (
+          <span className="text-xs text-muted-foreground">{otherRunningLabel} is running — wait for it to finish.</span>
         )}
-        {diffFinishedAt && !diffRunning && (
+        {job?.finishedAt && !running && (
           <span className="ml-auto text-xs text-muted-foreground">
-            Last run <RelativeTime ts={diffFinishedAt} />
+            Last run <RelativeTime ts={job.finishedAt} />
           </span>
         )}
       </div>
 
-      {diffRunning && (
-        <div
-          data-testid="tc-placement-diff-progress"
-          className="rounded-md border bg-card p-3 space-y-2 text-sm"
-          aria-busy="true"
-          aria-live="polite"
-        >
-          <div className="font-medium">Deriving placement from TeamCity for every in-scope component…</div>
-          <div className="h-2 overflow-hidden rounded-full bg-muted">
-            <div className="h-full bg-primary/60 animate-pulse" />
-          </div>
-        </div>
+      {running && (
+        <JobProgress
+          testId="tc-placement-diff-progress"
+          message="Deriving placement from TeamCity for every in-scope component…"
+        />
       )}
-
-      {diffFailed && diffErrorMessage && (
-        <StatusBanner variant="destructive">Diff failed: {diffErrorMessage}</StatusBanner>
+      {job?.state === 'FAILED' && job.errorMessage && (
+        <StatusBanner variant="destructive">Diff failed: {job.errorMessage}</StatusBanner>
       )}
-      {startDiffIsError && (
-        <StatusBanner variant="destructive">{formatMigrationError(startDiffError)}</StatusBanner>
-      )}
+      {startError != null && <StatusBanner variant="destructive">{formatMigrationError(startError)}</StatusBanner>}
     </>
   )
 }
 
 /**
- * Clickable bucket counts (replace the native status `<select>`), a
- * "Show all (N)" toggle, "Report from <local time>", and the Diff report
- * links — all next to the table they describe.
+ * Clickable bucket counts, a "Show all (N)" toggle, "Report from <local
+ * time>", and the Diff report links — all next to the table they describe.
  */
 function PlacementSummaryBar({
   bucketCounts,
@@ -286,15 +253,14 @@ function PlacementSummaryBar({
 
 /**
  * The report table area: empty states for "no report yet" / "no in-scope
- * rows" / "nothing needs attention" / "no rows match the filters", else the
- * grouped-by-component table.
+ * rows" / "nothing needs attention" / "no rows match the filters", else one
+ * table row per component.
  */
 function PlacementResultsArea({
   hasReport,
   totalRows,
   textFilteredCount,
-  visibleGroups,
-  totalComponentCount,
+  visibleRows,
   isDefaultView,
   onShowAll,
   selected,
@@ -303,8 +269,7 @@ function PlacementResultsArea({
   hasReport: boolean
   totalRows: number
   textFilteredCount: number
-  visibleGroups: PlacementComponentGroup[]
-  totalComponentCount: number
+  visibleRows: PlacementRowDiff[]
   isDefaultView: boolean
   onShowAll: () => void
   selected: Set<string>
@@ -321,25 +286,22 @@ function PlacementResultsArea({
   if (totalRows === 0) {
     return <EmptyState message="The latest Diff found no in-scope rows." className="py-8" />
   }
-  if (textFilteredCount === 0) {
-    return <EmptyState message="No rows match these filters." className="py-8" />
-  }
-  if (visibleGroups.length === 0 && isDefaultView) {
-    return (
-      <EmptyState
-        message={
-          <>
-            All {totalComponentCount} components in sync — nothing to do.{' '}
-            <button type="button" className="text-primary hover:underline" onClick={onShowAll}>
-              Show all ({textFilteredCount})
-            </button>
-          </>
-        }
-        className="py-8"
-      />
-    )
-  }
-  if (visibleGroups.length === 0) {
+  if (visibleRows.length === 0) {
+    if (isDefaultView && textFilteredCount > 0) {
+      return (
+        <EmptyState
+          message={
+            <>
+              All {textFilteredCount} components in sync — nothing to do.{' '}
+              <button type="button" className="text-primary hover:underline" onClick={onShowAll}>
+                Show all ({textFilteredCount})
+              </button>
+            </>
+          }
+          className="py-8"
+        />
+      )
+    }
     return <EmptyState message="No rows match these filters." className="py-8" />
   }
   return (
@@ -347,18 +309,18 @@ function PlacementResultsArea({
       <Table className="table-fixed">
         <TableHeader className="sticky top-0 z-10 bg-background">
           <TableRow>
-            <TableHead>Applies to</TableHead>
+            <TableHead>Component</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Proposed change</TableHead>
             <TableHead>Note</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {visibleGroups.map((group) => (
-            <ComponentGroupRows
-              key={group.componentId}
-              group={group}
-              checked={selected.has(group.componentId)}
+          {visibleRows.map((row) => (
+            <PlacementRow
+              key={row.configurationRowId}
+              row={row}
+              checked={selected.has(row.componentId)}
               onToggle={onToggleComponent}
             />
           ))}
@@ -369,40 +331,32 @@ function PlacementResultsArea({
 }
 
 /**
- * Sync button + its progress banner, failure banners, and the COMPLETED
- * result summary (summary counts, per-component outcomes, rollback CSV link).
+ * Sync button, its progress block and failure banners, and the COMPLETED
+ * result summary (counts, per-component outcomes, rollback CSV link).
  */
 function PlacementSyncControls({
   adminMode,
-  syncButtonDisabled,
-  syncBlockedReason,
-  syncRunning,
-  syncPending,
+  disabled,
+  blockedReason,
+  pending,
   onRequestRun,
   selectedCount,
-  syncFinishedAt,
-  syncNotice,
-  syncFailed,
-  syncErrorMessage,
-  startSyncIsError,
-  startSyncError,
-  result,
+  notice,
+  job,
+  startError,
 }: {
   adminMode: boolean
-  syncButtonDisabled: boolean
-  syncBlockedReason: string | null
-  syncRunning: boolean
-  syncPending: boolean
+  disabled: boolean
+  blockedReason: string | null
+  pending: boolean
   onRequestRun: () => void
   selectedCount: number
-  syncFinishedAt: string | null | undefined
-  syncNotice: string | null
-  syncFailed: boolean
-  syncErrorMessage: string | null | undefined
-  startSyncIsError: boolean
-  startSyncError: unknown
-  result: PlacementSyncResult | null | undefined
+  notice: string | null
+  job: TeamcityPlacementSyncJobResponse | null
+  startError: unknown
 }) {
+  const running = job?.state === 'RUNNING'
+  const result = job?.state === 'COMPLETED' ? job.result : null
   return (
     <>
       <div className="flex flex-wrap items-center gap-3 border-t pt-4">
@@ -410,42 +364,31 @@ function PlacementSyncControls({
           type="button"
           variant={adminMode ? 'destructive' : 'default'}
           onClick={onRequestRun}
-          disabled={syncButtonDisabled}
-          aria-busy={syncRunning || syncPending}
+          disabled={disabled}
+          aria-busy={running || pending}
         >
-          {(syncRunning || syncPending) && <Loader2 className="animate-spin" aria-hidden="true" />}
-          {syncRunning ? 'Syncing…' : syncPending ? 'Starting…' : `Sync selected (${selectedCount})`}
+          {(running || pending) && <Loader2 className="animate-spin" aria-hidden="true" />}
+          {running ? 'Syncing…' : pending ? 'Starting…' : `Sync selected (${selectedCount})`}
         </Button>
-        {syncBlockedReason && <span className="text-xs text-muted-foreground">{syncBlockedReason}</span>}
-        {syncFinishedAt && !syncRunning && (
+        {blockedReason && <span className="text-xs text-muted-foreground">{blockedReason}</span>}
+        {job?.finishedAt && !running && (
           <span className="text-xs text-muted-foreground">
-            Last sync <RelativeTime ts={syncFinishedAt} />
+            Last sync <RelativeTime ts={job.finishedAt} />
           </span>
         )}
       </div>
 
-      {syncNotice && <StatusBanner variant="warning">{syncNotice}</StatusBanner>}
-
-      {syncRunning && (
-        <div
-          data-testid="tc-placement-sync-progress"
-          className="rounded-md border bg-card p-3 space-y-2 text-sm"
-          aria-busy="true"
-          aria-live="polite"
-        >
-          <div className="font-medium">Writing the selected rows through the registry write path…</div>
-          <div className="h-2 overflow-hidden rounded-full bg-muted">
-            <div className="h-full bg-primary/60 animate-pulse" />
-          </div>
-        </div>
+      {notice && <StatusBanner variant="warning">{notice}</StatusBanner>}
+      {running && (
+        <JobProgress
+          testId="tc-placement-sync-progress"
+          message="Writing the selected rows through the registry write path…"
+        />
       )}
-
-      {syncFailed && syncErrorMessage && (
-        <StatusBanner variant="destructive">Sync failed: {syncErrorMessage}</StatusBanner>
+      {job?.state === 'FAILED' && job.errorMessage && (
+        <StatusBanner variant="destructive">Sync failed: {job.errorMessage}</StatusBanner>
       )}
-      {startSyncIsError && (
-        <StatusBanner variant="destructive">{formatMigrationError(startSyncError)}</StatusBanner>
-      )}
+      {startError != null && <StatusBanner variant="destructive">{formatMigrationError(startError)}</StatusBanner>}
 
       {result && (
         <div className="space-y-3">
@@ -482,35 +425,28 @@ function PlacementSyncControls({
 }
 
 /**
- * Admin panel for the ONB-002 TeamCity -> CRS VCS-placement Diff/Sync jobs.
- * Mirrors TeamCityResyncPanel/TeamCityValidationPanel's async-job pattern for
- * Run Diff, plus a component-grouped, filterable result table and a second
- * async job (Sync) for writing the selection back through CRS.
+ * Admin panel for the TeamCity -> CRS VCS-placement Diff/Sync jobs. Mirrors
+ * TeamCityResyncPanel/TeamCityValidationPanel's async-job pattern for Run Diff,
+ * plus a filterable result table (one row per component) and a second async job
+ * (Sync) that writes the selection back through CRS.
  *
- * Diff report + table are readable by anyone who can view components per the
- * design brief; in this version the whole `/admin` route already requires
- * `IMPORT_DATA` (see AdminSettingsPage's route), so that split isn't
- * re-implemented here — noted in the PR rather than restructuring routing.
- *
- * ponytail: unlike the other four admin job panels, this one cross-disables
- * against them, but they don't yet cross-disable against Diff/Sync (they'd
- * need the same two extra hook reads apiece). Clicking one of them while a
- * Diff/Sync is RUNNING still works safely — the shared MigrationLifecycleGate
- * 409s and the existing formatMigrationError path renders that banner — it
- * just isn't pre-emptively greyed out. Add the two hooks to those four panels
- * if that gap is worth the footprint.
+ * ponytail: this panel cross-disables against the other four admin job panels,
+ * but they don't yet cross-disable against Diff/Sync (they'd need the same two
+ * extra hook reads apiece). Clicking one of them while a Diff/Sync runs still
+ * works safely — the shared MigrationLifecycleGate answers 409 and
+ * formatMigrationError renders it — it just isn't greyed out in advance.
  */
 export function TeamCityPlacementPanel() {
-  const queryClient = useQueryClient()
-
   const diffJob = usePlacementDiffJob()
   const diffJobData = diffJob.data ?? null
   const diffRunning = diffJobData?.state === 'RUNNING'
-  const diffFailed = diffJobData?.state === 'FAILED'
   const startDiff = useRunPlacementDiff()
 
   const report = usePlacementDiffReport()
-  const rows = useMemo(() => report.data?.rows ?? [], [report.data])
+  const rows = useMemo(
+    () => [...(report.data?.rows ?? [])].sort((a, b) => a.componentKey.localeCompare(b.componentKey)),
+    [report.data],
+  )
 
   const syncJob = usePlacementSyncJob()
   const syncJobData = syncJob.data ?? null
@@ -528,45 +464,23 @@ export function TeamCityPlacementPanel() {
 
   // Cross-disable against the other four async job kinds — all six share one
   // MigrationLifecycleGate slot on the backend.
-  const componentsJob = useMigrationJob()
-  const componentsRunning = componentsJob.data?.state === 'RUNNING'
-  const historyJob = useHistoryMigrationJob()
-  const historyRunning = historyJob.data?.state === 'RUNNING'
-  const resyncJob = useTeamCityResyncJob()
-  const resyncRunning = resyncJob.data?.state === 'RUNNING'
-  const validationJob = useTeamCityValidationJob()
-  const validationRunning = validationJob.data?.state === 'RUNNING'
-  const otherKindRunning = componentsRunning || historyRunning || resyncRunning || validationRunning
+  const otherRunningLabel = describeOtherRunningJob({
+    components: useMigrationJob().data?.state === 'RUNNING',
+    history: useHistoryMigrationJob().data?.state === 'RUNNING',
+    resync: useTeamCityResyncJob().data?.state === 'RUNNING',
+    validation: useTeamCityValidationJob().data?.state === 'RUNNING',
+  })
 
   // CRS serves the report from the last COMPLETED run even while a newer Diff
   // is running or has failed, so the report's own diffId is the source of
   // truth: Sync only when the latest Diff job is the one that produced it.
   const isReportCurrent =
     !!report.data?.diffId && diffJobData?.state === 'COMPLETED' && diffJobData.id === report.data.diffId
-  // A previously selected component id can point at a row that no longer
-  // exists (or no longer resolves) once a new Diff report lands — drop the
-  // stale selection so Sync can never be asked to act on it.
-  // A new Diff job (this client's or another admin's) makes the report on
-  // screen not current, which invalidates the selection before the new report
-  // has landed.
+  // A new report, or a newer Diff job (this client's or another admin's), makes
+  // the selection stale: drop it so Sync is never asked to act on old rows.
   useEffect(() => {
     setSelected(new Set())
   }, [isReportCurrent, report.data?.diffId])
-
-  // Refresh the report + component caches once each job reaches COMPLETED —
-  // covers the normal (poll-detected) path; the mutations' own onSuccess
-  // handles the fast COMPLETED-on-start race (see useTeamCityPlacement.ts).
-  useEffect(() => {
-    if (diffJobData?.state === 'COMPLETED') {
-      void queryClient.invalidateQueries({ queryKey: ['tc-placement-diff', 'report'] }).catch(() => {})
-    }
-  }, [diffJobData?.state, diffJobData?.id, queryClient])
-  useEffect(() => {
-    if (syncJobData?.state === 'COMPLETED' && syncJobData.result) {
-      void queryClient.invalidateQueries({ queryKey: ['components'] }).catch(() => {})
-      void queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'component' }).catch(() => {})
-    }
-  }, [syncJobData?.state, syncJobData?.id, syncJobData?.result, queryClient])
 
   const textFilteredRows = useMemo(
     () =>
@@ -578,21 +492,18 @@ export function TeamCityPlacementPanel() {
 
   const bucketCounts = useMemo(() => {
     const counts: Record<PlacementStatusBucket, number> = { ready: 0, needsLook: 0, cantDerive: 0, nothingToDo: 0 }
-    for (const row of textFilteredRows) counts[getPlacementStatusBucket(row.status)] += 1
+    for (const row of textFilteredRows) counts[placementStatusInfo(row.status).bucket] += 1
     return counts
   }, [textFilteredRows])
 
   const isDefaultView = bucketFilter === null && !showAll
   const visibleRows = useMemo(() => {
     const visibleBuckets = bucketFilter ? [bucketFilter] : showAll ? ALL_BUCKET_IDS : DEFAULT_BUCKETS
-    return textFilteredRows.filter((row) => visibleBuckets.includes(getPlacementStatusBucket(row.status)))
+    return textFilteredRows.filter((row) => visibleBuckets.includes(placementStatusInfo(row.status).bucket))
   }, [textFilteredRows, bucketFilter, showAll])
-  const visibleGroups = useMemo(() => groupPlacementRows(visibleRows), [visibleRows])
-  const allGroups = useMemo(() => groupPlacementRows(rows), [rows])
-  const totalComponentCount = useMemo(() => groupPlacementRows(textFilteredRows).length, [textFilteredRows])
 
-  const readyGroups = visibleGroups.filter((g) => g.selectable)
-  const allReadySelected = readyGroups.length > 0 && readyGroups.every((g) => selected.has(g.componentId))
+  const readyRows = visibleRows.filter(isReady)
+  const allReadySelected = readyRows.length > 0 && readyRows.every((r) => selected.has(r.componentId))
   const someReadySelected = selected.size > 0 && !allReadySelected
 
   // React has no `indeterminate` prop for a native checkbox — it's a DOM-only
@@ -613,7 +524,7 @@ export function TeamCityPlacementPanel() {
   }
 
   function toggleSelectAllReady(checked: boolean) {
-    setSelected(checked ? new Set(readyGroups.map((g) => g.componentId)) : new Set())
+    setSelected(checked ? new Set(readyRows.map((r) => r.componentId)) : new Set())
   }
 
   function toggleBucket(bucket: PlacementStatusBucket) {
@@ -647,7 +558,7 @@ export function TeamCityPlacementPanel() {
     }
   }
 
-  const diffButtonDisabled = !adminMode || diffRunning || startDiff.isPending || otherKindRunning || syncRunning
+  const diffButtonDisabled = !adminMode || diffRunning || startDiff.isPending || !!otherRunningLabel || syncRunning
   const syncBlockedReason =
     diffRunning || !report.data?.diffId || !diffJobData || isReportCurrent
       ? null
@@ -658,31 +569,24 @@ export function TeamCityPlacementPanel() {
     !adminMode ||
     syncRunning ||
     startSync.isPending ||
-    otherKindRunning ||
+    !!otherRunningLabel ||
     diffRunning ||
     selected.size === 0 ||
     !isReportCurrent
 
-  const runningOtherLabel = describeOtherRunningJob({ componentsRunning, historyRunning, resyncRunning, validationRunning })
-
-  const selectedKeys = allGroups.filter((g) => selected.has(g.componentId)).map((g) => g.componentKey)
-  const changedFieldCount = countChangedFields(allGroups, selected)
+  const selectedKeys = rows.filter((r) => selected.has(r.componentId)).map((r) => r.componentKey)
+  const changedFieldCount = countChangedFields(rows, selected)
 
   return (
     <div className="space-y-4">
       <PlacementDiffControls
         adminMode={adminMode}
-        diffButtonDisabled={diffButtonDisabled}
-        diffRunning={diffRunning}
-        diffPending={startDiff.isPending}
+        disabled={diffButtonDisabled}
+        pending={startDiff.isPending}
         onRequestRun={() => setConfirmDiffOpen(true)}
-        otherKindRunning={otherKindRunning}
-        runningOtherLabel={runningOtherLabel}
-        diffFinishedAt={diffJobData?.finishedAt}
-        diffFailed={diffFailed}
-        diffErrorMessage={diffJobData?.errorMessage}
-        startDiffIsError={startDiff.isError}
-        startDiffError={startDiff.error}
+        otherRunningLabel={otherRunningLabel}
+        job={diffJobData}
+        startError={startDiff.error}
       />
 
       {(
@@ -731,21 +635,20 @@ export function TeamCityPlacementPanel() {
         <input
           ref={selectAllRef}
           type="checkbox"
-          aria-label={`Select all visible ready (${readyGroups.length})`}
+          aria-label={`Select all visible ready (${readyRows.length})`}
           checked={allReadySelected}
-          disabled={readyGroups.length === 0}
+          disabled={readyRows.length === 0}
           onChange={(e) => toggleSelectAllReady(e.target.checked)}
           className="h-4 w-4 rounded border-input accent-primary disabled:cursor-not-allowed disabled:opacity-50"
         />
-        Select all visible ready ({readyGroups.length})
+        Select all visible ready ({readyRows.length})
       </label>
 
       <PlacementResultsArea
         hasReport={!!report.data}
         totalRows={rows.length}
         textFilteredCount={textFilteredRows.length}
-        visibleGroups={visibleGroups}
-        totalComponentCount={totalComponentCount}
+        visibleRows={visibleRows}
         isDefaultView={isDefaultView}
         onShowAll={toggleShowAll}
         selected={selected}
@@ -754,19 +657,14 @@ export function TeamCityPlacementPanel() {
 
       <PlacementSyncControls
         adminMode={adminMode}
-        syncButtonDisabled={syncButtonDisabled}
-        syncBlockedReason={syncBlockedReason}
-        syncRunning={syncRunning}
-        syncPending={startSync.isPending}
+        disabled={syncButtonDisabled}
+        blockedReason={syncBlockedReason}
+        pending={startSync.isPending}
         onRequestRun={() => setConfirmSyncOpen(true)}
         selectedCount={selected.size}
-        syncFinishedAt={syncJobData?.finishedAt}
-        syncNotice={syncNotice}
-        syncFailed={syncJobData?.state === 'FAILED'}
-        syncErrorMessage={syncJobData?.errorMessage}
-        startSyncIsError={startSync.isError && !isDiffReplacedConflict(startSync.error)}
-        startSyncError={startSync.error}
-        result={syncJobData?.state === 'COMPLETED' ? syncJobData.result : null}
+        notice={syncNotice}
+        job={syncJobData}
+        startError={isDiffReplacedConflict(startSync.error) ? null : startSync.error}
       />
 
       <Dialog open={confirmDiffOpen} onOpenChange={setConfirmDiffOpen}>

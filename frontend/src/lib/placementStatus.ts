@@ -3,10 +3,10 @@ import type { PlacementDiffRowStatus } from './types'
 export type PlacementStatusBucket = 'ready' | 'needsLook' | 'cantDerive' | 'nothingToDo'
 
 /**
- * Everything the redesigned panel needs per raw status, in one place: the
- * badge tone, the human label (the raw code stays available as a tooltip —
- * it cross-references the CSV/HTML report), and which of the four summary
- * buckets it falls into.
+ * Everything the panel needs per raw status: the badge tone, the human label
+ * (the raw code stays available as a tooltip — it cross-references the CSV/HTML
+ * report), which of the four summary buckets it falls into, and whether
+ * TeamCity derived values for the row.
  */
 const STATUS_INFO: Record<
   PlacementDiffRowStatus,
@@ -31,39 +31,15 @@ const STATUS_INFO: Record<
   IN_SYNC: { tone: 'secondary', label: 'Already in sync', bucket: 'nothingToDo', derived: true },
 }
 
-/** Narrows a wire status to one this build knows; null for anything newer. */
-export function toKnownStatus(s: string): PlacementDiffRowStatus | null {
-  return Object.hasOwn(STATUS_INFO, s) ? (s as PlacementDiffRowStatus) : null
-}
+export type PlacementStatusInfo = (typeof STATUS_INFO)[PlacementDiffRowStatus]
 
 /**
  * CRS deploys independently of the Portal, so a status this build doesn't know
- * can arrive: show its raw code, neutral, under "Needs a look"; never selectable.
+ * can arrive: show its raw code, neutral, under "Needs a look", not derived.
  */
-function statusInfo(status: string) {
-  const known = toKnownStatus(status)
-  if (known) return STATUS_INFO[known]
-  return { tone: 'secondary' as const, label: status, bucket: 'needsLook' as const, derived: false }
-}
-
-/** Badge tone per Diff row status (`PlacementDiffRowStatus`, ADR-002's eleven outcomes). */
-export function getPlacementStatusTone(status: string) {
-  return statusInfo(status).tone
-}
-
-/** Human-readable label. The raw `status` code stays available as a tooltip/title. */
-export function getPlacementStatusLabel(status: string): string {
-  return statusInfo(status).label
-}
-
-/** Which of the four summary buckets (Ready / Needs a look / Can't derive / Nothing to do) a status falls into. */
-export function getPlacementStatusBucket(status: string): PlacementStatusBucket {
-  return statusInfo(status).bucket
-}
-
-/** Whether TeamCity derived values for a row with this status. */
-export function isPlacementStatusDerived(status: string): boolean {
-  return statusInfo(status).derived
+export function placementStatusInfo(status: string): PlacementStatusInfo {
+  if (Object.hasOwn(STATUS_INFO, status)) return STATUS_INFO[status as PlacementDiffRowStatus]
+  return { tone: 'secondary', label: status, bucket: 'needsLook', derived: false }
 }
 
 /** The four summary-bar buckets, in display order, each with its plain-English label. */
@@ -73,8 +49,3 @@ export const PLACEMENT_STATUS_BUCKETS: { id: PlacementStatusBucket; label: strin
   { id: 'cantDerive', label: "Can't derive" },
   { id: 'nothingToDo', label: 'Nothing to do' },
 ]
-
-/** Only RESOLVED + BASE rows are ever selectable for Sync (per-range `vcs.settings` rows are report-only). */
-export function isPlacementRowSelectable(row: { status: string; rowLabel: string }): boolean {
-  return row.status === 'RESOLVED' && row.rowLabel === 'BASE'
-}
