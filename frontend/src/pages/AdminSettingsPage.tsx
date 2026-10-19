@@ -170,8 +170,8 @@ export function AdminSettingsPage() {
                   Where TeamCity checks out each VCS root (Checkout Directory / Source Path) and
                   where it builds (Build Working Directory). Diff finds where a component's stored
                   values drifted from what its linked TeamCity compile configuration(s) derive;
-                  Sync writes back only the rows you select. Diff's report is visible to anyone who
-                  can view components; running Diff or Sync needs Admin mode armed above.
+                  Sync writes back only the components you select. Running Diff or Sync needs
+                  Admin mode armed above.
                 </p>
                 <div className="pt-2">
                   <TeamCityPlacementPanel />
