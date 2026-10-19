@@ -126,39 +126,47 @@ describe('useRunPlacementDiff', () => {
 
     await expect(result.current.mutateAsync()).rejects.toBeInstanceOf(ApiError)
   })
+})
 
-  it('invalidates the diff report cache once the job COMPLETES', async () => {
+function invalidatedKeys(spy: { mock: { calls: unknown[][] } }) {
+  return spy.mock.calls.map((call) => (call[0] as { queryKey?: readonly unknown[] } | undefined)?.queryKey)
+}
+
+describe('usePlacementDiffJob', () => {
+  it('refreshes the report once the job it reads is COMPLETED', async () => {
+    mockApi.get.mockResolvedValue(COMPLETED_DIFF_JOB)
+    const { wrapper, queryClient } = makeWrapper()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    renderHook(() => usePlacementDiffJob(), { wrapper })
+
+    await waitFor(() => expect(invalidatedKeys(invalidateSpy)).toContainEqual(['tc-placement-diff', 'report']))
+  })
+
+  it('does not refresh the report while the job is RUNNING', async () => {
+    mockApi.get.mockResolvedValue(RUNNING_DIFF_JOB)
+    const { wrapper, queryClient } = makeWrapper()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    const { result } = renderHook(() => usePlacementDiffJob(), { wrapper })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(invalidatedKeys(invalidateSpy)).not.toContainEqual(['tc-placement-diff', 'report'])
+  })
+
+  it('refreshes the report when the start response is already COMPLETED', async () => {
+    mockApi.get.mockResolvedValue(null)
     mockApi.post.mockResolvedValue(COMPLETED_DIFF_JOB)
     const { wrapper, queryClient } = makeWrapper()
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
 
-    const { result } = renderHook(() => useRunPlacementDiff(), { wrapper })
-    await result.current.mutateAsync()
+    const { result } = renderHook(() => ({ run: useRunPlacementDiff(), job: usePlacementDiffJob() }), { wrapper })
+    await waitFor(() => expect(result.current.job.isSuccess).toBe(true))
+    await result.current.run.mutateAsync()
 
-    await waitFor(() => {
-      const invalidatedKeys = invalidateSpy.mock.calls.map(
-        (call) => (call[0] as { queryKey?: readonly unknown[] } | undefined)?.queryKey,
-      )
-      expect(invalidatedKeys).toContainEqual(['tc-placement-diff', 'report'])
-    })
+    await waitFor(() => expect(invalidatedKeys(invalidateSpy)).toContainEqual(['tc-placement-diff', 'report']))
   })
 
-  it('does NOT invalidate the report cache on a fresh RUNNING start', async () => {
-    mockApi.post.mockResolvedValue(RUNNING_DIFF_JOB)
-    const { wrapper, queryClient } = makeWrapper()
-    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
-
-    const { result } = renderHook(() => useRunPlacementDiff(), { wrapper })
-    await result.current.mutateAsync()
-
-    const invalidatedKeys = invalidateSpy.mock.calls.map(
-      (call) => (call[0] as { queryKey?: readonly unknown[] } | undefined)?.queryKey,
-    )
-    expect(invalidatedKeys).not.toContainEqual(['tc-placement-diff', 'report'])
-  })
-})
-
-describe('usePlacementDiffJob', () => {
   it('GETs /admin/teamcity-placement/diff/job and returns the parsed body', async () => {
     mockApi.get.mockResolvedValue(COMPLETED_DIFF_JOB)
     const { wrapper } = makeWrapper()
@@ -244,25 +252,19 @@ describe('useRunPlacementSync', () => {
       ApiError,
     )
   })
-
-  it('invalidates components + per-component caches on COMPLETED', async () => {
-    mockApi.post.mockResolvedValue(COMPLETED_SYNC_JOB)
-    const { wrapper, queryClient } = makeWrapper()
-    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
-
-    const { result } = renderHook(() => useRunPlacementSync(), { wrapper })
-    await result.current.mutateAsync({ diffId: 'diff-1', componentIds: ['c-1'] })
-
-    await waitFor(() => {
-      const invalidatedKeys = invalidateSpy.mock.calls.map(
-        (call) => (call[0] as { queryKey?: readonly unknown[] } | undefined)?.queryKey,
-      )
-      expect(invalidatedKeys).toContainEqual(['components'])
-    })
-  })
 })
 
 describe('usePlacementSyncJob', () => {
+  it('refreshes the component caches once the Sync it reads is COMPLETED', async () => {
+    mockApi.get.mockResolvedValue(COMPLETED_SYNC_JOB)
+    const { wrapper, queryClient } = makeWrapper()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    renderHook(() => usePlacementSyncJob(), { wrapper })
+
+    await waitFor(() => expect(invalidatedKeys(invalidateSpy)).toContainEqual(['components']))
+  })
+
   it('GETs /admin/teamcity-placement/sync/job and returns the parsed body', async () => {
     mockApi.get.mockResolvedValue(COMPLETED_SYNC_JOB)
     const { wrapper } = makeWrapper()

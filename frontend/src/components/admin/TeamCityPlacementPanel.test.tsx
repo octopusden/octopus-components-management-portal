@@ -23,11 +23,10 @@ import { TeamCityPlacementPanel } from './TeamCityPlacementPanel'
 import { CRS_SHAPED_REPORT } from './placementReport.crs-shaped.fixture'
 
 // Hooks are mocked so this test focuses on panel behaviour — admin-mode gate,
-// confirm dialogs, RUNNING/COMPLETED/FAILED rendering, the grouped result
-// table's summary-bucket filters/selection, and cross-kind disable. The
-// hooks themselves are covered by useTeamCityPlacement.test.ts; the pure
-// grouping/label logic is covered by placementGrouping.test.ts and
-// placementStatus.test.ts.
+// confirm dialogs, RUNNING/COMPLETED/FAILED rendering, the result table's
+// summary-bucket filters/selection, and cross-kind disable. The hooks
+// themselves are covered by useTeamCityPlacement.test.ts; the pure row/label
+// logic by placementRows.test.ts and placementStatus.test.ts.
 
 vi.mock('@/hooks/useTeamCityPlacement', () => ({
   useRunPlacementDiff: vi.fn(),
@@ -133,9 +132,9 @@ const FAILED_DIFF_JOB: TeamcityPlacementDiffJobResponse = {
   errorMessage: 'TC unreachable',
 }
 
-// Four components: app-alpha (RESOLVED/ready), app-beta (CONFLICT/needs a
-// look), app-gamma (a per-range IN_SYNC marker row only — no Base row
-// at all), app-delta (RESOLVED/ready).
+// Four components, one Base row each (all the Diff ever sends): app-alpha
+// (RESOLVED/ready), app-beta (CONFLICT/needs a look), app-gamma (IN_SYNC/
+// nothing to do), app-delta (RESOLVED/ready).
 const REPORT: PlacementDiffResult = {
   diffId: 'diff-1',
   generatedAt: '2026-09-30T10:00:42Z',
@@ -179,14 +178,14 @@ const REPORT: PlacementDiffResult = {
       componentId: 'comp-c',
       componentKey: 'app-gamma',
       configurationRowId: 'row-c',
-      versionRange: '[2.0,)',
-      rowLabel: 'vcs.settings',
+      versionRange: '[1.0,)',
+      rowLabel: 'BASE',
       status: 'IN_SYNC',
       entries: [],
       currentBuildWorkingDirectory: undefined,
       derivedBuildWorkingDirectory: undefined,
-      sourceBuildTypeIds: [],
-      notes: ['marker row — report-only'],
+      sourceBuildTypeIds: ['Build_App_Gamma'],
+      notes: [],
     },
     {
       componentId: 'comp-d',
@@ -233,7 +232,7 @@ const COMPLETED_SYNC_JOB: TeamcityPlacementSyncJobResponse = {
       {
         componentId: 'comp-c',
         componentKey: 'app-gamma',
-        rows: [{ configurationRowId: 'row-c', rowLabel: 'vcs.settings', outcome: 'skipped: outside scope' }],
+        rows: [{ configurationRowId: 'row-c', rowLabel: 'BASE', outcome: 'skipped: changed since diff' }],
       },
     ],
     fieldChanges: [],
@@ -409,24 +408,42 @@ describe('TeamCityPlacementPanel — result table', () => {
     mockUseReport.mockReturnValue(buildQuery(REPORT) as unknown as ReturnType<typeof usePlacementDiffReport>)
   })
 
-  it('groups rows under one header per component, sorted by component key', () => {
+  it('renders one row per component, sorted by component key', () => {
     renderPanel()
-    const headings = screen.getAllByRole('checkbox').map((el) => el.getAttribute('aria-label'))
+    const labels = screen.getAllByRole('checkbox').map((el) => el.getAttribute('aria-label'))
     // Default view hides app-gamma (Nothing to do); alpha/beta/delta in key order.
     // (Excludes the "Select all visible ready" checkbox, which also starts with "Select ".)
-    expect(headings.filter((l) => l?.startsWith('Select ') && !l.startsWith('Select all'))).toEqual([
+    expect(labels.filter((l) => l?.startsWith('Select ') && !l.startsWith('Select all'))).toEqual([
       'Select app-alpha',
       'Select app-beta',
       'Select app-delta',
     ])
   })
 
+  it("keeps a component's checkbox, status, proposed change and note in one row", () => {
+    renderPanel()
+    const alpha = screen.getByRole('checkbox', { name: 'Select app-alpha' }).closest('tr')!
+    expect(within(alpha).getByText('Ready to sync')).toBeDefined()
+    expect(within(alpha).getByText('Checkout Directory: (root) → app-alpha')).toBeDefined()
+    const beta = screen.getByRole('checkbox', { name: 'Select app-beta' }).closest('tr')!
+    expect(within(beta).getByText('two compile configurations disagree')).toBeDefined()
+  })
+
+  it('has the columns Component, Status, Proposed change and Note (no "Applies to": every row is Base)', () => {
+    renderPanel()
+    expect(screen.getAllByRole('columnheader').map((th) => th.textContent)).toEqual([
+      'Component',
+      'Status',
+      'Proposed change',
+      'Note',
+    ])
+  })
+
   it('renders the human status label with the raw code as a tooltip/title', () => {
     renderPanel()
-    // app-alpha's single RESOLVED row renders "Ready to sync" twice — once as
-    // the group header's status chip, once as the detail row's Status cell.
+    // One badge per ready component: app-alpha and app-delta.
     const readyBadges = screen.getAllByText('Ready to sync')
-    expect(readyBadges.length).toBeGreaterThan(0)
+    expect(readyBadges).toHaveLength(2)
     for (const badge of readyBadges) expect(badge.getAttribute('title')).toBe('RESOLVED')
     for (const badge of screen.getAllByText('TeamCity configurations disagree')) {
       expect(badge.getAttribute('title')).toBe('CONFLICT')
@@ -448,7 +465,7 @@ describe('TeamCityPlacementPanel — result table', () => {
     renderPanel()
     fireEvent.click(screen.getByRole('button', { name: /^Show all \(3\)$/ }))
     const proposed = (key: string) =>
-      screen.getByRole('checkbox', { name: `Select ${key}` }).closest('tr')?.nextElementSibling?.children[2]?.textContent
+      screen.getByRole('checkbox', { name: `Select ${key}` }).closest('tr')?.children[2]?.textContent
     // RESOLVED: derived Build Working Directory null is a real value, "(root)".
     expect(proposed('app-resolved')).toBe('Checkout Directory: (root) → app-resolvedBuild Working Directory: old/dir → (root)')
     // Report-only rows derive nothing: no "no change", no "→ (root)".
@@ -456,17 +473,7 @@ describe('TeamCityPlacementPanel — result table', () => {
     expect(proposed('app-tcerror')).toBe('')
   })
 
-  it('"Applies to" shows Base / Override for versions <range>; the literal "vcs.settings" never appears', () => {
-    mockUseDiffJob.mockReturnValue(buildQuery(COMPLETED_DIFF_JOB) as unknown as ReturnType<typeof usePlacementDiffJob>)
-    mockUseReport.mockReturnValue(buildQuery(REPORT) as unknown as ReturnType<typeof usePlacementDiffReport>)
-    renderPanel()
-    fireEvent.click(screen.getByRole('button', { name: /^Show all \(4\)$/ }))
-    expect(screen.getAllByText('Base').length).toBeGreaterThan(0)
-    expect(screen.getByText('Override for versions [2.0,)')).toBeDefined()
-    expect(screen.queryByText(/vcs\.settings/)).toBeNull()
-  })
-
-  it('disables the header checkbox for a component with no RESOLVED Base row', () => {
+  it('disables the checkbox of a component whose row is not RESOLVED', () => {
     renderPanel()
     expect(screen.getByRole('checkbox', { name: 'Select app-alpha' })).not.toBeDisabled()
     expect(screen.getByRole('checkbox', { name: 'Select app-beta' })).toBeDisabled()
@@ -666,7 +673,7 @@ describe('TeamCityPlacementPanel — Sync selected', () => {
     expect(results.getByText('app-alpha')).toBeDefined()
     expect(results.getByText(/applied/i)).toBeDefined()
     expect(results.getByText('app-gamma')).toBeDefined()
-    expect(results.getByText(/skipped: outside scope/i)).toBeDefined()
+    expect(results.getByText(/skipped: changed since diff/i)).toBeDefined()
   })
 })
 
