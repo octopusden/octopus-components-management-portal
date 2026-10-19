@@ -93,6 +93,8 @@ Overridable: `baseConfiguration.vcsEntries[0].vcsPath`, `baseConfiguration.jira.
 - Changing a parameter discards the last run; Review is reached only through Next.
 - Never on a keystroke. Each run replaces the shown result; a response that arrives after a newer
   run started is discarded.
+- Create takes its place in that order: a created component always counts, but a rejection or
+  failure a newer run overtook changes nothing. (added on review)
 - While a run is in flight, Create is disabled and Review shows that checks are running.
 
 ### 4. Portal-only rules as one function over the create request

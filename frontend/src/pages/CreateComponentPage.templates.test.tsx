@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -390,6 +390,23 @@ describe('Create component — Review & create from a template', () => {
     expect(await screen.findByText(/Component template 'client-plugin' not found/)).toBeInTheDocument()
     expect(screen.queryByRole('radio', { name: 'Client plugin' })).toBeNull()
     expect(screen.getByRole('radio', { name: 'Regular external component' })).toBeInTheDocument()
+  })
+
+  it('keeps the newer review when a create sent before it is rejected late', async () => {
+    await reachReview()
+    let reject!: (error: unknown) => void
+    mockApi.post.mockReturnValueOnce(new Promise<never>((_, r) => (reject = r)))
+    fireEvent.change(screen.getByLabelText(/Jira task key/i), { target: { value: 'CD-1234' } })
+    await userEvent.click(createButton())
+    await userEvent.click(screen.getByRole('button', { name: 'Parameters' }))
+    await typePluginCode('PAY2')
+    mockApi.post.mockResolvedValueOnce(run({ component: { ...run().component!, name: 'abc-plugin-pay2' } }))
+    await userEvent.click(nextButton())
+    expect(await screen.findByText('abc-plugin-pay2')).toBeInTheDocument()
+    const obsolete = run({ valid: false, problems: [{ fields: ['name'], parameters: ['PLUGIN_CODE'], templateProblem: false, message: 'name: PAY taken' }] })
+    await act(async () => reject(new ApiError(422, 'rejected', JSON.stringify(obsolete))))
+    expect(screen.getByTestId('review-field-name')).toHaveTextContent('abc-plugin-pay2')
+    expect(screen.queryByText('PAY taken')).toBeNull()
   })
 
   it('shows a refusal at the top of Review', async () => {

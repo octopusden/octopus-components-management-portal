@@ -285,3 +285,11 @@
       1 page test.
 - [x] 15.5 The registry change merged; `vendor-spec:check` passes against its `main` with no
       change to the vendored contract (task 1.2).
+
+## 16. Fifth review (added on review)
+
+- [x] 16.1 While Create waited, the user could change a parameter and run a newer dry run; a late
+      rejection of the old Create then replaced the newer review, and a late failure or parameter
+      problem could do the same. Create now takes its place in the dry runs' order: a created
+      component always counts, a rejection or failure that a newer run overtook is dropped. 1 hook
+      test, 1 page test (both fail without the fix).

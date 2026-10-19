@@ -151,6 +151,26 @@ describe('useTemplateRun', () => {
       expect(result.current.run).toEqual(rejected)
     })
 
+    it('drops a rejection or failure that arrives after a newer dry run', async () => {
+      let rejectCreate!: (e: unknown) => void
+      mockApi.post.mockReturnValueOnce(new Promise((_, reject) => (rejectCreate = reject)))
+      const newer = run({ sources: { name: ['NEW'] } })
+      mockApi.post.mockResolvedValueOnce(newer)
+      const { result } = renderHook(() => useTemplateRun('client-plugin'))
+      let pending: ReturnType<typeof result.current.create> | undefined
+      act(() => {
+        pending = result.current.create(CREATE)
+      })
+      await act(() => result.current.dryRun(BODY))
+      let outcome: Awaited<ReturnType<typeof result.current.create>> | undefined
+      await act(async () => {
+        rejectCreate(new ApiError(422, 'rejected', JSON.stringify(run({ valid: false }))))
+        outcome = await pending
+      })
+      expect(outcome).toEqual({ kind: 'stale' })
+      expect(result.current.run).toEqual(newer)
+    })
+
     it.each([
       [404, "Component template 'client-plugin' not found"],
       [403, 'You do not have permission to create components'],

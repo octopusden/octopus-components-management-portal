@@ -21,6 +21,8 @@ export type CreateOutcome =
   /** The registry found problems; they replace the shown run. */
   | { kind: 'rejected'; run: TemplateRun }
   | ({ kind: 'failed' } & RunFailure)
+  /** A rejection or failure that arrived after a newer dry run, or a discard; nothing changed. */
+  | { kind: 'stale' }
 
 const failureOf = (e: unknown): RunFailure =>
   e instanceof ApiError ? { status: e.status, message: e.message } : { status: 0, message: String(e) }
@@ -38,7 +40,9 @@ function runOf(e: unknown): TemplateRun | null {
  * Dry runs and the create for one template, with the run Review shows.
  *
  * Only the newest dry run's answer is kept: an answer to a run that a newer one replaced, or that
- * [discard] dropped, is ignored, and [dryRun] resolves to `null` for it. [create] does not go through that ordering; the caller waits for it.
+ * [discard] dropped, is ignored, and [dryRun] resolves to `null` for it. [create] takes its place in
+ * that order too: a created component always counts, since it exists, but a rejection or failure
+ * that a newer run or a discard overtook resolves to `stale` and changes nothing.
  */
 export function useTemplateRun(templateId: string) {
   const [run, setRun] = useState<TemplateRun | null>(null)
@@ -78,12 +82,13 @@ export function useTemplateRun(templateId: string) {
 
   const create = useCallback(
     async (body: TemplateCreateBody): Promise<CreateOutcome> => {
+      const seq = ++latest.current
       try {
         return { kind: 'created', component: await api.post<ComponentDetail>(`${path}?dryRun=false`, body) }
       } catch (e) {
+        if (seq !== latest.current) return { kind: 'stale' }
         const rejected = runOf(e)
         if (!rejected) return { kind: 'failed', ...failureOf(e) }
-        latest.current++
         setRun(rejected)
         setError(null)
         return { kind: 'rejected', run: rejected }
