@@ -11,12 +11,12 @@ test.describe('Admin migration – admin journeys', () => {
     await page.goto('/admin')
 
     await expect(page.getByRole('heading', { name: /admin settings/i })).toBeVisible()
-    await page.getByRole('tab', { name: /migration/i }).click()
+    await page.getByRole('tab', { name: /maintenance/i }).click()
     await expect(page.getByRole('button', { name: /run migration/i })).toBeVisible()
 
     // The inline arm bar is checked first: the open account menu below would cover the tab.
     await expect(page.getByRole('switch', { name: 'Arm admin mode', exact: true })).toBeVisible()
-    // Admin-mode item in the header account menu (exact name — the Migration tab also has
+    // Admin-mode item in the header account menu (exact name — the Maintenance tab also has
     // an "Arm admin mode" switch, so /admin mode/i would be ambiguous).
     await page.getByRole('button', { name: /^account/i }).click()
     await expect(page.getByRole('menuitemcheckbox', { name: 'Admin mode', exact: true })).toBeVisible()
@@ -26,7 +26,7 @@ test.describe('Admin migration – admin journeys', () => {
     await mockIdleMigration(page)
     await page.goto('/admin')
 
-    await page.getByRole('tab', { name: /migration/i }).click()
+    await page.getByRole('tab', { name: /maintenance/i }).click()
     const runButton = page.getByRole('button', { name: /run migration/i })
     await expect(runButton).toBeDisabled()
     await expect(
@@ -38,8 +38,8 @@ test.describe('Admin migration – admin journeys', () => {
     await mockHappyPathMigration(page)
     await page.goto('/admin')
 
-    await page.getByRole('tab', { name: /migration/i }).click()
-    // Arm Admin mode via the inline arm bar on the Migration tab (shares the
+    await page.getByRole('tab', { name: /maintenance/i }).click()
+    // Arm Admin mode via the inline arm bar on the Maintenance tab (shares the
     // same store as the account-menu switch).
     await page.getByRole('switch', { name: 'Arm admin mode', exact: true }).click()
     await page.getByRole('button', { name: /run migration/i }).click()

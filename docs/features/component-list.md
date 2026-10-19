@@ -37,8 +37,8 @@ Values never add controls to the bar: every value shows as a removable chip unde
 | **Solution** | `?solution=true\|false` | tri-state (Any/Yes/No) | scalar eq |
 | **Jira project key** | `?jiraProjectKey=…` | text | base-row config eq |
 | **Jira technical** | `?jiraTechnical=true\|false` | tri-state | base-row config eq |
-| **VCS path** | `?vcsPath=…` | text | VCS-entry ILIKE |
-| **Production branch** | `?productionBranch=…` | text | VCS-entry ILIKE on `branch` |
+| **VCS path** | `?vcsPath=…` | text | VCS-root ILIKE |
+| **Production branch** | `?productionBranch=…` | text | VCS-root ILIKE on `branch` |
 | **Parent component** | `?parentComponentName=…` | text | parent-join eq on key |
 | **Can be parent** | `?canBeParent=true\|false` | tri-state | scalar eq |
 | **Group key** | `?groupKey=…` | text | group-join eq on `groupKey` |

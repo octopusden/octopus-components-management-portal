@@ -12,6 +12,7 @@ export const TEAMCITY_VALIDATION_TYPES: Record<string, { label: string }> = {
   ATTACHED_TO_BUILD_TEMPLATE: { label: 'Invalid template attachment count' },
   MULTIPLE_JAVA_VERSIONS: { label: 'Multiple Java versions' },
   JAVA_HOME_NOT_FROM_ENV: { label: 'Java declaration not from ENV' },
+  VCS_ROOTS_DIFFER_FROM_REGISTRY: { label: 'VCS roots differ from the registry' },
 }
 
 /** Label for a validation `type`, falling back to the raw type for unknown values. */
