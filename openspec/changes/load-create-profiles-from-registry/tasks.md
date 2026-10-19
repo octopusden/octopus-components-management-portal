@@ -204,7 +204,7 @@
 ## 11. Registry container (Decision 9) — Gradle
 
 - [x] 11.1 Bump `crs.version` in `gradle.properties` to the first registry release with profiles.
-      `3.0.16` (the #520 merge commit).
+      `3.0.16` (the #520 merge commit); `main` has since moved it to `3.1.0`, as has `infra/dev`.
 - [x] 11.2 The e2e registry container loads the four profiles from
       `src/test/resources/e2e/crs-fixture/component-profiles.yml` via
       `SPRING_CONFIG_ADDITIONAL_LOCATION` (design Decision 9). The file matches the registry's own
@@ -444,3 +444,7 @@
       covers) opened with no tile selected and Create held. The starting profile now comes from
       the starting classification too (`initialProfileId`). 1 page test (fails without the fix).
 - [x] 22.2 `profileForClassification`'s KDoc moved from above `profilesCovering` to its function.
+- [x] 22.3 22.1 left the unsaved-changes check comparing against the source's profile (none), so
+      such a clone counted as changed when it opened and Cancel asked to discard. The check now
+      compares against the profile the wizard opened with. The 22.1 page test asserts the guard
+      is off (fails without the fix).

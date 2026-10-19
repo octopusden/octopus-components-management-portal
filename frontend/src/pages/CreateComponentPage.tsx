@@ -50,6 +50,7 @@ import {
 } from '../hooks/useFieldConfig'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useComponent, useCreateComponent } from '../hooks/useComponent'
+import { cloneTestComponent, useTestComponentNamePatterns } from '../hooks/useTestComponentNamePatterns'
 import { useToast } from '../hooks/use-toast'
 import { ApiError } from '../lib/api'
 import { classifyConflictBody } from '../lib/conflict'
@@ -393,9 +394,8 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
   const noProfiles = profiles.length === 0
   const manualMode = isManualClassification(noProfiles, isClone, initial.matchesAny)
   const [manual, setManual] = useState(() => initialManualClassification(source))
-  const [profileId, setProfileId] = useState<string | null>(() =>
-    initialProfileId(initial, manualMode, manual, formDefaults.name, profiles),
-  )
+  const [startProfileId] = useState(() => initialProfileId(initial, manualMode, manual, formDefaults.name, profiles))
+  const [profileId, setProfileId] = useState<string | null>(startProfileId)
   const [explicitAnswer, setExplicitAnswer] = useState<boolean>(initial.explicit)
   const profile = profiles.find((p) => p.id === profileId) ?? null
   const flags = classificationFlags(manualMode, profile, explicitAnswer, manual)
@@ -739,6 +739,8 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
   const [submitted, setSubmitted] = useState(false)
   const [created, setCreated] = useState<{ id: string; name: string } | null>(null)
 
+  const testPatterns = useTestComponentNamePatterns().data
+
   async function onSubmit(formValues: CreateFormValues) {
     setAttempted(true)
     if (jiraKeyError) return
@@ -761,6 +763,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
         ...(editable('solution') ? { solution: flags.solution } : {}),
         // Without registry profiles nothing is named; undefined is dropped from the JSON body.
         profile: profile?.id,
+        ...(cloneTestComponent(source ?? undefined, formValues.name, testPatterns) ? { testComponent: true } : {}),
         jiraTaskKey: normalizeJiraKey(jiraTaskKey),
         changeComment: normalizeChangeComment(changeComment),
       }
@@ -1720,7 +1723,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
   // which is not an RHF field), so isDirty alone misses a profile-only change:
   // compare against the profile and answer the wizard opened with.
   const profileTouched =
-    profileId !== initial.profileId ||
+    profileId !== startProfileId ||
     explicitAnswer !== initial.explicit ||
     manualChanged(manual, source)
 
