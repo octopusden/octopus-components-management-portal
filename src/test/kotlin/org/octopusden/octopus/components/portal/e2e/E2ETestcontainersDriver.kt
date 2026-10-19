@@ -404,6 +404,11 @@ open class E2ETestcontainersDriver {
                         put("TEAMCITY_VALIDATION_RELEASEFAMILYTEMPLATEIDS", "CDRelease")
                         put("TEAMCITY_VALIDATION_GRADLEDEFAULTBUILDSTEPID", "RUNNER_1")
                         put("TEAMCITY_VALIDATION_MAVENDEFAULTBUILDSTEPID", "RUNNER_1")
+                        // The shipped Create-component profiles; without them the registry offers none.
+                        put(
+                            "SPRING_CONFIG_ADDITIONAL_LOCATION",
+                            "optional:file:/opt/crs-fixture/component-profiles.yml",
+                        )
                     },
                 )
                 .withFileSystemBind(
