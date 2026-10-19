@@ -9,7 +9,7 @@
 
 ## What it does
 
-ONB-002: finds where a component's Checkout Directory, Source Path, or Build Working Directory has
+Finds where a component's Checkout Directory, Source Path, or Build Working Directory has
 drifted from what its linked TeamCity compile configuration(s) derive, and lets an operator write
 back only the rows they choose — never a blind overwrite, and never touching a field a human
 edited by hand. Two CRS jobs, both under `rest/api/4/admin/teamcity-placement`:
@@ -30,28 +30,25 @@ edited by hand. Two CRS jobs, both under `rest/api/4/admin/teamcity-placement`:
   component whose TeamCity or CRS side changed since that Diff ran is skipped, with the outcome
   "changed since diff".
 
-See the spec (`octopus-release-management-program` openspec change
-`onb-001-teamcity-placement-sync`) and ADR-002 for the full rules this UI surfaces, and CRS's
-`TeamcityPlacementControllerV4` / `teamcity/placement/*` for the backend implementation.
+See CRS's `TeamcityPlacementControllerV4` / `teamcity/placement/*` and its technical design for the
+full rules this UI surfaces.
 
 ## UI surface
 
-A fourth card on `/admin` → Maintenance tab (renamed from "Migration"), after TC resync and TC
-validation, headed "Checkout paths from TeamCity". Lives in
+A card on `/admin` → Maintenance tab, after TC resync and TC validation, headed "Checkout paths
+from TeamCity". Lives in
 [`frontend/src/components/admin/TeamCityPlacementPanel.tsx`](../../frontend/src/components/admin/TeamCityPlacementPanel.tsx),
-with the pure grouping/formatting logic split out into
-[`frontend/src/lib/placementGrouping.ts`](../../frontend/src/lib/placementGrouping.ts) (field diffs,
-the "Proposed change" lines, component grouping) and
+with the pure formatting logic split out into
+[`frontend/src/lib/placementRows.ts`](../../frontend/src/lib/placementRows.ts) (field diffs, the
+"Proposed change" lines, the changed-field count) and
 [`frontend/src/lib/placementStatus.ts`](../../frontend/src/lib/placementStatus.ts) (status → human
 label / bucket / badge tone). React Query hooks live in
 [`frontend/src/hooks/useTeamCityPlacement.ts`](../../frontend/src/hooks/useTeamCityPlacement.ts):
 `useRunPlacementDiff` / `usePlacementDiffJob` / `usePlacementDiffReport` for Diff,
 `useRunPlacementSync` / `usePlacementSyncJob` for Sync.
 
-The whole `/admin` route already requires `IMPORT_DATA` in this Portal version (`RequirePermission`
-on the route, not re-gated per-tab). The design brief has Diff's report/table open to anyone with
-component read access — this version keeps it behind the existing route gate instead of
-restructuring routing; a real per-tab split is a followup if a non-admin viewer needs it.
+The whole `/admin` route requires `IMPORT_DATA` (`RequirePermission` on the route), so the report
+is shown to registry admins only, although CRS serves it to anyone who can view components.
 
 ### Summary bar
 
@@ -66,25 +63,21 @@ The default view shows Ready + Needs a look only; clicking a bucket narrows to j
 
 ### Result table
 
-Grouped by component (`groupPlacementRows`): one header row per component with the only checkbox
-(`aria-label="Select <componentKey>"`, keyed by `componentId` as before), the component key, and a
-status chip per distinct status in the group. Disabled when the component has no `RESOLVED` Base
-row. Underneath, one row per `PlacementRowDiff` — Base first, then overrides sorted by version
-range — with four columns: **Applies to** ("Base" or "Override for versions \<range\>" — the raw
-`vcs.settings` marker name never reaches the screen, see `appliesToLabel`), **Status** (human label
-from `getPlacementStatusLabel`, the raw `PlacementDiffRowStatus` code as the badge's `title`
-tooltip), **Proposed change** (one "Field name: before → after" line per changed field —
+One row per component (the Diff sends one Base row each), sorted by component key, with four
+columns: **Component** (the checkbox, `aria-label="Select <componentKey>"`, keyed by `componentId`,
+enabled only for a `RESOLVED` row, then the key), **Status** (human label from
+`placementStatusInfo`, the raw `PlacementDiffRowStatus` code as the badge's `title` tooltip),
+**Proposed change** (one "Field name: before → after" line per changed field —
 `buildProposedChangeLines`; a `null` directory renders as "(root)"; a VCS root name prefixes a line
 only when the row has more than one root; "no change" when the row was derived but nothing
-differs, empty when nothing was derived), and **Note**. "Select all visible ready (N)" replaces the
-old "Select all resolved" — it only ever selects components currently visible under the active
-bucket/text filters.
+differs, empty when nothing was derived), and **Note**. "Select all visible ready (N)" selects only
+the ready components currently visible under the active bucket/text filters.
 
 ### Sync
 
 "Sync selected (N)" opens a confirm dialog listing the selected component keys (first 10, then
 "and N more"), the number of fields that will be written (`countChangedFields`, summed over the
-selected components' Base rows only), and "Only base configurations are written. A before/after CSV
+selected components' rows), and "Only base configurations are written. A before/after CSV
 is kept for rollback." Confirming posts `POST /sync` with `{ diffId: <the displayed report's own
 `diffId`>, componentIds: [...selected] }`. Two 409 shapes share this endpoint and the Portal tells
 them apart (`isDiffReplacedConflict` in [`lib/migrationConflict.ts`](../../frontend/src/lib/migrationConflict.ts)):
@@ -135,8 +128,8 @@ Like the other migration panels, Run Diff / Sync selected are dimmed until Admin
 
 - [`frontend/src/components/admin/TeamCityPlacementPanel.tsx`](../../frontend/src/components/admin/TeamCityPlacementPanel.tsx)
 - [`frontend/src/hooks/useTeamCityPlacement.ts`](../../frontend/src/hooks/useTeamCityPlacement.ts)
-- [`frontend/src/lib/placementStatus.ts`](../../frontend/src/lib/placementStatus.ts) — status → human label / bucket / badge tone, row selectability.
-- [`frontend/src/lib/placementGrouping.ts`](../../frontend/src/lib/placementGrouping.ts) — field diffs, "Proposed change" lines, component grouping.
+- [`frontend/src/lib/placementStatus.ts`](../../frontend/src/lib/placementStatus.ts) — status → human label / bucket / badge tone / derived.
+- [`frontend/src/lib/placementRows.ts`](../../frontend/src/lib/placementRows.ts) — field diffs, "Proposed change" lines, changed-field count.
 - [`frontend/src/lib/migrationConflict.ts`](../../frontend/src/lib/migrationConflict.ts) — `isDiffReplacedConflict`.
 - [`frontend/src/pages/AdminSettingsPage.tsx`](../../frontend/src/pages/AdminSettingsPage.tsx) — mounts the panel.
 

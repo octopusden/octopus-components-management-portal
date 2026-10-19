@@ -1133,7 +1133,7 @@ export interface TeamCityValidationJobResponse {
   result: TeamCityValidationResult | null
 }
 
-// ── TeamCity → CRS VCS-placement Diff/Sync (ONB-002) ─────────────────────────
+// ── TeamCity → CRS VCS-placement Diff/Sync ───────────────────────────────────
 // Wire shapes for `rest/api/4/admin/teamcity-placement/**` — see CRS
 // `TeamcityPlacementControllerV4` and the `dto/v4` + `teamcity/placement`
 // packages it serves from. New endpoints, so (unlike the older job shapes

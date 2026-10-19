@@ -124,8 +124,7 @@ interface DockerState { imageName: string; flavor: string }
 interface PackageState { packageType: string; packageName: string }
 
 // ---------------------------------------------------------------------------
-// Pure helpers (extracted so their branching is scored on its own, not folded
-// into the component's cognitive complexity — SonarCloud S3776)
+// Pure helpers
 // ---------------------------------------------------------------------------
 
 // Scalar and marker catalogues are disjoint, so a stored/preset attribute
@@ -348,7 +347,6 @@ function validateOverrideSubmit(args: {
 
 // A locked-in attribute (edit mode, or a preset from the Distribution tab)
 // reads read-only; otherwise a Select over the catalogue for the current type.
-// Extracted so its branching is scored on its own (SonarCloud S3776).
 function AttributeSelector({
   mode,
   presetAttribute,
@@ -415,7 +413,7 @@ function AttributeSelector({
 }
 
 // The scalar Value control: a Switch for a boolean attribute, else a text
-// Input. Extracted alongside AttributeSelector for the same reason.
+// Input.
 function ScalarValueEditor({
   isBoolean,
   scalarBoolValue,

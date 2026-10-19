@@ -288,7 +288,7 @@ describe('TeamCityPlacementPanel — admin-mode gate', () => {
 })
 
 describe('TeamCityPlacementPanel — Run Diff confirm + mutation', () => {
-  it('opens confirm dialog (renamed for the redesign) and fires useRunPlacementDiff on confirm', async () => {
+  it('opens the confirm dialog and fires useRunPlacementDiff on confirm', async () => {
     const { base, mutateAsync } = buildMutation()
     mockUseRunDiff.mockReturnValue(base as unknown as ReturnType<typeof useRunPlacementDiff>)
     useAdminMode.setState({ enabled: true })

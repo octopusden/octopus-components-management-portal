@@ -202,9 +202,7 @@ export interface VcsSection {
 }
 
 // Where one parsed server field-error path routes to: a base-row entry field,
-// or a per-range override's entry field. Extracted from applyServerErrors so
-// the routing decision is a flat sequence of early returns instead of nested
-// if/else (SonarCloud S3776 — cognitive complexity).
+// or a per-range override's entry field.
 type ErrorRoute = { kind: 'base'; key: string } | { kind: 'override'; id: string; key: string }
 
 function routeVcsError(path: string, rowIds: string[], stateIndexOfSent: number[]): ErrorRoute | null {

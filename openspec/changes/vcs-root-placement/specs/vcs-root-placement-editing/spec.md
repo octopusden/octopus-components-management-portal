@@ -40,8 +40,9 @@ edit the component, and SHALL send both on save, sending `null` for a field left
 
 The VCS tab SHALL show the base row's Build Working Directory and the per-range override editor
 the Build Working Directory of each VCS override row, prefilled from the registry, editable by
-users allowed to edit the component, and SHALL send it with that row: the base value travels in
-the VCS slice of the PATCH, which is sent only when the slice is dirty. Left blank, the base row
+users allowed to edit the component, and SHALL send it with that row: the base value travels with
+the base VCS entries, which the PATCH carries only when the entries or the Build Working Directory
+changed. Left blank, the base row
 SHALL send `''` (the registry's base PATCH treats `null` as "unchanged" and blank as "clear", the
 Portal's convention for base scalars), and a VCS override row MAY send `null`, since its payload
 replaces the row.
@@ -83,10 +84,11 @@ SHALL send the stored Name unchanged (none for a new entry).
 
 The VCS editor SHALL show a registry error whose message starts with `vcsEntries[<i>].sourcePath: `
 or `vcsEntries[<i>].checkoutDirectory: ` next to that field of entry `<i>`, and one starting
-`buildWorkingDirectory: ` next to the Build Working Directory field. The per-range override editor
-SHALL show an error starting `fieldOverrides[<j>].vcsEntries[<i>].<field>: ` next to that field of
-entry `<i>`, and one starting `fieldOverrides[<j>].buildWorkingDirectory: ` next to the Build
-Working Directory, in the override row sent as the PATCH's `fieldOverrides[<j>]`.
+`buildWorkingDirectory: ` next to the Build Working Directory field. The per-range override editor,
+opened from the VCS tab, SHALL show an error starting `fieldOverrides[<j>].vcsEntries[<i>].<field>: `
+next to that field of entry `<i>`, and one starting `fieldOverrides[<j>].buildWorkingDirectory: `
+next to the Build Working Directory, in the override row sent as the PATCH's `fieldOverrides[<j>]`;
+until that editor is opened the message shows in the save-failed toast.
 
 #### Scenario: Two entries at the checkout root
 - **WHEN** an editor saves two entries without Checkout Directory and the registry answers 400 with
@@ -109,14 +111,16 @@ Working Directory, in the override row sent as the PATCH's `fieldOverrides[<j>]`
 #### Scenario: Error on a per-range override row
 - **WHEN** a save sends three override rows and the registry answers 400 with
   `fieldOverrides[2].buildWorkingDirectory: must start with the Checkout Directory of a VCS entry`
-- **THEN** the message is shown on the Build Working Directory field of the override row sent
-  third, and the VCS tab shows no error
+- **THEN** the page switches to the VCS tab, the message is shown in the toast and, once the
+  override row sent third is opened from the VCS tab, on its Build Working Directory field; the base
+  fields show no error
 
 ### Requirement: Chain-mismatch warning
 
 The Portal SHALL show a non-blocking warning after a successful save when the registry response
-carries warnings. The registry warns only when the save carries the base VCS slice (base VCS entries
-and Build Working Directory, sent only when that slice is dirty); a save that changes only per-range VCS override rows shows no warning.
+carries warnings. The registry warns only when the save carries the base VCS entries (sent only
+when the entries or the Build Working Directory changed); a save that changes only per-range VCS
+override rows shows no warning.
 
 #### Scenario: Entry added to a component with a build chain
 - **WHEN** a save succeeds and the response contains the warning that the build chain must be

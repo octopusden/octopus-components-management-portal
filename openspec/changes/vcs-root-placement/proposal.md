@@ -38,11 +38,8 @@ None.
 
 ## Impact
 
-- Frontend only; the BFF proxies the new fields unchanged. Touches the VCS tab and its section
-  hook (`useVcsSection.ts`, which today forces the first entry's Checkout Directory empty at
-  `:93-94`), the override row editor (`OverrideRowEditor.tsx`, the same at `:415` and the read-only
-  field at `:768-771`), field descriptions (`PRIMARY_CHECKOUT_DIRECTORY_HINT` removed), the
-  server-error parser (`serverErrors.ts:87`), the save flow for `warnings`, and the vendored
-  `v4.json`.
+- Frontend only; the BFF proxies the new fields unchanged. Editors can place every VCS root and
+  set where the build runs, on the VCS tab and in the per-range override editor; the registry's
+  placement errors land on the field they name, and its save warnings are shown.
 - Requires the registry version that returns the new fields; against an older registry the fields
   stay empty.
