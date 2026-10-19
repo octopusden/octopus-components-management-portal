@@ -397,6 +397,18 @@ open class E2ETestcontainersDriver {
                         put("COMPONENTS_REGISTRY_PRODUCT_TYPE_DDB", "PT_D_DB")
                         put("COMPONENTS_REGISTRY_VCS_ENABLED", "false")
                         put("COMPONENTS_REGISTRY_AUTO_MIGRATE", "true")
+                        // CRS (#443) refuses to start in DB mode without teamcity.validation.*; E2E never
+                        // calls TeamCity (teamcity.base-url stays blank), so the ids only need to be set.
+                        put("TEAMCITY_VALIDATION_GRADLEBUILDTEMPLATEID", "CDGradleBuild")
+                        put("TEAMCITY_VALIDATION_MAVENBUILDTEMPLATEID", "CDJavaMavenBuild")
+                        put("TEAMCITY_VALIDATION_RELEASEFAMILYTEMPLATEIDS", "CDRelease")
+                        put("TEAMCITY_VALIDATION_GRADLEDEFAULTBUILDSTEPID", "RUNNER_1")
+                        put("TEAMCITY_VALIDATION_MAVENDEFAULTBUILDSTEPID", "RUNNER_1")
+                        // The shipped Create-component profiles; without them the registry offers none.
+                        put(
+                            "SPRING_CONFIG_ADDITIONAL_LOCATION",
+                            "optional:file:/opt/crs-fixture/component-profiles.yml",
+                        )
                     },
                 )
                 .withFileSystemBind(

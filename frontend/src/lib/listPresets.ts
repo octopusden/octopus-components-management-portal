@@ -25,6 +25,7 @@ export type PresetId =
   | 'security-champion'
   | 'problems'
   | 'archived'
+  | 'test-components'
 
 export interface PresetDef {
   id: PresetId
@@ -33,9 +34,11 @@ export interface PresetDef {
   adminOnly?: boolean
 }
 
-// Active-only default — mirrors ComponentListPage's initial filter and
-// parseFilterParams' empty-query result, so "all" round-trips to a bare URL.
-const DEFAULT_FILTER: ComponentFilter = { archived: false }
+// Active-only, test-components-hidden default — mirrors parseFilterParams'
+// empty-query result, so "all" round-trips to a bare URL. Every preset except
+// `test-components` keeps `testComponent: false`, so test components stay hidden
+// unless that preset is picked explicitly.
+export const DEFAULT_FILTER: ComponentFilter = { archived: false, testComponent: false }
 
 export const PRESETS: readonly PresetDef[] = [
   { id: 'all', label: 'All' },
@@ -44,6 +47,7 @@ export const PRESETS: readonly PresetDef[] = [
   { id: 'security-champion', label: 'I am Security Champion' },
   { id: 'problems', label: 'With problems', adminOnly: true },
   { id: 'archived', label: 'Archived' },
+  { id: 'test-components', label: 'Test components' },
 ] as const
 
 export function presetById(id: PresetId): PresetDef | undefined {
@@ -64,23 +68,27 @@ export function applyPreset(
     // the owner filter, so fall back to the default rather than emitting a
     // broken owner: [undefined].
     return currentUsername
-      ? { archived: false, owner: [currentUsername] }
+      ? { ...DEFAULT_FILTER, owner: [currentUsername] }
       : { ...DEFAULT_FILTER }
   }
   if (id === 'archived') {
-    return { archived: true }
+    return { archived: true, testComponent: false }
+  }
+  if (id === 'test-components') {
+    // Only (active) test components — the one way to surface them in the list.
+    return { archived: false, testComponent: true }
   }
   if (id === 'release-manager') {
     // Personal preset: components where the current user is the release manager.
     // Without a username we cannot scope, so fall back to the default rather
     // than emitting releaseManager: [undefined].
     return currentUsername
-      ? { archived: false, releaseManager: [currentUsername] }
+      ? { ...DEFAULT_FILTER, releaseManager: [currentUsername] }
       : { ...DEFAULT_FILTER }
   }
   if (id === 'security-champion') {
     return currentUsername
-      ? { archived: false, securityChampion: [currentUsername] }
+      ? { ...DEFAULT_FILTER, securityChampion: [currentUsername] }
       : { ...DEFAULT_FILTER }
   }
   // Everything else applies only the active-only default footprint:
@@ -88,6 +96,20 @@ export function applyPreset(
   //  - `problems` carries no CRS query param (Portal-computed) — the page swaps
   //    the list source instead.
   return { ...DEFAULT_FILTER }
+}
+
+// Personal presets: a single-value people filter equal to the current user.
+const PERSONAL_PRESETS = [
+  ['mine', 'owner'],
+  ['release-manager', 'releaseManager'],
+  ['security-champion', 'securityChampion'],
+] as const satisfies readonly (readonly [PresetId, keyof ComponentFilter])[]
+
+// True when `filter` sets nothing beyond `allowed` — any extra filter means "custom".
+function onlyKeys(filter: ComponentFilter, allowed: readonly (keyof ComponentFilter)[]): boolean {
+  return (Object.keys(filter) as (keyof ComponentFilter)[]).every(
+    (k) => allowed.includes(k) || filter[k] === undefined,
+  )
 }
 
 /**
@@ -100,41 +122,26 @@ export function matchPreset(
   filter: ComponentFilter,
   currentUsername: string | null,
 ): PresetId | null {
-  // Any extra filter beyond the ones a preset sets means "custom" → no match.
-  const onlyKeys = (allowed: (keyof ComponentFilter)[]): boolean =>
-    (Object.keys(filter) as (keyof ComponentFilter)[]).every(
-      (k) => allowed.includes(k) || filter[k] === undefined,
-    )
+  const base = ['archived', 'testComponent'] as const
 
-  if (filter.archived === true && onlyKeys(['archived'])) return 'archived'
-
-  if (filter.archived === false || filter.archived === undefined) {
-    if (
-      currentUsername &&
-      filter.owner?.length === 1 &&
-      filter.owner[0] === currentUsername &&
-      onlyKeys(['archived', 'owner'])
-    ) {
-      return 'mine'
-    }
-    if (
-      currentUsername &&
-      filter.releaseManager?.length === 1 &&
-      filter.releaseManager[0] === currentUsername &&
-      onlyKeys(['archived', 'releaseManager'])
-    ) {
-      return 'release-manager'
-    }
-    if (
-      currentUsername &&
-      filter.securityChampion?.length === 1 &&
-      filter.securityChampion[0] === currentUsername &&
-      onlyKeys(['archived', 'securityChampion'])
-    ) {
-      return 'security-champion'
-    }
-    if (onlyKeys(['archived'])) return 'all'
+  // Test components are only ever listed by the `test-components` preset; any
+  // other combo that includes them is custom.
+  if (filter.testComponent === true) {
+    return filter.archived !== true && onlyKeys(filter, base) ? 'test-components' : null
   }
+  if (filter.archived === true) return onlyKeys(filter, base) ? 'archived' : null
 
-  return null
+  const personal = PERSONAL_PRESETS.find(([, key]) => {
+    const values = filter[key]
+    return (
+      !!currentUsername &&
+      Array.isArray(values) &&
+      values.length === 1 &&
+      values[0] === currentUsername &&
+      onlyKeys(filter, [...base, key])
+    )
+  })
+  if (personal) return personal[0]
+
+  return onlyKeys(filter, base) ? 'all' : null
 }
