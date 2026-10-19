@@ -2,10 +2,14 @@ import { z } from 'zod'
 import { isBadToken } from '../artifactOwnership'
 import { findUnsupportedGroupId } from '../groupValidation'
 import { isVcsHostSupported, hostOf } from '../vcsHost'
-import { isSolutionCandidate } from '../solutionKey'
 import { selectBaseRow } from '../api/baseRow'
-import type { ComponentDetail, EscrowAspect } from '../types'
+import type { ComponentCreateRequest, ComponentDetail, EscrowAspect } from '../types'
+import type { ComponentProfile, ProfileFieldRule } from '../../hooks/useComponentProfiles'
+import { flagsForProfile } from './createProfile'
+import { formFieldOfRulePath, profileRuleErrors } from './profileRules'
 import {
+  buildCreateRequest,
+  type CreateFieldVisibility,
   effectiveCreateClientCode,
   vcsBlockApplies,
   DEPRECATED_BUILD_SYSTEMS,
@@ -20,98 +24,6 @@ import {
 // pre-existing names) — new components follow the strict convention.
 export const BASE_KEY_REGEX = /^[a-z][a-z0-9-]*$/
 
-// The four component profiles chosen on the wizard's first (scratch) step. The
-// profile is the single source for the solution / external / explicit flags and
-// the Component-Key naming rule (see brief "Choose component profile").
-export type ComponentProfile = 'solution' | 'dmp-bundle' | 'regular-external' | 'regular-internal'
-
-// Scratch pre-selects the most common profile ("Regular external component").
-// Its flags are the source of truth for a from-scratch component's distribution
-// classification — so `initialValues` seeds the RHF flags from this profile, not
-// from `component-defaults`, keeping the pre-selected profile and the payload in
-// lockstep (the wizard only overlays `solution` at submit).
-export const DEFAULT_SCRATCH_PROFILE: ComponentProfile = 'regular-external'
-
-export interface ProfileMeta {
-  id: ComponentProfile
-  label: string
-  description: string
-  /** Whether "Has explicit distribution?" is asked (only the two Regular profiles). */
-  asksExplicit: boolean
-}
-
-// Fixed, sanitized copy (brief §10). No org/product tokens.
-export const PROFILE_META: readonly ProfileMeta[] = [
-  {
-    id: 'solution',
-    label: 'Solution',
-    description:
-      'A top-level solution component that groups and ships other components together. The key contains "-solution". External, with its own distribution.',
-    asksExplicit: false,
-  },
-  {
-    id: 'dmp-bundle',
-    label: 'DMP Bundle',
-    description:
-      'A bundle component (also a solution). The key contains "dmp-bundle". External, with its own distribution.',
-    asksExplicit: false,
-  },
-  {
-    id: 'regular-external',
-    label: 'Regular external component',
-    description:
-      'An ordinary component that is delivered to the client (explicitly or as part of another component).',
-    asksExplicit: true,
-  },
-  {
-    id: 'regular-internal',
-    label: 'Regular internal component',
-    description: 'An ordinary component for internal use only, not delivered to the client.',
-    asksExplicit: true,
-  },
-]
-
-export interface ProfileFlags {
-  solution: boolean
-  distributionExternal: boolean
-  distributionExplicit: boolean
-}
-
-// Solution / DMP Bundle fix external+explicit=true; the two Regular profiles fix
-// external by kind and take explicit from the "Has explicit distribution?" answer.
-export function flagsForProfile(profile: ComponentProfile, explicitAnswer: boolean): ProfileFlags {
-  switch (profile) {
-    case 'solution':
-    case 'dmp-bundle':
-      return { solution: true, distributionExternal: true, distributionExplicit: true }
-    case 'regular-external':
-      return { solution: false, distributionExternal: true, distributionExplicit: explicitAnswer }
-    case 'regular-internal':
-      return { solution: false, distributionExternal: false, distributionExplicit: explicitAnswer }
-  }
-}
-
-// Clone derives the profile from the source's flags + key pattern. Editable
-// afterwards (changing it resets the key + recomputes flags).
-export function profileFromSource(
-  source: ComponentDetail,
-  patterns: readonly string[] | undefined,
-): { profile: ComponentProfile; explicit: boolean } {
-  const key = source.name ?? ''
-  const bundlePattern = patterns?.[1]
-  if (source.solution) {
-    if (bundlePattern && key.includes(bundlePattern)) return { profile: 'dmp-bundle', explicit: true }
-    return { profile: 'solution', explicit: true }
-  }
-  return {
-    profile: source.distributionExternal ? 'regular-external' : 'regular-internal',
-    explicit: !!source.distributionExplicit,
-  }
-}
-
-// Profile-dependent Component-Key requirement message, or null when the key is
-// acceptable for the profile. Base-regex failure is reported first; then the
-// per-profile substring rule.
 // SYS-095 / CRS ADR-020: an underscore is legal in a Component Key only inside its
 // client-code prefix — the lowercased Client Code of the same component, leading the key
 // and followed by the end of the key or '-' and the usual kebab tail. No Client Code
@@ -151,31 +63,10 @@ export function renameKeyCharsetError(
   return componentKeyCharsetError(trimmed, clientCode)
 }
 
-export function componentKeyError(
-  key: string,
-  profile: ComponentProfile,
-  patterns: readonly string[] | undefined,
-  clientCode?: string,
-): string | null {
+export function componentKeyError(key: string, clientCode?: string): string | null {
   const trimmed = key.trim()
   if (!trimmed) return null
-  const charsetError = componentKeyCharsetError(trimmed, clientCode)
-  if (charsetError) return charsetError
-  const solutionPattern = patterns?.[0] ?? '-solution'
-  const bundlePattern = patterns?.[1] ?? 'dmp-bundle'
-  if (profile === 'solution' && !trimmed.includes(solutionPattern)) {
-    return `A Solution key must contain "${solutionPattern}"`
-  }
-  if (profile === 'dmp-bundle' && !trimmed.includes(bundlePattern)) {
-    return `A DMP Bundle key must contain "${bundlePattern}"`
-  }
-  if (
-    (profile === 'regular-external' || profile === 'regular-internal') &&
-    isSolutionCandidate(trimmed, patterns)
-  ) {
-    return 'This key matches a solution pattern — choose the Solution or DMP Bundle profile instead'
-  }
-  return null
+  return componentKeyCharsetError(trimmed, clientCode)
 }
 
 // A single Zod object; the explicit+external block is enforced via superRefine
@@ -184,17 +75,46 @@ export function componentKeyError(
 // CRS only requires it when a copyright catalog is configured server-side, which
 // the Portal can't detect — a server 400 is mapped inline instead. The schema is
 // built per-render from field-config visibility (a hidden/readonly field is
-// removed and must not fire its requirement) and from the chosen profile (the
-// Component-Key rule is profile-dependent).
+// removed and must not fire its requirement) and from the chosen profile's field
+// rules, checked against the request the form would send (D3).
+/**
+ * The wizard field that shows a rule failure on [rulePath]. The request drops blank ownership
+ * rows, so its first mapping is the first non-blank row.
+ */
+export function formFieldOfRule(rulePath: string, ownership: readonly { groupId: string }[]): string | undefined {
+  const field = formFieldOfRulePath(rulePath)
+  const firstSentRow = Math.max(0, ownership.findIndex((row) => row.groupId.trim() !== ''))
+  return field?.replace(/^ownership\.0\./, `ownership.${firstSentRow}.`)
+}
+
+// One issue per failing profile rule, on the form field for its path, tagged so the page can
+// list the ones whose field shows no error. The key shows one message at a time: "required" or
+// the charset rule come first, so a key rule waits while either applies.
+function addProfileRuleIssues(
+  ctx: z.RefinementCtx,
+  rules: readonly ProfileFieldRule[],
+  request: ComponentCreateRequest,
+  keyHasOtherError: boolean,
+  ownership: readonly { groupId: string }[],
+) {
+  for (const [rulePath, message] of profileRuleErrors(rules, request)) {
+    const field = formFieldOfRule(rulePath, ownership)
+    if (!field || (field === 'name' && keyHasOtherError)) continue
+    const path = field.split('.').map((segment) => (/^\d+$/.test(segment) ? Number(segment) : segment))
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path, message, params: { profileRule: true } })
+  }
+}
+
 export function makeCreateSchema(
   editable: (field: string) => boolean,
   supportedGroups: readonly string[],
   gitBaseUrl: string | null | undefined,
-  profile: ComponentProfile,
-  solutionPatterns: readonly string[] | undefined,
+  profileRules: readonly ProfileFieldRule[],
   // Needed for the Component-Key rule: a clone that is not external keeps its source's
   // clientCode in the payload, so the key may legally lean on it.
   source?: ComponentDetail,
+  // The same field visibilities the submit uses, so profile rules read the request that is sent.
+  visibility: CreateFieldVisibility = {},
 ) {
   return z
     .object({
@@ -243,18 +163,21 @@ export function makeCreateSchema(
       // Free-form: an enum value or ''. Never blocks submit (the escrow
       // generation is optional at create and validated server-side).
       escrowGeneration: z.string(),
+      labels: z.array(z.string()),
+      buildTasks: z.string(),
     })
     .superRefine((v, ctx) => {
-      // Profile-dependent Component-Key rule (strict for new components).
-      const keyError = componentKeyError(
-        v.name,
-        profile,
-        solutionPatterns,
-        effectiveCreateClientCode(v, source, editable),
-      )
+      const keyError = componentKeyError(v.name, effectiveCreateClientCode(v, source, editable))
       if (keyError) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['name'], message: keyError })
       }
+      addProfileRuleIssues(
+        ctx,
+        profileRules,
+        buildCreateRequest(v, source, editable, true, false, visibility),
+        !!keyError || !v.name.trim(),
+        v.ownership,
+      )
       // Legacy EscrowConfigValidator rule: a VCS root is mandatory for every
       // build system outside the exempt set.
       if (vcsBlockApplies(v.buildSystem)) {
@@ -400,6 +323,8 @@ export const SCRATCH_DEFAULTS: CreateFormValues = {
   coordinate: EMPTY_COORDINATE,
   ownership: [{ groupId: '', mode: 'ALL', tokens: [] }],
   escrowGeneration: '',
+  labels: [],
+  buildTasks: '',
 }
 
 // vcs.tag / vcs.branch read from GET /config/component-defaults.
@@ -489,6 +414,8 @@ export function versionFormatsFromDefaults(defaults: ComponentDefaults): Version
 export function initialValues(
   source: ComponentDetail | null,
   defaults: ComponentDefaults,
+  // The profile the wizard pre-selects; a clone copies its flags from the source instead.
+  profile: ComponentProfile | null = null,
 ): CreateFormValues {
   const vcsDefaults = defaults.vcs ?? {}
   const baseVcs = source ? selectBaseRow(source)?.vcsEntries?.[0] : undefined
@@ -501,10 +428,9 @@ export function initialValues(
     // wizard's source of truth), not from component-defaults — otherwise the
     // pre-selected profile and the seeded flags could disagree and the payload
     // would carry a classification that contradicts the shown profile.
-    const { distributionExplicit, distributionExternal } = flagsForProfile(
-      DEFAULT_SCRATCH_PROFILE,
-      SCRATCH_DEFAULTS.distributionExplicit,
-    )
+    const { distributionExplicit, distributionExternal } = profile
+      ? flagsForProfile(profile, SCRATCH_DEFAULTS.distributionExplicit)
+      : SCRATCH_DEFAULTS
     return {
       ...SCRATCH_DEFAULTS,
       buildSystem:
@@ -551,5 +477,7 @@ export function initialValues(
     escrowGeneration: selectBaseRow(source)?.escrow?.generation ?? '',
     vcsTag,
     vcsBranch,
+    labels: [...(source.labels ?? [])],
+    buildTasks: selectBaseRow(source)?.build?.buildTasks ?? '',
   }
 }

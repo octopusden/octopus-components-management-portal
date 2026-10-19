@@ -37,6 +37,8 @@ function makeForm(overrides: Partial<CreateFormValues> = {}): CreateFormValues {
     },
     ownership: [{ groupId: '', mode: 'ALL', tokens: [] }],
     escrowGeneration: '',
+    labels: [],
+    buildTasks: '',
     ...overrides,
   }
 }
@@ -600,7 +602,8 @@ describe('buildCreateRequest — copy mode (with source)', () => {
   const source = makeSource()
 
   it('copies source general fields and lists', () => {
-    const req = buildCreateRequest(makeForm({ name: 'svc-clone' }), source)
+    // A clone's form starts with the source's labels (initialValues); the form wins.
+    const req = buildCreateRequest(makeForm({ name: 'svc-clone', labels: source.labels }), source)
     expect(req).toMatchObject({
       name: 'svc-clone',
       productType: 'TYPE_A',
@@ -797,4 +800,57 @@ describe('buildCreateRequest — copy mode (with source)', () => {
     )
     expect('vcsExternalRegistry' in req).toBe(false)
   })
+})
+
+describe('buildCreateRequest — labels and build tasks', () => {
+  const withBuildTasks = (buildTasks: string) =>
+    makeSource({ configurations: [makeBaseRow({ build: { buildSystem: 'GRADLE', buildTasks } })] })
+
+  it('sends the picked labels', () => {
+    expect(buildCreateRequest(makeForm({ labels: ['sql', 'backend'] })).labels).toEqual(['sql', 'backend'])
+  })
+
+  it('sends no labels when none are picked', () => {
+    expect(buildCreateRequest(makeForm()).labels).toEqual([])
+  })
+
+  it('in a clone the form labels win over the source', () => {
+    const req = buildCreateRequest(makeForm({ labels: ['sql'] }), makeSource({ labels: ['backend', 'legacy'] }))
+    expect(req.labels).toEqual(['sql'])
+  })
+
+  it('keeps the source labels when labels are readonly, and sends none when hidden', () => {
+    const src = makeSource({ labels: ['backend'] })
+    const form = makeForm({ labels: ['sql'] })
+    expect(buildCreateRequest(form, src, undefined, true, false, { labels: 'readonly' }).labels).toEqual(['backend'])
+    expect(buildCreateRequest(form, src, undefined, true, false, { labels: 'hidden' }).labels).toEqual([])
+  })
+
+  it('sends trimmed build tasks', () => {
+    expect(buildCreateRequest(makeForm({ buildTasks: '  clean build ' })).baseConfiguration?.build?.buildTasks).toBe(
+      'clean build',
+    )
+  })
+
+  it('sends no build tasks when blank', () => {
+    expect(buildCreateRequest(makeForm({ buildTasks: '  ' })).baseConfiguration?.build).not.toHaveProperty('buildTasks')
+  })
+
+  it('in a clone the form build tasks win; clearing them drops the copied value', () => {
+    expect(
+      buildCreateRequest(makeForm({ buildTasks: 'assemble' }), withBuildTasks('build')).baseConfiguration?.build
+        ?.buildTasks,
+    ).toBe('assemble')
+    expect(buildCreateRequest(makeForm({ buildTasks: '' }), withBuildTasks('build')).baseConfiguration?.build).not.toHaveProperty(
+      'buildTasks',
+    )
+  })
+
+  it('sends no build tasks when readonly or hidden: the registry rejects a value the user may not edit', () => {
+    for (const buildTasks of ['readonly', 'hidden'] as const) {
+      const req = buildCreateRequest(makeForm({ buildTasks: 'x' }), withBuildTasks('build'), undefined, true, false, { buildTasks })
+      expect(req.baseConfiguration?.build).not.toHaveProperty('buildTasks')
+    }
+  })
+
 })

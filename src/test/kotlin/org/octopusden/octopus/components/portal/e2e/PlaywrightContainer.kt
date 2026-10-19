@@ -85,6 +85,12 @@ object PlaywrightContainer {
                 "/work/e2e",
                 org.testcontainers.containers.BindMode.READ_WRITE,
             )
+            // Specs import shared contract fixtures from src (the profiles listing the wizard mocks).
+            .withFileSystemBind(
+                frontendDir.resolve("src/test-fixtures").toAbsolutePath().toString(),
+                "/work/src/test-fixtures",
+                org.testcontainers.containers.BindMode.READ_ONLY,
+            )
             // Bind output dirs back to the host so JUnit XML and the
             // HTML report end up where TeamCity collects them
             // (frontend/test-results and frontend/playwright-report).
