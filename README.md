@@ -110,4 +110,4 @@ release-only contract tracking and drops the drift-gate.
 
 ## License
 
-Internal (F1 / Open Way Group).
+Apache License 2.0 — see [LICENSE](LICENSE).
