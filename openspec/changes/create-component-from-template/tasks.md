@@ -14,7 +14,7 @@
       `/rest/api/4/component-templates/{id}/components`, `/rest/api/4/admin/component-profiles`,
       `ComponentTemplateResponse`, `TemplateComponentRequest`, `TemplateRunResponse`,
       `AdminComponentProfilesResponse`. Vendored from the registry branch at `d4aa615b`.
-- [ ] 1.2 Re-vendor from registry `main` once the registry change merges; `vendor-spec:check`
+- [x] 1.2 Re-vendor from registry `main` once the registry change merges; `vendor-spec:check`
       passes.
 - [x] 1.3 `npm run generate-types:check` passes; `tsc --noEmit` clean.
 
@@ -266,3 +266,22 @@
 - [x] 14.3 Edits in the regular steps lost their unsaved-changes guard once a template tile was
       picked, since only the template path's guard is mounted then. The template path now also
       guards the regular steps' unsaved changes. 2 page tests (1 fails without the fix).
+
+## 15. Fourth review (added on review)
+
+- [x] 15.1 A picker on Review (labels, people list, build system, escrow generation) ran its dry
+      run with the overrides from before the pick, so the registry checked the old value. The edit
+      and its dry run now go together, with the new value. 1 page test (fails without the fix).
+- [x] 15.2 A create rejected with parameter problems carries no rendered component, so Review went
+      blank and the reason was never shown. The wizard now returns to Parameters with the messages,
+      as after a dry run. 1 page test, 1 spec scenario.
+- [x] 15.3 A produced artifact showed only as a summary line, so an overridable group ID was
+      edited as that line, and mode and artifacts had no input. When any of its fields is
+      overridable or has a problem, each gets its own row with the raw value; the mode edits with
+      the ownership-mode dropdown, the artifacts as chips, and overrides keep them a list. 2 unit
+      tests, 1 component test.
+- [x] 15.4 A dry run answered 404 (the template withdrawn by a reload) left the user on the
+      template. Any dry run's 404 now returns to the Profile step without it, as a create's does.
+      1 page test.
+- [x] 15.5 The registry change merged; `vendor-spec:check` passes against its `main` with no
+      change to the vendored contract (task 1.2).

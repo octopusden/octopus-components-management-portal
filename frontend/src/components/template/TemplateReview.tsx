@@ -1,13 +1,16 @@
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
+import { ArtifactTokensInput } from '../ui/ArtifactTokensInput'
 import { ChipsInput } from '../ui/ChipsInput'
 import { EnumSelect } from '../ui/EnumSelect'
 import { Input } from '../ui/input'
+import { ModeSelect } from '../ui/ModeSelect'
 import { PeopleInput } from '../ui/PeopleInput'
 import { PeopleListInput } from '../ui/PeopleListInput'
 import { StatusBanner } from '../ui/status-banner'
 import { useLabels } from '../../hooks/useLabels'
 import type { TemplateRun } from '../../hooks/useTemplateRun'
+import type { ArtifactIdMode } from '../../lib/types'
 import { reviewFieldGroups, type ReviewField, type ReviewProblem } from '../../lib/component/templateReview'
 
 export interface TemplateReviewProps {
@@ -21,8 +24,11 @@ export interface TemplateReviewProps {
   /** Messages the Portal's own checks give an edited field while it is typed. */
   overrideErrors: Readonly<Record<string, string>>
   onParameter: (name: string) => void
-  /** An edit as it is typed; `null` drops it and the template's value applies again. */
-  onOverride: (path: string, values: string[] | null) => void
+  /**
+   * An edit as it is typed; `null` drops it and the template's value applies again. `commit` asks
+   * for a dry run with this value, for a picker, which has no typing to wait out.
+   */
+  onOverride: (path: string, values: string[] | null, commit?: boolean) => void
   /** The user left an edited field: time for a new dry run. */
   onOverrideCommit: (path: string) => void
   /** Try it: nothing can be edited. */
@@ -31,7 +37,7 @@ export interface TemplateReviewProps {
   showSources?: boolean
 }
 
-type OverrideKind = 'person' | 'people' | 'labels' | 'buildSystem' | 'generation' | 'text'
+type OverrideKind = 'person' | 'people' | 'labels' | 'buildSystem' | 'generation' | 'artifactMode' | 'artifactTokens' | 'text'
 
 function kindOf(path: string): OverrideKind {
   if (path === 'componentOwner') return 'person'
@@ -39,6 +45,8 @@ function kindOf(path: string): OverrideKind {
   if (path === 'labels') return 'labels'
   if (path === 'baseConfiguration.build.buildSystem') return 'buildSystem'
   if (path === 'baseConfiguration.escrow.generation') return 'generation'
+  if (/^artifactIds\[\d+\]\.mode$/.test(path)) return 'artifactMode'
+  if (/^artifactIds\[\d+\]\.artifactTokens$/.test(path)) return 'artifactTokens'
   return 'text'
 }
 
@@ -53,21 +61,18 @@ function OverrideInput({
   invalid,
   onChange,
   onCommit,
+  onPick,
 }: {
   field: ReviewField
   value: string[]
   invalid: boolean
   onChange: (values: string[]) => void
   onCommit: () => void
+  onPick: (values: string[]) => void
 }) {
   const id = `review-override-${field.path}`
   const first = value[0] ?? ''
   const single = (v: string) => onChange(v ? [v] : [])
-  // A picker commits on each change; there is no typing to wait out.
-  const pick = (next: string[]) => {
-    onChange(next)
-    onCommit()
-  }
   switch (kindOf(field.path)) {
     case 'person':
       return (
@@ -76,9 +81,9 @@ function OverrideInput({
         </div>
       )
     case 'people':
-      return <PeopleListInput value={value} onChange={pick} />
+      return <PeopleListInput value={value} onChange={onPick} />
     case 'labels':
-      return <LabelsOverride value={value} onChange={pick} />
+      return <LabelsOverride value={value} onChange={onPick} />
     case 'buildSystem':
     case 'generation':
       return (
@@ -86,10 +91,14 @@ function OverrideInput({
           id={id}
           fieldPath={kindOf(field.path)}
           value={first}
-          onValueChange={(v) => pick(v ? [v] : [])}
+          onValueChange={(v) => onPick(v ? [v] : [])}
           aria-invalid={invalid}
         />
       )
+    case 'artifactMode':
+      return <ModeSelect id={id} value={first as ArtifactIdMode} onChange={(mode) => onPick([mode])} />
+    case 'artifactTokens':
+      return <ArtifactTokensInput tokens={value} onChange={onPick} ariaLabel={field.label} />
     case 'text':
       return (
         <Input
@@ -195,6 +204,7 @@ export function TemplateReview({
                             value={edited ? [...edited] : field.value}
                             invalid={!!overrideErrors[field.path]}
                             onChange={(values) => onOverride(field.path, values)}
+                            onPick={(values) => onOverride(field.path, values, true)}
                             onCommit={() => onOverrideCommit(field.path)}
                           />
                         </div>

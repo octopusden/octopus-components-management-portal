@@ -175,6 +175,12 @@ the new component. On a rejection the wizard SHALL stay on Review with the probl
 - **WHEN** the registry rejects the create with problems
 - **THEN** Review shows them and nothing is created
 
+#### Scenario: Rejected on create on a parameter
+
+- **WHEN** the registry rejects the create with a parameter problem, such as an option the template
+  no longer offers
+- **THEN** the wizard returns to Parameters with the message on that parameter
+
 #### Scenario: The template was withdrawn
 
 - **WHEN** the registry answers that the template no longer exists

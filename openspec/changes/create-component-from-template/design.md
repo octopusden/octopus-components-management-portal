@@ -130,8 +130,12 @@ Overridable: `baseConfiguration.vcsEntries[0].vcsPath`, `baseConfiguration.jira.
 
 - Each overridable path gets the input its field kind takes (the kinds in the registry's
   configuration reference): free text → text input; CRS value → dropdown of that list; person →
-  people picker; people list → people list picker; labels → chips. An unknown path gets a text
-  input.
+  people picker; people list → people list picker; labels → chips; a produced artifact's mode →
+  the ownership-mode dropdown, its artifacts → artifact chips. An unknown path gets a text input.
+- A produced artifact shows as one summary line, unless one of its fields is overridable or has a
+  problem: then its group ID, mode and artifacts each get a row with the raw value.
+- A picker has no typing to wait out: the edit and its dry run go together, with the new value.
+  (added on review)
 - An override is sent as `string[]`, as the registry takes it. Clearing an edit removes the
   override, and the field shows the template's value again.
 - While typing, the field is checked by `portalCreateRules` and the profile-rule checker on the
@@ -143,8 +147,11 @@ Overridable: `baseConfiguration.vcsEntries[0].vcsPath`, `baseConfiguration.jira.
 
 - Create sends the same body with `dryRun=false`, plus the Jira task key and comment.
 - The Jira task key is required by the Portal, with the regular wizard's validation and message.
-- 201 → the existing success panel. 422 → the body replaces the shown run, the user stays on Review.
-- 404 → the template was removed or failed on a reload; the wizard returns to the Profile step
+- 201 → the existing success panel. 422 → the body replaces the shown run, the user stays on Review;
+  when it carries parameter problems (the registry stopped before rendering), the wizard returns to
+  Parameters with them, as after a dry run.
+- 404, from a create or from any dry run → the template was removed or failed on a reload; the
+  wizard returns to the Profile step
   with that message and stops offering that template. It keeps the listing it opened with rather
   than refetching it, which would reset a form in progress.
 - 403 and 400 → the message at the top of Review; nothing else changes.

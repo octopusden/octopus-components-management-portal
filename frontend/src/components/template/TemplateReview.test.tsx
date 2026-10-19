@@ -119,6 +119,28 @@ describe('TemplateReview', () => {
     expect(onOverride).toHaveBeenCalledWith(VCS_PATH, null)
   })
 
+  it("edits a produced artifact's mode with the ownership modes and its artifacts as chips", () => {
+    const withArtifact = {
+      ...RUN,
+      component: { ...RUN.component!, artifactIds: [{ groupPattern: 'org.example.abc', mode: 'EXPLICIT', artifactTokens: ['pay'] }] },
+    } as TemplateRun
+    renderReview({
+      run: withArtifact,
+      template: {
+        id: 'client-plugin',
+        title: 'Client plugin',
+        version: 3,
+        overridable: ['artifactIds[0].mode', 'artifactIds[0].artifactTokens'],
+      },
+    })
+    fireEvent.change(within(rowOf('artifactIds[0].mode')).getByRole('combobox'), { target: { value: 'ALL' } })
+    expect(onOverride).toHaveBeenLastCalledWith('artifactIds[0].mode', ['ALL'], true)
+    const tokens = within(rowOf('artifactIds[0].artifactTokens')).getByRole('textbox')
+    fireEvent.change(tokens, { target: { value: 'core' } })
+    fireEvent.keyDown(tokens, { key: 'Enter' })
+    expect(onOverride).toHaveBeenLastCalledWith('artifactIds[0].artifactTokens', ['pay', 'core'], true)
+  })
+
   it('edits nothing in read-only mode', () => {
     renderReview({ readOnly: true })
     expect(within(rowOf(VCS_PATH)).queryByRole('textbox')).toBeNull()

@@ -19,7 +19,7 @@ export interface RunFailure {
 export type CreateOutcome =
   | { kind: 'created'; component: ComponentDetail }
   /** The registry found problems; they replace the shown run. */
-  | { kind: 'rejected' }
+  | { kind: 'rejected'; run: TemplateRun }
   | ({ kind: 'failed' } & RunFailure)
 
 const failureOf = (e: unknown): RunFailure =>
@@ -86,7 +86,7 @@ export function useTemplateRun(templateId: string) {
         latest.current++
         setRun(rejected)
         setError(null)
-        return { kind: 'rejected' }
+        return { kind: 'rejected', run: rejected }
       }
     },
     [path],

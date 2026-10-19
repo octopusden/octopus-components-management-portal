@@ -13,7 +13,7 @@ import { ChangeMetadataFields } from '../wizard/ChangeMetadataFields'
 import { TemplateParameterForm } from './TemplateParameterForm'
 import { TemplateReview } from './TemplateReview'
 import { useComponentTemplate } from '../../hooks/useComponentTemplate'
-import { useTemplateRun } from '../../hooks/useTemplateRun'
+import { useTemplateRun, type TemplateRun } from '../../hooks/useTemplateRun'
 import { useSupportedGroups } from '../../hooks/useSupportedGroups'
 import { usePortalLinks } from '../../hooks/useInfo'
 import { useToast } from '../../hooks/use-toast'
@@ -80,6 +80,13 @@ export function TemplateWizard({
   const [created, setCreated] = useState<{ id: string; name: string } | null>(null)
   const [focusParameter, setFocusParameter] = useState<string | null>(null)
 
+  // A reload can withdraw the template before any run; the registry then answers a dry run 404,
+  // as it does a create.
+  const goneMessage = templateRun.error?.status === 404 ? templateRun.error.message : null
+  useEffect(() => {
+    if (goneMessage) onTemplateGone(goneMessage)
+  }, [goneMessage, onTemplateGone])
+
   useEffect(() => {
     if (step !== 'parameters' || !focusParameter) return
     document.getElementById(`template-parameter-input-${focusParameter}`)?.focus()
@@ -125,25 +132,29 @@ export function TemplateWizard({
     templateRun.discard()
   }
 
+  // Parameter problems stop the registry before it renders anything, so they are shown where
+  // the values are entered.
+  const showParameterProblems = (result: TemplateRun): boolean => {
+    if (result.parameterProblems.length === 0) return false
+    setRegistryParameterErrors(Object.fromEntries(result.parameterProblems.map((p) => [p.parameter, p.message])))
+    setStep('parameters')
+    return true
+  }
+
   const runDry = async (withOverrides: Record<string, string[]>) => {
     setCreateError(null)
     const result = await templateRun.dryRun(templateRunBody(values, withOverrides))
-    if (!result) return
-    if (result.parameterProblems.length > 0) {
-      setRegistryParameterErrors(Object.fromEntries(result.parameterProblems.map((p) => [p.parameter, p.message])))
-      setStep('parameters')
-      return
-    }
+    if (!result || showParameterProblems(result)) return
     // The run just arrived; this render's `canReview` predates it.
     if (result.component) enter('review')
   }
 
-  const changeOverride = (path: string, next: string[] | null) => {
+  const changeOverride = (path: string, next: string[] | null, commit = false) => {
     const updated = { ...overrides }
     if (next === null) delete updated[path]
     else updated[path] = next
     setOverrides(updated)
-    if (next === null) void runDry(updated)
+    if (next === null || commit) void runDry(updated)
   }
 
   const create = async () => {
@@ -158,6 +169,8 @@ export function TemplateWizard({
     if (outcome.kind === 'created') {
       toast({ title: 'Component created', description: `"${outcome.component.name}" was created.` })
       setCreated({ id: outcome.component.id, name: outcome.component.name })
+    } else if (outcome.kind === 'rejected') {
+      showParameterProblems(outcome.run)
     } else if (outcome.kind === 'failed') {
       if (outcome.status === 404) onTemplateGone(outcome.message)
       else setCreateError(outcome.message)

@@ -147,7 +147,7 @@ describe('useTemplateRun', () => {
       await act(async () => {
         outcome = await result.current.create(CREATE)
       })
-      expect(outcome).toEqual({ kind: 'rejected' })
+      expect(outcome).toEqual({ kind: 'rejected', run: rejected })
       expect(result.current.run).toEqual(rejected)
     })
 

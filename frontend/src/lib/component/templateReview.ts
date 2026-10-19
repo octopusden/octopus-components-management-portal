@@ -120,11 +120,21 @@ function asValues(raw: unknown): string[] {
   return [String(raw).trim()].filter((v) => v !== '')
 }
 
-function artifactRows(c: RenderedComponent): ReviewField[] {
-  return (c.artifactIds ?? []).map((row, i) => {
+// A produced-artifact row reads as one summary line, unless a field of it needs a row of its own
+// to be edited or to carry a problem: then each field shows its raw value under its own path.
+function artifactRows(c: RenderedComponent, keep: ReadonlySet<string>): ReviewField[] {
+  return (c.artifactIds ?? []).flatMap((row, i) => {
+    const at = (field: string) => `artifactIds[${i}].${field}`
+    if (['groupPattern', 'mode', 'artifactTokens'].some((field) => keep.has(at(field)))) {
+      return [
+        { path: at('groupPattern'), label: 'Produced Artifacts · Group ID', value: asValues(row.groupPattern) },
+        { path: at('mode'), label: 'Produced Artifacts · Mode', value: asValues(row.mode) },
+        { path: at('artifactTokens'), label: 'Produced Artifacts · Artifacts', value: asValues(row.artifactTokens) },
+      ]
+    }
     const mode = OWNERSHIP_MODES.find((m) => m.key === row.mode)?.label ?? row.mode ?? ''
     const tokens = row.mode === 'EXPLICIT' ? ` (${(row.artifactTokens ?? []).join(', ')})` : ''
-    return { path: `artifactIds[${i}].groupPattern`, label: 'Produced Artifacts', value: [`${row.groupPattern} — ${mode}${tokens}`] }
+    return [{ path: at('groupPattern'), label: 'Produced Artifacts', value: [`${row.groupPattern} — ${mode}${tokens}`] }]
   })
 }
 
@@ -154,7 +164,7 @@ export function reviewFieldGroups(component: RenderedComponent, keepPaths: reado
   for (const field of KNOWN) {
     const value = asValues(field.read(component))
     if (value.length || keep.has(field.path)) add(field.group, { path: field.path, label: field.label, value })
-    if (field.path === 'baseConfiguration.build.buildTasks') artifactRows(component).forEach((r) => add('Build', r))
+    if (field.path === 'baseConfiguration.build.buildTasks') artifactRows(component, keep).forEach((r) => add('Build', r))
   }
   const known = new Set(KNOWN.map((f) => f.path))
   otherLeaves(component, '', known).forEach((r) => add(OTHER, r))
@@ -162,6 +172,7 @@ export function reviewFieldGroups(component: RenderedComponent, keepPaths: reado
 }
 
 const LIST_PATHS = new Set(['releaseManager', 'securityChampion', 'labels'])
+const isListPath = (path: string) => LIST_PATHS.has(path) || /^artifactIds\[\d+\]\.artifactTokens$/.test(path)
 
 type Mutable = Record<string, unknown>
 
@@ -191,7 +202,7 @@ export function applyOverrides<T extends object>(
 ): T {
   const edited = structuredClone(component) as unknown as Mutable
   for (const [path, values] of Object.entries(overrides)) {
-    setPath(edited, path, LIST_PATHS.has(path) ? [...values] : (values[0] ?? ''))
+    setPath(edited, path, isListPath(path) ? [...values] : (values[0] ?? ''))
   }
   return edited as unknown as T
 }

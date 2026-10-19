@@ -128,6 +128,15 @@ describe('reviewFieldGroups', () => {
     ])
   })
 
+  it('splits a produced-artifact row into its raw fields when any of them is kept', () => {
+    const build = groups(['artifactIds[0].mode']).find((g) => g.heading === 'Build')!
+    expect(build.rows.filter((r) => r.path.startsWith('artifactIds')).map((r) => [r.path, r.value])).toEqual([
+      ['artifactIds[0].groupPattern', ['org.example.abc']],
+      ['artifactIds[0].mode', ['EXPLICIT']],
+      ['artifactIds[0].artifactTokens', ['pay']],
+    ])
+  })
+
   it('lists a field the grouping does not know under Other fields, rather than dropping it', () => {
     expect(groups().find((g) => g.heading === 'Other fields')?.rows).toEqual([
       { path: 'baseConfiguration.requiredTools', label: 'baseConfiguration.requiredTools', value: ['jdk21'] },
@@ -160,5 +169,10 @@ describe('applyOverrides', () => {
 
   it('keeps a list field a list', () => {
     expect(applyOverrides(component, { releaseManager: ['asmith', 'jdoe'] }).releaseManager).toEqual(['asmith', 'jdoe'])
+  })
+
+  it("keeps a produced artifact's tokens a list", () => {
+    const edited = applyOverrides(component, { 'artifactIds[0].artifactTokens': ['pay', 'core'] })
+    expect(edited.artifactIds?.[0]?.artifactTokens).toEqual(['pay', 'core'])
   })
 })

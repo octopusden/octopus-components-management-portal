@@ -320,6 +320,18 @@ describe('Create component — Review & create from a template', () => {
     expect(dryRuns()[1]![1]).toMatchObject({ overrides: { [VCS_PATH]: ['ssh://git@git.example.com/abc/other.git'] } })
   })
 
+  it('runs the dry run with the value a picker just chose', async () => {
+    mockApi.get.mockImplementation(async (path: string) => {
+      if (path === TEMPLATE_PATH) return { ...TEMPLATE, overridable: [VCS_PATH, 'labels'] }
+      throw new Error(`unexpected GET ${path}`)
+    })
+    await reachReview(run({ component: { ...run().component!, labels: [] } }))
+    mockApi.post.mockResolvedValueOnce(run({ overridden: ['labels'] }))
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Add label' }), 'sql')
+    await waitFor(() => expect(dryRuns()).toHaveLength(2))
+    expect(dryRuns()[1]![1]).toMatchObject({ overrides: { labels: ['sql'] } })
+  })
+
   it('creates the component and shows the success panel', async () => {
     await reachReview()
     mockApi.post.mockResolvedValueOnce({ id: 'new-id', name: 'abc-plugin-pay' })
@@ -350,6 +362,31 @@ describe('Create component — Review & create from a template', () => {
     mockApi.post.mockRejectedValueOnce(new ApiError(404, "Component template 'client-plugin' not found"))
     fireEvent.change(screen.getByLabelText(/Jira task key/i), { target: { value: 'CD-1234' } })
     await userEvent.click(createButton())
+    expect(await screen.findByText(/Component template 'client-plugin' not found/)).toBeInTheDocument()
+    expect(screen.queryByRole('radio', { name: 'Client plugin' })).toBeNull()
+    expect(screen.getByRole('radio', { name: 'Regular external component' })).toBeInTheDocument()
+  })
+
+  it('returns to Parameters with the message when the registry rejects the create on a parameter', async () => {
+    await reachReview()
+    const rejected = run({
+      valid: false,
+      component: undefined,
+      sources: undefined,
+      parameterProblems: [{ parameter: 'PLUGIN_CODE', check: 'P5', message: 'PAY is no longer allowed' }],
+    })
+    mockApi.post.mockRejectedValueOnce(new ApiError(422, 'rejected', JSON.stringify(rejected)))
+    fireEvent.change(screen.getByLabelText(/Jira task key/i), { target: { value: 'CD-1234' } })
+    await userEvent.click(createButton())
+    expect(await screen.findByText('PAY is no longer allowed')).toBeInTheDocument()
+    expect(screen.getByText('Plugin code')).toBeInTheDocument()
+  })
+
+  it('returns to the Profile step without the template when a dry run says it is gone', async () => {
+    mockApi.post.mockRejectedValueOnce(new ApiError(404, "Component template 'client-plugin' not found"))
+    await pickTemplate()
+    await typePluginCode('PAY')
+    await userEvent.click(nextButton())
     expect(await screen.findByText(/Component template 'client-plugin' not found/)).toBeInTheDocument()
     expect(screen.queryByRole('radio', { name: 'Client plugin' })).toBeNull()
     expect(screen.getByRole('radio', { name: 'Regular external component' })).toBeInTheDocument()
