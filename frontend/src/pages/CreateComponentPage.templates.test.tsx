@@ -226,6 +226,21 @@ describe('Create component — Parameters', () => {
     expect(screen.getByPlaceholderText('my-component')).toHaveValue('payments')
   })
 
+  it('still guards what was typed in the regular steps while a template is picked', async () => {
+    renderWizard()
+    await userEvent.click(await screen.findByRole('button', { name: /^next$/i }))
+    fireEvent.change(screen.getByPlaceholderText('my-component'), { target: { value: 'payments' } })
+    await userEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    await userEvent.click(tile('Client plugin'))
+    await screen.findByText('Plugin code')
+    expect(screen.getByTestId('unsaved-guard')).toHaveAttribute('data-when', 'true')
+  })
+
+  it('does not guard a template picked from an untouched wizard', async () => {
+    await pickTemplate()
+    expect(screen.getByTestId('unsaved-guard')).toHaveAttribute('data-when', 'false')
+  })
+
   it('shows an error with Retry when the template cannot be loaded', async () => {
     mockApi.get.mockRejectedValue(new ApiError(500, 'boom'))
     renderWizard()

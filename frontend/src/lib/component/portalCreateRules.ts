@@ -16,6 +16,11 @@ export interface PortalRuleOptions {
    * blank, so the request alone cannot tell "Docker, name missing" from "no coordinate".
    */
   coordinateType?: CoordinateType
+  /**
+   * Whether the component is explicit and external. A request may omit both flags when field-config
+   * locks them, so the wizard passes its own; by default they are read from the request.
+   */
+  explicitExternal?: boolean
 }
 
 /** A Portal-only rule a create request breaks, on its create-request path. */
@@ -113,7 +118,8 @@ function coordinateIssues(
 }
 
 function explicitExternalIssues(request: ComponentCreateRequest, options: PortalRuleOptions): PortalRuleIssue[] {
-  if (!(request.distributionExplicit && request.distributionExternal)) return []
+  const explicitExternal = options.explicitExternal ?? (request.distributionExplicit && request.distributionExternal)
+  if (!explicitExternal) return []
   const editable = options.editable ?? (() => true)
   const issues: PortalRuleIssue[] = []
   if (editable('displayName') && !request.displayName?.trim()) {

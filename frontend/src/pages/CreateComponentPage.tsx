@@ -1736,6 +1736,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
         entry={templateEntry}
         headerTitle={headerTitle}
         profileStep={renderProfileStep()}
+        regularDirty={(isDirty || profileTouched) && !submitted}
         onCreateAnother={onCreateAnother}
         onTemplateGone={(message) => {
           setWithdrawn((w) => ({ ids: [...w.ids, templateEntry.id], message }))

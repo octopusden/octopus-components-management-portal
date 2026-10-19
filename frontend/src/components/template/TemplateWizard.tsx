@@ -40,6 +40,8 @@ interface TemplateWizardProps {
   headerTitle: string
   /** The wizard's Profile step, shown as this path's first step. */
   profileStep: ReactNode
+  /** The regular steps hold unsaved changes; they stay behind this path and must not be lost silently. */
+  regularDirty: boolean
   onCreateAnother: () => void
   /** The registry no longer has the template; the wizard goes back to the Profile step. */
   onTemplateGone: (message: string) => void
@@ -50,7 +52,14 @@ interface TemplateWizardProps {
  * nothing to the registry; a dry run runs on Next and when an edited overridable field is left.
  * Review is reached only through a dry run of the values on screen.
  */
-export function TemplateWizard({ entry, headerTitle, profileStep, onCreateAnother, onTemplateGone }: TemplateWizardProps) {
+export function TemplateWizard({
+  entry,
+  headerTitle,
+  profileStep,
+  regularDirty,
+  onCreateAnother,
+  onTemplateGone,
+}: TemplateWizardProps) {
   const navigate = useNavigate()
   const { toast } = useToast()
   const template = useComponentTemplate(entry.id)
@@ -245,7 +254,9 @@ export function TemplateWizard({ entry, headerTitle, profileStep, onCreateAnothe
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <UnsavedChangesGuard when={Object.keys(edited).length > 0 || Object.keys(overrides).length > 0} />
+      <UnsavedChangesGuard
+        when={regularDirty || Object.keys(edited).length > 0 || Object.keys(overrides).length > 0}
+      />
       <div className="flex items-center gap-3 border-b px-6 py-4 pr-12">
         <DialogTitle className="text-lg font-semibold tracking-tight">{headerTitle}</DialogTitle>
       </div>

@@ -251,3 +251,18 @@
 - [ ] 13.4 Open until the registry change is released: 1.2 (re-vendor from `main`) and group 11
       (`crs.version`, the starter template in the e2e and dev registry, the e2e run on CI). A
       template in the fixture before then would be read by a registry that does not know the kind.
+
+## 14. Review after the profiles change merged (added on review)
+
+- [x] 14.1 Merged `main` (the squashed profiles change, the hide-test-components change, the
+      quality-plugin bump). Every conflict was a file `main` carries exactly as the profiles branch
+      already merged here, so this branch's side was kept; the only new change is
+      `settings.gradle.kts`. The v4 contract keeps the template endpoints and the test-component
+      fields; `generate-types:check` passes.
+- [x] 14.2 With field-config locking the distribution flags, the request omits them, so the shared
+      Portal-only rules skipped every explicit-external check (display name, people, coordinate)
+      that `main` runs from the form. The wizard now passes its own explicit-external flag
+      (Decision 4). 2 schema tests (fail here, pass on `main`), 1 rules test.
+- [x] 14.3 Edits in the regular steps lost their unsaved-changes guard once a template tile was
+      picked, since only the template path's guard is mounted then. The template path now also
+      guards the regular steps' unsaved changes. 2 page tests (1 fails without the fix).

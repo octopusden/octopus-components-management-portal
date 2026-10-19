@@ -108,6 +108,9 @@ Overridable: `baseConfiguration.vcsEntries[0].vcsPath`, `baseConfiguration.jira.
   two.
 - The wizard also passes the coordinate type the user chose: it sends no Docker image while the
   name is blank, so the request alone cannot tell "Docker, name missing" from "no coordinate".
+- The wizard passes its own explicit-external flag too: a request omits the distribution flags
+  field-config locks, but the component is still created with them, so its required fields stay
+  required. Template review reads the flags from the rendered request. (added on review)
 - Template review calls it on the dry run's `component` with every field editable — the template,
   not field-config, decides what is set.
 - Why one function: the rule set and its messages must be the same on both paths, and a request

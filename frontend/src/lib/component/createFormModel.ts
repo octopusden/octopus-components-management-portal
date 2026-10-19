@@ -123,12 +123,13 @@ function addPortalRuleIssues(
   ctx: z.RefinementCtx,
   request: ComponentCreateRequest,
   v: CreateFormValues,
-  options: Omit<PortalRuleOptions, 'checkJiraRequired' | 'coordinateType'>,
+  options: Omit<PortalRuleOptions, 'checkJiraRequired' | 'coordinateType' | 'explicitExternal'>,
 ) {
   for (const { path, message } of portalCreateRules(request, {
     ...options,
     checkJiraRequired: false,
     coordinateType: v.coordinate.type,
+    explicitExternal: v.distributionExplicit && v.distributionExternal,
   })) {
     const field = formFieldOfPortalRule(path, v.ownership)
     if (!field) continue

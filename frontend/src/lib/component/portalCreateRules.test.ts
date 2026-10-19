@@ -129,6 +129,14 @@ describe('portalCreateRules', () => {
       expect(rules(request({ distributionExplicit: true, distributionExternal: false }))).toEqual([])
     })
 
+    it("takes the caller's classification over a request that omits the flags", () => {
+      const locked = request({ distributionExplicit: undefined, distributionExternal: undefined })
+      expect(rules(locked)).toEqual([])
+      expect(rules(locked, { explicitExternal: true }).map((i) => i.path)).toEqual(
+        expect.arrayContaining(['displayName', 'releaseManager', 'securityChampion']),
+      )
+    })
+
     it('requires the Maven group and artifact IDs, and a supported group prefix', () => {
       const maven = (groupPattern: string, artifactPattern: string) =>
         explicitExternal({ baseConfiguration: { mavenArtifacts: [{ groupPattern, artifactPattern }] } })
