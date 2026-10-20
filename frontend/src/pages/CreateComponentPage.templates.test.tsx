@@ -409,6 +409,22 @@ describe('Create component — Review & create from a template', () => {
     expect(screen.queryByText('PAY taken')).toBeNull()
   })
 
+  it('shows the success panel for a create that succeeds after a newer dry run withdrew the template', async () => {
+    await reachReview()
+    let resolveCreate!: (value: unknown) => void
+    mockApi.post.mockReturnValueOnce(new Promise((resolve) => (resolveCreate = resolve)))
+    fireEvent.change(screen.getByLabelText(/Jira task key/i), { target: { value: 'CD-1234' } })
+    await userEvent.click(createButton())
+    await userEvent.click(screen.getByRole('button', { name: 'Parameters' }))
+    await typePluginCode('PAY2')
+    mockApi.post.mockRejectedValueOnce(new ApiError(404, "Component template 'client-plugin' not found"))
+    await userEvent.click(nextButton())
+    expect(await screen.findByRole('radio', { name: 'Regular external component' })).toBeInTheDocument()
+    await act(async () => resolveCreate({ id: 'new-id', name: 'abc-plugin-pay' }))
+    expect(screen.getByText('Component created')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Go to component' })).toBeInTheDocument()
+  })
+
   it('shows a refusal at the top of Review', async () => {
     await reachReview()
     mockApi.post.mockRejectedValueOnce(new ApiError(403, 'You do not have permission to create components'))

@@ -1728,7 +1728,17 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
     manualChanged(manual, source)
 
   // Post-create success panel — replaces the wizard body once the component is
-  // created. `submitted` is already true, so no unsaved-changes guard is needed.
+  // created, from either path. `submitted` is already true, so no unsaved-changes guard is needed.
+  if (created) {
+    return (
+      <CreatedPanel
+        name={created.name}
+        onCreateAnother={onCreateAnother}
+        onOpen={() => navigate(`/components/${created.id}`)}
+      />
+    )
+  }
+
   if (templateEntry) {
     return (
       <TemplateWizard
@@ -1737,22 +1747,15 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
         headerTitle={headerTitle}
         profileStep={renderProfileStep()}
         regularDirty={(isDirty || profileTouched) && !submitted}
-        onCreateAnother={onCreateAnother}
+        onCreated={(component) => {
+          setSubmitted(true)
+          setCreated(component)
+        }}
         onTemplateGone={(message) => {
           setWithdrawn((w) => ({ ids: [...w.ids, templateEntry.id], message }))
           setTemplateId(null)
           enterStep('profile')
         }}
-      />
-    )
-  }
-
-  if (created) {
-    return (
-      <CreatedPanel
-        name={created.name}
-        onCreateAnother={onCreateAnother}
-        onOpen={() => navigate(`/components/${created.id}`)}
       />
     )
   }

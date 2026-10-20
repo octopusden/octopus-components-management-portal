@@ -8,7 +8,6 @@ import { SkeletonBlock } from '../ui/skeleton-block'
 import { StatusBanner } from '../ui/status-banner'
 import { UnsavedChangesGuard } from '../editor/UnsavedChangesGuard'
 import { WizardStepRail, type RailStep } from '../wizard/WizardStepRail'
-import { CreatedPanel } from '../wizard/CreatedPanel'
 import { ChangeMetadataFields } from '../wizard/ChangeMetadataFields'
 import { TemplateParameterForm } from './TemplateParameterForm'
 import { TemplateReview } from './TemplateReview'
@@ -42,7 +41,11 @@ interface TemplateWizardProps {
   profileStep: ReactNode
   /** The regular steps hold unsaved changes; they stay behind this path and must not be lost silently. */
   regularDirty: boolean
-  onCreateAnother: () => void
+  /**
+   * The component was created. The caller shows the success panel: this path may be gone by the
+   * time a create answers, after a withdrawal or another tile was picked.
+   */
+  onCreated: (component: { id: string; name: string }) => void
   /** The registry no longer has the template; the wizard goes back to the Profile step. */
   onTemplateGone: (message: string) => void
 }
@@ -57,7 +60,7 @@ export function TemplateWizard({
   headerTitle,
   profileStep,
   regularDirty,
-  onCreateAnother,
+  onCreated,
   onTemplateGone,
 }: TemplateWizardProps) {
   const navigate = useNavigate()
@@ -77,7 +80,6 @@ export function TemplateWizard({
   const [changeComment, setChangeComment] = useState('')
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
-  const [created, setCreated] = useState<{ id: string; name: string } | null>(null)
   const [focusParameter, setFocusParameter] = useState<string | null>(null)
 
   // A reload can withdraw the template before any run; the registry then answers a dry run 404,
@@ -168,19 +170,13 @@ export function TemplateWizard({
     setCreating(false)
     if (outcome.kind === 'created') {
       toast({ title: 'Component created', description: `"${outcome.component.name}" was created.` })
-      setCreated({ id: outcome.component.id, name: outcome.component.name })
+      onCreated({ id: outcome.component.id, name: outcome.component.name })
     } else if (outcome.kind === 'rejected') {
       showParameterProblems(outcome.run)
     } else if (outcome.kind === 'failed') {
       if (outcome.status === 404) onTemplateGone(outcome.message)
       else setCreateError(outcome.message)
     }
-  }
-
-  if (created) {
-    return (
-      <CreatedPanel name={created.name} onCreateAnother={onCreateAnother} onOpen={() => navigate(`/components/${created.id}`)} />
-    )
   }
 
   const nextDisabled =

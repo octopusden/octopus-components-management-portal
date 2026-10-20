@@ -293,3 +293,13 @@
       problem could do the same. Create now takes its place in the dry runs' order: a created
       component always counts, a rejection or failure that a newer run overtook is dropped. 1 hook
       test, 1 page test (both fail without the fix).
+
+## 17. Sixth review (added on review)
+
+- [x] 17.1 Merged `main` (the Maintenance tab rename, the CRS re-vendor, the README license line):
+      the Templates tab sits beside Maintenance; the vendored contract still matches the registry's
+      `main`.
+- [x] 17.2 A create that succeeded after a newer dry run withdrew the template (or another tile
+      was picked) reported to the template path, which was already gone, so no success panel
+      showed. The template path now hands a created component to the wizard, which shows the
+      success panel for either path. 1 page test (fails without the fix).
