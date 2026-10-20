@@ -52,8 +52,9 @@ function writeIdOf(state: unknown): number | undefined {
  * (no `archived` = active components only).
  * Every write replaces the history entry (one entry per page visit, not per keystroke), and any
  * change other than `limit` itself drops a previously raised `limit`.
- * `arrivals` counts locations this page did not write itself (palette, header search, a link,
- * back/forward — also to an entry it wrote earlier), even ones carrying the same `q`.
+ * `arrival` counts locations this page did not write itself (palette, header search, a link,
+ * back/forward — also to an entry it wrote earlier), even ones carrying the same `q` or returning
+ * to the location already rendered, and carries the `q` of the latest one.
  *
  * The data router (the app's createBrowserRouter) moves its location at once but renders it in a
  * transition, so a write can run while the page still shows the previous location. Writes
@@ -67,34 +68,38 @@ function useAsCodeSearchUrlState() {
   const location = useLocation()
   const router = useContext(UNSAFE_DataRouterContext)?.router
   // The id of the latest write while the router has not moved on from it; a write made before its
-  // location renders reads it. The router reports every location change: any other than that write
-  // itself (another page's navigation, Back/Forward — also to an entry the page wrote) clears it,
-  // even when React never renders the locations in between.
+  // location renders reads it.
   const latestWrite = useRef<number | null>(null)
   const renderedKey = useRef(location.key)
   useEffect(() => {
     renderedKey.current = location.key
   })
-  // The id of a write whose location has not rendered yet; consumed by that location, so a later
-  // Back/Forward to the same entry counts as an arrival.
-  const [ownWrite, setOwnWrite] = useState<number | null>(null)
+  const [arrival, setArrival] = useState({ count: 0, query: params.get('q') ?? '' })
+  // The data router reports every location change, also ones React never renders (Back then
+  // Forward before a render, even back to the rendered entry): any other than the page's latest
+  // write is an arrival, and it clears that write's marker.
   useEffect(() => {
     if (!router) return
     let seen = router.state.location
     return router.subscribe((state) => {
       if (state.location === seen) return
       seen = state.location
-      if (state.historyAction === 'POP' || writeIdOf(state.location.state) !== latestWrite.current) {
+      if (writeIdOf(state.location.state) !== latestWrite.current) {
         latestWrite.current = null
-        setOwnWrite(null)
+        const query = new URLSearchParams(state.location.search).get('q') ?? ''
+        setArrival((a) => ({ count: a.count + 1, query }))
       }
     })
   }, [router])
+  // A declarative router renders every location: one whose write id is not that of a pending
+  // write of this page is an arrival.
+  const [ownWrite, setOwnWrite] = useState<number | null>(null)
   const [seenKey, setSeenKey] = useState(location.key)
-  const [arrivals, setArrivals] = useState(0)
-  if (location.key !== seenKey) {
+  if (!router && location.key !== seenKey) {
     setSeenKey(location.key)
-    if (ownWrite === null || writeIdOf(location.state) !== ownWrite) setArrivals((n) => n + 1)
+    if (ownWrite === null || writeIdOf(location.state) !== ownWrite) {
+      setArrival((a) => ({ count: a.count + 1, query: params.get('q') ?? '' }))
+    }
     setOwnWrite(null)
   }
   const setParam = useCallback(
@@ -104,7 +109,7 @@ function useAsCodeSearchUrlState() {
       if (current && current.key !== renderedKey.current && writeIdOf(current.state) !== latestWrite.current) return
       const id = ++lastWriteId
       latestWrite.current = id
-      setOwnWrite(id)
+      if (!router) setOwnWrite(id)
       setParams(
         (prev) => {
           const next = new URLSearchParams(current ? current.search : prev)
@@ -123,7 +128,7 @@ function useAsCodeSearchUrlState() {
     regex: params.get('regex') === 'true',
     scope: parseScope(params.get('archived')),
     limit: parseLimit(params.get('limit')),
-    arrivals,
+    arrival,
     setParam,
   }
 }
@@ -133,27 +138,28 @@ function useAsCodeSearchUrlState() {
  * Groovy DSL files. The input is debounced; the URL and the request follow the debounced value.
  */
 export function AsCodeSearchPage() {
-  const { query: urlQuery, regex, scope, limit, arrivals, setParam } = useAsCodeSearchUrlState()
+  const { query: urlQuery, regex, scope, limit, arrival, setParam } = useAsCodeSearchUrlState()
   const [input, setInput] = useState(urlQuery)
   const debounced = useDebouncedValue(input, 300)
 
   // Incoming navigation while the page stays mounted replaces the input, pending keystrokes
-  // included, even when its `q` equals the current one (setting the input restarts the
-  // debounce, so the superseded text is never written).
-  const [seenArrivals, setSeenArrivals] = useState(arrivals)
-  if (arrivals !== seenArrivals) {
-    setSeenArrivals(arrivals)
-    setInput(urlQuery)
+  // included, even when its `q` equals the current one, as soon as the router reports it
+  // (setting the input restarts the debounce, so the superseded text is never written).
+  const [seenArrivals, setSeenArrivals] = useState(arrival.count)
+  if (arrival.count !== seenArrivals) {
+    setSeenArrivals(arrival.count)
+    setInput(arrival.query)
   }
 
-  // Typing writes the URL — only when the debounced text itself changes, so a stale value
-  // never overwrites a query that arrived by navigation.
+  // Typing writes the URL — only when the debounced text itself changes and is still the input,
+  // so a stale value (an arrival replaced the input after its debounce expired) never overwrites
+  // a query that arrived by navigation.
   const writtenRef = useRef(debounced)
   useEffect(() => {
     if (debounced === writtenRef.current) return
     writtenRef.current = debounced
-    if (debounced !== urlQuery) setParam('q', debounced)
-  }, [debounced, urlQuery, setParam])
+    if (debounced === input && debounced !== urlQuery) setParam('q', debounced)
+  }, [debounced, input, urlQuery, setParam])
 
   const search = useAsCodeSearch({ query: urlQuery, regex, archived: archivedParam(scope), limit })
 

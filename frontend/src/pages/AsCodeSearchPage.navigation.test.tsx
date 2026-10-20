@@ -144,6 +144,8 @@ describe('AsCodeSearchPage — writes racing a location the page has not rendere
     return router
   }
   const at = (r: NonNullable<typeof router>) => r.state.location.pathname + r.state.location.search
+  // The query of the location the page last rendered.
+  const rendered = () => vi.mocked(useAsCodeSearch).mock.lastCall?.[0].query
   // A history step resolves on popstate, which jsdom dispatches from a (faked) 1 ms timer.
   const go = async (r: NonNullable<typeof router>, delta: number) => {
     const done = r.navigate(delta)
@@ -171,6 +173,17 @@ describe('AsCodeSearchPage — writes racing a location the page has not rendere
         vi.advanceTimersByTime(299)
         await r.navigate(INCOMING)
         vi.advanceTimersByTime(1)
+      })
+      await act(async () => { vi.advanceTimersByTime(500) })
+      expect(at(r)).toBe(INCOMING)
+      expect(field().value).toBe('incoming')
+    })
+
+    it('a click on the still-rendered page after incoming navigation does not rewrite that location', async () => {
+      const r = start(kind, '/search?q=alpha')
+      await act(async () => {
+        await r.navigate(INCOMING)
+        fireEvent.mouseDown(screen.getByRole('tab', { name: 'Regex' }))
       })
       await act(async () => { vi.advanceTimersByTime(500) })
       expect(at(r)).toBe(INCOMING)
@@ -255,9 +268,43 @@ describe('AsCodeSearchPage — writes racing a location the page has not rendere
         expect(at(r)).toBe('/search?q=gamma')
         await go(r, 1)
         expect(at(r)).toBe('/search?q=delta')
+        expect(rendered()).toBe('beta')
         vi.advanceTimersByTime(300)
       })
       await act(async () => { vi.advanceTimersByTime(500) })
+      expect(at(r)).toBe('/search?q=delta')
+      expect(field().value).toBe('delta')
+    })
+
+    it('Back and Forward to the rendered entry before anything renders replace the draft', async () => {
+      const r = start(kind, '/search?q=alpha')
+      fireEvent.change(field(), { target: { value: 'gamma' } })
+      await act(async () => { vi.advanceTimersByTime(300) })
+      await act(async () => { await r.navigate('/search?q=beta') })
+      await act(async () => { vi.advanceTimersByTime(500) })
+      fireEvent.change(field(), { target: { value: 'delta' } })
+      await act(async () => { vi.advanceTimersByTime(300) })
+      expect(rendered()).toBe('delta')
+      fireEvent.change(field(), { target: { value: 'epsilon' } })
+      const calls = vi.mocked(useAsCodeSearch).mock.calls.length
+      const visited: string[] = []
+      const stop = r.subscribe((state) => { visited.push(state.location.search) })
+      await act(async () => {
+        // Both history steps and the debounce expiry land before React renders any of them.
+        void r.navigate(-1)
+        vi.advanceTimersByTime(1)
+        expect(at(r)).toBe('/search?q=gamma')
+        void r.navigate(1)
+        vi.advanceTimersByTime(1)
+        expect(at(r)).toBe('/search?q=delta')
+        vi.advanceTimersByTime(298)
+      })
+      await act(async () => { vi.advanceTimersByTime(500) })
+      stop()
+      // gamma never rendered: the page stayed on the delta key throughout.
+      expect(vi.mocked(useAsCodeSearch).mock.calls.slice(calls).map(([o]) => o.query)).not.toContain('gamma')
+      // The expired epsilon debounce is never written, not even briefly.
+      expect(visited).not.toContain('?q=epsilon')
       expect(at(r)).toBe('/search?q=delta')
       expect(field().value).toBe('delta')
     })
