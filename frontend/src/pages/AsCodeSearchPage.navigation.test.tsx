@@ -238,6 +238,31 @@ describe('AsCodeSearchPage — writes racing a location the page has not rendere
       expect(field().value).toBe('delta')
     })
 
+    it('Back and Forward before anything renders do not revive the marker of the write they passed', async () => {
+      const r = start(kind, '/search?q=alpha')
+      fireEvent.change(field(), { target: { value: 'gamma' } })
+      await act(async () => { vi.advanceTimersByTime(300) })
+      await act(async () => { await r.navigate('/search?q=beta') })
+      await act(async () => { vi.advanceTimersByTime(500) })
+      fireEvent.change(field(), { target: { value: 'delta' } })
+      await act(async () => {
+        // The debounced delta reaches the router while beta is still rendered…
+        flushSync(() => { vi.advanceTimersByTime(300) })
+        expect(at(r)).toBe('/search?q=delta')
+        // …a new draft is typed, and Back then Forward return to the delta entry, with no render in between.
+        fireEvent.change(field(), { target: { value: 'epsilon' } })
+        await go(r, -1)
+        expect(at(r)).toBe('/search?q=gamma')
+        await go(r, 1)
+        expect(at(r)).toBe('/search?q=delta')
+        vi.advanceTimersByTime(300)
+      })
+      await act(async () => { vi.advanceTimersByTime(500) })
+      expect(at(r)).toBe('/search?q=delta')
+      expect(field().value).toBe('delta')
+    })
+
+    // The second write reads the first one's marker (the router stands on it, unrendered).
     it('two own writes before the first renders keep both params', async () => {
       const r = start(kind, '/search?q=alpha')
       fireEvent.change(field(), { target: { value: 'draft' } })

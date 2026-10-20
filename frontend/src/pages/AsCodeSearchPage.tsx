@@ -66,23 +66,30 @@ function useAsCodeSearchUrlState() {
   const [params, setParams] = useSearchParams()
   const location = useLocation()
   const router = useContext(UNSAFE_DataRouterContext)?.router
-  // The id of the latest write while the router still stands on its location, not rendered yet;
-  // a write made in that window reads it. It is cleared as soon as a location renders and the router
-  // is anywhere else: that write rendered, or history navigation superseded it. Either way a later
-  // Back/Forward to its entry is navigation, not that write.
+  // The id of the latest write while the router has not moved on from it; a write made before its
+  // location renders reads it. The router reports every location change: any other than that write
+  // itself (another page's navigation, Back/Forward — also to an entry the page wrote) clears it,
+  // even when React never renders the locations in between.
   const latestWrite = useRef<number | null>(null)
   const renderedKey = useRef(location.key)
   useEffect(() => {
-    if (renderedKey.current === location.key) return
     renderedKey.current = location.key
-    const pending = router?.state.location
-    if (!pending || pending.key === location.key || writeIdOf(pending.state) !== latestWrite.current) {
-      latestWrite.current = null
-    }
   })
   // The id of a write whose location has not rendered yet; consumed by that location, so a later
   // Back/Forward to the same entry counts as an arrival.
   const [ownWrite, setOwnWrite] = useState<number | null>(null)
+  useEffect(() => {
+    if (!router) return
+    let seen = router.state.location
+    return router.subscribe((state) => {
+      if (state.location === seen) return
+      seen = state.location
+      if (state.historyAction === 'POP' || writeIdOf(state.location.state) !== latestWrite.current) {
+        latestWrite.current = null
+        setOwnWrite(null)
+      }
+    })
+  }, [router])
   const [seenKey, setSeenKey] = useState(location.key)
   const [arrivals, setArrivals] = useState(0)
   if (location.key !== seenKey) {
