@@ -407,6 +407,11 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
   const offered = entries.filter((e) => !withdrawn.ids.includes(e.id))
   const templateTiles = offered.filter(isTemplate)
   const templateEntry = offered.find((e) => e.id === templateId) ?? null
+  // A late 404 from a template the user has since left must not close the one now selected.
+  const selectedTemplate = useRef(templateId)
+  useEffect(() => {
+    selectedTemplate.current = templateId
+  }, [templateId])
 
   const buildTasksVisibility = useFieldVisibility('build.buildTasks')
   const labelsVisibility = useFieldVisibility('component.labels')
@@ -670,6 +675,13 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
   const enterStep = (step: StepId) => {
     setCurrent(step)
     setVisitedSteps((prev) => (prev.has(step) ? prev : new Set(prev).add(step)))
+  }
+  const withdrawTemplate = (id: string, message: string) => {
+    const selected = selectedTemplate.current === id
+    setWithdrawn((w) => ({ ids: [...w.ids, id], message: selected ? message : w.message }))
+    if (!selected) return
+    setTemplateId(null)
+    enterStep('profile')
   }
 
   // Cross-step validity from a full parse (independent of RHF's touched state) so
@@ -1751,11 +1763,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
           setSubmitted(true)
           setCreated(component)
         }}
-        onTemplateGone={(message) => {
-          setWithdrawn((w) => ({ ids: [...w.ids, templateEntry.id], message }))
-          setTemplateId(null)
-          enterStep('profile')
-        }}
+        onTemplateGone={(message) => withdrawTemplate(templateEntry.id, message)}
       />
     )
   }

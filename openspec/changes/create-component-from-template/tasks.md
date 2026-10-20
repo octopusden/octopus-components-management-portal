@@ -303,3 +303,11 @@
       was picked) reported to the template path, which was already gone, so no success panel
       showed. The template path now hands a created component to the wizard, which shows the
       success panel for either path. 1 page test (fails without the fix).
+
+## 18. Seventh review (added on review)
+
+- [x] 18.1 A late 404 from a template the user had left (another template or a regular profile
+      picked while its create waited) closed whatever was selected and returned to Profile,
+      losing what was typed there. The withdrawn template is still no longer offered, but the
+      wizard returns to Profile only when that template is still the one selected. 3 page tests
+      (2 fail without the fix).

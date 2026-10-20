@@ -425,6 +425,53 @@ describe('Create component — Review & create from a template', () => {
     expect(screen.getByRole('button', { name: 'Go to component' })).toBeInTheDocument()
   })
 
+  describe('a late 404 from a template the user has left', () => {
+    const SECOND_ENTRY: ComponentProfile = { ...TEMPLATE_ENTRY, id: 'second-plugin', title: 'Second plugin' }
+
+    async function leaveWithPendingCreate() {
+      listing = [...listing, SECOND_ENTRY]
+      mockApi.get.mockImplementation(async (path: string) => {
+        if (path === TEMPLATE_PATH) return TEMPLATE
+        if (path === '/component-templates/second-plugin') return { ...TEMPLATE, id: 'second-plugin', title: 'Second plugin' }
+        throw new Error(`unexpected GET ${path}`)
+      })
+      await reachReview()
+      let reject!: (error: unknown) => void
+      mockApi.post.mockReturnValueOnce(new Promise<never>((_, r) => (reject = r)))
+      fireEvent.change(screen.getByLabelText(/Jira task key/i), { target: { value: 'CD-1234' } })
+      await userEvent.click(createButton())
+      await userEvent.click(screen.getByRole('button', { name: 'Profile' }))
+      return () => act(async () => reject(new ApiError(404, "Component template 'client-plugin' not found")))
+    }
+
+    it('keeps the template now selected and what was typed into it', async () => {
+      const rejectLate = await leaveWithPendingCreate()
+      await userEvent.click(tile('Second plugin'))
+      await screen.findByText('Plugin code')
+      await typePluginCode('PAY2')
+      await rejectLate()
+      expect(within(screen.getByTestId('template-parameter-PLUGIN_CODE')).getByRole('textbox')).toHaveValue('PAY2')
+      expect(railSteps()).toEqual(['Profile', 'Parameters', 'Review & create'])
+    })
+
+    it('leaves the regular steps where they are', async () => {
+      const rejectLate = await leaveWithPendingCreate()
+      await userEvent.click(tile('Regular external component'))
+      await userEvent.click(nextButton())
+      expect(await screen.findByRole('heading', { name: 'General' })).toBeInTheDocument()
+      await rejectLate()
+      expect(screen.getByRole('heading', { name: 'General' })).toBeInTheDocument()
+      expect(screen.queryByText(/Component template 'client-plugin' not found/)).toBeNull()
+    })
+
+    it('stops offering the withdrawn template', async () => {
+      const rejectLate = await leaveWithPendingCreate()
+      await rejectLate()
+      expect(screen.queryByRole('radio', { name: 'Client plugin' })).toBeNull()
+      expect(tile('Second plugin')).toBeInTheDocument()
+    })
+  })
+
   it('shows a refusal at the top of Review', async () => {
     await reachReview()
     mockApi.post.mockRejectedValueOnce(new ApiError(403, 'You do not have permission to create components'))

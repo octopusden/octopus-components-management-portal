@@ -156,6 +156,8 @@ Overridable: `baseConfiguration.vcsEntries[0].vcsPath`, `baseConfiguration.jira.
   wizard returns to the Profile step
   with that message and stops offering that template. It keeps the listing it opened with rather
   than refetching it, which would reset a form in progress.
+- A 404 that arrives after the user left that template (picked another tile while its create
+  waited) only stops offering it; the selection and the step stay as they are. (added on review)
 - 403 and 400 → the message at the top of Review; nothing else changes.
 
 ### 8. Administrators' Templates tab
