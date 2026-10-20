@@ -66,15 +66,19 @@ function useAsCodeSearchUrlState() {
   const [params, setParams] = useSearchParams()
   const location = useLocation()
   const router = useContext(UNSAFE_DataRouterContext)?.router
-  // The id of the latest write until its location renders, read by a write made before that.
-  // Once rendered it is cleared, so a later Back/Forward to that entry is not taken for it.
+  // The id of the latest write while the router still stands on its location, not rendered yet;
+  // a write made in that window reads it. It is cleared as soon as a location renders and the router
+  // is anywhere else: that write rendered, or history navigation superseded it. Either way a later
+  // Back/Forward to its entry is navigation, not that write.
   const latestWrite = useRef<number | null>(null)
   const renderedKey = useRef(location.key)
   useEffect(() => {
     if (renderedKey.current === location.key) return
     renderedKey.current = location.key
-    const id = writeIdOf(location.state)
-    if (id === undefined || latestWrite.current === null || id >= latestWrite.current) latestWrite.current = null
+    const pending = router?.state.location
+    if (!pending || pending.key === location.key || writeIdOf(pending.state) !== latestWrite.current) {
+      latestWrite.current = null
+    }
   })
   // The id of a write whose location has not rendered yet; consumed by that location, so a later
   // Back/Forward to the same entry counts as an arrival.

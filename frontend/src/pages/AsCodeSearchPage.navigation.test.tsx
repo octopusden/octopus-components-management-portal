@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { createBrowserRouter, createMemoryRouter, RouterProvider } from 'react-router'
 import React from 'react'
+import { flushSync } from 'react-dom'
 import { AsCodeSearchPage } from './AsCodeSearchPage'
 import { useAsCodeSearch } from '../hooks/useAsCodeSearch'
 
@@ -202,6 +203,39 @@ describe('AsCodeSearchPage — writes racing a location the page has not rendere
       await act(async () => { vi.advanceTimersByTime(500) })
       expect(at(r)).toBe('/search?q=gamma')
       expect(field().value).toBe('gamma')
+    })
+
+    it.each([
+      ['expiry first', false],
+      ['navigation first', true],
+    ] as const)('a write superseded by Back before it renders does not claim its entry later (Forward, %s)', async (_order, navFirst) => {
+      const r = start(kind, '/search?q=alpha')
+      fireEvent.change(field(), { target: { value: 'gamma' } })
+      await act(async () => { vi.advanceTimersByTime(300) })
+      await act(async () => { await r.navigate('/search?q=beta') })
+      await act(async () => { vi.advanceTimersByTime(500) })
+      fireEvent.change(field(), { target: { value: 'delta' } })
+      await act(async () => {
+        // The debounced delta reaches the router (it replaces the beta entry) while beta is still rendered…
+        flushSync(() => { vi.advanceTimersByTime(300) })
+        expect(at(r)).toBe('/search?q=delta')
+        // …and Back supersedes it before it renders.
+        await go(r, -1)
+        expect(at(r)).toBe('/search?q=gamma')
+      })
+      await act(async () => { vi.advanceTimersByTime(500) })
+      expect(at(r)).toBe('/search?q=gamma')
+      expect(field().value).toBe('gamma')
+      // Forward to the delta entry, with a new draft pending: the entry wins.
+      fireEvent.change(field(), { target: { value: 'epsilon' } })
+      await act(async () => {
+        vi.advanceTimersByTime(navFirst ? 298 : 300)
+        await go(r, 1)
+        if (navFirst) vi.advanceTimersByTime(1)
+      })
+      await act(async () => { vi.advanceTimersByTime(500) })
+      expect(at(r)).toBe('/search?q=delta')
+      expect(field().value).toBe('delta')
     })
 
     it('two own writes before the first renders keep both params', async () => {
