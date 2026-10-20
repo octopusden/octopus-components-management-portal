@@ -457,12 +457,19 @@ const columns = [
   }),
   columnHelper.accessor('archived', {
     header: 'Status',
-    cell: ({ getValue }) => {
+    cell: ({ getValue, row }) => {
       const archived = getValue()
       return (
-        <Badge variant={archived ? 'destructive' : 'secondary'}>
-          {archived ? 'Archived' : 'Active'}
-        </Badge>
+        <div className="flex items-center gap-1">
+          <Badge variant={archived ? 'destructive' : 'secondary'}>
+            {archived ? 'Archived' : 'Active'}
+          </Badge>
+          {row.original.testComponent && (
+            <Badge variant="outline" title="Test component">
+              Test
+            </Badge>
+          )}
+        </div>
       )
     },
     enableSorting: false,

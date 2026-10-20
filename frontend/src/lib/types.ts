@@ -20,6 +20,10 @@ export interface ComponentSummary {
   systems: string[]
   productType: string | null
   archived: boolean
+  // Synthetic test component (e.g. the CVELAB stand). The list page hides these
+  // by default (`testComponent=false`); optional so existing fixtures need not
+  // set it — the server always emits it (default false).
+  testComponent?: boolean
   // Whether this component may be referenced as a parent (parent-picker
   // eligibility — NOT an aggregator, which is a `components { }` owner). Drives
   // the parent picker filter. Optional on the TS type so existing fixtures
@@ -59,6 +63,8 @@ export interface ComponentDetail {
   systems: string[]
   clientCode: string | null
   archived: boolean
+  // Synthetic test component — see ComponentSummary.testComponent.
+  testComponent?: boolean
   solution: boolean | null
   parentComponentName: string | null
   // Whether this component may itself be a parent. Editable (CAN_BE_PARENT
@@ -109,6 +115,11 @@ export interface ComponentDetail {
   // registered-build-parameters spec. Absent/null for a component CRS doesn't
   // track this for (archived, non-Maven/Gradle, or RMS integration disabled).
   registeredBuildParameters?: RegisteredBuildParametersDetail | null
+  // Non-blocking CRS advisories: on a write response (e.g. the TeamCity build
+  // chain must be recreated) and about the component itself (e.g. the
+  // `test-component` label without the testComponent flag). Optional — absent
+  // against an older registry and in fixtures.
+  warnings?: string[]
 }
 
 /** One RMS-registered ("ACTUAL") version range for a single build attribute. */
@@ -160,6 +171,8 @@ export interface ComponentConfiguration {
   escrow?: EscrowAspect | null
   jira?: JiraAspect | null
   vcsEntries: VcsEntry[]
+  // Directory the build runs in, relative to the checkout root. Absent against an older registry.
+  buildWorkingDirectory?: string | null
   mavenArtifacts: MavenArtifact[]
   fileUrlArtifacts: FileUrlArtifact[]
   dockerImages: DockerImage[]
@@ -218,6 +231,9 @@ export interface VcsEntry {
   tag?: string | null
   hotfixBranch?: string | null
   repositoryType?: string | null
+  // Checkout placement. Absent against an older registry.
+  sourcePath?: string | null
+  checkoutDirectory?: string | null
   sortOrder: number
 }
 
@@ -347,6 +363,8 @@ export interface VcsEntryRequest {
   tag?: string | null
   hotfixBranch?: string | null
   repositoryType?: string | null
+  sourcePath?: string | null
+  checkoutDirectory?: string | null
 }
 
 export interface MavenArtifactRequest {
@@ -409,6 +427,8 @@ export interface BaseConfigurationRequest {
   escrow?: EscrowAspect | null
   jira?: JiraAspect | null
   vcsEntries?: VcsEntryRequest[] | null
+  // `null` leaves the stored value; `''` clears it.
+  buildWorkingDirectory?: string | null
   mavenArtifacts?: MavenArtifactRequest[] | null
   fileUrlArtifacts?: FileUrlArtifactRequest[] | null
   dockerImages?: DockerImageRequest[] | null
@@ -431,6 +451,7 @@ export interface ComponentCreateRequest {
   solution?: boolean | null
   parentComponentName?: string | null
   archived?: boolean
+  testComponent?: boolean
   // Ordered multi-value lists on create. The CRS ComponentCreateRequest
   // defaults them to emptyList(), so the field is optional here — the create
   // dialog omits it entirely (people are added later via the editor).
@@ -453,6 +474,9 @@ export interface ComponentCreateRequest {
   securityGroups?: SecurityGroupRequest[]
   teamcityProjects?: TeamcityProjectRequest[]
   baseConfiguration?: BaseConfigurationRequest | null
+  // Id of the registry profile the component is created with; the registry checks the
+  // classification and the profile's field rules against it.
+  profile?: string | null
   // Change metadata recorded on the audit row (not on the component). Both
   // optional; the Jira key, when non-blank, must match a Jira key (see
   // lib/editor/jiraKey). Send a trimmed value or omit — never an empty string.
@@ -482,6 +506,7 @@ export interface ComponentUpdateRequest {
   canBeParent?: boolean | null
   clearParent?: boolean
   archived?: boolean | null
+  testComponent?: boolean | null
   // PATCH semantics mirror `labels`: omit / null = don't touch; a provided
   // ordered list (including empty [] = clear) REPLACES the whole list.
   releaseManager?: string[] | null
@@ -531,6 +556,8 @@ export interface ComponentFilter {
   /** Exact-match OR across values (components can belong to multiple systems via systemJunctions). CSV on the wire. */
   system?: string[]
   archived?: boolean
+  /** `false` hides test components, `true` shows only them; absent = both (CRS default). */
+  testComponent?: boolean
   search?: string
   /**
    * Server-side exact-match filter on `componentOwner`. Sourced from
@@ -624,6 +651,8 @@ export interface AuditLogEntry {
 //    securityGroups/teamcityProjects/group) are marker-overridable.
 export interface MarkerChildrenPayload {
   vcsEntries?: VcsEntryRequest[] | null
+  // With `vcsEntries` on a `vcs.settings` row; the payload replaces the row.
+  buildWorkingDirectory?: string | null
   mavenArtifacts?: MavenArtifactRequest[] | null
   fileUrlArtifacts?: FileUrlArtifactRequest[] | null
   dockerImages?: DockerImageRequest[] | null
@@ -1018,11 +1047,12 @@ export interface HistoryMigrationJobResponse {
 /**
  * 409 body returned for cross-kind conflicts — components POST while history
  * is RUNNING, history POST while TC sync is RUNNING, force-reset while
- * history is RUNNING, any of the above while TC validation is RUNNING (or
- * vice versa), etc. All four async job kinds (components migration, history
- * migration, TC resync, TC validation) share one single-flight lifecycle gate
- * on the backend. Distinct from the same-kind attach 409 that returns a full
- * job-response body — distinguished by the `kind` discriminator (always
+ * history is RUNNING, any of the above while TC validation or a TeamCity
+ * placement Diff/Sync is RUNNING (or vice versa), etc. All six async job
+ * kinds (components migration, history migration, TC resync, TC validation,
+ * TC placement Diff, TC placement Sync) share one single-flight lifecycle
+ * gate on the backend. Distinct from the same-kind attach 409 that returns a
+ * full job-response body — distinguished by the `kind` discriminator (always
  * 'conflict' here).
  */
 export interface MigrationConflictResponse {
@@ -1034,8 +1064,10 @@ export interface MigrationConflictResponse {
     | 'history-import-likely-live-elsewhere'
     | 'tc-resync-running'
     | 'tc-validation-running'
+    | 'tc-placement-diff-running'
+    | 'tc-placement-sync-running'
   message: string
-  activeKind: 'COMPONENTS' | 'HISTORY' | 'TC_RESYNC' | 'TC_VALIDATION'
+  activeKind: 'COMPONENTS' | 'HISTORY' | 'TC_RESYNC' | 'TC_VALIDATION' | 'TC_PLACEMENT_DIFF' | 'TC_PLACEMENT_SYNC'
   activeJobId: string | null
 }
 
@@ -1099,6 +1131,129 @@ export interface TeamCityValidationJobResponse {
   finishedAt: string | null
   errorMessage: string | null
   result: TeamCityValidationResult | null
+}
+
+// ── TeamCity → CRS VCS-placement Diff/Sync ───────────────────────────────────
+// Wire shapes for `rest/api/4/admin/teamcity-placement/**` — see CRS
+// `TeamcityPlacementControllerV4` and the `dto/v4` + `teamcity/placement`
+// packages it serves from. New endpoints, so (unlike the older job shapes
+// above) there's no legacy-CRS backward-compat concern: `kind` is required,
+// not optional.
+
+/**
+ * One outcome per Diff row (`PlacementDiffRowStatus` on CRS). RESOLVED is the
+ * only status Sync will ever write; every other status is report-only.
+ */
+export type PlacementDiffRowStatus =
+  | 'RESOLVED'
+  | 'CONFLICT'
+  | 'UNEXPRESSIBLE'
+  | 'NO_CHAIN'
+  | 'OUTSIDE_TEMPLATES'
+  | 'COMPILE_PAUSED'
+  | 'MANUAL_EDIT'
+  | 'IN_SYNC'
+  | 'INVALID'
+  | 'TC_ERROR'
+  | 'ROOTS_MISMATCH'
+
+/** One VCS root entry's current vs. TeamCity-derived Checkout Directory / Source Path. */
+export interface PlacementEntryDiff {
+  name: string
+  vcsPath: string
+  branch?: string | null
+  tag?: string | null
+  hotfixBranch?: string | null
+  repositoryType?: string | null
+  currentCheckoutDirectory?: string | null
+  currentSourcePath?: string | null
+  derivedCheckoutDirectory?: string | null
+  derivedSourcePath?: string | null
+}
+
+/** One base or marker (`vcs.settings`) configuration row's diff. */
+export interface PlacementRowDiff {
+  componentId: string
+  componentKey: string
+  configurationRowId: string
+  versionRange: string
+  /** "BASE" or the marker name — only "BASE" rows are ever selectable for Sync. */
+  rowLabel: string
+  status: PlacementDiffRowStatus
+  entries: PlacementEntryDiff[]
+  currentBuildWorkingDirectory?: string | null
+  derivedBuildWorkingDirectory?: string | null
+  sourceBuildTypeIds: string[]
+  notes: string[]
+}
+
+/** `GET /admin/teamcity-placement/diff/report.json` (component read access, 404 until a Diff has completed). */
+export interface PlacementDiffResult {
+  /** The Diff run these rows came from; what a Sync request must name. */
+  diffId?: string
+  generatedAt: string
+  rows: PlacementRowDiff[]
+}
+
+/** `POST /admin/teamcity-placement/diff` (202/409) and `GET .../diff/job` (200/404). */
+export interface TeamcityPlacementDiffJobResponse {
+  kind: 'job'
+  id: string
+  state: JobState
+  startedAt: string
+  finishedAt: string | null
+  errorMessage: string | null
+  rowCount: number | null
+}
+
+/** POST body for `/admin/teamcity-placement/sync` — the Diff run's id plus the selected component ids. */
+export interface TeamcityPlacementSyncRequest {
+  diffId: string
+  componentIds: string[]
+}
+
+export interface PlacementRowSyncOutcome {
+  configurationRowId: string
+  rowLabel: string
+  /** `applied` / `skipped: changed since diff` / `skipped: <reason>` / `failed: <message>`. */
+  outcome: string
+}
+
+export interface PlacementComponentSyncOutcome {
+  componentId: string
+  componentKey: string
+  rows: PlacementRowSyncOutcome[]
+}
+
+/** One written field's rollback trace — before/after, per `field` on `root` (VCS entry name, or "" for the row-level BWD). */
+export interface PlacementFieldChange {
+  componentKey: string
+  rowLabel: string
+  root: string
+  field: string
+  before: string | null
+  after: string | null
+}
+
+export interface PlacementSyncResult {
+  triggeredBy: string
+  requested: number
+  applied: number
+  skipped: number
+  failed: number
+  components: PlacementComponentSyncOutcome[]
+  fieldChanges: PlacementFieldChange[]
+}
+
+/** `POST /admin/teamcity-placement/sync` (202/409) and `GET .../sync/job` (200/404). */
+export interface TeamcityPlacementSyncJobResponse {
+  kind: 'job'
+  id: string
+  state: JobState
+  startedAt: string
+  finishedAt: string | null
+  errorMessage: string | null
+  result: PlacementSyncResult | null
 }
 
 // ── CRS legacy version rendering (rest/api/2/.../detailed-version) ───────────

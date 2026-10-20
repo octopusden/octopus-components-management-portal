@@ -4,7 +4,10 @@ import {
   useForm,
   useFieldArray,
   Controller,
+  type FieldPath,
   type UseFormRegisterReturn,
+  type UseFormSetError,
+  get,
 } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Check, ChevronLeft, ChevronRight, Plus, X, AlertCircle, Loader2 } from 'lucide-react'
@@ -28,11 +31,22 @@ import { cn } from '../lib/utils'
 import { hostOf } from '../lib/vcsHost'
 import { useFieldOptions } from '../hooks/useFieldOptions'
 import { useSupportedGroups } from '../hooks/useSupportedGroups'
-import { usePortalLinks, usePortalConfig } from '../hooks/useInfo'
+import { usePortalLinks } from '../hooks/useInfo'
 import { useFieldConfig, useComponentDefaults } from '../hooks/useAdminConfig'
-import { isFieldEditableFor, useFieldEditable, useFieldConfigEntry } from '../hooks/useFieldConfig'
+import type { ComponentProfile } from '../hooks/useComponentProfiles'
+import { useProfilesForWizard } from '../hooks/useProfilesForWizard'
+import { useLabels } from '../hooks/useLabels'
+import { ChipsInput } from '../components/ui/ChipsInput'
+import {
+  isFieldEditableFor,
+  useFieldEditable,
+  useFieldConfigEntry,
+  useFieldVisibility,
+  type FieldVisibility,
+} from '../hooks/useFieldConfig'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useComponent, useCreateComponent } from '../hooks/useComponent'
+import { cloneTestComponent, useTestComponentNamePatterns } from '../hooks/useTestComponentNamePatterns'
 import { useToast } from '../hooks/use-toast'
 import { ApiError } from '../lib/api'
 import { classifyConflictBody } from '../lib/conflict'
@@ -44,16 +58,17 @@ import {
   DEPRECATED_BUILD_SYSTEMS,
   type CreateFormValues,
 } from '../lib/component/buildCreateRequest'
+import { formFieldOfRule, makeCreateSchema, initialValues, type ComponentDefaults } from '../lib/component/createFormModel'
 import {
-  makeCreateSchema,
-  initialValues,
+  asksExplicit,
   flagsForProfile,
-  profileFromSource,
-  PROFILE_META,
-  DEFAULT_SCRATCH_PROFILE,
-  type ComponentProfile,
-  type ComponentDefaults,
-} from '../lib/component/createFormModel'
+  initialProfile,
+  manualFlags,
+  profileForClassification,
+  profilesCovering,
+  type ProfileFlags,
+} from '../lib/component/createProfile'
+import { ruleErrorOf, RULE_FORM_FIELDS } from '../lib/component/profileRules'
 import type { ComponentDetail } from '../lib/types'
 import { OWNERSHIP_MODES } from '../lib/artifactOwnership'
 import { validateJiraKey, normalizeJiraKey, normalizeChangeComment } from '../lib/editor/jiraKey'
@@ -84,15 +99,94 @@ const STEP_SUBTITLES: Record<StepId, string> = {
 
 const SCRATCH_STEPS: StepId[] = ['profile', 'general', 'build', 'vcs', 'jira', 'distribution', 'escrow', 'review']
 // Clone keeps the Profile step too: the profile is pre-derived from the source
-// but stays editable (changing it resets the Component Key + recomputes flags),
-// per the brief. It is not a gate in clone (a profile is always pre-selected).
+// but stays editable (changing it resets the Component Key + recomputes flags).
+// A clone opens on General unless only unusable profiles have its classification; with no matching
+// profile it sets its classification there directly, starting from the source's.
 const CLONE_STEPS: StepId[] = ['profile', 'general', 'build', 'vcs', 'jira', 'distribution', 'escrow', 'review']
+
+// A registry rejection of the profile (`profile: …`) belongs to the Profile step; one of a
+// profile field rule (`<create-request path>: …`) to the wizard field for that path, on its step.
+function routeProfileRejection(
+  rawBody: string,
+  fieldErrors: Map<string, string>,
+  setError: UseFormSetError<CreateFormValues>,
+  ownership: readonly { groupId: string }[],
+): StepId | null {
+  if (fieldErrors.get('profile')) return 'profile'
+  const ruleError = ruleErrorOf(rawBody)
+  const field = ruleError && formFieldOfRule(ruleError.path, ownership)
+  if (!ruleError || !field) return null
+  setError(field as FieldPath<CreateFormValues>, { type: 'server', message: ruleError.message })
+  return stepOfField(field)
+}
+
+// A clone that already has a classification skips to General; otherwise the Profile step comes first.
+function startStepFor(isClone: boolean, hasClassification: boolean): StepId {
+  return isClone && hasClassification ? 'general' : 'profile'
+}
+
+// The classification the user sets directly: a new component starts external and not a
+// solution (SCRATCH_DEFAULTS), a clone as its source — a solution only when explicit external,
+// so an unsent Solution cannot come back ticked when the user switches to explicit external.
+function initialManualClassification(source: ComponentDetail | null): { external: boolean; solution: boolean } {
+  if (!source) return { external: true, solution: false }
+  const { solution } = manualFlags(!!source.distributionExternal, !!source.distributionExplicit, !!source.solution)
+  return { external: !!source.distributionExternal, solution }
+}
+
+function manualChanged(manual: { external: boolean; solution: boolean }, source: ComponentDetail | null): boolean {
+  const start = initialManualClassification(source)
+  return manual.external !== start.external || manual.solution !== start.solution
+}
+
+// A clone sets its classification directly only when no profile has it; when only profiles the
+// user may not use have it, the clone must pick a profile and cannot, as a new component cannot.
+function isManualClassification(noProfiles: boolean, isClone: boolean, matchesAny: boolean): boolean {
+  return noProfiles || (isClone && !matchesAny)
+}
+
+function classificationFlags(
+  manualMode: boolean,
+  profile: ComponentProfile | null,
+  explicitAnswer: boolean,
+  manual: { external: boolean; solution: boolean },
+): ProfileFlags | null {
+  if (manualMode) return manualFlags(manual.external, explicitAnswer, manual.solution)
+  return profile ? flagsForProfile(profile, explicitAnswer) : null
+}
+
+// The wizard's starting classification is not always the source's (a solution that is not explicit
+// external starts as not a solution), so a profile may cover it although none matched the source.
+function initialProfileId(
+  initial: { profileId: string | null; explicit: boolean },
+  manualMode: boolean,
+  manual: { external: boolean; solution: boolean },
+  key: string,
+  profiles: readonly ComponentProfile[],
+): string | null {
+  if (!manualMode) return initial.profileId
+  const flags = manualFlags(manual.external, initial.explicit, manual.solution)
+  return profileForClassification(flags, key, profiles).profile?.id ?? null
+}
+
+// A classification set directly that a profile covers takes that profile, so its rules and
+// usability apply as if its tile were picked.
+function profileSelection(
+  manualMode: boolean,
+  flags: ProfileFlags | null,
+  profiles: readonly ComponentProfile[],
+  profileId: string | null,
+): { covering: ComponentProfile[]; profileMissing: boolean } {
+  const covering = manualMode && flags ? profilesCovering(flags, profiles) : []
+  return { covering, profileMissing: profileId === null && (!manualMode || covering.length > 0) }
+}
 
 // Map a zod-issue / RHF-error field path to the wizard step that owns it.
 function stepOfField(path: string): StepId {
   const head = path.split('.')[0]
   switch (head) {
     case 'buildSystem':
+    case 'buildTasks':
     case 'ownership':
       return 'build'
     case 'vcsUrl':
@@ -154,7 +248,8 @@ export function CreateComponentPage() {
   const { data: source, error } = useComponent(sourceId)
   const defaults = useComponentDefaults({ retry: false })
   const componentDefaults = (defaults.data ?? {}) as ComponentDefaults
-  const ready = (!isClone || (!!source && !error)) && (defaults.isSuccess || defaults.isError)
+  const { openedWith, unavailable: profilesUnavailable, retry: retryProfiles } = useProfilesForWizard()
+  const ready = (!isClone || (!!source && !error)) && (defaults.isSuccess || defaults.isError) && openedWith !== null
 
   return (
     <Dialog
@@ -182,6 +277,18 @@ export function CreateComponentPage() {
               }
             />
           </div>
+        ) : profilesUnavailable ? (
+          <div className="flex flex-1 flex-col gap-4 p-6">
+            <DialogTitle>{isClone ? 'Clone component' : 'Create component'}</DialogTitle>
+            <InlineError
+              message="Could not load the component profiles from the registry, so no component can be created right now."
+            />
+            <div>
+              <Button type="button" variant="outline" onClick={retryProfiles}>
+                Retry
+              </Button>
+            </div>
+          </div>
         ) : !ready ? (
           <div className="flex flex-1 flex-col gap-4 p-6">
             <DialogTitle className="sr-only">Create component</DialogTitle>
@@ -195,6 +302,7 @@ export function CreateComponentPage() {
             source={source ?? null}
             isClone={isClone}
             defaults={componentDefaults}
+            profiles={openedWith ?? []}
             onCreateAnother={() => setRemountKey((k) => k + 1)}
           />
         )}
@@ -207,12 +315,14 @@ interface WizardProps {
   source: ComponentDetail | null
   isClone: boolean
   defaults: ComponentDefaults
+  /** The registry's `regular` profiles, in its order; empty when the registry has none configured. */
+  profiles: ComponentProfile[]
   /** Remount the wizard as a fresh form instance after a successful create (same
    *  mode — scratch stays scratch, a clone restarts as another clone of the source). */
   onCreateAnother: () => void
 }
 
-function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: WizardProps) {
+function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAnother }: WizardProps) {
   const navigate = useNavigate()
   const createMutation = useCreateComponent()
   const { toast } = useToast()
@@ -228,40 +338,35 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
   )
   const { groups: supportedGroups } = useSupportedGroups()
   const { data: portalLinks } = usePortalLinks()
-  const { data: portalConfig } = usePortalConfig()
-  const solutionPatterns = portalConfig?.solutionKeyPatterns
   const gitBaseUrl = portalLinks?.gitBaseUrl
 
-  // Profile (brief "Choose component profile"). Scratch pre-selects the most
-  // common profile ("Regular external component") so the step is ready to go;
-  // clone derives it from the source (editable afterwards).
-  const derived = useMemo(
-    () => (source ? profileFromSource(source, solutionPatterns) : null),
-    [source, solutionPatterns],
-  )
-  const [profile, setProfile] = useState<ComponentProfile | null>(
-    derived?.profile ?? DEFAULT_SCRATCH_PROFILE,
-  )
-  const [explicitAnswer, setExplicitAnswer] = useState<boolean>(derived?.explicit ?? false)
-  // The clone profile/explicit are seeded once from `derived`, but `derived` is
-  // recomputed when solutionKeyPatterns arrive after mount (portal-config loads
-  // async), which can change the derived profile (e.g. solution → dmp-bundle).
-  // Re-seed from `derived` until the user actually picks a profile, so a late
-  // config load never looks like an unsaved edit.
-  const userPickedProfile = useRef(false)
-  useEffect(() => {
-    if (userPickedProfile.current || !derived) return
-    setProfile(derived.profile)
-    setExplicitAnswer(derived.explicit)
-  }, [derived])
-  // A profile is needed for the (profile-dependent) key rule even before the
-  // scratch gate is passed; fall back to the base-regex profile for the schema.
-  const effectiveProfile: ComponentProfile = profile ?? 'regular-external'
+  // Profile: scratch pre-selects the first usable registry profile; clone derives it from
+  // the source (editable afterwards). Frozen at mount — the profiles arrive with the wizard.
+  const [initial] = useState(() => initialProfile(source, profiles))
+  const [formDefaults] = useState(() => initialValues(source, defaults, initial.profile))
+  // The user sets the classification directly when the registry has no profiles, or when no
+  // profile has a clone's classification (D10).
+  const noProfiles = profiles.length === 0
+  const manualMode = isManualClassification(noProfiles, isClone, initial.matchesAny)
+  const [manual, setManual] = useState(() => initialManualClassification(source))
+  const [startProfileId] = useState(() => initialProfileId(initial, manualMode, manual, formDefaults.name, profiles))
+  const [profileId, setProfileId] = useState<string | null>(startProfileId)
+  const [explicitAnswer, setExplicitAnswer] = useState<boolean>(initial.explicit)
+  const profile = profiles.find((p) => p.id === profileId) ?? null
+  const flags = classificationFlags(manualMode, profile, explicitAnswer, manual)
+  const { covering, profileMissing } = profileSelection(manualMode, flags, profiles, profileId)
 
+  const buildTasksVisibility = useFieldVisibility('build.buildTasks')
+  const labelsVisibility = useFieldVisibility('component.labels')
+  const profileRules = useMemo(() => profile?.rules ?? [], [profile])
+  const previousRules = useRef(profileRules)
   const schema = useMemo(
     () =>
-      makeCreateSchema(editable, supportedGroups, gitBaseUrl, effectiveProfile, solutionPatterns, source ?? undefined),
-    [editable, supportedGroups, gitBaseUrl, effectiveProfile, solutionPatterns, source],
+      makeCreateSchema(editable, supportedGroups, gitBaseUrl, profileRules, source ?? undefined, {
+        labels: labelsVisibility,
+        buildTasks: buildTasksVisibility,
+      }),
+    [editable, supportedGroups, gitBaseUrl, profileRules, source, labelsVisibility, buildTasksVisibility],
   )
 
   const {
@@ -274,14 +379,24 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
     clearErrors,
     control,
     trigger,
+    getFieldState,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<CreateFormValues>({
     resolver: zodResolver(schema),
     // Live validation so inline field errors surface as the user types (the
     // stepper's cross-step markers use an independent safeParse).
     mode: 'onChange',
-    defaultValues: initialValues(source, defaults),
+    defaultValues: formDefaults,
   })
+  // A profile switch changes the rules: revalidate the fields showing a message, so one from a
+  // rule the new profile lacks clears.
+  useEffect(() => {
+    if (previousRules.current === profileRules) return
+    previousRules.current = profileRules
+    const shown = RULE_FORM_FIELDS.filter((field) => getFieldState(field as FieldPath<CreateFormValues>).error)
+    if (shown.length > 0) void trigger(shown as FieldPath<CreateFormValues>[])
+  }, [profileRules, trigger, getFieldState])
+
 
   const values = watch()
 
@@ -308,6 +423,7 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
   const escrowGenerationHidden =
     escrowFcLoading || escrowFcError || escrowGenerationEntry.visibility === 'hidden'
   const escrowGenerationEditable = useFieldEditable('escrow.generation')
+  const { data: labelOptions = [], isLoading: labelsLoading } = useLabels({ enabled: labelsVisibility === 'editable' })
   // Skip the escrow-generations meta fetch when the field is hidden — the control
   // isn't rendered and generation isn't sent, so the vocabulary is never needed.
   const { options: escrowGenerations } = useFieldOptions('generation', {
@@ -341,13 +457,28 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
 
   // Apply the chosen profile: set the derived flags and (on a real change) reset
   // the Component Key so the profile-dependent rule is re-entered (brief).
+  // The default copyright is seeded only for an explicit external component; once the
+  // classification leaves that, clear it unless the user changed it. Read before the new flags
+  // are set: a classification that was never explicit external keeps a clone's copied copyright.
+  const clearDefaultCopyrightUnless = useCallback(
+    (explicitExternal: boolean) => {
+      if (explicitExternal || !formDefaults.copyright) return
+      if (!(getValues('distributionExternal') && getValues('distributionExplicit'))) return
+      if (getValues('copyright') === formDefaults.copyright) setValue('copyright', '', { shouldValidate: false })
+    },
+    [formDefaults, getValues, setValue],
+  )
+
   const applyProfile = useCallback(
     (next: ComponentProfile, nextExplicit: boolean) => {
-      userPickedProfile.current = true
-      const changed = next !== profile
-      setProfile(next)
+      if (!next.usable) return
+      // A rejection of the old choice no longer applies, and must not keep the step blocked.
+      setServerError((current) => (current?.stepId === 'profile' ? null : current))
+      const changed = next.id !== profileId
+      setProfileId(next.id)
       setExplicitAnswer(nextExplicit)
       const flags = flagsForProfile(next, nextExplicit)
+      clearDefaultCopyrightUnless(flags.distributionExternal && flags.distributionExplicit)
       // Mark the form dirty when the profile OR its derived distribution flags
       // change — e.g. toggling the explicit-distribution answer for the SAME
       // profile still changes submitted values. A profile-only change that leaves
@@ -366,8 +497,34 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
       }
       void trigger('name')
     },
-    [profile, setValue, getValues, clearErrors, trigger],
+    [profileId, setValue, getValues, clearErrors, trigger, clearDefaultCopyrightUnless],
   )
+
+  const applyManual = useCallback(
+    (next: { external?: boolean; explicit?: boolean; solution?: boolean }) => {
+      const external = next.external ?? manual.external
+      const explicit = next.explicit ?? explicitAnswer
+      const solution = (next.solution ?? manual.solution) && external && explicit
+      setServerError((current) => (current?.stepId === 'profile' ? null : current))
+      setManual({ external, solution })
+      setExplicitAnswer(explicit)
+      clearDefaultCopyrightUnless(external && explicit)
+      setValue('distributionExternal', external, { shouldValidate: false, shouldDirty: true })
+      setValue('distributionExplicit', explicit, { shouldValidate: false, shouldDirty: true })
+      const covered = profileForClassification(manualFlags(external, explicit, solution), getValues('name'), profiles)
+      setProfileId(covered.profile?.id ?? null)
+    },
+    [manual, explicitAnswer, setValue, getValues, profiles, clearDefaultCopyrightUnless],
+  )
+  const pickCovering = (next: ComponentProfile) => {
+    if (!next.usable) return
+    setServerError((current) => (current?.stepId === 'profile' ? null : current))
+    setProfileId(next.id)
+  }
+  const chooseExplicit = (value: boolean) => {
+    if (manualMode) applyManual({ explicit: value })
+    else if (profile) applyProfile(profile, value)
+  }
 
   // Scratch: seed the owner from the current user once (brief §Ownership).
   const ownerSeeded = useRef(false)
@@ -439,12 +596,13 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
 
   // ---- Steps + cross-step validity ------------------------------------------
   const steps = isClone ? CLONE_STEPS : SCRATCH_STEPS
-  const [current, setCurrent] = useState<StepId>(isClone ? 'general' : 'profile')
+  const startStep = startStepFor(isClone, initial.profileId !== null || manualMode)
+  const [current, setCurrent] = useState<StepId>(startStep)
   // Steps the user has landed on, plus whether a Create was attempted. Together
   // they gate the rail's invalid/done markers so nothing is flagged eagerly on
   // first load — only after a step is visited (and left) or a submit is tried.
   const [visitedSteps, setVisitedSteps] = useState<Set<StepId>>(
-    () => new Set<StepId>([isClone ? 'general' : 'profile']),
+    () => new Set<StepId>([startStep]),
   )
   const [attempted, setAttempted] = useState(false)
   const enterStep = (step: StepId) => {
@@ -456,21 +614,23 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
   // the stepper can mark ANY step invalid, not just the current one.
   const parseIssues = useMemo(() => {
     const result = schema.safeParse(values)
-    if (result.success) return [] as { message: string; step: StepId }[]
+    if (result.success) return [] as ParseIssue[]
     return result.error.issues.map((issue) => ({
       message: issue.message,
+      field: issue.path.join('.'),
       step: stepOfField(issue.path.join('.')),
+      profileRule: issue.code === 'custom' && issue.params?.profileRule === true,
     }))
   }, [schema, values])
 
   const invalidSteps = useMemo(() => {
     const set = new Set<StepId>()
     for (const issue of parseIssues) set.add(issue.step)
-    if (!isClone && profile === null) set.add('profile')
+    if (profileMissing) set.add('profile')
     if (jiraKeyError) set.add('review')
     if (serverError) set.add(serverError.stepId)
     return set
-  }, [parseIssues, isClone, profile, jiraKeyError, serverError])
+  }, [parseIssues, profileMissing, jiraKeyError, serverError])
 
   // Invalid steps actually shown as such: only those visited (or all, once a
   // Create was attempted), and never the step you are currently on until you
@@ -517,6 +677,8 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
   const [submitted, setSubmitted] = useState(false)
   const [created, setCreated] = useState<{ id: string; name: string } | null>(null)
 
+  const testPatterns = useTestComponentNamePatterns().data
+
   async function onSubmit(formValues: CreateFormValues) {
     setAttempted(true)
     if (jiraKeyError) return
@@ -528,14 +690,18 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
         editable,
         escrowGenerationEditable,
         escrowGenerationHidden,
+        { labels: labelsVisibility, buildTasks: buildTasksVisibility },
       )
-      const flags = flagsForProfile(effectiveProfile, explicitAnswer)
+      if (!flags) return
       const request = {
         ...base,
         // Solution comes from the profile (scratch has no source to copy it
         // from; a clone may have changed profile). Only sent when the field is
         // editable — otherwise the builder already stripped it.
         ...(editable('solution') ? { solution: flags.solution } : {}),
+        // Without registry profiles nothing is named; undefined is dropped from the JSON body.
+        profile: profile?.id,
+        ...(cloneTestComponent(source ?? undefined, formValues.name, testPatterns) ? { testComponent: true } : {}),
         jiraTaskKey: normalizeJiraKey(jiraTaskKey),
         changeComment: normalizeChangeComment(changeComment),
       }
@@ -557,6 +723,7 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
       }
       if (err instanceof ApiError && err.status === 400) {
         const fieldErrors = parseServerFieldErrors(err.rawBody)
+        stepId = routeProfileRejection(err.rawBody, fieldErrors, setError, formValues.ownership) ?? stepId
         if (fieldErrors.get('name')) {
           setError('name', { type: 'server', message: fieldErrors.get('name')! })
           stepId = 'general'
@@ -612,13 +779,15 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
     ownerValidating ||
     !!jiraKeyError ||
     fcLoading ||
+    // Without field settings every field counts as not editable and would be silently dropped.
+    fcError ||
     userLoading ||
-    // Client-side blocking issues: any invalid field (schema parse) or, in
-    // scratch, an unchosen Profile. Excludes serverError (so a failed submit can
-    // be retried after the user edits). Prevents bypassing the Profile gate by
-    // jumping straight to Review via the stepper.
+    // Client-side blocking issues: any invalid field (schema parse) or an unchosen
+    // Profile. Excludes serverError (so a failed submit can be retried after the
+    // user edits). Prevents bypassing the Profile gate by jumping straight to
+    // Review via the stepper.
     parseIssues.length > 0 ||
-    (!isClone && profile === null)
+    profileMissing
 
   // ---- Rendering helpers ----------------------------------------------------
 
@@ -639,6 +808,7 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
     count: number,
     index: number,
     select: (i: number) => void,
+    isEnabled: (i: number) => boolean = () => true,
   ) => {
     const delta =
       e.key === 'ArrowDown' || e.key === 'ArrowRight'
@@ -648,7 +818,9 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
           : 0
     if (!delta) return
     e.preventDefault()
-    const next = (index + delta + count) % count
+    let next = (index + delta + count) % count
+    while (next !== index && !isEnabled(next)) next = (next + delta + count) % count
+    if (next === index) return
     select(next)
     // Roving tabindex: carry keyboard focus to the newly selected radio in the
     // same group so it doesn't stay stranded on the previous (now tabIndex=-1)
@@ -663,48 +835,16 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
         title="Choose component profile"
         subtitle="The profile sets how the component is classified and how its key is named."
       />
-      <div role="radiogroup" aria-label="Component profile" className="grid gap-3 sm:grid-cols-2">
-        {PROFILE_META.map((p, idx) => {
-          const selected = profile === p.id
-          const tabbable = selected || (profile === null && idx === 0)
-          return (
-            <button
-              key={p.id}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              aria-label={p.label}
-              tabIndex={tabbable ? 0 : -1}
-              onClick={() => applyProfile(p.id, explicitAnswer)}
-              onKeyDown={(e) =>
-                moveRadio(e, PROFILE_META.length, idx, (i) => {
-                  const next = PROFILE_META[i]
-                  if (next) applyProfile(next.id, explicitAnswer)
-                })
-              }
-              className={cn(
-                'flex gap-3 rounded-md border p-3 text-left transition-colors',
-                selected ? 'border-ring bg-muted' : 'border-border hover:bg-muted/50',
-              )}
-            >
-              <span
-                aria-hidden
-                className={cn(
-                  'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border',
-                  selected ? 'border-ring' : 'border-muted-foreground/40',
-                )}
-              >
-                {selected && <span className="h-2 w-2 rounded-full bg-foreground" />}
-              </span>
-              <span className="flex flex-col">
-                <span className="font-medium">{p.label}</span>
-                <span className="mt-1 text-sm text-muted-foreground">{p.description}</span>
-              </span>
-            </button>
-          )
-        })}
-      </div>
-      {profile && (
+      {manualMode ? renderManualClassification() : renderProfileTiles(profiles, (p) => applyProfile(p, explicitAnswer))}
+      {covering.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            This classification belongs to a profile, so its rules apply.
+          </p>
+          {renderProfileTiles(covering, pickCovering)}
+        </div>
+      )}
+      {(profile || manualMode) && (
         <p className="text-sm text-muted-foreground">
           This component will be:{' '}
           <span className="font-medium text-foreground">{external ? 'External' : 'Internal'}</span>
@@ -714,44 +854,149 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
           </span>
         </p>
       )}
-      {profile && PROFILE_META.find((p) => p.id === profile)?.asksExplicit && (
-        <fieldset className="space-y-2 rounded-md border border-border p-4">
-          <legend className="px-1 text-sm font-medium">Has explicit distribution?</legend>
-          <p className="text-sm text-muted-foreground">
-            Does the component have its own distribution — can it be shipped as a separate unit? No
-            → it is shipped inside a packaging component&apos;s distribution.
-          </p>
-          <div role="radiogroup" aria-label="Has explicit distribution" className="flex gap-2 pt-1">
-            {[
-              { label: 'Yes', value: true },
-              { label: 'No', value: false },
-            ].map((opt, idx, arr) => {
-              const selected = explicitAnswer === opt.value
-              return (
-                <Button
-                  key={opt.label}
-                  type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  tabIndex={selected ? 0 : -1}
-                  variant={selected ? 'default' : 'outline'}
-                  size="sm"
-                  onKeyDown={(e) =>
-                    moveRadio(e, arr.length, idx, (i) => {
-                      const opt = arr[i]
-                      if (opt) applyProfile(profile, opt.value)
-                    })
-                  }
-                  onClick={() => applyProfile(profile, opt.value)}
-                >
-                  {opt.label}
-                </Button>
-              )
-            })}
-          </div>
-        </fieldset>
-      )}
+      {((profile && asksExplicit(profile)) || manualMode) && renderExplicitQuestion()}
     </div>
+  )
+
+  const renderManualClassification = () => (
+    <div className="space-y-3">
+      <p className="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+        {noProfiles
+          ? 'The registry has no profiles configured. Set the classification yourself.'
+          : "No profile matches this component's classification. Set it directly; it starts as the source's."}
+      </p>
+      <div role="radiogroup" aria-label="Distribution" className="flex gap-2">
+        {[
+          { label: 'External', value: true },
+          { label: 'Internal', value: false },
+        ].map((opt, idx, arr) => {
+          const selected = manual.external === opt.value
+          return (
+            <Button
+              key={opt.label}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              tabIndex={selected ? 0 : -1}
+              variant={selected ? 'default' : 'outline'}
+              size="sm"
+              onKeyDown={(e) => moveRadio(e, arr.length, idx, (i) => applyManual({ external: arr[i]?.value }))}
+              onClick={() => applyManual({ external: opt.value })}
+            >
+              {opt.label}
+            </Button>
+          )
+        })}
+      </div>
+    </div>
+  )
+
+  const renderProfileTiles = (tiles: readonly ComponentProfile[], pick: (profile: ComponentProfile) => void) => (
+    <div role="radiogroup" aria-label="Component profile" className="grid gap-3 sm:grid-cols-2">
+      {tiles.map((p, idx) => {
+        const selected = profileId === p.id
+        const tabbable = selected || (profileId === null && idx === tiles.findIndex((q) => q.usable))
+        return (
+          <button
+            key={p.id}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            aria-label={p.title}
+            aria-describedby={!p.usable && p.unusableReason ? `profile-${p.id}-reason` : undefined}
+            disabled={!p.usable}
+            tabIndex={tabbable ? 0 : -1}
+            onClick={() => pick(p)}
+            onKeyDown={(e) =>
+              moveRadio(
+                e,
+                tiles.length,
+                idx,
+                (i) => {
+                  const next = tiles[i]
+                  if (next) pick(next)
+                },
+                (i) => !!tiles[i]?.usable,
+              )
+            }
+            className={cn(
+              'flex gap-3 rounded-md border p-3 text-left transition-colors',
+              selected ? 'border-ring bg-muted' : 'border-border hover:bg-muted/50',
+              !p.usable && 'cursor-not-allowed opacity-60 hover:bg-transparent',
+            )}
+          >
+            <span
+              aria-hidden
+              className={cn(
+                'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border',
+                selected ? 'border-ring' : 'border-muted-foreground/40',
+              )}
+            >
+              {selected && <span className="h-2 w-2 rounded-full bg-foreground" />}
+            </span>
+            <span className="flex flex-col">
+              <span className="font-medium">{p.title}</span>
+              <span className="mt-1 text-sm text-muted-foreground">{p.description}</span>
+              {!p.usable && p.unusableReason && (
+                <span id={`profile-${p.id}-reason`} className="mt-1 text-sm text-muted-foreground">
+                  {p.unusableReason}
+                </span>
+              )}
+            </span>
+          </button>
+        )
+      })}
+    </div>
+  )
+
+  const renderExplicitQuestion = () => (
+    <>
+      <fieldset className="space-y-2 rounded-md border border-border p-4">
+        <legend className="px-1 text-sm font-medium">Has explicit distribution?</legend>
+        <p className="text-sm text-muted-foreground">
+          Does the component have its own distribution — can it be shipped as a separate unit? No
+          → it is shipped inside a packaging component&apos;s distribution.
+        </p>
+        <div role="radiogroup" aria-label="Has explicit distribution" className="flex gap-2 pt-1">
+          {[
+            { label: 'Yes', value: true },
+            { label: 'No', value: false },
+          ].map((opt, idx, arr) => {
+            const selected = explicitAnswer === opt.value
+            return (
+              <Button
+                key={opt.label}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                tabIndex={selected ? 0 : -1}
+                variant={selected ? 'default' : 'outline'}
+                size="sm"
+                onKeyDown={(e) =>
+                  moveRadio(e, arr.length, idx, (i) => {
+                    const opt = arr[i]
+                    if (opt) chooseExplicit(opt.value)
+                  })
+                }
+                onClick={() => chooseExplicit(opt.value)}
+              >
+                {opt.label}
+              </Button>
+            )
+          })}
+        </div>
+      </fieldset>
+      {manualMode && manual.external && explicitAnswer && (
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={manual.solution}
+            onChange={(e) => applyManual({ solution: e.target.checked })}
+          />
+          <span>Solution — a top-level component that groups and ships other components</span>
+        </label>
+      )}
+    </>
   )
 
   const classificationRecap = () => {
@@ -759,7 +1004,7 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
       external ? 'External' : 'Internal',
       explicit ? 'explicit distribution' : 'implicit distribution',
     ]
-    if (flagsForProfile(effectiveProfile, explicitAnswer).solution) parts.push('solution')
+    if (flags?.solution) parts.push('solution')
     return parts.join(', ')
   }
 
@@ -833,7 +1078,8 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
 
       <SectionHeader title="Classification" />
       <p className="text-sm text-muted-foreground">
-        Derived from the profile: <span className="font-medium text-foreground">{classificationRecap()}</span>.
+        {manualMode ? 'Set on the Profile step' : 'Derived from the profile'}:{' '}
+        <span className="font-medium text-foreground">{classificationRecap()}</span>.
       </p>
       {external && editable('clientCode') && (
         <Field label="Client Code" htmlFor="create-clientCode" path="component.clientCode">
@@ -845,6 +1091,21 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
             {...register('clientCode', { onChange: () => void trigger('name') })}
           />
           <FieldError message={errors.clientCode?.message} />
+        </Field>
+      )}
+      {labelsVisibility !== 'hidden' && (
+        <Field label="Labels" htmlFor="create-labels" path="component.labels">
+          <ChipsInput
+            disabled={labelsVisibility === 'readonly'}
+            id="create-labels"
+            noun="label"
+            placeholder="Add label"
+            value={values.labels}
+            onChange={(next) => setValue('labels', next, { shouldValidate: true, shouldDirty: true })}
+            options={labelOptions}
+            isLoading={labelsLoading}
+          />
+          <FieldError message={errors.labels?.message} />
         </Field>
       )}
     </div>
@@ -871,6 +1132,16 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
         </select>
         <FieldError message={errors.buildSystem?.message} />
       </Field>
+      {buildTasksVisibility === 'editable' && (
+        <Field label="Build Tasks" htmlFor="create-buildTasks" path="build.buildTasks">
+          <Input
+            id="create-buildTasks"
+            placeholder="clean build"
+            {...register('buildTasks')}
+          />
+          <FieldError message={errors.buildTasks?.message} />
+        </Field>
+      )}
 
       <SectionHeader title="Produced Artifacts" subtitle="Artifacts this component produces." />
       <div className="space-y-2" data-testid="create-ownership">
@@ -1321,12 +1592,17 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
           </button>
         </div>
       </div>
+      {fcError && (
+        <InlineError message="Field settings could not be loaded, so the component cannot be created right now. Reload the page to try again." />
+      )}
       {serverError && (
         <InlineError message={serverError.message} />
       )}
 
       <SummaryDiff
         values={values}
+        showLabels={labelsVisibility !== 'hidden'}
+        showBuildTasks={buildTasksVisibility === 'editable'}
         gated={gated}
         vcsApplies={vcsApplies}
         classification={classificationRecap()}
@@ -1393,14 +1669,12 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
     : 'Create component'
 
   // The profile lives outside RHF and drives submitted flags (incl. `solution`,
-  // which is not an RHF field), so isDirty alone misses a profile-only change. In
-  // clone mode compare against the source-derived profile/explicit; in scratch
-  // compare against the pre-selected default — since the profile is never null in
-  // scratch, "!== null" would make this always true and fire a spurious
-  // unsaved-changes prompt on a pristine wizard.
-  const profileTouched = isClone
-    ? profile !== (derived?.profile ?? null) || explicitAnswer !== (derived?.explicit ?? false)
-    : profile !== DEFAULT_SCRATCH_PROFILE || explicitAnswer !== false
+  // which is not an RHF field), so isDirty alone misses a profile-only change:
+  // compare against the profile and answer the wizard opened with.
+  const profileTouched =
+    profileId !== startProfileId ||
+    explicitAnswer !== initial.explicit ||
+    manualChanged(manual, source)
 
   // Post-create success panel — replaces the wizard body once the component is
   // created. `submitted` is already true, so no unsaved-changes guard is needed.
@@ -1538,6 +1812,18 @@ function CreateComponentWizard({ source, isClone, defaults, onCreateAnother }: W
                 </ul>
               </StatusBanner>
             )}
+            {/* A rejection routed here shows on the step too: its field may be hidden. Review has its own. */}
+            <StepServerError serverError={serverError} current={current} />
+            <StepRuleMessages
+              messages={ruleMessagesNotShown(parseIssues, current, {
+                external,
+                gated,
+                vcsApplies,
+                buildTasksVisibility,
+                editable,
+                hasError: (field) => !!get(errors, field),
+              })}
+            />
             {stepBody[current]()}
           </div>
         </div>
@@ -1650,6 +1936,87 @@ function FieldError({ message }: { message?: string }) {
   return <p className="text-xs text-destructive">{message}</p>
 }
 
+interface ParseIssue {
+  message: string
+  field: string
+  step: StepId
+  profileRule: boolean
+}
+
+interface FieldDisplay {
+  external: boolean
+  gated: boolean
+  vcsApplies: boolean
+  buildTasksVisibility: FieldVisibility
+  editable: (field: string) => boolean
+  // Whether the form currently holds an error for the field; RHF validates only the field being
+  // changed, so a rule failing on an untouched or seeded value has none to show under it.
+  hasError: (field: string) => boolean
+}
+
+// Whether the wizard renders this field's error under it. Fields not listed (the version prefix,
+// the line/minor/release/build formats, the Docker flavor) never do.
+function fieldShowsError(field: string, display: FieldDisplay): boolean {
+  switch (field.replace(/^ownership\.\d+\./, 'ownership.')) {
+    case 'name':
+    case 'ownership.groupId':
+    case 'jiraProjectKey':
+    case 'versionFormat':
+      return true
+    case 'displayName':
+      return display.editable('displayName')
+    case 'clientCode':
+      return display.external && display.editable('clientCode')
+    case 'buildTasks':
+      return display.buildTasksVisibility === 'editable'
+    case 'vcsUrl':
+    case 'vcsBranch':
+    case 'vcsTag':
+      return display.vcsApplies
+    case 'coordinate.groupPattern':
+    case 'coordinate.artifactPattern':
+    case 'coordinate.imageName':
+    case 'coordinate.packageName':
+      return display.gated
+    default:
+      return false
+  }
+}
+
+// Profile rules that fail on the current step without a message under their field — the field
+// shows no error, or the form holds none for it yet — so the step lists them instead of blocking
+// Create silently.
+function ruleMessagesNotShown(issues: ParseIssue[], current: StepId, display: FieldDisplay): string[] {
+  return issues
+    .filter((i) => i.profileRule && i.step === current && !(fieldShowsError(i.field, display) && display.hasError(i.field)))
+    .map((i) => i.message)
+}
+
+function StepRuleMessages({ messages }: { messages: string[] }) {
+  if (messages.length === 0) return null
+  return (
+    <InlineError
+      message={
+        <ul className="space-y-0.5">
+          {messages.map((m) => (
+            <li key={m}>{m}</li>
+          ))}
+        </ul>
+      }
+    />
+  )
+}
+
+function StepServerError({ serverError, current }: { serverError: { message: string; stepId: StepId } | null; current: StepId }) {
+  if (!serverError || serverError.stepId !== current || current === 'review') return null
+  return <InlineError message={serverError.message} />
+}
+
+// A summary row with an empty value is left out (see `push` in SummaryDiff).
+function shownIf(show: boolean, value: string): string {
+  return show ? value : ''
+}
+
 /** Green-`+` summary of the fields that will be created (brief §5/§7). */
 function SummaryDiff({
   values,
@@ -1657,8 +2024,12 @@ function SummaryDiff({
   vcsApplies,
   classification,
   escrowGeneration,
+  showLabels,
+  showBuildTasks,
 }: {
   values: CreateFormValues
+  showLabels: boolean
+  showBuildTasks: boolean
   gated: boolean
   vcsApplies: boolean
   classification: string
@@ -1678,6 +2049,7 @@ function SummaryDiff({
     ['Security Champions', values.securityChampion.join(', ')],
     ['Copyright', values.copyright],
     ['Classification', classification],
+    ['Labels', shownIf(showLabels, values.labels.join(', '))],
   ])
   const ownershipSummary = values.ownership
     .filter((r) => r.groupId.trim())
@@ -1688,6 +2060,7 @@ function SummaryDiff({
     .join('\n')
   push('Build', [
     ['Build System', values.buildSystem],
+    ['Build Tasks', shownIf(showBuildTasks, values.buildTasks)],
     ['Produced Artifacts', ownershipSummary],
   ])
   if (vcsApplies) {
