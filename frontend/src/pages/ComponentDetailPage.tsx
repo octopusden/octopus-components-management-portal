@@ -124,6 +124,7 @@ function mapComponentToForm(component: ComponentDetail): GeneralFormValues {
     clientCode: component.clientCode ?? '',
     solution: component.solution ?? false,
     archived: component.archived,
+    testComponent: component.testComponent ?? false,
     parentComponentName: component.parentComponentName ?? '',
     canBeParent: component.canBeParent ?? false,
     releaseManager: component.releaseManager ?? [],
@@ -148,6 +149,9 @@ function sectionForField(field: string): string | null {
   if (field === 'distributionExplicit' || field === 'distributionExternal') return 'general'
   if ((GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(field)) return 'general'
   if ((MISC_TAB_FIELDS as ReadonlyArray<string>).includes(field)) return 'misc'
+  // VCS placement is edited on the VCS tab — the Build Working Directory too, not on the Build tab —
+  // for the base row and for a per-range row (`fieldOverrides[<j>].…`).
+  if (/^(fieldOverrides\[\d+\]\.)?(buildWorkingDirectory$|vcsEntries\[)/.test(field)) return 'vcs'
   if (field.startsWith('build')) return 'build'
   if (field.startsWith('vcs')) return 'vcs'
   if (field.startsWith('jira')) return 'jira'
@@ -285,6 +289,7 @@ function ComponentDetailEditor() {
       clientCode: '',
       solution: false,
       archived: false,
+      testComponent: false,
       parentComponentName: '',
       canBeParent: false,
       releaseManager: [],
@@ -532,6 +537,7 @@ function ComponentDetailEditor() {
     setReviewError(null)
     setJiraConflict(null)
     setBuildConflict(null)
+    vcsSection.clearServerErrors()
 
     // Build System is REQUIRED (P1-3). Clearing it would PATCH null = a CRS
     // no-op, so block and surface the Build section's inline required error.
@@ -545,17 +551,26 @@ function ComponentDetailEditor() {
     // the component — merge it onto the combined PATCH. Values arrive already
     // normalized (undefined when blank), so JSON.stringify omits them.
     const patchDirty = anyDirty(slices)
+    // The override rows in the order sent as `fieldOverrides`, to route its indexed 400s.
+    const sentOverrideIds = overridesSection.rowIds
     const request = {
       ...combineRequest(component.version, slices),
       jiraTaskKey: meta.jiraTaskKey,
       changeComment: meta.changeComment,
     }
 
+    // Non-blocking advisories from the PATCH response (e.g. the TeamCity build
+    // chain must be recreated after a base VCS change), shown once the save is done.
+    let saveWarnings: string[] = []
+    const showSaveWarnings = () => {
+      for (const warning of saveWarnings) toast({ title: 'Warning', description: warning })
+    }
     try {
       // The combined PATCH fires only when a PATCH-backed section is dirty — a
       // supported-versions-only save must not send an (essentially empty) PATCH.
       if (patchDirty) {
         const saved = await updateMutation.mutateAsync(request)
+        saveWarnings = saved?.warnings ?? []
         // Re-baseline the General/Misc form to the SAVED (server-normalized) component.
         // The GeneralTab re-hydration guard skips while the form is dirty/touched, so without
         // an explicit reset here the form would stay dirty for the rest of the session and a
@@ -594,6 +609,8 @@ function ComponentDetailEditor() {
               description: `Your other changes were saved, but updating supported versions failed: ${msg}`,
               variant: 'destructive',
             })
+            // The PATCH did land, so its advisories still apply.
+            showSaveWarnings()
             return
           }
           // Coverage-only failure: nothing else persisted, so defer to the shared
@@ -612,6 +629,7 @@ function ComponentDetailEditor() {
       overridesSection.reset()
       setReviewOpen(false)
       toast({ title: 'Component saved', description: 'Changes have been saved successfully.' })
+      showSaveWarnings()
     } catch (err) {
       // 409 — split by kind. A `value` conflict (uniqueness / overlapping range)
       // is fixable in place, so keep the Review dialog open with a persistent
@@ -666,7 +684,9 @@ function ComponentDetailEditor() {
         const hasGeneralError = [...fieldErrors.keys()].some((f) =>
           (GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(f),
         )
-        let anyFieldMapped = false
+        // A placement error on a base VCS entry shows inline on the VCS tab. One
+        // on a per-range row shows in its (closed) editor, so it keeps the toast.
+        let anyFieldMapped = vcsSection.applyServerErrors(fieldErrors, sentOverrideIds)
         let switchTo: string | null = null
         for (const [field, message] of fieldErrors) {
           const isGeneral = (GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(field)
@@ -696,8 +716,8 @@ function ComponentDetailEditor() {
         if (anyFieldMapped || switchTo) {
           setReviewOpen(false)
           // A General/Misc field 400 (anyFieldMapped) surfaces inline via
-          // form.setError, so we stop here (no toast). Non-RHF section fields
-          // (build/vcs/jira/escrow/distribution) have no inline-error slot, so
+          // form.setError (or, for a base VCS entry, the VCS tab), so we stop here
+          // (no toast). Other non-RHF section fields have no inline-error slot, so
           // we switch to the owning section AND fall through to the toast below
           // — the toast is their only error surface.
           if (anyFieldMapped) return
@@ -812,6 +832,7 @@ function ComponentDetailEditor() {
 
   const baseRow = selectBaseRow(component)
   const profilePct = completenessPercent(component)
+  const warnings = component.warnings ?? []
 
   return (
     <Layout>
@@ -832,6 +853,11 @@ function ComponentDetailEditor() {
               <Badge variant={component.archived ? 'destructive' : 'secondary'}>
                 {component.archived ? 'Archived' : 'Active'}
               </Badge>
+              {component.testComponent && (
+                <Badge variant="outline" title="Test component">
+                  Test
+                </Badge>
+              )}
               {!canEdit && (
                 <Badge variant="warning" title={CANNOT_EDIT_TITLE}>
                   <LockKeyhole className="mr-1 h-3 w-3" />
@@ -1051,6 +1077,16 @@ function ComponentDetailEditor() {
           </StatusBanner>
         )}
 
+        {warnings.length > 0 && (
+          <StatusBanner variant="warning" data-testid="component-warnings">
+            <ul className="space-y-1">
+              {warnings.map((w) => (
+                <li key={w}>{w}</li>
+              ))}
+            </ul>
+          </StatusBanner>
+        )}
+
         {!canEdit && <WhoCanEditPanel componentId={component.id} />}
 
         <Separator />
@@ -1171,7 +1207,11 @@ function ComponentDetailEditor() {
             <TabsContent value="build">
               <EditSurface canEdit={canEdit} label="Build">
                 <div className="space-y-6">
-                  <BuildTab section={buildSection} canEdit={canEdit} conflictError={buildConflict} />
+                  <BuildTab
+                    section={buildSection} canEdit={canEdit} conflictError={buildConflict}
+                    buildWorkingDirectory={vcsSection.effectiveBuildWorkingDirectory}
+                    onEditBuildWorkingDirectory={() => setActiveTab('vcs')}
+                  />
                   <ProducedArtifactsSection form={form} component={component} canEdit={canEdit} />
                 </div>
               </EditSurface>

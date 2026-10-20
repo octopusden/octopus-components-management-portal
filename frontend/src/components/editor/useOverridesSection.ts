@@ -19,6 +19,9 @@ import { toUpsert, diffOverrides } from './overrideDraftUtil'
 
 export interface OverridesSection {
   slice: SectionSlice
+  /** Ids of the rows in `fieldOverrides` order (draft ids for creates), so a
+   *  `fieldOverrides[<j>]…` 400 can be traced back to its row. */
+  rowIds: string[]
   reset: () => void
 }
 
@@ -34,5 +37,5 @@ export function useOverridesSection(): OverridesSection {
     ? { fieldOverrides: effectiveOverrides.map(toUpsert) }
     : {}
 
-  return { slice: { isDirty, diff, request }, reset }
+  return { slice: { isDirty, diff, request }, rowIds: effectiveOverrides.map((o) => o.id), reset }
 }

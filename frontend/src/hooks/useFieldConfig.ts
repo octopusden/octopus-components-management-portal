@@ -244,6 +244,17 @@ export function useFieldEditable(fieldPath: string): boolean {
   return isEntryEditableFor(entry, user)
 }
 
+/**
+ * Where a field stands for the current user: hidden, readonly or editable. Fails closed to
+ * `hidden` while field-config loads or after it errored, so a hidden field never flashes in.
+ */
+export function useFieldVisibility(fieldPath: string): FieldVisibility {
+  const { entry, isLoading, isError } = useFieldConfigEntry(fieldPath)
+  const editable = useFieldEditable(fieldPath)
+  if (isLoading || isError || entry.visibility === 'hidden') return 'hidden'
+  return editable ? 'editable' : 'readonly'
+}
+
 /** Convenience hook for a single field's display label (see labelFor). */
 export function useFieldLabel(fieldPath: string, fallback: string): string {
   const { data } = useFieldConfig()

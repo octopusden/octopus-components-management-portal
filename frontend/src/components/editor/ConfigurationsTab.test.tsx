@@ -121,9 +121,9 @@ describe('ConfigurationsTab — table rendering', () => {
 
   it('BASE row payload summary lists populated aspects and child counts', () => {
     render(<ConfigurationsTab component={component} />)
-    // build and jira are populated; vcsEntries: 2, maven: 1
+    // build and jira are populated; VCS roots: 2, maven: 1
     expect(screen.getByText(/build.*jira/i)).toBeDefined()
-    expect(screen.getByText(/vcsEntries: 2/)).toBeDefined()
+    expect(screen.getByText(/VCS roots: 2/)).toBeDefined()
     expect(screen.getByText(/maven: 1/)).toBeDefined()
   })
 
@@ -235,6 +235,26 @@ describe('ConfigurationsTab — build.requiredTools marker', () => {
     })
     render(<ConfigurationsTab component={component} />)
     expect(screen.getByText('3 tools')).toBeDefined()
+  })
+})
+
+describe('ConfigurationsTab — vcs.settings marker', () => {
+  it('renders "<N> VCS roots" for vcs.settings marker', () => {
+    const component = makeComponent({
+      configurations: [
+        makeConfig({
+          id: 'marker-vcs',
+          rowType: 'MARKER',
+          overriddenAttribute: 'vcs.settings',
+          vcsEntries: [
+            { id: 'v1', vcsPath: '/repo/a', sortOrder: 0 },
+            { id: 'v2', vcsPath: '/repo/b', sortOrder: 1 },
+          ],
+        }),
+      ],
+    })
+    render(<ConfigurationsTab component={component} />)
+    expect(screen.getByText('2 VCS roots')).toBeDefined()
   })
 })
 

@@ -111,6 +111,25 @@ describe('useComponents — URL params', () => {
     expect(calledUrl).toContain('archived=true')
   })
 
+  it('passes testComponent filter when set, omits it when undefined', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+
+    const { result } = renderHook(
+      () => useComponents({ filter: { testComponent: false } }),
+      { wrapper: makeWrapper() },
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const calledUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    expect(calledUrl).toContain('testComponent=false')
+
+    const { result: unfiltered } = renderHook(() => useComponents({ filter: {} }), {
+      wrapper: makeWrapper(),
+    })
+    await waitFor(() => expect(unfiltered.current.isSuccess).toBe(true))
+    const unfilteredUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[1]![0] as string
+    expect(unfilteredUrl).not.toContain('testComponent')
+  })
+
   it('does not include system param when filter is undefined', async () => {
     mockApi.get.mockResolvedValue(emptyPage)
 

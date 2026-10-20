@@ -19,6 +19,12 @@ interface BuildTabProps {
    * at the start of the next save, or on navigating to a different component.
    */
   conflictError?: string | null
+  /**
+   * The base row's Build Working Directory, shown read-only: it is edited on the VCS tab, next to
+   * the Checkout Directories it must start with. Omitted → the line is not shown.
+   */
+  buildWorkingDirectory?: string
+  onEditBuildWorkingDirectory?: () => void
 }
 
 /**
@@ -27,7 +33,9 @@ interface BuildTabProps {
  * BASE-row toolchain fields and reports edits up via `section.set`. The page's
  * single sticky Save bar replaces the old per-tab "Save Build" button.
  */
-export function BuildTab({ section, canEdit, conflictError }: BuildTabProps) {
+export function BuildTab({
+  section, canEdit, conflictError, buildWorkingDirectory, onEditBuildWorkingDirectory,
+}: BuildTabProps) {
   const {
     state, set, buildSystemMissing, buildSystemTouched, setBuildSystemTouched,
     showMavenVersion, showGradleVersion, registeredBuildParameters,
@@ -120,6 +128,25 @@ export function BuildTab({ section, canEdit, conflictError }: BuildTabProps) {
               ranges={registeredBuildParameters?.mavenActualRanges ?? []}
               warnings={registeredBuildParameters?.mavenWarnings ?? []}
             />
+          </div>
+        )}
+
+        {buildWorkingDirectory !== undefined && (
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1">
+              <span className="text-sm font-medium">Build Working Directory (WORK_DIR in TC)</span>
+              <FieldInfo path="vcs.buildWorkingDirectory" label="Build Working Directory" />
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <span className={buildWorkingDirectory ? 'font-mono' : 'text-muted-foreground'}>
+                {buildWorkingDirectory || 'Checkout root'}
+              </span>
+              {onEditBuildWorkingDirectory && (
+                <button type="button" className="text-primary underline-offset-4 hover:underline" onClick={onEditBuildWorkingDirectory}>
+                  Edit on the VCS tab
+                </button>
+              )}
+            </div>
           </div>
         )}
 
