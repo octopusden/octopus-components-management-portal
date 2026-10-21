@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PLACEMENT_STATUS_BUCKETS, checkoutLayoutStatusInfo } from './checkoutLayoutStatus'
+import { CHECKOUT_LAYOUT_STATUS_BUCKETS, checkoutLayoutStatusInfo } from './checkoutLayoutStatus'
 
 describe('checkoutLayoutStatusInfo — tone', () => {
   it('tones RESOLVED as success', () => {
@@ -67,10 +67,10 @@ describe('checkoutLayoutStatusInfo — bucket', () => {
   })
 })
 
-describe('PLACEMENT_STATUS_BUCKETS', () => {
+describe('CHECKOUT_LAYOUT_STATUS_BUCKETS', () => {
   it('orders the four buckets Ready, Needs a look, Can\'t derive, Nothing to do, each with a label', () => {
-    expect(PLACEMENT_STATUS_BUCKETS.map((b) => b.id)).toEqual(['ready', 'needsLook', 'cantDerive', 'nothingToDo'])
-    expect(PLACEMENT_STATUS_BUCKETS.map((b) => b.label)).toEqual([
+    expect(CHECKOUT_LAYOUT_STATUS_BUCKETS.map((b) => b.id)).toEqual(['ready', 'needsLook', 'cantDerive', 'nothingToDo'])
+    expect(CHECKOUT_LAYOUT_STATUS_BUCKETS.map((b) => b.label)).toEqual([
       'Ready',
       'Needs a look',
       "Can't derive",

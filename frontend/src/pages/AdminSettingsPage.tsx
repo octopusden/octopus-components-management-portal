@@ -180,7 +180,7 @@ export function AdminSettingsPage() {
               </div>
 
               <div className="border-t pt-6 space-y-2">
-                <h2 className="text-lg font-semibold">Checkout layout from TeamCity</h2>
+                <h2 className="text-lg font-semibold">TeamCity Checkout Layout</h2>
                 <p className="text-sm text-muted-foreground">
                   Where TeamCity checks out each VCS root (Checkout Directory / Source Path) and
                   where it builds (Build Working Directory). Diff finds where a component's stored

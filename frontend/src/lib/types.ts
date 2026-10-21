@@ -1144,7 +1144,7 @@ export interface TeamCityValidationJobResponse {
 
 // ── TeamCity → CRS VCS checkout-layout Diff/Sync ───────────────────────────────────
 // Wire shapes for `rest/api/4/admin/teamcity-checkout-layout/**` — see CRS
-// `TeamcityCheckoutLayoutControllerV4` and the `dto/v4` + `teamcity/checkout layout`
+// `TeamcityCheckoutLayoutControllerV4` and the `dto/v4` + `teamcity/checkoutlayout`
 // packages it serves from. New endpoints, so (unlike the older job shapes
 // above) there's no legacy-CRS backward-compat concern: `kind` is required,
 // not optional.

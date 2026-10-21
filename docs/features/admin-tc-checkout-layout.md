@@ -30,7 +30,7 @@ edited by hand. Two CRS jobs, both under `rest/api/4/admin/teamcity-checkout-lay
   component whose TeamCity or CRS side changed since that Diff ran is skipped, with the outcome
   "changed since diff".
 
-See CRS's `TeamcityCheckoutLayoutControllerV4` / `teamcity/checkout layout/*` and its technical design for the
+See CRS's `TeamcityCheckoutLayoutControllerV4` / `teamcity/checkoutlayout/*` and its technical design for the
 full rules this UI surfaces.
 
 ## UI surface
@@ -54,7 +54,7 @@ is shown to registry admins only, although CRS serves it to anyone who can view 
 
 Once a Diff completes, a summary bar sits above the table: one clickable, `aria-pressed` count
 button per status bucket (Ready / Needs a look / Can't derive / Nothing to do —
-`PLACEMENT_STATUS_BUCKETS` in `lib/checkoutLayoutStatus.ts`), a "Show all (N)" toggle, "Report from
+`CHECKOUT_LAYOUT_STATUS_BUCKETS` in `lib/checkoutLayoutStatus.ts`), a "Show all (N)" toggle, "Report from
 \<local time\>" (`formatLocalDateTime` in `lib/date.ts`), and the "Open report (HTML)" / "Download
 CSV" links straight to `GET /admin/teamcity-checkout-layout/diff/report.{html,csv}` — plain
 cookie-authenticated anchors (via the exported `API_BASE` in `lib/api.ts`), not a fetch+blob dance.

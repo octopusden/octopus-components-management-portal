@@ -16,7 +16,7 @@ import { formatLocalDateTime } from '@/lib/date'
 import { formatMigrationError } from '@/lib/migrationErrors'
 import { isDiffReplacedConflict } from '@/lib/migrationConflict'
 import { buildProposedChangeLines, countChangedFields, summarizeKeys } from '@/lib/checkoutLayoutRows'
-import { PLACEMENT_STATUS_BUCKETS, checkoutLayoutStatusInfo, type CheckoutLayoutStatusBucket } from '@/lib/checkoutLayoutStatus'
+import { CHECKOUT_LAYOUT_STATUS_BUCKETS, checkoutLayoutStatusInfo, type CheckoutLayoutStatusBucket } from '@/lib/checkoutLayoutStatus'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -44,7 +44,7 @@ import type {
 // might need an operator's attention, without the "can't derive" /
 // "nothing to do" noise.
 const DEFAULT_BUCKETS: CheckoutLayoutStatusBucket[] = ['ready', 'needsLook']
-const ALL_BUCKET_IDS: CheckoutLayoutStatusBucket[] = PLACEMENT_STATUS_BUCKETS.map((b) => b.id)
+const ALL_BUCKET_IDS: CheckoutLayoutStatusBucket[] = CHECKOUT_LAYOUT_STATUS_BUCKETS.map((b) => b.id)
 
 /** Only a RESOLVED row has something Sync can write. */
 const isReady = (row: CheckoutLayoutRowDiff) => row.status === 'RESOLVED'
@@ -219,7 +219,7 @@ function CheckoutLayoutSummaryBar({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-3 text-sm">
-      {PLACEMENT_STATUS_BUCKETS.map(({ id, label }) => (
+      {CHECKOUT_LAYOUT_STATUS_BUCKETS.map(({ id, label }) => (
         <Button
           key={id}
           type="button"
@@ -278,7 +278,7 @@ function CheckoutLayoutResultsArea({
   if (!hasReport) {
     return (
       <EmptyState
-        message="Run Diff to see the current TeamCity ↔ CRS checkout layout report. Where TeamCity checks out each VCS root (Checkout Directory / Source Path) and where it builds (Build Working Directory)."
+        message="Run Diff to compare TeamCity and CRS checkout layouts."
         className="py-8"
       />
     )
@@ -670,7 +670,7 @@ export function TeamCityCheckoutLayoutPanel() {
       <Dialog open={confirmDiffOpen} onOpenChange={setConfirmDiffOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Run the checkout paths Diff?</DialogTitle>
+            <DialogTitle>Run the checkout layout Diff?</DialogTitle>
             <DialogDescription>
               Derives checkout layout (Checkout Directory, Source Path, Build Working Directory) from
               every in-scope component's linked TeamCity compile configuration(s) and compares it

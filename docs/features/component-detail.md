@@ -56,7 +56,7 @@ Saving `build.javaVersion`/`build.mavenVersion` goes through CRS's write-time AC
 
 ## VCS tab — checkout layout
 
-Each VCS Root (an item of the API's `vcsEntries`; the editors label them "VCS Root N") carries the registry's **Source Path** (the directory of the repository that belongs to the component; empty = the whole repository) and **Checkout Directory** (the directory below the checkout root the VCS Root is placed in: its sources land at `Checkout Directory / Source Path`; empty = the checkout root itself, for at most one VCS Root of a row). Each configuration row also carries a **Build Working Directory**: where the build runs, relative to the checkout root, empty = the checkout root. Decision: program ADR-001 (VCS root checkout layout).
+Each VCS Root (an item of the API's `vcsEntries`; the editors label them "VCS Root N") carries the registry's **Source Path** (the directory of the repository that belongs to the component; empty = the whole repository) and **Checkout Directory** (the directory below the checkout root the VCS Root is placed in: its sources land at `Checkout Directory / Source Path`; empty = the checkout root itself, for at most one VCS Root of a row). Each configuration row also carries a **Build Working Directory**: where the build runs, relative to the checkout root, empty = the checkout root. Decision: CRS ADR-022.
 
 - **Both editors.** The VCS tab ([`VcsTab.tsx`](../../frontend/src/components/editor/VcsTab.tsx), state in `useVcsSection`) and the per-range override editor ([`OverrideRowEditor.tsx`](../../frontend/src/components/editor/OverrideRowEditor.tsx)) show the two fields on every VCS Root, editable, and the row's Build Working Directory. A blank Source Path or Checkout Directory is sent as `null`.
 - **Build Working Directory.** Edited on the VCS tab, next to the Checkout Directories it must start with; the Build tab shows it read-only as "Build Working Directory (WORK_DIR in TC)" ("Checkout root" when empty) with a link to the VCS tab. It is the directory the build runs in; chain generation writes it to TeamCity as the `WORK_DIR` parameter (`%teamcity.build.checkoutDir%/<directory>`). The base value travels in the VCS slice (sent only when that slice is dirty) as `baseConfiguration.buildWorkingDirectory`; blank is sent as `''`, because a base-row `null` leaves the stored value, and it is `''` when every VCS Root is removed (the field is then hidden). A `vcs.settings` override row sends it in `markerChildren` next to `vcsEntries`, blank as `null`.
@@ -221,7 +221,7 @@ See `openspec/specs/component-archive-readiness/spec.md` for the full behavioura
 | Rename | `disabled` input with hint when missing `RENAME_COMPONENTS` | `canRenameComponent(...)` (ROLE_ADMIN today) |
 | Delete | `RequirePermission` around the page (the route is gated up-front)<sup>†</sup> | `canDeleteComponent(...)` |
 
-<sup>†</sup> Today the page itself is reachable to any authenticated user; the Delete button does its own check via `useCurrentUser` + `hasPermission('DELETE_COMPONENTS')`. See `ComponentDetailPage.tsx` for the exact checkout layout.
+<sup>†</sup> Today the page itself is reachable to any authenticated user; the Delete button does its own check via `useCurrentUser` + `hasPermission('DELETE_COMPONENTS')`. See `ComponentDetailPage.tsx` for the exact placement.
 
 ## Navigation between detail pages
 

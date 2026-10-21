@@ -43,7 +43,7 @@ export function checkoutLayoutStatusInfo(status: string): CheckoutLayoutStatusIn
 }
 
 /** The four summary-bar buckets, in display order, each with its plain-English label. */
-export const PLACEMENT_STATUS_BUCKETS: { id: CheckoutLayoutStatusBucket; label: string }[] = [
+export const CHECKOUT_LAYOUT_STATUS_BUCKETS: { id: CheckoutLayoutStatusBucket; label: string }[] = [
   { id: 'ready', label: 'Ready' },
   { id: 'needsLook', label: 'Needs a look' },
   { id: 'cantDerive', label: "Can't derive" },
