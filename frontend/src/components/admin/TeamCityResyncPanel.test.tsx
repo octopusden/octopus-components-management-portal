@@ -249,8 +249,7 @@ describe('TeamCityResyncPanel — RUNNING / COMPLETED / FAILED rendering', () =>
     // Pin the new sub-counter value to guard against tile reordering accidentally
     // mapping a number to the wrong label.
     expect(screen.getByText('4')).toBeDefined()
-    expect(screen.getByText('Auto release on')).toBeDefined()
-    expect(screen.getByText('7')).toBeDefined()
+    expect(within(screen.getByText('Auto release on').parentElement!).getByText('7')).toBeDefined()
     expect(screen.getByText('Errors')).toBeDefined()
   })
 

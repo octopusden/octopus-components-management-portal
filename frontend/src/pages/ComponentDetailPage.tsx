@@ -138,7 +138,6 @@ function mapComponentToForm(component: ComponentDetail): GeneralFormValues {
   }
 }
 
-
 // Maps a server 400 field error (or a tab section) to the sidebar section that
 // should auto-switch into view. Identifiers match the Phase 3a nav values.
 function sectionForField(field: string): string | null {

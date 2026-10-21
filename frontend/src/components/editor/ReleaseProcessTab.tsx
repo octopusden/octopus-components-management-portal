@@ -17,30 +17,30 @@ export function ReleaseProcessTab({ form }: { form: UseFormReturn<GeneralFormVal
 
   return (
     <section data-testid="section-release-process">
-        <h3 className="text-sm font-medium text-muted-foreground mb-3">Release Process</h3>
-        {autoReleaseEntry.visibility !== 'hidden' && (
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-3">
-              <Switch
-                id="autoRelease"
-                checked={autoRelease}
-                disabled={autoReleaseEntry.visibility === 'readonly'}
-                aria-describedby="autoRelease-help"
-                onCheckedChange={(checked) =>
-                  setValue('autoRelease', checked, { shouldDirty: true, shouldTouch: true })
-                }
-              />
-              <Label htmlFor="autoRelease" className="cursor-pointer">
-                <FieldLabelText path="component.autoRelease" fallback="Auto release" />
-              </Label>
-              <FieldInfo path="component.autoRelease" label="Auto release" />
-            </div>
-            <p id="autoRelease-help" className="text-xs text-muted-foreground">
-              Sync from TeamCity turns this on when the release has a finish-build trigger.
-            </p>
-            {errors.autoRelease && <p className="text-xs text-destructive">{errors.autoRelease.message}</p>}
+      <h3 className="text-sm font-medium text-muted-foreground mb-3">Release Process</h3>
+      {autoReleaseEntry.visibility !== 'hidden' && (
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-3">
+            <Switch
+              id="autoRelease"
+              checked={autoRelease}
+              disabled={autoReleaseEntry.visibility === 'readonly'}
+              aria-describedby="autoRelease-help"
+              onCheckedChange={(checked) =>
+                setValue('autoRelease', checked, { shouldDirty: true, shouldTouch: true })
+              }
+            />
+            <Label htmlFor="autoRelease" className="cursor-pointer">
+              <FieldLabelText path="component.autoRelease" fallback="Auto release" />
+            </Label>
+            <FieldInfo path="component.autoRelease" label="Auto release" />
           </div>
-        )}
+          <p id="autoRelease-help" className="text-xs text-muted-foreground">
+            Sync from TeamCity turns this on when every release line has a finish-build trigger, unless someone has turned it off.
+          </p>
+          {errors.autoRelease && <p className="text-xs text-destructive">{errors.autoRelease.message}</p>}
+        </div>
+      )}
     </section>
   )
 }
