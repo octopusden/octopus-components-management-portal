@@ -408,3 +408,33 @@ describe('renameKeyCharsetError — the editor rename gate', () => {
     expect(renameKeyCharsetError(undefined, 'legacy-key')).toBeNull()
   })
 })
+
+describe('makeCreateSchema — explicit external checks with locked classification flags', () => {
+  // field-config may lock the distribution flags; the request then omits them, but the component
+  // is still created explicit external, so its required fields are still required.
+  const flagsLocked = (field: string) => field !== 'distributionExplicit' && field !== 'distributionExternal'
+  const explicitExternal: CreateFormValues = {
+    ...initialValues(null, {}),
+    name: 'payments',
+    componentOwner: 'alice',
+    buildSystem: 'PROVIDED',
+    jiraProjectKey: 'ABCD',
+    versionFormat: '$major.$minor',
+    distributionExplicit: true,
+    distributionExternal: true,
+  }
+  const pathsOf = (values: CreateFormValues) => {
+    const result = makeCreateSchema(flagsLocked, [], null, []).safeParse(values)
+    return result.success ? [] : result.error.issues.map((i) => i.path.join('.'))
+  }
+
+  it('still requires the display name, people and coordinate', () => {
+    expect(pathsOf(explicitExternal)).toEqual(
+      expect.arrayContaining(['displayName', 'releaseManager', 'securityChampion', 'coordinate.groupPattern']),
+    )
+  })
+
+  it('requires none of them when the locked flags are not explicit external', () => {
+    expect(pathsOf({ ...explicitExternal, distributionExplicit: false })).toEqual([])
+  })
+})

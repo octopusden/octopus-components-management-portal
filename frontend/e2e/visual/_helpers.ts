@@ -92,6 +92,23 @@ export async function mockComponentProfiles(page: Page, fixture: unknown = compo
   await page.route(COMPONENT_PROFILES, (route) => jsonRoute(route, 200, fixture))
 }
 
+/**
+ * Mock one template's description, dry run and create. [onRun] answers each run: return the
+ * registry's response body, with `dryRun` telling a dry run from a create.
+ */
+export async function mockComponentTemplate(
+  page: Page,
+  template: { id: string },
+  onRun: (body: Record<string, unknown>, dryRun: boolean) => { status: number; body: unknown },
+) {
+  await page.route(`**/rest/api/4/component-templates/${template.id}`, (route) => jsonRoute(route, 200, template))
+  await page.route(`**/rest/api/4/component-templates/${template.id}/components?**`, (route) => {
+    const dryRun = new URL(route.request().url()).searchParams.get('dryRun') !== 'false'
+    const answer = onRun((route.request().postDataJSON() ?? {}) as Record<string, unknown>, dryRun)
+    jsonRoute(route, answer.status, answer.body)
+  })
+}
+
 /** Mock GET /components (list) with a 500 to drive InlineError state. */
 export async function mockComponentListError(page: Page) {
   await page.route(COMPONENTS_LIST, (route) =>
