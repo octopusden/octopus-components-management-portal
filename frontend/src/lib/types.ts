@@ -1096,6 +1096,8 @@ export interface TeamCityResyncResult {
   skipped_no_match: number
   skipped_ambiguous: number
   ambiguous_auto_resolved?: number
+  /** SYS-104: components this run set to auto release (finish-build trigger in TeamCity); absent on older CRS. */
+  auto_release_enabled?: number
   errors: string[]
 }
 

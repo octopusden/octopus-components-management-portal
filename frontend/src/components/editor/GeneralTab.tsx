@@ -57,7 +57,6 @@ export const GENERAL_TAB_FIELDS = [
   // CRS 400s `testComponent: … matches none of the test-component name patterns` (SYS-099);
   // shown inline under the switch.
   'testComponent',
-  'autoRelease',
 ] as const
 
 function testComponentHint(blocked: boolean, patterns: readonly string[] | undefined): string {
@@ -219,8 +218,6 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
   const { entry: releaseManagerEntry } = useFieldConfigEntry('component.releaseManager')
   const { entry: securityChampionEntry } = useFieldConfigEntry('component.securityChampion')
   const { entry: copyrightEntry } = useFieldConfigEntry('component.copyright')
-  const { entry: autoReleaseEntry } = useFieldConfigEntry('component.autoRelease')
-  const autoRelease = watch('autoRelease')
 
   useEffect(() => {
     // Re-hydration guard. This effect re-runs on every (re)mount and whenever the
@@ -375,21 +372,7 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
             )}
           </div>
 
-          {/* Auto release — release automation may start releases of this component. */}
-          {autoReleaseEntry.visibility !== 'hidden' && (
-            <div className="sm:col-span-2 flex items-center gap-3">
-              <Switch
-                id="autoRelease"
-                checked={autoRelease}
-                disabled={autoReleaseEntry.visibility === 'readonly'}
-                onCheckedChange={(checked) =>
-                  setValue('autoRelease', checked, { shouldDirty: true, shouldTouch: true })
-                }
-              />
-              <Label htmlFor="autoRelease" className="cursor-pointer"><FieldLabelText path="component.autoRelease" fallback="Auto release" /></Label>
-              <FieldInfo path="component.autoRelease" label="Auto release" />
-            </div>
-          )}
+          {/* Auto release moved to the Release Process tab (ReleaseProcessTab.tsx). */}
 
           {/* Parent Component, Can-be-parent, and Group Key / Synthetic-group moved to the
               Misc tab (MiscTab.tsx) to keep General focused on identity/ownership/metadata.

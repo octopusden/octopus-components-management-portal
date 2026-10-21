@@ -27,6 +27,7 @@ import { DocumentationTab } from '../components/editor/DocumentationTab'
 import { SolutionTab } from '../components/editor/SolutionTab'
 import { HeaderLabelsEditor } from '../components/editor/HeaderLabelsEditor'
 import { MiscTab, MISC_TAB_FIELDS } from '../components/editor/MiscTab'
+import { ReleaseProcessTab } from '../components/editor/ReleaseProcessTab'
 import { ProducedArtifactsSection } from '../components/editor/ProducedArtifactsSection'
 import { buildUpdateRequest } from '../lib/component/buildUpdateRequest'
 import { renameKeyCharsetError } from '../lib/component/createFormModel'
@@ -137,6 +138,9 @@ function mapComponentToForm(component: ComponentDetail): GeneralFormValues {
   }
 }
 
+// Field names rendered on the Release Process tab (ReleaseProcessTab), for routing a CRS 400 there.
+const RELEASE_PROCESS_TAB_FIELDS = ['autoRelease'] as const
+
 // Maps a server 400 field error (or a tab section) to the sidebar section that
 // should auto-switch into view. Identifiers match the Phase 3a nav values.
 function sectionForField(field: string): string | null {
@@ -150,6 +154,7 @@ function sectionForField(field: string): string | null {
   if (field === 'distributionExplicit' || field === 'distributionExternal') return 'general'
   if ((GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(field)) return 'general'
   if ((MISC_TAB_FIELDS as ReadonlyArray<string>).includes(field)) return 'misc'
+  if ((RELEASE_PROCESS_TAB_FIELDS as ReadonlyArray<string>).includes(field)) return 'release-process'
   // VCS placement is edited on the VCS tab — the Build Working Directory too, not on the Build tab —
   // for the base row and for a per-range row (`fieldOverrides[<j>].…`).
   if (/^(fieldOverrides\[\d+\]\.)?(buildWorkingDirectory$|vcsEntries\[)/.test(field)) return 'vcs'
@@ -694,7 +699,9 @@ function ComponentDetailEditor() {
         let switchTo: string | null = null
         for (const [field, message] of fieldErrors) {
           const isGeneral = (GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(field)
-          const isMisc = (MISC_TAB_FIELDS as ReadonlyArray<string>).includes(field)
+          const isMisc =
+            (MISC_TAB_FIELDS as ReadonlyArray<string>).includes(field) ||
+            (RELEASE_PROCESS_TAB_FIELDS as ReadonlyArray<string>).includes(field)
           // `labels` is a page-level RHF field edited in the always-visible
           // header (not a tab), so it isn't in GENERAL_TAB_FIELDS. Map its 400
           // to form.setError anyway → HeaderLabelsEditor shows it inline instead
@@ -1127,6 +1134,7 @@ function ComponentDetailEditor() {
                   { value: 'build', label: 'Build', count: br?.build ? 1 : 0 },
                   { value: 'vcs', label: 'VCS', count: vcsCount },
                   { value: 'jira', label: 'Jira', count: br?.jira ? 1 : 0 },
+                  { value: 'release-process', label: 'Release Process' },
                   { value: 'escrow', label: 'Escrow', count: br?.escrow ? 1 : 0 },
                   { value: 'documentation', label: 'Documentation', count: docsCount },
                 ],
@@ -1254,6 +1262,12 @@ function ComponentDetailEditor() {
             <TabsContent value="escrow">
               <EditSurface canEdit={canEdit} label="Escrow">
                 <EscrowTab section={escrowSection} canEdit={canEdit} />
+              </EditSurface>
+            </TabsContent>
+
+            <TabsContent value="release-process">
+              <EditSurface canEdit={canEdit} label="Release Process">
+                <ReleaseProcessTab form={form} />
               </EditSurface>
             </TabsContent>
 

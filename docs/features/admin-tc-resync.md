@@ -38,7 +38,7 @@ The job state is in-memory on CRS (same caveat as the components-migration job �
 
 ## Counter tiles
 
-On COMPLETED the panel renders seven `StatCard` tiles in a single row:
+On COMPLETED the panel renders eight `StatCard` tiles in a single row:
 
 - **Scanned** — total components considered.
 - **Updated** — `components.teamcity_project_id` rewritten because the match changed.
@@ -46,6 +46,7 @@ On COMPLETED the panel renders seven `StatCard` tiles in a single row:
 - **No match** — no TC project found. Often a typo in component name or a project not yet created.
 - **Ambiguous** — multiple TC projects matched and the auto-resolution rule did not pick one. Listed in the detail banner for manual fix.
 - **Auto-resolved** — multiple TC projects matched and CRS picked the one whose name starts with `CDRelease-` (per CRS PR #188). Surface it so an operator can sanity-check the picks.
+- **Auto release on** — components whose `autoRelease` this run turned on, because a linked release configuration in TeamCity has an enabled finish-build trigger (CRS SYS-104). The resync never turns it off. `0` against an older CRS that omits `auto_release_enabled`.
 - **Errors** — the underlying TC client failed (auth, 5xx, timeout). Component IDs are listed in the destructive banner below.
 
 Tiles are read-only — there is no click-through to a filtered list page.

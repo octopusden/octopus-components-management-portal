@@ -96,7 +96,8 @@ export function TeamCityResyncPanel() {
       description:
         `${result.scanned} scanned, ${result.updated} updated, ${result.unchanged} unchanged, ` +
         `${result.skipped_no_match} no match, ${result.skipped_ambiguous} ambiguous, ` +
-        `${result.ambiguous_auto_resolved ?? 0} auto-resolved, ${result.errors.length} errors`,
+        `${result.ambiguous_auto_resolved ?? 0} auto-resolved, ${result.auto_release_enabled ?? 0} set to auto release, ` +
+        `${result.errors.length} errors`,
     })
     queryClient.invalidateQueries({ queryKey: ['components'] })
     queryClient.invalidateQueries({
@@ -197,18 +198,19 @@ export function TeamCityResyncPanel() {
       {isCompleted && result && (
         <div className="space-y-3">
           {/*
-           * 7 tiles: 3-up on phones, 4-up on tablets (so 7 wraps as 4+3),
-           * 7-up on desktop. "Auto-resolved" sits next to "Ambiguous"
+           * 8 tiles: 3-up on phones, 4-up on tablets (so 8 wraps as 4+4),
+           * 8-up on desktop. "Auto-resolved" sits next to "Ambiguous"
            * because it's a sub-counter explaining how the CDRelease
            * tie-break is performing on multi-candidate matches.
            */}
-          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-8">
             <StatCard label="Scanned" value={result.scanned} />
             <StatCard label="Updated" value={result.updated} />
             <StatCard label="Unchanged" value={result.unchanged} />
             <StatCard label="No match" value={result.skipped_no_match} />
             <StatCard label="Ambiguous" value={result.skipped_ambiguous} />
             <StatCard label="Auto-resolved" value={result.ambiguous_auto_resolved ?? 0} />
+            <StatCard label="Auto release on" value={result.auto_release_enabled ?? 0} />
             <StatCard label="Errors" value={errorCount} />
           </div>
           {errorCount > 0 && (
