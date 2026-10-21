@@ -212,6 +212,20 @@ describe('TeamCityResyncPanel — confirm + mutation', () => {
 
     expect(mutateAsync).not.toHaveBeenCalled()
   })
+
+  it('the confirm dialog says the resync also turns Auto release on and leaves TeamCity unchanged', async () => {
+    const { base } = buildMutation()
+    mockUseRun.mockReturnValue(base)
+    useAdminMode.setState({ enabled: true })
+
+    renderPanel()
+    fireEvent.click(screen.getByRole('button', { name: /resync tc project ids/i }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(/finish-build trigger/i)).toBeDefined()
+    expect(within(dialog).getByText(/never turns it off/i)).toBeDefined()
+    expect(within(dialog).getByText(/TeamCity itself is not changed/i)).toBeDefined()
+  })
 })
 
 describe('TeamCityResyncPanel — RUNNING / COMPLETED / FAILED rendering', () => {
