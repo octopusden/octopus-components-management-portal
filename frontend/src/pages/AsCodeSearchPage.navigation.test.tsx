@@ -126,10 +126,11 @@ describe('AsCodeSearchPage — writes racing a location the page has not rendere
   const INCOMING = '/search?q=incoming&archived=all&limit=1000'
   const routes = [{ path: '/search', element: <AsCodeSearchPage /> }, { path: '/other', element: <div /> }]
   const factories = {
-    memory: (entry: string) => createMemoryRouter(routes, { initialEntries: [entry] }),
-    browser: (entry: string) => {
-      window.history.replaceState(null, '', entry)
-      return createBrowserRouter(routes)
+    memory: (entry: string, basename?: string) =>
+      createMemoryRouter(routes, { initialEntries: [(basename ?? '') + entry], basename }),
+    browser: (entry: string, basename?: string) => {
+      window.history.replaceState(null, '', (basename ?? '') + entry)
+      return createBrowserRouter(routes, { basename })
     },
   }
   let router: ReturnType<typeof createMemoryRouter> | undefined
@@ -138,8 +139,8 @@ describe('AsCodeSearchPage — writes racing a location the page has not rendere
     router = undefined
     window.history.replaceState(null, '', '/')
   })
-  const start = (kind: keyof typeof factories, entry: string) => {
-    router = factories[kind](entry)
+  const start = (kind: keyof typeof factories, entry: string, basename?: string) => {
+    router = factories[kind](entry, basename)
     render(<RouterProvider router={router} />)
     return router
   }
@@ -316,6 +317,8 @@ describe('AsCodeSearchPage — writes racing a location the page has not rendere
         vi.advanceTimersByTime(300)
         fireEvent.change(field(), { target: { value: 'betax' } })
       })
+      // beta was skipped (it expired while betax awaited rendering), not written.
+      expect(at(r)).toBe('/search?q=alpha')
       expect(field().value).toBe('betax')
       fireEvent.change(field(), { target: { value: 'beta' } })
       await act(async () => { vi.advanceTimersByTime(1000) })
@@ -328,7 +331,68 @@ describe('AsCodeSearchPage — writes racing a location the page has not rendere
       await act(async () => {
         // The router moves at once; the destination renders later, in a transition.
         flushSync(() => { void r.navigate('/other') })
+        expect(at(r)).toBe('/other')
         expect(field().value).toBe('alpha')
+      })
+    })
+
+    it('a debounce expiring after leaving the page, before the destination renders, is not written', async () => {
+      const r = start(kind, '/search?q=alpha')
+      fireEvent.change(field(), { target: { value: 'draft' } })
+      await act(async () => {
+        vi.advanceTimersByTime(299)
+        flushSync(() => { void r.navigate('/other') })
+        expect(at(r)).toBe('/other')
+        vi.advanceTimersByTime(1)
+      })
+      await act(async () => { vi.advanceTimersByTime(500) })
+      expect(at(r)).toBe('/other')
+    })
+
+    describe('under a basename (sub-path build)', () => {
+      const BASE = '/portal'
+
+      it('adopts an incoming ?q= with a draft pending, and the draft is not written over it', async () => {
+        const r = start(kind, '/search?q=alpha', BASE)
+        fireEvent.change(field(), { target: { value: 'draft' } })
+        await act(async () => {
+          vi.advanceTimersByTime(100)
+          await r.navigate('/search?q=beta')
+        })
+        expect(field().value).toBe('beta')
+        await act(async () => { vi.advanceTimersByTime(500) })
+        expect(at(r)).toBe(`${BASE}/search?q=beta`)
+        expect(field().value).toBe('beta')
+      })
+
+      it('Back and Forward to the rendered entry before anything renders replace the draft', async () => {
+        const r = start(kind, '/search?q=alpha', BASE)
+        await act(async () => { await r.navigate('/search?q=beta') })
+        await act(async () => { vi.advanceTimersByTime(500) })
+        fireEvent.change(field(), { target: { value: 'draft' } })
+        await act(async () => {
+          void r.navigate(-1)
+          vi.advanceTimersByTime(1)
+          void r.navigate(1)
+          vi.advanceTimersByTime(1)
+          expect(at(r)).toBe(`${BASE}/search?q=beta`)
+          vi.advanceTimersByTime(298)
+        })
+        await act(async () => { vi.advanceTimersByTime(500) })
+        expect(at(r)).toBe(`${BASE}/search?q=beta`)
+        expect(field().value).toBe('beta')
+      })
+
+      it('still writes typed text, and leaving the page is not an arrival', async () => {
+        const r = start(kind, '/search?q=alpha', BASE)
+        fireEvent.change(field(), { target: { value: 'gamma' } })
+        await act(async () => { vi.advanceTimersByTime(300) })
+        expect(at(r)).toBe(`${BASE}/search?q=gamma`)
+        await act(async () => {
+          flushSync(() => { void r.navigate('/other') })
+          expect(at(r)).toBe(`${BASE}/other`)
+          expect(field().value).toBe('gamma')
+        })
       })
     })
 

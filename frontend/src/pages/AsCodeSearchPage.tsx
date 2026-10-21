@@ -88,7 +88,8 @@ function useAsCodeSearchUrlState() {
       seen = state.location
       if (writeIdOf(state.location.state) !== latestWrite.current) {
         latestWrite.current = null
-        if (state.location.pathname !== pathname.current) return
+        // The router's locations keep the basename (a sub-path build); useLocation strips it.
+        if (state.location.pathname !== (router.basename ?? '').replace(/\/$/, '') + pathname.current) return
         const query = new URLSearchParams(state.location.search).get('q') ?? ''
         setArrival((a) => ({ count: a.count + 1, query }))
       }
