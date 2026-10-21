@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { useCallback, useContext, useEffect, useState } from 'react'
 import { UNSAFE_DataRouterContext, useLocation, useSearchParams } from 'react-router'
 import { Layout } from '../components/Layout'
 import { AsCodeSearchResults } from '../components/AsCodeSearchResults'
@@ -10,7 +10,6 @@ import { SkeletonBlock } from '../components/ui/skeleton-block'
 import { StatusBanner } from '../components/ui/status-banner'
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { AS_CODE_SEARCH_MIN_QUERY, useAsCodeSearch } from '../hooks/useAsCodeSearch'
-import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { ApiError } from '../lib/api'
 import type { AsCodeSearchResponse } from '../lib/types'
 
@@ -40,89 +39,31 @@ function parseLimit(raw: string | null): number | undefined {
   return Number.isInteger(n) && n > 0 ? n : undefined
 }
 
-/** Tags each URL write of this page (in the location state), so it can be told from incoming navigation. */
-let lastWriteId = 0
-
-function writeIdOf(state: unknown): number | undefined {
-  return (state as { asCodeSearchWrite?: number } | null)?.asCodeSearchWrite
-}
-
 /**
  * The search state, kept in the URL so a search is shareable: `?q=&regex=true&archived=all|true&limit=`
  * (no `archived` = active components only).
- * Every write replaces the history entry (one entry per page visit, not per keystroke), and any
+ * Every write replaces the history entry (one entry per page visit, not per search), and any
  * change other than `limit` itself drops a previously raised `limit`.
- * `arrival` counts locations this page did not write itself (palette, header search, a link,
- * back/forward — also to an entry it wrote earlier), even ones carrying the same `q` or returning
- * to the location already rendered, and carries the `q` of the latest one.
- *
- * The data router (the app's createBrowserRouter) moves its location at once but renders it in a
- * transition, so a write can run while the page still shows the previous location. Writes
- * therefore start from the router's own location, and are dropped while it is one the page did
- * not write (it arrives as soon as it renders) or while a navigation is still loading (a route
- * loader would keep it out of the router's location until then). Under a declarative router
- * they use the rendered params.
+ * A write starts from the router's own location: the data router renders a location in a
+ * transition, so two writes in a row (a tab click, then the field's blur) would otherwise both
+ * start from the rendered params and the second would undo the first.
  */
 function useAsCodeSearchUrlState() {
   const [params, setParams] = useSearchParams()
-  const location = useLocation()
   const router = useContext(UNSAFE_DataRouterContext)?.router
-  // The id of the latest write while the router has not moved on from it; a write made before its
-  // location renders reads it.
-  const latestWrite = useRef<number | null>(null)
-  const renderedKey = useRef(location.key)
-  const pathname = useRef(location.pathname)
-  useEffect(() => {
-    renderedKey.current = location.key
-    pathname.current = location.pathname
-  })
-  const [arrival, setArrival] = useState({ count: 0, query: params.get('q') ?? '' })
-  // The data router reports every location change, also ones React never renders (Back then
-  // Forward before a render, even back to the rendered entry): any other than the page's latest
-  // write clears that write's marker, and is an arrival unless it leaves the page.
-  useEffect(() => {
-    if (!router) return
-    let seen = router.state.location
-    return router.subscribe((state) => {
-      if (state.location === seen) return
-      seen = state.location
-      if (writeIdOf(state.location.state) !== latestWrite.current) {
-        latestWrite.current = null
-        // The router's locations keep the basename (a sub-path build); useLocation strips it.
-        if (state.location.pathname !== (router.basename ?? '').replace(/\/$/, '') + pathname.current) return
-        const query = new URLSearchParams(state.location.search).get('q') ?? ''
-        setArrival((a) => ({ count: a.count + 1, query }))
-      }
-    })
-  }, [router])
-  // A declarative router renders every location: one whose write id is not that of a pending
-  // write of this page is an arrival.
-  const [ownWrite, setOwnWrite] = useState<number | null>(null)
-  const [seenKey, setSeenKey] = useState(location.key)
-  if (!router && location.key !== seenKey) {
-    setSeenKey(location.key)
-    if (ownWrite === null || writeIdOf(location.state) !== ownWrite) {
-      setArrival((a) => ({ count: a.count + 1, query: params.get('q') ?? '' }))
-    }
-    setOwnWrite(null)
-  }
-  const setParam = useCallback(
-    (key: string, value: string | null) => {
-      const current = router?.state.location
-      if (router && router.state.navigation.state !== 'idle') return
-      if (current && current.key !== renderedKey.current && writeIdOf(current.state) !== latestWrite.current) return
-      const id = ++lastWriteId
-      latestWrite.current = id
-      if (!router) setOwnWrite(id)
+  const update = useCallback(
+    (changes: Record<string, string | null>) => {
       setParams(
         (prev) => {
-          const next = new URLSearchParams(current ? current.search : prev)
-          if (value) next.set(key, value)
-          else next.delete(key)
-          if (key !== 'limit') next.delete('limit')
+          const next = new URLSearchParams(router ? router.state.location.search : prev)
+          for (const [key, value] of Object.entries(changes)) {
+            if (value) next.set(key, value)
+            else next.delete(key)
+          }
+          if (!('limit' in changes)) next.delete('limit')
           return next
         },
-        { replace: true, state: { asCodeSearchWrite: id } },
+        { replace: true },
       )
     },
     [router, setParams],
@@ -132,40 +73,44 @@ function useAsCodeSearchUrlState() {
     regex: params.get('regex') === 'true',
     scope: parseScope(params.get('archived')),
     limit: parseLimit(params.get('limit')),
-    arrival,
-    setParam,
+    update,
   }
 }
 
 /**
  * Global text search over every component's as-code view — the replacement for grepping the
- * Groovy DSL files. The input is debounced; the URL and the request follow the debounced value.
+ * Groovy DSL files. Results follow the field as it is typed (debounced); the URL takes the text
+ * only when the search is committed: Enter, leaving the field, or a change of mode, scope or limit.
  */
 export function AsCodeSearchPage() {
-  const { query: urlQuery, regex, scope, limit, arrival, setParam } = useAsCodeSearchUrlState()
+  const { query: urlQuery, regex, scope, limit, update } = useAsCodeSearchUrlState()
+  const location = useLocation()
   const [input, setInput] = useState(urlQuery)
-  const debounced = useDebouncedValue(input, 300)
+  const [query, setQuery] = useState(urlQuery)
 
-  // Incoming navigation while the page stays mounted replaces the input, pending keystrokes
-  // included, even when its `q` equals the current one, as soon as the router reports it
-  // (setting the input restarts the debounce, so the superseded text is never written).
-  const [seenArrivals, setSeenArrivals] = useState(arrival.count)
-  if (arrival.count !== seenArrivals) {
-    setSeenArrivals(arrival.count)
-    setInput(arrival.query)
+  // Every location the page renders (palette, header search, a link, Back/Forward, its own
+  // commits) sets the field and the results to its `q`. A draft typed before it is dropped:
+  // only a commit writes the URL, so no pending text can overwrite navigation. A commit is a user
+  // action; one landing before another navigation renders applies to it (last write wins).
+  const [seenKey, setSeenKey] = useState(location.key)
+  if (location.key !== seenKey) {
+    setSeenKey(location.key)
+    setInput(urlQuery)
+    setQuery(urlQuery)
   }
 
-  // Typing writes the URL — only when the debounced text itself changes, and only once it is
-  // the input: a stale value (an arrival replaced the input after its debounce expired) never
-  // overwrites a query that arrived by navigation, and one the input returns to is written then.
-  const writtenRef = useRef(debounced)
   useEffect(() => {
-    if (debounced === writtenRef.current || debounced !== input) return
-    writtenRef.current = debounced
-    if (debounced !== urlQuery) setParam('q', debounced)
-  }, [debounced, input, urlQuery, setParam])
+    if (input === query) return
+    const timer = setTimeout(() => setQuery(input), 300)
+    return () => clearTimeout(timer)
+  }, [input, query])
 
-  const search = useAsCodeSearch({ query: urlQuery, regex, archived: archivedParam(scope), limit })
+  // Writes the field's text along with `changes`.
+  const commit = (changes: Record<string, string | null> = {}) => update({ q: input || null, ...changes })
+
+  // A raised limit belongs to the committed query.
+  const committed = query === urlQuery
+  const search = useAsCodeSearch({ query, regex, archived: archivedParam(scope), limit: committed ? limit : undefined })
 
   return (
     <Layout>
@@ -184,9 +129,15 @@ export function AsCodeSearchPage() {
             className="h-9 min-w-64 flex-1 font-mono"
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && input !== urlQuery) commit()
+            }}
+            onBlur={() => {
+              if (input !== urlQuery) commit()
+            }}
             autoFocus
           />
-          <Tabs value={regex ? 'regex' : 'text'} onValueChange={(v) => setParam('regex', v === 'regex' ? 'true' : null)} variant="pill">
+          <Tabs value={regex ? 'regex' : 'text'} onValueChange={(v) => commit({ regex: v === 'regex' ? 'true' : null })} variant="pill">
             <TabsList aria-label="Match mode">
               <TabsTrigger value="text">Text</TabsTrigger>
               <TabsTrigger value="regex">Regex</TabsTrigger>
@@ -194,7 +145,7 @@ export function AsCodeSearchPage() {
           </Tabs>
           <Tabs
             value={scope}
-            onValueChange={(v) => setParam('archived', SCOPE_PARAM[v as ArchivedScope])}
+            onValueChange={(v) => commit({ archived: SCOPE_PARAM[v as ArchivedScope] })}
             variant="pill"
           >
             <TabsList aria-label="Archived">
@@ -206,12 +157,12 @@ export function AsCodeSearchPage() {
         </div>
 
         <SearchBody
-          tooShort={urlQuery.trim().length < AS_CODE_SEARCH_MIN_QUERY}
+          tooShort={query.trim().length < AS_CODE_SEARCH_MIN_QUERY}
           regex={regex}
           data={search.data}
           error={search.error}
-          canRaiseLimit={(limit ?? 0) < MAX_LIMIT}
-          onRaiseLimit={() => setParam('limit', String(MAX_LIMIT))}
+          canRaiseLimit={!committed || (limit ?? 0) < MAX_LIMIT}
+          onRaiseLimit={() => commit({ limit: String(MAX_LIMIT) })}
         />
       </div>
     </Layout>

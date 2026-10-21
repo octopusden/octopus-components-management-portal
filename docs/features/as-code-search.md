@@ -7,8 +7,10 @@ replacement for grepping the old Groovy DSL files. Anything the component's **As
 is searchable: artifact and group patterns, version ranges, VCS URLs, Jira keys, docker images,
 people.
 
-- **Query box** — debounced (300 ms); nothing is sent below 2 characters (the server minimum),
-  so typing never produces a 400.
+- **Query box** — results follow the text as it is typed (debounced, 300 ms); nothing is sent
+  below 2 characters (the server minimum), so typing never produces a 400. The text goes into
+  the URL only when the search is committed: **Enter**, leaving the field, or a change of mode,
+  scope or limit.
 - **Text / Regex** — Text is a case-insensitive substring match with regex metacharacters taken
   literally; Regex sends the query as a case-insensitive regular expression in RE2 syntax (no
   lookarounds or backreferences — the server matches in linear time). Matched text is highlighted
@@ -26,7 +28,11 @@ people.
   inline.
 
 State lives in the URL, so a search is shareable: `?q=…&regex=true&archived=true|all&limit=…`.
-Changing the query, mode or scope drops a raised `limit`.
+A commit replaces the history entry (one entry per visit), and changing the query, mode or scope
+drops a raised `limit`. Any navigation to the page (palette, header search, a link, Back/Forward)
+sets the field to the URL's `q` and drops an uncommitted draft; the page never writes the URL by
+itself, so a pending draft cannot overwrite a navigation. A commit is an explicit user action: one
+that lands while another navigation has not rendered yet applies to that location (last write wins).
 
 ### Deep link into the As Code tab
 

@@ -15,8 +15,6 @@ vi.mock('../hooks/useAsCodeSearch', async () => {
   const actual = await vi.importActual<typeof import('../hooks/useAsCodeSearch')>('../hooks/useAsCodeSearch')
   return { ...actual, useAsCodeSearch: vi.fn() }
 })
-// Identity debounce so typing reaches the URL synchronously.
-vi.mock('../hooks/useDebouncedValue', () => ({ useDebouncedValue: (v: string) => v }))
 
 const mockSearch = vi.mocked(useAsCodeSearch)
 
@@ -88,9 +86,11 @@ describe('AsCodeSearchPage', () => {
     expect(screen.getByRole('tab', { name: 'All' }).getAttribute('data-state')).toBe('active')
   })
 
-  it('writes the typed query into the URL', async () => {
+  it('writes the typed query into the URL on Enter', async () => {
     renderPage('/search')
     await userEvent.type(screen.getByLabelText('Search text'), 'foo')
+    expect(location()).toBe('/search')
+    await userEvent.keyboard('{Enter}')
     expect(location()).toBe('/search?q=foo')
     // No archived param = the Active default: only active components are searched.
     expect(lastParams()).toMatchObject({ query: 'foo', regex: false, archived: false })
