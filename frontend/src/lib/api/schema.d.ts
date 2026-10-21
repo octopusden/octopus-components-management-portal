@@ -2430,6 +2430,8 @@ export interface components {
             /** Format: int32 */
             ambiguous_auto_resolved: number;
             /** Format: int32 */
+            auto_release_enabled: number;
+            /** Format: int32 */
             dropped_lines: number;
             errors: string[];
             /** Format: int32 */
