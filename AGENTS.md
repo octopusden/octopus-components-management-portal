@@ -74,5 +74,5 @@ Default credentials (substituted into the realm from `.env`): `e2e-admin` / `$E2
 - Frontend tests: `frontend/src/**/*.test.tsx`
 - Test fixtures (static assets for WebFlux tests): `src/test/resources/static/`
 
-When writing tests, always write a failing test first that reproduces the bug,
-then fix the production code until the test passes.
+- Bug fix: first a test that reproduces it and fails (`test:` commit), then the fix (`fix:` commit).
+- New behaviour ships with its tests in the same PR. A test counts only if it fails without the change.
