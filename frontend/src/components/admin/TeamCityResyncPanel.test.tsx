@@ -171,7 +171,7 @@ afterEach(() => {
 describe('TeamCityResyncPanel — admin-mode gate', () => {
   it('disables the button when adminMode is false', () => {
     renderPanel()
-    expect(screen.getByRole('button', { name: /resync tc project ids/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /sync from teamcity/i })).toBeDisabled()
     expect(screen.getByText(/Arm Admin mode above/i)).toBeDefined()
   })
 
@@ -180,7 +180,7 @@ describe('TeamCityResyncPanel — admin-mode gate', () => {
     act(() => {
       useAdminMode.setState({ enabled: true })
     })
-    expect(screen.getByRole('button', { name: /resync tc project ids/i })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: /sync from teamcity/i })).not.toBeDisabled()
   })
 })
 
@@ -191,7 +191,7 @@ describe('TeamCityResyncPanel — confirm + mutation', () => {
     useAdminMode.setState({ enabled: true })
 
     renderPanel()
-    fireEvent.click(screen.getByRole('button', { name: /resync tc project ids/i }))
+    fireEvent.click(screen.getByRole('button', { name: /sync from teamcity/i }))
 
     const dialog = await screen.findByRole('dialog')
     fireEvent.click(within(dialog).getByRole('button', { name: /confirm/i }))
@@ -205,7 +205,7 @@ describe('TeamCityResyncPanel — confirm + mutation', () => {
     useAdminMode.setState({ enabled: true })
 
     renderPanel()
-    fireEvent.click(screen.getByRole('button', { name: /resync tc project ids/i }))
+    fireEvent.click(screen.getByRole('button', { name: /sync from teamcity/i }))
 
     const dialog = await screen.findByRole('dialog')
     fireEvent.click(within(dialog).getByRole('button', { name: /cancel/i }))
@@ -213,18 +213,16 @@ describe('TeamCityResyncPanel — confirm + mutation', () => {
     expect(mutateAsync).not.toHaveBeenCalled()
   })
 
-  it('the confirm dialog says the resync also turns Auto release on and leaves TeamCity unchanged', async () => {
+  it('the confirm dialog mentions Auto release', async () => {
     const { base } = buildMutation()
     mockUseRun.mockReturnValue(base)
     useAdminMode.setState({ enabled: true })
 
     renderPanel()
-    fireEvent.click(screen.getByRole('button', { name: /resync tc project ids/i }))
+    fireEvent.click(screen.getByRole('button', { name: /sync from teamcity/i }))
 
     const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByText(/finish-build trigger/i)).toBeDefined()
-    expect(within(dialog).getByText(/never turns it off/i)).toBeDefined()
-    expect(within(dialog).getByText(/TeamCity itself is not changed/i)).toBeDefined()
+    expect(within(dialog).getByText(/auto release/i)).toBeDefined()
   })
 })
 
@@ -235,7 +233,7 @@ describe('TeamCityResyncPanel — RUNNING / COMPLETED / FAILED rendering', () =>
     renderPanel()
     expect(screen.getByTestId('tc-resync-progress')).toBeDefined()
     // Button shows "Resyncing…" while a RUNNING job is being polled.
-    expect(screen.getByRole('button', { name: /resyncing/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /syncing/i })).toBeDisabled()
   })
 
   it('renders all eight counter tiles on COMPLETED', () => {
@@ -304,7 +302,7 @@ describe('TeamCityResyncPanel — RUNNING / COMPLETED / FAILED rendering', () =>
     mockUseJob.mockReturnValue(buildJobQuery(FAILED_JOB))
     useAdminMode.setState({ enabled: true })
     renderPanel()
-    expect(screen.getByText(/TC resync failed: TC unreachable/i)).toBeDefined()
+    expect(screen.getByText(/TeamCity sync failed: TC unreachable/i)).toBeDefined()
   })
 
   it('renders a destructive banner when the start mutation errors (cross-kind 409 etc.)', () => {
@@ -345,7 +343,7 @@ describe('TeamCityResyncPanel — terminal COMPLETED side-effects', () => {
 
     await waitFor(() => expect(mockToast).toHaveBeenCalledOnce())
     const call = mockToast.mock.calls[0]?.[0] as { title: string; description: string }
-    expect(call.title).toMatch(/TC resync completed/i)
+    expect(call.title).toMatch(/TeamCity sync completed/i)
     expect(call.description).toContain('650 scanned')
     expect(call.description).toContain('12 updated')
     expect(call.description).toContain('4 auto-resolved')
@@ -399,7 +397,7 @@ describe('TeamCityResyncPanel — cross-kind disable', () => {
     )
     useAdminMode.setState({ enabled: true })
     renderPanel()
-    expect(screen.getByRole('button', { name: /resync tc project ids/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /sync from teamcity/i })).toBeDisabled()
     expect(screen.getByText(/Components migration is running/i)).toBeDefined()
   })
 
@@ -409,7 +407,7 @@ describe('TeamCityResyncPanel — cross-kind disable', () => {
     )
     useAdminMode.setState({ enabled: true })
     renderPanel()
-    expect(screen.getByRole('button', { name: /resync tc project ids/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /sync from teamcity/i })).toBeDisabled()
     expect(screen.getByText(/History migration is running/i)).toBeDefined()
   })
 
@@ -419,7 +417,7 @@ describe('TeamCityResyncPanel — cross-kind disable', () => {
     )
     useAdminMode.setState({ enabled: true })
     renderPanel()
-    expect(screen.getByRole('button', { name: /resync tc project ids/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /sync from teamcity/i })).toBeDisabled()
     expect(screen.getByText(/TC validation is running/i)).toBeDefined()
   })
 })

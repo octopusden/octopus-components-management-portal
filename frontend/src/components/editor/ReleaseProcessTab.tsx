@@ -41,8 +41,7 @@ export function ReleaseProcessTab({ form }: { form: UseFormReturn<GeneralFormVal
               <FieldInfo path="component.autoRelease" label="Auto release" />
             </div>
             <p id="autoRelease-help" className="text-xs text-muted-foreground">
-              Release automation may start releases of this component. The TeamCity resync turns this on
-              when the release configuration in TeamCity has a finish-build trigger; it never turns it off.
+              Turned on by the TeamCity sync when the release has a finish-build trigger.
             </p>
             {errors.autoRelease && <p className="text-xs text-destructive">{errors.autoRelease.message}</p>}
           </div>

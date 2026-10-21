@@ -43,7 +43,7 @@ describe('ReleaseProcessTab auto release switch', () => {
     expect(formRef.current!.getValues('autoRelease')).toBe(false)
   })
 
-  it('says that the TeamCity resync turns it on from a finish-build trigger', () => {
+  it('says that the TeamCity sync turns it on from a finish-build trigger', () => {
     renderTab(<Harness autoRelease={false} />)
     expect(screen.getByText(/finish-build trigger/i)).toBeDefined()
   })

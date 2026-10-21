@@ -92,7 +92,7 @@ export function TeamCityResyncPanel() {
     if (invalidatedJobs.current.has(jobData.id)) return
     invalidatedJobs.current.add(jobData.id)
     toast({
-      title: 'TC resync completed',
+      title: 'TeamCity sync completed',
       description:
         `${result.scanned} scanned, ${result.updated} updated, ${result.unchanged} unchanged, ` +
         `${result.skipped_no_match} no match, ${result.skipped_ambiguous} ambiguous, ` +
@@ -141,10 +141,10 @@ export function TeamCityResyncPanel() {
         >
           {(isRunning || startResync.isPending) && <Loader2 className="animate-spin" aria-hidden="true" />}
           {isRunning
-            ? 'Resyncing…'
+            ? 'Syncing…'
             : startResync.isPending
               ? 'Starting…'
-              : 'Resync TC project IDs'}
+              : 'Sync from TeamCity'}
         </Button>
         {!adminMode && (
           <span className="text-xs text-muted-foreground">
@@ -185,7 +185,7 @@ export function TeamCityResyncPanel() {
 
       {isFailed && jobData?.errorMessage && (
         <StatusBanner variant="destructive">
-          TC resync failed: {jobData.errorMessage}
+          TeamCity sync failed: {jobData.errorMessage}
         </StatusBanner>
       )}
 
@@ -237,18 +237,9 @@ export function TeamCityResyncPanel() {
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Resync TC project IDs?</DialogTitle>
+            <DialogTitle>Sync from TeamCity?</DialogTitle>
             <DialogDescription>
-              Scans every component, queries TeamCity for projects whose
-              COMPONENT_NAME parameter matches the component id, and rewrites
-              the persisted teamcityProjectId + teamcityProjectUrl when the
-              match changes. Manual overrides for affected components will be
-              replaced. It also turns Auto release on for components whose
-              release configuration has an enabled finish-build trigger, and
-              never turns it off; TeamCity itself is not changed. The
-              operation runs in the background and progress
-              will appear in this tab; on large registries it can take
-              several minutes.
+              Updates project links and Auto release from TeamCity. Runs in the background.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
