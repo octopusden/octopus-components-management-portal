@@ -53,6 +53,7 @@ const RESULT: TeamCityResyncResult = {
   skipped_no_match: 50,
   skipped_ambiguous: 8,
   ambiguous_auto_resolved: 4,
+  auto_release_enabled: 7,
   errors: [],
 }
 
@@ -223,7 +224,7 @@ describe('TeamCityResyncPanel — RUNNING / COMPLETED / FAILED rendering', () =>
     expect(screen.getByRole('button', { name: /resyncing/i })).toBeDisabled()
   })
 
-  it('renders all seven counter tiles on COMPLETED', () => {
+  it('renders all eight counter tiles on COMPLETED', () => {
     mockUseJob.mockReturnValue(buildJobQuery(COMPLETED_JOB))
     useAdminMode.setState({ enabled: true })
     renderPanel()
@@ -237,6 +238,14 @@ describe('TeamCityResyncPanel — RUNNING / COMPLETED / FAILED rendering', () =>
     // mapping a number to the wrong label.
     expect(screen.getByText('4')).toBeDefined()
     expect(screen.getByText('Errors')).toBeDefined()
+  })
+
+  it('shows how many components the resync set to auto release', () => {
+    mockUseJob.mockReturnValue(buildJobQuery(COMPLETED_JOB))
+    useAdminMode.setState({ enabled: true })
+    renderPanel()
+    expect(screen.getByText('Auto release on')).toBeDefined()
+    expect(screen.getByText('7')).toBeDefined()
   })
 
   it('renders Auto-resolved as 0 when the field is absent (older CRS without ambiguous_auto_resolved)', () => {

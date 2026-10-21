@@ -887,6 +887,7 @@ describe('ComponentDetailPage — sidebar nav order', () => {
       'Build',
       'VCS',
       'Jira',
+      'Release Process',
       'Escrow',
       'Documentation',
       'Distribution',
