@@ -1,5 +1,5 @@
-import { placementStatusInfo } from './placementStatus'
-import type { PlacementRowDiff } from './types'
+import { checkoutLayoutStatusInfo } from './checkoutLayoutStatus'
+import type { CheckoutLayoutRowDiff } from './types'
 
 /**
  * "current → derived", null-aware: `null` (the wire value for "no
@@ -15,10 +15,10 @@ export function fieldChange(current: string | null | undefined, derived: string 
 }
 
 /** One "Field name: before → after" line per changed field, in the "Proposed change" column. */
-export function buildProposedChangeLines(row: PlacementRowDiff): string[] {
+export function buildProposedChangeLines(row: CheckoutLayoutRowDiff): string[] {
   // Whether a row was derived is decided by its status: on the wire every derived field is present,
   // and null is also a real derived value ("checkout root"). A report-only row proposes nothing.
-  if (!placementStatusInfo(row.status).derived) return []
+  if (!checkoutLayoutStatusInfo(row.status).derived) return []
   const prefixRoot = row.entries.length > 1
   const lines: string[] = []
   for (const entry of row.entries) {
@@ -40,7 +40,7 @@ export function summarizeKeys(keys: string[], max = 10): string {
 }
 
 /** Total changed fields across the selected components' rows — what a Sync of them would write. */
-export function countChangedFields(rows: PlacementRowDiff[], selectedIds: Set<string>): number {
+export function countChangedFields(rows: CheckoutLayoutRowDiff[], selectedIds: Set<string>): number {
   return rows
     .filter((row) => selectedIds.has(row.componentId))
     .reduce((total, row) => total + buildProposedChangeLines(row).length, 0)

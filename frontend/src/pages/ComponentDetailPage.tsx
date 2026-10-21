@@ -152,7 +152,7 @@ function sectionForField(field: string): string | null {
   if ((GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(field)) return 'general'
   if ((MISC_TAB_FIELDS as ReadonlyArray<string>).includes(field)) return 'misc'
   if (field === 'autoRelease') return 'release-process'
-  // VCS placement is edited on the VCS tab — the Build Working Directory too, not on the Build tab —
+  // VCS checkout layout is edited on the VCS tab — the Build Working Directory too, not on the Build tab —
   // for the base row and for a per-range row (`fieldOverrides[<j>].…`).
   if (/^(fieldOverrides\[\d+\]\.)?(buildWorkingDirectory$|vcsEntries\[)/.test(field)) return 'vcs'
   if (field.startsWith('build')) return 'build'
@@ -699,7 +699,7 @@ function ComponentDetailEditor() {
         const hasGeneralError = [...fieldErrors.keys()].some((f) =>
           (GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(f),
         )
-        // A placement error on a base VCS entry shows inline on the VCS tab. One
+        // A checkout layout error on a base VCS entry shows inline on the VCS tab. One
         // on a per-range row shows in its (closed) editor, so it keeps the toast.
         let anyFieldMapped = vcsSection.applyServerErrors(fieldErrors, sentOverrideIds)
         let switchTo: string | null = null

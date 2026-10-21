@@ -112,7 +112,7 @@ function renderEditor(props: Partial<Parameters<typeof OverrideRowEditor>[0]> = 
     mode: 'create' as const,
     ...props,
   }
-  // FieldInfo (VCS placement descriptions) needs the app-level TooltipProvider.
+  // FieldInfo (VCS checkout layout descriptions) needs the app-level TooltipProvider.
   return render(<TooltipProvider><OverrideRowEditor {...defaults} /></TooltipProvider>)
 }
 
@@ -1002,10 +1002,10 @@ describe('OverrideRowEditor — empty/inverted version range (client-side early 
 })
 
 // ---------------------------------------------------------------------------
-// Tests: VCS placement (Source Path / Checkout Directory) + read-only Name
+// Tests: VCS checkout layout (Source Path / Checkout Directory) + read-only Name
 // ---------------------------------------------------------------------------
 
-describe('OverrideRowEditor — VCS placement', () => {
+describe('OverrideRowEditor — VCS checkout layout', () => {
   beforeEach(() => {
     mockQueueUpdate.mockReset()
     mockOverridesList = []
@@ -1035,7 +1035,7 @@ describe('OverrideRowEditor — VCS placement', () => {
     expect(screen.getByRole('button', { name: 'Remove VCS Root 3' })).toBeInTheDocument()
   })
 
-  it('sends the edited placement, null for blanks', async () => {
+  it('sends the edited checkout layout, null for blanks', async () => {
     renderEditor({ mode: 'edit', override: vcsOverride() })
     const cd = screen.getAllByLabelText('Checkout Directory')
     fireEvent.change(cd[1]!, { target: { value: 'feature' } })

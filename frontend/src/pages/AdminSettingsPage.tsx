@@ -10,7 +10,7 @@ import { MigrationHistoryPanel } from '../components/admin/MigrationHistoryPanel
 import { MigrationPanel } from '../components/admin/MigrationPanel'
 import { TeamCityResyncPanel } from '../components/admin/TeamCityResyncPanel'
 import { TeamCityValidationPanel } from '../components/admin/TeamCityValidationPanel'
-import { TeamCityPlacementPanel } from '../components/admin/TeamCityPlacementPanel'
+import { TeamCityCheckoutLayoutPanel } from '../components/admin/TeamCityCheckoutLayoutPanel'
 import { ServiceEventsPanel } from '../components/admin/ServiceEventsPanel'
 import { FeedbackPanel } from '../components/admin/FeedbackPanel'
 import { TemplatesPanel } from '../components/admin/TemplatesPanel'
@@ -180,7 +180,7 @@ export function AdminSettingsPage() {
               </div>
 
               <div className="border-t pt-6 space-y-2">
-                <h2 className="text-lg font-semibold">Checkout paths from TeamCity</h2>
+                <h2 className="text-lg font-semibold">Checkout layout from TeamCity</h2>
                 <p className="text-sm text-muted-foreground">
                   Where TeamCity checks out each VCS root (Checkout Directory / Source Path) and
                   where it builds (Build Working Directory). Diff finds where a component's stored
@@ -189,7 +189,7 @@ export function AdminSettingsPage() {
                   Admin mode armed above.
                 </p>
                 <div className="pt-2">
-                  <TeamCityPlacementPanel />
+                  <TeamCityCheckoutLayoutPanel />
                 </div>
               </div>
             </div>

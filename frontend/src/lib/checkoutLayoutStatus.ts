@@ -1,6 +1,6 @@
-import type { PlacementDiffRowStatus } from './types'
+import type { CheckoutLayoutDiffRowStatus } from './types'
 
-export type PlacementStatusBucket = 'ready' | 'needsLook' | 'cantDerive' | 'nothingToDo'
+export type CheckoutLayoutStatusBucket = 'ready' | 'needsLook' | 'cantDerive' | 'nothingToDo'
 
 /**
  * Everything the panel needs per raw status: the badge tone, the human label
@@ -9,11 +9,11 @@ export type PlacementStatusBucket = 'ready' | 'needsLook' | 'cantDerive' | 'noth
  * TeamCity derived values for the row.
  */
 const STATUS_INFO: Record<
-  PlacementDiffRowStatus,
+  CheckoutLayoutDiffRowStatus,
   {
     tone: 'success' | 'secondary' | 'warning' | 'destructive'
     label: string
-    bucket: PlacementStatusBucket
+    bucket: CheckoutLayoutStatusBucket
     /** TeamCity derived values for the row (vs. a report-only row). */
     derived: boolean
   }
@@ -31,19 +31,19 @@ const STATUS_INFO: Record<
   IN_SYNC: { tone: 'secondary', label: 'Already in sync', bucket: 'nothingToDo', derived: true },
 }
 
-export type PlacementStatusInfo = (typeof STATUS_INFO)[PlacementDiffRowStatus]
+export type CheckoutLayoutStatusInfo = (typeof STATUS_INFO)[CheckoutLayoutDiffRowStatus]
 
 /**
  * CRS deploys independently of the Portal, so a status this build doesn't know
  * can arrive: show its raw code, neutral, under "Needs a look", not derived.
  */
-export function placementStatusInfo(status: string): PlacementStatusInfo {
-  if (Object.hasOwn(STATUS_INFO, status)) return STATUS_INFO[status as PlacementDiffRowStatus]
+export function checkoutLayoutStatusInfo(status: string): CheckoutLayoutStatusInfo {
+  if (Object.hasOwn(STATUS_INFO, status)) return STATUS_INFO[status as CheckoutLayoutDiffRowStatus]
   return { tone: 'secondary', label: status, bucket: 'needsLook', derived: false }
 }
 
 /** The four summary-bar buckets, in display order, each with its plain-English label. */
-export const PLACEMENT_STATUS_BUCKETS: { id: PlacementStatusBucket; label: string }[] = [
+export const PLACEMENT_STATUS_BUCKETS: { id: CheckoutLayoutStatusBucket; label: string }[] = [
   { id: 'ready', label: 'Ready' },
   { id: 'needsLook', label: 'Needs a look' },
   { id: 'cantDerive', label: "Can't derive" },
