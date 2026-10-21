@@ -68,6 +68,10 @@
   released after this change.
 - **A route guard on `/components/new`** — the registry already refuses a create the user may not
   make; the disabled tiles explain why.
+- **A registry with no regular profile** — the Profile step then offers manual classification,
+  and a template-only creator can fill the regular wizard only to get 403 on Create. The
+  registry refuses that create anyway, and it needs a registry configured without regular
+  profiles.
 - **Hiding regular profile tiles** — the registry decides who may use a profile and says why; the
   Portal shows its answer, as for any unusable profile.
 - **Editing components** — who may edit is the registry's `canEdit`, unchanged.

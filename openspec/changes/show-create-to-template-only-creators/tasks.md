@@ -84,3 +84,6 @@
         `CreateComponentPage.templates.test.tsx`
   - [x] 7.2.3 `TemplatesPanel` unchanged
   - [x] 7.2.4 no BFF, `v4.json` or `schema.d.ts` change
+  - [x] 7.2.5 with no regular profile in the registry, a template-only creator still reaches the
+        manual-classification path and gets 403 on Create; left as is and recorded in
+        `proposal.md` Out of scope. (added on review)
