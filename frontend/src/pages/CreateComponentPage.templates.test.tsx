@@ -12,6 +12,7 @@ import type { TemplateRun } from '../hooks/useTemplateRun'
 import shippedProfiles from '../test-fixtures/component-profiles.contract.json'
 import { TooltipProvider } from '../components/ui/tooltip'
 import type { ComponentDetail } from '../lib/types'
+import type { User } from '../lib/auth'
 
 // ── mocks (as in CreateComponentPage.test.tsx; the template endpoints go through the real hooks) ──
 vi.mock('../lib/api', async () => {
@@ -39,7 +40,18 @@ vi.mock('../hooks/useAdminConfig', () => ({
   useFieldConfig: () => ({ data: undefined, isLoading: false, isError: false }),
   useComponentDefaults: () => ({ data: {}, isSuccess: true, isError: false, isLoading: false }),
 }))
-vi.mock('../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ data: undefined, isLoading: false }) }))
+const REGULAR_CREATOR: User = {
+  username: 'jdoe',
+  roles: [{ name: 'ROLE_COMPONENTS_REGISTRY_EDITOR', permissions: ['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'] }],
+  groups: [],
+}
+const TEMPLATE_CREATOR: User = {
+  username: 'dave',
+  roles: [{ name: 'ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR', permissions: ['ACCESS_COMPONENTS', 'CREATE_FROM_TEMPLATE'] }],
+  groups: [],
+}
+let currentUser: User = REGULAR_CREATOR
+vi.mock('../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ data: currentUser, isLoading: false }) }))
 vi.mock('../hooks/useOwners', () => ({ useOwners: () => ({ data: ['jdoe'] }) }))
 vi.mock('../hooks/useLabels', () => ({ useLabels: () => ({ data: ['sql'], isLoading: false }) }))
 vi.mock('../components/editor/UnsavedChangesGuard', () => ({
@@ -48,6 +60,8 @@ vi.mock('../components/editor/UnsavedChangesGuard', () => ({
 }))
 
 const VCS_PATH = 'baseConfiguration.vcsEntries[0].vcsPath'
+const TEMPLATE_VALUES_NOTE = 'Values come from the template and cannot be changed.'
+const ONLY_TEMPLATES = 'You may create components from templates only'
 const TEMPLATE_PATH = '/component-templates/client-plugin'
 const RUN_PATH = `${TEMPLATE_PATH}/components`
 
@@ -162,6 +176,7 @@ async function reachReview(result: TemplateRun = run()) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  currentUser = REGULAR_CREATOR
   listing = [...(shippedProfiles.profiles as ComponentProfile[]), TEMPLATE_ENTRY]
   mockUseComponent.mockReturnValue({ data: undefined, isLoading: false, error: null })
   mockApi.get.mockImplementation(async (path: string) => {
@@ -472,11 +487,66 @@ describe('Create component — Review & create from a template', () => {
     })
   })
 
+  it('does not show the template-values note to a user who may override', async () => {
+    await reachReview()
+    expect(screen.queryByText(TEMPLATE_VALUES_NOTE)).toBeNull()
+  })
+
   it('shows a refusal at the top of Review', async () => {
     await reachReview()
     mockApi.post.mockRejectedValueOnce(new ApiError(403, 'You do not have permission to create components'))
     fireEvent.change(screen.getByLabelText(/Jira task key/i), { target: { value: 'CD-1234' } })
     await userEvent.click(createButton())
     expect(await screen.findByText('You do not have permission to create components')).toBeInTheDocument()
+  })
+})
+
+describe('Create component — a template-only creator', () => {
+  beforeEach(() => {
+    currentUser = TEMPLATE_CREATOR
+    listing = listing.map((p) => (p.kind === 'template' ? p : { ...p, usable: false, unusableReason: ONLY_TEMPLATES }))
+  })
+
+  it('sees the regular profiles disabled with the registry reason, none selected, and can pick a template', async () => {
+    renderWizard()
+    expect(await screen.findByRole('radio', { name: 'Regular external component' })).toBeDisabled()
+    expect(screen.getAllByText(ONLY_TEMPLATES).length).toBeGreaterThan(0)
+    expect(screen.queryByRole('radio', { checked: true })).toBeNull()
+    await userEvent.click(tile('Client plugin'))
+    expect(await screen.findByText('Plugin code')).toBeInTheDocument()
+  })
+
+  it('cannot edit an overridable field on Review', async () => {
+    await reachReview()
+    const field = screen.getByTestId(`review-field-${VCS_PATH}`)
+    expect(within(field).queryByRole('textbox')).toBeNull()
+    expect(within(field).getByText('ssh://git@git.example.com/abc/plugin.git')).toBeInTheDocument()
+  })
+
+  it('is told once that the template values cannot be changed', async () => {
+    await reachReview()
+    expect(screen.getAllByText(TEMPLATE_VALUES_NOTE)).toHaveLength(1)
+  })
+
+  it('is not shown the note for a template with no overridable field', async () => {
+    mockApi.get.mockImplementation(async (path: string) => {
+      if (path === TEMPLATE_PATH) return { ...TEMPLATE, overridable: [] }
+      throw new Error(`unexpected GET ${path}`)
+    })
+    await reachReview()
+    expect(screen.queryByText(TEMPLATE_VALUES_NOTE)).toBeNull()
+  })
+
+  it('creates without overrides and sees the success panel', async () => {
+    await reachReview()
+    expect(dryRuns()[0]![1]).toEqual({ parameters: { CLIENT_CODE: ['ABC'], PLUGIN_CODE: ['PAY'] }, overrides: {} })
+    mockApi.post.mockResolvedValueOnce({ id: 'new-id', name: 'abc-plugin-pay' })
+    fireEvent.change(screen.getByLabelText(/Jira task key/i), { target: { value: 'CD-1234' } })
+    await userEvent.click(createButton())
+    expect(await screen.findByText('Component created')).toBeInTheDocument()
+    expect(mockApi.post).toHaveBeenLastCalledWith(
+      `${RUN_PATH}?dryRun=false`,
+      expect.objectContaining({ parameters: { CLIENT_CODE: ['ABC'], PLUGIN_CODE: ['PAY'] }, overrides: {} }),
+    )
   })
 })

@@ -22,6 +22,9 @@ export type User = z.infer<typeof UserSchema>
 export const PERMISSIONS = {
   ACCESS_COMPONENTS: 'ACCESS_COMPONENTS',
   CREATE_COMPONENTS: 'CREATE_COMPONENTS',
+  // Create from a template only, without overrides; the registry refuses its holders the
+  // regular profiles and the template overrides.
+  CREATE_FROM_TEMPLATE: 'CREATE_FROM_TEMPLATE',
   ARCHIVE_COMPONENTS: 'ARCHIVE_COMPONENTS',
   RENAME_COMPONENTS: 'RENAME_COMPONENTS',
   DELETE_COMPONENTS: 'DELETE_COMPONENTS',
@@ -117,6 +120,16 @@ export async function fetchCurrentUser(): Promise<User | null> {
 
 export function hasPermission(user: User | null | undefined, permission: string): boolean {
   return !!user && user.roles.some((r) => r.permissions.includes(permission))
+}
+
+/**
+ * Whether the user may open the create wizard: either create permission. Which profiles and
+ * templates they may then use is the registry's answer on each tile, not this check's.
+ */
+export function canStartCreate(user: User | null | undefined): boolean {
+  return (
+    hasPermission(user, PERMISSIONS.CREATE_COMPONENTS) || hasPermission(user, PERMISSIONS.CREATE_FROM_TEMPLATE)
+  )
 }
 
 export function logout(): void {

@@ -53,7 +53,8 @@
 - `frontend/src/pages/ComponentListPage.tsx`, `frontend/src/components/CommandPalette.tsx` — the
   New Component gate.
 - `frontend/src/components/template/TemplateWizard.tsx` — Review read-only and the note for a
-  user without `CREATE_COMPONENTS`.
+  user without `CREATE_COMPONENTS`; `CreateComponentPage.tsx` tells it whether the user may
+  override.
 - Copy and Clone gates (`ComponentListPage.tsx`, `ComponentDetailPage.tsx`) — unchanged, newly
   covered by tests for a template-only creator.
 - Docs: `docs/features/create-component.md` (who sees New Component, Copy, overrides).

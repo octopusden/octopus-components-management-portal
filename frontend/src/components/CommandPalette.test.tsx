@@ -45,6 +45,17 @@ const VIEWER: User = {
   groups: [],
 }
 
+const TEMPLATE_CREATOR: User = {
+  username: 'dave',
+  roles: [
+    {
+      name: 'ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR',
+      permissions: ['ACCESS_COMPONENTS', 'ACCESS_AUDIT', 'CREATE_FROM_TEMPLATE'],
+    },
+  ],
+  groups: [],
+}
+
 function mockUser(user: User | undefined) {
   mockedUseCurrentUser.mockReturnValue({
     data: user,
@@ -181,6 +192,14 @@ describe('CommandPalette — navigation', () => {
   })
 
   it('navigates to the create wizard on New Component', async () => {
+    const user = userEvent.setup()
+    renderPalette()
+    await user.click(screen.getByText('New Component'))
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/components/new'))
+  })
+
+  it('offers New Component to a template-only creator and opens the create wizard', async () => {
+    mockUser(TEMPLATE_CREATOR)
     const user = userEvent.setup()
     renderPalette()
     await user.click(screen.getByText('New Component'))

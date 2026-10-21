@@ -4,6 +4,13 @@ The wizard at `/components/new` (scratch) and `/components/new?from={id}` (clone
 [`openspec/specs/create-component-wizard`](../../openspec/specs/) once archived; the key's character
 rule is [`component-key-format`](../../openspec/specs/component-key-format/spec.md).
 
+- **New Component** (component list, command palette) shows for `CREATE_COMPONENTS` or
+  `CREATE_FROM_TEMPLATE`. A `CREATE_FROM_TEMPLATE`-only user finds the regular profiles disabled
+  with the registry's reason and creates from templates.
+- **Copy** (list row) and **Clone** (component page) need `CREATE_COMPONENTS`: they open the
+  regular wizard.
+- `/components/new` has no route guard; the registry refuses a create the user may not make.
+
 ## Profile step
 
 - Tiles are the registry's `regular` profiles and, for a new component, its templates
@@ -66,8 +73,8 @@ rule is [`component-key-format`](../../openspec/specs/component-key-format/spec.
   template problem to report to an administrator. The registry reports its create rules one
   problem at a time, so a fix can reveal the next.
 - Fields the template marks overridable can be edited, are checked while typing, and run a new dry
-  run when the user leaves them. Everyone who may create may override until the registry restricts
-  it.
+  run when the user leaves them — for a `CREATE_COMPONENTS` holder only. Anyone else sees them
+  read-only, with "Values come from the template and cannot be changed." when the template has any.
 - Changing a parameter discards the shown run; Review is reached only through Next.
 - **Create** sends the same body with `dryRun=false`, the Jira task key (required) and the comment.
   A 422 keeps the user on Review with the returned problems; a 404 (the template was withdrawn by a

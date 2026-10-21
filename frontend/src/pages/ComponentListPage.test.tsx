@@ -137,6 +137,17 @@ const editorUser: User = {
   groups: [],
 }
 
+const templateCreatorUser: User = {
+  username: 'dave',
+  roles: [
+    {
+      name: 'ROLE_COMPONENTS_REGISTRY_TEMPLATE_CREATOR',
+      permissions: ['ACCESS_COMPONENTS', 'ACCESS_AUDIT', 'CREATE_FROM_TEMPLATE'],
+    },
+  ],
+  groups: [],
+}
+
 const adminUser: User = {
   username: 'alice',
   roles: [
@@ -274,6 +285,15 @@ describe('ComponentListPage — New Component button gating', () => {
     expect(screen.getByRole('button', { name: /new component/i })).toBeDefined()
   })
 
+  it('shows "New Component" for a template-only creator (CREATE_FROM_TEMPLATE only)', () => {
+    mockUser(templateCreatorUser)
+    mockComponentsOk()
+
+    renderPage()
+
+    expect(screen.getByRole('button', { name: /new component/i })).toBeDefined()
+  })
+
   it('shows "New Component" for an admin user (full permissions)', () => {
     mockUser(adminUser)
     mockComponentsOk()
@@ -333,6 +353,13 @@ describe('ComponentListPage — per-row Copy gating + clone navigation', () => {
 
   it('does not pass onCopy without CREATE_COMPONENTS — no copy trigger rendered', () => {
     mockUser(viewerUser)
+    mockComponentsOk()
+    renderPage()
+    expect(screen.queryByTestId('table-copy-trigger')).toBeNull()
+  })
+
+  it('does not pass onCopy to a template-only creator — a copy opens the regular wizard', () => {
+    mockUser(templateCreatorUser)
     mockComponentsOk()
     renderPage()
     expect(screen.queryByTestId('table-copy-trigger')).toBeNull()
