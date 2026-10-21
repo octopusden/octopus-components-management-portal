@@ -96,6 +96,9 @@ vi.mock('../components/editor/MiscTab', async () => {
   )
   return { ...actual, MiscTab: () => React.createElement('div', { 'data-testid': 'misc-tab' }) }
 })
+vi.mock('../components/editor/ReleaseProcessTab', () => ({
+  ReleaseProcessTab: () => React.createElement('div', { 'data-testid': 'release-process-tab' }),
+}))
 vi.mock('../components/editor/BuildTab', () => ({
   BuildTab: ({ conflictError }: { conflictError?: string | null }) =>
     React.createElement('div', { 'data-testid': 'build-tab', 'data-conflict-error': conflictError ?? '' }),
@@ -899,6 +902,16 @@ describe('ComponentDetailPage — sidebar nav order', () => {
       'Overrides',
       'History',
     ])
+  })
+
+  it('hides the Release Process tab when component.autoRelease is hidden', () => {
+    mockedUseFieldConfigEntry.mockImplementation((path: string) => ({
+      entry: { visibility: path === 'component.autoRelease' ? ('hidden' as const) : ('editable' as const), required: false },
+      isLoading: false,
+      isError: false,
+    }))
+    renderPage(baseComponent, makeUser(['ACCESS_COMPONENTS']))
+    expect(within(screen.getByRole('tablist')).queryByRole('tab', { name: /release process/i })).toBeNull()
   })
 
   it('appends the admin-only Validations section (TeamCity, Unregistered Release) at the end for an admin', () => {
@@ -1806,6 +1819,33 @@ describe('ComponentDetailPage — cross-tab 400 + displayName clear', () => {
     await clickSaveAndConfirm()
 
     await waitFor(() => expect(screen.getByTestId('misc-tab')).toBeDefined())
+  })
+
+  it('auto-switches to the Release Process tab when a 400 maps to autoRelease', async () => {
+    // GeneralTab stub hydrates displayName + exposes a dirty edit so Save enables.
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('systems', component.systems ?? [])
+        form.setValue('displayName', component.displayName ?? '')
+      }, [component, form])
+      return React.createElement(
+        'button',
+        { 'data-testid': 'edit', onClick: () => form.setValue('displayName', 'X', { shouldDirty: true }) },
+        'edit',
+      )
+    })
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(
+        new ApiError(400, 'bad', JSON.stringify({ errorMessage: 'autoRelease: not editable' })),
+      ),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    await waitFor(() => expect(screen.getByTestId('release-process-tab')).toBeDefined())
   })
 
   it('auto-switches to the Documentation tab when a 400 maps to a docs field', async () => {
