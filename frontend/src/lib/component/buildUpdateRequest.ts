@@ -28,7 +28,7 @@ export interface FieldVisibilities {
   // behind the UI's disabled switch). Required so every buildUpdateRequest
   // caller must pass the field-config visibility explicitly.
   solution: FieldVisibility
-  // `autoRelease` gates like `solution`: hidden/readonly never reaches the wire.
+  // `autoRelease`: value-compared like testComponent; hidden/readonly is stripped.
   autoRelease: FieldVisibility
 }
 
@@ -161,8 +161,7 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
   const canBeParentChanged = (values.canBeParent ?? false) !== (component.canBeParent ?? false)
   const autoReleaseChanged =
     (values.autoRelease ?? false) !== (component.autoRelease ?? false) &&
-    visibilities.autoRelease !== 'hidden' &&
-    visibilities.autoRelease !== 'readonly'
+    visibilities.autoRelease === 'editable'
   const testComponentChanged = (values.testComponent ?? false) !== (component.testComponent ?? false)
   // Clearing a parent needs the explicit clearParent flag — `parentComponentName:
   // null` reads as "don't touch" server-side. Fires only on non-empty → empty.

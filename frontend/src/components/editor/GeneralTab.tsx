@@ -388,12 +388,6 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
               />
               <Label htmlFor="autoRelease" className="cursor-pointer"><FieldLabelText path="component.autoRelease" fallback="Auto release" /></Label>
               <FieldInfo path="component.autoRelease" label="Auto release" />
-              <span className="text-xs text-muted-foreground">
-                Off: a person starts every release.
-              </span>
-              {errors.autoRelease && (
-                <p className="text-xs text-destructive">{errors.autoRelease.message}</p>
-              )}
             </div>
           )}
 

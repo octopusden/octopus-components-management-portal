@@ -318,7 +318,8 @@ export function buildCreateRequest(
     solution: source?.solution ?? undefined,
     parentComponentName: source?.parentComponentName ?? undefined,
     archived: false,
-    autoRelease: source?.autoRelease ?? false,
+    // Never cloned: release automation must be opted in explicitly.
+    autoRelease: false,
     releaseManager: [...form.releaseManager],
     securityChampion: [...form.securityChampion],
     copyright: form.copyright || undefined,

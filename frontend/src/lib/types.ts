@@ -29,7 +29,7 @@ export interface ComponentSummary {
   // the parent picker filter. Optional on the TS type so existing fixtures
   // need not set it; the server always emits it (default false).
   canBeParent?: boolean
-  // Release automation may start releases of this component (CRS autoRelease; default false). Optional so fixtures need not set it; the server always emits it.
+  // Release automation may start releases of this component (CRS autoRelease; default false). Optional for deploy-order tolerance (portal deployed before CRS emits it) and so fixtures need not set it.
   autoRelease?: boolean
   updatedAt: string | null
   // Required on the wire per ComponentSummaryResponse — server emits []
