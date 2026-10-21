@@ -71,13 +71,15 @@ function useAsCodeSearchUrlState() {
   // location renders reads it.
   const latestWrite = useRef<number | null>(null)
   const renderedKey = useRef(location.key)
+  const pathname = useRef(location.pathname)
   useEffect(() => {
     renderedKey.current = location.key
+    pathname.current = location.pathname
   })
   const [arrival, setArrival] = useState({ count: 0, query: params.get('q') ?? '' })
   // The data router reports every location change, also ones React never renders (Back then
   // Forward before a render, even back to the rendered entry): any other than the page's latest
-  // write is an arrival, and it clears that write's marker.
+  // write clears that write's marker, and is an arrival unless it leaves the page.
   useEffect(() => {
     if (!router) return
     let seen = router.state.location
@@ -86,6 +88,7 @@ function useAsCodeSearchUrlState() {
       seen = state.location
       if (writeIdOf(state.location.state) !== latestWrite.current) {
         latestWrite.current = null
+        if (state.location.pathname !== pathname.current) return
         const query = new URLSearchParams(state.location.search).get('q') ?? ''
         setArrival((a) => ({ count: a.count + 1, query }))
       }
@@ -151,14 +154,14 @@ export function AsCodeSearchPage() {
     setInput(arrival.query)
   }
 
-  // Typing writes the URL — only when the debounced text itself changes and is still the input,
-  // so a stale value (an arrival replaced the input after its debounce expired) never overwrites
-  // a query that arrived by navigation.
+  // Typing writes the URL — only when the debounced text itself changes, and only once it is
+  // the input: a stale value (an arrival replaced the input after its debounce expired) never
+  // overwrites a query that arrived by navigation, and one the input returns to is written then.
   const writtenRef = useRef(debounced)
   useEffect(() => {
-    if (debounced === writtenRef.current) return
+    if (debounced === writtenRef.current || debounced !== input) return
     writtenRef.current = debounced
-    if (debounced === input && debounced !== urlQuery) setParam('q', debounced)
+    if (debounced !== urlQuery) setParam('q', debounced)
   }, [debounced, input, urlQuery, setParam])
 
   const search = useAsCodeSearch({ query: urlQuery, regex, archived: archivedParam(scope), limit })

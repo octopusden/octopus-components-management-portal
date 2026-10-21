@@ -124,7 +124,7 @@ describe('AsCodeSearchPage — navigation while mounted', () => {
 // in that window must neither overwrite the incoming location nor drop the page's own params.
 describe('AsCodeSearchPage — writes racing a location the page has not rendered yet', () => {
   const INCOMING = '/search?q=incoming&archived=all&limit=1000'
-  const routes = [{ path: '/search', element: <AsCodeSearchPage /> }]
+  const routes = [{ path: '/search', element: <AsCodeSearchPage /> }, { path: '/other', element: <div /> }]
   const factories = {
     memory: (entry: string) => createMemoryRouter(routes, { initialEntries: [entry] }),
     browser: (entry: string) => {
@@ -307,6 +307,29 @@ describe('AsCodeSearchPage — writes racing a location the page has not rendere
       expect(visited).not.toContain('?q=epsilon')
       expect(at(r)).toBe('/search?q=delta')
       expect(field().value).toBe('delta')
+    })
+
+    it('a debounced value skipped while newer input awaits rendering is still written once the input returns to it', async () => {
+      const r = start(kind, '/search?q=alpha')
+      fireEvent.change(field(), { target: { value: 'beta' } })
+      await act(async () => {
+        vi.advanceTimersByTime(300)
+        fireEvent.change(field(), { target: { value: 'betax' } })
+      })
+      expect(field().value).toBe('betax')
+      fireEvent.change(field(), { target: { value: 'beta' } })
+      await act(async () => { vi.advanceTimersByTime(1000) })
+      expect(at(r)).toBe('/search?q=beta')
+      expect(rendered()).toBe('beta')
+    })
+
+    it('leaving the page is not an arrival: the field keeps its text until the destination renders', async () => {
+      const r = start(kind, '/search?q=alpha')
+      await act(async () => {
+        // The router moves at once; the destination renders later, in a transition.
+        flushSync(() => { void r.navigate('/other') })
+        expect(field().value).toBe('alpha')
+      })
     })
 
     // The second write reads the first one's marker (the router stands on it, unrendered).
