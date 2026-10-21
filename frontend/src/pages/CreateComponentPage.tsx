@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import {
   useForm,
@@ -10,7 +10,7 @@ import {
   get,
 } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Check, ChevronLeft, ChevronRight, Plus, X, AlertCircle, Loader2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, X, Loader2 } from 'lucide-react'
 import { Button } from '../components/ui/button'
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../components/ui/dialog'
 import { Input } from '../components/ui/input'
@@ -27,6 +27,10 @@ import { FieldLabelText } from '../components/ui/FieldLabelText'
 import { FieldInfo } from '../components/ui/FieldInfo'
 import { JiraVersionPreview } from '../components/editor/JiraVersionPreview'
 import { UnsavedChangesGuard } from '../components/editor/UnsavedChangesGuard'
+import { WizardStepRail } from '../components/wizard/WizardStepRail'
+import { CreatedPanel } from '../components/wizard/CreatedPanel'
+import { ChangeMetadataFields } from '../components/wizard/ChangeMetadataFields'
+import { TemplateWizard } from '../components/template/TemplateWizard'
 import { cn } from '../lib/utils'
 import { hostOf } from '../lib/vcsHost'
 import { useFieldOptions } from '../hooks/useFieldOptions'
@@ -63,6 +67,8 @@ import {
   asksExplicit,
   flagsForProfile,
   initialProfile,
+  isRegular,
+  isTemplate,
   manualFlags,
   profileForClassification,
   profilesCovering,
@@ -71,7 +77,7 @@ import {
 import { ruleErrorOf, RULE_FORM_FIELDS } from '../lib/component/profileRules'
 import type { ComponentDetail } from '../lib/types'
 import { OWNERSHIP_MODES } from '../lib/artifactOwnership'
-import { validateJiraKey, normalizeJiraKey, normalizeChangeComment } from '../lib/editor/jiraKey'
+import { createJiraKeyError, normalizeJiraKey, normalizeChangeComment } from '../lib/editor/jiraKey'
 
 type StepId = 'profile' | 'general' | 'build' | 'vcs' | 'jira' | 'distribution' | 'escrow' | 'review'
 
@@ -251,6 +257,7 @@ export function CreateComponentPage() {
   const componentDefaults = (defaults.data ?? {}) as ComponentDefaults
   const { openedWith, unavailable: profilesUnavailable, retry: retryProfiles } = useProfilesForWizard()
   const ready = (!isClone || (!!source && !error)) && (defaults.isSuccess || defaults.isError) && openedWith !== null
+  const regularProfiles = (openedWith ?? []).filter(isRegular)
 
   return (
     <Dialog
@@ -266,50 +273,86 @@ export function CreateComponentPage() {
         <DialogDescription className="sr-only">
           Fill in the steps to create a new component.
         </DialogDescription>
-        {isClone && error ? (
-          <div className="flex flex-1 flex-col gap-4 p-6">
-            <DialogTitle>Clone component</DialogTitle>
-            <InlineError
-              message={
-                <>
-                  Failed to load the source component:{' '}
-                  {error instanceof Error ? error.message : String(error)}
-                </>
-              }
-            />
-          </div>
-        ) : profilesUnavailable ? (
-          <div className="flex flex-1 flex-col gap-4 p-6">
-            <DialogTitle>{isClone ? 'Clone component' : 'Create component'}</DialogTitle>
-            <InlineError
-              message="Could not load the component profiles from the registry, so no component can be created right now."
-            />
-            <div>
-              <Button type="button" variant="outline" onClick={retryProfiles}>
-                Retry
-              </Button>
-            </div>
-          </div>
-        ) : !ready ? (
-          <div className="flex flex-1 flex-col gap-4 p-6">
-            <DialogTitle className="sr-only">Create component</DialogTitle>
-            <SkeletonBlock className="h-9 w-64" />
-            <SkeletonBlock className="h-9 w-full" />
-            <SkeletonBlock className="h-9 w-full" />
-          </div>
-        ) : (
+        <CreateDialogBody
+          isClone={isClone}
+          sourceError={error}
+          profilesUnavailable={profilesUnavailable}
+          onRetryProfiles={retryProfiles}
+          ready={ready}
+        >
           <CreateComponentWizard
             key={`${source?.id ?? 'scratch'}-${remountKey}`}
             source={source ?? null}
             isClone={isClone}
             defaults={componentDefaults}
-            profiles={openedWith ?? []}
+            profiles={regularProfiles}
+            entries={isClone ? regularProfiles : (openedWith ?? [])}
             onCreateAnother={() => setRemountKey((k) => k + 1)}
           />
-        )}
+        </CreateDialogBody>
       </DialogContent>
     </Dialog>
   )
+}
+
+// What the dialog shows: the source's load error, the profiles' load error, a skeleton while
+// anything loads, else the wizard.
+function CreateDialogBody({
+  isClone,
+  sourceError,
+  profilesUnavailable,
+  onRetryProfiles,
+  ready,
+  children,
+}: {
+  isClone: boolean
+  sourceError: unknown
+  profilesUnavailable: boolean
+  onRetryProfiles: () => void
+  ready: boolean
+  children: ReactNode
+}) {
+  if (isClone && sourceError) {
+    return (
+      <div className="flex flex-1 flex-col gap-4 p-6">
+        <DialogTitle>Clone component</DialogTitle>
+        <InlineError
+          message={
+            <>
+              Failed to load the source component:{' '}
+              {sourceError instanceof Error ? sourceError.message : String(sourceError)}
+            </>
+          }
+        />
+      </div>
+    )
+  }
+  if (profilesUnavailable) {
+    return (
+      <div className="flex flex-1 flex-col gap-4 p-6">
+        <DialogTitle>{isClone ? 'Clone component' : 'Create component'}</DialogTitle>
+        <InlineError
+          message="Could not load the component profiles from the registry, so no component can be created right now."
+        />
+        <div>
+          <Button type="button" variant="outline" onClick={onRetryProfiles}>
+            Retry
+          </Button>
+        </div>
+      </div>
+    )
+  }
+  if (!ready) {
+    return (
+      <div className="flex flex-1 flex-col gap-4 p-6">
+        <DialogTitle className="sr-only">Create component</DialogTitle>
+        <SkeletonBlock className="h-9 w-64" />
+        <SkeletonBlock className="h-9 w-full" />
+        <SkeletonBlock className="h-9 w-full" />
+      </div>
+    )
+  }
+  return <>{children}</>
 }
 
 interface WizardProps {
@@ -318,12 +361,14 @@ interface WizardProps {
   defaults: ComponentDefaults
   /** The registry's `regular` profiles, in its order; empty when the registry has none configured. */
   profiles: ComponentProfile[]
+  /** The tiles the Profile step offers, in the registry's order: the profiles, and for a new component the templates. */
+  entries: ComponentProfile[]
   /** Remount the wizard as a fresh form instance after a successful create (same
    *  mode — scratch stays scratch, a clone restarts as another clone of the source). */
   onCreateAnother: () => void
 }
 
-function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAnother }: WizardProps) {
+function CreateComponentWizard({ source, isClone, defaults, profiles, entries, onCreateAnother }: WizardProps) {
   const navigate = useNavigate()
   const createMutation = useCreateComponent()
   const { toast } = useToast()
@@ -356,6 +401,18 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
   const profile = profiles.find((p) => p.id === profileId) ?? null
   const flags = classificationFlags(manualMode, profile, explicitAnswer, manual)
   const { covering, profileMissing } = profileSelection(manualMode, flags, profiles, profileId)
+  // A template picked on the Profile step takes over the wizard with its own steps; the regular
+  // form stays mounted behind it, so picking a regular profile again finds it as it was left.
+  const [templateId, setTemplateId] = useState<string | null>(null)
+  const [withdrawn, setWithdrawn] = useState<{ ids: string[]; message: string | null }>({ ids: [], message: null })
+  const offered = entries.filter((e) => !withdrawn.ids.includes(e.id))
+  const templateTiles = offered.filter(isTemplate)
+  const templateEntry = offered.find((e) => e.id === templateId) ?? null
+  // A late 404 from a template the user has since left must not close the one now selected.
+  const selectedTemplate = useRef(templateId)
+  useEffect(() => {
+    selectedTemplate.current = templateId
+  }, [templateId])
 
   const buildTasksVisibility = useFieldVisibility('build.buildTasks')
   const labelsVisibility = useFieldVisibility('component.labels')
@@ -517,8 +574,19 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
     },
     [manual, explicitAnswer, setValue, getValues, profiles, clearDefaultCopyrightUnless],
   )
+  const chooseEntry = (next: ComponentProfile) => {
+    if (!next.usable) return
+    setWithdrawn((w) => ({ ...w, message: null }))
+    if (isTemplate(next)) {
+      setTemplateId(next.id)
+      return
+    }
+    setTemplateId(null)
+    applyProfile(next, explicitAnswer)
+  }
   const pickCovering = (next: ComponentProfile) => {
     if (!next.usable) return
+    setTemplateId(null)
     setServerError((current) => (current?.stepId === 'profile' ? null : current))
     setProfileId(next.id)
   }
@@ -589,8 +657,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
   // Cross-highlight link between the Jira version-format fields and the live
   // Version Preview rows (same control the editor uses).
   const [jiraHoveredField, setJiraHoveredField] = useState<string | null>(null)
-  const jiraFormatError = validateJiraKey(jiraTaskKey)
-  const jiraKeyError = jiraFormatError ?? (jiraTaskKey.trim() === '' ? 'Jira task key is required' : null)
+  const jiraKeyError = createJiraKeyError(jiraTaskKey)
 
   // Server error, routed to its step (banner + stepper marker + click-to-step).
   const [serverError, setServerError] = useState<{ message: string; stepId: StepId } | null>(null)
@@ -609,6 +676,13 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
   const enterStep = (step: StepId) => {
     setCurrent(step)
     setVisitedSteps((prev) => (prev.has(step) ? prev : new Set(prev).add(step)))
+  }
+  const withdrawTemplate = (id: string, message: string) => {
+    const selected = selectedTemplate.current === id
+    setWithdrawn((w) => ({ ids: [...w.ids, id], message: selected ? message : w.message }))
+    if (!selected) return
+    setTemplateId(null)
+    enterStep('profile')
   }
 
   // Cross-step validity from a full parse (independent of RHF's touched state) so
@@ -836,8 +910,16 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
         title="Choose component profile"
         subtitle="The profile sets how the component is classified and how its key is named."
       />
-      {manualMode ? renderManualClassification() : renderProfileTiles(profiles, (p) => applyProfile(p, explicitAnswer))}
-      {covering.length > 0 && (
+      {withdrawn.message && <StatusBanner variant="destructive">{withdrawn.message}</StatusBanner>}
+      {manualMode ? (
+        <>
+          {renderManualClassification()}
+          {templateTiles.length > 0 && renderProfileTiles(templateTiles, chooseEntry)}
+        </>
+      ) : (
+        renderProfileTiles(offered, chooseEntry)
+      )}
+      {!templateEntry && covering.length > 0 && (
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
             This classification belongs to a profile, so its rules apply.
@@ -845,7 +927,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
           {renderProfileTiles(covering, pickCovering)}
         </div>
       )}
-      {(profile || manualMode) && (
+      {!templateEntry && (profile || manualMode) && (
         <p className="text-sm text-muted-foreground">
           This component will be:{' '}
           <span className="font-medium text-foreground">{external ? 'External' : 'Internal'}</span>
@@ -855,7 +937,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
           </span>
         </p>
       )}
-      {((profile && asksExplicit(profile)) || manualMode) && renderExplicitQuestion()}
+      {!templateEntry && ((profile && asksExplicit(profile)) || manualMode) && renderExplicitQuestion()}
     </div>
   )
 
@@ -895,8 +977,9 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
   const renderProfileTiles = (tiles: readonly ComponentProfile[], pick: (profile: ComponentProfile) => void) => (
     <div role="radiogroup" aria-label="Component profile" className="grid gap-3 sm:grid-cols-2">
       {tiles.map((p, idx) => {
-        const selected = profileId === p.id
-        const tabbable = selected || (profileId === null && idx === tiles.findIndex((q) => q.usable))
+        const selected = templateEntry ? templateEntry.id === p.id : profileId === p.id
+        const noneSelected = templateEntry === null && profileId === null
+        const tabbable = selected || (noneSelected && idx === tiles.findIndex((q) => q.usable))
         return (
           <button
             key={p.id}
@@ -936,8 +1019,14 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
               {selected && <span className="h-2 w-2 rounded-full bg-foreground" />}
             </span>
             <span className="flex flex-col">
-              <span className="font-medium">{p.title}</span>
+              <span className="flex items-center gap-2 font-medium">
+                {p.title}
+                {isTemplate(p) && <Badge variant="secondary">Template</Badge>}
+              </span>
               <span className="mt-1 text-sm text-muted-foreground">{p.description}</span>
+              {isTemplate(p) && p.version !== undefined && (
+                <span className="mt-1 text-xs text-muted-foreground">Version {p.version}</span>
+              )}
               {!p.usable && p.unusableReason && (
                 <span id={`profile-${p.id}-reason`} className="mt-1 text-sm text-muted-foreground">
                   {p.unusableReason}
@@ -1619,38 +1708,12 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
         }
       />
 
-      <fieldset className="space-y-4 rounded-md border border-border p-3">
-        <legend className="px-1 text-xs font-medium text-muted-foreground">Change metadata</legend>
-        <div className="space-y-1.5">
-          <Label htmlFor="create-jira-key">
-            Jira task key <span className="text-destructive">*</span>
-          </Label>
-          <Input
-            id="create-jira-key"
-            placeholder="ABC-123"
-            value={jiraTaskKey}
-            onChange={(e) => setJiraTaskKey(e.target.value)}
-            aria-invalid={!!jiraKeyError}
-            aria-describedby={jiraKeyError ? 'create-jira-key-error' : undefined}
-          />
-          {jiraKeyError && (
-            <p id="create-jira-key-error" className="text-xs text-destructive">
-              {jiraFormatError ?? jiraKeyError}
-            </p>
-          )}
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="create-change-comment">Comment (optional)</Label>
-          <textarea
-            id="create-change-comment"
-            placeholder="What changed and why"
-            value={changeComment}
-            onChange={(e) => setChangeComment(e.target.value)}
-            rows={3}
-            className="flex min-h-[64px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          />
-        </div>
-      </fieldset>
+      <ChangeMetadataFields
+        jiraTaskKey={jiraTaskKey}
+        onJiraTaskKey={setJiraTaskKey}
+        changeComment={changeComment}
+        onChangeComment={setChangeComment}
+      />
     </div>
   )
 
@@ -1678,30 +1741,31 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
     manualChanged(manual, source)
 
   // Post-create success panel — replaces the wizard body once the component is
-  // created. `submitted` is already true, so no unsaved-changes guard is needed.
+  // created, from either path. `submitted` is already true, so no unsaved-changes guard is needed.
   if (created) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-5 p-10 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
-          <Check className="h-7 w-7" aria-hidden />
-        </div>
-        <div className="space-y-1">
-          <DialogTitle className="text-xl font-semibold">Component created</DialogTitle>
-          <p className="text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">{created.name}</span> was added to the registry.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center justify-center gap-3">
-          <Button type="button" variant="outline" onClick={onCreateAnother}>
-            <Plus className="h-4 w-4" />
-            Create another
-          </Button>
-          <Button type="button" onClick={() => navigate(`/components/${created.id}`)}>
-            Go to component
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+      <CreatedPanel
+        name={created.name}
+        onCreateAnother={onCreateAnother}
+        onOpen={() => navigate(`/components/${created.id}`)}
+      />
+    )
+  }
+
+  if (templateEntry) {
+    return (
+      <TemplateWizard
+        key={templateEntry.id}
+        entry={templateEntry}
+        headerTitle={headerTitle}
+        profileStep={renderProfileStep()}
+        regularDirty={(isDirty || profileTouched) && !submitted}
+        onCreated={(component) => {
+          setSubmitted(true)
+          setCreated(component)
+        }}
+        onTemplateGone={(message) => withdrawTemplate(templateEntry.id, message)}
+      />
     )
   }
 
@@ -1717,71 +1781,17 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, onCreateAn
 
       {/* Body row: vertical stepper rail + scrollable content */}
       <div className="flex min-h-0 flex-1">
-        <nav
-          aria-label="Wizard steps"
-          className="flex w-64 shrink-0 flex-col gap-1 overflow-y-auto border-r bg-card p-4"
-        >
-          {steps.map((step, i) => {
+        <WizardStepRail
+          steps={steps.map((step) => {
             const active = step === current
-            const showInvalid = shownInvalidSteps.has(step)
             const done = !active && visitedSteps.has(step) && !invalidSteps.has(step)
-            // `invalid` wins over `active`: the current step can also be invalid
-            // once a Create attempt marks every step attempted, and that must stay
-            // distinguishable (data-status + destructive styling). aria-current
-            // still conveys "active" independently.
-            const status = showInvalid ? 'invalid' : active ? 'active' : done ? 'done' : 'todo'
-            // Announce the icon-only status to assistive tech (the circle is
-            // aria-hidden). `active` is already conveyed by aria-current="step".
-            const statusText = showInvalid ? 'has errors' : done ? 'completed' : null
-            return (
-              <button
-                key={step}
-                type="button"
-                aria-label={STEP_LABELS[step]}
-                aria-describedby={statusText ? `step-status-${step}` : undefined}
-                data-status={status}
-                onClick={() => goToStep(step)}
-                aria-current={active ? 'step' : undefined}
-                className={cn(
-                  'flex items-start gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors',
-                  active ? 'bg-muted font-medium' : 'hover:bg-muted',
-                  showInvalid && 'text-destructive',
-                )}
-              >
-                <span
-                  aria-hidden
-                  className={cn(
-                    'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs',
-                    showInvalid
-                      ? 'border-destructive/50 text-destructive'
-                      : active
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : done
-                          ? 'border-emerald-600/40 bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
-                          : 'border-border text-muted-foreground',
-                  )}
-                >
-                  {showInvalid ? (
-                    <AlertCircle className="h-3.5 w-3.5" />
-                  ) : done ? (
-                    <Check className="h-3.5 w-3.5" />
-                  ) : (
-                    i + 1
-                  )}
-                </span>
-                <span className="flex flex-col">
-                  <span>{STEP_LABELS[step]}</span>
-                  <span className="text-xs font-normal text-muted-foreground">{STEP_SUBTITLES[step]}</span>
-                </span>
-                {statusText && (
-                  <span id={`step-status-${step}`} className="sr-only">
-                    {statusText}
-                  </span>
-                )}
-              </button>
-            )
+            // `invalid` wins over `active`: the current step can also be invalid once a Create
+            // attempt marks every step attempted, and that must stay distinguishable.
+            const status = shownInvalidSteps.has(step) ? 'invalid' : active ? 'active' : done ? 'done' : 'todo'
+            return { id: step, label: STEP_LABELS[step], subtitle: STEP_SUBTITLES[step], status, current: active }
           })}
-        </nav>
+          onSelect={goToStep}
+        />
 
         <div className="flex-1 overflow-y-auto p-6">
           <div className="mx-auto max-w-2xl space-y-6">
