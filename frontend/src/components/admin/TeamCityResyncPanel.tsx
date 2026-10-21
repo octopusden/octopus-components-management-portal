@@ -243,7 +243,10 @@ export function TeamCityResyncPanel() {
               COMPONENT_NAME parameter matches the component id, and rewrites
               the persisted teamcityProjectId + teamcityProjectUrl when the
               match changes. Manual overrides for affected components will be
-              replaced. The operation runs in the background and progress
+              replaced. It also turns Auto release on for components whose
+              release configuration has an enabled finish-build trigger, and
+              never turns it off; TeamCity itself is not changed. The
+              operation runs in the background and progress
               will appear in this tab; on large registries it can take
               several minutes.
             </DialogDescription>

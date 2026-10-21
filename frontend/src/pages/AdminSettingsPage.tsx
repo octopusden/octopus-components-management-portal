@@ -160,7 +160,9 @@ export function AdminSettingsPage() {
                 <p className="text-sm text-muted-foreground">
                   Resync persisted teamcityProjectId + teamcityProjectUrl from
                   TC project params. Overwrites manual overrides for matched
-                  components. Arm Admin mode above to enable the button.
+                  components. Also turns Auto release on where the TeamCity
+                  release configuration has a finish-build trigger (never off;
+                  TeamCity is not changed). Arm Admin mode above to enable the button.
                 </p>
                 <div className="pt-2">
                   <TeamCityResyncPanel />
