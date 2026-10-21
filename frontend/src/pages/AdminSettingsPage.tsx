@@ -158,8 +158,8 @@ export function AdminSettingsPage() {
               <div className="border-t pt-6 space-y-2">
                 <h2 className="text-lg font-semibold">Sync from TeamCity</h2>
                 <p className="text-sm text-muted-foreground">
-                  Links components to TeamCity projects; turns Auto release on where the release
-                  has a finish-build trigger. Needs Admin mode.
+                  Links components to TeamCity projects (replaces manual links) and turns Auto release
+                  on where the release has a finish-build trigger. Needs Admin mode.
                 </p>
                 <div className="pt-2">
                   <TeamCityResyncPanel />

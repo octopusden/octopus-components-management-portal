@@ -372,7 +372,6 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
             )}
           </div>
 
-          {/* Auto release moved to the Release Process tab (ReleaseProcessTab.tsx). */}
 
           {/* Parent Component, Can-be-parent, and Group Key / Synthetic-group moved to the
               Misc tab (MiscTab.tsx) to keep General focused on identity/ownership/metadata.

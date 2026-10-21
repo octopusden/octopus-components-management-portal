@@ -232,7 +232,7 @@ describe('TeamCityResyncPanel — RUNNING / COMPLETED / FAILED rendering', () =>
     useAdminMode.setState({ enabled: true })
     renderPanel()
     expect(screen.getByTestId('tc-resync-progress')).toBeDefined()
-    // Button shows "Resyncing…" while a RUNNING job is being polled.
+    // Button shows "Syncing…" while a RUNNING job is being polled.
     expect(screen.getByRole('button', { name: /syncing/i })).toBeDisabled()
   })
 
@@ -249,16 +249,11 @@ describe('TeamCityResyncPanel — RUNNING / COMPLETED / FAILED rendering', () =>
     // Pin the new sub-counter value to guard against tile reordering accidentally
     // mapping a number to the wrong label.
     expect(screen.getByText('4')).toBeDefined()
+    expect(screen.getByText('Auto release on')).toBeDefined()
+    expect(screen.getByText('7')).toBeDefined()
     expect(screen.getByText('Errors')).toBeDefined()
   })
 
-  it('shows how many components the resync set to auto release', () => {
-    mockUseJob.mockReturnValue(buildJobQuery(COMPLETED_JOB))
-    useAdminMode.setState({ enabled: true })
-    renderPanel()
-    expect(screen.getByText('Auto release on')).toBeDefined()
-    expect(screen.getByText('7')).toBeDefined()
-  })
 
   it('renders Auto-resolved as 0 when the field is absent (older CRS without ambiguous_auto_resolved)', () => {
     const { ambiguous_auto_resolved: _omit, ...legacyResult } = RESULT

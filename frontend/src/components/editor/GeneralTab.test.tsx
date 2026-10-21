@@ -128,7 +128,6 @@ function Harness({ component, formRef, onOwnerValidatingChange, canEdit, classif
       solution: component.solution ?? false,
       archived: component.archived,
       testComponent: component.testComponent ?? false,
-      autoRelease: component.autoRelease ?? false,
       parentComponentName: component.parentComponentName ?? '',
       canBeParent: component.canBeParent ?? false,
       releaseManager: component.releaseManager ?? [],
@@ -272,7 +271,7 @@ describe('GeneralTab test component switch', () => {
 })
 
 describe('GeneralTab auto release', () => {
-  it('no longer shows the switch (it moved to the Release Process tab) but keeps the value in the form', () => {
+  it('hydrates autoRelease without rendering the switch', () => {
     setAllEditable()
     const formRef = { current: null } as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
     renderWithProviders(<Harness component={baseComponent({ autoRelease: true })} formRef={formRef} />)

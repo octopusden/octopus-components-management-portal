@@ -11,17 +11,12 @@ import type { GeneralFormValues } from './GeneralTab'
  * form (the header Save covers it); `autoRelease` is hydrated by GeneralTab, the always-mounted tab.
  */
 export function ReleaseProcessTab({ form }: { form: UseFormReturn<GeneralFormValues> }) {
-  const {
-    setValue,
-    watch,
-    formState: { errors },
-  } = form
+  const { setValue, watch, formState: { errors } } = form
   const { entry: autoReleaseEntry } = useFieldConfigEntry('component.autoRelease')
   const autoRelease = watch('autoRelease')
 
   return (
-    <div className="space-y-6">
-      <section data-testid="section-release-process">
+    <section data-testid="section-release-process">
         <h3 className="text-sm font-medium text-muted-foreground mb-3">Release Process</h3>
         {autoReleaseEntry.visibility !== 'hidden' && (
           <div className="space-y-1.5">
@@ -41,12 +36,11 @@ export function ReleaseProcessTab({ form }: { form: UseFormReturn<GeneralFormVal
               <FieldInfo path="component.autoRelease" label="Auto release" />
             </div>
             <p id="autoRelease-help" className="text-xs text-muted-foreground">
-              Turned on by the TeamCity sync when the release has a finish-build trigger.
+              Sync from TeamCity turns this on when the release has a finish-build trigger.
             </p>
             {errors.autoRelease && <p className="text-xs text-destructive">{errors.autoRelease.message}</p>}
           </div>
         )}
-      </section>
-    </div>
+    </section>
   )
 }

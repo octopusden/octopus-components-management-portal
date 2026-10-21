@@ -96,7 +96,7 @@ export function TeamCityResyncPanel() {
       description:
         `${result.scanned} scanned, ${result.updated} updated, ${result.unchanged} unchanged, ` +
         `${result.skipped_no_match} no match, ${result.skipped_ambiguous} ambiguous, ` +
-        `${result.ambiguous_auto_resolved ?? 0} auto-resolved, ${result.auto_release_enabled ?? 0} set to auto release, ` +
+        `${result.ambiguous_auto_resolved ?? 0} auto-resolved, ${result.auto_release_enabled ?? 0} auto release on, ` +
         `${result.errors.length} errors`,
     })
     queryClient.invalidateQueries({ queryKey: ['components'] })
@@ -239,7 +239,7 @@ export function TeamCityResyncPanel() {
           <DialogHeader>
             <DialogTitle>Sync from TeamCity?</DialogTitle>
             <DialogDescription>
-              Updates project links and Auto release from TeamCity. Runs in the background.
+              Updates project links and Auto release from TeamCity, replacing manual project links. Runs in the background.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

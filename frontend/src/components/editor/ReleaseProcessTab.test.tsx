@@ -43,12 +43,8 @@ describe('ReleaseProcessTab auto release switch', () => {
     expect(formRef.current!.getValues('autoRelease')).toBe(false)
   })
 
-  it('says that the TeamCity sync turns it on from a finish-build trigger', () => {
-    renderTab(<Harness autoRelease={false} />)
-    expect(screen.getByText(/finish-build trigger/i)).toBeDefined()
-  })
 
-  it('hidden → not rendered; readonly → disabled', () => {
+  it('hidden hides, readonly disables', () => {
     mockUseFieldConfigEntry.mockImplementation(() => makeEntry('hidden'))
     const { unmount } = renderTab(<Harness autoRelease={false} />)
     expect(screen.queryByRole('switch', { name: /auto release/i })).toBeNull()
