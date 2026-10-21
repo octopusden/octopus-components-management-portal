@@ -23,6 +23,8 @@ export const fieldDescriptions: Record<string, string> = {
     'Allows this component to be selected as another component’s parent. A can-be-parent component cannot itself have a parent (the hierarchy is single-level). Not the same as an aggregator group — see Group Key.',
   'component.groupId':
     'Aggregator-group membership: the key of the registry group this component belongs to (an aggregator owns a components-block in the registry definition). Filled for aggregator members, empty for standalone components. Read-only — set by the migration/import path, never through the portal.',
+  'component.autoRelease':
+    'Releases of the component may be started automatically by release automation (for example the CVE remediation service) once a release candidate passes its gates. Off: a person starts every release.',
   'component.solution':
     'Marks the component as a solution rather than a regular component or module. Downstream automation (release notes, distribution display rules) applies solution-specific workflows to flagged components.',
   'component.componentOwner':

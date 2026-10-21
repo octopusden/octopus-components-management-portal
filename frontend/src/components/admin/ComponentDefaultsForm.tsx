@@ -28,6 +28,7 @@ interface DefaultsData {
   parentComponent?: string
   releasesInDefaultBranch?: boolean
   solution?: boolean
+  autoRelease?: boolean
   archived?: boolean
   deprecated?: boolean
   copyright?: string
@@ -155,6 +156,7 @@ export function ComponentDefaultsForm() {
             <Separator />
             <div className="flex flex-wrap gap-6">
               <SwitchField label="Solution" checked={defaults.solution ?? false} />
+              <SwitchField label="Auto release" checked={defaults.autoRelease ?? false} />
               <SwitchField label="Archived" checked={defaults.archived ?? false} />
               <SwitchField label="Deprecated" checked={defaults.deprecated ?? false} />
               <SwitchField label="Releases in Default Branch" checked={defaults.releasesInDefaultBranch ?? false} />

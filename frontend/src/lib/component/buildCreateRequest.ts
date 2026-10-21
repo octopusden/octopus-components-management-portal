@@ -237,7 +237,7 @@ function buildCreateOwnership(rows: CreateFormValues['ownership'] | undefined): 
 const VISIBILITY_GATED_CREATE_FIELDS = [
   'displayName', 'copyright', 'releaseManager', 'securityChampion',
   'distributionExplicit', 'distributionExternal', 'systems', 'clientCode',
-  'solution', 'productType', 'parentComponentName', 'releasesInDefaultBranch',
+  'solution', 'autoRelease', 'productType', 'parentComponentName', 'releasesInDefaultBranch',
   'vcsExternalRegistry',
 ] as const
 
@@ -318,6 +318,7 @@ export function buildCreateRequest(
     solution: source?.solution ?? undefined,
     parentComponentName: source?.parentComponentName ?? undefined,
     archived: false,
+    autoRelease: source?.autoRelease ?? false,
     releaseManager: [...form.releaseManager],
     securityChampion: [...form.securityChampion],
     copyright: form.copyright || undefined,

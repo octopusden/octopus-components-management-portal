@@ -128,6 +128,7 @@ function Harness({ component, formRef, onOwnerValidatingChange, canEdit, classif
       solution: component.solution ?? false,
       archived: component.archived,
       testComponent: component.testComponent ?? false,
+      autoRelease: component.autoRelease ?? false,
       parentComponentName: component.parentComponentName ?? '',
       canBeParent: component.canBeParent ?? false,
       releaseManager: component.releaseManager ?? [],
@@ -267,6 +268,36 @@ describe('GeneralTab test component switch', () => {
     )
     await userEvent.click(sw)
     expect(formRef.current!.getValues('testComponent')).toBe(false)
+  })
+})
+
+describe('GeneralTab auto release switch', () => {
+  it('hydrates from the component and writes the toggled value into the form', async () => {
+    setAllEditable()
+    const formRef = { current: null } as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    renderWithProviders(<Harness component={baseComponent({ autoRelease: true })} formRef={formRef} />)
+    const sw = screen.getByRole('switch', { name: /auto release/i })
+    expect(sw.getAttribute('aria-checked')).toBe('true')
+    await userEvent.click(sw)
+    expect(formRef.current!.getValues('autoRelease')).toBe(false)
+  })
+
+  it('defaults to off when the component omits the field', () => {
+    setAllEditable()
+    renderWithProviders(<Harness component={baseComponent()} />)
+    expect(screen.getByRole('switch', { name: /auto release/i }).getAttribute('aria-checked')).toBe('false')
+  })
+
+  it('hidden → not rendered; readonly → disabled', () => {
+    mockUseFieldConfigEntry.mockImplementation((path: string) =>
+      makeEntry(path === 'component.autoRelease' ? 'hidden' : 'editable'))
+    const { unmount } = renderWithProviders(<Harness component={baseComponent()} />)
+    expect(screen.queryByRole('switch', { name: /auto release/i })).toBeNull()
+    unmount()
+    mockUseFieldConfigEntry.mockImplementation((path: string) =>
+      makeEntry(path === 'component.autoRelease' ? 'readonly' : 'editable'))
+    renderWithProviders(<Harness component={baseComponent()} />)
+    expect((screen.getByRole('switch', { name: /auto release/i }) as HTMLButtonElement).disabled).toBe(true)
   })
 })
 

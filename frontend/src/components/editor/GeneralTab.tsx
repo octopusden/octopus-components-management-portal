@@ -57,6 +57,7 @@ export const GENERAL_TAB_FIELDS = [
   // CRS 400s `testComponent: … matches none of the test-component name patterns` (SYS-099);
   // shown inline under the switch.
   'testComponent',
+  'autoRelease',
 ] as const
 
 function testComponentHint(blocked: boolean, patterns: readonly string[] | undefined): string {
@@ -91,6 +92,8 @@ export interface GeneralFormValues {
   // Synthetic test component (hidden from the list by default). Value-compared
   // on save like canBeParent.
   testComponent: boolean
+  // Release automation may start releases of this component. Value-compared on save.
+  autoRelease: boolean
   parentComponentName: string
   // canBeParent — editable Switch: whether this component may be picked as another
   // component's parent. A canBeParent component may not itself have a parent (single
@@ -216,6 +219,8 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
   const { entry: releaseManagerEntry } = useFieldConfigEntry('component.releaseManager')
   const { entry: securityChampionEntry } = useFieldConfigEntry('component.securityChampion')
   const { entry: copyrightEntry } = useFieldConfigEntry('component.copyright')
+  const { entry: autoReleaseEntry } = useFieldConfigEntry('component.autoRelease')
+  const autoRelease = watch('autoRelease')
 
   useEffect(() => {
     // Re-hydration guard. This effect re-runs on every (re)mount and whenever the
@@ -251,6 +256,7 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
     setValue('solution', component.solution ?? false)
     setValue('archived', component.archived)
     setValue('testComponent', component.testComponent ?? false)
+    setValue('autoRelease', component.autoRelease ?? false)
     // parentComponentName / canBeParent render on the Misc tab but are hydrated HERE: General
     // is the default tab (always mounted on load), whereas Radix unmounts the inactive Misc
     // tab, so hydrating in MiscTab would leave these unset until the user opens Misc.
@@ -368,6 +374,28 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
               <p className="text-xs text-destructive">{errors.testComponent.message}</p>
             )}
           </div>
+
+          {/* Auto release — release automation may start releases of this component. */}
+          {autoReleaseEntry.visibility !== 'hidden' && (
+            <div className="sm:col-span-2 flex items-center gap-3">
+              <Switch
+                id="autoRelease"
+                checked={autoRelease}
+                disabled={autoReleaseEntry.visibility === 'readonly'}
+                onCheckedChange={(checked) =>
+                  setValue('autoRelease', checked, { shouldDirty: true, shouldTouch: true })
+                }
+              />
+              <Label htmlFor="autoRelease" className="cursor-pointer"><FieldLabelText path="component.autoRelease" fallback="Auto release" /></Label>
+              <FieldInfo path="component.autoRelease" label="Auto release" />
+              <span className="text-xs text-muted-foreground">
+                Off: a person starts every release.
+              </span>
+              {errors.autoRelease && (
+                <p className="text-xs text-destructive">{errors.autoRelease.message}</p>
+              )}
+            </div>
+          )}
 
           {/* Parent Component, Can-be-parent, and Group Key / Synthetic-group moved to the
               Misc tab (MiscTab.tsx) to keep General focused on identity/ownership/metadata.

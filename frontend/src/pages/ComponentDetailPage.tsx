@@ -125,6 +125,7 @@ function mapComponentToForm(component: ComponentDetail): GeneralFormValues {
     solution: component.solution ?? false,
     archived: component.archived,
     testComponent: component.testComponent ?? false,
+    autoRelease: component.autoRelease ?? false,
     parentComponentName: component.parentComponentName ?? '',
     canBeParent: component.canBeParent ?? false,
     releaseManager: component.releaseManager ?? [],
@@ -251,6 +252,7 @@ function ComponentDetailEditor() {
   const { entry: securityChampionFc } = useFieldConfigEntry('component.securityChampion')
   const { entry: copyrightFc } = useFieldConfigEntry('component.copyright')
   const { entry: canBeParentFc } = useFieldConfigEntry('component.canBeParent')
+  const { entry: autoReleaseFc } = useFieldConfigEntry('component.autoRelease')
   const { entry: labelsFc } = useFieldConfigEntry('component.labels')
   // Section send-gating visibilities (Jira / Escrow).
   const { entry: releasesInDefaultBranchFc } = useFieldConfigEntry('component.releasesInDefaultBranch')
@@ -290,6 +292,7 @@ function ComponentDetailEditor() {
       solution: false,
       archived: false,
       testComponent: false,
+      autoRelease: false,
       parentComponentName: '',
       canBeParent: false,
       releaseManager: [],
@@ -404,6 +407,7 @@ function ComponentDetailEditor() {
         canBeParent: canBeParentFc.visibility ?? 'editable',
         labels: labelsFc.visibility ?? 'editable',
         solution: solutionFc.visibility ?? 'editable',
+        autoRelease: autoReleaseFc.visibility ?? 'editable',
       },
       dirtyFields: {
         solution: form.formState.dirtyFields.solution === true,

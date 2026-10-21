@@ -28,6 +28,8 @@ export interface FieldVisibilities {
   // behind the UI's disabled switch). Required so every buildUpdateRequest
   // caller must pass the field-config visibility explicitly.
   solution: FieldVisibility
+  // `autoRelease` gates like `solution`: hidden/readonly never reaches the wire.
+  autoRelease: FieldVisibility
 }
 
 // Subset of RHF `formState.dirtyFields` that drives clear/omit/REPLACE
@@ -157,6 +159,10 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
 
   // canBeParent: value-compared (boolean, no null ambiguity) like `archived`.
   const canBeParentChanged = (values.canBeParent ?? false) !== (component.canBeParent ?? false)
+  const autoReleaseChanged =
+    (values.autoRelease ?? false) !== (component.autoRelease ?? false) &&
+    visibilities.autoRelease !== 'hidden' &&
+    visibilities.autoRelease !== 'readonly'
   const testComponentChanged = (values.testComponent ?? false) !== (component.testComponent ?? false)
   // Clearing a parent needs the explicit clearParent flag — `parentComponentName:
   // null` reads as "don't touch" server-side. Fires only on non-empty → empty.
@@ -193,6 +199,7 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
     solution: solutionChanged ? values.solution : undefined,
     archived: archivedChanged ? values.archived : undefined,
     testComponent: testComponentChanged ? values.testComponent : undefined,
+    autoRelease: autoReleaseChanged ? values.autoRelease : undefined,
     parentComponentName,
     clearParent: clearParent ? true : undefined,
     canBeParent:

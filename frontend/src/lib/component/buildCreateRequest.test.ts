@@ -133,6 +133,13 @@ describe('buildCreateRequest — clientCode (external-gated)', () => {
   })
 })
 
+describe('buildCreateRequest — autoRelease', () => {
+  it('defaults to false from scratch and is copied from a clone source', () => {
+    expect(buildCreateRequest(makeForm({ name: 'svc-new' })).autoRelease).toBe(false)
+    expect(buildCreateRequest(makeForm({ name: 'svc-clone' }), makeSource({ autoRelease: true })).autoRelease).toBe(true)
+  })
+})
+
 describe('buildCreateRequest — scratch mode (no source)', () => {
   it('builds the from-scratch payload mirroring the legacy CreateComponentDialog shape', () => {
     const req = buildCreateRequest(makeForm({ name: 'widget', displayName: 'Widget' }))

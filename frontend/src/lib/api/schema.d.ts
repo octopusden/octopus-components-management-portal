@@ -1496,6 +1496,7 @@ export interface components {
         ComponentCreateRequest: {
             archived?: boolean;
             artifactIds?: components["schemas"]["ArtifactIdRequest"][];
+            autoRelease?: boolean;
             baseConfiguration: components["schemas"]["BaseConfigurationRequest"];
             canBeParent?: boolean;
             /** @description Optional free-text comment describing the change; recorded on the audit row. */
@@ -1534,6 +1535,7 @@ export interface components {
         ComponentDetailResponse: {
             archived: boolean;
             artifactIds: components["schemas"]["ArtifactIdResponse"][];
+            autoRelease: boolean;
             canBeParent: boolean;
             canEdit?: boolean;
             clientCode?: string;
@@ -1622,6 +1624,7 @@ export interface components {
         };
         ComponentSummaryResponse: {
             archived: boolean;
+            autoRelease: boolean;
             buildSystem?: string;
             canBeParent: boolean;
             componentOwner?: string;
@@ -1691,6 +1694,7 @@ export interface components {
         ComponentUpdateRequest: {
             archived?: boolean;
             artifactIds?: components["schemas"]["ArtifactIdRequest"][];
+            autoRelease?: boolean;
             baseConfiguration?: components["schemas"]["BaseConfigurationRequest"];
             canBeParent?: boolean;
             /** @description Optional free-text comment describing the change; recorded on the audit row. */
@@ -7204,6 +7208,7 @@ export interface operations {
                 productType?: string;
                 archived?: boolean;
                 testComponent?: boolean;
+                autoRelease?: boolean;
                 search?: string;
                 owner?: string[];
                 releaseManager?: string[];

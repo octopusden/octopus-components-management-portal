@@ -50,6 +50,23 @@ describe('useComponents — URL params', () => {
     expect(calledUrl).toContain('sort=componentKey%2Casc')
   })
 
+  it('passes autoRelease when set, and omits the param when unset', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result } = renderHook(
+      () => useComponents({ filter: { autoRelease: false } }),
+      { wrapper: makeWrapper() },
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const url = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    expect(url).toContain('autoRelease=false')
+
+    vi.clearAllMocks()
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result: r2 } = renderHook(() => useComponents(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(r2.current.isSuccess).toBe(true))
+    expect(((mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string)).not.toContain('autoRelease')
+  })
+
   it('passes canBeParent=true when set, and omits the param when unset', async () => {
     mockApi.get.mockResolvedValue(emptyPage)
     const { result } = renderHook(
