@@ -1304,6 +1304,41 @@ describe('ComponentDetailPage — solution flag dirty-gate', () => {
   })
 })
 
+// A first load seeds the form with setValue (no reset), so the form default stays false.
+// Turning a seeded `true` switch off lands back on that default: RHF reports it touched
+// but not dirty, and the change must still reach the PATCH.
+describe('ComponentDetailPage — switching a seeded flag off is sent', () => {
+  it.each(['autoRelease', 'solution'] as const)('%s: server true → off → PATCH carries false', async (field) => {
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('systems', component.systems ?? [])
+        form.setValue(field, component[field] ?? false)
+      }, [component, form])
+      return React.createElement(
+        'button',
+        {
+          'data-testid': 'switch-off',
+          onClick: () => form.setValue(field, false, { shouldDirty: true, shouldTouch: true }),
+        },
+        'off',
+      )
+    })
+    const updateMutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage({ ...baseComponent, [field]: true }, user, { updateMutation: { mutateAsync: updateMutateAsync } })
+
+    fireEvent.click(screen.getByTestId('switch-off'))
+    await waitFor(() => {
+      const btn = screen.getByRole('button', { name: /save changes/i }) as HTMLButtonElement
+      expect(btn.disabled).toBe(false)
+    })
+    await clickSaveAndConfirm()
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
+    const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
+    expect(payload[field]).toBe(false)
+  })
+})
+
 describe('ComponentDetailPage — Save gating on owner validation', () => {
   it('disables Save while GeneralTab reports the owner lookup in flight', async () => {
     const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
