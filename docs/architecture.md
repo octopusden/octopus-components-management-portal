@@ -105,7 +105,7 @@ object-src 'none'; base-uri 'self'; frame-ancestors 'none'
 - No `form-action`: the logout form POST is answered with a redirect to Keycloak, and browsers apply `form-action` to that redirect as well.
 - No `'unsafe-eval'`: Zod's JIT probe is switched off in `frontend/src/lib/zodConfig.ts` so it doesn't log a CSP violation.
 
-`/actuator/health` stays anonymous for probes and monitoring, but with `show-details: when-authorized` an anonymous caller gets the aggregate status only.
+`/actuator/health` stays anonymous for probes and monitoring, but with `show-details: when-authorized` an anonymous caller gets the aggregate status only. Component paths such as `/actuator/health/validationSweep` answer 404 to anonymous callers, because `show-components` follows `show-details`; the probe groups (`liveness`, `readiness`) are unaffected.
 
 ## SPA fallback: which paths fall through to backend?
 

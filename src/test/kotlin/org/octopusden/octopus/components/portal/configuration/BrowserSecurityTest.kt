@@ -1,13 +1,11 @@
 package org.octopusden.octopus.components.portal.configuration
 
-import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.ApplicationContext
 import org.springframework.context.annotation.Import
-import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers.mockOAuth2Login
 import org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers.springSecurity
@@ -56,19 +54,16 @@ class BrowserSecurityTest {
 
     @Test
     fun `authenticated POST to rest with double-submitted csrf token passes the csrf check`() {
-        // No CRS upstream in the fixture, so the gateway answers with an error of its own;
-        // anything but 403 means the request got past the CSRF filter.
-        val status =
-            client.mutateWith(mockOAuth2Login())
-                .post().uri("/rest/api/4/components")
-                .cookie("XSRF-TOKEN", CSRF_TOKEN)
-                .header("X-XSRF-TOKEN", CSRF_TOKEN)
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue("{}")
-                .exchange()
-                .returnResult(Void::class.java)
-                .status
-        assertNotEquals(HttpStatus.FORBIDDEN, status)
+        // No CRS upstream in the fixture, so a request that gets past the CSRF filter ends in
+        // the gateway failing to reach it: a 5xx, never the 403 of a rejected token.
+        client.mutateWith(mockOAuth2Login())
+            .post().uri("/rest/api/4/components")
+            .cookie("XSRF-TOKEN", CSRF_TOKEN)
+            .header("X-XSRF-TOKEN", CSRF_TOKEN)
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue("{}")
+            .exchange()
+            .expectStatus().is5xxServerError
     }
 
     @Test
@@ -83,7 +78,9 @@ class BrowserSecurityTest {
     }
 
     @Test
-    fun `rest responses carry security headers`() {
+    fun `api 401 from the entry point carries security headers`() {
+        // Anonymous, so this 401 is written by the API entry point before routing; a proxied
+        // CRS response is not covered, and keeps any such header CRS sets itself.
         client.get().uri("/rest/api/4/components")
             .exchange()
             .expectStatus().isUnauthorized
@@ -101,6 +98,15 @@ class BrowserSecurityTest {
             .jsonPath("$.status").exists()
             .jsonPath("$.components").doesNotExist()
             .jsonPath("$.details").doesNotExist()
+    }
+
+    @Test
+    fun `authenticated health shows component details`() {
+        client.mutateWith(mockOAuth2Login())
+            .get().uri("/actuator/health")
+            .exchange()
+            .expectBody()
+            .jsonPath("$.components").exists()
     }
 
     private companion object {
