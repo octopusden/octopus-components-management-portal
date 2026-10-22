@@ -48,7 +48,7 @@ jobs:
       trivy-continue-on-error: true
 
   frontend:
-    # Contract-drift gates only. Deliberately does NOT run lint / typecheck /
+    # Contract-drift and e2e-discovery gates only. Deliberately does NOT run lint / typecheck /
     # test:coverage: build.gradle.kts wires npmLint, npmTypecheck and
     # npmTestCoverage into the `check` task, so the `build` job above already
     # executes all three. Running them here as well made every PR do the frontend
@@ -83,6 +83,11 @@ jobs:
       - run: npm run vendor-spec:check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # E2E discovery gate. [2.0] E2E runs every Playwright project, but a
+      # project only takes the specs its testMatch names, so a spec no pattern
+      # matches never runs. `playwright test --list` needs no browser or e2e
+      # stack, so this catches the orphan on the PR instead of never.
+      - run: npm run check:e2e-discovery
 
   gate-merge:
     name: gate/merge
