@@ -42,7 +42,7 @@ function countError(parameter: TemplateParameter, entered: string[]): string | u
 }
 
 function valueError(parameter: TemplateParameter, value: string): string | undefined {
-  if (parameter.maxLength !== undefined && value.length > parameter.maxLength) {
+  if (parameter.maxLength != null && value.length > parameter.maxLength) {
     return `At most ${parameter.maxLength} characters`
   }
   const regex = parameter.pattern ? regexOf(parameter.pattern) : null
@@ -60,7 +60,7 @@ function errorOf(parameter: TemplateParameter, entered: string[]): string | unde
     const error = valueError(parameter, value)
     if (error) return error
   }
-  if (parameter.maxSelection !== undefined && entered.length > parameter.maxSelection) {
+  if (parameter.maxSelection != null && entered.length > parameter.maxSelection) {
     return `At most ${parameter.maxSelection} may be chosen`
   }
   return undefined

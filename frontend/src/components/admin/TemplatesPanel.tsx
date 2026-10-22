@@ -38,8 +38,8 @@ function settingsOf(p: TemplateParameter): string {
   if (p.list) settings.push(`list: ${p.list}`)
   if (p.pattern) settings.push(`pattern: ${p.pattern}`)
   if (p.message) settings.push(`message: ${p.message}`)
-  if (p.maxLength !== undefined) settings.push(`max length: ${p.maxLength}`)
-  if (p.maxSelection !== undefined) settings.push(`max selection: ${p.maxSelection}`)
+  if (p.maxLength != null) settings.push(`max length: ${p.maxLength}`)
+  if (p.maxSelection != null) settings.push(`max selection: ${p.maxSelection}`)
   if (p.multiple) settings.push('several values')
   return settings.join('; ')
 }
