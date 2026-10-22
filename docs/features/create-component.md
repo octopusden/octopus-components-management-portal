@@ -81,3 +81,4 @@ rule is [`component-key-format`](../../openspec/specs/component-key-format/spec.
 - Labels follow `component.labels`: readonly shows them disabled and a clone keeps the source's;
   hidden removes the field and sends none.
 - A clone starts with the source's labels, and with its build tasks when the user may edit them.
+- **Auto release** is never copied by a clone: it is off on every new component.

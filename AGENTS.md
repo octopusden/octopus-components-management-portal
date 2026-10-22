@@ -33,8 +33,8 @@ Guidance for AI agents and developers working on this repository.
 - [`docs/features/audit-log.md`](docs/features/audit-log.md) — global feed filters (B7.1.3) + per-component History tab (B7.1.2).
 - [`docs/features/admin-migration.md`](docs/features/admin-migration.md) — async `/admin/migrate` flow.
 - [`docs/features/admin-mode.md`](docs/features/admin-mode.md) — UX-only switch gating destructive actions.
-- [`docs/features/admin-tc-resync.md`](docs/features/admin-tc-resync.md) — admin TeamCity resync flow (`IMPORT_DATA` permission).
-- [`docs/features/admin-tc-placement.md`](docs/features/admin-tc-placement.md) — admin "Checkout paths from TeamCity" Diff/Sync (`IMPORT_DATA` permission).
+- [`docs/features/admin-tc-resync.md`](docs/features/admin-tc-resync.md) — admin "Sync from TeamCity" flow (`IMPORT_DATA` permission).
+- [`docs/features/admin-tc-checkout-layout.md`](docs/features/admin-tc-checkout-layout.md) — admin "TeamCity Checkout Layout" Diff/Sync (`IMPORT_DATA` permission).
 - [`docs/features/app-footer.md`](docs/features/app-footer.md) — anonymous build-info on both Portal and CRS sides.
 
 ## Tech debt

@@ -40,6 +40,7 @@ const STRING_KEYS = ['search', 'vcsPath', 'productionBranch'] as const satisfies
 const TRISTATE_KEYS = [
   'canBeParent',
   'solution',
+  'autoRelease',
   'jiraTechnical',
   'distributionExplicit',
   'distributionExternal',

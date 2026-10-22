@@ -128,6 +128,7 @@ export function ComponentFilters({
   const extendedActive =
     !!filter.clientCode?.length ||
     filter.solution !== undefined ||
+    filter.autoRelease !== undefined ||
     !!filter.jiraProjectKey?.length ||
     !!filter.javaVersion?.length ||
     filter.jiraTechnical !== undefined ||
@@ -248,6 +249,7 @@ export function ComponentFilters({
   const { entry: productionBranchEntry } = useFieldConfigEntry('vcs.branch')
   const { entry: parentEntry } = useFieldConfigEntry('component.parentComponentName')
   const { entry: canBeParentEntry } = useFieldConfigEntry('component.canBeParent')
+  const { entry: autoReleaseEntry } = useFieldConfigEntry('component.autoRelease')
   const { entry: groupKeyEntry } = useFieldConfigEntry('component.groupKey')
   const { entry: distributionExplicitEntry } = useFieldConfigEntry('component.distributionExplicit')
   const { entry: distributionExternalEntry } = useFieldConfigEntry('component.distributionExternal')
@@ -409,6 +411,17 @@ export function ComponentFilters({
           label="Solution"
           value={filter.solution}
           onChange={(v) => onFilterChange({ ...filter, solution: v })}
+        />
+      ),
+    },
+    {
+      place: place('component.autoRelease', autoReleaseEntry),
+      node: (
+        <TriStateFilter
+          key="autoRelease"
+          label="Auto release"
+          value={filter.autoRelease}
+          onChange={(v) => onFilterChange({ ...filter, autoRelease: v })}
         />
       ),
     },
