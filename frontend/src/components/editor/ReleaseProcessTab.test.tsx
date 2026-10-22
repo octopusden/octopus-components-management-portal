@@ -7,14 +7,30 @@ import { ReleaseProcessTab } from './ReleaseProcessTab'
 import type { GeneralFormValues } from './GeneralTab'
 import { TooltipProvider } from '../ui/tooltip'
 
-const mockUseFieldConfigEntry = vi.fn()
-vi.mock('../../hooks/useFieldConfig', () => ({
-  useFieldConfigEntry: (fieldPath: string) => mockUseFieldConfigEntry(fieldPath),
-  useFieldLabel: (_path: string, fallback: string) => fallback,
-}))
+import { PERMISSIONS, type User } from '../../lib/auth'
 
-function makeEntry(visibility: 'editable' | 'readonly' | 'hidden' = 'editable') {
-  return { entry: { visibility, required: false }, isLoading: false, isError: false }
+// The real field-config hooks run against a mocked field-config blob and current user,
+// so the `editable` axis (adminOnly / none) is exercised end to end.
+const mockFieldConfig = vi.fn()
+vi.mock('../../hooks/useAdminConfig', () => ({ useFieldConfig: () => mockFieldConfig() }))
+const mockCurrentUser = vi.fn()
+vi.mock('../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockCurrentUser() }))
+
+const adminUser: User = {
+  username: 'admin', groups: [],
+  roles: [{ name: 'ADMIN', permissions: [PERMISSIONS.EDIT_ANY_COMPONENT] }],
+}
+const regularUser: User = {
+  username: 'bob', groups: [],
+  roles: [{ name: 'USER', permissions: [PERMISSIONS.ACCESS_COMPONENTS] }],
+}
+
+function setAutoReleaseEntry(entry: Record<string, string>) {
+  mockFieldConfig.mockReturnValue({
+    data: { component: { autoRelease: entry } },
+    isLoading: false,
+    isError: false,
+  })
 }
 
 type Form = ReturnType<typeof useForm<GeneralFormValues>>
@@ -30,7 +46,8 @@ function renderTab(ui: React.ReactElement) {
 }
 
 beforeEach(() => {
-  mockUseFieldConfigEntry.mockImplementation(() => makeEntry('editable'))
+  mockFieldConfig.mockReturnValue({ data: undefined, isLoading: false, isError: false })
+  mockCurrentUser.mockReturnValue({ data: regularUser, isLoading: false })
 })
 
 describe('ReleaseProcessTab auto release switch', () => {
@@ -43,13 +60,29 @@ describe('ReleaseProcessTab auto release switch', () => {
     expect(formRef.current!.getValues('autoRelease')).toBe(false)
   })
 
-
   it('hidden hides, readonly disables', () => {
-    mockUseFieldConfigEntry.mockImplementation(() => makeEntry('hidden'))
+    setAutoReleaseEntry({ visibility: 'hidden' })
     const { unmount } = renderTab(<Harness autoRelease={false} />)
     expect(screen.queryByRole('switch', { name: /auto release/i })).toBeNull()
     unmount()
-    mockUseFieldConfigEntry.mockImplementation(() => makeEntry('readonly'))
+    setAutoReleaseEntry({ visibility: 'readonly' })
+    renderTab(<Harness autoRelease={false} />)
+    expect((screen.getByRole('switch', { name: /auto release/i }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('adminOnly: disabled for a non-admin, enabled for an admin', () => {
+    setAutoReleaseEntry({ visibility: 'editable', editable: 'adminOnly' })
+    const { unmount } = renderTab(<Harness autoRelease={false} />)
+    expect((screen.getByRole('switch', { name: /auto release/i }) as HTMLButtonElement).disabled).toBe(true)
+    unmount()
+    mockCurrentUser.mockReturnValue({ data: adminUser, isLoading: false })
+    renderTab(<Harness autoRelease={false} />)
+    expect((screen.getByRole('switch', { name: /auto release/i }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('editable none: disabled even for an admin', () => {
+    setAutoReleaseEntry({ visibility: 'editable', editable: 'none' })
+    mockCurrentUser.mockReturnValue({ data: adminUser, isLoading: false })
     renderTab(<Harness autoRelease={false} />)
     expect((screen.getByRole('switch', { name: /auto release/i }) as HTMLButtonElement).disabled).toBe(true)
   })
