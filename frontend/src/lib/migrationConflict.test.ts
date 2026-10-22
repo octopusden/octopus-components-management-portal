@@ -7,13 +7,13 @@ function conflict409(body: unknown) {
 }
 
 describe('isDiffReplacedConflict', () => {
-  it('is true for the actual CRS body (errorCode placement-diff-stale)', () => {
-    const err = conflict409({ errorMessage: 'diff replaced, re-run Diff', errorCode: 'placement-diff-stale' })
+  it('is true for the actual CRS body (errorCode checkout-layout-diff-stale)', () => {
+    const err = conflict409({ errorMessage: 'diff replaced, re-run Diff', errorCode: 'checkout-layout-diff-stale' })
     expect(isDiffReplacedConflict(err)).toBe(true)
   })
 
   it('is true on errorCode alone, whatever the message says', () => {
-    expect(isDiffReplacedConflict(conflict409({ errorCode: 'placement-diff-stale', errorMessage: 'reworded' }))).toBe(true)
+    expect(isDiffReplacedConflict(conflict409({ errorCode: 'checkout-layout-diff-stale', errorMessage: 'reworded' }))).toBe(true)
   })
 
   it('falls back to errorMessage for a CRS without errorCode', () => {

@@ -234,7 +234,7 @@ export interface VcsEntry {
   tag?: string | null
   hotfixBranch?: string | null
   repositoryType?: string | null
-  // Checkout placement. Absent against an older registry.
+  // Checkout layout. Absent against an older registry.
   sourcePath?: string | null
   checkoutDirectory?: string | null
   sortOrder: number
@@ -1055,9 +1055,9 @@ export interface HistoryMigrationJobResponse {
  * 409 body returned for cross-kind conflicts — components POST while history
  * is RUNNING, history POST while TC sync is RUNNING, force-reset while
  * history is RUNNING, any of the above while TC validation or a TeamCity
- * placement Diff/Sync is RUNNING (or vice versa), etc. All six async job
+ * checkout layout Diff/Sync is RUNNING (or vice versa), etc. All six async job
  * kinds (components migration, history migration, TC resync, TC validation,
- * TC placement Diff, TC placement Sync) share one single-flight lifecycle
+ * TC checkout layout Diff, TC checkout layout Sync) share one single-flight lifecycle
  * gate on the backend. Distinct from the same-kind attach 409 that returns a
  * full job-response body — distinguished by the `kind` discriminator (always
  * 'conflict' here).
@@ -1071,10 +1071,10 @@ export interface MigrationConflictResponse {
     | 'history-import-likely-live-elsewhere'
     | 'tc-resync-running'
     | 'tc-validation-running'
-    | 'tc-placement-diff-running'
-    | 'tc-placement-sync-running'
+    | 'tc-checkout-layout-diff-running'
+    | 'tc-checkout-layout-sync-running'
   message: string
-  activeKind: 'COMPONENTS' | 'HISTORY' | 'TC_RESYNC' | 'TC_VALIDATION' | 'TC_PLACEMENT_DIFF' | 'TC_PLACEMENT_SYNC'
+  activeKind: 'COMPONENTS' | 'HISTORY' | 'TC_RESYNC' | 'TC_VALIDATION' | 'TC_CHECKOUT_LAYOUT_DIFF' | 'TC_CHECKOUT_LAYOUT_SYNC'
   activeJobId: string | null
 }
 
@@ -1142,18 +1142,18 @@ export interface TeamCityValidationJobResponse {
   result: TeamCityValidationResult | null
 }
 
-// ── TeamCity → CRS VCS-placement Diff/Sync ───────────────────────────────────
-// Wire shapes for `rest/api/4/admin/teamcity-placement/**` — see CRS
-// `TeamcityPlacementControllerV4` and the `dto/v4` + `teamcity/placement`
+// ── TeamCity → CRS VCS checkout-layout Diff/Sync ───────────────────────────────────
+// Wire shapes for `rest/api/4/admin/teamcity-checkout-layout/**` — see CRS
+// `TeamcityCheckoutLayoutControllerV4` and the `dto/v4` + `teamcity/checkoutlayout`
 // packages it serves from. New endpoints, so (unlike the older job shapes
 // above) there's no legacy-CRS backward-compat concern: `kind` is required,
 // not optional.
 
 /**
- * One outcome per Diff row (`PlacementDiffRowStatus` on CRS). RESOLVED is the
+ * One outcome per Diff row (`CheckoutLayoutDiffRowStatus` on CRS). RESOLVED is the
  * only status Sync will ever write; every other status is report-only.
  */
-export type PlacementDiffRowStatus =
+export type CheckoutLayoutDiffRowStatus =
   | 'RESOLVED'
   | 'CONFLICT'
   | 'UNEXPRESSIBLE'
@@ -1167,7 +1167,7 @@ export type PlacementDiffRowStatus =
   | 'ROOTS_MISMATCH'
 
 /** One VCS root entry's current vs. TeamCity-derived Checkout Directory / Source Path. */
-export interface PlacementEntryDiff {
+export interface CheckoutLayoutEntryDiff {
   name: string
   vcsPath: string
   branch?: string | null
@@ -1181,31 +1181,31 @@ export interface PlacementEntryDiff {
 }
 
 /** One base or marker (`vcs.settings`) configuration row's diff. */
-export interface PlacementRowDiff {
+export interface CheckoutLayoutRowDiff {
   componentId: string
   componentKey: string
   configurationRowId: string
   versionRange: string
   /** "BASE" or the marker name — only "BASE" rows are ever selectable for Sync. */
   rowLabel: string
-  status: PlacementDiffRowStatus
-  entries: PlacementEntryDiff[]
+  status: CheckoutLayoutDiffRowStatus
+  entries: CheckoutLayoutEntryDiff[]
   currentBuildWorkingDirectory?: string | null
   derivedBuildWorkingDirectory?: string | null
   sourceBuildTypeIds: string[]
   notes: string[]
 }
 
-/** `GET /admin/teamcity-placement/diff/report.json` (component read access, 404 until a Diff has completed). */
-export interface PlacementDiffResult {
+/** `GET /admin/teamcity-checkout-layout/diff/report.json` (component read access, 404 until a Diff has completed). */
+export interface CheckoutLayoutDiffResult {
   /** The Diff run these rows came from; what a Sync request must name. */
   diffId?: string
   generatedAt: string
-  rows: PlacementRowDiff[]
+  rows: CheckoutLayoutRowDiff[]
 }
 
-/** `POST /admin/teamcity-placement/diff` (202/409) and `GET .../diff/job` (200/404). */
-export interface TeamcityPlacementDiffJobResponse {
+/** `POST /admin/teamcity-checkout-layout/diff` (202/409) and `GET .../diff/job` (200/404). */
+export interface TeamcityCheckoutLayoutDiffJobResponse {
   kind: 'job'
   id: string
   state: JobState
@@ -1215,27 +1215,27 @@ export interface TeamcityPlacementDiffJobResponse {
   rowCount: number | null
 }
 
-/** POST body for `/admin/teamcity-placement/sync` — the Diff run's id plus the selected component ids. */
-export interface TeamcityPlacementSyncRequest {
+/** POST body for `/admin/teamcity-checkout-layout/sync` — the Diff run's id plus the selected component ids. */
+export interface TeamcityCheckoutLayoutSyncRequest {
   diffId: string
   componentIds: string[]
 }
 
-export interface PlacementRowSyncOutcome {
+export interface CheckoutLayoutRowSyncOutcome {
   configurationRowId: string
   rowLabel: string
   /** `applied` / `skipped: changed since diff` / `skipped: <reason>` / `failed: <message>`. */
   outcome: string
 }
 
-export interface PlacementComponentSyncOutcome {
+export interface CheckoutLayoutComponentSyncOutcome {
   componentId: string
   componentKey: string
-  rows: PlacementRowSyncOutcome[]
+  rows: CheckoutLayoutRowSyncOutcome[]
 }
 
 /** One written field's rollback trace — before/after, per `field` on `root` (VCS entry name, or "" for the row-level BWD). */
-export interface PlacementFieldChange {
+export interface CheckoutLayoutFieldChange {
   componentKey: string
   rowLabel: string
   root: string
@@ -1244,25 +1244,25 @@ export interface PlacementFieldChange {
   after: string | null
 }
 
-export interface PlacementSyncResult {
+export interface CheckoutLayoutSyncResult {
   triggeredBy: string
   requested: number
   applied: number
   skipped: number
   failed: number
-  components: PlacementComponentSyncOutcome[]
-  fieldChanges: PlacementFieldChange[]
+  components: CheckoutLayoutComponentSyncOutcome[]
+  fieldChanges: CheckoutLayoutFieldChange[]
 }
 
-/** `POST /admin/teamcity-placement/sync` (202/409) and `GET .../sync/job` (200/404). */
-export interface TeamcityPlacementSyncJobResponse {
+/** `POST /admin/teamcity-checkout-layout/sync` (202/409) and `GET .../sync/job` (200/404). */
+export interface TeamcityCheckoutLayoutSyncJobResponse {
   kind: 'job'
   id: string
   state: JobState
   startedAt: string
   finishedAt: string | null
   errorMessage: string | null
-  result: PlacementSyncResult | null
+  result: CheckoutLayoutSyncResult | null
 }
 
 // ── CRS legacy version rendering (rest/api/2/.../detailed-version) ───────────

@@ -478,7 +478,7 @@ export interface OverrideRowEditorProps {
    *  also excluded from the overlap-conflict preview so the merged range doesn't
    *  report a false conflict against its own members. */
   collapseMemberIds?: string[]
-  /** Edit-mode only: registry placement errors on this row's VCS entries,
+  /** Edit-mode only: registry checkout layout errors on this row's VCS entries,
    *  keyed `<entry index>.<field>` (set by the page after a 400). */
   vcsEntryErrors?: Record<string, string>
 }
