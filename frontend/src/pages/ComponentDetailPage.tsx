@@ -409,7 +409,11 @@ function ComponentDetailEditor() {
         canBeParent: canBeParentFc.visibility ?? 'editable',
         labels: labelsFc.visibility ?? 'editable',
         solution: solutionFc.visibility ?? 'editable',
-        autoRelease: autoReleaseFc.visibility ?? 'editable',
+        // Not editable for this user (readonly, adminOnly, none) → never sent.
+        autoRelease:
+          autoReleaseFc.visibility === 'hidden'
+            ? 'hidden'
+            : isFieldEditableFor(fieldConfigData, 'component.autoRelease', user) ? 'editable' : 'readonly',
       },
       dirtyFields: {
         solution: form.formState.dirtyFields.solution === true,

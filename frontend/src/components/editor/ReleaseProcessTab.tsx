@@ -3,7 +3,7 @@ import { Label } from '../ui/label'
 import { Switch } from '../ui/switch'
 import { FieldInfo } from '../ui/FieldInfo'
 import { FieldLabelText } from '../ui/FieldLabelText'
-import { useFieldConfigEntry } from '../../hooks/useFieldConfig'
+import { useFieldConfigEntry, useFieldEditable } from '../../hooks/useFieldConfig'
 import type { GeneralFormValues } from './GeneralTab'
 
 /**
@@ -13,6 +13,8 @@ import type { GeneralFormValues } from './GeneralTab'
 export function ReleaseProcessTab({ form }: { form: UseFormReturn<GeneralFormValues> }) {
   const { setValue, watch, formState: { errors } } = form
   const { entry: autoReleaseEntry } = useFieldConfigEntry('component.autoRelease')
+  // Covers readonly and the `editable` axis (adminOnly / none) for the current user.
+  const autoReleaseEditable = useFieldEditable('component.autoRelease')
   const autoRelease = watch('autoRelease')
 
   return (
@@ -24,7 +26,7 @@ export function ReleaseProcessTab({ form }: { form: UseFormReturn<GeneralFormVal
             <Switch
               id="autoRelease"
               checked={autoRelease}
-              disabled={autoReleaseEntry.visibility === 'readonly'}
+              disabled={!autoReleaseEditable}
               aria-describedby="autoRelease-help"
               onCheckedChange={(checked) =>
                 setValue('autoRelease', checked, { shouldDirty: true, shouldTouch: true })
