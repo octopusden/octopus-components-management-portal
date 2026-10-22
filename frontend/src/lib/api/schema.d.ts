@@ -5287,8 +5287,8 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
-            200: {
+            /** @description A new Diff job was started */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5314,13 +5314,13 @@ export interface operations {
                     "*/*": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Conflict */
+            /** @description Two body shapes. (1) A Diff is already running: the in-flight TeamcityCheckoutLayoutDiffJobResponse. (2) Another admin job holds the gate: MigrationConflictResponse {code, message, activeKind, activeJobId}. */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ErrorResponse"];
+                    "*/*": components["schemas"]["MigrationConflictResponse"] | components["schemas"]["TeamcityCheckoutLayoutDiffJobResponse"];
                 };
             };
             /** @description Payload Too Large */
@@ -6099,8 +6099,8 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
-            200: {
+            /** @description A new Diff job was started */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6126,13 +6126,13 @@ export interface operations {
                     "*/*": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Conflict */
+            /** @description Two body shapes. (1) A Diff is already running: the in-flight TeamcityCheckoutLayoutDiffJobResponse. (2) Another admin job holds the gate: MigrationConflictResponse {code, message, activeKind, activeJobId}. */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ErrorResponse"];
+                    "*/*": components["schemas"]["MigrationConflictResponse"] | components["schemas"]["TeamcityCheckoutLayoutDiffJobResponse"];
                 };
             };
             /** @description Payload Too Large */
@@ -6608,8 +6608,8 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
-            200: {
+            /** @description A new Sync job was started */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6635,13 +6635,13 @@ export interface operations {
                     "*/*": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Conflict */
+            /** @description Three body shapes, checked in this order. (1) A Sync is already running: the in-flight TeamcityCheckoutLayoutSyncJobResponse (kind "job"). (2) Another admin job holds the gate, a running Diff included: MigrationConflictResponse {code, message, activeKind, activeJobId}. (3) diffId is not the last completed Diff, or none has completed: ErrorResponse {errorMessage: "diff replaced, re-run Diff", errorCode: "checkout-layout-diff-stale"}, nothing written; Diff keeps only that one result (ADR-023 decision 1). */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ErrorResponse"];
+                    "*/*": components["schemas"]["MigrationConflictResponse"] | components["schemas"]["TeamcityCheckoutLayoutSyncJobResponse"] | components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Payload Too Large */
