@@ -121,7 +121,7 @@ export function TeamCityValidationPanel() {
               ? 'Components migration'
               : historyRunning
                 ? 'History migration'
-                : 'TC resync'}{' '}
+                : 'TeamCity sync'}{' '}
             is running — wait for it to finish.
           </span>
         )}

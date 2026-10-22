@@ -32,6 +32,7 @@ const FIELD_LABELS: Partial<Record<keyof ComponentFilter, string>> = {
   productionBranch: 'Production branch',
   canBeParent: 'Can be parent',
   solution: 'Solution',
+  autoRelease: 'Auto release',
   jiraTechnical: 'Jira technical',
   distributionExplicit: 'Distribution explicit',
   distributionExternal: 'Distribution external',
@@ -67,6 +68,7 @@ const STRING_KEYS = ['search', 'vcsPath', 'productionBranch'] as const satisfies
 const TRISTATE_KEYS = [
   'canBeParent',
   'solution',
+  'autoRelease',
   'jiraTechnical',
   'distributionExplicit',
   'distributionExternal',

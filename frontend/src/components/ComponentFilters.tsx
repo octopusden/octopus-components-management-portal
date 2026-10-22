@@ -439,6 +439,7 @@ export function ComponentFilters({
   const { entry: productionBranchEntry } = useFieldConfigEntry('vcs.branch')
   const { entry: parentEntry } = useFieldConfigEntry('component.parentComponentName')
   const { entry: canBeParentEntry } = useFieldConfigEntry('component.canBeParent')
+  const { entry: autoReleaseEntry } = useFieldConfigEntry('component.autoRelease')
   const { entry: groupKeyEntry } = useFieldConfigEntry('component.groupKey')
   const { entry: distributionExplicitEntry } = useFieldConfigEntry('component.distributionExplicit')
   const { entry: distributionExternalEntry } = useFieldConfigEntry('component.distributionExternal')
@@ -487,7 +488,7 @@ export function ComponentFilters({
     />
   )
 
-  const tri = (key: 'solution' | 'jiraTechnical' | 'canBeParent' | 'distributionExplicit' | 'distributionExternal', label: string) => (
+  const tri = (key: 'solution' | 'autoRelease' | 'jiraTechnical' | 'canBeParent' | 'distributionExplicit' | 'distributionExternal', label: string) => (
     <TriStateFilter label={label} value={filter[key]} onChange={(v) => onFilterChange({ ...filter, [key]: v })} />
   )
 
@@ -571,6 +572,12 @@ export function ComponentFilters({
       active: filter.solution !== undefined, cleared: { solution: undefined },
       control: tri('solution', 'Solution'),
       editor: tri('solution', 'Solution'),
+    },
+    {
+      id: 'autoRelease', label: 'Auto release', group: 'Structure', place: place('component.autoRelease', autoReleaseEntry),
+      active: filter.autoRelease !== undefined, cleared: { autoRelease: undefined },
+      control: tri('autoRelease', 'Auto release'),
+      editor: tri('autoRelease', 'Auto release'),
     },
     {
       id: 'javaVersion', label: 'Java version', group: 'Build & VCS', place: place('build.javaVersion', javaVersionEntry),

@@ -156,11 +156,11 @@ export function AdminSettingsPage() {
               </div>
 
               <div className="border-t pt-6 space-y-2">
-                <h2 className="text-lg font-semibold">TeamCity</h2>
+                <h2 className="text-lg font-semibold">Sync from TeamCity</h2>
                 <p className="text-sm text-muted-foreground">
-                  Resync persisted teamcityProjectId + teamcityProjectUrl from
-                  TC project params. Overwrites manual overrides for matched
-                  components. Arm Admin mode above to enable the button.
+                  Links components to TeamCity projects (replaces manual links) and turns Auto release
+                  on (never off) where every release line has a finish-build trigger, unless someone
+                  changed it. Needs Admin mode.
                 </p>
                 <div className="pt-2">
                   <TeamCityResyncPanel />

@@ -270,6 +270,16 @@ describe('GeneralTab test component switch', () => {
   })
 })
 
+describe('GeneralTab auto release', () => {
+  it('hydrates autoRelease without rendering the switch', () => {
+    setAllEditable()
+    const formRef = { current: null } as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    renderWithProviders(<Harness component={baseComponent({ autoRelease: true })} formRef={formRef} />)
+    expect(screen.queryByRole('switch', { name: /auto release/i })).toBeNull()
+    expect(formRef.current!.getValues('autoRelease')).toBe(true)
+  })
+})
+
 // parentComponentName / canBeParent / group-key tests moved to MiscTab.test.tsx (those
 // fields now render on the Misc tab).
 

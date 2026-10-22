@@ -41,6 +41,7 @@ Values never add controls to the bar: every value shows as a removable chip unde
 | **Production branch** | `?productionBranch=…` | text | VCS-root ILIKE on `branch` |
 | **Parent component** | `?parentComponentName=…` | text | parent-join eq on key |
 | **Can be parent** | `?canBeParent=true\|false` | tri-state | scalar eq |
+| **Auto release** | `?autoRelease=true\|false` | tri-state | scalar eq |
 | **Group key** | `?groupKey=…` | text | group-join eq on `groupKey` |
 
 These params are added to [`useComponents`](../../frontend/src/hooks/useComponents.ts) and served by the CRS v4 `listComponents` controller (see `octopus-components-registry-service/docs/registry/functional-spec.md`). Each control is placed by the field's **Searchable** setting (below), not hard-coded into the row.

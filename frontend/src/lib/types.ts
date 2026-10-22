@@ -29,6 +29,8 @@ export interface ComponentSummary {
   // the parent picker filter. Optional on the TS type so existing fixtures
   // need not set it; the server always emits it (default false).
   canBeParent?: boolean
+  // Release automation may start releases of this component (CRS autoRelease; default false). Optional for deploy-order tolerance (portal deployed before CRS emits it) and so fixtures need not set it.
+  autoRelease?: boolean
   updatedAt: string | null
   // Required on the wire per ComponentSummaryResponse — server emits []
   // for empty, never omits the key. Matches ComponentDetail.labels.
@@ -70,6 +72,7 @@ export interface ComponentDetail {
   // Whether this component may itself be a parent. Editable (CAN_BE_PARENT
   // switch); a component with canBeParent=true may not have a parent.
   canBeParent?: boolean
+  autoRelease?: boolean
   version: number
   createdAt: string | null
   updatedAt: string | null
@@ -452,6 +455,7 @@ export interface ComponentCreateRequest {
   parentComponentName?: string | null
   archived?: boolean
   testComponent?: boolean
+  autoRelease?: boolean
   // Ordered multi-value lists on create. The CRS ComponentCreateRequest
   // defaults them to emptyList(), so the field is optional here — the create
   // dialog omits it entirely (people are added later via the editor).
@@ -507,6 +511,7 @@ export interface ComponentUpdateRequest {
   clearParent?: boolean
   archived?: boolean | null
   testComponent?: boolean | null
+  autoRelease?: boolean | null
   // PATCH semantics mirror `labels`: omit / null = don't touch; a provided
   // ordered list (including empty [] = clear) REPLACES the whole list.
   releaseManager?: string[] | null
@@ -582,6 +587,8 @@ export interface ComponentFilter {
   labels?: string[]
   /** Filter on the `canBeParent` flag — the parent picker passes `true`. */
   canBeParent?: boolean
+  /** Filter on the `autoRelease` flag. */
+  autoRelease?: boolean
   // ── Extended-search filters (back the list-page "extended search" mode; each
   //    maps to a CRS v4 query param). clientCode / jiraProjectKey /
   //    parentComponentName / groupKey are multi-value exact-IN (SYS-046, CSV on
@@ -1096,6 +1103,8 @@ export interface TeamCityResyncResult {
   skipped_no_match: number
   skipped_ambiguous: number
   ambiguous_auto_resolved?: number
+  /** Components this run turned Auto release on for; absent on older CRS. */
+  auto_release_enabled?: number
   errors: string[]
 }
 

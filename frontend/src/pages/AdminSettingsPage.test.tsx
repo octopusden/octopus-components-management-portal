@@ -232,7 +232,7 @@ describe('AdminSettingsPage tabs', () => {
 
     const runMigration = screen.getByRole('button', { name: /run migration/i })
     const runHistory = screen.getByRole('button', { name: /run history migration/i })
-    const resync = screen.getByRole('button', { name: /resync tc project ids/i })
+    const resync = screen.getByRole('button', { name: /sync from teamcity/i })
 
     // Disarmed → all disabled.
     expect(runMigration).toBeDisabled()

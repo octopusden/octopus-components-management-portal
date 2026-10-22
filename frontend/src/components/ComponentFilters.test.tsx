@@ -607,7 +607,7 @@ async function pickTriState(label: string, option: 'Any' | 'Yes' | 'No') {
 
 const EXTENDED_LABELS = [
   'Client code', 'Jira project key', 'Java version', 'VCS path', 'Production branch', 'Parent component',
-  'Group key', 'Solution', 'Jira technical', 'Can be parent', 'Distribution explicit', 'Distribution external',
+  'Group key', 'Solution', 'Auto release', 'Jira technical', 'Can be parent', 'Distribution explicit', 'Distribution external',
 ]
 
 describe('ComponentFilters "+ Filter" panel (extended dimensions)', () => {

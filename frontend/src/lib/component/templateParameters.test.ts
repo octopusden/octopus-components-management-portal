@@ -89,6 +89,28 @@ describe('templateParameterErrors', () => {
     })
   })
 
+  describe('as the registry sends it, unset settings as null', () => {
+    const sent = (overrides: Partial<TemplateParameter>) =>
+      ({ ...param('CODE'), pattern: null, message: null, maxLength: null, maxSelection: null, ...overrides }) as unknown as TemplateParameter
+
+    it('passes a text value with no maximum length', () => {
+      expect(errorsOf(sent({}), ['nbgcust'])).toBeUndefined()
+    })
+
+    it('passes a select value with no maximum length or selection', () => {
+      expect(errorsOf(sent({ type: 'select', options: ['OWI_GRCNBG'] }), ['OWI_GRCNBG'])).toBeUndefined()
+    })
+
+    it('passes several values with no maximum selection', () => {
+      expect(errorsOf(sent({ type: 'select', multiple: true, options: ['eu', 'us'] }), ['eu', 'us'])).toBeUndefined()
+    })
+
+    it('still enforces a limit of 0', () => {
+      expect(errorsOf(sent({ maxLength: 0 }), ['a'])).toBe('At most 0 characters')
+      expect(errorsOf(sent({ type: 'select', multiple: true, options: ['eu'], maxSelection: 0 }), ['eu'])).toBe('At most 0 may be chosen')
+    })
+  })
+
   it('reports each failing parameter under its own name', () => {
     const errors = templateParameterErrors(
       [param('A', { label: 'First' }), param('B', { label: 'Second' }), param('C', { required: false })],

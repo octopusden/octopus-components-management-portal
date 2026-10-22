@@ -46,6 +46,7 @@ const CATALOG: CatalogRow[] = [
   { section: 'component', fieldName: 'groupId',        label: 'groupId',        locked: true },
   { section: 'component', fieldName: 'parentComponentName', label: 'parentComponentName' },
   { section: 'component', fieldName: 'canBeParent',         label: 'canBeParent'         },
+  { section: 'component', fieldName: 'autoRelease',         label: 'autoRelease'         },
   { section: 'component', fieldName: 'groupKey',            label: 'groupKey', locked: true },
   { section: 'component', fieldName: 'distributionExplicit', label: 'distributionExplicit' },
   { section: 'component', fieldName: 'distributionExternal', label: 'distributionExternal' },
