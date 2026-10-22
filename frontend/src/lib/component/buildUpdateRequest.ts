@@ -28,7 +28,7 @@ export interface FieldVisibilities {
   // behind the UI's disabled switch). Required so every buildUpdateRequest
   // caller must pass the field-config visibility explicitly.
   solution: FieldVisibility
-  // `autoRelease`: value-compared like testComponent; hidden/readonly is stripped.
+  // `autoRelease`: dirty-gated and value-compared; hidden/readonly is stripped.
   autoRelease: FieldVisibility
 }
 
@@ -44,6 +44,9 @@ export interface FieldVisibilities {
 // changed to isFieldDirty: the array shape never reaches this layer.
 export interface DirtyFlags {
   solution?: boolean
+  // Sync from TeamCity can turn autoRelease on server-side while the form still holds the
+  // old false, so an untouched switch must never be sent.
+  autoRelease?: boolean
   systems?: boolean
   // displayName is nullable + unique server-side. The page passes this as "interacted"
   // (dirty OR touched); buildUpdateRequest value-compares against the persisted value so a
@@ -160,6 +163,7 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
   // canBeParent: value-compared (boolean, no null ambiguity) like `archived`.
   const canBeParentChanged = (values.canBeParent ?? false) !== (component.canBeParent ?? false)
   const autoReleaseChanged =
+    dirtyFields.autoRelease === true &&
     (values.autoRelease ?? false) !== (component.autoRelease ?? false) &&
     visibilities.autoRelease === 'editable'
   const testComponentChanged = (values.testComponent ?? false) !== (component.testComponent ?? false)

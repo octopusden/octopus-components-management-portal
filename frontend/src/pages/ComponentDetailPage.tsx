@@ -413,6 +413,7 @@ function ComponentDetailEditor() {
       },
       dirtyFields: {
         solution: form.formState.dirtyFields.solution === true,
+        autoRelease: form.formState.dirtyFields.autoRelease === true,
         // `systems` is a multi-value array field — same dirty shape as labels
         // (isFieldDirty handles RHF's collapsed-boolean-or-array form; the
         // second branch keeps the clear-all case value-compare can't see).
