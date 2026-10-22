@@ -17,7 +17,7 @@ import {
 } from '../hooks/useValidationProblems'
 import { useTeamCityValidations } from '../hooks/useTeamCityValidations'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
-import { hasPermission, PERMISSIONS } from '@/lib/auth'
+import { canStartCreate, hasPermission, PERMISSIONS } from '@/lib/auth'
 import { useAdminMode } from '@/lib/adminModeStore'
 import { useFilterUrlState } from '../hooks/useFilterUrlState'
 import { applyPreset, DEFAULT_FILTER, matchPreset, type PresetId } from '../lib/listPresets'
@@ -159,7 +159,9 @@ export function ComponentListPage() {
     [validation.byComponent],
   )
 
-  const canCreate = hasPermission(user, PERMISSIONS.CREATE_COMPONENTS)
+  const canStartNew = canStartCreate(user)
+  // A copy opens the regular wizard, which only CREATE_COMPONENTS may use.
+  const canCopy = hasPermission(user, PERMISSIONS.CREATE_COMPONENTS)
 
   // The preset reflected in the UI (segmented control + chip). A `problems`
   // preset that the current user can't actually use (not admin) is suppressed
@@ -248,7 +250,7 @@ export function ComponentListPage() {
           </div>
           <div className="flex items-center gap-2">
             <SearchCommandButton />
-            {canCreate && <CreateComponentButton />}
+            {canStartNew && <CreateComponentButton />}
           </div>
         </div>
 
@@ -377,7 +379,7 @@ export function ComponentListPage() {
         <ComponentTable
           data={showProblemsOnly ? problemRows : (data?.content ?? [])}
           isLoading={showProblemsOnly ? problems.isLoading : isLoading}
-          onCopy={canCreate ? (id) => navigate(`/components/new?from=${id}`) : undefined}
+          onCopy={canCopy ? (id) => navigate(`/components/new?from=${id}`) : undefined}
           // Overlay map (admin-mode only): in problems-only mode use the
           // problem-set report; in the normal paged view use the full report.
           // Undefined for non-admins or an empty/failed report → no Validation

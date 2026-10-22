@@ -41,6 +41,8 @@ interface TemplateWizardProps {
   profileStep: ReactNode
   /** The regular steps hold unsaved changes; they stay behind this path and must not be lost silently. */
   regularDirty: boolean
+  /** The user holds `CREATE_COMPONENTS`; without it the registry refuses every override. */
+  canOverride: boolean
   /**
    * The component was created. The caller shows the success panel: this path may be gone by the
    * time a create answers, after a withdrawal or another tile was picked.
@@ -60,6 +62,7 @@ export function TemplateWizard({
   headerTitle,
   profileStep,
   regularDirty,
+  canOverride,
   onCreated,
   onTemplateGone,
 }: TemplateWizardProps) {
@@ -236,6 +239,9 @@ export function TemplateWizard({
             <p className="text-sm text-muted-foreground">Everything below will be created.</p>
           </div>
           {templateRun.running && <p className="text-sm text-muted-foreground">Checking with the registry…</p>}
+          {!canOverride && template.data.overridable.length > 0 && (
+            <p className="text-sm text-muted-foreground">Values come from the template and cannot be changed.</p>
+          )}
           <TemplateReview
             template={template.data}
             run={run}
@@ -249,6 +255,7 @@ export function TemplateWizard({
             }}
             onOverride={changeOverride}
             onOverrideCommit={() => void runDry(overrides)}
+            readOnly={!canOverride}
           />
           <ChangeMetadataFields
             jiraTaskKey={jiraTaskKey}
