@@ -57,7 +57,8 @@ const ADMIN: AdminComponentProfiles = {
         classification: { external: true, explicit: 'false', solution: false },
         overridable: ['baseConfiguration.vcsEntries[0].vcsPath'],
         parameters: [
-          { name: 'CLIENT_CODE', label: 'Client code', type: 'select', required: true, multiple: false, default: ['ABC'], options: ['ABC', 'XYZ'] },
+          // The registry sends unset settings as null, which the generated types leave out.
+          { name: 'CLIENT_CODE', label: 'Client code', type: 'select', required: true, multiple: false, default: ['ABC'], options: ['ABC', 'XYZ'], maxLength: null as unknown as undefined, maxSelection: null as unknown as undefined },
           { name: 'PLUGIN_CODE', label: 'Plugin code', type: 'text', required: true, multiple: false, default: [], pattern: '^[A-Z]+$', maxLength: 16 },
         ],
       },
@@ -146,7 +147,7 @@ describe('TemplatesPanel', () => {
     const details = screen.getByTestId('template-details-client-plugin')
     expect(within(details).getAllByRole('row').map((r) => r.textContent)).toEqual([
       expect.stringContaining('Parameter'),
-      expect.stringMatching(/Client code.*CLIENT_CODE.*select.*required.*ABC.*options: ABC, XYZ/),
+      expect.stringMatching(/Client code.*CLIENT_CODE.*select.*required.*ABC.*options: ABC, XYZ$/),
       expect.stringMatching(/Plugin code.*PLUGIN_CODE.*text.*required.*pattern: \^\[A-Z\]\+\$.*max length: 16/),
     ])
     expect(within(details).getByText('External · not explicit')).toBeInTheDocument()
