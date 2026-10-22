@@ -20,7 +20,7 @@ function defaults(over: Partial<GeneralFormValues> = {}): GeneralFormValues {
   return {
     name: '', displayName: '', componentOwner: '', productType: '', systems: [],
     clientCode: '', solution: false, archived: false, testComponent: false, parentComponentName: '',
-    canBeParent: false, releaseManager: [], securityChampion: [], copyright: '',
+    canBeParent: false, autoRelease: false, releaseManager: [], securityChampion: [], copyright: '',
     labels: [], docs: [], artifactIds: [], ...over,
   }
 }

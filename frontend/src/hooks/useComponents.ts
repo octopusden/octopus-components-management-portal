@@ -48,6 +48,7 @@ export function useComponents({ filter, page = 0, size = 20, sort = 'componentKe
   // stay single-value (empty strings dropped, booleans stringified).
   if (filter?.clientCode?.length) params.set('clientCode', filter.clientCode.join(','))
   if (filter?.solution !== undefined) params.set('solution', String(filter.solution))
+  if (filter?.autoRelease !== undefined) params.set('autoRelease', String(filter.autoRelease))
   if (filter?.jiraProjectKey?.length) params.set('jiraProjectKey', filter.jiraProjectKey.join(','))
   if (filter?.jiraTechnical !== undefined) params.set('jiraTechnical', String(filter.jiraTechnical))
   if (filter?.vcsPath) params.set('vcsPath', filter.vcsPath)

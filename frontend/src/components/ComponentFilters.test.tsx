@@ -624,6 +624,7 @@ describe('ComponentFilters extended search (items 5 / 10)', () => {
     expect(screen.getByLabelText('Parent component')).toBeDefined()
     expect(screen.getByLabelText('Group key')).toBeDefined()
     expect(screen.getByLabelText('Solution')).toBeDefined()
+    expect(screen.getByLabelText('Auto release')).toBeDefined()
     expect(screen.getByLabelText('Jira technical')).toBeDefined()
     expect(screen.getByLabelText('Can be parent')).toBeDefined()
     expect(screen.getByLabelText('Distribution explicit')).toBeDefined()

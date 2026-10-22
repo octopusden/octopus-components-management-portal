@@ -131,7 +131,7 @@ function describeOtherRunningJob(running: {
 }): string | null {
   if (running.components) return 'Components migration'
   if (running.history) return 'History migration'
-  if (running.resync) return 'TC resync'
+  if (running.resync) return 'TeamCity sync'
   if (running.validation) return 'TC validation'
   return null
 }
