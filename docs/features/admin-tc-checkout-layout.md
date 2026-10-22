@@ -1,4 +1,4 @@
-# Admin: Checkout Paths from TeamCity (Diff / Sync)
+# Admin: TeamCity Checkout Layout (Diff / Sync)
 
 > Target users: registry admins (Keycloak realm role mapped to `IMPORT_DATA` permission, i.e.
 > `ROLE_ADMIN`). CRS also serves the Diff report to anyone who can view components, but this
