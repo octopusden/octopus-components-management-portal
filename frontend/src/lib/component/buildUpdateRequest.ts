@@ -45,7 +45,8 @@ export interface FieldVisibilities {
 export interface DirtyFlags {
   solution?: boolean
   // Sync from TeamCity can turn autoRelease on server-side while the form still holds the
-  // old false, so an untouched switch must never be sent.
+  // old false, so an untouched switch must never be sent. Passed as "interacted" (dirty OR
+  // touched), like `solution`.
   autoRelease?: boolean
   systems?: boolean
   // displayName is nullable + unique server-side. The page passes this as "interacted"
@@ -136,6 +137,7 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
   // overwrites the server flag.
   const solutionChanged =
     dirtyFields.solution === true &&
+    (values.solution ?? false) !== (component.solution ?? false) &&
     visibilities.solution !== 'hidden' &&
     visibilities.solution !== 'readonly'
   // `archived` is value-compared rather than dirtyFields-gated: the field

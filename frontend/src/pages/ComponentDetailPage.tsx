@@ -416,8 +416,12 @@ function ComponentDetailEditor() {
             : isFieldEditableFor(fieldConfigData, 'component.autoRelease', user) ? 'editable' : 'readonly',
       },
       dirtyFields: {
-        solution: form.formState.dirtyFields.solution === true,
-        autoRelease: form.formState.dirtyFields.autoRelease === true,
+        // "Interacted" (dirty OR touched): a first load seeds by setValue, so the form default stays
+        // false and switching a seeded `true` off reads as touched, not dirty. buildUpdateRequest
+        // value-compares, so an untouched switch still never sends a stale value.
+        solution: form.formState.dirtyFields.solution === true || form.formState.touchedFields.solution === true,
+        autoRelease:
+          form.formState.dirtyFields.autoRelease === true || form.formState.touchedFields.autoRelease === true,
         // `systems` is a multi-value array field — same dirty shape as labels
         // (isFieldDirty handles RHF's collapsed-boolean-or-array form; the
         // second branch keeps the clear-all case value-compare can't see).
