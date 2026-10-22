@@ -87,7 +87,9 @@ jobs:
       # project only takes the specs its testMatch names, so a spec no pattern
       # matches never runs. `playwright test --list` needs no browser or e2e
       # stack, so this catches the orphan on the PR instead of never.
+      # !cancelled(): still report when an earlier drift gate has failed.
       - run: npm run check:e2e-discovery
+        if: ${{ !cancelled() }}
 
   gate-merge:
     name: gate/merge
