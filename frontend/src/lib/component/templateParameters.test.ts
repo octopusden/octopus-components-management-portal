@@ -104,6 +104,11 @@ describe('templateParameterErrors', () => {
     it('passes several values with no maximum selection', () => {
       expect(errorsOf(sent({ type: 'select', multiple: true, options: ['eu', 'us'] }), ['eu', 'us'])).toBeUndefined()
     })
+
+    it('still enforces a limit of 0', () => {
+      expect(errorsOf(sent({ maxLength: 0 }), ['a'])).toBe('At most 0 characters')
+      expect(errorsOf(sent({ type: 'select', multiple: true, options: ['eu'], maxSelection: 0 }), ['eu'])).toBe('At most 0 may be chosen')
+    })
   })
 
   it('reports each failing parameter under its own name', () => {
