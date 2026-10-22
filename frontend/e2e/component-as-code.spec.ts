@@ -40,12 +40,16 @@ test.describe('Components Management Portal – As Code tab (viewer)', () => {
     const versionInput = page.getByLabel('Version', { exact: true })
     await expect(versionInput).toBeVisible()
     await versionInput.fill('1.0.0')
-    await resolved
-    // Either the resolved code renders or the inline "falls outside every configured
-    // range" hint shows (depends on fixture data) — both are acceptable, just no crash.
-    await expect(
-      page.locator('pre').or(page.getByText(/falls outside every configured range/i)),
-    ).toBeVisible({ timeout: 10_000 })
+    // Which view is right depends on fixture data: 1.0.0 either resolves (the <pre>
+    // must show exactly the resolved body, not the previous Full text) or falls
+    // outside every range (404 → inline hint). Anything else is a failure.
+    const resolvedResp = await resolved
+    if (resolvedResp.status() === 404) {
+      await expect(page.getByText(/falls outside every configured range/i)).toBeVisible({ timeout: 10_000 })
+    } else {
+      expect(resolvedResp.status(), 'GET as-code?version=1.0.0').toBe(200)
+      await expect(codeBlock).toHaveText(await resolvedResp.text(), { useInnerText: true, timeout: 10_000 })
+    }
 
     // Back to Full, then Copy → success toast.
     await page.getByRole('tab', { name: /^full$/i }).click()

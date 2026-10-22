@@ -11,7 +11,7 @@
 // Needs neither browsers nor the e2e stack: `--list` does not launch a
 // browser or run globalSetup.
 import { spawnSync } from 'node:child_process'
-import { globSync } from 'node:fs'
+import { readdirSync } from 'node:fs'
 import path from 'node:path'
 
 const res = spawnSync('npx', ['playwright', 'test', '--list', '--reporter=json'], {
@@ -38,8 +38,9 @@ const collect = (suite) => {
 report.suites.forEach(collect)
 
 const testDir = report.config.rootDir
-const onDisk = globSync('**/*.spec.ts', { cwd: testDir })
+const onDisk = readdirSync(testDir, { recursive: true })
   .map((f) => f.split(path.sep).join('/'))
+  .filter((f) => f.endsWith('.spec.ts'))
   .filter((f) => !f.split('/').some((segment) => segment.startsWith('_')))
 
 const orphans = onDisk.filter((f) => !listed.has(f)).sort()
