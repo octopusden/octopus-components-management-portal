@@ -88,6 +88,25 @@ The handler is `ServerCsrfTokenRequestAttributeHandler` (the **plain** one), not
 
 A `csrfCookieWebFilter` bean (also in `SecurityConfig.kt`) materialises the token on every request so the cookie is set on first load, before the SPA has anything to echo.
 
+`BrowserSecurityTest` pins both sides: a POST without the header is 403, a raw cookie/header echo passes.
+
+## Response headers and anonymous health
+
+Every response keeps Spring Security's default headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, no-cache, HSTS over https) plus a Content-Security-Policy, `SecurityConfig.CONTENT_SECURITY_POLICY`:
+
+```
+default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;
+object-src 'none'; base-uri 'self'; frame-ancestors 'none'
+```
+
+- Everything the SPA loads is same-origin, so `'self'` is the baseline. The browser never talks to Keycloak from script; the OIDC hops are top-level navigations.
+- `style-src 'unsafe-inline'`: Radix dialogs inject a `<style>` element for scroll locking.
+- `img-src data:`: the feedback form previews picked screenshots as `data:` URLs.
+- No `form-action`: the logout form POST is answered with a redirect to Keycloak, and browsers apply `form-action` to that redirect as well.
+- No `'unsafe-eval'`: Zod's JIT probe is switched off in `frontend/src/lib/zodConfig.ts` so it doesn't log a CSP violation.
+
+`/actuator/health` stays anonymous for probes and monitoring, but with `show-details: when-authorized` an anonymous caller gets the aggregate status only.
+
 ## SPA fallback: which paths fall through to backend?
 
 `SpaFallbackFilter` runs as a `WebFilter` and serves `classpath:/static/index.html` for any **GET** that is not API, asset, OIDC, or actuator. The exclusion list is the source of truth:
