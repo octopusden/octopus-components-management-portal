@@ -22,7 +22,7 @@ let report
 try {
   report = JSON.parse(res.stdout)
 } catch {
-  console.error(`playwright --list did not produce JSON (exit ${res.status}):\n${res.stderr}`)
+  console.error(`playwright --list did not produce JSON (exit ${res.status}):\n${res.error ?? ''}\n${res.stderr ?? ''}`)
   process.exit(1)
 }
 if (report.errors.length > 0) {
