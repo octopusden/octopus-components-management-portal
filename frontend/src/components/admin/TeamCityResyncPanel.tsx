@@ -239,7 +239,7 @@ export function TeamCityResyncPanel() {
           <DialogHeader>
             <DialogTitle>Sync from TeamCity?</DialogTitle>
             <DialogDescription>
-              Updates project links and Auto release from TeamCity, replacing manual project links. Runs in the background.
+              Updates project links from TeamCity, replacing manual ones, and turns Auto release on (never off). Runs in the background.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

@@ -6,7 +6,7 @@ The detail page at `/components/<UUID>` is the editor surface. It renders [`page
 
 **Labels** are edited in the page **header** (badges + a popover [`HeaderLabelsEditor`](../../frontend/src/components/editor/HeaderLabelsEditor.tsx)), not on General. A component with `solution = true` is flagged in the header (a prominent badge + an info `StatusBanner`). A component with `testComponent = true` gets a *Test* badge next to Archived/Active; the flag is edited by the **Test component** switch in General (Identity). The flag can only be set on a key matching one of the CRS test-component name patterns (`GET /components/meta/test-component-name-patterns`, e.g. `^test-`, `^cvelab-`; checked against the live form key): otherwise the switch is disabled with a hint naming them. A configured empty list blocks every key (hint: no patterns configured). It stays enabled while the flag is on so it can always be unset, and fails open — CRS decides — when the patterns cannot be loaded (error, or 404/501 from an older CRS) or any pattern uses Java-only regex syntax that JS cannot compile. The CRS 400 for a non-matching key (`testComponent: …`) shows inline under the switch; a rename of a flagged component to a non-matching key comes back as `name: …` under the key. CRS advisories in `ComponentDetail.warnings` (e.g. the `test-component` label without the flag) render as a warning `StatusBanner` under the header. Test components are hidden from the list by default (see [component-list](component-list.md)) but open normally by UUID or name.
 
-**Auto release** (`autoRelease`, default off) is a switch on the **Release Process** tab. Field-config: `hidden` removes the tab, `readonly` disables the switch. Not copied by a clone. Sync from TeamCity turns it on (finish-build trigger), never off.
+**Auto release** (`autoRelease`, default off) is a switch on the **Release Process** tab. Field-config: `hidden` removes the tab; `readonly`, `editable: none` and `editable: adminOnly` (for a non-admin) disable the switch. Not copied by a clone. Sync from TeamCity turns it on (never off) when every release line has a finish-build trigger, unless someone changed it.
 
 ## URL stability
 
@@ -146,7 +146,7 @@ autocomplete (`frontend/src/components/ui/ComponentSelect.tsx`) drives the paren
 | `parentComponentName` | `string \| null \| undefined` | Three states: `unchanged → undefined`, `'' → null` (clear), `value → string` (set). |
 | `archived` | `boolean` | Only when `values.archived !== component.archived` — dead in practice: no control in the UI ever changes `values.archived` off its server-hydrated value, so this never fires. See "Archiving (readiness gate)" below for how archiving actually happens. |
 | `testComponent` | `boolean` | Only when the General **Test component** switch differs from `component.testComponent` (value-compared like `canBeParent`). |
-| `autoRelease` | `boolean` | Only when the Release Process **Auto release** switch differs from `component.autoRelease` and the field-config is neither `hidden` nor `readonly`. |
+| `autoRelease` | `boolean` | Only when the Release Process **Auto release** switch was changed in this edit (dirty), differs from `component.autoRelease`, and the field is editable for the user (not `hidden`, `readonly`, `editable: none`, or `adminOnly` for a non-admin). |
 
 If any of these fields is always sent, a non-admin's plain edit (only `displayName` or owner) would 403 because the server's PATCH SpEL guards `(#request.archived == null or canArchiveComponent(...))` etc.
 
