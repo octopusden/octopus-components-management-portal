@@ -394,12 +394,17 @@ describe('buildUpdateRequest — dirtyFields gating (pre-hydration safety)', () 
 })
 
 describe('buildUpdateRequest — autoRelease', () => {
-  const run = (compAuto: boolean, formAuto: boolean, vis: FieldVisibilities['autoRelease'] = 'editable') =>
+  const run = (
+    compAuto: boolean,
+    formAuto: boolean,
+    vis: FieldVisibilities['autoRelease'] = 'editable',
+    dirty = true,
+  ) =>
     buildUpdateRequest({
       component: makeComponent({ autoRelease: compAuto }),
       values: makeValues({ autoRelease: formAuto }),
       visibilities: { ...EDITABLE, autoRelease: vis },
-      dirtyFields: {},
+      dirtyFields: { autoRelease: dirty },
     })
 
   it('unchanged → omitted', () => expect(run(true, true).autoRelease).toBeUndefined())
@@ -409,6 +414,10 @@ describe('buildUpdateRequest — autoRelease', () => {
     expect(run(false, true, 'hidden').autoRelease).toBeUndefined()
     expect(run(false, true, 'readonly').autoRelease).toBeUndefined()
   })
+  // A sync turned the flag on server-side while the form still holds the old false:
+  // an untouched switch must not send it back off.
+  it('not dirty → omitted even when the server value differs', () =>
+    expect(run(true, false, 'editable', false).autoRelease).toBeUndefined())
 })
 
 describe('buildUpdateRequest — canBeParent + clearParent (items 1/2 + 4)', () => {
