@@ -151,7 +151,11 @@ export function MultiSelectFilter({
     } else {
       // Preserve options order so selection order stays deterministic
       // (improves the readability of the CSV query string and the test).
-      onChange(options.filter((o) => value.includes(o) || o === option))
+      // Values not among the options (set by a preset or deep-link) stay first.
+      onChange([
+        ...value.filter((v) => !options.includes(v)),
+        ...options.filter((o) => value.includes(o) || o === option),
+      ])
     }
   }
 
