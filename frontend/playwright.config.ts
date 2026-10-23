@@ -61,7 +61,6 @@ export default defineConfig({
       // that exercise read-only endpoints, so the viewer storageState
       // (COMPONENTS_REGISTRY_VIEWER → ACCESS_COMPONENTS + ACCESS_AUDIT) is enough.
       // component-as-code is the read-only As Code tab journey.
-      // `npm run check:e2e-discovery` fails on a spec no project matches.
       testMatch: /(smoke-viewer|admin-migration-viewer|component-as-code|regression-[^/]+)\.spec\.ts$/,
     },
     {

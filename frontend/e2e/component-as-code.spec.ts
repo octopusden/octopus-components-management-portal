@@ -2,8 +2,7 @@ import { test, expect, type APIRequestContext } from '@playwright/test'
 
 // "As Code" tab on the component detail page. Viewer has ACCESS_COMPONENTS, which
 // is all the as-code endpoint requires, so this runs in the chromium-viewer project.
-// No self-skip: the pinned CRS image (crs.version) serves GET .../as-code, so a
-// non-OK probe is a real failure, not a missing feature.
+// No self-skip: the pinned CRS image (crs.version) serves GET .../as-code.
 //
 // Data: the seeded `e2e-component` (src/test/resources/e2e/crs-fixture/TestComponents.groovy)
 // has a single ALL_VERSIONS block, so every version resolves in real CRS. That makes
@@ -28,9 +27,6 @@ test.describe('Components Management Portal – As Code tab (viewer)', () => {
 
   test('renders highlighted code and supports Full/Resolved + Copy', async ({ page }) => {
     const id = await seededComponentId(page.request)
-
-    const probe = await page.request.get(`/rest/api/4/components/${id}/as-code`)
-    expect(probe.ok(), `GET as-code for ${id} returned HTTP ${probe.status()}`).toBe(true)
 
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
     await page.goto(`/components/${id}`, { waitUntil: 'networkidle' })

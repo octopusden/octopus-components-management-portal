@@ -12,44 +12,28 @@
 // browser or run globalSetup.
 import { spawnSync } from 'node:child_process'
 import { readdirSync } from 'node:fs'
-import path from 'node:path'
 
 const res = spawnSync('npx', ['playwright', 'test', '--list', '--reporter=json'], {
   encoding: 'utf8',
   maxBuffer: 64 * 1024 * 1024,
 })
-let report = null
-try {
-  report = JSON.parse(res.stdout)
-} catch {
-  // Reported below, together with the exit status.
+// No report at all (npx missing, config throws): say why. Unparseable stdout
+// throws, which also exits 1. Load errors (e.g. test.only under forbidOnly)
+// come back as JSON errors with a non-zero exit.
+if (res.error || !res.stdout) {
+  console.error(res.error ?? res.stderr)
+  process.exit(1)
 }
-// Config/load errors (e.g. a test.only under forbidOnly) come back as JSON with a
-// non-zero exit; print them first, they are the useful part.
-for (const e of report?.errors ?? []) console.error(e.message)
-// Fail closed: only a clean exit with a parseable, error-free report counts.
-if (res.status !== 0 || res.signal || !report || report.errors.length > 0) {
-  const stderrTail = (res.stderr ?? '').trim().split('\n').slice(-20).join('\n')
-  console.error(
-    `playwright --list failed (status ${res.status}, signal ${res.signal ?? 'none'}` +
-      `${report ? '' : ', no JSON report'})` +
-      `${res.error ? `\n${res.error}` : ''}${stderrTail ? `\n${stderrTail}` : ''}`,
-  )
+const report = JSON.parse(res.stdout)
+if (res.status !== 0 || report.errors.length) {
+  console.error(res.stderr, ...report.errors.map((e) => e.message))
   process.exit(1)
 }
 
-const listed = new Set()
-const collect = (suite) => {
-  for (const spec of suite.specs ?? []) listed.add(spec.file)
-  for (const child of suite.suites ?? []) collect(child)
-}
-report.suites.forEach(collect)
-
-const testDir = report.config.rootDir
-const onDisk = readdirSync(testDir, { recursive: true })
-  .map((f) => f.split(path.sep).join('/'))
-  .filter((f) => f.endsWith('.spec.ts'))
-  .filter((f) => !f.split('/').some((segment) => segment.startsWith('_')))
+const listed = new Set(report.suites.map((s) => s.file))
+const onDisk = readdirSync(report.config.rootDir, { recursive: true }).filter(
+  (f) => /\.spec\.ts$/.test(f) && !/(^|\/)_/.test(f),
+)
 
 const orphans = onDisk.filter((f) => !listed.has(f)).sort()
 if (orphans.length > 0) {
