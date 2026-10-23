@@ -18,15 +18,23 @@ const res = spawnSync('npx', ['playwright', 'test', '--list', '--reporter=json']
   encoding: 'utf8',
   maxBuffer: 64 * 1024 * 1024,
 })
-let report
+let report = null
 try {
   report = JSON.parse(res.stdout)
 } catch {
-  console.error(`playwright --list did not produce JSON (exit ${res.status}):\n${res.error ?? ''}\n${res.stderr ?? ''}`)
-  process.exit(1)
+  // Reported below, together with the exit status.
 }
-if (report.errors.length > 0) {
-  for (const e of report.errors) console.error(e.message)
+// Config/load errors (e.g. a test.only under forbidOnly) come back as JSON with a
+// non-zero exit; print them first, they are the useful part.
+for (const e of report?.errors ?? []) console.error(e.message)
+// Fail closed: only a clean exit with a parseable, error-free report counts.
+if (res.status !== 0 || res.signal || !report || report.errors.length > 0) {
+  const stderrTail = (res.stderr ?? '').trim().split('\n').slice(-20).join('\n')
+  console.error(
+    `playwright --list failed (status ${res.status}, signal ${res.signal ?? 'none'}` +
+      `${report ? '' : ', no JSON report'})` +
+      `${res.error ? `\n${res.error}` : ''}${stderrTail ? `\n${stderrTail}` : ''}`,
+  )
   process.exit(1)
 }
 
