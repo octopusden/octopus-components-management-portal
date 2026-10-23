@@ -5,18 +5,18 @@ import { useHistoryMigrationJob, useMigrationJob } from '@/hooks/useMigration'
 import { useTeamCityResyncJob } from '@/hooks/useTeamCityResync'
 import { useTeamCityValidationJob } from '@/hooks/useTeamCityValidation'
 import {
-  usePlacementDiffJob,
-  usePlacementDiffReport,
-  usePlacementSyncJob,
-  useRunPlacementDiff,
-  useRunPlacementSync,
-} from '@/hooks/useTeamCityPlacement'
+  useCheckoutLayoutDiffJob,
+  useCheckoutLayoutDiffReport,
+  useCheckoutLayoutSyncJob,
+  useRunCheckoutLayoutDiff,
+  useRunCheckoutLayoutSync,
+} from '@/hooks/useTeamCityCheckoutLayout'
 import { API_BASE } from '@/lib/api'
 import { formatLocalDateTime } from '@/lib/date'
 import { formatMigrationError } from '@/lib/migrationErrors'
 import { isDiffReplacedConflict } from '@/lib/migrationConflict'
-import { buildProposedChangeLines, countChangedFields, summarizeKeys } from '@/lib/placementRows'
-import { PLACEMENT_STATUS_BUCKETS, placementStatusInfo, type PlacementStatusBucket } from '@/lib/placementStatus'
+import { buildProposedChangeLines, countChangedFields, summarizeKeys } from '@/lib/checkoutLayoutRows'
+import { CHECKOUT_LAYOUT_STATUS_BUCKETS, checkoutLayoutStatusInfo, type CheckoutLayoutStatusBucket } from '@/lib/checkoutLayoutStatus'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -35,22 +35,22 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { StatCard } from './StatCard'
 import type {
-  PlacementRowDiff,
-  TeamcityPlacementDiffJobResponse,
-  TeamcityPlacementSyncJobResponse,
+  CheckoutLayoutRowDiff,
+  TeamcityCheckoutLayoutDiffJobResponse,
+  TeamcityCheckoutLayoutSyncJobResponse,
 } from '@/lib/types'
 
 // The default view (no bucket picked, "Show all" off) — everything that
 // might need an operator's attention, without the "can't derive" /
 // "nothing to do" noise.
-const DEFAULT_BUCKETS: PlacementStatusBucket[] = ['ready', 'needsLook']
-const ALL_BUCKET_IDS: PlacementStatusBucket[] = PLACEMENT_STATUS_BUCKETS.map((b) => b.id)
+const DEFAULT_BUCKETS: CheckoutLayoutStatusBucket[] = ['ready', 'needsLook']
+const ALL_BUCKET_IDS: CheckoutLayoutStatusBucket[] = CHECKOUT_LAYOUT_STATUS_BUCKETS.map((b) => b.id)
 
 /** Only a RESOLVED row has something Sync can write. */
-const isReady = (row: PlacementRowDiff) => row.status === 'RESOLVED'
+const isReady = (row: CheckoutLayoutRowDiff) => row.status === 'RESOLVED'
 
 /** The changed fields, one per line; "no change" for a derived row with none; empty for a report-only row. */
-function ProposedChangeCell({ row }: { row: PlacementRowDiff }) {
+function ProposedChangeCell({ row }: { row: CheckoutLayoutRowDiff }) {
   const lines = buildProposedChangeLines(row)
   if (lines.length > 0) {
     return (
@@ -61,13 +61,13 @@ function ProposedChangeCell({ row }: { row: PlacementRowDiff }) {
       </ul>
     )
   }
-  if (placementStatusInfo(row.status).derived) return <span className="text-xs text-muted-foreground">no change</span>
+  if (checkoutLayoutStatusInfo(row.status).derived) return <span className="text-xs text-muted-foreground">no change</span>
   return null
 }
 
 /** Status badge — human label, raw code as the tooltip so it cross-references the CSV/HTML report. */
 function StatusChip({ status }: { status: string }) {
-  const { tone, label } = placementStatusInfo(status)
+  const { tone, label } = checkoutLayoutStatusInfo(status)
   return (
     <Badge variant={tone} title={status}>
       {label}
@@ -75,12 +75,12 @@ function StatusChip({ status }: { status: string }) {
   )
 }
 
-function PlacementRow({
+function CheckoutLayoutRow({
   row,
   checked,
   onToggle,
 }: {
-  row: PlacementRowDiff
+  row: CheckoutLayoutRowDiff
   checked: boolean
   onToggle: (componentId: string, checked: boolean) => void
 }) {
@@ -137,7 +137,7 @@ function describeOtherRunningJob(running: {
 }
 
 /** Run Diff button, its progress block and its failure banners. */
-function PlacementDiffControls({
+function CheckoutLayoutDiffControls({
   adminMode,
   disabled,
   pending,
@@ -152,7 +152,7 @@ function PlacementDiffControls({
   onRequestRun: () => void
   /** The other admin job that is running, if any. */
   otherRunningLabel: string | null
-  job: TeamcityPlacementDiffJobResponse | null
+  job: TeamcityCheckoutLayoutDiffJobResponse | null
   startError: unknown
 }) {
   const running = job?.state === 'RUNNING'
@@ -184,8 +184,8 @@ function PlacementDiffControls({
 
       {running && (
         <JobProgress
-          testId="tc-placement-diff-progress"
-          message="Deriving placement from TeamCity for every in-scope component…"
+          testId="tc-checkout-layout-diff-progress"
+          message="Deriving checkout layout from TeamCity for every in-scope component…"
         />
       )}
       {job?.state === 'FAILED' && job.errorMessage && (
@@ -200,7 +200,7 @@ function PlacementDiffControls({
  * Clickable bucket counts, a "Show all (N)" toggle, "Report from <local
  * time>", and the Diff report links — all next to the table they describe.
  */
-function PlacementSummaryBar({
+function CheckoutLayoutSummaryBar({
   bucketCounts,
   totalCount,
   bucketFilter,
@@ -209,17 +209,17 @@ function PlacementSummaryBar({
   onToggleShowAll,
   reportGeneratedAt,
 }: {
-  bucketCounts: Record<PlacementStatusBucket, number>
+  bucketCounts: Record<CheckoutLayoutStatusBucket, number>
   totalCount: number
-  bucketFilter: PlacementStatusBucket | null
+  bucketFilter: CheckoutLayoutStatusBucket | null
   showAll: boolean
-  onToggleBucket: (bucket: PlacementStatusBucket) => void
+  onToggleBucket: (bucket: CheckoutLayoutStatusBucket) => void
   onToggleShowAll: () => void
   reportGeneratedAt: string | null
 }) {
   return (
     <div className="flex flex-wrap items-center gap-3 text-sm">
-      {PLACEMENT_STATUS_BUCKETS.map(({ id, label }) => (
+      {CHECKOUT_LAYOUT_STATUS_BUCKETS.map(({ id, label }) => (
         <Button
           key={id}
           type="button"
@@ -237,14 +237,14 @@ function PlacementSummaryBar({
       </Button>
       <span className="text-xs text-muted-foreground">Report from {formatLocalDateTime(reportGeneratedAt)}</span>
       <a
-        href={`${API_BASE}/admin/teamcity-placement/diff/report.html`}
+        href={`${API_BASE}/admin/teamcity-checkout-layout/diff/report.html`}
         target="_blank"
         rel="noopener noreferrer"
         className="ml-auto text-primary hover:underline"
       >
         Open report (HTML)
       </a>
-      <a href={`${API_BASE}/admin/teamcity-placement/diff/report.csv`} className="text-primary hover:underline">
+      <a href={`${API_BASE}/admin/teamcity-checkout-layout/diff/report.csv`} className="text-primary hover:underline">
         Download CSV
       </a>
     </div>
@@ -256,7 +256,7 @@ function PlacementSummaryBar({
  * rows" / "nothing needs attention" / "no rows match the filters", else one
  * table row per component.
  */
-function PlacementResultsArea({
+function CheckoutLayoutResultsArea({
   hasReport,
   totalRows,
   textFilteredCount,
@@ -269,7 +269,7 @@ function PlacementResultsArea({
   hasReport: boolean
   totalRows: number
   textFilteredCount: number
-  visibleRows: PlacementRowDiff[]
+  visibleRows: CheckoutLayoutRowDiff[]
   isDefaultView: boolean
   onShowAll: () => void
   selected: Set<string>
@@ -278,7 +278,7 @@ function PlacementResultsArea({
   if (!hasReport) {
     return (
       <EmptyState
-        message="Run Diff to see the current TeamCity ↔ CRS placement report. Where TeamCity checks out each VCS root (Checkout Directory / Source Path) and where it builds (Build Working Directory)."
+        message="Run Diff to compare TeamCity and CRS checkout layouts."
         className="py-8"
       />
     )
@@ -317,7 +317,7 @@ function PlacementResultsArea({
         </TableHeader>
         <TableBody>
           {visibleRows.map((row) => (
-            <PlacementRow
+            <CheckoutLayoutRow
               key={row.configurationRowId}
               row={row}
               checked={selected.has(row.componentId)}
@@ -334,7 +334,7 @@ function PlacementResultsArea({
  * Sync button, its progress block and failure banners, and the COMPLETED
  * result summary (counts, per-component outcomes, rollback CSV link).
  */
-function PlacementSyncControls({
+function CheckoutLayoutSyncControls({
   adminMode,
   disabled,
   blockedReason,
@@ -352,7 +352,7 @@ function PlacementSyncControls({
   onRequestRun: () => void
   selectedCount: number
   notice: string | null
-  job: TeamcityPlacementSyncJobResponse | null
+  job: TeamcityCheckoutLayoutSyncJobResponse | null
   startError: unknown
 }) {
   const running = job?.state === 'RUNNING'
@@ -381,7 +381,7 @@ function PlacementSyncControls({
       {notice && <StatusBanner variant="warning">{notice}</StatusBanner>}
       {running && (
         <JobProgress
-          testId="tc-placement-sync-progress"
+          testId="tc-checkout-layout-sync-progress"
           message="Writing the selected rows through the registry write path…"
         />
       )}
@@ -413,7 +413,7 @@ function PlacementSyncControls({
             </ul>
           </details>
           <a
-            href={`${API_BASE}/admin/teamcity-placement/sync/report.csv`}
+            href={`${API_BASE}/admin/teamcity-checkout-layout/sync/report.csv`}
             className="text-sm text-primary hover:underline"
           >
             Download rollback trace (CSV)
@@ -425,7 +425,7 @@ function PlacementSyncControls({
 }
 
 /**
- * Admin panel for the TeamCity -> CRS VCS-placement Diff/Sync jobs. Mirrors
+ * Admin panel for the TeamCity -> CRS VCS checkout-layout Diff/Sync jobs. Mirrors
  * TeamCityResyncPanel/TeamCityValidationPanel's async-job pattern for Run Diff,
  * plus a filterable result table (one row per component) and a second async job
  * (Sync) that writes the selection back through CRS.
@@ -436,27 +436,27 @@ function PlacementSyncControls({
  * works safely — the shared MigrationLifecycleGate answers 409 and
  * formatMigrationError renders it — it just isn't greyed out in advance.
  */
-export function TeamCityPlacementPanel() {
-  const diffJob = usePlacementDiffJob()
+export function TeamCityCheckoutLayoutPanel() {
+  const diffJob = useCheckoutLayoutDiffJob()
   const diffJobData = diffJob.data ?? null
   const diffRunning = diffJobData?.state === 'RUNNING'
-  const startDiff = useRunPlacementDiff()
+  const startDiff = useRunCheckoutLayoutDiff()
 
-  const report = usePlacementDiffReport()
+  const report = useCheckoutLayoutDiffReport()
   const rows = useMemo(
     () => [...(report.data?.rows ?? [])].sort((a, b) => a.componentKey.localeCompare(b.componentKey)),
     [report.data],
   )
 
-  const syncJob = usePlacementSyncJob()
+  const syncJob = useCheckoutLayoutSyncJob()
   const syncJobData = syncJob.data ?? null
   const syncRunning = syncJobData?.state === 'RUNNING'
-  const startSync = useRunPlacementSync()
+  const startSync = useRunCheckoutLayoutSync()
 
   const adminMode = useAdminMode((s) => s.enabled)
   const [confirmDiffOpen, setConfirmDiffOpen] = useState(false)
   const [confirmSyncOpen, setConfirmSyncOpen] = useState(false)
-  const [bucketFilter, setBucketFilter] = useState<PlacementStatusBucket | null>(null)
+  const [bucketFilter, setBucketFilter] = useState<CheckoutLayoutStatusBucket | null>(null)
   const [showAll, setShowAll] = useState(false)
   const [textFilter, setTextFilter] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -491,15 +491,15 @@ export function TeamCityPlacementPanel() {
   )
 
   const bucketCounts = useMemo(() => {
-    const counts: Record<PlacementStatusBucket, number> = { ready: 0, needsLook: 0, cantDerive: 0, nothingToDo: 0 }
-    for (const row of textFilteredRows) counts[placementStatusInfo(row.status).bucket] += 1
+    const counts: Record<CheckoutLayoutStatusBucket, number> = { ready: 0, needsLook: 0, cantDerive: 0, nothingToDo: 0 }
+    for (const row of textFilteredRows) counts[checkoutLayoutStatusInfo(row.status).bucket] += 1
     return counts
   }, [textFilteredRows])
 
   const isDefaultView = bucketFilter === null && !showAll
   const visibleRows = useMemo(() => {
     const visibleBuckets = bucketFilter ? [bucketFilter] : showAll ? ALL_BUCKET_IDS : DEFAULT_BUCKETS
-    return textFilteredRows.filter((row) => visibleBuckets.includes(placementStatusInfo(row.status).bucket))
+    return textFilteredRows.filter((row) => visibleBuckets.includes(checkoutLayoutStatusInfo(row.status).bucket))
   }, [textFilteredRows, bucketFilter, showAll])
 
   const readyRows = visibleRows.filter(isReady)
@@ -527,7 +527,7 @@ export function TeamCityPlacementPanel() {
     setSelected(checked ? new Set(readyRows.map((r) => r.componentId)) : new Set())
   }
 
-  function toggleBucket(bucket: PlacementStatusBucket) {
+  function toggleBucket(bucket: CheckoutLayoutStatusBucket) {
     setBucketFilter((prev) => (prev === bucket ? null : bucket))
   }
 
@@ -579,7 +579,7 @@ export function TeamCityPlacementPanel() {
 
   return (
     <div className="space-y-4">
-      <PlacementDiffControls
+      <CheckoutLayoutDiffControls
         adminMode={adminMode}
         disabled={diffButtonDisabled}
         pending={startDiff.isPending}
@@ -606,11 +606,11 @@ export function TeamCityPlacementPanel() {
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1">
-          <Label htmlFor="tc-placement-text-filter" className="text-xs text-muted-foreground">
+          <Label htmlFor="tc-checkout-layout-text-filter" className="text-xs text-muted-foreground">
             Component
           </Label>
           <Input
-            id="tc-placement-text-filter"
+            id="tc-checkout-layout-text-filter"
             className="w-56"
             placeholder="Filter by component key"
             value={textFilter}
@@ -620,7 +620,7 @@ export function TeamCityPlacementPanel() {
       </div>
 
       {!!report.data && (
-        <PlacementSummaryBar
+        <CheckoutLayoutSummaryBar
           bucketCounts={bucketCounts}
           totalCount={textFilteredRows.length}
           bucketFilter={bucketFilter}
@@ -644,7 +644,7 @@ export function TeamCityPlacementPanel() {
         Select all visible ready ({readyRows.length})
       </label>
 
-      <PlacementResultsArea
+      <CheckoutLayoutResultsArea
         hasReport={!!report.data}
         totalRows={rows.length}
         textFilteredCount={textFilteredRows.length}
@@ -655,7 +655,7 @@ export function TeamCityPlacementPanel() {
         onToggleComponent={toggleComponent}
       />
 
-      <PlacementSyncControls
+      <CheckoutLayoutSyncControls
         adminMode={adminMode}
         disabled={syncButtonDisabled}
         blockedReason={syncBlockedReason}
@@ -670,9 +670,9 @@ export function TeamCityPlacementPanel() {
       <Dialog open={confirmDiffOpen} onOpenChange={setConfirmDiffOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Run the checkout paths Diff?</DialogTitle>
+            <DialogTitle>Run the checkout layout Diff?</DialogTitle>
             <DialogDescription>
-              Derives placement (Checkout Directory, Source Path, Build Working Directory) from
+              Derives checkout layout (Checkout Directory, Source Path, Build Working Directory) from
               every in-scope component's linked TeamCity compile configuration(s) and compares it
               against the registry's stored values. Read-only — nothing is written. The operation
               runs in the background; progress appears in this tab.
@@ -694,7 +694,7 @@ export function TeamCityPlacementPanel() {
           <DialogHeader>
             <DialogTitle>Sync {selected.size} component{selected.size === 1 ? '' : 's'}?</DialogTitle>
             <DialogDescription>
-              Writes the derived placement for the selected base configurations through the same
+              Writes the derived checkout layout for the selected base configurations through the same
               validation, name-derivation and audit path a manual edit uses. Rows that changed on
               either side since this Diff ran are skipped, not overwritten blind.
             </DialogDescription>

@@ -214,12 +214,12 @@ describe('AdminSettingsPage tabs', () => {
     expect(screen.getByRole('button', { name: /run migration/i })).toBeDefined()
   })
 
-  it('renames the TeamCity placement card to "Checkout paths from TeamCity" and explains it', async () => {
+  it('titles and explains the checkout layout card', async () => {
     renderPage()
     const user = userEvent.setup()
     await user.click(screen.getByRole('tab', { name: /^Maintenance$/i }))
 
-    expect(screen.getByRole('heading', { name: 'Checkout paths from TeamCity' })).toBeDefined()
+    expect(screen.getByRole('heading', { name: 'TeamCity Checkout Layout' })).toBeDefined()
     expect(
       screen.getByText(/Where TeamCity checks out each VCS root.*and where it builds/i),
     ).toBeDefined()

@@ -126,7 +126,7 @@ describe('parseServerFieldErrors — non-GeneralTab fields parse but rely on cal
 })
 
 describe('parseServerFieldErrors — indexed VCS entry paths', () => {
-  it('keys a base-row placement error by its indexed path', () => {
+  it('keys a base-row checkout layout error by its indexed path', () => {
     const body = JSON.stringify({ errorMessage: 'vcsEntries[1].checkoutDirectory: required on a secondary VCS entry' })
     expect([...parseServerFieldErrors(body)]).toEqual([['vcsEntries[1].checkoutDirectory', 'required on a secondary VCS entry']])
   })

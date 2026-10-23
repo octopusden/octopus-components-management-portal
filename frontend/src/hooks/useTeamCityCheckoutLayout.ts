@@ -3,32 +3,32 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '../lib/api'
 import { parseSameKindAttach } from '../lib/migrationConflict'
 import type {
-  PlacementDiffResult,
-  TeamcityPlacementDiffJobResponse,
-  TeamcityPlacementSyncJobResponse,
-  TeamcityPlacementSyncRequest,
+  CheckoutLayoutDiffResult,
+  TeamcityCheckoutLayoutDiffJobResponse,
+  TeamcityCheckoutLayoutSyncJobResponse,
+  TeamcityCheckoutLayoutSyncRequest,
 } from '../lib/types'
 
-// TeamCity -> CRS VCS-placement Diff (read-only) and Sync. Mirrors
+// TeamCity -> CRS VCS checkout-layout Diff (read-only) and Sync. Mirrors
 // useTeamCityResync.ts / useTeamCityValidation.ts — same 202-vs-409 same-kind
 // attach dance, same 404-means-idle polling. See those hooks' doc comments
 // for the full rationale; this file only calls out what differs.
 
-const DIFF_JOB_KEY = ['tc-placement-diff', 'job'] as const
-const DIFF_REPORT_KEY = ['tc-placement-diff', 'report'] as const
-const SYNC_JOB_KEY = ['tc-placement-sync', 'job'] as const
+const DIFF_JOB_KEY = ['tc-checkout-layout-diff', 'job'] as const
+const DIFF_REPORT_KEY = ['tc-checkout-layout-diff', 'report'] as const
+const SYNC_JOB_KEY = ['tc-checkout-layout-sync', 'job'] as const
 const JOB_POLL_INTERVAL_MS = 1_000
 
-/** Start (or attach to) the async Diff job. `POST /admin/teamcity-placement/diff`. */
-export function useRunPlacementDiff() {
+/** Start (or attach to) the async Diff job. `POST /admin/teamcity-checkout-layout/diff`. */
+export function useRunCheckoutLayoutDiff() {
   const queryClient = useQueryClient()
-  return useMutation<TeamcityPlacementDiffJobResponse, Error, void>({
+  return useMutation<TeamcityCheckoutLayoutDiffJobResponse, Error, void>({
     mutationFn: async () => {
       try {
-        return await api.post<TeamcityPlacementDiffJobResponse>('/admin/teamcity-placement/diff')
+        return await api.post<TeamcityCheckoutLayoutDiffJobResponse>('/admin/teamcity-checkout-layout/diff')
       } catch (err) {
         if (err instanceof ApiError) {
-          const attach = parseSameKindAttach<TeamcityPlacementDiffJobResponse>(err)
+          const attach = parseSameKindAttach<TeamcityCheckoutLayoutDiffJobResponse>(err)
           if (attach) return attach
         }
         throw err
@@ -41,16 +41,16 @@ export function useRunPlacementDiff() {
 }
 
 /**
- * Poll `/admin/teamcity-placement/diff/job` for the current async Diff state,
+ * Poll `/admin/teamcity-checkout-layout/diff/job` for the current async Diff state,
  * and refresh the report once the job it reads is COMPLETED.
  */
-export function usePlacementDiffJob() {
+export function useCheckoutLayoutDiffJob() {
   const queryClient = useQueryClient()
-  const query = useQuery<TeamcityPlacementDiffJobResponse | null>({
+  const query = useQuery<TeamcityCheckoutLayoutDiffJobResponse | null>({
     queryKey: DIFF_JOB_KEY,
     queryFn: async () => {
       try {
-        return await api.get<TeamcityPlacementDiffJobResponse>('/admin/teamcity-placement/diff/job')
+        return await api.get<TeamcityCheckoutLayoutDiffJobResponse>('/admin/teamcity-checkout-layout/diff/job')
       } catch (err) {
         if (err instanceof ApiError && err.status === 404) return null
         throw err
@@ -67,16 +67,16 @@ export function usePlacementDiffJob() {
 
 /**
  * The latest completed Diff's rows for the Portal table —
- * `GET /admin/teamcity-placement/diff/report.json`. Component read access,
+ * `GET /admin/teamcity-checkout-layout/diff/report.json`. Component read access,
  * not `IMPORT_DATA` (see the CRS controller); 404 until a Diff has completed
  * at least once since the pod came up.
  */
-export function usePlacementDiffReport() {
-  return useQuery<PlacementDiffResult | null>({
+export function useCheckoutLayoutDiffReport() {
+  return useQuery<CheckoutLayoutDiffResult | null>({
     queryKey: DIFF_REPORT_KEY,
     queryFn: async () => {
       try {
-        return await api.get<PlacementDiffResult>('/admin/teamcity-placement/diff/report.json')
+        return await api.get<CheckoutLayoutDiffResult>('/admin/teamcity-checkout-layout/diff/report.json')
       } catch (err) {
         if (err instanceof ApiError && err.status === 404) return null
         throw err
@@ -86,27 +86,27 @@ export function usePlacementDiffReport() {
 }
 
 /**
- * Start (or attach to) the async Sync job. `POST /admin/teamcity-placement/sync`.
+ * Start (or attach to) the async Sync job. `POST /admin/teamcity-checkout-layout/sync`.
  *
  * Two distinct 409s share this endpoint:
  *  - same-kind attach (a Sync is already RUNNING) — same job-response body,
  *    `parseSameKindAttach` resolves it as success like every other job hook.
  *  - "diff replaced" (the `diffId` no longer names the latest Diff) — CRS
- *    `ErrorResponse` body (`errorMessage` + `errorCode: placement-diff-stale`)
+ *    `ErrorResponse` body (`errorMessage` + `errorCode: checkout-layout-diff-stale`)
  *    with no `id`/`state`/`kind`.
  *    `parseSameKindAttach` returns null for it (correctly — it is not an
  *    attach), so it rethrows; the panel tells this apart from a genuine
  *    cross-kind conflict with `isDiffReplacedConflict` (`lib/migrationConflict.ts`).
  */
-export function useRunPlacementSync() {
+export function useRunCheckoutLayoutSync() {
   const queryClient = useQueryClient()
-  return useMutation<TeamcityPlacementSyncJobResponse, Error, TeamcityPlacementSyncRequest>({
+  return useMutation<TeamcityCheckoutLayoutSyncJobResponse, Error, TeamcityCheckoutLayoutSyncRequest>({
     mutationFn: async (request) => {
       try {
-        return await api.post<TeamcityPlacementSyncJobResponse>('/admin/teamcity-placement/sync', request)
+        return await api.post<TeamcityCheckoutLayoutSyncJobResponse>('/admin/teamcity-checkout-layout/sync', request)
       } catch (err) {
         if (err instanceof ApiError) {
-          const attach = parseSameKindAttach<TeamcityPlacementSyncJobResponse>(err)
+          const attach = parseSameKindAttach<TeamcityCheckoutLayoutSyncJobResponse>(err)
           if (attach) return attach
         }
         throw err
@@ -117,16 +117,16 @@ export function useRunPlacementSync() {
 }
 
 /**
- * Poll `/admin/teamcity-placement/sync/job` for the current async Sync state,
+ * Poll `/admin/teamcity-checkout-layout/sync/job` for the current async Sync state,
  * and refresh the component caches once the Sync it reads has written.
  */
-export function usePlacementSyncJob() {
+export function useCheckoutLayoutSyncJob() {
   const queryClient = useQueryClient()
-  const query = useQuery<TeamcityPlacementSyncJobResponse | null>({
+  const query = useQuery<TeamcityCheckoutLayoutSyncJobResponse | null>({
     queryKey: SYNC_JOB_KEY,
     queryFn: async () => {
       try {
-        return await api.get<TeamcityPlacementSyncJobResponse>('/admin/teamcity-placement/sync/job')
+        return await api.get<TeamcityCheckoutLayoutSyncJobResponse>('/admin/teamcity-checkout-layout/sync/job')
       } catch (err) {
         if (err instanceof ApiError && err.status === 404) return null
         throw err

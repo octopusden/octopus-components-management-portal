@@ -54,9 +54,9 @@ export function parseSameKindAttach<T>(err: ApiError): T | null {
 }
 
 /**
- * True when a `POST /admin/teamcity-placement/sync` 409 means the diffId is no
+ * True when a `POST /admin/teamcity-checkout-layout/sync` 409 means the diffId is no
  * longer the latest Diff: a kind-less CRS `ErrorResponse` with `errorCode`
- * `placement-diff-stale` (or, failing that, an `errorMessage` of "diff replaced").
+ * `checkout-layout-diff-stale` (or, failing that, an `errorMessage` of "diff replaced").
  */
 export function isDiffReplacedConflict(err: unknown): boolean {
   if (!(err instanceof ApiError) || err.status !== 409) return false
@@ -65,7 +65,7 @@ export function isDiffReplacedConflict(err: unknown): boolean {
     if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return false
     const obj = parsed as Record<string, unknown>
     if ('kind' in obj) return false
-    if (obj['errorCode'] === 'placement-diff-stale') return true
+    if (obj['errorCode'] === 'checkout-layout-diff-stale') return true
     const text = obj['errorMessage']
     return typeof text === 'string' && text.toLowerCase().includes('diff replaced')
   } catch {
