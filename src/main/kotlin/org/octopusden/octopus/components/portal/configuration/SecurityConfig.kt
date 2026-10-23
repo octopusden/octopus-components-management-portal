@@ -179,8 +179,6 @@ open class SecurityConfig(
                 csrf.csrfTokenRepository(CookieServerCsrfTokenRepository.withHttpOnlyFalse())
                 csrf.csrfTokenRequestHandler(ServerCsrfTokenRequestAttributeHandler())
             }
-            // Adds a CSP on top of Spring's default headers (nosniff, X-Frame-Options DENY,
-            // no-cache, HSTS over https), which stay on.
             .headers { headers -> headers.contentSecurityPolicy { it.policyDirectives(CONTENT_SECURITY_POLICY) } }
         return http.build()
     }

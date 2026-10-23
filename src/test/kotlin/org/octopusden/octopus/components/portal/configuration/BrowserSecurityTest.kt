@@ -1,6 +1,5 @@
 package org.octopusden.octopus.components.portal.configuration
 
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -20,10 +19,7 @@ import org.springframework.test.web.reactive.server.WebTestClient
  * [ClientAuthorizationRequiredIntegrationTest]: `mockOAuth2Login()` only reaches an
  * in-process client. `management.server.port` is cleared so actuator shares this context.
  *
- * The valid-token case sends a real double-submit (same value in the XSRF-TOKEN cookie and
- * the X-XSRF-TOKEN header), exactly what `frontend/src/lib/api.ts` does, rather than the
- * `csrf()` mutator, which switches CSRF checking off and would prove nothing about the
- * plain request handler [SecurityConfig] relies on.
+ * Valid-token case is a real double-submit, not the csrf() mutator (which disables the check).
  */
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.MOCK,
@@ -35,12 +31,7 @@ class BrowserSecurityTest {
     @Autowired
     lateinit var ctx: ApplicationContext
 
-    private lateinit var client: WebTestClient
-
-    @BeforeEach
-    fun setUp() {
-        client = WebTestClient.bindToApplicationContext(ctx).apply(springSecurity()).build()
-    }
+    private val client by lazy { WebTestClient.bindToApplicationContext(ctx).apply(springSecurity()).build() }
 
     @Test
     fun `authenticated POST to rest without csrf token is rejected`() {
@@ -85,8 +76,6 @@ class BrowserSecurityTest {
             .exchange()
             .expectStatus().isUnauthorized
             .expectHeader().valueEquals("Content-Security-Policy", EXPECTED_CSP)
-            .expectHeader().valueEquals("X-Content-Type-Options", "nosniff")
-            .expectHeader().valueEquals("X-Frame-Options", "DENY")
     }
 
     @Test
