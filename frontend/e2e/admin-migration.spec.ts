@@ -11,7 +11,7 @@ test.describe('Admin migration – admin journeys', () => {
     await page.goto('/admin')
 
     await expect(page.getByRole('heading', { name: /admin settings/i })).toBeVisible()
-    await page.getByRole('tab', { name: /migration/i }).click()
+    await page.getByRole('tab', { name: /maintenance/i }).click()
     await expect(page.getByRole('button', { name: /run migration/i })).toBeVisible()
 
     // Footer Admin-mode switch (exact name — the Migration tab also has an
@@ -25,7 +25,7 @@ test.describe('Admin migration – admin journeys', () => {
     await mockIdleMigration(page)
     await page.goto('/admin')
 
-    await page.getByRole('tab', { name: /migration/i }).click()
+    await page.getByRole('tab', { name: /maintenance/i }).click()
     const runButton = page.getByRole('button', { name: /run migration/i })
     await expect(runButton).toBeDisabled()
     await expect(
@@ -37,9 +37,9 @@ test.describe('Admin migration – admin journeys', () => {
     await mockHappyPathMigration(page)
     await page.goto('/admin')
 
-    await page.getByRole('tab', { name: /migration/i }).click()
-    // Arm Admin mode via the inline arm bar on the Migration tab (shares the
-    // same store as the footer switch).
+    await page.getByRole('tab', { name: /maintenance/i }).click()
+    // Arm Admin mode via the inline arm bar on the Maintenance tab (shares
+    // the same store as the footer switch).
     await page.getByRole('switch', { name: 'Arm admin mode', exact: true }).click()
     await page.getByRole('button', { name: /run migration/i }).click()
     // Confirm dialog → Confirm.
