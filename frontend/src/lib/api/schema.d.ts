@@ -372,7 +372,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/rest/api/4/admin/teamcity-placement/diff": {
+    "/rest/api/4/admin/teamcity-checkout-layout/diff": {
         parameters: {
             query?: never;
             header?: never;
@@ -388,7 +388,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/rest/api/4/admin/teamcity-placement/diff/job": {
+    "/rest/api/4/admin/teamcity-checkout-layout/diff/job": {
         parameters: {
             query?: never;
             header?: never;
@@ -404,7 +404,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/rest/api/4/admin/teamcity-placement/diff/report.csv": {
+    "/rest/api/4/admin/teamcity-checkout-layout/diff/report.csv": {
         parameters: {
             query?: never;
             header?: never;
@@ -420,7 +420,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/rest/api/4/admin/teamcity-placement/diff/report.html": {
+    "/rest/api/4/admin/teamcity-checkout-layout/diff/report.html": {
         parameters: {
             query?: never;
             header?: never;
@@ -436,7 +436,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/rest/api/4/admin/teamcity-placement/diff/report.json": {
+    "/rest/api/4/admin/teamcity-checkout-layout/diff/report.json": {
         parameters: {
             query?: never;
             header?: never;
@@ -444,6 +444,154 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getReportJson"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rest/api/4/admin/teamcity-checkout-layout/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["startSync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rest/api/4/admin/teamcity-checkout-layout/sync/job": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getSyncJob"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rest/api/4/admin/teamcity-checkout-layout/sync/report.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getSyncReportCsv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rest/api/4/admin/teamcity-placement/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deprecated: use the same path under /rest/api/4/admin/teamcity-checkout-layout
+         * @deprecated
+         */
+        post: operations["startDiffLegacy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rest/api/4/admin/teamcity-placement/diff/job": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Deprecated: use the same path under /rest/api/4/admin/teamcity-checkout-layout
+         * @deprecated
+         */
+        get: operations["getDiffJobLegacy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rest/api/4/admin/teamcity-placement/diff/report.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Deprecated: use the same path under /rest/api/4/admin/teamcity-checkout-layout
+         * @deprecated
+         */
+        get: operations["getReportCsvLegacy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rest/api/4/admin/teamcity-placement/diff/report.html": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Deprecated: use the same path under /rest/api/4/admin/teamcity-checkout-layout
+         * @deprecated
+         */
+        get: operations["getReportHtmlLegacy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rest/api/4/admin/teamcity-placement/diff/report.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Deprecated: use the same path under /rest/api/4/admin/teamcity-checkout-layout
+         * @deprecated
+         */
+        get: operations["getReportJsonLegacy"];
         put?: never;
         post?: never;
         delete?: never;
@@ -461,7 +609,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["startSync"];
+        /**
+         * Deprecated: use the same path under /rest/api/4/admin/teamcity-checkout-layout
+         * @deprecated
+         */
+        post: operations["startSyncLegacy"];
         delete?: never;
         options?: never;
         head?: never;
@@ -475,7 +627,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["getSyncJob"];
+        /**
+         * Deprecated: use the same path under /rest/api/4/admin/teamcity-checkout-layout
+         * @deprecated
+         */
+        get: operations["getSyncJobLegacy"];
         put?: never;
         post?: never;
         delete?: never;
@@ -491,7 +647,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["getSyncReportCsv"];
+        /**
+         * Deprecated: use the same path under /rest/api/4/admin/teamcity-checkout-layout
+         * @deprecated
+         */
+        get: operations["getSyncReportCsvLegacy"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1482,6 +1642,73 @@ export interface components {
             toolType?: string;
             versionPattern?: string;
         };
+        CheckoutLayoutComponentSyncOutcome: {
+            /** Format: uuid */
+            componentId: string;
+            componentKey: string;
+            rows: components["schemas"]["CheckoutLayoutRowSyncOutcome"][];
+        };
+        CheckoutLayoutDiffResult: {
+            diffId?: string;
+            /** Format: date-time */
+            generatedAt: string;
+            rows: components["schemas"]["CheckoutLayoutRowDiff"][];
+        };
+        CheckoutLayoutEntryDiff: {
+            branch?: string;
+            currentCheckoutDirectory?: string;
+            currentSourcePath?: string;
+            derivedCheckoutDirectory?: string;
+            derivedSourcePath?: string;
+            hotfixBranch?: string;
+            name: string;
+            repositoryType?: string;
+            tag?: string;
+            vcsPath: string;
+        };
+        CheckoutLayoutFieldChange: {
+            after?: string;
+            before?: string;
+            componentKey: string;
+            field: string;
+            root: string;
+            rowLabel: string;
+        };
+        CheckoutLayoutRowDiff: {
+            /** Format: uuid */
+            componentId: string;
+            componentKey: string;
+            /** Format: uuid */
+            configurationRowId: string;
+            currentBuildWorkingDirectory?: string;
+            derivedBuildWorkingDirectory?: string;
+            entries: components["schemas"]["CheckoutLayoutEntryDiff"][];
+            notes: string[];
+            rowLabel: string;
+            sourceBuildTypeIds: string[];
+            /** @enum {string} */
+            status: "RESOLVED" | "CONFLICT" | "UNEXPRESSIBLE" | "NO_CHAIN" | "OUTSIDE_TEMPLATES" | "COMPILE_PAUSED" | "MANUAL_EDIT" | "IN_SYNC" | "INVALID" | "TC_ERROR" | "ROOTS_MISMATCH";
+            versionRange: string;
+        };
+        CheckoutLayoutRowSyncOutcome: {
+            /** Format: uuid */
+            configurationRowId: string;
+            outcome: string;
+            rowLabel: string;
+        };
+        CheckoutLayoutSyncResult: {
+            /** Format: int32 */
+            applied: number;
+            components: components["schemas"]["CheckoutLayoutComponentSyncOutcome"][];
+            /** Format: int32 */
+            failed: number;
+            fieldChanges: components["schemas"]["CheckoutLayoutFieldChange"][];
+            /** Format: int32 */
+            requested: number;
+            /** Format: int32 */
+            skipped: number;
+            triggeredBy: string;
+        };
         Classification: {
             /**
              * @description Never `ask` for a template.
@@ -1516,6 +1743,7 @@ export interface components {
         ComponentCreateRequest: {
             archived?: boolean;
             artifactIds?: components["schemas"]["ArtifactIdRequest"][];
+            autoRelease?: boolean;
             baseConfiguration: components["schemas"]["BaseConfigurationRequest"];
             canBeParent?: boolean;
             /** @description Optional free-text comment describing the change; recorded on the audit row. */
@@ -1554,6 +1782,7 @@ export interface components {
         ComponentDetailResponse: {
             archived: boolean;
             artifactIds: components["schemas"]["ArtifactIdResponse"][];
+            autoRelease: boolean;
             canBeParent: boolean;
             canEdit?: boolean;
             clientCode?: string;
@@ -1642,6 +1871,7 @@ export interface components {
         };
         ComponentSummaryResponse: {
             archived: boolean;
+            autoRelease: boolean;
             buildSystem?: string;
             canBeParent: boolean;
             componentOwner?: string;
@@ -1711,6 +1941,7 @@ export interface components {
         ComponentUpdateRequest: {
             archived?: boolean;
             artifactIds?: components["schemas"]["ArtifactIdRequest"][];
+            autoRelease?: boolean;
             baseConfiguration?: components["schemas"]["BaseConfigurationRequest"];
             canBeParent?: boolean;
             /** @description Optional free-text comment describing the change; recorded on the audit row. */
@@ -2267,73 +2498,6 @@ export interface components {
             sort?: components["schemas"]["SortObject"];
             unpaged?: boolean;
         };
-        PlacementComponentSyncOutcome: {
-            /** Format: uuid */
-            componentId: string;
-            componentKey: string;
-            rows: components["schemas"]["PlacementRowSyncOutcome"][];
-        };
-        PlacementDiffResult: {
-            diffId?: string;
-            /** Format: date-time */
-            generatedAt: string;
-            rows: components["schemas"]["PlacementRowDiff"][];
-        };
-        PlacementEntryDiff: {
-            branch?: string;
-            currentCheckoutDirectory?: string;
-            currentSourcePath?: string;
-            derivedCheckoutDirectory?: string;
-            derivedSourcePath?: string;
-            hotfixBranch?: string;
-            name: string;
-            repositoryType?: string;
-            tag?: string;
-            vcsPath: string;
-        };
-        PlacementFieldChange: {
-            after?: string;
-            before?: string;
-            componentKey: string;
-            field: string;
-            root: string;
-            rowLabel: string;
-        };
-        PlacementRowDiff: {
-            /** Format: uuid */
-            componentId: string;
-            componentKey: string;
-            /** Format: uuid */
-            configurationRowId: string;
-            currentBuildWorkingDirectory?: string;
-            derivedBuildWorkingDirectory?: string;
-            entries: components["schemas"]["PlacementEntryDiff"][];
-            notes: string[];
-            rowLabel: string;
-            sourceBuildTypeIds: string[];
-            /** @enum {string} */
-            status: "RESOLVED" | "CONFLICT" | "UNEXPRESSIBLE" | "NO_CHAIN" | "OUTSIDE_TEMPLATES" | "COMPILE_PAUSED" | "MANUAL_EDIT" | "IN_SYNC" | "INVALID" | "TC_ERROR" | "ROOTS_MISMATCH";
-            versionRange: string;
-        };
-        PlacementRowSyncOutcome: {
-            /** Format: uuid */
-            configurationRowId: string;
-            outcome: string;
-            rowLabel: string;
-        };
-        PlacementSyncResult: {
-            /** Format: int32 */
-            applied: number;
-            components: components["schemas"]["PlacementComponentSyncOutcome"][];
-            /** Format: int32 */
-            failed: number;
-            fieldChanges: components["schemas"]["PlacementFieldChange"][];
-            /** Format: int32 */
-            requested: number;
-            /** Format: int32 */
-            skipped: number;
-            triggeredBy: string;
-        };
         RMSSweepStatusResponse: {
             /** Format: int32 */
             componentsWithData: number;
@@ -2432,7 +2596,7 @@ export interface components {
             ranges: string[];
             warnings: string[];
         };
-        TeamcityPlacementDiffJobResponse: {
+        TeamcityCheckoutLayoutDiffJobResponse: {
             errorMessage?: string;
             /** Format: date-time */
             finishedAt?: string;
@@ -2445,19 +2609,19 @@ export interface components {
             /** @enum {string} */
             state: "RUNNING" | "COMPLETED" | "FAILED";
         };
-        TeamcityPlacementSyncJobResponse: {
+        TeamcityCheckoutLayoutSyncJobResponse: {
             errorMessage?: string;
             /** Format: date-time */
             finishedAt?: string;
             id: string;
             kind: string;
-            result?: components["schemas"]["PlacementSyncResult"];
+            result?: components["schemas"]["CheckoutLayoutSyncResult"];
             /** Format: date-time */
             startedAt: string;
             /** @enum {string} */
             state: "RUNNING" | "COMPLETED" | "FAILED";
         };
-        TeamcityPlacementSyncRequest: {
+        TeamcityCheckoutLayoutSyncRequest: {
             componentIds: string[];
             diffId: string;
         };
@@ -2489,6 +2653,8 @@ export interface components {
         TeamcitySyncResult: {
             /** Format: int32 */
             ambiguous_auto_resolved: number;
+            /** Format: int32 */
+            auto_release_enabled: number;
             /** Format: int32 */
             dropped_lines: number;
             errors: string[];
@@ -5185,13 +5351,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
-            200: {
+            /** @description A new Diff job was started */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["TeamcityPlacementDiffJobResponse"];
+                    "*/*": components["schemas"]["TeamcityCheckoutLayoutDiffJobResponse"];
                 };
             };
             /** @description Bad Request */
@@ -5212,13 +5378,13 @@ export interface operations {
                     "*/*": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Conflict */
+            /** @description Two body shapes. (1) A Diff is already running: the in-flight TeamcityCheckoutLayoutDiffJobResponse. (2) Another admin job holds the gate: MigrationConflictResponse {code, message, activeKind, activeJobId}. */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ErrorResponse"];
+                    "*/*": components["schemas"]["MigrationConflictResponse"] | components["schemas"]["TeamcityCheckoutLayoutDiffJobResponse"];
                 };
             };
             /** @description Payload Too Large */
@@ -5292,7 +5458,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["TeamcityPlacementDiffJobResponse"];
+                    "*/*": components["schemas"]["TeamcityCheckoutLayoutDiffJobResponse"];
                 };
             };
             /** @description Bad Request */
@@ -5595,7 +5761,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PlacementDiffResult"];
+                    "application/json": components["schemas"]["CheckoutLayoutDiffResult"];
                 };
             };
             /** @description Bad Request */
@@ -5690,7 +5856,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["TeamcityPlacementSyncRequest"];
+                "application/json": components["schemas"]["TeamcityCheckoutLayoutSyncRequest"];
             };
         };
         responses: {
@@ -5700,7 +5866,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["TeamcityPlacementSyncJobResponse"];
+                    "*/*": components["schemas"]["TeamcityCheckoutLayoutSyncJobResponse"];
                 };
             };
             /** @description Bad Request */
@@ -5721,13 +5887,13 @@ export interface operations {
                     "*/*": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Three body shapes, checked in this order. (1) A Sync is already running: the in-flight TeamcityPlacementSyncJobResponse (kind "job"). (2) Another admin job holds the gate, a running Diff included: MigrationConflictResponse {code, message, activeKind, activeJobId}. (3) diffId is not the last completed Diff, or none has completed: ErrorResponse {errorMessage: "diff replaced, re-run Diff", errorCode: "placement-diff-stale"}, nothing written; Diff keeps only that one result (ADR-002 decision 1). */
+            /** @description Three body shapes, checked in this order. (1) A Sync is already running: the in-flight TeamcityCheckoutLayoutSyncJobResponse (kind "job"). (2) Another admin job holds the gate, a running Diff included: MigrationConflictResponse {code, message, activeKind, activeJobId}. (3) diffId is not the last completed Diff, or none has completed: ErrorResponse {errorMessage: "diff replaced, re-run Diff", errorCode: "checkout-layout-diff-stale"}, nothing written; Diff keeps only that one result (ADR-023 decision 1). */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["MigrationConflictResponse"] | components["schemas"]["TeamcityPlacementSyncJobResponse"] | components["schemas"]["ErrorResponse"];
+                    "*/*": components["schemas"]["MigrationConflictResponse"] | components["schemas"]["TeamcityCheckoutLayoutSyncJobResponse"] | components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Payload Too Large */
@@ -5801,7 +5967,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["TeamcityPlacementSyncJobResponse"];
+                    "*/*": components["schemas"]["TeamcityCheckoutLayoutSyncJobResponse"];
                 };
             };
             /** @description Bad Request */
@@ -5888,6 +6054,818 @@ export interface operations {
         };
     };
     getSyncReportCsv: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Early */
+            425: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    startDiffLegacy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A new Diff job was started */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["TeamcityCheckoutLayoutDiffJobResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Two body shapes. (1) A Diff is already running: the in-flight TeamcityCheckoutLayoutDiffJobResponse. (2) Another admin job holds the gate: MigrationConflictResponse {code, message, activeKind, activeJobId}. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MigrationConflictResponse"] | components["schemas"]["TeamcityCheckoutLayoutDiffJobResponse"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Early */
+            425: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getDiffJobLegacy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["TeamcityCheckoutLayoutDiffJobResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Early */
+            425: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getReportCsvLegacy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Early */
+            425: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getReportHtmlLegacy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Early */
+            425: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getReportJsonLegacy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckoutLayoutDiffResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Early */
+            425: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    startSyncLegacy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeamcityCheckoutLayoutSyncRequest"];
+            };
+        };
+        responses: {
+            /** @description A new Sync job was started */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["TeamcityCheckoutLayoutSyncJobResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Three body shapes, checked in this order. (1) A Sync is already running: the in-flight TeamcityCheckoutLayoutSyncJobResponse (kind "job"). (2) Another admin job holds the gate, a running Diff included: MigrationConflictResponse {code, message, activeKind, activeJobId}. (3) diffId is not the last completed Diff, or none has completed: ErrorResponse {errorMessage: "diff replaced, re-run Diff", errorCode: "checkout-layout-diff-stale"}, nothing written; Diff keeps only that one result (ADR-023 decision 1). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MigrationConflictResponse"] | components["schemas"]["TeamcityCheckoutLayoutSyncJobResponse"] | components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Early */
+            425: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getSyncJobLegacy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["TeamcityCheckoutLayoutSyncJobResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Early */
+            425: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getSyncReportCsvLegacy: {
         parameters: {
             query?: never;
             header?: never;
@@ -7268,6 +8246,7 @@ export interface operations {
                 productType?: string;
                 archived?: boolean;
                 testComponent?: boolean;
+                autoRelease?: boolean;
                 search?: string;
                 owner?: string[];
                 releaseManager?: string[];

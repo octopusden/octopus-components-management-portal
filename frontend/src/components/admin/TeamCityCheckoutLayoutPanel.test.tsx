@@ -3,37 +3,37 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 import {
-  useRunPlacementDiff,
-  usePlacementDiffJob,
-  usePlacementDiffReport,
-  useRunPlacementSync,
-  usePlacementSyncJob,
-} from '@/hooks/useTeamCityPlacement'
+  useRunCheckoutLayoutDiff,
+  useCheckoutLayoutDiffJob,
+  useCheckoutLayoutDiffReport,
+  useRunCheckoutLayoutSync,
+  useCheckoutLayoutSyncJob,
+} from '@/hooks/useTeamCityCheckoutLayout'
 import { useHistoryMigrationJob, useMigrationJob } from '@/hooks/useMigration'
 import { useTeamCityResyncJob } from '@/hooks/useTeamCityResync'
 import { useTeamCityValidationJob } from '@/hooks/useTeamCityValidation'
 import { useAdminMode } from '@/lib/adminModeStore'
 import { ApiError } from '@/lib/api'
 import type {
-  PlacementDiffResult,
-  TeamcityPlacementDiffJobResponse,
-  TeamcityPlacementSyncJobResponse,
+  CheckoutLayoutDiffResult,
+  TeamcityCheckoutLayoutDiffJobResponse,
+  TeamcityCheckoutLayoutSyncJobResponse,
 } from '@/lib/types'
-import { TeamCityPlacementPanel } from './TeamCityPlacementPanel'
-import { CRS_SHAPED_REPORT } from './placementReport.crs-shaped.fixture'
+import { TeamCityCheckoutLayoutPanel } from './TeamCityCheckoutLayoutPanel'
+import { CRS_SHAPED_REPORT } from './checkoutLayoutReport.crs-shaped.fixture'
 
 // Hooks are mocked so this test focuses on panel behaviour — admin-mode gate,
 // confirm dialogs, RUNNING/COMPLETED/FAILED rendering, the result table's
 // summary-bucket filters/selection, and cross-kind disable. The hooks
-// themselves are covered by useTeamCityPlacement.test.ts; the pure row/label
-// logic by placementRows.test.ts and placementStatus.test.ts.
+// themselves are covered by useTeamCityCheckoutLayout.test.ts; the pure row/label
+// logic by checkoutLayoutRows.test.ts and checkoutLayoutStatus.test.ts.
 
-vi.mock('@/hooks/useTeamCityPlacement', () => ({
-  useRunPlacementDiff: vi.fn(),
-  usePlacementDiffJob: vi.fn(),
-  usePlacementDiffReport: vi.fn(),
-  useRunPlacementSync: vi.fn(),
-  usePlacementSyncJob: vi.fn(),
+vi.mock('@/hooks/useTeamCityCheckoutLayout', () => ({
+  useRunCheckoutLayoutDiff: vi.fn(),
+  useCheckoutLayoutDiffJob: vi.fn(),
+  useCheckoutLayoutDiffReport: vi.fn(),
+  useRunCheckoutLayoutSync: vi.fn(),
+  useCheckoutLayoutSyncJob: vi.fn(),
 }))
 vi.mock('@/hooks/useMigration', () => ({
   useMigrationJob: vi.fn(),
@@ -46,11 +46,11 @@ vi.mock('@/hooks/useTeamCityValidation', () => ({
   useTeamCityValidationJob: vi.fn(),
 }))
 
-const mockUseRunDiff = vi.mocked(useRunPlacementDiff)
-const mockUseDiffJob = vi.mocked(usePlacementDiffJob)
-const mockUseReport = vi.mocked(usePlacementDiffReport)
-const mockUseRunSync = vi.mocked(useRunPlacementSync)
-const mockUseSyncJob = vi.mocked(usePlacementSyncJob)
+const mockUseRunDiff = vi.mocked(useRunCheckoutLayoutDiff)
+const mockUseDiffJob = vi.mocked(useCheckoutLayoutDiffJob)
+const mockUseReport = vi.mocked(useCheckoutLayoutDiffReport)
+const mockUseRunSync = vi.mocked(useRunCheckoutLayoutSync)
+const mockUseSyncJob = vi.mocked(useCheckoutLayoutSyncJob)
 const mockUseMigrationJob = vi.mocked(useMigrationJob)
 const mockUseHistoryJob = vi.mocked(useHistoryMigrationJob)
 const mockUseResyncJob = vi.mocked(useTeamCityResyncJob)
@@ -108,7 +108,7 @@ function buildQuery<T>(data: T | null = null) {
   }
 }
 
-const RUNNING_DIFF_JOB: TeamcityPlacementDiffJobResponse = {
+const RUNNING_DIFF_JOB: TeamcityCheckoutLayoutDiffJobResponse = {
   kind: 'job',
   id: 'diff-1',
   state: 'RUNNING',
@@ -118,14 +118,14 @@ const RUNNING_DIFF_JOB: TeamcityPlacementDiffJobResponse = {
   rowCount: null,
 }
 
-const COMPLETED_DIFF_JOB: TeamcityPlacementDiffJobResponse = {
+const COMPLETED_DIFF_JOB: TeamcityCheckoutLayoutDiffJobResponse = {
   ...RUNNING_DIFF_JOB,
   state: 'COMPLETED',
   finishedAt: '2026-09-30T10:00:42Z',
   rowCount: 2,
 }
 
-const FAILED_DIFF_JOB: TeamcityPlacementDiffJobResponse = {
+const FAILED_DIFF_JOB: TeamcityCheckoutLayoutDiffJobResponse = {
   ...RUNNING_DIFF_JOB,
   state: 'FAILED',
   finishedAt: '2026-09-30T10:00:05Z',
@@ -135,7 +135,7 @@ const FAILED_DIFF_JOB: TeamcityPlacementDiffJobResponse = {
 // Four components, one Base row each (all the Diff ever sends): app-alpha
 // (RESOLVED/ready), app-beta (CONFLICT/needs a look), app-gamma (IN_SYNC/
 // nothing to do), app-delta (RESOLVED/ready).
-const REPORT: PlacementDiffResult = {
+const REPORT: CheckoutLayoutDiffResult = {
   diffId: 'diff-1',
   generatedAt: '2026-09-30T10:00:42Z',
   rows: [
@@ -203,7 +203,7 @@ const REPORT: PlacementDiffResult = {
   ],
 }
 
-const RUNNING_SYNC_JOB: TeamcityPlacementSyncJobResponse = {
+const RUNNING_SYNC_JOB: TeamcityCheckoutLayoutSyncJobResponse = {
   kind: 'job',
   id: 'sync-1',
   state: 'RUNNING',
@@ -213,7 +213,7 @@ const RUNNING_SYNC_JOB: TeamcityPlacementSyncJobResponse = {
   result: null,
 }
 
-const COMPLETED_SYNC_JOB: TeamcityPlacementSyncJobResponse = {
+const COMPLETED_SYNC_JOB: TeamcityCheckoutLayoutSyncJobResponse = {
   ...RUNNING_SYNC_JOB,
   state: 'COMPLETED',
   finishedAt: '2026-09-30T10:05:05Z',
@@ -245,23 +245,23 @@ function renderPanel() {
   })
   return {
     client,
-    ...render(React.createElement(QueryClientProvider, { client }, <TeamCityPlacementPanel />)),
+    ...render(React.createElement(QueryClientProvider, { client }, <TeamCityCheckoutLayoutPanel />)),
   }
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
   useAdminMode.setState({ enabled: false })
-  mockUseRunDiff.mockReturnValue(buildMutation().base as unknown as ReturnType<typeof useRunPlacementDiff>)
-  mockUseDiffJob.mockReturnValue(buildQuery<TeamcityPlacementDiffJobResponse>(null) as unknown as ReturnType<
-    typeof usePlacementDiffJob
+  mockUseRunDiff.mockReturnValue(buildMutation().base as unknown as ReturnType<typeof useRunCheckoutLayoutDiff>)
+  mockUseDiffJob.mockReturnValue(buildQuery<TeamcityCheckoutLayoutDiffJobResponse>(null) as unknown as ReturnType<
+    typeof useCheckoutLayoutDiffJob
   >)
-  mockUseReport.mockReturnValue(buildQuery<PlacementDiffResult>(null) as unknown as ReturnType<
-    typeof usePlacementDiffReport
+  mockUseReport.mockReturnValue(buildQuery<CheckoutLayoutDiffResult>(null) as unknown as ReturnType<
+    typeof useCheckoutLayoutDiffReport
   >)
-  mockUseRunSync.mockReturnValue(buildMutation().base as unknown as ReturnType<typeof useRunPlacementSync>)
-  mockUseSyncJob.mockReturnValue(buildQuery<TeamcityPlacementSyncJobResponse>(null) as unknown as ReturnType<
-    typeof usePlacementSyncJob
+  mockUseRunSync.mockReturnValue(buildMutation().base as unknown as ReturnType<typeof useRunCheckoutLayoutSync>)
+  mockUseSyncJob.mockReturnValue(buildQuery<TeamcityCheckoutLayoutSyncJobResponse>(null) as unknown as ReturnType<
+    typeof useCheckoutLayoutSyncJob
   >)
   mockUseMigrationJob.mockReturnValue(buildQuery(null) as never)
   mockUseHistoryJob.mockReturnValue(buildQuery(null) as never)
@@ -274,7 +274,7 @@ afterEach(() => {
   useAdminMode.setState({ enabled: false })
 })
 
-describe('TeamCityPlacementPanel — admin-mode gate', () => {
+describe('TeamCityCheckoutLayoutPanel — admin-mode gate', () => {
   it('disables Run Diff when adminMode is false', () => {
     renderPanel()
     expect(screen.getByRole('button', { name: /run diff/i })).toBeDisabled()
@@ -287,42 +287,42 @@ describe('TeamCityPlacementPanel — admin-mode gate', () => {
   })
 })
 
-describe('TeamCityPlacementPanel — Run Diff confirm + mutation', () => {
-  it('opens the confirm dialog and fires useRunPlacementDiff on confirm', async () => {
+describe('TeamCityCheckoutLayoutPanel — Run Diff confirm + mutation', () => {
+  it('opens the confirm dialog and fires useRunCheckoutLayoutDiff on confirm', async () => {
     const { base, mutateAsync } = buildMutation()
-    mockUseRunDiff.mockReturnValue(base as unknown as ReturnType<typeof useRunPlacementDiff>)
+    mockUseRunDiff.mockReturnValue(base as unknown as ReturnType<typeof useRunCheckoutLayoutDiff>)
     useAdminMode.setState({ enabled: true })
 
     renderPanel()
     fireEvent.click(screen.getByRole('button', { name: /run diff/i }))
     const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByRole('heading', { name: /run the checkout paths diff/i })).toBeDefined()
+    expect(within(dialog).getByRole('heading', { name: /run the checkout layout diff/i })).toBeDefined()
     fireEvent.click(within(dialog).getByRole('button', { name: /confirm/i }))
 
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledOnce())
   })
 
   it('renders the RUNNING progress region with aria-live', () => {
-    mockUseDiffJob.mockReturnValue(buildQuery(RUNNING_DIFF_JOB) as unknown as ReturnType<typeof usePlacementDiffJob>)
+    mockUseDiffJob.mockReturnValue(buildQuery(RUNNING_DIFF_JOB) as unknown as ReturnType<typeof useCheckoutLayoutDiffJob>)
     useAdminMode.setState({ enabled: true })
     renderPanel()
-    const region = screen.getByTestId('tc-placement-diff-progress')
+    const region = screen.getByTestId('tc-checkout-layout-diff-progress')
     expect(region.getAttribute('aria-live')).toBe('polite')
   })
 
   it('renders a destructive banner with errorMessage on FAILED', () => {
-    mockUseDiffJob.mockReturnValue(buildQuery(FAILED_DIFF_JOB) as unknown as ReturnType<typeof usePlacementDiffJob>)
+    mockUseDiffJob.mockReturnValue(buildQuery(FAILED_DIFF_JOB) as unknown as ReturnType<typeof useCheckoutLayoutDiffJob>)
     useAdminMode.setState({ enabled: true })
     renderPanel()
     expect(screen.getByText(/Diff failed: TC unreachable/i)).toBeDefined()
   })
 })
 
-describe('TeamCityPlacementPanel — pre-Diff empty state', () => {
+describe('TeamCityCheckoutLayoutPanel — pre-Diff empty state', () => {
   it('explains what the card does before any Diff has run', () => {
     renderPanel()
     expect(
-      screen.getByText(/Where TeamCity checks out each VCS root.*and where it builds/i),
+      screen.getByText(/compare TeamCity and CRS checkout layouts/i),
     ).toBeDefined()
   })
 
@@ -333,18 +333,18 @@ describe('TeamCityPlacementPanel — pre-Diff empty state', () => {
   })
 })
 
-describe('TeamCityPlacementPanel — summary bar', () => {
+describe('TeamCityCheckoutLayoutPanel — summary bar', () => {
   beforeEach(() => {
-    mockUseDiffJob.mockReturnValue(buildQuery(COMPLETED_DIFF_JOB) as unknown as ReturnType<typeof usePlacementDiffJob>)
-    mockUseReport.mockReturnValue(buildQuery(REPORT) as unknown as ReturnType<typeof usePlacementDiffReport>)
+    mockUseDiffJob.mockReturnValue(buildQuery(COMPLETED_DIFF_JOB) as unknown as ReturnType<typeof useCheckoutLayoutDiffJob>)
+    mockUseReport.mockReturnValue(buildQuery(REPORT) as unknown as ReturnType<typeof useCheckoutLayoutDiffReport>)
   })
 
   it('shows Open report (HTML) and Download CSV once a Diff has completed', () => {
     renderPanel()
     const htmlLink = screen.getByRole('link', { name: /open report \(html\)/i })
     const csvLink = screen.getByRole('link', { name: /download csv/i })
-    expect(htmlLink.getAttribute('href')).toMatch(/\/admin\/teamcity-placement\/diff\/report\.html$/)
-    expect(csvLink.getAttribute('href')).toMatch(/\/admin\/teamcity-placement\/diff\/report\.csv$/)
+    expect(htmlLink.getAttribute('href')).toMatch(/\/admin\/teamcity-checkout-layout\/diff\/report\.html$/)
+    expect(csvLink.getAttribute('href')).toMatch(/\/admin\/teamcity-checkout-layout\/diff\/report\.csv$/)
   })
 
   it('shows "Report from <local time>"', () => {
@@ -386,14 +386,14 @@ describe('TeamCityPlacementPanel — summary bar', () => {
   })
 })
 
-describe('TeamCityPlacementPanel — zero state', () => {
+describe('TeamCityCheckoutLayoutPanel — zero state', () => {
   it('shows "All N components in sync — nothing to do" when the default view has no attention rows', () => {
-    const onlyNothingToDo: PlacementDiffResult = {
+    const onlyNothingToDo: CheckoutLayoutDiffResult = {
       ...REPORT,
       rows: [REPORT.rows[2]!], // app-gamma, IN_SYNC only
     }
-    mockUseDiffJob.mockReturnValue(buildQuery(COMPLETED_DIFF_JOB) as unknown as ReturnType<typeof usePlacementDiffJob>)
-    mockUseReport.mockReturnValue(buildQuery(onlyNothingToDo) as unknown as ReturnType<typeof usePlacementDiffReport>)
+    mockUseDiffJob.mockReturnValue(buildQuery(COMPLETED_DIFF_JOB) as unknown as ReturnType<typeof useCheckoutLayoutDiffJob>)
+    mockUseReport.mockReturnValue(buildQuery(onlyNothingToDo) as unknown as ReturnType<typeof useCheckoutLayoutDiffReport>)
     renderPanel()
     expect(screen.getByText(/All 1 components in sync — nothing to do/i)).toBeDefined()
     // Two "Show all (1)" affordances coexist on purpose: the summary bar's
@@ -402,10 +402,10 @@ describe('TeamCityPlacementPanel — zero state', () => {
   })
 })
 
-describe('TeamCityPlacementPanel — result table', () => {
+describe('TeamCityCheckoutLayoutPanel — result table', () => {
   beforeEach(() => {
-    mockUseDiffJob.mockReturnValue(buildQuery(COMPLETED_DIFF_JOB) as unknown as ReturnType<typeof usePlacementDiffJob>)
-    mockUseReport.mockReturnValue(buildQuery(REPORT) as unknown as ReturnType<typeof usePlacementDiffReport>)
+    mockUseDiffJob.mockReturnValue(buildQuery(COMPLETED_DIFF_JOB) as unknown as ReturnType<typeof useCheckoutLayoutDiffJob>)
+    mockUseReport.mockReturnValue(buildQuery(REPORT) as unknown as ReturnType<typeof useCheckoutLayoutDiffReport>)
   })
 
   it('renders one row per component, sorted by component key', () => {
@@ -461,7 +461,7 @@ describe('TeamCityPlacementPanel — result table', () => {
   })
 
   it('renders the Proposed change column from a CRS-shaped report with explicit nulls', () => {
-    mockUseReport.mockReturnValue(buildQuery(CRS_SHAPED_REPORT) as unknown as ReturnType<typeof usePlacementDiffReport>)
+    mockUseReport.mockReturnValue(buildQuery(CRS_SHAPED_REPORT) as unknown as ReturnType<typeof useCheckoutLayoutDiffReport>)
     renderPanel()
     fireEvent.click(screen.getByRole('button', { name: /^Show all \(3\)$/ }))
     const proposed = (key: string) =>
@@ -514,10 +514,10 @@ describe('TeamCityPlacementPanel — result table', () => {
   })
 })
 
-describe('TeamCityPlacementPanel — Sync selected', () => {
+describe('TeamCityCheckoutLayoutPanel — Sync selected', () => {
   beforeEach(() => {
-    mockUseDiffJob.mockReturnValue(buildQuery(COMPLETED_DIFF_JOB) as unknown as ReturnType<typeof usePlacementDiffJob>)
-    mockUseReport.mockReturnValue(buildQuery(REPORT) as unknown as ReturnType<typeof usePlacementDiffReport>)
+    mockUseDiffJob.mockReturnValue(buildQuery(COMPLETED_DIFF_JOB) as unknown as ReturnType<typeof useCheckoutLayoutDiffJob>)
+    mockUseReport.mockReturnValue(buildQuery(REPORT) as unknown as ReturnType<typeof useCheckoutLayoutDiffReport>)
     useAdminMode.setState({ enabled: true })
   })
 
@@ -529,7 +529,7 @@ describe('TeamCityPlacementPanel — Sync selected', () => {
   it('disables Sync selected when the current Diff job is not COMPLETED (e.g. a later Diff failed)', () => {
     mockUseDiffJob.mockReturnValue(
       buildQuery({ ...COMPLETED_DIFF_JOB, id: 'diff-2', state: 'FAILED', errorMessage: 'TC unreachable' }) as unknown as ReturnType<
-        typeof usePlacementDiffJob
+        typeof useCheckoutLayoutDiffJob
       >,
     )
     renderPanel()
@@ -540,7 +540,7 @@ describe('TeamCityPlacementPanel — Sync selected', () => {
   it('explains next to Sync why it is disabled when the latest Diff failed', () => {
     mockUseDiffJob.mockReturnValue(
       buildQuery({ ...COMPLETED_DIFF_JOB, id: 'diff-2', state: 'FAILED', errorMessage: 'TC unreachable' }) as unknown as ReturnType<
-        typeof usePlacementDiffJob
+        typeof useCheckoutLayoutDiffJob
       >,
     )
     renderPanel()
@@ -549,7 +549,7 @@ describe('TeamCityPlacementPanel — Sync selected', () => {
 
   it('explains next to Sync why it is disabled when the report is from an older Diff', () => {
     mockUseDiffJob.mockReturnValue(
-      buildQuery({ ...COMPLETED_DIFF_JOB, id: 'diff-2' }) as unknown as ReturnType<typeof usePlacementDiffJob>,
+      buildQuery({ ...COMPLETED_DIFF_JOB, id: 'diff-2' }) as unknown as ReturnType<typeof useCheckoutLayoutDiffJob>,
     )
     renderPanel()
     expect(screen.getByText(/report shown is not from the latest Diff/i)).toBeDefined()
@@ -568,7 +568,7 @@ describe('TeamCityPlacementPanel — Sync selected', () => {
 
   it('confirm dialog lists the selected component keys, the field count, and the base-configuration note', async () => {
     const { base, mutateAsync } = buildMutation()
-    mockUseRunSync.mockReturnValue(base as unknown as ReturnType<typeof useRunPlacementSync>)
+    mockUseRunSync.mockReturnValue(base as unknown as ReturnType<typeof useRunCheckoutLayoutSync>)
 
     renderPanel()
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select app-alpha' }))
@@ -597,7 +597,7 @@ describe('TeamCityPlacementPanel — Sync selected', () => {
       configurationRowId: `row-${i}`,
     }))
     mockUseReport.mockReturnValue(
-      buildQuery({ ...REPORT, rows: manyRows }) as unknown as ReturnType<typeof usePlacementDiffReport>,
+      buildQuery({ ...REPORT, rows: manyRows }) as unknown as ReturnType<typeof useCheckoutLayoutDiffReport>,
     )
     renderPanel()
     fireEvent.click(screen.getByRole('button', { name: /^Show all \(12\)$/ }))
@@ -610,7 +610,7 @@ describe('TeamCityPlacementPanel — Sync selected', () => {
 
   it('disables Sync while the report on screen is from an older Diff than the latest job', () => {
     mockUseDiffJob.mockReturnValue(
-      buildQuery({ ...COMPLETED_DIFF_JOB, id: 'diff-2' }) as unknown as ReturnType<typeof usePlacementDiffJob>,
+      buildQuery({ ...COMPLETED_DIFF_JOB, id: 'diff-2' }) as unknown as ReturnType<typeof useCheckoutLayoutDiffJob>,
     )
     useAdminMode.setState({ enabled: true })
 
@@ -627,9 +627,9 @@ describe('TeamCityPlacementPanel — Sync selected', () => {
     expect(screen.getByRole('checkbox', { name: 'Select app-alpha' })).toBeChecked()
 
     mockUseDiffJob.mockReturnValue(
-      buildQuery({ ...COMPLETED_DIFF_JOB, id: 'diff-2' }) as unknown as ReturnType<typeof usePlacementDiffJob>,
+      buildQuery({ ...COMPLETED_DIFF_JOB, id: 'diff-2' }) as unknown as ReturnType<typeof useCheckoutLayoutDiffJob>,
     )
-    rerender(React.createElement(QueryClientProvider, { client }, <TeamCityPlacementPanel />))
+    rerender(React.createElement(QueryClientProvider, { client }, <TeamCityCheckoutLayoutPanel />))
 
     expect(screen.getByRole('checkbox', { name: 'Select app-alpha' })).not.toBeChecked()
   })
@@ -638,7 +638,7 @@ describe('TeamCityPlacementPanel — Sync selected', () => {
     const conflict = new ApiError(
       409,
       'diff replaced, re-run Diff',
-      JSON.stringify({ errorMessage: 'diff replaced, re-run Diff', errorCode: 'placement-diff-stale' }),
+      JSON.stringify({ errorMessage: 'diff replaced, re-run Diff', errorCode: 'checkout-layout-diff-stale' }),
     )
     const mutateAsync = vi.fn().mockRejectedValue(conflict)
     mockUseRunSync.mockReturnValue({
@@ -646,7 +646,7 @@ describe('TeamCityPlacementPanel — Sync selected', () => {
       mutateAsync,
       isError: true,
       error: conflict,
-    } as unknown as ReturnType<typeof useRunPlacementSync>)
+    } as unknown as ReturnType<typeof useRunCheckoutLayoutSync>)
 
     renderPanel()
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select app-alpha' }))
@@ -659,15 +659,15 @@ describe('TeamCityPlacementPanel — Sync selected', () => {
   })
 
   it('renders applied/skipped/failed + a "Download rollback trace (CSV)" link on COMPLETED', () => {
-    mockUseSyncJob.mockReturnValue(buildQuery(COMPLETED_SYNC_JOB) as unknown as ReturnType<typeof usePlacementSyncJob>)
+    mockUseSyncJob.mockReturnValue(buildQuery(COMPLETED_SYNC_JOB) as unknown as ReturnType<typeof useCheckoutLayoutSyncJob>)
     renderPanel()
     expect(screen.getByText('Applied')).toBeDefined()
     const csvLink = screen.getByRole('link', { name: /download rollback trace \(csv\)/i })
-    expect(csvLink.getAttribute('href')).toMatch(/\/admin\/teamcity-placement\/sync\/report\.csv$/)
+    expect(csvLink.getAttribute('href')).toMatch(/\/admin\/teamcity-checkout-layout\/sync\/report\.csv$/)
   })
 
   it('lists the per-component outcome on COMPLETED', () => {
-    mockUseSyncJob.mockReturnValue(buildQuery(COMPLETED_SYNC_JOB) as unknown as ReturnType<typeof usePlacementSyncJob>)
+    mockUseSyncJob.mockReturnValue(buildQuery(COMPLETED_SYNC_JOB) as unknown as ReturnType<typeof useCheckoutLayoutSyncJob>)
     renderPanel()
     const results = within(screen.getByText(/^results \(2 components\)$/i).closest('details') as HTMLElement)
     expect(results.getByText('app-alpha')).toBeDefined()
@@ -677,7 +677,7 @@ describe('TeamCityPlacementPanel — Sync selected', () => {
   })
 })
 
-describe('TeamCityPlacementPanel — cross-kind disable', () => {
+describe('TeamCityCheckoutLayoutPanel — cross-kind disable', () => {
   it('disables Run Diff + shows hint when components migration is RUNNING', () => {
     mockUseMigrationJob.mockReturnValue(buildQuery({ state: 'RUNNING', id: 'comp-1' }) as never)
     useAdminMode.setState({ enabled: true })
@@ -687,12 +687,12 @@ describe('TeamCityPlacementPanel — cross-kind disable', () => {
   })
 })
 
-describe('TeamCityPlacementPanel — unknown status', () => {
+describe('TeamCityCheckoutLayoutPanel — unknown status', () => {
   it('renders a row with a status this Portal does not know, without crashing', () => {
     const unknown = { ...REPORT.rows[1], componentId: 'comp-u', componentKey: 'app-unknown', status: 'SOMETHING_NEW' }
     mockUseReport.mockReturnValue(
-      buildQuery({ ...REPORT, rows: [unknown] } as unknown as PlacementDiffResult) as unknown as ReturnType<
-        typeof usePlacementDiffReport
+      buildQuery({ ...REPORT, rows: [unknown] } as unknown as CheckoutLayoutDiffResult) as unknown as ReturnType<
+        typeof useCheckoutLayoutDiffReport
       >,
     )
     renderPanel()
@@ -702,7 +702,7 @@ describe('TeamCityPlacementPanel — unknown status', () => {
   })
 })
 
-describe('TeamCityPlacementPanel — query errors', () => {
+describe('TeamCityCheckoutLayoutPanel — query errors', () => {
   const failing = (message: string) => ({
     ...buildQuery(null),
     isError: true,
@@ -711,25 +711,25 @@ describe('TeamCityPlacementPanel — query errors', () => {
   })
 
   it('shows a destructive banner when the report fails to load', () => {
-    mockUseReport.mockReturnValue(failing('report exploded') as unknown as ReturnType<typeof usePlacementDiffReport>)
+    mockUseReport.mockReturnValue(failing('report exploded') as unknown as ReturnType<typeof useCheckoutLayoutDiffReport>)
     renderPanel()
     expect(screen.getByText(/Report: .*report exploded/)).toBeDefined()
   })
 
   it('shows a destructive banner when the Diff job poll fails', () => {
-    mockUseDiffJob.mockReturnValue(failing('diff poll exploded') as unknown as ReturnType<typeof usePlacementDiffJob>)
+    mockUseDiffJob.mockReturnValue(failing('diff poll exploded') as unknown as ReturnType<typeof useCheckoutLayoutDiffJob>)
     renderPanel()
     expect(screen.getByText(/Diff job: .*diff poll exploded/)).toBeDefined()
   })
 
   it('shows a destructive banner when the Sync job poll fails', () => {
-    mockUseSyncJob.mockReturnValue(failing('sync poll exploded') as unknown as ReturnType<typeof usePlacementSyncJob>)
+    mockUseSyncJob.mockReturnValue(failing('sync poll exploded') as unknown as ReturnType<typeof useCheckoutLayoutSyncJob>)
     renderPanel()
     expect(screen.getByText(/Sync job: .*sync poll exploded/)).toBeDefined()
   })
 
   it('still treats "no report yet" (data null, no error) as the empty state', () => {
     renderPanel()
-    expect(screen.getByText(/run diff to see the current/i)).toBeDefined()
+    expect(screen.getByText(/run diff to compare/i)).toBeDefined()
   })
 })

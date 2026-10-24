@@ -48,6 +48,8 @@ describe('parseFilterParams', () => {
     expect(state.filter.solution).toBe(true)
     expect(state.filter.jiraTechnical).toBe(false)
     expect(state.filter.canBeParent).toBeUndefined()
+    expect(parseFilterParams(new URLSearchParams('autoRelease=true')).filter.autoRelease).toBe(true)
+    expect(state.filter.autoRelease).toBeUndefined()
   })
 
   it('parses archived=true', () => {
@@ -114,6 +116,9 @@ describe('serializeFilterState', () => {
     expect(params.get('solution')).toBe('true')
     expect(params.get('jiraTechnical')).toBe('false')
     expect(params.has('canBeParent')).toBe(false)
+    expect(
+      serializeFilterState({ filter: { archived: false, autoRelease: false }, preset: null }).get('autoRelease'),
+    ).toBe('false')
   })
 
   it('writes the preset when present', () => {

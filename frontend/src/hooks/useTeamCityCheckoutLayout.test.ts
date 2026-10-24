@@ -3,17 +3,17 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
 import {
-  useRunPlacementDiff,
-  usePlacementDiffJob,
-  usePlacementDiffReport,
-  useRunPlacementSync,
-  usePlacementSyncJob,
-} from './useTeamCityPlacement'
+  useRunCheckoutLayoutDiff,
+  useCheckoutLayoutDiffJob,
+  useCheckoutLayoutDiffReport,
+  useRunCheckoutLayoutSync,
+  useCheckoutLayoutSyncJob,
+} from './useTeamCityCheckoutLayout'
 import { api, ApiError } from '../lib/api'
 import type {
-  PlacementDiffResult,
-  TeamcityPlacementDiffJobResponse,
-  TeamcityPlacementSyncJobResponse,
+  CheckoutLayoutDiffResult,
+  TeamcityCheckoutLayoutDiffJobResponse,
+  TeamcityCheckoutLayoutSyncJobResponse,
 } from '../lib/types'
 
 // Pins the wire paths and the parseSameKindAttach branching contract for the
@@ -29,7 +29,7 @@ vi.mock('../lib/api', async () => {
 })
 const mockApi = vi.mocked(api)
 
-const RUNNING_DIFF_JOB: TeamcityPlacementDiffJobResponse = {
+const RUNNING_DIFF_JOB: TeamcityCheckoutLayoutDiffJobResponse = {
   kind: 'job',
   id: 'diff-1',
   state: 'RUNNING',
@@ -39,19 +39,19 @@ const RUNNING_DIFF_JOB: TeamcityPlacementDiffJobResponse = {
   rowCount: null,
 }
 
-const COMPLETED_DIFF_JOB: TeamcityPlacementDiffJobResponse = {
+const COMPLETED_DIFF_JOB: TeamcityCheckoutLayoutDiffJobResponse = {
   ...RUNNING_DIFF_JOB,
   state: 'COMPLETED',
   finishedAt: '2026-09-30T10:00:42Z',
   rowCount: 3,
 }
 
-const REPORT: PlacementDiffResult = {
+const REPORT: CheckoutLayoutDiffResult = {
   generatedAt: '2026-09-30T10:00:42Z',
   rows: [],
 }
 
-const RUNNING_SYNC_JOB: TeamcityPlacementSyncJobResponse = {
+const RUNNING_SYNC_JOB: TeamcityCheckoutLayoutSyncJobResponse = {
   kind: 'job',
   id: 'sync-1',
   state: 'RUNNING',
@@ -61,7 +61,7 @@ const RUNNING_SYNC_JOB: TeamcityPlacementSyncJobResponse = {
   result: null,
 }
 
-const COMPLETED_SYNC_JOB: TeamcityPlacementSyncJobResponse = {
+const COMPLETED_SYNC_JOB: TeamcityCheckoutLayoutSyncJobResponse = {
   ...RUNNING_SYNC_JOB,
   state: 'COMPLETED',
   finishedAt: '2026-09-30T10:05:05Z',
@@ -89,15 +89,15 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
-describe('useRunPlacementDiff', () => {
-  it('POSTs /admin/teamcity-placement/diff with no body', async () => {
+describe('useRunCheckoutLayoutDiff', () => {
+  it('POSTs /admin/teamcity-checkout-layout/diff with no body', async () => {
     mockApi.post.mockResolvedValue(RUNNING_DIFF_JOB)
     const { wrapper } = makeWrapper()
 
-    const { result } = renderHook(() => useRunPlacementDiff(), { wrapper })
+    const { result } = renderHook(() => useRunCheckoutLayoutDiff(), { wrapper })
     await result.current.mutateAsync()
 
-    expect(mockApi.post).toHaveBeenCalledWith('/admin/teamcity-placement/diff')
+    expect(mockApi.post).toHaveBeenCalledWith('/admin/teamcity-checkout-layout/diff')
     expect(mockApi.post.mock.calls[0]).toHaveLength(1)
   })
 
@@ -105,7 +105,7 @@ describe('useRunPlacementDiff', () => {
     mockApi.post.mockRejectedValue(new ApiError(409, 'Conflict', JSON.stringify(RUNNING_DIFF_JOB)))
     const { wrapper } = makeWrapper()
 
-    const { result } = renderHook(() => useRunPlacementDiff(), { wrapper })
+    const { result } = renderHook(() => useRunCheckoutLayoutDiff(), { wrapper })
     const data = await result.current.mutateAsync()
 
     expect(data).toEqual(RUNNING_DIFF_JOB)
@@ -122,7 +122,7 @@ describe('useRunPlacementDiff', () => {
     mockApi.post.mockRejectedValue(new ApiError(409, conflict.message, JSON.stringify(conflict)))
     const { wrapper } = makeWrapper()
 
-    const { result } = renderHook(() => useRunPlacementDiff(), { wrapper })
+    const { result } = renderHook(() => useRunCheckoutLayoutDiff(), { wrapper })
 
     await expect(result.current.mutateAsync()).rejects.toBeInstanceOf(ApiError)
   })
@@ -132,15 +132,15 @@ function invalidatedKeys(spy: { mock: { calls: unknown[][] } }) {
   return spy.mock.calls.map((call) => (call[0] as { queryKey?: readonly unknown[] } | undefined)?.queryKey)
 }
 
-describe('usePlacementDiffJob', () => {
+describe('useCheckoutLayoutDiffJob', () => {
   it('refreshes the report once the job it reads is COMPLETED', async () => {
     mockApi.get.mockResolvedValue(COMPLETED_DIFF_JOB)
     const { wrapper, queryClient } = makeWrapper()
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
 
-    renderHook(() => usePlacementDiffJob(), { wrapper })
+    renderHook(() => useCheckoutLayoutDiffJob(), { wrapper })
 
-    await waitFor(() => expect(invalidatedKeys(invalidateSpy)).toContainEqual(['tc-placement-diff', 'report']))
+    await waitFor(() => expect(invalidatedKeys(invalidateSpy)).toContainEqual(['tc-checkout-layout-diff', 'report']))
   })
 
   it('does not refresh the report while the job is RUNNING', async () => {
@@ -148,10 +148,10 @@ describe('usePlacementDiffJob', () => {
     const { wrapper, queryClient } = makeWrapper()
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
 
-    const { result } = renderHook(() => usePlacementDiffJob(), { wrapper })
+    const { result } = renderHook(() => useCheckoutLayoutDiffJob(), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
-    expect(invalidatedKeys(invalidateSpy)).not.toContainEqual(['tc-placement-diff', 'report'])
+    expect(invalidatedKeys(invalidateSpy)).not.toContainEqual(['tc-checkout-layout-diff', 'report'])
   })
 
   it('refreshes the report when the start response is already COMPLETED', async () => {
@@ -160,21 +160,21 @@ describe('usePlacementDiffJob', () => {
     const { wrapper, queryClient } = makeWrapper()
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
 
-    const { result } = renderHook(() => ({ run: useRunPlacementDiff(), job: usePlacementDiffJob() }), { wrapper })
+    const { result } = renderHook(() => ({ run: useRunCheckoutLayoutDiff(), job: useCheckoutLayoutDiffJob() }), { wrapper })
     await waitFor(() => expect(result.current.job.isSuccess).toBe(true))
     await result.current.run.mutateAsync()
 
-    await waitFor(() => expect(invalidatedKeys(invalidateSpy)).toContainEqual(['tc-placement-diff', 'report']))
+    await waitFor(() => expect(invalidatedKeys(invalidateSpy)).toContainEqual(['tc-checkout-layout-diff', 'report']))
   })
 
-  it('GETs /admin/teamcity-placement/diff/job and returns the parsed body', async () => {
+  it('GETs /admin/teamcity-checkout-layout/diff/job and returns the parsed body', async () => {
     mockApi.get.mockResolvedValue(COMPLETED_DIFF_JOB)
     const { wrapper } = makeWrapper()
 
-    const { result } = renderHook(() => usePlacementDiffJob(), { wrapper })
+    const { result } = renderHook(() => useCheckoutLayoutDiffJob(), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
-    expect(mockApi.get).toHaveBeenCalledWith('/admin/teamcity-placement/diff/job')
+    expect(mockApi.get).toHaveBeenCalledWith('/admin/teamcity-checkout-layout/diff/job')
     expect(result.current.data).toEqual(COMPLETED_DIFF_JOB)
   })
 
@@ -182,22 +182,22 @@ describe('usePlacementDiffJob', () => {
     mockApi.get.mockRejectedValue(new ApiError(404, 'no current job'))
     const { wrapper } = makeWrapper()
 
-    const { result } = renderHook(() => usePlacementDiffJob(), { wrapper })
+    const { result } = renderHook(() => useCheckoutLayoutDiffJob(), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
     expect(result.current.data).toBeNull()
   })
 })
 
-describe('usePlacementDiffReport', () => {
-  it('GETs /admin/teamcity-placement/diff/report.json and returns the parsed body', async () => {
+describe('useCheckoutLayoutDiffReport', () => {
+  it('GETs /admin/teamcity-checkout-layout/diff/report.json and returns the parsed body', async () => {
     mockApi.get.mockResolvedValue(REPORT)
     const { wrapper } = makeWrapper()
 
-    const { result } = renderHook(() => usePlacementDiffReport(), { wrapper })
+    const { result } = renderHook(() => useCheckoutLayoutDiffReport(), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
-    expect(mockApi.get).toHaveBeenCalledWith('/admin/teamcity-placement/diff/report.json')
+    expect(mockApi.get).toHaveBeenCalledWith('/admin/teamcity-checkout-layout/diff/report.json')
     expect(result.current.data).toEqual(REPORT)
   })
 
@@ -205,22 +205,22 @@ describe('usePlacementDiffReport', () => {
     mockApi.get.mockRejectedValue(new ApiError(404, 'no report'))
     const { wrapper } = makeWrapper()
 
-    const { result } = renderHook(() => usePlacementDiffReport(), { wrapper })
+    const { result } = renderHook(() => useCheckoutLayoutDiffReport(), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
     expect(result.current.data).toBeNull()
   })
 })
 
-describe('useRunPlacementSync', () => {
-  it('POSTs /admin/teamcity-placement/sync with {diffId, componentIds}', async () => {
+describe('useRunCheckoutLayoutSync', () => {
+  it('POSTs /admin/teamcity-checkout-layout/sync with {diffId, componentIds}', async () => {
     mockApi.post.mockResolvedValue(RUNNING_SYNC_JOB)
     const { wrapper } = makeWrapper()
 
-    const { result } = renderHook(() => useRunPlacementSync(), { wrapper })
+    const { result } = renderHook(() => useRunCheckoutLayoutSync(), { wrapper })
     await result.current.mutateAsync({ diffId: 'diff-1', componentIds: ['c-1', 'c-2'] })
 
-    expect(mockApi.post).toHaveBeenCalledWith('/admin/teamcity-placement/sync', {
+    expect(mockApi.post).toHaveBeenCalledWith('/admin/teamcity-checkout-layout/sync', {
       diffId: 'diff-1',
       componentIds: ['c-1', 'c-2'],
     })
@@ -230,7 +230,7 @@ describe('useRunPlacementSync', () => {
     mockApi.post.mockRejectedValue(new ApiError(409, 'Conflict', JSON.stringify(RUNNING_SYNC_JOB)))
     const { wrapper } = makeWrapper()
 
-    const { result } = renderHook(() => useRunPlacementSync(), { wrapper })
+    const { result } = renderHook(() => useRunCheckoutLayoutSync(), { wrapper })
     const data = await result.current.mutateAsync({ diffId: 'diff-1', componentIds: [] })
 
     expect(data).toEqual(RUNNING_SYNC_JOB)
@@ -241,12 +241,12 @@ describe('useRunPlacementSync', () => {
       new ApiError(
         409,
         'diff replaced, re-run Diff',
-        JSON.stringify({ errorMessage: 'diff replaced, re-run Diff', errorCode: 'placement-diff-stale' }),
+        JSON.stringify({ errorMessage: 'diff replaced, re-run Diff', errorCode: 'checkout-layout-diff-stale' }),
       ),
     )
     const { wrapper } = makeWrapper()
 
-    const { result } = renderHook(() => useRunPlacementSync(), { wrapper })
+    const { result } = renderHook(() => useRunCheckoutLayoutSync(), { wrapper })
 
     await expect(result.current.mutateAsync({ diffId: 'stale', componentIds: [] })).rejects.toBeInstanceOf(
       ApiError,
@@ -254,13 +254,13 @@ describe('useRunPlacementSync', () => {
   })
 })
 
-describe('usePlacementSyncJob', () => {
+describe('useCheckoutLayoutSyncJob', () => {
   it('refreshes the component caches once the Sync it reads is COMPLETED', async () => {
     mockApi.get.mockResolvedValue(COMPLETED_SYNC_JOB)
     const { wrapper, queryClient } = makeWrapper()
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
 
-    renderHook(() => usePlacementSyncJob(), { wrapper })
+    renderHook(() => useCheckoutLayoutSyncJob(), { wrapper })
 
     await waitFor(() => expect(invalidatedKeys(invalidateSpy)).toContainEqual(['components']))
   })
@@ -271,21 +271,21 @@ describe('usePlacementSyncJob', () => {
     const { wrapper, queryClient } = makeWrapper()
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
 
-    const { result } = renderHook(() => ({ run: useRunPlacementSync(), job: usePlacementSyncJob() }), { wrapper })
+    const { result } = renderHook(() => ({ run: useRunCheckoutLayoutSync(), job: useCheckoutLayoutSyncJob() }), { wrapper })
     await waitFor(() => expect(result.current.job.isSuccess).toBe(true))
     await result.current.run.mutateAsync({ diffId: 'diff-1', componentIds: ['c-1'] })
 
     await waitFor(() => expect(invalidatedKeys(invalidateSpy)).toContainEqual(['components']))
   })
 
-  it('GETs /admin/teamcity-placement/sync/job and returns the parsed body', async () => {
+  it('GETs /admin/teamcity-checkout-layout/sync/job and returns the parsed body', async () => {
     mockApi.get.mockResolvedValue(COMPLETED_SYNC_JOB)
     const { wrapper } = makeWrapper()
 
-    const { result } = renderHook(() => usePlacementSyncJob(), { wrapper })
+    const { result } = renderHook(() => useCheckoutLayoutSyncJob(), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
-    expect(mockApi.get).toHaveBeenCalledWith('/admin/teamcity-placement/sync/job')
+    expect(mockApi.get).toHaveBeenCalledWith('/admin/teamcity-checkout-layout/sync/job')
     expect(result.current.data).toEqual(COMPLETED_SYNC_JOB)
   })
 
@@ -293,7 +293,7 @@ describe('usePlacementSyncJob', () => {
     mockApi.get.mockRejectedValue(new ApiError(404, 'no current job'))
     const { wrapper } = makeWrapper()
 
-    const { result } = renderHook(() => usePlacementSyncJob(), { wrapper })
+    const { result } = renderHook(() => useCheckoutLayoutSyncJob(), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
     expect(result.current.data).toBeNull()

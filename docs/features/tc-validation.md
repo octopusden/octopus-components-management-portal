@@ -6,7 +6,7 @@
 
 Triggers `POST /rest/api/4/admin/teamcity-validation` on CRS. The backend scans every component's TeamCity project(s) against a set of validation rules (e.g. build config drift, custom/overridden build steps, multiple Java/Maven versions) and records findings per project. The job result (`TeamCityValidationResult`) is a counter object — `scanned`, `findings`, `componentsWithIssues`, `errors: string[]`.
 
-Unlike [TeamCity Resync](admin-tc-resync.md) (which repairs `teamcity_project_id`/`teamcity_project_url`), this feature is read-only diagnostics: it never mutates component data, only validation records that the rest of the Portal surfaces.
+Unlike [Sync from TeamCity](admin-tc-resync.md) (which repairs `teamcity_project_id`/`teamcity_project_url`), this feature is read-only diagnostics: it never mutates component data, only validation records that the rest of the Portal surfaces.
 
 ## Admin panel (trigger + job status)
 

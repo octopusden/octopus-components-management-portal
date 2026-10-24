@@ -155,6 +155,33 @@ describe('initialProfile', () => {
     expect(initialProfile(src, profiles)).toMatchObject({ profileId: 'solution', explicit: true })
   })
 
+  const template = (overrides: Partial<ComponentProfile> = {}): ComponentProfile => ({
+    id: 'client-plugin',
+    kind: 'template',
+    version: 3,
+    title: 'Client plugin',
+    description: 'A client plugin',
+    classification: { external: true, explicit: 'false', solution: false },
+    rules: [],
+    usable: true,
+    ...overrides,
+  })
+
+  it('never pre-selects a template, even one listed first', () => {
+    expect(initialProfile(null, [template(), ...profiles])).toMatchObject({ profileId: 'regular-external' })
+  })
+
+  it('selects nothing when only a template is usable', () => {
+    const regularUnusable = profiles.map((p) => ({ ...p, usable: false }))
+    expect(initialProfile(null, [...regularUnusable, template()])).toMatchObject({ profileId: null, profile: null })
+  })
+
+  it('never matches a clone to a template with the same classification', () => {
+    const src = { name: 'abc-plugin', distributionExternal: true, distributionExplicit: false } as ComponentDetail
+    const internalOnly = profiles.filter((p) => p.id === 'regular-internal')
+    expect(initialProfile(src, [template(), ...internalOnly])).toMatchObject({ profileId: null, matchesAny: false })
+  })
+
   it('opens with nothing selected when no profile is usable', () => {
     expect(initialProfile(null, profiles.map((p) => ({ ...p, usable: false })))).toMatchObject({
       profileId: null,

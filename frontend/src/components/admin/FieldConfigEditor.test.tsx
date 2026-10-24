@@ -86,7 +86,7 @@ describe('FieldConfigEditor — catalog rows', () => {
       'clientCode', 'groupId', 'distributionExplicit', 'distributionExternal', 'releasesInDefaultBranch',
       'copyright', 'releaseManager', 'securityChampion', 'jiraDisplayName', 'jiraHotfixVersionFormat', 'vcsExternalRegistry',
       'buildSystem', 'javaVersion', 'gradleVersion',
-      'parentComponentName', 'canBeParent', 'groupKey', 'projectKey', 'technical',
+      'parentComponentName', 'canBeParent', 'autoRelease', 'groupKey', 'projectKey', 'technical',
       'vcsPath', 'branch',
     ]
     for (const field of fields) {

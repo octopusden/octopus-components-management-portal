@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { buildProposedChangeLines, countChangedFields, fieldChange, summarizeKeys } from './placementRows'
-import type { PlacementRowDiff } from './types'
+import { buildProposedChangeLines, countChangedFields, fieldChange, summarizeKeys } from './checkoutLayoutRows'
+import type { CheckoutLayoutRowDiff } from './types'
 
-function row(overrides: Partial<PlacementRowDiff> = {}): PlacementRowDiff {
+function row(overrides: Partial<CheckoutLayoutRowDiff> = {}): CheckoutLayoutRowDiff {
   return {
     componentId: 'comp-a',
     componentKey: 'app-alpha',
@@ -58,7 +58,7 @@ describe('buildProposedChangeLines', () => {
           derivedCheckoutDirectory: null,
           currentSourcePath: null,
           derivedSourcePath: null,
-        } as PlacementRowDiff['entries'][number],
+        } as CheckoutLayoutRowDiff['entries'][number],
       ],
       currentBuildWorkingDirectory: 'app/build',
       derivedBuildWorkingDirectory: null,

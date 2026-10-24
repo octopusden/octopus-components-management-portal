@@ -27,13 +27,14 @@ Guidance for AI agents and developers working on this repository.
 ## Features
 
 - [`docs/features/component-list.md`](docs/features/component-list.md) — list page filters incl. owner dropdown (B7.1.1).
-- [`docs/features/create-component.md`](docs/features/create-component.md) — create wizard: profiles and their key rules from CRS, labels and build tasks.
+- [`docs/features/create-component.md`](docs/features/create-component.md) — create wizard: profiles and their key rules from CRS, creating from a template, labels and build tasks.
+- [`docs/features/admin-templates.md`](docs/features/admin-templates.md) — Admin settings Templates tab: profiles and templates, failures, Try it.
 - [`docs/features/component-detail.md`](docs/features/component-detail.md) — tabs, rename gating (B7.1.4), parent autocomplete (B7.1.5), conflict UX (B7.1.6).
 - [`docs/features/audit-log.md`](docs/features/audit-log.md) — global feed filters (B7.1.3) + per-component History tab (B7.1.2).
 - [`docs/features/admin-migration.md`](docs/features/admin-migration.md) — async `/admin/migrate` flow.
 - [`docs/features/admin-mode.md`](docs/features/admin-mode.md) — UX-only switch gating destructive actions.
-- [`docs/features/admin-tc-resync.md`](docs/features/admin-tc-resync.md) — admin TeamCity resync flow (`IMPORT_DATA` permission).
-- [`docs/features/admin-tc-placement.md`](docs/features/admin-tc-placement.md) — admin "Checkout paths from TeamCity" Diff/Sync (`IMPORT_DATA` permission).
+- [`docs/features/admin-tc-resync.md`](docs/features/admin-tc-resync.md) — admin "Sync from TeamCity" flow (`IMPORT_DATA` permission).
+- [`docs/features/admin-tc-checkout-layout.md`](docs/features/admin-tc-checkout-layout.md) — admin "TeamCity Checkout Layout" Diff/Sync (`IMPORT_DATA` permission).
 - [`docs/features/app-footer.md`](docs/features/app-footer.md) — anonymous build-info on both Portal and CRS sides.
 
 ## Tech debt
@@ -73,5 +74,5 @@ Default credentials (substituted into the realm from `.env`): `e2e-admin` / `$E2
 - Frontend tests: `frontend/src/**/*.test.tsx`
 - Test fixtures (static assets for WebFlux tests): `src/test/resources/static/`
 
-When writing tests, always write a failing test first that reproduces the bug,
-then fix the production code until the test passes.
+- Bug fix: first a test that reproduces it and fails (`test:` commit), then the fix (`fix:` commit).
+- New behaviour ships with its tests in the same PR. A test counts only if it fails without the change.

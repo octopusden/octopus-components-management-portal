@@ -799,7 +799,7 @@ describe('ComponentDetailPage — distribution version preview', () => {
   })
 })
 
-describe('ComponentDetailPage — VCS placement errors', () => {
+describe('ComponentDetailPage — VCS checkout layout errors', () => {
   afterEach(() => {
     vi.mocked(useFieldOverrides).mockReturnValue({ data: [] } as unknown as ReturnType<typeof useFieldOverrides>)
   })
@@ -881,7 +881,7 @@ describe('ComponentDetailPage — chain-mismatch warning', () => {
   })
 })
 
-describe('ComponentDetailPage — VCS placement for a read-only viewer', () => {
+describe('ComponentDetailPage — VCS checkout layout for a read-only viewer', () => {
   it('shows Source Path, Checkout Directory and Build Working Directory without letting them be edited', async () => {
     const entry = (name: string, vcsPath: string, sortOrder: number, checkoutDirectory?: string) =>
       ({ id: `id-${name}`, sortOrder, name, vcsPath, repositoryType: 'GIT', sourcePath: 'src', checkoutDirectory })

@@ -27,6 +27,7 @@ import { DocumentationTab } from '../components/editor/DocumentationTab'
 import { SolutionTab } from '../components/editor/SolutionTab'
 import { HeaderLabelsEditor } from '../components/editor/HeaderLabelsEditor'
 import { MiscTab, MISC_TAB_FIELDS } from '../components/editor/MiscTab'
+import { ReleaseProcessTab } from '../components/editor/ReleaseProcessTab'
 import { ProducedArtifactsSection } from '../components/editor/ProducedArtifactsSection'
 import { buildUpdateRequest } from '../lib/component/buildUpdateRequest'
 import { renameKeyCharsetError } from '../lib/component/createFormModel'
@@ -125,6 +126,7 @@ function mapComponentToForm(component: ComponentDetail): GeneralFormValues {
     solution: component.solution ?? false,
     archived: component.archived,
     testComponent: component.testComponent ?? false,
+    autoRelease: component.autoRelease ?? false,
     parentComponentName: component.parentComponentName ?? '',
     canBeParent: component.canBeParent ?? false,
     releaseManager: component.releaseManager ?? [],
@@ -149,7 +151,8 @@ function sectionForField(field: string): string | null {
   if (field === 'distributionExplicit' || field === 'distributionExternal') return 'general'
   if ((GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(field)) return 'general'
   if ((MISC_TAB_FIELDS as ReadonlyArray<string>).includes(field)) return 'misc'
-  // VCS placement is edited on the VCS tab — the Build Working Directory too, not on the Build tab —
+  if (field === 'autoRelease') return 'release-process'
+  // VCS checkout layout is edited on the VCS tab — the Build Working Directory too, not on the Build tab —
   // for the base row and for a per-range row (`fieldOverrides[<j>].…`).
   if (/^(fieldOverrides\[\d+\]\.)?(buildWorkingDirectory$|vcsEntries\[)/.test(field)) return 'vcs'
   if (field.startsWith('build')) return 'build'
@@ -251,6 +254,7 @@ function ComponentDetailEditor() {
   const { entry: securityChampionFc } = useFieldConfigEntry('component.securityChampion')
   const { entry: copyrightFc } = useFieldConfigEntry('component.copyright')
   const { entry: canBeParentFc } = useFieldConfigEntry('component.canBeParent')
+  const { entry: autoReleaseFc } = useFieldConfigEntry('component.autoRelease')
   const { entry: labelsFc } = useFieldConfigEntry('component.labels')
   // Section send-gating visibilities (Jira / Escrow).
   const { entry: releasesInDefaultBranchFc } = useFieldConfigEntry('component.releasesInDefaultBranch')
@@ -290,6 +294,7 @@ function ComponentDetailEditor() {
       solution: false,
       archived: false,
       testComponent: false,
+      autoRelease: false,
       parentComponentName: '',
       canBeParent: false,
       releaseManager: [],
@@ -404,9 +409,19 @@ function ComponentDetailEditor() {
         canBeParent: canBeParentFc.visibility ?? 'editable',
         labels: labelsFc.visibility ?? 'editable',
         solution: solutionFc.visibility ?? 'editable',
+        // Not editable for this user (readonly, adminOnly, none) → never sent.
+        autoRelease:
+          autoReleaseFc.visibility === 'hidden'
+            ? 'hidden'
+            : isFieldEditableFor(fieldConfigData, 'component.autoRelease', user) ? 'editable' : 'readonly',
       },
       dirtyFields: {
-        solution: form.formState.dirtyFields.solution === true,
+        // "Interacted" (dirty OR touched): a first load seeds by setValue, so the form default stays
+        // false and switching a seeded `true` off reads as touched, not dirty. buildUpdateRequest
+        // value-compares, so an untouched switch still never sends a stale value.
+        solution: form.formState.dirtyFields.solution === true || form.formState.touchedFields.solution === true,
+        autoRelease:
+          form.formState.dirtyFields.autoRelease === true || form.formState.touchedFields.autoRelease === true,
         // `systems` is a multi-value array field — same dirty shape as labels
         // (isFieldDirty handles RHF's collapsed-boolean-or-array form; the
         // second branch keeps the clear-all case value-compare can't see).
@@ -684,24 +699,24 @@ function ComponentDetailEditor() {
         const hasGeneralError = [...fieldErrors.keys()].some((f) =>
           (GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(f),
         )
-        // A placement error on a base VCS entry shows inline on the VCS tab. One
+        // A checkout layout error on a base VCS entry shows inline on the VCS tab. One
         // on a per-range row shows in its (closed) editor, so it keeps the toast.
         let anyFieldMapped = vcsSection.applyServerErrors(fieldErrors, sentOverrideIds)
         let switchTo: string | null = null
         for (const [field, message] of fieldErrors) {
           const isGeneral = (GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(field)
-          const isMisc = (MISC_TAB_FIELDS as ReadonlyArray<string>).includes(field)
+          const isOtherTab = (MISC_TAB_FIELDS as ReadonlyArray<string>).includes(field) || field === 'autoRelease'
           // `labels` is a page-level RHF field edited in the always-visible
           // header (not a tab), so it isn't in GENERAL_TAB_FIELDS. Map its 400
           // to form.setError anyway → HeaderLabelsEditor shows it inline instead
           // of the user getting only a toast for a field they're looking at.
           const isHeaderLabels = field === 'labels'
-          if (isGeneral || isMisc || isHeaderLabels) {
+          if (isGeneral || isOtherTab || isHeaderLabels) {
             form.setError(field as keyof GeneralFormValues, { type: 'server', message })
             anyFieldMapped = true
           }
           // First non-General offending field decides the section to switch to.
-          if (switchTo === null && !(isGeneral && !isMisc)) {
+          if (switchTo === null && !(isGeneral && !isOtherTab)) {
             const target = sectionForField(field)
             // Normally 'general' isn't a switch target (RHF general fields render
             // inline on the default tab). But section-state fields mapped to
@@ -1123,6 +1138,7 @@ function ComponentDetailEditor() {
                   { value: 'build', label: 'Build', count: br?.build ? 1 : 0 },
                   { value: 'vcs', label: 'VCS', count: vcsCount },
                   { value: 'jira', label: 'Jira', count: br?.jira ? 1 : 0 },
+                  ...(autoReleaseFc.visibility !== 'hidden' ? [{ value: 'release-process', label: 'Release Process' }] : []),
                   { value: 'escrow', label: 'Escrow', count: br?.escrow ? 1 : 0 },
                   { value: 'documentation', label: 'Documentation', count: docsCount },
                 ],
@@ -1265,6 +1281,12 @@ function ComponentDetailEditor() {
             <TabsContent value="escrow">
               <EditSurface canEdit={canEdit} label="Escrow">
                 <EscrowTab section={escrowSection} canEdit={canEdit} />
+              </EditSurface>
+            </TabsContent>
+
+            <TabsContent value="release-process">
+              <EditSurface canEdit={canEdit} label="Release Process">
+                <ReleaseProcessTab form={form} />
               </EditSurface>
             </TabsContent>
 
