@@ -58,11 +58,16 @@ against the new login HTML.
 
 ## Projects
 
-| Project           | storageState                  | testMatch                                                |
-|-------------------|-------------------------------|----------------------------------------------------------|
-| `chromium-anon`   | none                          | `smoke-anon.spec.ts`                                     |
-| `chromium-viewer` | `playwright/.auth/viewer.json`| `smoke-viewer.spec.ts`, `admin-migration-viewer.spec.ts` |
-| `chromium-admin`  | `playwright/.auth/admin.json` | `smoke-admin.spec.ts`, `admin-migration.spec.ts`         |
+| Project           | storageState                  | testMatch                                                                                  |
+|-------------------|-------------------------------|--------------------------------------------------------------------------------------------|
+| `chromium-anon`   | none                          | `smoke-anon.spec.ts`                                                                       |
+| `chromium-viewer` | `playwright/.auth/viewer.json`| `smoke-viewer`, `admin-migration-viewer`, `component-as-code`, `regression-*`              |
+| `chromium-admin`  | `playwright/.auth/admin.json` | `smoke-admin`, `admin-migration`, `editor-*`, `visual/*` (not `_`-prefixed)                |
+
+A new spec runs only if one of these `testMatch` patterns names it.
+`npm run check:e2e-discovery` (run on every PR by the merge gate) fails on
+any `e2e/**/*.spec.ts` that no project discovers; files and directories
+starting with `_` are ad-hoc tools and are exempt.
 
 `workers: 1`, `fullyParallel: false` — kept on purpose. The portal uses
 an in-memory session store; parallel specs risk cross-test bleed.
