@@ -1,0 +1,21 @@
+import type { ActualDisagreement } from './types'
+
+/**
+ * CRS reports one warning per (configured row × ACTUAL range) pair, so two
+ * different rows disagreeing with the same ACTUAL range produce
+ * byte-identical entries. Collapses those before they're counted or listed.
+ *
+ * The key is JSON rather than a joined string so no separator can collide
+ * with the field values themselves.
+ */
+export function dedupeActualDisagreements(warnings: ActualDisagreement[]): ActualDisagreement[] {
+  const seen = new Set<string>()
+  const result: ActualDisagreement[] = []
+  for (const w of warnings) {
+    const key = JSON.stringify([w.subRange, w.actualValue])
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push(w)
+  }
+  return result
+}

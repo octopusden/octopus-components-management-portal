@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { ComponentDetail } from '../../lib/types'
+import type { ComponentDetail, RegisteredBuildParametersDetail } from '../../lib/types'
 import { selectBaseRow, selectOverrideRows } from '../../lib/api/baseRow'
 import { useFieldConfig } from '../../hooks/useAdminConfig'
 import { labelFor } from '../../hooks/useFieldConfig'
@@ -38,6 +38,8 @@ export interface BuildSection {
   setBuildSystemTouched: (v: boolean) => void
   showMavenVersion: boolean
   showGradleVersion: boolean
+  /** RMS-registered ("ACTUAL") data for javaVersion/mavenVersion, display-only. Null/undefined when CRS doesn't track it for this component. */
+  registeredBuildParameters: RegisteredBuildParametersDetail | null | undefined
   slice: SectionSlice
   reset: () => void
 }
@@ -126,6 +128,7 @@ export function useBuildSection(component: ComponentDetail): BuildSection {
     setBuildSystemTouched,
     showMavenVersion,
     showGradleVersion,
+    registeredBuildParameters: component.registeredBuildParameters,
     slice,
     reset,
   }

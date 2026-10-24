@@ -17,6 +17,7 @@ const EXPECTED_KEYS = [
   'component.displayName',
   'component.parentComponentName',
   'component.canBeParent',
+  'component.autoRelease',
   'component.groupId',
   'component.solution',
   'component.componentOwner',
@@ -63,6 +64,9 @@ const EXPECTED_KEYS = [
   'vcs.branch',
   'vcs.tag',
   'vcs.hotfixBranch',
+  'vcs.sourcePath',
+  'vcs.checkoutDirectory',
+  'vcs.buildWorkingDirectory',
   // DistributionTab
   'component.distributionExplicit',
   'component.distributionExternal',

@@ -99,22 +99,22 @@ describe('CommandPalette — sections + gating', () => {
     renderPalette()
     expect(screen.getByText('Components')).toBeInTheDocument()
     expect(screen.getByText('Audit')).toBeInTheDocument()
-    expect(screen.getByText('Health')).toBeInTheDocument()
+    expect(screen.getByText('Validations')).toBeInTheDocument()
   })
 
-  it('hides Audit and Health for a viewer (no ACCESS_AUDIT / not admin)', () => {
+  it('hides Audit and Validations for a viewer (no ACCESS_AUDIT / not admin)', () => {
     mockUser(VIEWER)
     useAdminMode.setState({ enabled: false })
     renderPalette()
     expect(screen.getByText('Components')).toBeInTheDocument()
     expect(screen.queryByText('Audit')).not.toBeInTheDocument()
-    expect(screen.queryByText('Health')).not.toBeInTheDocument()
+    expect(screen.queryByText('Validations')).not.toBeInTheDocument()
   })
 
-  it('hides Health when adminMode is off even for an IMPORT_DATA holder', () => {
+  it('hides Validations when adminMode is off even for an IMPORT_DATA holder', () => {
     useAdminMode.setState({ enabled: false })
     renderPalette()
-    expect(screen.queryByText('Health')).not.toBeInTheDocument()
+    expect(screen.queryByText('Validations')).not.toBeInTheDocument()
   })
 
   it('hides the New Component action without CREATE_COMPONENTS', () => {
@@ -196,6 +196,12 @@ describe('CommandPalette — component search', () => {
     expect(arg.enabled).toBe(false)
   })
 
+  it('hides archived and test components from the search', () => {
+    renderPalette()
+    const arg = mockUseComponents.mock.calls[0]![0] as { filter: Record<string, unknown> }
+    expect(arg.filter).toMatchObject({ archived: false, testComponent: false })
+  })
+
   it('debounces the search query then passes it to useComponents', async () => {
     const user = userEvent.setup()
     renderPalette()
@@ -273,7 +279,7 @@ describe('CommandPalette — component search', () => {
 
     // Once the debounced query is active, non-matching static entries drop out…
     await waitFor(() => expect(screen.queryByText('With problems')).not.toBeInTheDocument())
-    expect(screen.queryByText('Health')).not.toBeInTheDocument()
+    expect(screen.queryByText('Validations')).not.toBeInTheDocument()
     // …while the entry whose label matches the query stays (under Go to).
     expect(screen.getByText('Audit')).toBeInTheDocument()
   })

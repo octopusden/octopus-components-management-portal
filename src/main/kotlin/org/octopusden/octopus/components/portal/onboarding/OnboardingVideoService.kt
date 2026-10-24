@@ -181,17 +181,31 @@ class OnboardingVideoService(
      * Best-effort deletion of the throwaway per-attempt clone dir. By the time this runs the
      * video is already in memory (status READY), so a failure to delete a temp dir must NOT
      * fail an otherwise-successful load. JGit fires a *detached* auto-GC after the clone; that
-     * background thread deletes `.git/gc.log.lock` and can race the recursive walk, throwing
-     * NoSuchFileException (TC build 1.0.4-831). A leftover dir is harmless — it's unique per
-     * attempt — so swallow-and-log rather than propagate.
+     * background thread creates/deletes `.git/gc.log.lock` and can race the recursive walk,
+     * which aborts on the first vanished entry (`FileSystemUtils.deleteRecursively` throws
+     * instead of skipping it) and leaves whatever the walk hadn't reached yet — not just the
+     * lock file. The GC background task is near-instant for a depth-1 shallow clone, so a
+     * short retry lets the walk restart once the lock file has settled; only swallow-and-log
+     * once retries are exhausted.
      */
     @Suppress("TooGenericExceptionCaught") // best-effort cleanup must swallow ANY delete failure
     private fun deleteAttemptDirSafely(attemptDir: Path) {
-        try {
-            deleteAttemptDir(attemptDir)
-        } catch (e: Exception) {
-            log.warn("Onboarding video: failed to delete temp clone dir {} (ignored)", attemptDir, e)
+        var lastError: Exception? = null
+        for (attempt in 1..DELETE_RETRY_ATTEMPTS) {
+            try {
+                deleteAttemptDir(attemptDir)
+                return
+            } catch (e: Exception) {
+                lastError = e
+                if (attempt < DELETE_RETRY_ATTEMPTS) Thread.sleep(DELETE_RETRY_DELAY_MS)
+            }
         }
+        log.warn(
+            "Onboarding video: failed to delete temp clone dir {} after {} attempts (ignored)",
+            attemptDir,
+            DELETE_RETRY_ATTEMPTS,
+            lastError,
+        )
     }
 
     /**
@@ -232,5 +246,7 @@ class OnboardingVideoService(
             "webp" to "image/webp",
             "gif" to "image/gif",
         )
+        private const val DELETE_RETRY_ATTEMPTS = 3
+        private const val DELETE_RETRY_DELAY_MS = 50L
     }
 }

@@ -3,12 +3,28 @@ import { Input } from '../ui/input'
 import { EnumSelect } from '../ui/EnumSelect'
 import { FieldInfo } from '../ui/FieldInfo'
 import { FieldLabelText } from '../ui/FieldLabelText'
+import { StatusBanner } from '../ui/status-banner'
 import { FieldOverrideInline } from './FieldOverrideInline'
+import { ActualBuildParameters } from './ActualBuildParameters'
 import type { BuildSection } from './useBuildSection'
 
 interface BuildTabProps {
   section: BuildSection
   canEdit: boolean
+  /**
+   * Inline `RMS_REGISTERED_VALUE_CONFLICT` message from the last failed save
+   * (page-level 409 classification). Unlike a Jira-pair conflict, CRS's
+   * message doesn't say whether Java or Maven conflicted, so this renders as
+   * a tab-level banner rather than attached to one field. Cleared by the page
+   * at the start of the next save, or on navigating to a different component.
+   */
+  conflictError?: string | null
+  /**
+   * The base row's Build Working Directory, shown read-only: it is edited on the VCS tab, next to
+   * the Checkout Directories it must start with. Omitted → the line is not shown.
+   */
+  buildWorkingDirectory?: string
+  onEditBuildWorkingDirectory?: () => void
 }
 
 /**
@@ -17,12 +33,22 @@ interface BuildTabProps {
  * BASE-row toolchain fields and reports edits up via `section.set`. The page's
  * single sticky Save bar replaces the old per-tab "Save Build" button.
  */
-export function BuildTab({ section, canEdit }: BuildTabProps) {
-  const { state, set, buildSystemMissing, buildSystemTouched, setBuildSystemTouched, showMavenVersion, showGradleVersion } = section
+export function BuildTab({
+  section, canEdit, conflictError, buildWorkingDirectory, onEditBuildWorkingDirectory,
+}: BuildTabProps) {
+  const {
+    state, set, buildSystemMissing, buildSystemTouched, setBuildSystemTouched,
+    showMavenVersion, showGradleVersion, registeredBuildParameters,
+  } = section
   const showRequiredError = buildSystemTouched && buildSystemMissing
 
   return (
     <div className="space-y-6">
+      {conflictError && (
+        <StatusBanner variant="destructive" role="alert">
+          {conflictError}
+        </StatusBanner>
+      )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <div className="flex items-center gap-1">
@@ -77,6 +103,11 @@ export function BuildTab({ section, canEdit }: BuildTabProps) {
             placeholder="Select Java version"
           />
           <FieldOverrideInline canEdit={canEdit} overriddenAttribute="build.javaVersion" />
+          <ActualBuildParameters
+            ranges={registeredBuildParameters?.javaActualRanges ?? []}
+            warnings={registeredBuildParameters?.javaWarnings ?? []}
+            actualDataUnavailable={registeredBuildParameters?.actualDataUnavailable}
+          />
         </div>
 
         {showMavenVersion && (
@@ -93,6 +124,29 @@ export function BuildTab({ section, canEdit }: BuildTabProps) {
               placeholder="Select Maven version"
             />
             <FieldOverrideInline canEdit={canEdit} overriddenAttribute="build.mavenVersion" />
+            <ActualBuildParameters
+              ranges={registeredBuildParameters?.mavenActualRanges ?? []}
+              warnings={registeredBuildParameters?.mavenWarnings ?? []}
+            />
+          </div>
+        )}
+
+        {buildWorkingDirectory !== undefined && (
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1">
+              <span className="text-sm font-medium">Build Working Directory (WORK_DIR in TC)</span>
+              <FieldInfo path="vcs.buildWorkingDirectory" label="Build Working Directory" />
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <span className={buildWorkingDirectory ? 'font-mono' : 'text-muted-foreground'}>
+                {buildWorkingDirectory || 'Checkout root'}
+              </span>
+              {onEditBuildWorkingDirectory && (
+                <button type="button" className="text-primary underline-offset-4 hover:underline" onClick={onEditBuildWorkingDirectory}>
+                  Edit on the VCS tab
+                </button>
+              )}
+            </div>
           </div>
         )}
 

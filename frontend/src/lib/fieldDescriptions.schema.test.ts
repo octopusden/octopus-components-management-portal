@@ -37,6 +37,7 @@ const KEY_TO_SCHEMA = {
   'component.displayName': ['ComponentDetailResponse', 'displayName'],
   'component.parentComponentName': ['ComponentDetailResponse', 'parentComponentName'],
   'component.canBeParent': ['ComponentDetailResponse', 'canBeParent'],
+  'component.autoRelease': ['ComponentDetailResponse', 'autoRelease'],
   // UI "Group Key" documents aggregator-group membership; the backing field is group.groupKey.
   'component.groupId': ['ComponentGroupResponse', 'groupKey'],
   'component.solution': ['ComponentDetailResponse', 'solution'],
@@ -91,6 +92,9 @@ const KEY_TO_SCHEMA = {
   'vcs.branch': ['VcsEntryResponse', 'branch'],
   'vcs.tag': ['VcsEntryResponse', 'tag'],
   'vcs.hotfixBranch': ['VcsEntryResponse', 'hotfixBranch'],
+  'vcs.sourcePath': ['VcsEntryResponse', 'sourcePath'],
+  'vcs.checkoutDirectory': ['VcsEntryResponse', 'checkoutDirectory'],
+  'vcs.buildWorkingDirectory': ['ComponentConfigurationResponse', 'buildWorkingDirectory'],
 
   // ── distribution.* — collection-level keys point at the list property; row keys at the child DTO ──
   'distribution.mavenArtifacts': ['ComponentConfigurationResponse', 'mavenArtifacts'],

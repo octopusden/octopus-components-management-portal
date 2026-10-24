@@ -16,6 +16,7 @@ Independently optional filters, ANDed server-side. Each filter resets pagination
 | **Build system** | `?buildSystem=…` (CSV, OR semantics) | `MultiSelectFilter` populated from `GET /components/meta/build-systems` via [`useFieldOptions('buildSystem')`](../../frontend/src/hooks/useFieldOptions.ts) (fallback when admin field-config has no options) | CRS SYS-041. OR semantics against `component_configurations.build_system` on the base row. |
 | **Labels** | `?labels=…` (CSV, AND semantics) | `MultiSelectFilter` populated from `GET /components/meta/labels` via [`useLabels`](../../frontend/src/hooks/useLabels.ts) | CRS SYS-040. Each selected label produces its own JOIN+predicate (component must carry ALL labels). |
 | **Archived** | `?archived=false` (default; omit for "all") | Two-state toggle cycling *Active only ↔ All* | The button label flips between *Show archived components* and *Hide archived components*. Default is `archived: false` (active only); "Clear filters" returns to that state, not to *All*. |
+| **Test components** | `?testComponent=false` sent to CRS by default (the Portal URL never carries `testComponent=false` — absent means hidden); `?testComponent=true` = only test components | *Test components* preset (next to *Archived*) | Test components (e.g. the CVELAB stand) are hidden by default — the CRS API itself returns them unless filtered, hiding is a Portal decision. Only the *Test components* preset (`archived=false&testComponent=true`) lists them; every other preset, "Clear all" and removing the *Status: Test components* chip return to `testComponent=false`. The command palette search also sends `testComponent=false`. Opening a test component by URL (UUID or name) still works. Archived test components appear in neither preset (Archived keeps `testComponent=false`, Test components keeps `archived=false`); they are reachable only by deep link or the hand-written list URL `?archived=true&testComponent=true`. Parent and doc pickers of a non-test component offer only non-test components (CRS rejects such references). Rows show a *Test* badge next to the status. |
 
 The whole filter row lives in [`frontend/src/components/ui/filter-bar.tsx`](../../frontend/src/components/ui/filter-bar.tsx); the multi-selects use [`frontend/src/components/ui/MultiSelectFilter.tsx`](../../frontend/src/components/ui/MultiSelectFilter.tsx). A "Clear filters" button surfaces whenever any filter is active.
 
@@ -29,10 +30,11 @@ An **Extended search** toggle (next to the archived button) reveals a second fil
 | **Solution** | `?solution=true\|false` | tri-state (Any/Yes/No) | scalar eq |
 | **Jira project key** | `?jiraProjectKey=…` | text | base-row config eq |
 | **Jira technical** | `?jiraTechnical=true\|false` | tri-state | base-row config eq |
-| **VCS path** | `?vcsPath=…` | text | VCS-entry ILIKE |
-| **Production branch** | `?productionBranch=…` | text | VCS-entry ILIKE on `branch` |
+| **VCS path** | `?vcsPath=…` | text | VCS-root ILIKE |
+| **Production branch** | `?productionBranch=…` | text | VCS-root ILIKE on `branch` |
 | **Parent component** | `?parentComponentName=…` | text | parent-join eq on key |
 | **Can be parent** | `?canBeParent=true\|false` | tri-state | scalar eq |
+| **Auto release** | `?autoRelease=true\|false` | tri-state | scalar eq |
 | **Group key** | `?groupKey=…` | text | group-join eq on `groupKey` |
 
 These params are added to [`useComponents`](../../frontend/src/hooks/useComponents.ts) and served by the CRS v4 `listComponents` controller (see `octopus-components-registry-service/docs/registry/functional-spec.md`). Each control is placed by the field's **Searchable** setting (below), not hard-coded into the row.
@@ -61,6 +63,15 @@ Each field carries a **`searchable`** placement — one of:
 - **`None`** — not searchable; the control is never rendered.
 
 The effective placement is resolved by [`searchabilityFor`](../../frontend/src/hooks/useFieldConfig.ts): an explicit `searchable` wins; otherwise a legacy `filterable: false` maps to `None`; otherwise a central `DEFAULT_SEARCHABILITY` map applies; otherwise the field defaults to `Extended`. This means a fresh install (empty field-config) already places every filter correctly before an admin saves the catalog. `searchable` **supersedes** the older boolean `filterable` flag, which was never surfaced in the admin UI — `filterable: false` is still honoured (as `None`) for backward-compat. Placement is independent of the form-level `visibility` flag (a field can be editor-hidden yet searchable, or vice-versa).
+
+## Validation problem indicators (admin-only)
+
+Two independent, Portal-computed problem sources feed the same row-level indicator and the **"With problems"** preset (`ListPresetBar`), both admin-only:
+
+- **Unregistered Release** — from `useValidationProblems`/`useComponentsWithProblems` (the registered-version validation report).
+- **TeamCity** — from `useTeamCityValidations`, keyed by `componentId` (not name, unlike the report above).
+
+A row shows **at most one** warning triangle: an Unregistered-Released issue takes priority (`ValidationBadge`); a `TeamCityProblemBadge` only renders when the row has no Unregistered-Released issue. The **"With problems"** preset unions both sources into one row set (deduped by component), so a component with only a TeamCity finding still shows up. See [`docs/features/component-detail.md`](component-detail.md#validations-admin-only) for the per-component view of the same two sources.
 
 ## Routing
 

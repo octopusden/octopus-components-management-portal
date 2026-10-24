@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { isValidElement, type ReactElement } from 'react'
-import { matchRoutes } from 'react-router'
+import { matchRoutes, Navigate } from 'react-router'
 import { appRoutes } from './App'
 import { RouteError } from './components/RouteError'
 import { CreateComponentPage } from './pages/CreateComponentPage'
@@ -25,5 +25,16 @@ describe('appRoutes', () => {
     expect((leaf.route.element as ReactElement).type).toBe(CreateComponentPage)
     // And it must not have matched as a param route with id="new".
     expect((leaf.params as { id?: string }).id).toBeUndefined()
+  })
+
+  it('redirects the retired /health route to the Validations page\'s Unregistered Release tab', () => {
+    const matches = matchRoutes(appRoutes, '/health')
+    expect(matches).not.toBeNull()
+    const leaf = matches![matches!.length - 1]!
+    expect((leaf.route.element as ReactElement).type).toBe(Navigate)
+    expect((leaf.route.element as ReactElement).props).toMatchObject({
+      to: '/validations?tab=unregistered-release',
+      replace: true,
+    })
   })
 })

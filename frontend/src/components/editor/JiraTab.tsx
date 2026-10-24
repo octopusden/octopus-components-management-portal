@@ -25,7 +25,8 @@ interface JiraTabProps {
   /**
    * Inline (projectKey, versionPrefix) uniqueness-conflict message from the last
    * failed save (page-level 409 classification). Renders a red border + error
-   * under Project Key. Cleared by the page at the start of the next save.
+   * under Project Key. Cleared by the page at the start of the next save, or
+   * on navigating to a different component.
    */
   conflictError?: string | null
   /**

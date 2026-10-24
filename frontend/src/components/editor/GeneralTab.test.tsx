@@ -31,6 +31,15 @@ vi.mock('../../hooks/useComponents', () => ({
 // with its own dict (rendered in the header, not GeneralTab).
 const mockUseSystemsDictionary = vi.fn(() => ({ data: ['SYS1', 'SYS2', 'SYS_NEW_DICT_ONLY'], isLoading: false, isError: false }))
 const mockUseLabelsDictionary = vi.fn(() => ({ data: ['backend', 'internal', 'frontend'], isLoading: false, isError: false }))
+// SYS-099 test-component key patterns. Default `null` = endpoint missing (no
+// restriction known → fail-open); a real [] means nothing may be flagged.
+const mockTestPatterns = vi.fn((): { data?: string[] | null } => ({ data: null }))
+vi.mock('../../hooks/useTestComponentNamePatterns', async () => {
+  const actual = await vi.importActual<typeof import('../../hooks/useTestComponentNamePatterns')>(
+    '../../hooks/useTestComponentNamePatterns',
+  )
+  return { ...actual, useTestComponentNamePatterns: () => mockTestPatterns() }
+})
 vi.mock('../../hooks/useSystemsDictionary', () => ({
   useSystemsDictionary: () => mockUseSystemsDictionary(),
 }))
@@ -118,6 +127,7 @@ function Harness({ component, formRef, onOwnerValidatingChange, canEdit, classif
       clientCode: component.clientCode ?? '',
       solution: component.solution ?? false,
       archived: component.archived,
+      testComponent: component.testComponent ?? false,
       parentComponentName: component.parentComponentName ?? '',
       canBeParent: component.canBeParent ?? false,
       releaseManager: component.releaseManager ?? [],
@@ -187,6 +197,88 @@ const EDITOR_USER = {
   ],
   groups: [],
 }
+
+describe('GeneralTab test component switch — key patterns (SYS-099)', () => {
+  const PATTERNS = ['^test-', '^cvelab-']
+  const sw = () => screen.getByRole('switch', { name: /test component/i }) as HTMLButtonElement
+
+  it('enabled for a matching key', () => {
+    mockTestPatterns.mockReturnValue({ data: PATTERNS })
+    renderWithProviders(<Harness component={baseComponent({ name: 'cvelab-app' })} />)
+    expect(sw().disabled).toBe(false)
+    mockTestPatterns.mockReturnValue({ data: null })
+  })
+
+  it('disabled with a hint naming the patterns when the key matches none and the flag is off', () => {
+    mockTestPatterns.mockReturnValue({ data: PATTERNS })
+    renderWithProviders(<Harness component={baseComponent({ name: 'payments' })} />)
+    expect(sw().disabled).toBe(true)
+    expect(
+      screen.getByText('Only components whose key matches ^test-, ^cvelab- can be test components.'),
+    ).toBeDefined()
+    mockTestPatterns.mockReturnValue({ data: null })
+  })
+
+  it('stays enabled when the flag is already on, so it can be unset', () => {
+    mockTestPatterns.mockReturnValue({ data: PATTERNS })
+    renderWithProviders(<Harness component={baseComponent({ name: 'payments', testComponent: true })} />)
+    expect(sw().disabled).toBe(false)
+    mockTestPatterns.mockReturnValue({ data: null })
+  })
+
+  it.each([
+    ['loading / error', undefined],
+    ['endpoint missing (404/501)', null],
+  ])('fails open while patterns are unknown: %s', (_label, data) => {
+    mockTestPatterns.mockReturnValue({ data })
+    renderWithProviders(<Harness component={baseComponent({ name: 'payments' })} />)
+    expect(sw().disabled).toBe(false)
+    mockTestPatterns.mockReturnValue({ data: null })
+  })
+
+  it('a configured [] blocks every key with the "no patterns configured" hint', () => {
+    mockTestPatterns.mockReturnValue({ data: [] })
+    renderWithProviders(<Harness component={baseComponent({ name: 'test-x' })} />)
+    expect(sw().disabled).toBe(true)
+    expect(
+      screen.getByText(
+        'No test-component name patterns are configured, so no component can be marked as a test component.',
+      ),
+    ).toBeDefined()
+    mockTestPatterns.mockReturnValue({ data: null })
+  })
+
+  it('does not block when a pattern uses Java-only syntax JS cannot compile (CRS decides)', () => {
+    mockTestPatterns.mockReturnValue({ data: ['(?i)^TEST-'] })
+    renderWithProviders(<Harness component={baseComponent({ name: 'test-x' })} />)
+    expect(sw().disabled).toBe(false)
+    mockTestPatterns.mockReturnValue({ data: null })
+  })
+})
+
+describe('GeneralTab test component switch', () => {
+  it('hydrates from the component and writes the toggled value into the form', async () => {
+    const formRef = { current: null } as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    renderWithProviders(<Harness component={baseComponent({ testComponent: true })} formRef={formRef} />)
+    const sw = screen.getByRole('switch', { name: /test component/i })
+    expect(sw.getAttribute('aria-checked')).toBe('true')
+    expect(document.getElementById(sw.getAttribute('aria-describedby')!)!.textContent).toMatch(
+      /hidden from component lists by default/,
+    )
+    await userEvent.click(sw)
+    expect(formRef.current!.getValues('testComponent')).toBe(false)
+  })
+})
+
+describe('GeneralTab auto release', () => {
+  it('hydrates autoRelease without rendering the switch', () => {
+    setAllEditable()
+    const formRef = { current: null } as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    renderWithProviders(<Harness component={baseComponent({ autoRelease: true })} formRef={formRef} />)
+    expect(screen.queryByRole('switch', { name: /auto release/i })).toBeNull()
+    expect(formRef.current!.getValues('autoRelease')).toBe(true)
+  })
+})
 
 // parentComponentName / canBeParent / group-key tests moved to MiscTab.test.tsx (those
 // fields now render on the Misc tab).
@@ -532,6 +624,16 @@ describe('GeneralTab server error display (S3.1a)', () => {
     await waitFor(() => {
       expect(screen.getByText('must not be blank')).toBeDefined()
     })
+  })
+
+  it('setError("testComponent") renders the CRS pattern message under the switch', async () => {
+    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    renderWithProviders(<Harness component={baseComponent()} formRef={formRef} />)
+    const msg = "test component key 'svc' matches none of the test-component name patterns [^test-, ^cvelab-]"
+    await act(async () => {
+      formRef.current?.setError('testComponent', { type: 'server', message: msg })
+    })
+    await waitFor(() => expect(screen.getByText(msg)).toBeDefined())
   })
 
   it('setError("name") renders the message and suppresses the rename hint', async () => {
@@ -917,5 +1019,64 @@ describe('GeneralTab — Classification', () => {
     setAllEditable()
     renderWithProviders(<Harness component={baseComponent()} />)
     expect(screen.queryByTestId('section-classification')).toBeNull()
+  })
+})
+
+// SYS-095: a rename target follows the same key rule as a create — '_' only inside
+// the client-code prefix. An untouched existing key is never re-validated.
+describe('GeneralTab — rename target key format', () => {
+  const KEY_MESSAGE = /must be lowercase letters, digits/i
+
+  it('accepts an underscore backed by the stored Client Code', async () => {
+    renderWithProviders(<Harness component={baseComponent({ clientCode: 'AB_CD' })} />)
+    const key = screen.getByLabelText(/^component key$/i)
+    await userEvent.clear(key)
+    await userEvent.type(key, 'ab_cd-payments')
+    await waitFor(() => expect(screen.queryByText(KEY_MESSAGE)).toBeNull())
+  })
+
+  it('rejects an underscore on a component with no Client Code', async () => {
+    renderWithProviders(<Harness component={baseComponent({ clientCode: null })} />)
+    const key = screen.getByLabelText(/^component key$/i)
+    await userEvent.clear(key)
+    await userEvent.type(key, 'ab_cd-payments')
+    await waitFor(() => expect(screen.getByText(KEY_MESSAGE)).toBeDefined())
+  })
+
+  it('accepts the underscore when the stored Client Code is populated but hidden', async () => {
+    mockUseFieldConfigEntry.mockImplementation((path: string) => {
+      if (path === 'component.clientCode') return makeEntry('hidden')
+      return makeEntry('editable')
+    })
+    renderWithProviders(<Harness component={baseComponent({ clientCode: 'AB_CD' })} />)
+    const key = screen.getByLabelText(/^component key$/i)
+    await userEvent.clear(key)
+    await userEvent.type(key, 'ab_cd-payments')
+    await waitFor(() => expect(screen.queryByText(KEY_MESSAGE)).toBeNull())
+  })
+
+  it('does not flag a legacy key that differs only by surrounding whitespace', async () => {
+    renderWithProviders(
+      <Harness component={baseComponent({ name: 'Legacy.Key_1', clientCode: null })} />,
+    )
+    // CRS trims before deciding whether this is a rename at all, so a stray space
+    // must not turn an untouched legacy key into a validated rename target.
+    await userEvent.type(screen.getByLabelText(/^component key$/i), ' ')
+    await waitFor(() => expect(screen.queryByText(KEY_MESSAGE)).toBeNull())
+  })
+
+  it('says nothing while the field is cleared mid-retype', async () => {
+    // A blank key is omitted from the PATCH by buildUpdateRequest's nameChanged gate,
+    // so it is not-yet-attempted rather than a charset violation.
+    renderWithProviders(<Harness component={baseComponent({ clientCode: null })} />)
+    await userEvent.clear(screen.getByLabelText(/^component key$/i))
+    await waitFor(() => expect(screen.queryByText(KEY_MESSAGE)).toBeNull())
+  })
+
+  it('never re-validates an untouched legacy key', () => {
+    renderWithProviders(
+      <Harness component={baseComponent({ name: 'Legacy.Key_1', clientCode: null })} />,
+    )
+    expect(screen.queryByText(KEY_MESSAGE)).toBeNull()
   })
 })

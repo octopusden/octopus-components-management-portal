@@ -11,12 +11,14 @@ import { useMigrationJob, useMigrationStatus, useRunMigration } from '@/hooks/us
 import { useFieldConfig, useComponentDefaults, useReloadConfig } from '@/hooks/useAdminConfig'
 import { useAdminMode } from '@/lib/adminModeStore'
 
-// AdminSettingsPage is the only mount point for the Migration tab; the plan
-// is explicit that the migration UI lives next to field-config and component-
-// defaults, not on a separate route. This test pins:
+// AdminSettingsPage is the only mount point for the Maintenance tab (renamed
+// from "Migration" — its content, including the "Components" migration card,
+// is unchanged); the plan is explicit that the migration UI lives next to
+// field-config and component-defaults, not on a separate route. This test
+// pins:
 //   1. all three tabs are present in the tablist (failure here means a
-//      regression hid one of the tabs or moved Migration elsewhere),
-//   2. clicking Migration mounts MigrationPanel (failure here usually means
+//      regression hid one of the tabs or moved Maintenance elsewhere),
+//   2. clicking Maintenance mounts MigrationPanel (failure here usually means
 //      the TabsContent value mismatched the TabsTrigger value — Radix
 //      silently renders nothing in that case).
 
@@ -86,6 +88,9 @@ vi.mock('@/hooks/useAdminConfig', () => ({
 }))
 // RuntimeSection (System tab) has its own data hooks + test coverage; stub it so
 // the tab-visibility tests don't pull in a live metrics query.
+vi.mock('../components/admin/TemplatesPanel', () => ({
+  TemplatesPanel: () => React.createElement('div', { 'data-testid': 'templates-panel-stub' }),
+}))
 vi.mock('../components/RuntimeSection', () => ({
   RuntimeSection: () => React.createElement('div', { 'data-testid': 'runtime-section-stub' }),
 }))
@@ -181,20 +186,26 @@ afterEach(() => {
 })
 
 describe('AdminSettingsPage tabs', () => {
-  it('exposes Field Configuration, Component Defaults, and Migration tabs', () => {
+  it('exposes Field Configuration, Component Defaults, and Maintenance tabs', () => {
     renderPage()
     expect(screen.getByRole('tab', { name: /Field Configuration/i })).toBeDefined()
     expect(screen.getByRole('tab', { name: /Component Defaults/i })).toBeDefined()
-    expect(screen.getByRole('tab', { name: /Migration/i })).toBeDefined()
+    expect(screen.getByRole('tab', { name: /^Maintenance$/i })).toBeDefined()
   })
 
-  it('mounts MigrationPanel when the Migration tab is clicked', async () => {
+  it('offers a Templates tab that shows the registry profiles and templates', async () => {
+    renderPage()
+    await userEvent.setup().click(screen.getByRole('tab', { name: /Templates/i }))
+    expect(screen.getByTestId('templates-panel-stub')).toBeDefined()
+  })
+
+  it('mounts MigrationPanel when the Maintenance tab is clicked', async () => {
     renderPage()
     // Radix Tabs ignore plain fireEvent.click in jsdom (the trigger uses
     // pointer-down/keyboard semantics). userEvent simulates the full
     // pointerdown → click → focus chain Radix listens for.
     const user = userEvent.setup()
-    await user.click(screen.getByRole('tab', { name: /Migration/i }))
+    await user.click(screen.getByRole('tab', { name: /^Maintenance$/i }))
 
     // MigrationPanel renders a "Run migration" button whose presence proves
     // the panel mounted (no other tab content has it). The button is
@@ -203,14 +214,25 @@ describe('AdminSettingsPage tabs', () => {
     expect(screen.getByRole('button', { name: /run migration/i })).toBeDefined()
   })
 
+  it('titles and explains the checkout layout card', async () => {
+    renderPage()
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('tab', { name: /^Maintenance$/i }))
+
+    expect(screen.getByRole('heading', { name: 'TeamCity Checkout Layout' })).toBeDefined()
+    expect(
+      screen.getByText(/Where TeamCity checks out each VCS root.*and where it builds/i),
+    ).toBeDefined()
+  })
+
   it('arming via the AdminModeArmBar enables ALL three destructive Run buttons', async () => {
     renderPage()
     const user = userEvent.setup()
-    await user.click(screen.getByRole('tab', { name: /Migration/i }))
+    await user.click(screen.getByRole('tab', { name: /^Maintenance$/i }))
 
     const runMigration = screen.getByRole('button', { name: /run migration/i })
     const runHistory = screen.getByRole('button', { name: /run history migration/i })
-    const resync = screen.getByRole('button', { name: /resync tc project ids/i })
+    const resync = screen.getByRole('button', { name: /sync from teamcity/i })
 
     // Disarmed → all disabled.
     expect(runMigration).toBeDisabled()

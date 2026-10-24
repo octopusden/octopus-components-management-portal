@@ -342,6 +342,9 @@ test.describe('Editor — multi-value Release Managers / Security Champions (SYS
       name: 'Drag rm-carol to reorder',
     })
     const bobRow = peopleField(page, 'Release Managers').getByTestId('person-row-1')
+    // Centre the rows first: near the bottom of the viewport the sticky review bar
+    // covers them and the drag lands on the bar instead of the grip.
+    await bobRow.evaluate((el) => el.scrollIntoView({ block: 'center' }))
     const grip = await carolGrip.boundingBox()
     const target = await bobRow.boundingBox()
     if (!grip || !target) throw new Error('reorder: missing bounding box for grip/target')

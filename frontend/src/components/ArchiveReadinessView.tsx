@@ -1,0 +1,225 @@
+import { RefreshCw, UserRound, Users } from 'lucide-react'
+import { Badge } from './ui/badge'
+import { Button } from './ui/button'
+import { StatusBanner } from './ui/status-banner'
+import { InlineError } from './ui/inline-error'
+import { SkeletonBlock } from './ui/skeleton-block'
+import {
+  targetKindLabel,
+  unknownWordingFor,
+  sharedTargetCount,
+  issueTrackerUrl,
+} from '../lib/archiveReadiness'
+import { actionFor, responsibilityFor, responsibleParty } from '../lib/archiveReadinessOwnership'
+import type { ArchiveReadinessEntry, ArchiveReadinessResponse } from '../lib/types'
+
+export interface ArchiveReadinessViewProps {
+  isLoading: boolean
+  isError: boolean
+  data: ArchiveReadinessResponse | undefined
+  onRetry: () => void
+  /** Base URL for the issue tracker; undefined/empty when unconfigured — open issues still list, without links. */
+  jiraBaseUrl?: string
+  /** The component's owner, named on the rows that are their work. Falls back to "the component owner". */
+  componentOwner?: string | null
+  /** The reader, so a row that is their own work can say so instead of naming them. */
+  currentUsername?: string | null
+}
+
+/**
+ * Presents CRS's archive-readiness answer for a component: per-target rows,
+ * the shared-target summary, and the states around the answer itself
+ * (loading, request failure, "nothing was checked"). Purely presentational —
+ * gating whether Archive can be confirmed reads `data.ready` at the call
+ * site (ComponentDetailPage), not this component (design.md decision 2).
+ *
+ * Modelled on TeamCityValidationsTab's per-finding card layout.
+ */
+export function ArchiveReadinessView({
+  isLoading,
+  isError,
+  data,
+  onRetry,
+  jiraBaseUrl,
+  componentOwner,
+  currentUsername,
+}: ArchiveReadinessViewProps) {
+  if (isLoading) {
+    return (
+      <div data-testid="archive-readiness-loading" className="space-y-3">
+        <SkeletonBlock height="h-16" />
+        <SkeletonBlock height="h-16" />
+        <SkeletonBlock height="h-16" />
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <div data-testid="archive-readiness-request-error">
+        <InlineError message="Could not check whether this component is ready to archive. Try again." />
+      </div>
+    )
+  }
+
+  if (!data) return null
+
+  const { entries } = data
+  const sharedCount = sharedTargetCount(entries)
+
+  if (entries.length === 0) {
+    return (
+      <StatusBanner data-testid="archive-readiness-no-checks" variant="info">
+        No archive-readiness checks ran for this component — nothing configured on the registry
+        side covers it.
+      </StatusBanner>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Summary line only when MORE THAN ONE target was left as-is — a single one is
+          already visible in its own row and doesn't need restating (spec.md scenario
+          "One such entry produces no summary line"). */}
+      {sharedCount > 1 && (
+        <StatusBanner data-testid="archive-readiness-shared-summary" variant="info">
+          {sharedCount} targets were not required to be archived, because other live components
+          still use them.
+        </StatusBanner>
+      )}
+      <div className="space-y-3">
+        {entries.map((entry, i) => (
+          <ArchiveReadinessEntryRow
+            // No stable server id on this shape — index-prefixed key, same as TeamCityValidationsTab.
+            key={`${i}-${entry.targetKind}-${entry.targetId}`}
+            entry={entry}
+            jiraBaseUrl={jiraBaseUrl}
+            onRetry={onRetry}
+            componentOwner={componentOwner}
+            currentUsername={currentUsername}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function outcomeTone(entry: ArchiveReadinessEntry): 'success' | 'destructive' | 'warning' {
+  if (entry.outcome === 'COMPLETED') return 'success'
+  if (entry.outcome === 'UNKNOWN') return 'warning'
+  return 'destructive'
+}
+
+function ArchiveReadinessEntryRow({
+  entry,
+  jiraBaseUrl,
+  onRetry,
+  componentOwner,
+  currentUsername,
+}: {
+  entry: ArchiveReadinessEntry
+  jiraBaseUrl?: string
+  onRetry: () => void
+  componentOwner?: string | null
+  currentUsername?: string | null
+}) {
+  const shared = entry.outcome === 'COMPLETED' && entry.sharedWith.length > 0
+  const unknown = entry.outcome === 'UNKNOWN' ? unknownWordingFor(entry.reasonKind) : null
+  const responsibility = responsibilityFor(entry)
+  const party = responsibility ? responsibleParty(responsibility, { componentOwner, currentUsername }) : null
+
+  return (
+    <div
+      data-testid="archive-readiness-entry"
+      data-outcome={entry.outcome}
+      className="rounded-md border p-4 space-y-2.5"
+    >
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs font-medium text-muted-foreground">{targetKindLabel(entry.targetKind)}</span>
+        <span className="text-sm font-mono">{entry.targetId}</span>
+        <Badge variant={outcomeTone(entry)} className="uppercase tracking-wide">
+          {entry.outcome}
+        </Badge>
+      </div>
+
+      {entry.outcome === 'COMPLETED' && !shared && entry.reason && (
+        <p className="text-sm text-muted-foreground">{entry.reason}</p>
+      )}
+
+      {shared && (
+        <p className="text-sm text-muted-foreground">
+          Not required to be archived — also used by {entry.sharedWith.join(', ')}.
+        </p>
+      )}
+
+      {entry.outcome === 'NOT_COMPLETED' && (
+        <div className="space-y-1">
+          {/* CRS's reason is a diagnosis ("Repository is not archived: <id>"); the
+              instruction below says what to do about it. Both are shown — neither
+              answers the other's question. Still guarded: the field is nullable. */}
+          {entry.reason && <p className="text-sm text-muted-foreground">{entry.reason}</p>}
+          <p className="text-sm text-destructive" data-testid="archive-readiness-action">
+            {actionFor(entry.targetKind)}
+          </p>
+        </div>
+      )}
+
+      {unknown && (
+        <div className="flex items-center gap-3 flex-wrap">
+          <p className="text-sm text-[color:var(--color-badge-yellow-fg)]">{entry.reason ?? unknown.message}</p>
+          {unknown.retryable && (
+            <Button variant="outline" size="sm" onClick={onRetry}>
+              <RefreshCw className="h-3.5 w-3.5" />
+              Retry
+            </Button>
+          )}
+        </div>
+      )}
+
+      {/* An explicit assignment, not a category tag: "Responsible" plus a person (or the
+          team) reads as someone's work, where a bare label left the reader guessing whether
+          it was theirs. Highlighted when the reader is the person named. */}
+      {responsibility && party && (
+        <p
+          data-testid="archive-readiness-responsibility"
+          data-responsibility={responsibility}
+          data-viewer={party.isViewer ? 'true' : undefined}
+          className={
+            party.isViewer
+              ? 'flex items-center gap-1.5 text-sm font-medium text-foreground'
+              : 'flex items-center gap-1.5 text-sm text-muted-foreground'
+          }
+        >
+          {responsibility === 'COMPONENT_OWNER' ? (
+            <UserRound className="h-3.5 w-3.5 shrink-0" />
+          ) : (
+            <Users className="h-3.5 w-3.5 shrink-0" />
+          )}
+          <span className="text-muted-foreground">Responsible:</span>
+          <span className={party.isViewer ? 'text-foreground' : 'text-foreground/80'}>{party.name}</span>
+        </p>
+      )}
+
+      {entry.openIssues.length > 0 && (
+        <ul className="space-y-1 pl-1">
+          {entry.openIssues.map((issue) => {
+            const url = issueTrackerUrl(jiraBaseUrl, issue.key)
+            return (
+              <li key={issue.key} className="text-sm">
+                {url ? (
+                  <a href={url} target="_blank" rel="noopener noreferrer" className="font-mono text-primary hover:underline">
+                    {issue.key}
+                  </a>
+                ) : (
+                  <span className="font-mono">{issue.key}</span>
+                )}
+                {' — '}
+                <span>{issue.summary}</span>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
+  )
+}

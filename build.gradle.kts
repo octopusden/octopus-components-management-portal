@@ -13,12 +13,28 @@ plugins {
     id("org.jlleitschuh.gradle.ktlint")
     id("org.jetbrains.kotlinx.kover")
     id("org.octopusden.octopus-quality")
-    signing
+    id("org.sonarqube")
     idea
     `maven-publish`
 }
 
 octopusQuality {
+    // This repository must publish NOTHING to Maven Central. `release.yaml` sets
+    // `publish-to-nexus: false` and this branch removed the MavenPublication itself, because a
+    // workflow flag alone does not stop a manual `publishToSonatype` with real credentials.
+    //
+    // The declared set is therefore deliberately EMPTY — a statement that the build enforces,
+    // not an omission. The local task that did this until now is deleted in the same commit as
+    // the version bump: octopus-base v2.7.0 registers a task of exactly that name, and two tasks
+    // of one name fail configuration.
+    //
+    // Verification differs from the non-empty case and is easy to misread: with an empty set
+    // GREEN prints NOTHING, so a passing run is not by itself evidence the task executed, and
+    // RED can only be shown by temporarily ADDING a publication.
+    publication {
+        enforceCentralPublications.set(true)
+        centralPublications.set(emptySet())
+    }
     coverage {
         minimumLineCoverage.set(BigDecimal("0.00"))
         overallMinimum.set(BigDecimal("0.00"))
@@ -46,12 +62,45 @@ java {
     }
 }
 
+sonar {
+    // The Sonar Gradle plugin derives sonar.sources from the JVM source sets, so the React
+    // application under frontend/ is invisible to it. eslint and tsc cover that code through
+    // npmLint and npmTypecheck; Sonar adds the security and reliability rules those do not
+    // have, and puts the whole repository behind one quality gate.
+    //
+    // Naming sonar.sources replaces the derived value rather than adding to it, so the Kotlin
+    // root has to be listed here too. This is the repository's own layout, which the shared
+    // workflow in octopus-base cannot know; every Sonar deployment property still comes from it.
+    //
+    // The frontend unit tests live beside the code they test, so frontend/src appears in BOTH
+    // sonar.sources and sonar.tests, partitioned by sonar.test.inclusions. The scanner appends
+    // those patterns to the excluded sources itself, so the main scope needs no matching entry.
+    // sonar.test.inclusions filters every test root, not just the frontend one, so the Kotlin
+    // and e2e roots are listed as well - omitting them would drop those tests from test scope.
+    val frontendTestPatterns = listOf(
+        "frontend/src/**/*.test.ts",
+        "frontend/src/**/*.test.tsx",
+        "frontend/src/**/*.spec.ts",
+        "frontend/src/**/*.spec.tsx",
+        "frontend/src/test/**",
+    )
+    properties {
+        property("sonar.sources", "src/main/kotlin,frontend/src")
+        property("sonar.tests", "src/test/kotlin,frontend/src,frontend/e2e")
+        property(
+            "sonar.test.inclusions",
+            (listOf("src/test/kotlin/**", "frontend/e2e/**") + frontendTestPatterns).joinToString(","),
+        )
+        property("sonar.exclusions", "frontend/node_modules/**,frontend/dist/**,frontend/coverage/**")
+    }
+}
+
 kotlin {
     jvmToolchain(25)
     compilerOptions.jvmTarget = JvmTarget.JVM_25
 }
 
-// SpotBugs: nothing to configure here. octopus-quality 2.4.1 only wires SpotBugs on Java
+// SpotBugs: nothing to configure here. octopus-quality only wires SpotBugs on Java
 // modules without Kotlin, so this Kotlin-only portal never gets it — no force/disable needed.
 
 // detekt 2.x splits its baselines per source set (detekt-baseline-main.xml / -test.xml)
@@ -113,10 +162,6 @@ dependencies {
 
 ext {
     System.getenv().let {
-        set(
-            "signingRequired",
-            it.containsKey("ORG_GRADLE_PROJECT_signingKey") && it.containsKey("ORG_GRADLE_PROJECT_signingPassword")
-        )
         set(
             "dockerRegistry",
             System.getenv().getOrDefault("DOCKER_REGISTRY", project.properties["docker.registry"])
@@ -313,43 +358,15 @@ nexusPublishing {
     }
 }
 
-publishing {
-    publications {
-        create<MavenPublication>("bootJar") {
-            artifact(tasks.getByName("bootJar"))
-            from(components["java"])
-            pom {
-                name.set(project.name)
-                description.set("Octopus module: ${project.name}")
-                url.set("https://github.com/octopusden/octopus-components-management-portal.git")
-                licenses {
-                    license {
-                        name.set("The Apache License, Version 2.0")
-                        url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
-                    }
-                }
-                scm {
-                    url.set("https://github.com/octopusden/octopus-components-management-portal.git")
-                    connection.set("scm:git://github.com/octopusden/octopus-components-management-portal.git")
-                }
-                developers {
-                    developer {
-                        id.set("octopus")
-                        name.set("octopus")
-                    }
-                }
-            }
-        }
-    }
-}
-
-signing {
-    isRequired = project.ext["signingRequired"] as Boolean
-    val signingKey: String? by project
-    val signingPassword: String? by project
-    useInMemoryPgpKeys(signingKey, signingPassword)
-    sign(publishing.publications["bootJar"])
-}
+// This repository publishes nothing to Maven Central: nothing consumes it as a Maven
+// dependency and its deliverable is the docker image built below. The release workflow has
+// passed publish-to-nexus: false since the original change, but the MavenPublication and
+// the signing block that signed it were left behind — so a manual `./gradlew
+// publishToSonatype` with credentials would still have uploaded the boot jar. Both halves,
+// or it is not done.
+//
+// nexusPublishing above is intentionally left in place: it declares only the destination,
+// creates no publication, and keeps publishToSonatype existing as a harmless no-op.
 
 docker {
     springBootApplication {

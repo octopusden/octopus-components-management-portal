@@ -7,7 +7,9 @@ import {
   useFieldConfigEntry,
   useFieldLabel,
   useFieldEditable,
+  useFieldVisibility,
   isFieldEditableFor,
+  resolveFieldEntry,
   labelFor,
   searchabilityFor,
   DEFAULT_SEARCHABILITY,
@@ -384,6 +386,43 @@ describe('isFieldEditableFor', () => {
   it('an unconfigured path defaults to editable', () => {
     expect(isFieldEditableFor(data, 'jira.nope', regularUser)).toBe(true)
   })
+
+  // CRS stores the axis LOWERCASED (ConfigSyncService.serializeFieldEntry
+  // `.trim().lowercase()`), so the real wire shape of an admin-only field is
+  // `{"editable": "adminonly"}` — never the camelCase token this module compares.
+  // A strict comparison read every adminOnly field as editable-by-all, which kept
+  // `jira.technical` in a non-admin's PATCH and earned a 403 from CRS.
+  it('matches the axis case-insensitively (CRS serves it lowercased)', () => {
+    const wire = {
+      jira: {
+        technical: { visibility: 'editable', editable: 'adminonly' },
+        versionFormat: { editable: 'NONE' },
+        projectKey: { editable: ' All ' },
+        displayName: { visibility: 'READONLY' },
+      },
+    }
+    expect(isFieldEditableFor(wire, 'jira.technical', regularUser)).toBe(false)
+    expect(isFieldEditableFor(wire, 'jira.technical', adminUser)).toBe(true)
+    expect(isFieldEditableFor(wire, 'jira.versionFormat', adminUser)).toBe(false)
+    expect(isFieldEditableFor(wire, 'jira.projectKey', regularUser)).toBe(true)
+    expect(isFieldEditableFor(wire, 'jira.displayName', adminUser)).toBe(false)
+  })
+
+  it('an unrecognized axis token degrades to editable, as CRS does', () => {
+    const typo = { jira: { technical: { editable: 'admins-only' } } }
+    expect(isFieldEditableFor(typo, 'jira.technical', regularUser)).toBe(true)
+  })
+
+  // The resolver hands back the CANONICAL camelCase token, so consumers that read
+  // the axis directly (JiraTab's "admin only" pill) keep working on the wire shape.
+  it('resolveFieldEntry canonicalizes the axis it returns', () => {
+    const wire = { jira: { technical: { visibility: 'EDITABLE', editable: 'adminonly' } } }
+    expect(resolveFieldEntry(wire, 'jira.technical')).toMatchObject({
+      visibility: 'editable',
+      editable: 'adminOnly',
+    })
+    expect(resolveFieldEntry({ jira: { technical: { editable: 'huh' } } }, 'jira.technical').editable).toBeUndefined()
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -447,6 +486,35 @@ describe('useFieldEditable', () => {
     mockUseCurrentUser.mockReturnValue({ data: regularUser, isLoading: false } as unknown as ReturnType<typeof useCurrentUser>)
     const { result } = renderHook(() => useFieldEditable('jira.projectKey'), { wrapper: makeWrapper() })
     expect(result.current).toBe(true)
+  })
+})
+
+describe('useFieldVisibility', () => {
+  const visibilityOf = (fieldConfig: unknown, fcOverrides: Record<string, unknown> = {}) => {
+    mockUseFieldConfig.mockReturnValue({
+      data: fieldConfig,
+      isLoading: false,
+      ...fcOverrides,
+    } as unknown as ReturnType<typeof useFieldConfig>)
+    mockUseCurrentUser.mockReturnValue({ data: regularUser, isLoading: false } as unknown as ReturnType<typeof useCurrentUser>)
+    return renderHook(() => useFieldVisibility('build.buildTasks'), { wrapper: makeWrapper() }).result.current
+  }
+
+  it('is editable for an ordinary field', () => {
+    expect(visibilityOf({ build: { buildTasks: {} } })).toBe('editable')
+  })
+
+  it('is readonly when the user may not edit the field', () => {
+    expect(visibilityOf({ build: { buildTasks: { visibility: 'readonly' } } })).toBe('readonly')
+  })
+
+  it('is hidden when field-config hides the field', () => {
+    expect(visibilityOf({ build: { buildTasks: { visibility: 'hidden' } } })).toBe('hidden')
+  })
+
+  it('fails closed to hidden while field-config loads or after it errored', () => {
+    expect(visibilityOf(undefined, { isLoading: true })).toBe('hidden')
+    expect(visibilityOf(undefined, { isError: true })).toBe('hidden')
   })
 })
 

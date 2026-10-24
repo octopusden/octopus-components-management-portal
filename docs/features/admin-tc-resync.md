@@ -1,8 +1,10 @@
-# Admin: TeamCity Resync
+# Admin: Sync from TeamCity
 
 > Target users: registry admins (Keycloak realm role mapped to `IMPORT_DATA` permission, i.e. `ROLE_ADMIN`).
 
 ## What it does
+
+Links components to TeamCity projects (replaces manual links) and turns Auto release on (never off) where every release line has a finish-build trigger, unless someone changed the flag.
 
 Triggers `POST /rest/api/4/admin/teamcity-project-ids/sync` on CRS. The backend walks every DB-sourced component, queries the configured TeamCity for projects matching that component, and rewrites `components.teamcity_project_id` **and** `components.teamcity_project_url` where the match changes. The result wire shape (`TeamCityResyncResult` in `frontend/src/lib/types.ts`) is a counter object — `scanned`, `updated`, `unchanged`, `skipped_no_match`, `skipped_ambiguous`, optional `ambiguous_auto_resolved` — plus an `errors: string[]` list of per-component error messages. The Portal renders the counters as tiles when the job completes; the error list feeds the destructive banner.
 
@@ -38,7 +40,7 @@ The job state is in-memory on CRS (same caveat as the components-migration job �
 
 ## Counter tiles
 
-On COMPLETED the panel renders seven `StatCard` tiles in a single row:
+On COMPLETED the panel renders eight `StatCard` tiles in a single row:
 
 - **Scanned** — total components considered.
 - **Updated** — `components.teamcity_project_id` rewritten because the match changed.
@@ -46,6 +48,7 @@ On COMPLETED the panel renders seven `StatCard` tiles in a single row:
 - **No match** — no TC project found. Often a typo in component name or a project not yet created.
 - **Ambiguous** — multiple TC projects matched and the auto-resolution rule did not pick one. Listed in the detail banner for manual fix.
 - **Auto-resolved** — multiple TC projects matched and CRS picked the one whose name starts with `CDRelease-` (per CRS PR #188). Surface it so an operator can sanity-check the picks.
+- **Auto release on** — components this run turned `autoRelease` on for (every release line has a finish-build trigger, flag never changed by a person). Never turned off; `0` on an older CRS.
 - **Errors** — the underlying TC client failed (auth, 5xx, timeout). Component IDs are listed in the destructive banner below.
 
 Tiles are read-only — there is no click-through to a filtered list page.
@@ -71,3 +74,4 @@ Like the migration panels, the Start button is dimmed until the user enables adm
 - CRS PR #37 — auto-resolved (`CDRelease-*`) tile and report shape.
 - CRS PR #181 — backend async TC resync job (`POST /sync` + `GET /sync/job`).
 - [`admin-migration.md`](admin-migration.md) — companion async-job feature.
+- [`tc-validation.md`](tc-validation.md) — companion read-only diagnostics sweep (validation findings, not project-id repair).

@@ -50,6 +50,23 @@ describe('useComponents — URL params', () => {
     expect(calledUrl).toContain('sort=componentKey%2Casc')
   })
 
+  it('passes autoRelease when set, and omits the param when unset', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result } = renderHook(
+      () => useComponents({ filter: { autoRelease: false } }),
+      { wrapper: makeWrapper() },
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const url = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    expect(url).toContain('autoRelease=false')
+
+    vi.clearAllMocks()
+    mockApi.get.mockResolvedValue(emptyPage)
+    const { result: r2 } = renderHook(() => useComponents(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(r2.current.isSuccess).toBe(true))
+    expect(((mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string)).not.toContain('autoRelease')
+  })
+
   it('passes canBeParent=true when set, and omits the param when unset', async () => {
     mockApi.get.mockResolvedValue(emptyPage)
     const { result } = renderHook(
@@ -109,6 +126,25 @@ describe('useComponents — URL params', () => {
 
     const calledUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
     expect(calledUrl).toContain('archived=true')
+  })
+
+  it('passes testComponent filter when set, omits it when undefined', async () => {
+    mockApi.get.mockResolvedValue(emptyPage)
+
+    const { result } = renderHook(
+      () => useComponents({ filter: { testComponent: false } }),
+      { wrapper: makeWrapper() },
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const calledUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[0]![0] as string
+    expect(calledUrl).toContain('testComponent=false')
+
+    const { result: unfiltered } = renderHook(() => useComponents({ filter: {} }), {
+      wrapper: makeWrapper(),
+    })
+    await waitFor(() => expect(unfiltered.current.isSuccess).toBe(true))
+    const unfilteredUrl = (mockApi.get as ReturnType<typeof vi.fn>).mock.calls[1]![0] as string
+    expect(unfilteredUrl).not.toContain('testComponent')
   })
 
   it('does not include system param when filter is undefined', async () => {

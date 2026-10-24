@@ -2,9 +2,11 @@
 
 > Target users: `ACCESS_COMPONENTS` for read; per-tab gates for writes (see "Auth gating" below).
 
-The detail page at `/components/<UUID>` is the editor surface. It renders [`pages/ComponentDetailPage.tsx`](../../frontend/src/pages/ComponentDetailPage.tsx) and decomposes into tabs (General, **Solution** (conditional), **Misc**, Build, VCS, **Documentation**, Distribution, Jira, Escrow, **Supported Versions**, Configurations, As Code, Overrides, History). The page-level form lives once and General / Solution / Documentation / Misc all share its state via `react-hook-form`. The `Tabs` are controlled so a server 400 on a field that lives on a non-active tab auto-switches to the owning tab (`sectionForField`, incl. `docs → documentation`).
+The detail page at `/components/<UUID>` is the editor surface. It renders [`pages/ComponentDetailPage.tsx`](../../frontend/src/pages/ComponentDetailPage.tsx) and decomposes into tabs (General, **Solution** (conditional), **Misc**, Build, VCS, **Documentation**, Distribution, Jira, Escrow, **Supported Versions**, Configurations, As Code, Overrides, History, and an admin-only **Validations** group — TeamCity, Unregistered Release). The page-level form lives once and General / Solution / Documentation / Misc all share its state via `react-hook-form`. The `Tabs` are controlled so a server 400 on a field that lives on a non-active tab auto-switches to the owning tab (`sectionForField`, incl. `docs → documentation`).
 
-**Labels** are edited in the page **header** (badges + a popover [`HeaderLabelsEditor`](../../frontend/src/components/editor/HeaderLabelsEditor.tsx)), not on General. A component with `solution = true` is flagged in the header (a prominent badge + an info `StatusBanner`).
+**Labels** are edited in the page **header** (badges + a popover [`HeaderLabelsEditor`](../../frontend/src/components/editor/HeaderLabelsEditor.tsx)), not on General. A component with `solution = true` is flagged in the header (a prominent badge + an info `StatusBanner`). A component with `testComponent = true` gets a *Test* badge next to Archived/Active; the flag is edited by the **Test component** switch in General (Identity). The flag can only be set on a key matching one of the CRS test-component name patterns (`GET /components/meta/test-component-name-patterns`, e.g. `^test-`, `^cvelab-`; checked against the live form key): otherwise the switch is disabled with a hint naming them. A configured empty list blocks every key (hint: no patterns configured). It stays enabled while the flag is on so it can always be unset, and fails open — CRS decides — when the patterns cannot be loaded (error, or 404/501 from an older CRS) or any pattern uses Java-only regex syntax that JS cannot compile. The CRS 400 for a non-matching key (`testComponent: …`) shows inline under the switch; a rename of a flagged component to a non-matching key comes back as `name: …` under the key. CRS advisories in `ComponentDetail.warnings` (e.g. the `test-component` label without the flag) render as a warning `StatusBanner` under the header. Test components are hidden from the list by default (see [component-list](component-list.md)) but open normally by UUID or name.
+
+**Auto release** (`autoRelease`, default off) is a switch on the **Release Process** tab. Field-config: `hidden` removes the tab; `readonly`, `editable: none` and `editable: adminOnly` (for a non-admin) disable the switch. Not copied by a clone. Sync from TeamCity turns it on (never off) when every release line has a finish-build trigger, unless someone changed it.
 
 ## URL stability
 
@@ -17,11 +19,13 @@ The detail page at `/components/<UUID>` is the editor surface. It renders [`page
 | **General** | `GeneralTab` | Identity + ownership + metadata: name, **Display Name (nullable + unique; required for explicit+external)**, owner, release managers, security champions, system, clientCode, copyright, artifact IDs, plus a read-only **"who can edit"** list (owner + release managers + security champions, from `GET /{id}/editors`; admins also edit). **Solution toggle, Doc links, and Labels no longer live here** (see Solution / Documentation topics and the header labels editor). Detailed below. |
 | **Solution** | `SolutionTab` | Conditional topic (Overview group) — rendered **only** when the component key matches a service-config solution pattern (`isSolutionCandidate`, `/portal/config`) **and** `component.solution` field-config isn't `hidden`. A single `solution` toggle; `readonly` field-config disables it, and `buildUpdateRequest` omits `solution` when hidden/readonly (defense-in-depth). Shares the page form. |
 | **Documentation** | `DocumentationTab` | Doc-links editor moved off General (Build & Release group). `{ docComponentKey, majorVersion? }` rows backed by `component_doc_links`; a CRS `docs` 400 auto-switches here. Shares the page form. |
+| **Release Process** | `ReleaseProcessTab` | Build & Release group, after Jira. The **Auto release** switch. Shares the page form; hydrated by `GeneralTab`; an `autoRelease` 400 switches here. |
 | **Misc** | `MiscTab` | Parent Component, Can-be-parent, and the read-only Group Key / synthetic-group display — moved off General. Shares the page form; the header Save covers it. `MISC_TAB_FIELDS` lets the 400 handler auto-switch here when a parent/canBeParent error returns. |
-| **Build / VCS / Distribution / Jira / Escrow** | `BuildTab` etc. | Per-tab Save buttons; each tab handles its own mutation slice via the page-level `updateMutation`. Build's **Java / Maven Version** are dropdowns sourced from `GET /meta/{java,maven}-versions` (CRS `application.yml`, per-install overridable). Jira's **Display Name** is shown only when it diverges from the component display name. Mostly out of scope for this doc. |
+| **Build / VCS / Distribution / Jira / Escrow** | `BuildTab` etc. | Per-tab Save buttons; each tab handles its own mutation slice via the page-level `updateMutation`. Build's **Java / Maven Version** are dropdowns sourced from `GET /meta/{java,maven}-versions` (CRS `application.yml`, per-install overridable), alongside RMS's read-only registered ("ACTUAL") value per range — detailed below. Jira's **Display Name** is shown only when it diverges from the component display name. Mostly out of scope for this doc otherwise. |
 | **Supported Versions** | `SupportedVersionsTab` | Coverage editor — the decoupled-version-model layer 1 (CRS [ADR-018](https://github.com/octopusden/octopus-components-registry-service/blob/main/docs/registry/adr/018-decoupled-version-model.md)), independent of per-attribute overrides. Reads `GET /{id}/supported-versions` → `{all, ranges, warnings}`; `all` ⇒ every version is defined, else `supported = ∪ ranges` (a version outside resolves to 404). Add-range / remove / "Set to all versions" each **declaratively PUT the full desired set** (instant save, no page-level Save bar) and the server returns the **merged** coverage (overlapping/contiguous ranges collapse; a set tiling all-versions becomes `all`) + non-blocking V1/V5 `warnings` (an override left outside supported). `useUpdateSupportedVersions` seeds the cache with the PUT response before invalidating, so back-to-back edits don't replace from stale data. Detailed below. |
 | **Overrides** | `FieldOverrides` | Per-version field overrides. **Open-upper ranges (`[2.0,)`) are now first-class** (ADR-018; `isAllowedOverrideRange` rejects only the all-versions sentinel — that is the base default). Out of scope otherwise. |
 | **History** | `ComponentHistoryTab` (B7.1.2) | New in P1; detailed below. |
+| **TeamCity / Unregistered Release** (Validations group) | `TeamCityValidationsTab`, `ValidationProblemsList` | Admin-only (`isAdmin` = adminMode + `IMPORT_DATA`); the whole group is hidden for regular users. Detailed below. |
 
 ## Supported versions (coverage) tab
 
@@ -32,6 +36,33 @@ The decoupled version model (CRS [ADR-018](https://github.com/octopusden/octopus
 - **Client validation:** the add input gates on `isAllowedOverrideRange` (valid syntax, not an all-versions shape incl. a `(,)` segment inside a composite). Overlapping/adjacent ranges are **allowed** — the server merges them (no disjoint requirement); only the all-versions sentinel is rejected (use "Set to all versions"). Editing is gated by component ownership (`canEdit`); read-only otherwise.
 - **Relation to Overrides:** open-upper override ranges (`[2.0,)`) are now first-class on the Overrides tab; "extend coverage to ≥2 and default it to value X" is two edits — extend supported here, add an open-upper override there.
 - **Version lifecycle (future teaser).** A read-only, non-interactive "coming soon" block sits at the bottom of the tab showing the planned lifecycle states (Active development / On maintenance / Archived). It is the structural home for the deferred lifecycle layer (CRS [ADR-018](https://github.com/octopusden/octopus-components-registry-service/blob/main/docs/registry/adr/018-decoupled-version-model.md)); not yet wired to any state.
+
+## Build tab — registered build parameters (ACTUAL)
+
+CRS's `registered-build-parameters` spec (`openspec/specs/registered-build-parameters/spec.md` once archived, currently `openspec/changes/registered-build-parameters-display/`) records what Java/Maven version RMS actually saw a component build with, per version range — the **ACTUAL** value — read-only alongside the configured `javaVersion`/`mavenVersion` (DEFAULT/OVERRIDDEN) fields already on this tab.
+
+- **Read:** `ComponentDetail.registeredBuildParameters` (`{ javaActualRanges, javaWarnings, mavenActualRanges, mavenWarnings, actualDataUnavailable }`), attached to the same detail response — no separate fetch. `null` for a component CRS doesn't track this for (archived, not Maven/Gradle, or RMS integration disabled server-side); Portal renders nothing extra in that case.
+- **Ranges** ([`ActualBuildParameters.tsx`](../../frontend/src/components/editor/ActualBuildParameters.tsx)) render read-only under each of `javaVersion`/`mavenVersion`'s `FieldOverrideInline` — no add/edit/delete control, and no effect on the editability of the configured value.
+- **Disagreements** (`javaWarnings`/`mavenWarnings`) collapse into **one summary per attribute** ("N ranges differ from the registered version"), expandable on demand, rather than a badge per configured row. CRS pairs every configured row against every ACTUAL range, so the DEFAULT row is compared against all of them — a per-row badge would mark most long-lived, multi-Java-version components as permanently broken. Entries are de-duplicated on `(subRange, actualValue)` before counting (`dedupeActualDisagreements`, `lib/registeredBuildParameters.ts`) since CRS can report the same disagreement from two different configured rows.
+- **`actualDataUnavailable`** renders as its own alert (amber, `role="alert"`) — "we couldn't check", distinct in wording and styling from a disagreement (destructive, "we checked and it disagrees"). Never both at once.
+- **No client-side edit lock.** Displaying ACTUAL — including a disagreement — never disables the configured `javaVersion`/`mavenVersion` controls, and never gates the page Save button. CRS's write-time gate (below) is the only enforcement point.
+
+### Save-time RMS conflict / unavailable
+
+Saving `build.javaVersion`/`build.mavenVersion` goes through CRS's write-time ACTUAL gate, which can reject the whole combined `PATCH`:
+
+- **`409 RMS_REGISTERED_VALUE_CONFLICT`** — the new value disagrees with a non-null ACTUAL value. Classified as its own `kind: 'rms'` in [`useOptimisticConflict.ts`](../../frontend/src/hooks/useOptimisticConflict.ts) — deliberately not `'value'`, so this never risks being misrouted by the Jira-pair message-text heuristic that `'value'` conflicts go through. The Review dialog closes, the Build tab shows the message inline (`BuildTab`'s `conflictError` → `StatusBanner`), and the toast states plainly that nothing was saved (CRS applies the whole PATCH in one transaction). Portal then fires a best-effort `refetchQueries(['component', id])` *after* the message is shown — never awaited, so a slow or failed refetch can't delay or mask it — since CRS refreshed its own cached ACTUAL data for this component at the moment it rejected the write.
+- **`503` with `errorCode: 'RMS_UNAVAILABLE'`** — the live RMS check was unreachable, timed out, or was ambiguous, so CRS failed closed. Shown as a distinct "Registered build data unavailable" toast rather than the generic "Save failed"; any other `503` (or one with a different/no `errorCode`) falls through to that generic path unchanged.
+
+## VCS tab — checkout layout
+
+Each VCS Root (an item of the API's `vcsEntries`; the editors label them "VCS Root N") carries the registry's **Source Path** (the directory of the repository that belongs to the component; empty = the whole repository) and **Checkout Directory** (the directory below the checkout root the VCS Root is placed in: its sources land at `Checkout Directory / Source Path`; empty = the checkout root itself, for at most one VCS Root of a row). Each configuration row also carries a **Build Working Directory**: where the build runs, relative to the checkout root, empty = the checkout root. Decision: CRS ADR-022.
+
+- **Both editors.** The VCS tab ([`VcsTab.tsx`](../../frontend/src/components/editor/VcsTab.tsx), state in `useVcsSection`) and the per-range override editor ([`OverrideRowEditor.tsx`](../../frontend/src/components/editor/OverrideRowEditor.tsx)) show the two fields on every VCS Root, editable, and the row's Build Working Directory. A blank Source Path or Checkout Directory is sent as `null`.
+- **Build Working Directory.** Edited on the VCS tab, next to the Checkout Directories it must start with; the Build tab shows it read-only as "Build Working Directory (WORK_DIR in TC)" ("Checkout root" when empty) with a link to the VCS tab. It is the directory the build runs in; chain generation writes it to TeamCity as the `WORK_DIR` parameter (`%teamcity.build.checkoutDir%/<directory>`). The base value travels in the VCS slice (sent only when that slice is dirty) as `baseConfiguration.buildWorkingDirectory`; blank is sent as `''`, because a base-row `null` leaves the stored value, and it is `''` when every VCS Root is removed (the field is then hidden). A `vcs.settings` override row sends it in `markerChildren` next to `vcsEntries`, blank as `null`.
+- **Name is read-only.** The registry derives it (the Checkout Directory when the VCS Root has one). The stored Name is still sent unchanged, so a registry rolled back to before this change keeps it.
+- **Errors on the field.** A 400 `vcsEntries[<i>].<sourcePath|checkoutDirectory>: …` shows under that field of "VCS Root `<i>+1`" on the VCS tab, and `buildWorkingDirectory: …` under the Build Working Directory (the VCS tab is switched to, not Build; no toast). The same paths prefixed `fieldOverrides[<j>].` are traced to the override row sent at index `<j>` (`useOverridesSection().rowIds`) and show in that row's editor when it is opened again; the toast stays, since the editor is closed. An error on any member of a coalesced per-range group shows in the group's editor. `<i>` counts only the VCS Roots sent, i.e. those with a VCS Path. Errors clear on the next save, on Discard and on navigation.
+- **Chain-mismatch warning.** A successful PATCH whose response carries `warnings` (CRS sends one when the base VCS slice is saved on a component with a TeamCity project) shows each as a toast after "Component saved", or after "Partly saved" when only the supported-versions PUT failed.
 
 ## General tab
 
@@ -48,6 +79,39 @@ For users with the permission a different hint surfaces:
 The UX gate is a hint, not a security boundary. Server-side `@PreAuthorize canRenameComponent` is the actual authority — bypassing the disabled state would still get a 403. The reason we still gate in the UI is to set expectations: a "disabled forever" lie creates support tickets.
 
 The save handler in `ComponentDetailPage.handleSave` only sends `name` on a real change (`trimmedName !== '' && trimmedName !== component.name`). Defence in depth — even if the UI gate were bypassed, an unchanged form value never trips the server's gate.
+
+#### Key format on rename (SYS-095)
+
+A rename target follows the same rule as a newly created key: lowercase letters, digits and
+`-`, starting with a letter — **or** the component's own Client Code, lowercased, as a
+leading prefix, followed by the end of the key or `-` and the usual tail. That prefix is the
+only place a `_` may appear, so a component with no Client Code can carry none, and a Client
+Code without an underscore grants none. Uppercase in a key stays rejected either way, and
+so is a key that doesn't start with a lowercase letter — a Client Code may begin with a
+digit or an underscore, a key may not.
+
+The check is **change-based**: an untouched key is never re-validated, mirroring CRS's own
+`isRename` gate. That matters — 214 existing components have keys that predate the
+convention (uppercase, dots, underscores with no Client Code behind them), and re-validating
+those would leave their editors permanently invalid for no reason.
+
+A Client Code hidden by field-config still grants the underscore when it is populated: the
+form holds the stored value even when the input isn't rendered, matching CRS's use of the
+effective persisted value. Editing the Client Code re-checks the key immediately, without
+touching the key field.
+
+An illegal rename target also **blocks Save**, alongside the other client-detectable
+problems (artifact ownership, Group ID prefixes, VCS hosts) — the inline error and the
+blocked Save come from the same check, so they cannot disagree. A blank key is not a
+violation: `buildUpdateRequest` omits a blank name from the PATCH, so a cleared field is
+simply a rename not yet attempted.
+
+The message names the prefix that would legalise the underscore when a Client Code exists,
+and falls back to the plain charset rule when it doesn't. CRS is the enforcing side —
+[SYS-095](https://github.com/octopusden/octopus-components-registry-service/blob/main/docs/registry/requirements-common.md)
+and [ADR-020](https://github.com/octopusden/octopus-components-registry-service/blob/main/docs/registry/adr/020-component-key-format.md);
+the Portal check is a pre-submit mirror of it. See [`CONTEXT.md`](../../CONTEXT.md) for the
+**client-code prefix** term.
 
 ### Display Name (nullable + unique; required for explicit+external)
 
@@ -80,7 +144,9 @@ autocomplete (`frontend/src/components/ui/ComponentSelect.tsx`) drives the paren
 |---|---|---|
 | `name` | `string` (rename) | Only when `trimmedName !== '' && trimmedName !== component.name`. |
 | `parentComponentName` | `string \| null \| undefined` | Three states: `unchanged → undefined`, `'' → null` (clear), `value → string` (set). |
-| `archived` | `boolean` | Only when `values.archived !== component.archived`. ARCHIVE_COMPONENTS gate. |
+| `archived` | `boolean` | Only when `values.archived !== component.archived` — dead in practice: no control in the UI ever changes `values.archived` off its server-hydrated value, so this never fires. See "Archiving (readiness gate)" below for how archiving actually happens. |
+| `testComponent` | `boolean` | Only when the General **Test component** switch differs from `component.testComponent` (value-compared like `canBeParent`). |
+| `autoRelease` | `boolean` | Only when the Release Process **Auto release** switch was changed in this edit (dirty), differs from `component.autoRelease`, and the field is editable for the user (not `hidden`, `readonly`, `editable: none`, or `adminOnly` for a non-admin). |
 
 If any of these fields is always sent, a non-admin's plain edit (only `displayName` or owner) would 403 because the server's PATCH SpEL guards `(#request.archived == null or canArchiveComponent(...))` etc.
 
@@ -88,11 +154,19 @@ If any of these fields is always sent, a non-admin's plain edit (only `displayNa
 
 With CRS schema v2 (`component_configurations` as the wide row), component child collections are edited from the page-level form:
 
-- **TeamCity projects** — `projectId` rows backed by the `component_teamcity_projects` child table. Sort order is preserved (server sorts by `sort_order`); the header exposes them as read-only quick links.
+- **TeamCity projects** — `projectId` rows backed by the `component_teamcity_projects` child table. Sort order is preserved (server sorts by `sort_order`); the header exposes them as read-only quick links. Below the header, a project list renders each project's TeamCity validation status (see "Validations" below).
 - **Doc links** — `{ docComponentKey: string, majorVersion?: string | null }` rows backed by `component_doc_links`. Identifies the documentation source by component key and (optionally) the major version it documents (e.g. `3.x`); the editor maps a blank input to `null` on save. **Moved to the dedicated Documentation topic** ([`DocumentationTab`](../../frontend/src/components/editor/DocumentationTab.tsx)); it still shares the page form and saves in the same PATCH.
 - **Artifact IDs** — `{ groupPattern: string, artifactPattern: string }` rows backed by `component_artifact_ids`. Order preserved; primary use is fuzzy-match by build artifact identifier in downstream Feign consumers. Edited from General via [`ArtifactOwnershipEditor`](../../frontend/src/components/editor/ArtifactOwnershipEditor.tsx).
 
 The editable collections share the page-level `react-hook-form` state; the page Save bar sends them together with scalar General fields in one PATCH.
+
+## Validations (admin-only)
+
+An admin-only, read-only sidebar group with two items — **TeamCity** and **Unregistered Release** — both hidden for regular users (`isAdmin` = adminMode + `IMPORT_DATA`; see [`admin-mode.md`](admin-mode.md)). This mirrors the registry-wide [Validations page](../../frontend/src/pages/ValidationsPage.tsx), scoped to one component.
+
+- **TeamCity findings**, per project, from the header's project status list (checkmark/warning icon + issue count, admin-only) and `TeamCityValidationsTab`. Findings render via [`TeamCityMessage`](../../frontend/src/components/TeamCityMessage.tsx) — `\n`-separated lines, with `- STEP_ID in BUILD_CONF_ID` / `- BUILD_CONF_ID` lines turned into bulleted, linked TeamCity admin URLs.
+- **Unregistered Release** findings via `ValidationProblemsList` (the pre-existing registered-version validation facility). Empty state ("No unregister release for this component.") when the component has no findings — the tab is always present for an admin, not conditionally hidden.
+- Each sidebar item shows a red/warning treatment with a count badge when it has findings (`EditorSidebarNav`'s `problemCount`), independent of the other item — a component can show a warning on one, both, or neither.
 
 ### Release Managers / Security Champions (SYS-039 — multi-value)
 
@@ -111,12 +185,30 @@ The editable collections share the page-level `react-hook-form` state; the page 
 
 ### Optimistic-locking conflict UX (B7.1.6)
 
-On `409 Conflict`:
-1. `queryClient.refetchQueries({ queryKey: ['component', id], type: 'active' })` is awaited so the cache lands the post-conflict state. Note: `refetchQueries`, **not** `invalidateQueries` — the latter resolves once the cache marker is set, not after the network round-trip, so `getQueryData` would still see the user's stale snapshot. See the inline comment at `ComponentDetailPage.tsx:110-121` for the rationale; future "simplifications" back to `invalidate` are wrong.
+For an optimistic-lock `409 Conflict`, this flow now lives in [`useOptimisticConflict.ts`](../../frontend/src/hooks/useOptimisticConflict.ts)
+1. `queryClient.refetchQueries({ queryKey: ['component', id], type: 'active' })` is awaited so the cache lands the post-conflict state. Note: `refetchQueries`, **not** `invalidateQueries` — the latter resolves once the cache marker is set, not after the network round-trip, so `getQueryData` would still see the user's stale snapshot. See the inline comment at the top of `useOptimisticConflict.ts` for the rationale; future "simplifications" back to `invalidate` are wrong.
 2. The post-refetch `ComponentDetail` is fed to [`describeOptimisticConflict`](../../frontend/src/lib/conflict.ts), which builds a toast that names *what* and *when* (using the freshly-loaded `updatedAt`). When the cache fetch hasn't landed yet (rare in practice), the helper degrades to a "updated by another user" message rather than inventing data.
 3. Toast is `variant: 'destructive'` — colour matches the prior failure UX so the user sees something went wrong without reading the title.
 
 This is the lighter path Plan §7.1.6 explicitly allowed. The full ConflictResolutionDialog with field-level diff and merge actions is deferred to B7.2.
+
+All three persistent conflict banners (the Review-dialog `reviewError`, the Jira-tab `jiraConflict`, and the Build-tab `buildConflict`) are cleared not only at the start of the next save but also when the page navigates to a different component without remounting — the same id-change effect that re-hydrates the General/Misc form (`ComponentDetailPage.tsx`). Without this, a conflict raised on one component could otherwise still be showing after navigating to another.
+
+## Archiving (readiness gate)
+
+Choosing **Archive** in the header (requires `DELETE_COMPONENTS`) opens a dialog that no longer archives immediately. It requests CRS's archive-readiness verdict — `GET /{id}/archive-readiness`, fetched only once the dialog opens (never on page load) via [`useArchiveReadiness`](../../frontend/src/hooks/useArchiveReadiness.ts) — and presents the answer through [`ArchiveReadinessView`](../../frontend/src/components/ArchiveReadinessView.tsx) before the confirm control is enabled.
+
+- **The gate reads CRS's `ready` verdict, not a Portal-derived one.** The confirm Archive button inside the dialog is disabled unless `ready === true`, the request is neither loading nor in-flight, and it did not error. There is no override.
+- **Every reported target is listed** — issue-tracker project, open issues, TeamCity projects, repositories — each with its own outcome. A blocking entry states what is wrong: Portal authors that wording per target kind, since CRS sends no reason on a `FAILED` entry. An `UNKNOWN` entry is worded and offered a retry (or not) based on CRS's `reasonKind` — only `SYSTEM_UNAVAILABLE` is retryable; `REGISTRY_DATA` and `NOT_CONFIGURED` never resolve by retrying.
+- **A target shared with another live component** (non-empty `sharedWith`) is named as "not required to be archived" rather than hidden or read as a failure, and the view opens with a summary line once more than one such target is present.
+- **An answer with no entries** (nothing configured on the CRS side for this component) is stated as "no checks ran" rather than rendered as an empty, clean-looking list — but the `ready` verdict CRS returns still governs whether archiving proceeds.
+- **CRS does not enforce this at write time.** The readiness answer is advisory by CRS's own design — `deleteComponent` (the same soft-delete the Archive button calls) is unchanged and never consults readiness. Portal's gate is the only gate; there is no write-time refusal to handle.
+- **The General tab's `archived` field is not a live control.** There is no `archived` Switch on `GeneralTab` — it was removed well before this gate existed (only the RHF form value + a dead `buildUpdateRequest` compare survive; nothing renders it). Archiving happens exclusively through the header's Archive button.
+- **A blocking row says what to do, not just what is wrong.** CRS's `reason` diagnoses the state ("Repository is not archived: <id>"); Portal renders that *and* the step it implies ("Archive this repository in the VCS"), from [`actionFor`](../../frontend/src/lib/archiveReadinessOwnership.ts). Both appear — neither answers the other's question.
+- **Each blocking row names who is responsible.** An explicit "Responsible:" line, not a role chip. Open issues go to the component owner, **named as the person** the component records, because only that component's people can judge whether an issue may be closed; every other target, and anything `UNKNOWN`, goes to the F1 team, named collectively. When the reader is the owner the row says the work is theirs and is emphasised. This mapping is Portal policy — CRS's answer has no notion of people — see the change's `design.md` decision 9.
+- **Un-archiving is unchanged**: the header's Unarchive button (`ARCHIVE_COMPONENTS`), no readiness check, no dialog beyond the existing confirm.
+
+See `openspec/specs/component-archive-readiness/spec.md` for the full behavioural contract, and `openspec/changes/archive/2026-08-31-component-archive-readiness-gate/design.md` for the CRS response shape and the decisions behind it.
 
 ## Auth gating
 
@@ -124,7 +216,8 @@ This is the lighter path Plan §7.1.6 explicitly allowed. The full ConflictResol
 |---|---|---|
 | Read everything | none (public per CRS Phase 1 backward compat) | `permitAll` filter chain on GET |
 | Plain edit | Save and inline override controls follow the detail response `canEdit` flag | `canEditComponent(#id.toString())` |
-| Archive / unarchive | none (Switch is always interactive) | `canArchiveComponent(...)` (ROLE_ADMIN today) |
+| Archive | header Archive button requires `DELETE_COMPONENTS`; confirm is disabled until CRS reports the component ready (see "Archiving (readiness gate)" above) | `canDeleteComponent(...)` on both `DELETE` and `GET /{id}/archive-readiness` |
+| Unarchive | header Unarchive button requires `ARCHIVE_COMPONENTS`, no readiness check | `canArchiveComponent(...)` (ROLE_ADMIN today) |
 | Rename | `disabled` input with hint when missing `RENAME_COMPONENTS` | `canRenameComponent(...)` (ROLE_ADMIN today) |
 | Delete | `RequirePermission` around the page (the route is gated up-front)<sup>†</sup> | `canDeleteComponent(...)` |
 

@@ -131,6 +131,49 @@ describe('artifactOwnership helpers', () => {
     ).toBe(false)
   })
 
+  it('hasOverlappingOverrides does not falsely flag an exact-version range against its disjoint neighbors', () => {
+    expect(
+      hasOverlappingOverrides([
+        m({ id: 'a', base: false, range: '[2.6,2.7.25)' }),
+        m({ id: 'b', base: false, range: '[2.7.25,2.8.0)' }),
+        m({ id: 'c', base: false, range: '[2.8.0,2.8.512),(2.8.512,3.0)' }),
+        m({ id: 'd', base: false, range: '[2.8.512]' }),
+      ]),
+    ).toBe(false)
+  })
+
+  it('hasOverlappingOverrides compares full 3-part versions, not just the first two components', () => {
+    expect(
+      hasOverlappingOverrides([
+        m({ id: 'a', base: false, range: '[2.8.100,2.8.600)' }),
+        m({ id: 'b', base: false, range: '[2.8.200,2.8.300)' }),
+      ]),
+    ).toBe(true)
+    expect(
+      hasOverlappingOverrides([
+        m({ id: 'a', base: false, range: '[2.8.100,2.8.200)' }),
+        m({ id: 'b', base: false, range: '[2.8.300,2.8.600)' }),
+      ]),
+    ).toBe(false)
+  })
+
+  it('hasOverlappingOverrides treats a shared closed endpoint as overlapping', () => {
+    // Both inclusive at 2.0 — that version is claimed by both ranges.
+    expect(
+      hasOverlappingOverrides([
+        m({ id: 'a', base: false, range: '[1.0,2.0]' }),
+        m({ id: 'b', base: false, range: '[2.0,3.0]' }),
+      ]),
+    ).toBe(true)
+    // Same boundary, but one side excludes it — genuinely disjoint.
+    expect(
+      hasOverlappingOverrides([
+        m({ id: 'a', base: false, range: '[1.0,2.0)' }),
+        m({ id: 'b', base: false, range: '[2.0,3.0)' }),
+      ]),
+    ).toBe(false)
+  })
+
   it('toArtifactIdRequests: splits a (grandfathered) comma group-list into ONE request per groupId, same mode/tokens/range', () => {
     // Canonicalization: one groupId per request. A row that still carries "a,b" (legacy /
     // pre-split) fans out to two per-group requests — matching the create form and CRS storage.

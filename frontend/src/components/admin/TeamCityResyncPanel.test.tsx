@@ -8,6 +8,10 @@ import {
   type TeamCityResyncResult,
 } from '@/hooks/useTeamCityResync'
 import { useHistoryMigrationJob, useMigrationJob } from '@/hooks/useMigration'
+import {
+  invalidateTeamCityValidationJob,
+  useTeamCityValidationJob,
+} from '@/hooks/useTeamCityValidation'
 import { toast } from '@/hooks/use-toast'
 import { useAdminMode } from '@/lib/adminModeStore'
 import type { TeamCityResyncJobResponse } from '@/lib/types'
@@ -26,6 +30,10 @@ vi.mock('@/hooks/useMigration', () => ({
   useMigrationJob: vi.fn(),
   useHistoryMigrationJob: vi.fn(),
 }))
+vi.mock('@/hooks/useTeamCityValidation', () => ({
+  useTeamCityValidationJob: vi.fn(),
+  invalidateTeamCityValidationJob: vi.fn(),
+}))
 vi.mock('@/hooks/use-toast', () => ({
   toast: vi.fn(),
 }))
@@ -34,6 +42,8 @@ const mockUseRun = vi.mocked(useRunTeamCityResync)
 const mockUseJob = vi.mocked(useTeamCityResyncJob)
 const mockUseMigrationJob = vi.mocked(useMigrationJob)
 const mockUseHistoryJob = vi.mocked(useHistoryMigrationJob)
+const mockUseValidationJob = vi.mocked(useTeamCityValidationJob)
+const mockInvalidateValidationJob = vi.mocked(invalidateTeamCityValidationJob)
 const mockToast = vi.mocked(toast)
 
 const RESULT: TeamCityResyncResult = {
@@ -43,6 +53,7 @@ const RESULT: TeamCityResyncResult = {
   skipped_no_match: 50,
   skipped_ambiguous: 8,
   ambiguous_auto_resolved: 4,
+  auto_release_enabled: 7,
   errors: [],
 }
 
@@ -148,6 +159,7 @@ beforeEach(() => {
   // doesn't render.
   mockUseMigrationJob.mockReturnValue(buildJobQuery(null) as never)
   mockUseHistoryJob.mockReturnValue(buildJobQuery(null) as never)
+  mockUseValidationJob.mockReturnValue(buildJobQuery(null) as never)
 })
 
 afterEach(() => {
@@ -159,7 +171,7 @@ afterEach(() => {
 describe('TeamCityResyncPanel — admin-mode gate', () => {
   it('disables the button when adminMode is false', () => {
     renderPanel()
-    expect(screen.getByRole('button', { name: /resync tc project ids/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /sync from teamcity/i })).toBeDisabled()
     expect(screen.getByText(/Arm Admin mode above/i)).toBeDefined()
   })
 
@@ -168,7 +180,7 @@ describe('TeamCityResyncPanel — admin-mode gate', () => {
     act(() => {
       useAdminMode.setState({ enabled: true })
     })
-    expect(screen.getByRole('button', { name: /resync tc project ids/i })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: /sync from teamcity/i })).not.toBeDisabled()
   })
 })
 
@@ -179,7 +191,7 @@ describe('TeamCityResyncPanel — confirm + mutation', () => {
     useAdminMode.setState({ enabled: true })
 
     renderPanel()
-    fireEvent.click(screen.getByRole('button', { name: /resync tc project ids/i }))
+    fireEvent.click(screen.getByRole('button', { name: /sync from teamcity/i }))
 
     const dialog = await screen.findByRole('dialog')
     fireEvent.click(within(dialog).getByRole('button', { name: /confirm/i }))
@@ -193,12 +205,24 @@ describe('TeamCityResyncPanel — confirm + mutation', () => {
     useAdminMode.setState({ enabled: true })
 
     renderPanel()
-    fireEvent.click(screen.getByRole('button', { name: /resync tc project ids/i }))
+    fireEvent.click(screen.getByRole('button', { name: /sync from teamcity/i }))
 
     const dialog = await screen.findByRole('dialog')
     fireEvent.click(within(dialog).getByRole('button', { name: /cancel/i }))
 
     expect(mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('the confirm dialog mentions Auto release', async () => {
+    const { base } = buildMutation()
+    mockUseRun.mockReturnValue(base)
+    useAdminMode.setState({ enabled: true })
+
+    renderPanel()
+    fireEvent.click(screen.getByRole('button', { name: /sync from teamcity/i }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(/auto release/i)).toBeDefined()
   })
 })
 
@@ -208,11 +232,11 @@ describe('TeamCityResyncPanel — RUNNING / COMPLETED / FAILED rendering', () =>
     useAdminMode.setState({ enabled: true })
     renderPanel()
     expect(screen.getByTestId('tc-resync-progress')).toBeDefined()
-    // Button shows "Resyncing…" while a RUNNING job is being polled.
-    expect(screen.getByRole('button', { name: /resyncing/i })).toBeDisabled()
+    // Button shows "Syncing…" while a RUNNING job is being polled.
+    expect(screen.getByRole('button', { name: /syncing/i })).toBeDisabled()
   })
 
-  it('renders all seven counter tiles on COMPLETED', () => {
+  it('renders all eight counter tiles on COMPLETED', () => {
     mockUseJob.mockReturnValue(buildJobQuery(COMPLETED_JOB))
     useAdminMode.setState({ enabled: true })
     renderPanel()
@@ -225,8 +249,10 @@ describe('TeamCityResyncPanel — RUNNING / COMPLETED / FAILED rendering', () =>
     // Pin the new sub-counter value to guard against tile reordering accidentally
     // mapping a number to the wrong label.
     expect(screen.getByText('4')).toBeDefined()
+    expect(within(screen.getByText('Auto release on').parentElement!).getByText('7')).toBeDefined()
     expect(screen.getByText('Errors')).toBeDefined()
   })
+
 
   it('renders Auto-resolved as 0 when the field is absent (older CRS without ambiguous_auto_resolved)', () => {
     const { ambiguous_auto_resolved: _omit, ...legacyResult } = RESULT
@@ -270,7 +296,7 @@ describe('TeamCityResyncPanel — RUNNING / COMPLETED / FAILED rendering', () =>
     mockUseJob.mockReturnValue(buildJobQuery(FAILED_JOB))
     useAdminMode.setState({ enabled: true })
     renderPanel()
-    expect(screen.getByText(/TC resync failed: TC unreachable/i)).toBeDefined()
+    expect(screen.getByText(/TeamCity sync failed: TC unreachable/i)).toBeDefined()
   })
 
   it('renders a destructive banner when the start mutation errors (cross-kind 409 etc.)', () => {
@@ -311,7 +337,7 @@ describe('TeamCityResyncPanel — terminal COMPLETED side-effects', () => {
 
     await waitFor(() => expect(mockToast).toHaveBeenCalledOnce())
     const call = mockToast.mock.calls[0]?.[0] as { title: string; description: string }
-    expect(call.title).toMatch(/TC resync completed/i)
+    expect(call.title).toMatch(/TeamCity sync completed/i)
     expect(call.description).toContain('650 scanned')
     expect(call.description).toContain('12 updated')
     expect(call.description).toContain('4 auto-resolved')
@@ -328,6 +354,11 @@ describe('TeamCityResyncPanel — terminal COMPLETED side-effects', () => {
     )
     expect(queryKeyForms).toContainEqual(['components'])
     expect(hasPredicateCall).toBe(true)
+    // CRS auto-starts a TC validation job right after a successful resync —
+    // the panel must trigger a validation-job refetch so that auto-started
+    // job is discovered (see the dedicated describe block below; the helper
+    // is mocked in this file, so it's asserted via the mock, not the spy).
+    expect(mockInvalidateValidationJob).toHaveBeenCalledOnce()
   })
 
   it('does NOT re-fire toast/invalidations on subsequent re-renders for the same job id', async () => {
@@ -360,7 +391,7 @@ describe('TeamCityResyncPanel — cross-kind disable', () => {
     )
     useAdminMode.setState({ enabled: true })
     renderPanel()
-    expect(screen.getByRole('button', { name: /resync tc project ids/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /sync from teamcity/i })).toBeDisabled()
     expect(screen.getByText(/Components migration is running/i)).toBeDefined()
   })
 
@@ -370,7 +401,26 @@ describe('TeamCityResyncPanel — cross-kind disable', () => {
     )
     useAdminMode.setState({ enabled: true })
     renderPanel()
-    expect(screen.getByRole('button', { name: /resync tc project ids/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /sync from teamcity/i })).toBeDisabled()
     expect(screen.getByText(/History migration is running/i)).toBeDefined()
+  })
+
+  it('disables the button + shows hint when TC validation is RUNNING', () => {
+    mockUseValidationJob.mockReturnValue(
+      buildJobQuery({ state: 'RUNNING', id: 'validation-1' } as never) as never,
+    )
+    useAdminMode.setState({ enabled: true })
+    renderPanel()
+    expect(screen.getByRole('button', { name: /sync from teamcity/i })).toBeDisabled()
+    expect(screen.getByText(/TC validation is running/i)).toBeDefined()
+  })
+})
+
+describe('TeamCityResyncPanel — validation-job discovery on completion', () => {
+  it('invalidates the TC validation job query on terminal COMPLETED (CRS auto-starts validation after resync)', async () => {
+    useAdminMode.setState({ enabled: true })
+    mockUseJob.mockReturnValue(buildJobQuery(COMPLETED_JOB))
+    renderPanel()
+    await waitFor(() => expect(mockInvalidateValidationJob).toHaveBeenCalledOnce())
   })
 })

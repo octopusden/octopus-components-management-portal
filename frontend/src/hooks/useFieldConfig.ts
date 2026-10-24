@@ -112,7 +112,57 @@ export function resolveFieldEntry(data: unknown, fieldPath: string): FieldConfig
     }
   }
 
-  return { ...base, ...found }
+  return normalizeAxes({ ...base, ...found })
+}
+
+/**
+ * Case-fold the two policy axes to the tokens this module compares against.
+ *
+ * CRS does NOT serve the axis values verbatim: `ConfigSyncService.serializeFieldEntry`
+ * writes `visibility` and `editable` `.trim().lowercase()`ed into the
+ * `registry_config[field-config]` blob, so the wire shape of an `adminOnly` field is
+ * `{"editable": "adminonly"}`. The server then compares lowercase throughout
+ * (`FieldConfigService.editabilityFor`), while this module's tokens are camelCase —
+ * so a strict `=== 'adminOnly'` silently read every admin-only field as editable-by-all:
+ * the control rendered enabled and, worse, `omitNonEditable` kept the field in the PATCH,
+ * which CRS then rejected with 403 "Field '<path>' is editable by administrators only"
+ * for any non-admin.
+ *
+ * Unrecognized tokens are DROPPED rather than passed through, mirroring CRS's own
+ * graceful fallback (`editabilityFor` → `all`, `visibilityFor` → `editable`) so client
+ * and server agree on a typo'd catalog too.
+ */
+function normalizeAxes(entry: FieldConfigEntry): FieldConfigEntry {
+  const out = { ...entry }
+  if (out.visibility !== undefined) {
+    const v = canonicalToken(out.visibility, VISIBILITY_TOKENS)
+    if (v) out.visibility = v
+    else delete out.visibility
+  }
+  if (out.editable !== undefined) {
+    const e = canonicalToken(out.editable, EDITABILITY_TOKENS)
+    if (e) out.editable = e
+    else delete out.editable
+  }
+  return out
+}
+
+/** Canonical camelCase token for a case-insensitive wire value, or undefined if unknown. */
+function canonicalToken<T extends string>(raw: unknown, tokens: Record<string, T>): T | undefined {
+  if (typeof raw !== 'string') return undefined
+  return tokens[raw.trim().toLowerCase()]
+}
+
+const VISIBILITY_TOKENS: Record<string, FieldVisibility> = {
+  editable: 'editable',
+  readonly: 'readonly',
+  hidden: 'hidden',
+}
+
+const EDITABILITY_TOKENS: Record<string, FieldEditability> = {
+  all: 'all',
+  adminonly: 'adminOnly',
+  none: 'none',
 }
 
 /** Visibility for a field path, defaulting to 'editable'. Pure (no hook). */
@@ -192,6 +242,17 @@ export function useFieldEditable(fieldPath: string): boolean {
   // fields — the opposite of the intended gate.
   if (fcLoading || userLoading || fcError) return false
   return isEntryEditableFor(entry, user)
+}
+
+/**
+ * Where a field stands for the current user: hidden, readonly or editable. Fails closed to
+ * `hidden` while field-config loads or after it errored, so a hidden field never flashes in.
+ */
+export function useFieldVisibility(fieldPath: string): FieldVisibility {
+  const { entry, isLoading, isError } = useFieldConfigEntry(fieldPath)
+  const editable = useFieldEditable(fieldPath)
+  if (isLoading || isError || entry.visibility === 'hidden') return 'hidden'
+  return editable ? 'editable' : 'readonly'
 }
 
 /** Convenience hook for a single field's display label (see labelFor). */

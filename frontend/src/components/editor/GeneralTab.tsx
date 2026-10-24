@@ -2,16 +2,19 @@ import { useEffect } from 'react'
 import { UseFormReturn } from 'react-hook-form'
 import { Label } from '../ui/label'
 import { Input } from '../ui/input'
+import { Switch } from '../ui/switch'
 import { EmployeeStatusBadge, PeopleInput } from '../ui/PeopleInput'
 import { PeopleListInput } from '../ui/PeopleListInput'
 import { ChipsInput } from '../ui/ChipsInput'
 import { FieldInfo } from '../ui/FieldInfo'
 import { FieldLabelText } from '../ui/FieldLabelText'
 import { fromArtifactId, type OwnershipMappingValue } from '../../lib/artifactOwnership'
+import { renameKeyCharsetError } from '../../lib/component/createFormModel'
 import type { ComponentDetail } from '../../lib/types'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { hasPermission, PERMISSIONS } from '../../lib/auth'
 import { useFieldConfigEntry } from '../../hooks/useFieldConfig'
+import { keyMatchesTestPatterns, useTestComponentNamePatterns } from '../../hooks/useTestComponentNamePatterns'
 // system is MULTI-value (a component may belong to several systems —
 // component_systems junction). The editor is a ChipsInput multi-select fed the
 // FULL dictionary (not just in-use values) via useSystemsDictionary() →
@@ -51,7 +54,18 @@ export const GENERAL_TAB_FIELDS = [
   'releaseManager',
   'securityChampion',
   'copyright',
+  // CRS 400s `testComponent: … matches none of the test-component name patterns` (SYS-099);
+  // shown inline under the switch.
+  'testComponent',
 ] as const
+
+function testComponentHint(blocked: boolean, patterns: readonly string[] | undefined): string {
+  if (!blocked) return 'Synthetic component for testing; hidden from component lists by default.'
+  if (!patterns?.length) {
+    return 'No test-component name patterns are configured, so no component can be marked as a test component.'
+  }
+  return `Only components whose key matches ${patterns.join(', ')} can be test components.`
+}
 
 export interface GeneralFormValues {
   /**
@@ -74,6 +88,11 @@ export interface GeneralFormValues {
   clientCode: string
   solution: boolean
   archived: boolean
+  // Synthetic test component (hidden from the list by default). Value-compared
+  // on save like canBeParent.
+  testComponent: boolean
+  // Release automation may start releases of this component. Value-compared on save.
+  autoRelease: boolean
   parentComponentName: string
   // canBeParent — editable Switch: whether this component may be picked as another
   // component's parent. A canBeParent component may not itself have a parent (single
@@ -136,6 +155,19 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
     formState: { errors },
   } = form
 
+  // SYS-095 / CRS ADR-020: a rename target follows the create rule — '_' only inside the
+  // client-code prefix. Change-based, exactly like CRS's `isRename` gate: an untouched key
+  // is never re-validated, so the 214 legacy keys that predate the convention (uppercase,
+  // dots, unbacked underscores) don't render their own editor permanently invalid.
+  // Derived from watched values rather than an RHF validator: the editor's form is
+  // default-mode (validation only runs on submit, and Save is a custom handler), and
+  // watching clientCode is also what re-validates the key when the code changes.
+  const watchedKey = watch('name')
+  const watchedClientCode = watch('clientCode')
+  // Shared with ComponentDetailPage's Save gate, so the inline error and the blocked
+  // Save can never disagree; the helper owns the trim/blank/unchanged short-circuits.
+  const renameKeyError = renameKeyCharsetError(watchedKey, component.name, watchedClientCode)
+
   const componentOwner = watch('componentOwner')
   // parentComponentName / canBeParent moved to the Misc tab (MiscTab.tsx).
   // SYS-039 watchers — PeopleListInput (multi-value) is controlled, not
@@ -145,6 +177,17 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
   // `systems` is a multi-value string[] (ChipsInput), watched so the controlled
   // primitive receives the current array.
   const systemsValue = watch('systems')
+  const testComponent = watch('testComponent')
+  // SYS-099: the flag may only be SET on a key matching a configured pattern
+  // (checked against the live form key, so a pending rename counts). Unsetting
+  // is always allowed, so the switch stays enabled while the flag is on.
+  // Fail-open while loading / on error / on a CRS without the endpoint (no
+  // patterns known): CRS 400 stays authoritative. A real `[]` blocks every key.
+  const testPatterns = useTestComponentNamePatterns().data ?? undefined
+  const testComponentBlocked =
+    !testComponent &&
+    testPatterns !== undefined &&
+    !keyMatchesTestPatterns((watchedKey ?? '').trim(), testPatterns)
 
   // Systems dictionary powers the ChipsInput options — see the note next to its
   // render block. 404/501 → [] (handled by the hook).
@@ -209,6 +252,8 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
     setValue('clientCode', component.clientCode ?? '')
     setValue('solution', component.solution ?? false)
     setValue('archived', component.archived)
+    setValue('testComponent', component.testComponent ?? false)
+    setValue('autoRelease', component.autoRelease ?? false)
     // parentComponentName / canBeParent render on the Misc tab but are hydrated HERE: General
     // is the default tab (always mounted on load), whereas Radix unmounts the inactive Misc
     // tab, so hydrating in MiscTab would leave these unset until the user opens Misc.
@@ -270,16 +315,16 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
               className={!isNew && !canRename ? 'bg-muted' : undefined}
               {...register('name')}
             />
-            {errors.name && (
-              <p className="text-xs text-destructive">{errors.name.message}</p>
+            {(errors.name || renameKeyError) && (
+              <p className="text-xs text-destructive">{errors.name?.message ?? renameKeyError}</p>
             )}
-            {!errors.name && !isNew && !canRename && (
+            {!errors.name && !renameKeyError && !isNew && !canRename && (
               <p className="text-xs text-muted-foreground">
                 Renaming requires the RENAME_COMPONENTS permission (typically ROLE_ADMIN).
                 Ask an admin to rename this component or request the permission.
               </p>
             )}
-            {!errors.name && !isNew && canRename && (
+            {!errors.name && !renameKeyError && !isNew && canRename && (
               <p className="text-xs text-muted-foreground">
                 Renaming changes the canonical identifier — every legacy v1/v2/v3 lookup
                 by old key will resolve to the renamed component.
@@ -306,6 +351,27 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
               )}
             </div>
           )}
+
+          {/* Test component — hides the component from lists by default. */}
+          <div className="sm:col-span-2 flex items-center gap-3">
+            <Switch
+              id="testComponent"
+              checked={testComponent}
+              aria-describedby="testComponent-help"
+              disabled={testComponentBlocked}
+              onCheckedChange={(checked) =>
+                setValue('testComponent', checked, { shouldDirty: true, shouldTouch: true })
+              }
+            />
+            <Label htmlFor="testComponent" className="cursor-pointer">Test component</Label>
+            <span id="testComponent-help" className="text-xs text-muted-foreground">
+              {testComponentHint(testComponentBlocked, testPatterns)}
+            </span>
+            {errors.testComponent && (
+              <p className="text-xs text-destructive">{errors.testComponent.message}</p>
+            )}
+          </div>
+
 
           {/* Parent Component, Can-be-parent, and Group Key / Synthetic-group moved to the
               Misc tab (MiscTab.tsx) to keep General focused on identity/ownership/metadata.

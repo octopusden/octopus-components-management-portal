@@ -48,6 +48,15 @@ interface MultiSelectFilterProps {
   'aria-invalid'?: boolean
   /** Forwarded to the trigger so AT can locate the error/help text. */
   'aria-describedby'?: string
+  /**
+   * Maps an option's raw value (what's stored/sent) to its display text.
+   */
+  getOptionLabel?: (option: string) => string
+  /**
+   * Renders option text in monospace — fits raw tokens (owner/label/build-
+   * system values) but not human-readable labels.
+   */
+  monospaceOptions?: boolean
 }
 
 export function MultiSelectFilter({
@@ -63,6 +72,8 @@ export function MultiSelectFilter({
   'aria-required': ariaRequired,
   'aria-invalid': ariaInvalid,
   'aria-describedby': ariaDescribedBy,
+  getOptionLabel = (option) => option,
+  monospaceOptions = true,
 }: MultiSelectFilterProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -87,8 +98,10 @@ export function MultiSelectFilter({
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return options
-    return options.filter((o) => o.toLowerCase().includes(q))
-  }, [options, search])
+    return options.filter(
+      (o) => o.toLowerCase().includes(q) || getOptionLabel(o).toLowerCase().includes(q),
+    )
+  }, [options, search, getOptionLabel])
 
   // Container-level Arrow handling — "stops at last" (matches native <select>).
   // preventDefault so the popover doesn't scroll the page instead. Navigation
@@ -129,7 +142,7 @@ export function MultiSelectFilter({
     value.length === 0
       ? placeholder
       : value.length === 1
-        ? value[0]!
+        ? getOptionLabel(value[0]!)
         : `${value.length} ${pluralUnit}`
 
   const toggle = (option: string) => {
@@ -205,12 +218,14 @@ export function MultiSelectFilter({
                       else optionRefs.current.delete(option)
                     }}
                     type="checkbox"
-                    aria-label={option}
+                    aria-label={getOptionLabel(option)}
                     className="accent-primary h-4 w-4 rounded"
                     checked={checked}
                     onChange={() => toggle(option)}
                   />
-                  <span className="truncate font-mono text-xs">{option}</span>
+                  <span className={cn('truncate text-xs', monospaceOptions && 'font-mono')}>
+                    {getOptionLabel(option)}
+                  </span>
                 </label>
               )
             })

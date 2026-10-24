@@ -1,4 +1,5 @@
 import type { Page, Route } from '@playwright/test'
+import componentProfilesFixture from '../../src/test-fixtures/component-profiles.contract.json' with { type: 'json' }
 
 // Visual-acceptance route mocks. Visual specs MUST NOT depend on live CRS
 // data (different fixture snapshots break archived-row / action-coverage /
@@ -18,6 +19,7 @@ const COMPONENTS_LABELS = '**/rest/api/4/components/meta/labels'
 const AUDIT_RECENT = '**/rest/api/4/audit/recent?**'
 const FIELD_CONFIG = '**/rest/api/4/config/field-config'
 const COMPONENT_DEFAULTS = '**/rest/api/4/config/component-defaults'
+const COMPONENT_PROFILES = '**/rest/api/4/component-profiles'
 
 function jsonRoute(route: Route, status: number, body: unknown) {
   void route.fulfill({
@@ -80,6 +82,31 @@ export async function mockComponentDefaults(
   fixture: unknown = { vcs: { tag: '$module-$version' } },
 ) {
   await page.route(COMPONENT_DEFAULTS, (route) => jsonRoute(route, 200, fixture))
+}
+
+/**
+ * Mock GET /component-profiles — the create page gates the wizard on it. The default fixture is
+ * the four profiles service-config ships, as the registry lists them (shared with the unit tests).
+ */
+export async function mockComponentProfiles(page: Page, fixture: unknown = componentProfilesFixture) {
+  await page.route(COMPONENT_PROFILES, (route) => jsonRoute(route, 200, fixture))
+}
+
+/**
+ * Mock one template's description, dry run and create. [onRun] answers each run: return the
+ * registry's response body, with `dryRun` telling a dry run from a create.
+ */
+export async function mockComponentTemplate(
+  page: Page,
+  template: { id: string },
+  onRun: (body: Record<string, unknown>, dryRun: boolean) => { status: number; body: unknown },
+) {
+  await page.route(`**/rest/api/4/component-templates/${template.id}`, (route) => jsonRoute(route, 200, template))
+  await page.route(`**/rest/api/4/component-templates/${template.id}/components?**`, (route) => {
+    const dryRun = new URL(route.request().url()).searchParams.get('dryRun') !== 'false'
+    const answer = onRun((route.request().postDataJSON() ?? {}) as Record<string, unknown>, dryRun)
+    jsonRoute(route, answer.status, answer.body)
+  })
 }
 
 /** Mock GET /components (list) with a 500 to drive InlineError state. */

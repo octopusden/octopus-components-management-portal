@@ -7,10 +7,11 @@ pluginManagement {
         id("com.github.node-gradle.node") version "7.1.0"
         id("com.bmuschko.docker-spring-boot-application") version "10.0.0"
         id("io.github.gradle-nexus.publish-plugin") version "2.0.0"
-        id("org.octopusden.octopus-quality") version "2.4.1"
+        id("org.octopusden.octopus-quality") version "3.2.1"
         id("dev.detekt") version "2.0.0-alpha.3"
         id("org.jlleitschuh.gradle.ktlint") version "14.2.0"
         id("org.jetbrains.kotlinx.kover") version "0.9.8"
+        id("org.sonarqube") version "7.5.0.8588"
     }
 }
 

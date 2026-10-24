@@ -20,11 +20,17 @@ export interface ComponentSummary {
   systems: string[]
   productType: string | null
   archived: boolean
+  // Synthetic test component (e.g. the CVELAB stand). The list page hides these
+  // by default (`testComponent=false`); optional so existing fixtures need not
+  // set it — the server always emits it (default false).
+  testComponent?: boolean
   // Whether this component may be referenced as a parent (parent-picker
   // eligibility — NOT an aggregator, which is a `components { }` owner). Drives
   // the parent picker filter. Optional on the TS type so existing fixtures
   // need not set it; the server always emits it (default false).
   canBeParent?: boolean
+  // Release automation may start releases of this component (CRS autoRelease; default false). Optional for deploy-order tolerance (portal deployed before CRS emits it) and so fixtures need not set it.
+  autoRelease?: boolean
   updatedAt: string | null
   // Required on the wire per ComponentSummaryResponse — server emits []
   // for empty, never omits the key. Matches ComponentDetail.labels.
@@ -59,11 +65,14 @@ export interface ComponentDetail {
   systems: string[]
   clientCode: string | null
   archived: boolean
+  // Synthetic test component — see ComponentSummary.testComponent.
+  testComponent?: boolean
   solution: boolean | null
   parentComponentName: string | null
   // Whether this component may itself be a parent. Editable (CAN_BE_PARENT
   // switch); a component with canBeParent=true may not have a parent.
   canBeParent?: boolean
+  autoRelease?: boolean
   version: number
   createdAt: string | null
   updatedAt: string | null
@@ -105,6 +114,35 @@ export interface ComponentDetail {
   // admin). Optional — absent against an older backend, in which case the UI
   // falls back to the global CREATE_COMPONENTS permission check.
   canEdit?: boolean
+  // RMS-registered ("ACTUAL") build.javaVersion/mavenVersion data, per CRS's
+  // registered-build-parameters spec. Absent/null for a component CRS doesn't
+  // track this for (archived, non-Maven/Gradle, or RMS integration disabled).
+  registeredBuildParameters?: RegisteredBuildParametersDetail | null
+  // Non-blocking CRS advisories: on a write response (e.g. the TeamCity build
+  // chain must be recreated) and about the component itself (e.g. the
+  // `test-component` label without the testComponent flag). Optional — absent
+  // against an older registry and in fixtures.
+  warnings?: string[]
+}
+
+/** One RMS-registered ("ACTUAL") version range for a single build attribute. */
+export interface ActualRange {
+  versionRange: string
+  value: string
+}
+
+/** A stored DEFAULT/OVERRIDDEN sub-range that disagrees with ACTUAL there. */
+export interface ActualDisagreement {
+  subRange: string
+  actualValue: string
+}
+
+export interface RegisteredBuildParametersDetail {
+  javaActualRanges: ActualRange[]
+  javaWarnings: ActualDisagreement[]
+  mavenActualRanges: ActualRange[]
+  mavenWarnings: ActualDisagreement[]
+  actualDataUnavailable: boolean
 }
 
 /**
@@ -136,6 +174,8 @@ export interface ComponentConfiguration {
   escrow?: EscrowAspect | null
   jira?: JiraAspect | null
   vcsEntries: VcsEntry[]
+  // Directory the build runs in, relative to the checkout root. Absent against an older registry.
+  buildWorkingDirectory?: string | null
   mavenArtifacts: MavenArtifact[]
   fileUrlArtifacts: FileUrlArtifact[]
   dockerImages: DockerImage[]
@@ -194,6 +234,9 @@ export interface VcsEntry {
   tag?: string | null
   hotfixBranch?: string | null
   repositoryType?: string | null
+  // Checkout layout. Absent against an older registry.
+  sourcePath?: string | null
+  checkoutDirectory?: string | null
   sortOrder: number
 }
 
@@ -279,6 +322,37 @@ export interface TeamcityProject {
   projectId: string
   projectUrl?: string | null
   sortOrder: number
+  projectVersion?: string | null
+  validations: TeamcityValidation[]
+}
+
+export interface TeamcityValidation {
+  type: string
+  status: string
+  message?: string | null
+  updatedAt?: string | null
+}
+
+export interface TeamcityValidationSummary {
+  byStatus: Record<string, number>
+  byType: Record<string, number>
+  componentsWithIssues: number
+  findings: number
+}
+
+export interface TeamcityValidationRow {
+  componentId: string
+  componentName: string
+  message?: string | null
+  projectId: string
+  // Verbatim TeamCity webUrl for this finding's project, mirroring
+  // TeamcityProject.projectUrl — lets the findings table link the project id
+  // out to TeamCity the same way the detail page does. Optional/nullable
+  // since not every finding may resolve to a live project.
+  projectUrl?: string | null
+  status: string
+  type: string
+  updatedAt: string
 }
 
 // ---------------------------------------------------------------------------
@@ -292,6 +366,8 @@ export interface VcsEntryRequest {
   tag?: string | null
   hotfixBranch?: string | null
   repositoryType?: string | null
+  sourcePath?: string | null
+  checkoutDirectory?: string | null
 }
 
 export interface MavenArtifactRequest {
@@ -354,6 +430,8 @@ export interface BaseConfigurationRequest {
   escrow?: EscrowAspect | null
   jira?: JiraAspect | null
   vcsEntries?: VcsEntryRequest[] | null
+  // `null` leaves the stored value; `''` clears it.
+  buildWorkingDirectory?: string | null
   mavenArtifacts?: MavenArtifactRequest[] | null
   fileUrlArtifacts?: FileUrlArtifactRequest[] | null
   dockerImages?: DockerImageRequest[] | null
@@ -376,6 +454,8 @@ export interface ComponentCreateRequest {
   solution?: boolean | null
   parentComponentName?: string | null
   archived?: boolean
+  testComponent?: boolean
+  autoRelease?: boolean
   // Ordered multi-value lists on create. The CRS ComponentCreateRequest
   // defaults them to emptyList(), so the field is optional here — the create
   // dialog omits it entirely (people are added later via the editor).
@@ -398,6 +478,9 @@ export interface ComponentCreateRequest {
   securityGroups?: SecurityGroupRequest[]
   teamcityProjects?: TeamcityProjectRequest[]
   baseConfiguration?: BaseConfigurationRequest | null
+  // Id of the registry profile the component is created with; the registry checks the
+  // classification and the profile's field rules against it.
+  profile?: string | null
   // Change metadata recorded on the audit row (not on the component). Both
   // optional; the Jira key, when non-blank, must match a Jira key (see
   // lib/editor/jiraKey). Send a trimmed value or omit — never an empty string.
@@ -427,6 +510,8 @@ export interface ComponentUpdateRequest {
   canBeParent?: boolean | null
   clearParent?: boolean
   archived?: boolean | null
+  testComponent?: boolean | null
+  autoRelease?: boolean | null
   // PATCH semantics mirror `labels`: omit / null = don't touch; a provided
   // ordered list (including empty [] = clear) REPLACES the whole list.
   releaseManager?: string[] | null
@@ -476,6 +561,8 @@ export interface ComponentFilter {
   /** Exact-match OR across values (components can belong to multiple systems via systemJunctions). CSV on the wire. */
   system?: string[]
   archived?: boolean
+  /** `false` hides test components, `true` shows only them; absent = both (CRS default). */
+  testComponent?: boolean
   search?: string
   /**
    * Server-side exact-match filter on `componentOwner`. Sourced from
@@ -493,6 +580,8 @@ export interface ComponentFilter {
   labels?: string[]
   /** Filter on the `canBeParent` flag — the parent picker passes `true`. */
   canBeParent?: boolean
+  /** Filter on the `autoRelease` flag. */
+  autoRelease?: boolean
   // ── Extended-search filters (back the list-page "extended search" mode; each
   //    maps to a CRS v4 query param). clientCode / jiraProjectKey /
   //    parentComponentName / groupKey are multi-value exact-IN (SYS-046, CSV on
@@ -569,6 +658,8 @@ export interface AuditLogEntry {
 //    securityGroups/teamcityProjects/group) are marker-overridable.
 export interface MarkerChildrenPayload {
   vcsEntries?: VcsEntryRequest[] | null
+  // With `vcsEntries` on a `vcs.settings` row; the payload replaces the row.
+  buildWorkingDirectory?: string | null
   mavenArtifacts?: MavenArtifactRequest[] | null
   fileUrlArtifacts?: FileUrlArtifactRequest[] | null
   dockerImages?: DockerImageRequest[] | null
@@ -963,9 +1054,13 @@ export interface HistoryMigrationJobResponse {
 /**
  * 409 body returned for cross-kind conflicts — components POST while history
  * is RUNNING, history POST while TC sync is RUNNING, force-reset while
- * history is RUNNING, etc. Distinct from the same-kind attach 409 that
- * returns a full job-response body — distinguished by the `kind`
- * discriminator (always 'conflict' here).
+ * history is RUNNING, any of the above while TC validation or a TeamCity
+ * checkout layout Diff/Sync is RUNNING (or vice versa), etc. All six async job
+ * kinds (components migration, history migration, TC resync, TC validation,
+ * TC checkout layout Diff, TC checkout layout Sync) share one single-flight lifecycle
+ * gate on the backend. Distinct from the same-kind attach 409 that returns a
+ * full job-response body — distinguished by the `kind` discriminator (always
+ * 'conflict' here).
  */
 export interface MigrationConflictResponse {
   /** Discriminator — always 'conflict' for this shape. Mutually exclusive with the 'job' shape. */
@@ -975,8 +1070,11 @@ export interface MigrationConflictResponse {
     | 'history-migration-running'
     | 'history-import-likely-live-elsewhere'
     | 'tc-resync-running'
+    | 'tc-validation-running'
+    | 'tc-checkout-layout-diff-running'
+    | 'tc-checkout-layout-sync-running'
   message: string
-  activeKind: 'COMPONENTS' | 'HISTORY' | 'TC_RESYNC'
+  activeKind: 'COMPONENTS' | 'HISTORY' | 'TC_RESYNC' | 'TC_VALIDATION' | 'TC_CHECKOUT_LAYOUT_DIFF' | 'TC_CHECKOUT_LAYOUT_SYNC'
   activeJobId: string | null
 }
 
@@ -998,6 +1096,8 @@ export interface TeamCityResyncResult {
   skipped_no_match: number
   skipped_ambiguous: number
   ambiguous_auto_resolved?: number
+  /** Components this run turned Auto release on for; absent on older CRS. */
+  auto_release_enabled?: number
   errors: string[]
 }
 
@@ -1020,6 +1120,149 @@ export interface TeamCityResyncJobResponse {
   finishedAt: string | null
   errorMessage: string | null
   result: TeamCityResyncResult | null
+}
+
+export interface TeamCityValidationResult {
+  scanned: number
+  succeeded: number
+  failed: number
+  projectsWithIssues: number
+  removed: number
+  errors: string[]
+}
+
+export interface TeamCityValidationJobResponse {
+  /** Discriminator — always 'job' for this shape. */
+  kind?: 'job'
+  id: string
+  state: JobState
+  startedAt: string
+  finishedAt: string | null
+  errorMessage: string | null
+  result: TeamCityValidationResult | null
+}
+
+// ── TeamCity → CRS VCS checkout-layout Diff/Sync ───────────────────────────────────
+// Wire shapes for `rest/api/4/admin/teamcity-checkout-layout/**` — see CRS
+// `TeamcityCheckoutLayoutControllerV4` and the `dto/v4` + `teamcity/checkoutlayout`
+// packages it serves from. New endpoints, so (unlike the older job shapes
+// above) there's no legacy-CRS backward-compat concern: `kind` is required,
+// not optional.
+
+/**
+ * One outcome per Diff row (`CheckoutLayoutDiffRowStatus` on CRS). RESOLVED is the
+ * only status Sync will ever write; every other status is report-only.
+ */
+export type CheckoutLayoutDiffRowStatus =
+  | 'RESOLVED'
+  | 'CONFLICT'
+  | 'UNEXPRESSIBLE'
+  | 'NO_CHAIN'
+  | 'OUTSIDE_TEMPLATES'
+  | 'COMPILE_PAUSED'
+  | 'MANUAL_EDIT'
+  | 'IN_SYNC'
+  | 'INVALID'
+  | 'TC_ERROR'
+  | 'ROOTS_MISMATCH'
+
+/** One VCS root entry's current vs. TeamCity-derived Checkout Directory / Source Path. */
+export interface CheckoutLayoutEntryDiff {
+  name: string
+  vcsPath: string
+  branch?: string | null
+  tag?: string | null
+  hotfixBranch?: string | null
+  repositoryType?: string | null
+  currentCheckoutDirectory?: string | null
+  currentSourcePath?: string | null
+  derivedCheckoutDirectory?: string | null
+  derivedSourcePath?: string | null
+}
+
+/** One base or marker (`vcs.settings`) configuration row's diff. */
+export interface CheckoutLayoutRowDiff {
+  componentId: string
+  componentKey: string
+  configurationRowId: string
+  versionRange: string
+  /** "BASE" or the marker name — only "BASE" rows are ever selectable for Sync. */
+  rowLabel: string
+  status: CheckoutLayoutDiffRowStatus
+  entries: CheckoutLayoutEntryDiff[]
+  currentBuildWorkingDirectory?: string | null
+  derivedBuildWorkingDirectory?: string | null
+  sourceBuildTypeIds: string[]
+  notes: string[]
+}
+
+/** `GET /admin/teamcity-checkout-layout/diff/report.json` (component read access, 404 until a Diff has completed). */
+export interface CheckoutLayoutDiffResult {
+  /** The Diff run these rows came from; what a Sync request must name. */
+  diffId?: string
+  generatedAt: string
+  rows: CheckoutLayoutRowDiff[]
+}
+
+/** `POST /admin/teamcity-checkout-layout/diff` (202/409) and `GET .../diff/job` (200/404). */
+export interface TeamcityCheckoutLayoutDiffJobResponse {
+  kind: 'job'
+  id: string
+  state: JobState
+  startedAt: string
+  finishedAt: string | null
+  errorMessage: string | null
+  rowCount: number | null
+}
+
+/** POST body for `/admin/teamcity-checkout-layout/sync` — the Diff run's id plus the selected component ids. */
+export interface TeamcityCheckoutLayoutSyncRequest {
+  diffId: string
+  componentIds: string[]
+}
+
+export interface CheckoutLayoutRowSyncOutcome {
+  configurationRowId: string
+  rowLabel: string
+  /** `applied` / `skipped: changed since diff` / `skipped: <reason>` / `failed: <message>`. */
+  outcome: string
+}
+
+export interface CheckoutLayoutComponentSyncOutcome {
+  componentId: string
+  componentKey: string
+  rows: CheckoutLayoutRowSyncOutcome[]
+}
+
+/** One written field's rollback trace — before/after, per `field` on `root` (VCS entry name, or "" for the row-level BWD). */
+export interface CheckoutLayoutFieldChange {
+  componentKey: string
+  rowLabel: string
+  root: string
+  field: string
+  before: string | null
+  after: string | null
+}
+
+export interface CheckoutLayoutSyncResult {
+  triggeredBy: string
+  requested: number
+  applied: number
+  skipped: number
+  failed: number
+  components: CheckoutLayoutComponentSyncOutcome[]
+  fieldChanges: CheckoutLayoutFieldChange[]
+}
+
+/** `POST /admin/teamcity-checkout-layout/sync` (202/409) and `GET .../sync/job` (200/404). */
+export interface TeamcityCheckoutLayoutSyncJobResponse {
+  kind: 'job'
+  id: string
+  state: JobState
+  startedAt: string
+  finishedAt: string | null
+  errorMessage: string | null
+  result: CheckoutLayoutSyncResult | null
 }
 
 // ── CRS legacy version rendering (rest/api/2/.../detailed-version) ───────────
@@ -1050,7 +1293,7 @@ export interface DetailedComponentVersion {
  */
 export interface ServiceEvent {
   id: number
-  /** STARTUP | MIGRATION_COMPONENTS | MIGRATION_HISTORY | TEAMCITY_RESYNC | VALIDATION_SWEEP | ONBOARDING_VIDEO_VIEW */
+  /** STARTUP | MIGRATION_COMPONENTS | MIGRATION_HISTORY | TEAMCITY_RESYNC | TEAMCITY_VALIDATION | VALIDATION_SWEEP | ONBOARDING_VIDEO_VIEW */
   eventType: string
   /** Derived SYSTEM | USER split (from eventType), server-provided. */
   category?: string
@@ -1113,4 +1356,93 @@ export interface FeedbackResponse {
 
 export interface FeedbackStatusUpdateRequest {
   status: FeedbackStatus
+}
+
+// Archive-readiness gate (component-archive-readiness-gate). Mirrors CRS's
+// `GET rest/api/4/components/{id}/archive-readiness` response — advisory, not
+// enforced on write (see openspec/changes/component-archive-readiness-gate/design.md
+// "The contract"). CRS's endpoint is now on `main` and the vendored spec carries it, so
+// `ArchiveReadinessEntry` / `ArchiveReadinessResponse` also exist as generated types in
+// `src/lib/api/schema.d.ts`. These hand-written ones are kept for now and agree with the
+// generated shapes field for field, with one DELIBERATE difference: `reason` and
+// `reasonKind` are `T | null` here, while the generated types say `T | undefined` because
+// springdoc emits no `nullable: true` and CRS serialises a completed entry as
+// `"reason": null`. `null` is what arrives on the wire, so read through these types, not
+// the generated ones, until TD-002 removes the duplication.
+
+/** Which external system a single ArchiveReadinessEntry addresses. */
+export type ArchiveReadinessTargetKind = 'JIRA_ISSUES' | 'JIRA_PROJECT' | 'TEAMCITY_PROJECT' | 'REPOSITORY'
+
+/**
+ * COMPLETED / NOT_COMPLETED / UNKNOWN — three, not four. A target shared with a live
+ * component is COMPLETED with a non-empty `sharedWith`; there is no separate
+ * "skipped" outcome.
+ */
+export type ArchiveReadinessOutcome = 'COMPLETED' | 'NOT_COMPLETED' | 'UNKNOWN'
+
+/**
+ * Who owns the work a blocking entry leaves outstanding.
+ *
+ * NOT sent by CRS — its `ArchiveReadinessEntry` carries no such field today, so
+ * Portal derives this from `targetKind` (see `responsibilityFor`). Closing an
+ * issue can only be judged by the component's own people; every other target is
+ * infrastructure the platform team administers, as is anything unreadable.
+ * If CRS ever reports it, prefer the reported value over the derived one.
+ */
+export type ArchiveReadinessResponsibility = 'COMPONENT_OWNER' | 'F1_TEAM'
+
+/**
+ * Classifies the remedy an UNKNOWN entry needs, because `reason` is prose a
+ * caller cannot branch on. Always null on COMPLETED and NOT_COMPLETED. Only
+ * SYSTEM_UNAVAILABLE is worth retrying — REGISTRY_DATA and NOT_CONFIGURED
+ * never resolve by retrying.
+ */
+export type ArchiveReadinessReasonKind = 'SYSTEM_UNAVAILABLE' | 'REGISTRY_DATA' | 'NOT_CONFIGURED'
+
+/** An open Jira issue reported inside a JIRA_ISSUES entry. CRS supplies no URL. */
+export interface ArchiveReadinessOpenIssue {
+  key: string
+  summary: string
+}
+
+/**
+ * Per-target result in an ArchiveReadinessResponse.
+ *
+ * `reason` is populated on every outcome CRS can report a reason for: UNKNOWN,
+ * a COMPLETED target that no longer exists, and — since CRS's checkers were
+ * completed — every NOT_COMPLETED entry too. It is still typed nullable, and
+ * the render path must still cope with null: CRS's own DTO permits it, and a
+ * future check need not supply one.
+ *
+ * A reason is a diagnosis, not an instruction. Portal renders it *and* its own
+ * per-kind instruction (design.md decision 3) — the two answer different
+ * questions, so neither replaces the other.
+ *
+ * There is no `targetUrl`: CRS carries no deep link on an entry, so Portal
+ * builds its own links from `jiraBaseUrl` where relevant.
+ *
+ * `sharedWith` is non-empty only on COMPLETED, and CRS checks sharing BEFORE
+ * archived state — a non-empty list means the target was not required to be
+ * archived, not that the target is confirmed still live.
+ */
+export interface ArchiveReadinessEntry {
+  targetKind: ArchiveReadinessTargetKind
+  targetId: string
+  outcome: ArchiveReadinessOutcome
+  reason: string | null
+  reasonKind: ArchiveReadinessReasonKind | null
+  sharedWith: string[]
+  openIssues: ArchiveReadinessOpenIssue[]
+}
+
+/**
+ * `ready` is CRS's verdict — gate on this, never on a derived read of
+ * `entries`, so an outcome value Portal does not recognise can never unblock
+ * archiving (design.md decision 2). False iff some entry is NOT_COMPLETED or UNKNOWN.
+ * An unconfigured integration contributes no entries at all, so `entries` can
+ * be empty with `ready: true` meaning "nothing was checked", not "all passed".
+ */
+export interface ArchiveReadinessResponse {
+  ready: boolean
+  entries: ArchiveReadinessEntry[]
 }

@@ -140,4 +140,30 @@ describe('EditorSidebarNav', () => {
     await userEvent.setup().click(vp)
     expect(screen.getByText('problems-body')).toBeDefined()
   })
+
+  it('renders a per-item destructive count badge when an item has problemCount > 0, leaving other items muted', () => {
+    const sectionsWithProblem: EditorNavSection[] = [
+      ...SECTIONS,
+      {
+        label: 'Validations',
+        items: [
+          { value: 'teamcity', label: 'TeamCity', problemCount: 3 },
+          { value: 'unregistered-release', label: 'Unregistered Release' },
+        ],
+      },
+    ]
+    render(
+      <Tabs value="general" variant="underline">
+        <EditorSidebarNav sections={sectionsWithProblem} activeValue="general" />
+      </Tabs>,
+    )
+
+    const tc = screen.getByRole('tab', { name: /^TeamCity/ })
+    expect(tc.className).toContain('text-destructive')
+    expect(within(tc).getByText('3')).toBeDefined()
+
+    // No problemCount → stays the normal muted style, no red/warning icon.
+    const ur = screen.getByRole('tab', { name: /unregistered release/i })
+    expect(ur.className).not.toContain('text-destructive')
+  })
 })

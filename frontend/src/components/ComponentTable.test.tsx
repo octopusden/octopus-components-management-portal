@@ -362,17 +362,92 @@ describe('ComponentTable', () => {
       expect(cellForColumn('Release Manager').textContent).toContain('—')
     })
 
-    it('renders a single release manager as a chip', () => {
+    it('renders a single release manager as plain text, not a chip', () => {
       renderTable([makeComponent({ releaseManagers: ['jsmith'] })])
-      expect(within(cellForColumn('Release Manager')).getByText('jsmith')).toBeDefined()
+      const cell = cellForColumn('Release Manager')
+      expect(within(cell).getByText('jsmith')).toBeDefined()
+      // Owner-style formatting: no Badge chip wrapper in the cell.
+      expect(cell.querySelector('[data-variant]')).toBeNull()
     })
 
-    it('renders +N overflow badge when more than 3 release managers are present', () => {
-      renderTable([makeComponent({ releaseManagers: ['a', 'b', 'c', 'd'] })])
+    it('stacks two release managers on their own lines (no comma run)', () => {
+      renderTable([makeComponent({ releaseManagers: ['jsmith', 'adoe'] })])
+      const cell = cellForColumn('Release Manager')
+      expect(within(cell).getByText('jsmith')).toBeDefined()
+      expect(within(cell).getByText('adoe')).toBeDefined()
+      // One name per line — not 'jsmith, adoe' glued into a single run.
+      expect(cell.textContent).not.toContain(',')
+      expect(cell.querySelector('[data-variant]')).toBeNull()
+    })
+
+    it('shows no expand toggle at or below the 2-line visible limit', () => {
+      renderTable([makeComponent({ releaseManagers: ['jsmith', 'adoe'] })])
+      expect(within(cellForColumn('Release Manager')).queryByRole('button')).toBeNull()
+    })
+
+    it('shows the first two release managers plus a +N more toggle when there are more', () => {
+      renderTable([makeComponent({ releaseManagers: ['a', 'b', 'c', 'd', 'e'] })])
       const cell = cellForColumn('Release Manager')
       expect(within(cell).getByText('a')).toBeDefined()
-      expect(within(cell).getByText('+1')).toBeDefined()
-      expect(within(cell).queryByText('d')).toBeNull()
+      expect(within(cell).getByText('b')).toBeDefined()
+      // Overflow stays collapsed until the toggle is used — the row must not
+      // grow to five lines on its own.
+      expect(within(cell).queryByText('c')).toBeNull()
+      expect(within(cell).getByRole('button', { name: /show all 5 release managers/i }).textContent)
+        .toBe('+3 more')
+    })
+
+    it('shows the toggle with exactly one manager past the visible limit (3 values)', async () => {
+      // Boundary case: showToggle first flips true here and overflowCount is at
+      // its minimum, so a fencepost slip in either would surface in this test.
+      renderTable([makeComponent({ releaseManagers: ['a', 'b', 'c'] })])
+      const cell = cellForColumn('Release Manager')
+      expect(within(cell).queryByText('c')).toBeNull()
+      const toggle = within(cell).getByRole('button', { name: /show all 3 release managers/i })
+      expect(toggle.textContent).toBe('+1 more')
+      await userEvent.click(toggle)
+      expect(within(cell).getByText('c')).toBeDefined()
+    })
+
+    it('expands the full list inline on toggle click and collapses again', async () => {
+      renderTable([makeComponent({ releaseManagers: ['a', 'b', 'c', 'd', 'e'] })])
+      const cell = cellForColumn('Release Manager')
+      const toggle = within(cell).getByRole('button', { name: /show all 5 release managers/i })
+      expect(toggle.getAttribute('aria-expanded')).toBe('false')
+
+      await userEvent.click(toggle)
+      expect(within(cell).getByText('c')).toBeDefined()
+      expect(within(cell).getByText('e')).toBeDefined()
+      const collapse = within(cell).getByRole('button', { name: /show fewer release managers/i })
+      expect(collapse.textContent).toBe('show less')
+      expect(collapse.getAttribute('aria-expanded')).toBe('true')
+
+      await userEvent.click(collapse)
+      expect(within(cell).queryByText('c')).toBeNull()
+    })
+
+    it('drops blank entries instead of rendering an empty line', () => {
+      // Defensive: CRS child rows are trimmed non-empty by contract, but a blank
+      // slipping through must not surface as a stray empty row in the cell.
+      renderTable([makeComponent({ releaseManagers: ['', 'adoe'] })])
+      expect(cellForColumn('Release Manager').textContent).toBe('adoe')
+    })
+
+    it('trims surrounding whitespace so a padded value renders normalized', () => {
+      renderTable([makeComponent({ releaseManagers: ['  adoe  '] })])
+      expect(cellForColumn('Release Manager').textContent).toBe('adoe')
+    })
+
+    it('renders em-dash when every release-manager entry is blank', () => {
+      renderTable([makeComponent({ releaseManagers: ['', '  '] })])
+      expect(cellForColumn('Release Manager').textContent).toContain('—')
+    })
+
+    it('gives each release-manager line its own title so a long id is readable on hover', () => {
+      renderTable([makeComponent({ releaseManagers: ['a-long-manager-id', 'b'] })])
+      const cell = cellForColumn('Release Manager')
+      const line = within(cell).getByTitle('a-long-manager-id')
+      expect(line.className).toContain('truncate')
     })
 
     it('hides the Release Manager column when component.releaseManager visibility is hidden', () => {
@@ -485,7 +560,7 @@ describe('ComponentTable', () => {
       expect(screen.queryByRole('link', { name: /Jira/i })).toBeNull()
     })
 
-    it('renders Bitbucket icon + browser URL (vcsPath split on first slash)', () => {
+    it('renders Bitbucket icon + browse URL from a legacy bare PROJ/repo vcsPath (fallback branch)', () => {
       mockLinks({ gitBaseUrl: 'https://git.example.com' })
       renderTable([makeComponent({ vcsPath: 'CREG/components-registry' })])
       const link = screen.getByRole('link', { name: /Bitbucket: CREG\/components-registry/i })
@@ -495,6 +570,17 @@ describe('ComponentTable', () => {
       )
       // Pin the brand icon — without this assertion the visual mockup match
       // could regress to a generic glyph without a test failure.
+      expect(within(link).getByTestId('brand-icon-bitbucket')).toBeDefined()
+    })
+
+    it('renders Bitbucket icon + browse URL from a clone-URL vcsPath', () => {
+      mockLinks({ gitBaseUrl: 'https://git.example.com' })
+      renderTable([makeComponent({ vcsPath: 'ssh://git@bitbucket.example.com:7999/CREG/components-registry.git' })])
+      const link = screen.getByRole('link', { name: /Bitbucket: CREG\/components-registry/i })
+      expect(link).toBeDefined()
+      expect((link as HTMLAnchorElement).href).toBe(
+        'https://git.example.com/projects/CREG/repos/components-registry',
+      )
       expect(within(link).getByTestId('brand-icon-bitbucket')).toBeDefined()
     })
 
@@ -545,7 +631,7 @@ describe('ComponentTable', () => {
       expect(screen.queryByRole('link', { name: /TeamCity/i })).toBeNull()
     })
 
-    it('does NOT render TeamCity icon when teamcityProjectUrl is undefined', () => {
+    it('does NOT render TeamCity icon when teamcityProjectUrl is unset', () => {
       mockLinks({ tcBaseUrl: 'https://teamcity.example.com' })
       renderTable([makeComponent({ name: 'delta' })])
       expect(screen.queryByRole('link', { name: /TeamCity/i })).toBeNull()
@@ -587,6 +673,17 @@ describe('ComponentTable', () => {
     it('renders an em-dash for a null updatedAt', () => {
       renderTable([makeComponent({ updatedAt: null })])
       expect(cellForColumn('Updated').textContent).toContain('—')
+    })
+  })
+
+  describe('test component badge', () => {
+    it('shows a "Test" badge next to the status for test components only', () => {
+      renderTable([
+        makeComponent({ id: 't1', name: 'test-svc', testComponent: true }),
+        makeComponent({ id: 'r1', name: 'real-svc' }),
+      ])
+      expect(screen.getAllByText('Test')).toHaveLength(1)
+      expect(screen.getAllByText('Active')).toHaveLength(2)
     })
   })
 
@@ -819,6 +916,19 @@ describe('ComponentTable — compact fit (Option A: truncate wide text columns)'
     const inner = cell.querySelector('[title]')
     expect(inner?.getAttribute('title')).toBe(owner)
     expect(inner?.className).toContain('truncate')
+  })
+
+  it('bounds the Release Manager cell width so a long people list cannot widen the table', () => {
+    // Same compact-fit contract as Owner: the column is capped and each stacked
+    // line truncates inside it, full value one hover away.
+    const managers = ['a-very-long-release-manager-id', 'another-long-release-manager-id']
+    renderTable([makeComponent({ releaseManagers: managers })])
+    const cell = cellForColumn('Release Manager')
+    expect(cell.className).toMatch(/max-w-/)
+    const lines = cell.querySelectorAll('[title]')
+    expect(lines.length).toBe(2)
+    expect(lines[0]?.getAttribute('title')).toBe(managers[0])
+    expect(lines[0]?.className).toContain('truncate')
   })
 
   it('pins the Clone/actions column to the right (sticky) so it stays visible when the table scrolls', () => {

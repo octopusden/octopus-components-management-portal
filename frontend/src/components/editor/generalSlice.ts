@@ -43,6 +43,8 @@ const FIELD_LABELS: Record<string, string> = {
   copyright: 'Copyright',
   solution: 'Solution',
   archived: 'Archived',
+  testComponent: 'Test component',
+  autoRelease: 'Auto release',
   parentComponentName: 'Parent Component',
   canBeParent: 'Can be a parent',
   releaseManager: 'Release Managers',
@@ -65,6 +67,8 @@ function priorValueFor(component: ComponentDetail, key: string): unknown {
     case 'copyright': return component.copyright ?? null
     case 'solution': return component.solution ?? false
     case 'archived': return component.archived
+    case 'testComponent': return component.testComponent ?? false
+    case 'autoRelease': return component.autoRelease ?? false
     case 'parentComponentName': return component.parentComponentName
     case 'canBeParent': return component.canBeParent ?? false
     case 'releaseManager': return component.releaseManager ?? []

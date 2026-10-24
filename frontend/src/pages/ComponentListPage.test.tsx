@@ -29,6 +29,9 @@ vi.mock('../hooks/useValidationProblems', () => ({
   useValidationProblems: vi.fn(),
   useComponentsWithProblems: vi.fn(),
 }))
+vi.mock('../hooks/useTeamCityValidations', () => ({
+  useTeamCityValidations: vi.fn(),
+}))
 
 vi.mock('../components/Layout', () => ({
   Layout: ({ children }: { children: React.ReactNode }) =>
@@ -66,6 +69,9 @@ vi.mock('../components/ComponentTable', () => ({
         // page test can assert the list source swapped in problemsOnly mode.
         'data-row-count': String(data.length),
         'data-has-validation': validationByComponent ? 'yes' : 'no',
+        // Row names, comma-joined — lets a test assert which components made it
+        // into the (merged Unregistered-Released + TeamCity-only) problem set.
+        'data-row-names': data.map((d) => d.name).join(','),
       },
       onCopy
         ? React.createElement('button', {
@@ -84,13 +90,15 @@ import {
   useValidationProblems,
   useComponentsWithProblems,
 } from '../hooks/useValidationProblems'
+import { useTeamCityValidations } from '../hooks/useTeamCityValidations'
 import { useAdminMode } from '@/lib/adminModeStore'
-import type { ComponentValidation } from '@/lib/types'
+import type { ComponentValidation, TeamcityValidationRow } from '@/lib/types'
 
 const mockedUseCurrentUser = vi.mocked(useCurrentUser)
 const mockedUseComponents = vi.mocked(useComponents)
 const mockedUseValidationProblems = vi.mocked(useValidationProblems)
 const mockedUseComponentsWithProblems = vi.mocked(useComponentsWithProblems)
+const mockedUseTeamCityValidations = vi.mocked(useTeamCityValidations)
 
 function makeValidationResult(byComponent = new Map<string, ComponentValidation>(), over = {}) {
   return {
@@ -227,6 +235,12 @@ beforeEach(() => {
   mockedUseComponentsWithProblems.mockReturnValue(
     makeValidationResult() as unknown as ReturnType<typeof useComponentsWithProblems>,
   )
+  mockedUseTeamCityValidations.mockReturnValue({
+    data: [],
+    isLoading: false,
+    isError: false,
+    error: null,
+  } as unknown as ReturnType<typeof useTeamCityValidations>)
 })
 
 afterEach(() => {
@@ -368,6 +382,38 @@ describe('ComponentListPage — presets + active-filter chips (spec §1.1/1.2)',
       'true',
     )
     expect(screen.getByText(/Status: Archived/i)).toBeDefined()
+  })
+
+  it('hides test components by default: the list query carries testComponent=false', () => {
+    mockUser(editorUser)
+    renderPage()
+    expect(mockedUseComponents.mock.calls.at(-1)![0]!.filter).toMatchObject({
+      archived: false,
+      testComponent: false,
+    })
+  })
+
+  it('selecting "Test components" lists only test components and shows a Status chip', async () => {
+    mockUser(editorUser)
+    renderPage()
+    await userEvent.click(screen.getByRole('button', { name: 'Test components' }))
+    expect(
+      screen.getByRole('button', { name: 'Test components' }).getAttribute('aria-pressed'),
+    ).toBe('true')
+    expect(screen.getByText(/Status: Test components/i)).toBeDefined()
+    expect(mockedUseComponents.mock.calls.at(-1)![0]!.filter).toMatchObject({ testComponent: true })
+    const search = screen.getByTestId('loc-search').textContent ?? ''
+    expect(search).toContain('preset=test-components')
+    expect(search).toContain('testComponent=true')
+  })
+
+  it('"Clear all" from the Test components preset hides test components again', async () => {
+    mockUser(editorUser)
+    renderPage(['/components?preset=test-components&testComponent=true'])
+    await userEvent.click(screen.getByRole('button', { name: /clear all/i }))
+    expect(screen.getByRole('button', { name: 'All' }).getAttribute('aria-pressed')).toBe('true')
+    expect(mockedUseComponents.mock.calls.at(-1)![0]!.filter).toMatchObject({ testComponent: false })
+    expect(screen.getByTestId('loc-search').textContent).toBe('')
   })
 
   it('removing the owner chip drops just that value and returns to the All preset', async () => {
@@ -595,6 +641,90 @@ describe('ComponentListPage — Validation Problems', () => {
       // After selecting the preset: table fed from the 1-entry problem set.
       expect(screen.getByTestId('table').getAttribute('data-row-count')).toBe('1')
       expect(screen.getByTestId('table').getAttribute('data-has-validation')).toBe('yes')
+    })
+
+    it('includes a component that ONLY has a TeamCity finding (no Unregistered-Released issue) in the "With problems" set, without duplicating one that has both', async () => {
+      mockComponentsOk({ ...emptyPage, totalElements: 99 })
+      // "unregistered-only" has an Unregistered-Released problem; "both" has one
+      // too AND a TeamCity finding (must appear once, not twice); "teamcity-only"
+      // has ONLY a TeamCity finding — this is the row the fix must surface.
+      // `.component` (not the map key) is what the page actually reads, so each
+      // entry needs its own value there.
+      mockedUseComponentsWithProblems.mockReturnValue(
+        makeValidationResult(
+          new Map([
+            ['unregistered-only', { ...problemValidation, component: 'unregistered-only' }],
+            ['both', { ...problemValidation, component: 'both' }],
+          ]),
+        ) as unknown as ReturnType<typeof useComponentsWithProblems>,
+      )
+      const tcRows: TeamcityValidationRow[] = [
+        {
+          componentId: 'tc-id-teamcity-only',
+          componentName: 'teamcity-only',
+          message: 'drift',
+          projectId: 'Proj_A',
+          projectUrl: null,
+          status: 'FAILED',
+          type: 'BUILD_CONFIG_DRIFT',
+          updatedAt: '2026-06-13T10:00:00Z',
+        },
+        {
+          componentId: 'tc-id-both',
+          componentName: 'both',
+          message: 'drift',
+          projectId: 'Proj_B',
+          projectUrl: null,
+          status: 'FAILED',
+          type: 'BUILD_CONFIG_DRIFT',
+          updatedAt: '2026-06-13T10:00:00Z',
+        },
+      ]
+      mockedUseTeamCityValidations.mockReturnValue({
+        data: tcRows,
+        isLoading: false,
+        isError: false,
+        error: null,
+      } as unknown as ReturnType<typeof useTeamCityValidations>)
+
+      renderPage()
+      await userEvent.click(screen.getByRole('button', { name: 'With problems' }))
+
+      const table = screen.getByTestId('table')
+      const names = table.getAttribute('data-row-names')!.split(',')
+      expect(names.sort()).toEqual(['both', 'teamcity-only', 'unregistered-only'])
+      // Exactly 3 rows — "both" is not duplicated for having issues in both systems.
+      expect(table.getAttribute('data-row-count')).toBe('3')
+    })
+
+    it('surfaces an error when the TeamCity findings query fails (badges/"With problems" may be incomplete)', () => {
+      useAdminMode.setState({ enabled: true })
+      mockUser(adminUser)
+      mockComponentsOk()
+      mockedUseTeamCityValidations.mockReturnValue({
+        data: undefined,
+        isLoading: false,
+        isError: true,
+        error: new Error('CRS unreachable'),
+      } as unknown as ReturnType<typeof useTeamCityValidations>)
+
+      renderPage()
+      expect(screen.getByText(/Could not load TeamCity validation findings/i)).toBeInTheDocument()
+      expect(screen.getByText(/CRS unreachable/)).toBeInTheDocument()
+    })
+
+    it('does NOT surface the TeamCity findings error banner for a non-admin', () => {
+      mockUser(viewerUser)
+      mockComponentsOk()
+      mockedUseTeamCityValidations.mockReturnValue({
+        data: undefined,
+        isLoading: false,
+        isError: true,
+        error: new Error('CRS unreachable'),
+      } as unknown as ReturnType<typeof useTeamCityValidations>)
+
+      renderPage()
+      expect(screen.queryByText(/Could not load TeamCity validation findings/i)).toBeNull()
     })
   })
 

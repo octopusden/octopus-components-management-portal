@@ -141,6 +141,24 @@ describe('useOptimisticConflict', () => {
     expect(refetchSpy).not.toHaveBeenCalled()
   })
 
+  it("RMS_REGISTERED_VALUE_CONFLICT → 'rms' kind, server message + 'no changes were saved', no refetch", async () => {
+    const { refetchSpy, wrapper } = makeHarness()
+    const { result } = renderHook(() => useOptimisticConflict('c-1'), { wrapper })
+    const serverMsg = "javaVersion '21' disagrees with the registered value '17' for range [2.0,3.0)"
+    const out = await result.current(
+      new ApiError(
+        409,
+        serverMsg,
+        JSON.stringify({ errorMessage: serverMsg, errorCode: 'RMS_REGISTERED_VALUE_CONFLICT' }),
+      ),
+    )
+    expect(out).not.toBeNull()
+    expect(out!.kind).toBe('rms')
+    expect(out!.title).not.toBe('Save failed')
+    expect(out!.description).toBe(`${serverMsg}. No changes were saved.`)
+    expect(refetchSpy).not.toHaveBeenCalled()
+  })
+
   it('409 with no errorCode (older server) keeps the legacy optimistic-lock flow', async () => {
     const { refetchSpy, wrapper } = makeHarness()
     const { result } = renderHook(() => useOptimisticConflict('c-1'), { wrapper })

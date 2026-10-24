@@ -111,8 +111,8 @@ class OnboardingVideoServiceTest {
     fun `cleanup failure after a successful read does not fail the load (JGit auto-GC delete race)`(
         @TempDir tmp: Path,
     ) {
-        // Regression (TC build 1.0.4-831): JGit fires a *detached* auto-GC after the clone;
-        // that background thread deletes `.git/gc.log.lock` and can race the `finally`
+        // Regression: JGit fires a *detached* auto-GC after the clone; that background
+        // thread deletes `.git/gc.log.lock` and can race the `finally`
         // recursive delete of the throwaway clone dir, so the file-tree walk throws
         // NoSuchFileException. By then the video is already in memory (status READY), so a
         // temp-dir cleanup failure must NOT flip a successful load to FAILED. We inject a

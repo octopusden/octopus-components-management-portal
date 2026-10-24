@@ -1,15 +1,16 @@
 import { z } from 'zod'
-import { isBadToken } from '../artifactOwnership'
-import { findUnsupportedGroupId } from '../groupValidation'
-import { isVcsHostSupported, hostOf } from '../vcsHost'
-import { isSolutionCandidate } from '../solutionKey'
 import { selectBaseRow } from '../api/baseRow'
-import type { ComponentDetail, EscrowAspect } from '../types'
+import type { ComponentCreateRequest, ComponentDetail, EscrowAspect } from '../types'
+import type { ComponentProfile, ProfileFieldRule } from '../../hooks/useComponentProfiles'
+import { flagsForProfile } from './createProfile'
+import { formFieldOfRulePath, profileRuleErrors } from './profileRules'
+import { portalCreateRules, type PortalRuleOptions } from './portalCreateRules'
 import {
-  vcsBlockApplies,
+  buildCreateRequest,
+  type CreateFieldVisibility,
+  effectiveCreateClientCode,
   DEPRECATED_BUILD_SYSTEMS,
   FALLBACK_VCS_BRANCH,
-  SSH_VCS_URL_REGEX,
   type CreateFormValues,
 } from './buildCreateRequest'
 
@@ -19,123 +20,49 @@ import {
 // pre-existing names) — new components follow the strict convention.
 export const BASE_KEY_REGEX = /^[a-z][a-z0-9-]*$/
 
-// The four component profiles chosen on the wizard's first (scratch) step. The
-// profile is the single source for the solution / external / explicit flags and
-// the Component-Key naming rule (see brief "Choose component profile").
-export type ComponentProfile = 'solution' | 'dmp-bundle' | 'regular-external' | 'regular-internal'
+// SYS-095 / CRS ADR-020: an underscore is legal in a Component Key only inside its
+// client-code prefix — the lowercased Client Code of the same component, leading the key
+// and followed by the end of the key or '-' and the usual kebab tail. No Client Code
+// therefore means no underscore, and an uppercase key stays rejected either way.
+const KEY_TAIL_REGEX = /^(-[a-z0-9-]*)?$/
 
-// Scratch pre-selects the most common profile ("Regular external component").
-// Its flags are the source of truth for a from-scratch component's distribution
-// classification — so `initialValues` seeds the RHF flags from this profile, not
-// from `component-defaults`, keeping the pre-selected profile and the payload in
-// lockstep (the wizard only overlays `solution` at submit).
-export const DEFAULT_SCRATCH_PROFILE: ComponentProfile = 'regular-external'
+export function componentKeyCharsetError(key: string, clientCode?: string): string | null {
+  const trimmed = key.trim()
+  if (BASE_KEY_REGEX.test(trimmed)) return null
 
-export interface ProfileMeta {
-  id: ComponentProfile
-  label: string
-  description: string
-  /** Whether "Has explicit distribution?" is asked (only the two Regular profiles). */
-  asksExplicit: boolean
-}
-
-// Fixed, sanitized copy (brief §10). No org/product tokens.
-export const PROFILE_META: readonly ProfileMeta[] = [
-  {
-    id: 'solution',
-    label: 'Solution',
-    description:
-      'A top-level solution component that groups and ships other components together. The key contains "-solution". External, with its own distribution.',
-    asksExplicit: false,
-  },
-  {
-    id: 'dmp-bundle',
-    label: 'DMP Bundle',
-    description:
-      'A bundle component (also a solution). The key contains "dmp-bundle". External, with its own distribution.',
-    asksExplicit: false,
-  },
-  {
-    id: 'regular-external',
-    label: 'Regular external component',
-    description:
-      'An ordinary component that is delivered to the client (explicitly or as part of another component).',
-    asksExplicit: true,
-  },
-  {
-    id: 'regular-internal',
-    label: 'Regular internal component',
-    description: 'An ordinary component for internal use only, not delivered to the client.',
-    asksExplicit: true,
-  },
-]
-
-export interface ProfileFlags {
-  solution: boolean
-  distributionExternal: boolean
-  distributionExplicit: boolean
-}
-
-// Solution / DMP Bundle fix external+explicit=true; the two Regular profiles fix
-// external by kind and take explicit from the "Has explicit distribution?" answer.
-export function flagsForProfile(profile: ComponentProfile, explicitAnswer: boolean): ProfileFlags {
-  switch (profile) {
-    case 'solution':
-    case 'dmp-bundle':
-      return { solution: true, distributionExternal: true, distributionExplicit: true }
-    case 'regular-external':
-      return { solution: false, distributionExternal: true, distributionExplicit: explicitAnswer }
-    case 'regular-internal':
-      return { solution: false, distributionExternal: false, distributionExplicit: explicitAnswer }
+  // The prefix relaxes the charset, never the letter start: a Client Code may begin with
+  // a digit or an underscore (`[A-Z_0-9]+`), and a Component Key may not.
+  const prefix = clientCode?.trim().toLowerCase()
+  if (prefix && trimmed.startsWith(prefix) && /^[a-z]/.test(trimmed)) {
+    if (KEY_TAIL_REGEX.test(trimmed.slice(prefix.length))) return null
   }
+  return prefix
+    ? `Component Key must be lowercase letters, digits and "-", starting with a letter; "_" is allowed only inside the Client Code prefix "${prefix}" (e.g. ${prefix}-payments)`
+    : 'Component Key must be lowercase letters, digits and "-", starting with a letter'
 }
 
-// Clone derives the profile from the source's flags + key pattern. Editable
-// afterwards (changing it resets the key + recomputes flags).
-export function profileFromSource(
-  source: ComponentDetail,
-  patterns: readonly string[] | undefined,
-): { profile: ComponentProfile; explicit: boolean } {
-  const key = source.name ?? ''
-  const bundlePattern = patterns?.[1]
-  if (source.solution) {
-    if (bundlePattern && key.includes(bundlePattern)) return { profile: 'dmp-bundle', explicit: true }
-    return { profile: 'solution', explicit: true }
-  }
-  return {
-    profile: source.distributionExternal ? 'regular-external' : 'regular-internal',
-    explicit: !!source.distributionExplicit,
-  }
-}
-
-// Profile-dependent Component-Key requirement message, or null when the key is
-// acceptable for the profile. Base-regex failure is reported first; then the
-// per-profile substring rule.
-export function componentKeyError(
-  key: string,
-  profile: ComponentProfile,
-  patterns: readonly string[] | undefined,
+/**
+ * Rename-target charset check, shared by the editor's inline error and its Save gate.
+ *
+ * Change-based like CRS's `isRename`: an untouched key is never re-validated, so legacy
+ * keys that predate the convention don't render their own editor invalid. Blank-tolerant
+ * because `buildUpdateRequest`'s `nameChanged` gate treats a blank name as "not a rename"
+ * and omits it from the PATCH — a cleared field is not-yet-attempted, not a violation.
+ */
+export function renameKeyCharsetError(
+  key: string | undefined,
+  currentName: string,
+  clientCode?: string,
 ): string | null {
+  const trimmed = (key ?? '').trim()
+  if (!trimmed || trimmed === currentName) return null
+  return componentKeyCharsetError(trimmed, clientCode)
+}
+
+export function componentKeyError(key: string, clientCode?: string): string | null {
   const trimmed = key.trim()
   if (!trimmed) return null
-  if (!BASE_KEY_REGEX.test(trimmed)) {
-    return 'Component Key must be lowercase letters, digits and "-", starting with a letter'
-  }
-  const solutionPattern = patterns?.[0] ?? '-solution'
-  const bundlePattern = patterns?.[1] ?? 'dmp-bundle'
-  if (profile === 'solution' && !trimmed.includes(solutionPattern)) {
-    return `A Solution key must contain "${solutionPattern}"`
-  }
-  if (profile === 'dmp-bundle' && !trimmed.includes(bundlePattern)) {
-    return `A DMP Bundle key must contain "${bundlePattern}"`
-  }
-  if (
-    (profile === 'regular-external' || profile === 'regular-internal') &&
-    isSolutionCandidate(trimmed, patterns)
-  ) {
-    return 'This key matches a solution pattern — choose the Solution or DMP Bundle profile instead'
-  }
-  return null
+  return componentKeyCharsetError(trimmed, clientCode)
 }
 
 // A single Zod object; the explicit+external block is enforced via superRefine
@@ -144,14 +71,82 @@ export function componentKeyError(
 // CRS only requires it when a copyright catalog is configured server-side, which
 // the Portal can't detect — a server 400 is mapped inline instead. The schema is
 // built per-render from field-config visibility (a hidden/readonly field is
-// removed and must not fire its requirement) and from the chosen profile (the
-// Component-Key rule is profile-dependent).
+// removed and must not fire its requirement) and from the chosen profile's field
+// rules, checked against the request the form would send (D3).
+/**
+ * The wizard field that shows a rule failure on [rulePath]. The request drops blank ownership
+ * rows, so its first mapping is the first non-blank row.
+ */
+export function formFieldOfRule(rulePath: string, ownership: readonly { groupId: string }[]): string | undefined {
+  const field = formFieldOfRulePath(rulePath)
+  const firstSentRow = Math.max(0, ownership.findIndex((row) => row.groupId.trim() !== ''))
+  return field?.replace(/^ownership\.0\./, `ownership.${firstSentRow}.`)
+}
+
+const toIssuePath = (field: string) =>
+  field.split('.').map((segment) => (/^\d+$/.test(segment) ? Number(segment) : segment))
+
+// One issue per failing profile rule, on the form field for its path, tagged so the page can
+// list the ones whose field shows no error. The key shows one message at a time: "required" or
+// the charset rule come first, so a key rule waits while either applies.
+function addProfileRuleIssues(
+  ctx: z.RefinementCtx,
+  rules: readonly ProfileFieldRule[],
+  request: ComponentCreateRequest,
+  keyHasOtherError: boolean,
+  ownership: readonly { groupId: string }[],
+) {
+  for (const [rulePath, message] of profileRuleErrors(rules, request)) {
+    const field = formFieldOfRule(rulePath, ownership)
+    if (!field || (field === 'name' && keyHasOtherError)) continue
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: toIssuePath(field), message, params: { profileRule: true } })
+  }
+}
+
+// The form field a Portal-only rule's create-request path shows on. Ownership rows the request
+// dropped (blank Group ID) shift the request's indices, so a request row maps back to the k-th
+// non-blank form row.
+function formFieldOfPortalRule(path: string, ownership: readonly { groupId: string }[]): string | undefined {
+  const row = /^artifactIds\[(\d+)\]\.(groupPattern|artifactTokens)$/.exec(path)
+  if (row) {
+    const sentRows = ownership.flatMap((r, i) => (r.groupId.trim() ? [i] : []))
+    const formRow = sentRows[Number(row[1])]
+    return formRow === undefined ? undefined : `ownership.${formRow}.${row[2] === 'groupPattern' ? 'groupId' : 'tokens'}`
+  }
+  if (path === 'releaseManager' || path === 'securityChampion') return path
+  return formFieldOfRulePath(path)
+}
+
+// The wizard requires the Jira project key and full version format on their fields in the object
+// schema, so those two are not asked for again here.
+function addPortalRuleIssues(
+  ctx: z.RefinementCtx,
+  request: ComponentCreateRequest,
+  v: CreateFormValues,
+  options: Omit<PortalRuleOptions, 'checkJiraRequired' | 'coordinateType' | 'explicitExternal'>,
+) {
+  for (const { path, message } of portalCreateRules(request, {
+    ...options,
+    checkJiraRequired: false,
+    coordinateType: v.coordinate.type,
+    explicitExternal: v.distributionExplicit && v.distributionExternal,
+  })) {
+    const field = formFieldOfPortalRule(path, v.ownership)
+    if (!field) continue
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: toIssuePath(field), message })
+  }
+}
+
 export function makeCreateSchema(
   editable: (field: string) => boolean,
   supportedGroups: readonly string[],
   gitBaseUrl: string | null | undefined,
-  profile: ComponentProfile,
-  solutionPatterns: readonly string[] | undefined,
+  profileRules: readonly ProfileFieldRule[],
+  // Needed for the Component-Key rule: a clone that is not external keeps its source's
+  // clientCode in the payload, so the key may legally lean on it.
+  source?: ComponentDetail,
+  // The same field visibilities the submit uses, so profile rules read the request that is sent.
+  visibility: CreateFieldVisibility = {},
 ) {
   return z
     .object({
@@ -200,117 +195,17 @@ export function makeCreateSchema(
       // Free-form: an enum value or ''. Never blocks submit (the escrow
       // generation is optional at create and validated server-side).
       escrowGeneration: z.string(),
+      labels: z.array(z.string()),
+      buildTasks: z.string(),
     })
     .superRefine((v, ctx) => {
-      // Profile-dependent Component-Key rule (strict for new components).
-      const keyError = componentKeyError(v.name, profile, solutionPatterns)
+      const keyError = componentKeyError(v.name, effectiveCreateClientCode(v, source, editable))
       if (keyError) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['name'], message: keyError })
       }
-      // Legacy EscrowConfigValidator rule: a VCS root is mandatory for every
-      // build system outside the exempt set.
-      if (vcsBlockApplies(v.buildSystem)) {
-        const url = v.vcsUrl.trim()
-        if (!url) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['vcsUrl'],
-            message: 'VCS Path is required for this build system',
-          })
-        } else if (!SSH_VCS_URL_REGEX.test(url)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['vcsUrl'],
-            message: 'VCS Path must be an ssh:// URL, e.g. ssh://git@host/path/repo.git',
-          })
-        } else if (!isVcsHostSupported(url, gitBaseUrl)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['vcsUrl'],
-            message: `VCS host must be ${hostOf(gitBaseUrl)} (the ecosystem Bitbucket)`,
-          })
-        }
-        if (!v.vcsTag.trim()) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['vcsTag'], message: 'Tag is required' })
-        }
-        if (!v.vcsBranch.trim()) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['vcsBranch'],
-            message: 'Production branch is required',
-          })
-        }
-      }
-      // Base ownership: validate PER ROW (blank Group ID rows are skipped).
-      v.ownership.forEach((row, i) => {
-        const groupId = row.groupId.trim()
-        if (!groupId) return
-        if (isBadToken(groupId)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['ownership', i, 'groupId'],
-            message: `Invalid group "${groupId}" — letters, digits, . _ - only`,
-          })
-        }
-        const unsupported = findUnsupportedGroupId(groupId, supportedGroups)
-        if (unsupported) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['ownership', i, 'groupId'],
-            message: `Group "${unsupported}" must start with a supported prefix (${supportedGroups.join(', ')})`,
-          })
-        }
-        if (row.mode === 'EXPLICIT' && row.tokens.length === 0) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['ownership', i, 'tokens'],
-            message: 'Add at least one artifact, or switch to a catch-all mode',
-          })
-        }
-      })
-      if (!(v.distributionExplicit && v.distributionExternal)) return
-      if (editable('displayName') && !v.displayName.trim()) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['displayName'],
-          message: 'Display Name is required for an explicit + external component',
-        })
-      }
-      if (editable('releaseManager') && v.releaseManager.length === 0) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['releaseManager'],
-          message: 'At least one Release Manager is required for an explicit + external component',
-        })
-      }
-      if (editable('securityChampion') && v.securityChampion.length === 0) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['securityChampion'],
-          message: 'At least one Security Champion is required for an explicit + external component',
-        })
-      }
-      const c = v.coordinate
-      const missing = (field: string, msg: string) =>
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['coordinate', field], message: msg })
-      if (c.type === 'maven') {
-        if (!c.groupPattern.trim()) {
-          missing('groupPattern', 'Group ID is required')
-        } else {
-          const unsupported = findUnsupportedGroupId(c.groupPattern, supportedGroups)
-          if (unsupported) {
-            missing(
-              'groupPattern',
-              `Group ID "${unsupported}" must start with a supported prefix (${supportedGroups.join(', ')})`,
-            )
-          }
-        }
-        if (!c.artifactPattern.trim()) missing('artifactPattern', 'Artifact ID is required')
-      } else if (c.type === 'docker') {
-        if (!c.imageName.trim()) missing('imageName', 'Image name is required')
-      } else {
-        if (!c.packageName.trim()) missing('packageName', 'Package name is required')
-      }
+      const request = buildCreateRequest(v, source, editable, true, false, visibility)
+      addProfileRuleIssues(ctx, profileRules, request, !!keyError || !v.name.trim(), v.ownership)
+      addPortalRuleIssues(ctx, request, v, { supportedGroups, gitBaseUrl, editable })
     })
 }
 
@@ -352,6 +247,8 @@ export const SCRATCH_DEFAULTS: CreateFormValues = {
   coordinate: EMPTY_COORDINATE,
   ownership: [{ groupId: '', mode: 'ALL', tokens: [] }],
   escrowGeneration: '',
+  labels: [],
+  buildTasks: '',
 }
 
 // vcs.tag / vcs.branch read from GET /config/component-defaults.
@@ -441,6 +338,8 @@ export function versionFormatsFromDefaults(defaults: ComponentDefaults): Version
 export function initialValues(
   source: ComponentDetail | null,
   defaults: ComponentDefaults,
+  // The profile the wizard pre-selects; a clone copies its flags from the source instead.
+  profile: ComponentProfile | null = null,
 ): CreateFormValues {
   const vcsDefaults = defaults.vcs ?? {}
   const baseVcs = source ? selectBaseRow(source)?.vcsEntries?.[0] : undefined
@@ -453,10 +352,9 @@ export function initialValues(
     // wizard's source of truth), not from component-defaults — otherwise the
     // pre-selected profile and the seeded flags could disagree and the payload
     // would carry a classification that contradicts the shown profile.
-    const { distributionExplicit, distributionExternal } = flagsForProfile(
-      DEFAULT_SCRATCH_PROFILE,
-      SCRATCH_DEFAULTS.distributionExplicit,
-    )
+    const { distributionExplicit, distributionExternal } = profile
+      ? flagsForProfile(profile, SCRATCH_DEFAULTS.distributionExplicit)
+      : SCRATCH_DEFAULTS
     return {
       ...SCRATCH_DEFAULTS,
       buildSystem:
@@ -503,5 +401,7 @@ export function initialValues(
     escrowGeneration: selectBaseRow(source)?.escrow?.generation ?? '',
     vcsTag,
     vcsBranch,
+    labels: [...(source.labels ?? [])],
+    buildTasks: selectBaseRow(source)?.build?.buildTasks ?? '',
   }
 }
