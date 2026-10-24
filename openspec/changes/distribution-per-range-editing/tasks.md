@@ -1,9 +1,9 @@
-> Depends on CRS SYS-099 (`POST /rest/api/4/components/{idOrName}/distribution/preview`).
+> Depends on CRS SYS-105 (`POST /rest/api/4/components/{idOrName}/distribution/preview`).
 > CRS merges first; the Portal re-vendors the v4 spec from `main` after.
 
 ## 1. API surface
 
-- [x] 1.1 Vendor the CRS spec carrying SYS-099 from the CRS branch
+- [x] 1.1 Vendor the CRS spec carrying SYS-105 from the CRS branch
       (`CRS_SPEC_REF=<branch> npm run vendor-spec`); re-vendor from `main` after
       CRS merges
 - [x] 1.2 Failing tests in `hooks/useDistributionPreview.test.ts`: posts the
@@ -14,7 +14,7 @@
 ## 2. Preview control and attribution
 
 - [x] 2.1 Failing tests in `DistributionTab.test.tsx` for every spec scenario of
-      the control, attribution, Docker line and error states, mocking only
+      the control, attribution, Docker and Generic lines and error states, mocking only
       `api.post`
 - [x] 2.2 Add the version box (debounced) and per-subsection attribution to
       `DistributionTab.tsx`

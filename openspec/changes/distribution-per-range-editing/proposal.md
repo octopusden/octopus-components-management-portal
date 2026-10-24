@@ -41,7 +41,7 @@ issue #146 that was deferred when the rest of per-range editing shipped.
 ## Impact
 
 **Cross-repo, CRS merges first.** CRS gains
-`POST /rest/api/4/components/{idOrName}/distribution/preview` (CRS SYS-099). The
+`POST /rest/api/4/components/{idOrName}/distribution/preview` (CRS SYS-105). The
 Portal vendors the v4 spec from the CRS branch during development and
 re-vendors from `main` once CRS merges; until then the Portal PR's
 `vendor-spec:check` fails by design.

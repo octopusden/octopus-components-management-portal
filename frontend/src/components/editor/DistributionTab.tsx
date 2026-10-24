@@ -37,7 +37,7 @@ interface DistributionTabProps {
  *  come from the matched draft row, base children are the rows shown in the
  *  subsection. `label` prefixes the line (the Docker one-liner). */
 function PathVerdict({ path, verdict, overrides, label }: {
-  path: DistributionMarkerPath
+  path: DistributionMarkerPath | 'distribution.generic'
   verdict: DistributionPreviewResponse | undefined
   overrides: FieldOverride[]
   label?: string
@@ -185,6 +185,8 @@ export function DistributionTab({ componentId, section, canEdit, supportedGroups
           </p>
         )}
         <PathVerdict path="distribution.docker" label="Docker images (Docker tab)" verdict={verdict} overrides={distOverrides.byPath['distribution.docker']} />
+        {/* No Generic editor in the Portal yet, so the line names the range without its children. */}
+        <PathVerdict path="distribution.generic" label="Generic artifacts" verdict={verdict} overrides={[]} />
       </div>
 
       <Separator />

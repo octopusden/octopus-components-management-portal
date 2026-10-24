@@ -362,6 +362,13 @@ describe('DistributionTab — version preview', () => {
     expect((await screen.findByTestId('dist-preview-distribution.docker')).textContent).toMatch(/Docker images.*component level/i)
   })
 
+  it('reports the Generic verdict in one line', async () => {
+    respond([path('distribution.generic', 'OVERRIDE', ['[1.0,2.0)'])])
+    renderTab(populated())
+    enter('1.5')
+    expect((await screen.findByTestId('dist-preview-distribution.generic')).textContent).toMatch(/Generic artifacts.*from range \[1\.0,2\.0\)/)
+  })
+
   it('states the component has no configuration for an unsupported version', async () => {
     respond([], false)
     renderTab(populated())

@@ -16,7 +16,7 @@ export type DistributionPreviewRequest = Omit<components['schemas']['Distributio
 /**
  * Which source each `distribution.*` marker path takes for `payload.version`,
  * resolved by the registry over the unsaved drafts
- * (`POST /components/{id}/distribution/preview`, CRS SYS-099). Read-only: never
+ * (`POST /components/{id}/distribution/preview`, CRS SYS-105). Read-only: never
  * touches the editor's dirty state.
  *
  * The caller passes a trimmed version; an empty one issues nothing. The only

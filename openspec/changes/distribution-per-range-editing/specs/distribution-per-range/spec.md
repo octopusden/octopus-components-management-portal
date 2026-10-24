@@ -47,7 +47,7 @@ independent of edit rights (`ComponentDetail.canEdit`).
 ### Requirement: The registry resolves the preview from the unsaved drafts
 
 The preview SHALL be resolved by the registry
-(`POST /rest/api/4/components/{id}/distribution/preview`, CRS SYS-099), sending
+(`POST /rest/api/4/components/{id}/distribution/preview`, CRS SYS-105), sending
 the current override draft and supported-versions draft rather than the saved
 state. The Portal SHALL NOT decide containment or version ordering itself.
 
@@ -95,11 +95,11 @@ resolve independently of each other.
 - **THEN** the subsection states that nothing is published for that version,
   attributed to that range
 
-#### Scenario: Docker verdict is reported
+#### Scenario: Docker and Generic verdicts are reported
 
 - **WHEN** a version is previewed
-- **THEN** the tab states in one line whether Docker images come from the base
-  list or from a specific range
+- **THEN** the tab states in one line each whether Docker images and generic
+  artifacts come from the base list or from a specific range
 
 ### Requirement: The winning row is marked
 

@@ -28,6 +28,8 @@ second copy does the most damage.
   paths.
 - Marking winning rows on the Docker tab. The Distribution tab's preview reports
   the Docker verdict in one line; marking rows there can follow if asked for.
+  Generic artifacts (`distribution.generic`) have no Portal editor yet, so their
+  verdict is one line naming the range, without children.
 
 ## Decisions
 
