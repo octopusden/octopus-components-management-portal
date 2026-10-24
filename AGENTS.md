@@ -27,6 +27,7 @@ Guidance for AI agents and developers working on this repository.
 ## Features
 
 - [`docs/features/component-list.md`](docs/features/component-list.md) — list page filters incl. owner dropdown (B7.1.1).
+- [`docs/features/as-code-search.md`](docs/features/as-code-search.md) — `/search`: global text search over every component's as-code view + deep link into the As Code tab.
 - [`docs/features/create-component.md`](docs/features/create-component.md) — create wizard: profiles and their key rules from CRS, creating from a template, labels and build tasks.
 - [`docs/features/admin-templates.md`](docs/features/admin-templates.md) — Admin settings Templates tab: profiles and templates, failures, Try it.
 - [`docs/features/component-detail.md`](docs/features/component-detail.md) — tabs, rename gating (B7.1.4), parent autocomplete (B7.1.5), conflict UX (B7.1.6).

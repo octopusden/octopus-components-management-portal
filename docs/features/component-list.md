@@ -10,19 +10,26 @@ Independently optional filters, ANDed server-side. Each filter resets pagination
 
 | Filter | Source / wire param | UI control | Notes |
 |---|---|---|---|
-| **Search** | `?search=…` (server-side ILIKE on `name` + `displayName`) | Debounced text input (300 ms) | |
+| **Key or name** | `?search=…` (server-side ILIKE on `name` + `displayName`) | Debounced text input (300 ms), placeholder "Filter by key or name…" | Narrows this list only. With ≥ 2 characters a "Global search →" link offers the same text to the as-code [Global search](as-code-search.md). |
 | **Owner** | `?owner=…` (CSV, OR semantics) | `MultiSelectFilter` populated from `GET /components/meta/owners` via [`useOwners`](../../frontend/src/hooks/useOwners.ts) | CRS `SYS-035` baseline; multi-value OR added in CRS PR #265. Multiple selections produce `?owner=a,b` and match `componentOwner IN (...)`. |
 | **System** | `?system=…` (CSV, OR semantics) | `MultiSelectFilter` populated from `GET /components/meta/systems` via [`useFieldOptions('system')`](../../frontend/src/hooks/useFieldOptions.ts) | CRS SYS-042. Server-side JOIN through `component_systems` + `IN (...)`. |
 | **Build system** | `?buildSystem=…` (CSV, OR semantics) | `MultiSelectFilter` populated from `GET /components/meta/build-systems` via [`useFieldOptions('buildSystem')`](../../frontend/src/hooks/useFieldOptions.ts) (fallback when admin field-config has no options) | CRS SYS-041. OR semantics against `component_configurations.build_system` on the base row. |
 | **Labels** | `?labels=…` (CSV, AND semantics) | `MultiSelectFilter` populated from `GET /components/meta/labels` via [`useLabels`](../../frontend/src/hooks/useLabels.ts) | CRS SYS-040. Each selected label produces its own JOIN+predicate (component must carry ALL labels). |
-| **Archived** | `?archived=false` (default; omit for "all") | Two-state toggle cycling *Active only ↔ All* | The button label flips between *Show archived components* and *Hide archived components*. Default is `archived: false` (active only); "Clear filters" returns to that state, not to *All*. |
-| **Test components** | `?testComponent=false` sent to CRS by default (the Portal URL never carries `testComponent=false` — absent means hidden); `?testComponent=true` = only test components | *Test components* preset (next to *Archived*) | Test components (e.g. the CVELAB stand) are hidden by default — the CRS API itself returns them unless filtered, hiding is a Portal decision. Only the *Test components* preset (`archived=false&testComponent=true`) lists them; every other preset, "Clear all" and removing the *Status: Test components* chip return to `testComponent=false`. The command palette search also sends `testComponent=false`. Opening a test component by URL (UUID or name) still works. Archived test components appear in neither preset (Archived keeps `testComponent=false`, Test components keeps `archived=false`); they are reachable only by deep link or the hand-written list URL `?archived=true&testComponent=true`. Parent and doc pickers of a non-test component offer only non-test components (CRS rejects such references). Rows show a *Test* badge next to the status. |
+| **Status** | `?archived=false` sent to CRS by default (no Portal URL param); `?archived=true` = archived only; `?archived=all` = both (no CRS param) | *Status* segmented control *Active / Archived / All / Test* | Default is *Active*; "Clear all" and removing the *Status* chip return to it. *Test* is described in the next row. A legacy `?preset=archived` link is rewritten to `?archived=true`. |
+| **Test components** | `?testComponent=false` sent to CRS by default (the Portal URL never carries `testComponent=false` — absent means hidden); `?testComponent=true` = only test components | *Test* option of the *Status* control (after *Active / Archived / All*) | Test components (e.g. the CVELAB stand) are hidden by default — the CRS API itself returns them unless filtered, hiding is a Portal decision. Only *Status: Test* (`archived=false&testComponent=true`) lists them; the other Status options, the URL/palette presets, "Clear all" and removing the *Status: Test components* chip return to `testComponent=false`. A legacy `?preset=test-components` link is rewritten to `?testComponent=true`. The command palette search also sends `testComponent=false`. Opening a test component by URL (UUID or name) still works. Archived test components appear under no Status option (Archived and All keep `testComponent=false`, Test keeps `archived=false`); they are reachable only by deep link or the hand-written list URL `?archived=true&testComponent=true`. Parent and doc pickers of a non-test component offer only non-test components (CRS rejects such references). Rows show a *Test* badge next to the status. |
 
 The whole filter row lives in [`frontend/src/components/ui/filter-bar.tsx`](../../frontend/src/components/ui/filter-bar.tsx); the multi-selects use [`frontend/src/components/ui/MultiSelectFilter.tsx`](../../frontend/src/components/ui/MultiSelectFilter.tsx). A "Clear filters" button surfaces whenever any filter is active.
 
-### Extended search
+### + Filter
 
-An **Extended search** toggle (next to the archived button) reveals a second filter row of single-value controls that back the less-common search dimensions. The toggle auto-opens when the current filter already carries an extended value (so a shared/bookmarked URL never hides its own active filters), and "Clear filters" clears the extended row along with everything else.
+The filter bar is always one row: the key/name filter, the Main-placed pickers and a
+**+ Filter** button. **+ Filter** opens a panel listing the Extended dimensions grouped by topic
+(Classification, Ownership, Build & VCS, Jira, Distribution, Structure); a dimension that holds a
+value shows it ("2 selected", "Yes", the text). Picking one opens its editor in the same panel —
+the multi-select list inline, an **Any / Yes / No** segmented control for booleans, a "contains…"
+text box — with a back arrow to the list. The button shows how many Extended dimensions are set.
+Values never add controls to the bar: every value shows as a removable chip under it, and
+"Clear all" clears everything. URL parameters are unchanged.
 
 | Filter | Wire param | Control | Match |
 |---|---|---|---|
@@ -59,7 +66,7 @@ Per-filter option-fetch timing differs:
 Each field carries a **`searchable`** placement — one of:
 
 - **`Main`** — always-visible filter in the top row (today's defaults: `system`, `buildSystem`, `labels`, `componentOwner`).
-- **`Extended`** — only shown when the Extended search toggle is open (the default for the new single-value filters above).
+- **`Extended`** — edited in the **+ Filter** panel (values shown as chips) (the default for the new single-value filters above).
 - **`None`** — not searchable; the control is never rendered.
 
 The effective placement is resolved by [`searchabilityFor`](../../frontend/src/hooks/useFieldConfig.ts): an explicit `searchable` wins; otherwise a legacy `filterable: false` maps to `None`; otherwise a central `DEFAULT_SEARCHABILITY` map applies; otherwise the field defaults to `Extended`. This means a fresh install (empty field-config) already places every filter correctly before an admin saves the catalog. `searchable` **supersedes** the older boolean `filterable` flag, which was never surfaced in the admin UI — `filterable: false` is still honoured (as `None`) for backward-compat. Placement is independent of the form-level `visibility` flag (a field can be editor-hidden yet searchable, or vice-versa).
