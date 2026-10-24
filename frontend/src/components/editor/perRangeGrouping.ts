@@ -57,3 +57,29 @@ export function coalescePerRangeOverrides(overrides: FieldOverride[]): PerRangeG
   }
   return groups
 }
+
+/** One-line human summary of a marker override's children (the identifiers
+ *  each child carries), keyed on the overridden attribute; '' when it has none.
+ *  Shared by the Distribution per-range rows, the version preview and the
+ *  Overrides tab (which adds its own placeholder for an empty summary). */
+export function summarizeMarkerChildren(o: FieldOverride): string {
+  const mc = o.markerChildren
+  if (!mc) return ''
+  const join = (xs: Array<string | null | undefined>) => xs.filter((x): x is string => !!x).join(', ')
+  switch (o.overriddenAttribute) {
+    case 'vcs.settings':
+      return join((mc.vcsEntries ?? []).map((e) => e.name?.trim() || e.vcsPath))
+    case 'distribution.maven':
+      return join((mc.mavenArtifacts ?? []).map((a) => `${a.groupPattern}:${a.artifactPattern}`))
+    case 'distribution.fileUrl':
+      return join((mc.fileUrlArtifacts ?? []).map((a) => a.url))
+    case 'distribution.docker':
+      return join((mc.dockerImages ?? []).map((d) => (d.flavor ? `${d.imageName}:${d.flavor}` : d.imageName)))
+    case 'distribution.packages':
+      return join((mc.packages ?? []).map((p) => `${p.packageType} ${p.packageName}`))
+    case 'build.requiredTools':
+      return join(mc.requiredTools ?? [])
+    default:
+      return ''
+  }
+}

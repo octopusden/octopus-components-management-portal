@@ -1,21 +1,41 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { ReactNode } from 'react'
 import { DistributionTab } from './DistributionTab'
+import type { SupportedVersionsState } from './useSupportedVersionsSection'
+import { api, ApiError } from '../../lib/api'
+import type { DistributionPreviewResponse } from '../../hooks/useDistributionPreview'
 import { useDistributionSection } from './useDistributionSection'
 import { TooltipProvider } from '../ui/tooltip'
 import type { ComponentDetail, ComponentConfiguration, FieldOverride } from '../../lib/types'
+
+// The preview runs the REAL useDistributionPreview; only the network is mocked.
+vi.mock('../../lib/api', async () => {
+  const actual = await vi.importActual<typeof import('../../lib/api')>('../../lib/api')
+  return { ...actual, api: { ...actual.api, post: vi.fn() } }
+})
+const mockPost = vi.mocked(api).post
+
+function WithQuery({ children }: { children: ReactNode }) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+}
 
 vi.mock('./FieldOverrideInline', () => ({ FieldOverrideInline: () => null }))
 
 // Per-range distribution overrides ride the shared page-level draft. Mock it so
 // tests can seed effective overrides and spy on queued deletes without a provider.
 let mockEffective: FieldOverride[] = []
+let mockDraftLoading = false
+let mockDraftError = false
 const mockQueueDelete = vi.fn()
 vi.mock('./overridesDraft', () => ({
   useOverridesDraft: () => ({
     serverOverrides: mockEffective,
     effectiveOverrides: mockEffective,
-    isLoading: false,
+    isLoading: mockDraftLoading,
+    isError: mockDraftError,
     isDirty: false,
     queueCreate: vi.fn(),
     queueUpdate: vi.fn(),
@@ -56,22 +76,24 @@ function baseComponent(overrides: Partial<ComponentDetail> = {}): ComponentDetai
 beforeEach(() => {
   vi.clearAllMocks()
   mockEffective = []
+  mockDraftLoading = false
+  mockDraftError = false
   mockQueueDelete.mockReset()
 })
 
 const captured: { section?: ReturnType<typeof useDistributionSection> } = {}
-function Harness({ component, canEdit = true }: { component: ComponentDetail; canEdit?: boolean }) {
+function Harness({ component, canEdit = true, supportedVersions }: { component: ComponentDetail; canEdit?: boolean; supportedVersions?: SupportedVersionsState | null }) {
   const section = useDistributionSection(component)
   captured.section = section
   return (
     <TooltipProvider>
-      <DistributionTab section={section} canEdit={canEdit} />
+      <DistributionTab componentId={component.id} section={section} canEdit={canEdit} supportedVersions={supportedVersions} />
     </TooltipProvider>
   )
 }
-function renderTab(component: ComponentDetail, canEdit = true) {
+function renderTab(component: ComponentDetail, canEdit = true, supportedVersions?: SupportedVersionsState | null) {
   captured.section = undefined
-  return render(<Harness component={component} canEdit={canEdit} />)
+  return render(<Harness component={component} canEdit={canEdit} supportedVersions={supportedVersions} />, { wrapper: WithQuery })
 }
 
 describe('DistributionTab — blank-row filter (slice payload)', () => {
@@ -180,11 +202,11 @@ describe('DistributionTab — groupId supported-prefix validation', () => {
       const section = useDistributionSection(component)
       return (
         <TooltipProvider>
-          <DistributionTab section={section} canEdit supportedGroups={supportedGroups} />
+          <DistributionTab componentId={component.id} section={section} canEdit supportedGroups={supportedGroups} />
         </TooltipProvider>
       )
     }
-    return render(<H />)
+    return render(<H />, { wrapper: WithQuery })
   }
 
   it('flags a maven Group ID without a supported prefix', () => {
@@ -195,5 +217,244 @@ describe('DistributionTab — groupId supported-prefix validation', () => {
   it('shows no error when the Group ID is under a supported prefix', () => {
     renderWithSupported(mavenComponent('com.acme.svc'), ['com.acme'])
     expect(screen.queryByText(/must start with a supported prefix/i)).toBeNull()
+  })
+})
+
+describe('DistributionTab — version preview', () => {
+  function marker(attr: string, range: string, children: FieldOverride['markerChildren'], id = `${attr}${range}`): FieldOverride {
+    return { id, overriddenAttribute: attr, versionRange: range, rowType: 'MARKER', value: null, markerChildren: children, createdAt: null, updatedAt: null }
+  }
+  function populated(): ComponentDetail {
+    const c = baseComponent()
+    return {
+      ...c,
+      configurations: [
+        {
+          ...c.configurations[0]!,
+          mavenArtifacts: [{ id: 'm1', groupPattern: 'org.example', artifactPattern: 'base-art', extension: null, classifier: null, sortOrder: 0 }],
+          packages: [{ id: 'p1', packageType: 'rpm', packageName: 'base-pkg', sortOrder: 0 }],
+        },
+      ],
+    }
+  }
+  const path = (attribute: string, source: 'BASE' | 'OVERRIDE' | 'CONFLICT', matchedRanges: string[] = [], unevaluableRanges: string[] = []) =>
+    ({ attribute, source, matchedRanges, unevaluableRanges })
+  function respond(paths: DistributionPreviewResponse['paths'], supported = true) {
+    mockPost.mockResolvedValue({ version: '1.5', supported, paths } satisfies DistributionPreviewResponse)
+  }
+  const allBase = () => [
+    path('distribution.maven', 'BASE'), path('distribution.fileUrl', 'BASE'),
+    path('distribution.docker', 'BASE'), path('distribution.packages', 'BASE'),
+  ]
+  const enter = (v: string) => fireEvent.change(screen.getByLabelText('Preview version'), { target: { value: v } })
+  const verdict = (attr: string) => screen.findByTestId(`dist-preview-${attr}`)
+
+  it.each(['', '   '])('issues no request and shows nothing for blank input %j', async (v) => {
+    renderTab(populated())
+    enter(v)
+    await new Promise((r) => setTimeout(r, 450))
+    expect(mockPost).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('dist-preview-status')).toBeNull()
+    expect(screen.queryByTestId('dist-preview-distribution.maven')).toBeNull()
+  })
+
+  it('sends only the settled version, with the override and supported-version drafts', async () => {
+    const ov = marker('distribution.maven', '[1.0,2.0)', { mavenArtifacts: [{ groupPattern: 'org.example', artifactPattern: 'ov-art' }] }, 'draft-1')
+    mockEffective = [ov]
+    respond(allBase())
+    renderTab(populated(), true, { all: false, ranges: ['[1.0,3.0)'] })
+    enter('1')
+    enter('1.')
+    enter(' 1.5 ')
+    expect(screen.getByTestId('dist-preview-status').textContent).toMatch(/resolving/i)
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1))
+    expect(mockPost).toHaveBeenCalledWith('/components/c-1/distribution/preview', {
+      version: '1.5',
+      fieldOverrides: [{ overriddenAttribute: 'distribution.maven', versionRange: '[1.0,2.0)', markerChildren: ov.markerChildren }],
+      supportedVersions: { all: false, ranges: ['[1.0,3.0)'] },
+    })
+  })
+
+  it('follows the override draft', async () => {
+    respond(allBase())
+    const { rerender } = renderTab(populated())
+    enter('1.5')
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1))
+    mockEffective = [marker('distribution.maven', '[1.0,2.0)', { mavenArtifacts: [] }, 'draft-2')]
+    rerender(<Harness component={populated()} />)
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(2))
+    expect(mockPost.mock.calls[1]![1]).toMatchObject({
+      fieldOverrides: [{ overriddenAttribute: 'distribution.maven', versionRange: '[1.0,2.0)' }],
+    })
+  })
+
+  it('re-requests when the supported-versions draft changes', async () => {
+    respond(allBase())
+    const { rerender } = renderTab(populated(), true, { all: false, ranges: ['[1.0,3.0)'] })
+    enter('1.5')
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1))
+    rerender(<Harness component={populated()} supportedVersions={{ all: false, ranges: ['[1.0,3.0)', '[4.0,5.0)'] }} />)
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(2))
+    expect(mockPost.mock.calls[1]![1]).toMatchObject({ supportedVersions: { all: false, ranges: ['[1.0,3.0)', '[4.0,5.0)'] } })
+  })
+
+  it('waits for the override draft to load before requesting', async () => {
+    mockDraftLoading = true
+    respond(allBase())
+    renderTab(populated())
+    enter('1.5')
+    await new Promise((r) => setTimeout(r, 450))
+    expect(mockPost).not.toHaveBeenCalled()
+  })
+
+  it('omits the override draft when it failed to load, so the registry uses the saved set', async () => {
+    mockDraftError = true
+    respond(allBase())
+    renderTab(populated())
+    enter('1.5')
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1))
+    expect(mockPost.mock.calls[0]![1]).not.toHaveProperty('fieldOverrides')
+  })
+
+  it('waits for the supported-versions draft before requesting', async () => {
+    respond(allBase())
+    renderTab(populated(), true, null)
+    enter('1.5')
+    await new Promise((r) => setTimeout(r, 450))
+    expect(mockPost).not.toHaveBeenCalled()
+  })
+
+  it('attributes an overridden path to its range and an untouched path to the component level', async () => {
+    mockEffective = [marker('distribution.maven', '[1.0,2.0)', { mavenArtifacts: [{ groupPattern: 'org.example', artifactPattern: 'ov-art' }] })]
+    respond([path('distribution.maven', 'OVERRIDE', ['[1.0,2.0)']), path('distribution.packages', 'BASE'), path('distribution.docker', 'BASE')])
+    renderTab(populated())
+    enter('1.5')
+    const maven = await verdict('distribution.maven')
+    expect(maven.textContent).toContain('org.example:ov-art')
+    expect(maven.textContent).toContain('[1.0,2.0)')
+    const pkgs = await verdict('distribution.packages')
+    expect(pkgs.textContent).toMatch(/base list \(component level\)/i)
+  })
+
+  it('states that nothing is published for an empty override, attributed to its range', async () => {
+    mockEffective = [marker('distribution.packages', '[1.0,2.0)', { packages: [] })]
+    respond([path('distribution.packages', 'OVERRIDE', ['[1.0,2.0)'])])
+    renderTab(populated())
+    enter('1.5')
+    const pkgs = await verdict('distribution.packages')
+    expect(pkgs.textContent).toMatch(/nothing is published/i)
+    expect(pkgs.textContent).toContain('[1.0,2.0)')
+    expect(pkgs.textContent).not.toContain('base-pkg')
+  })
+
+  it('reports the Docker verdict in one line', async () => {
+    mockEffective = [marker('distribution.docker', '[1.0,2.0)', { dockerImages: [{ imageName: 'img' }] })]
+    respond([path('distribution.docker', 'OVERRIDE', ['[1.0,2.0)'])])
+    renderTab(populated())
+    enter('1.5')
+    expect((await screen.findByTestId('dist-preview-distribution.docker')).textContent).toMatch(/Docker images.*\[1\.0,2\.0\)/)
+  })
+
+  it('reports the Docker base list at the component level', async () => {
+    respond(allBase())
+    renderTab(populated())
+    enter('1.5')
+    expect((await screen.findByTestId('dist-preview-distribution.docker')).textContent).toMatch(/Docker images.*component level/i)
+  })
+
+  it('reports the Generic verdict in one line', async () => {
+    respond([path('distribution.generic', 'OVERRIDE', ['[1.0,2.0)'])])
+    renderTab(populated())
+    enter('1.5')
+    expect((await screen.findByTestId('dist-preview-distribution.generic')).textContent).toMatch(/Generic artifacts.*from range \[1\.0,2\.0\)/)
+  })
+
+  it('states the component has no configuration for an unsupported version', async () => {
+    respond([], false)
+    renderTab(populated())
+    enter('9.0')
+    await waitFor(() => expect(screen.getByTestId('dist-preview-status').textContent).toMatch(/no configuration/i))
+    expect(screen.queryByTestId('dist-preview-distribution.maven')).toBeNull()
+    expect(screen.queryByTestId('dist-preview-distribution.docker')).toBeNull()
+  })
+
+  it('reports an unparseable version as invalid input', async () => {
+    mockPost.mockRejectedValue(new ApiError(400, 'bad version'))
+    renderTab(populated())
+    enter('abc')
+    await waitFor(() => expect(screen.getByTestId('dist-preview-status').textContent).toMatch(/not a valid version/i))
+    expect(screen.getByLabelText('Preview version')).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.queryByTestId('dist-preview-distribution.maven')).toBeNull()
+  })
+
+  it.each([403, 500])('reports the preview unavailable on a %i', async (status) => {
+    mockPost.mockRejectedValue(new ApiError(status, 'nope'))
+    renderTab(populated())
+    enter('1.5')
+    await waitFor(() => expect(screen.getByTestId('dist-preview-status').textContent).toMatch(/unavailable/i))
+    expect(screen.queryByTestId('dist-preview-distribution.maven')).toBeNull()
+  })
+
+  it('names overlapping ranges as a data conflict', async () => {
+    mockEffective = [
+      marker('distribution.maven', '[1.0,2.0)', { mavenArtifacts: [] }),
+      marker('distribution.maven', '[1.2,3.0)', { mavenArtifacts: [] }),
+    ]
+    respond([path('distribution.maven', 'CONFLICT', ['[1.0,2.0)', '[1.2,3.0)'])])
+    renderTab(populated())
+    enter('1.5')
+    const maven = await verdict('distribution.maven')
+    expect(maven.textContent).toMatch(/conflict/i)
+    expect(maven.textContent).toContain('[1.0,2.0)')
+    expect(maven.textContent).toContain('[1.2,3.0)')
+    expect(screen.queryByText('In effect')).toBeNull()
+  })
+
+  it('warns when an override range could not be evaluated', async () => {
+    mockEffective = [marker('distribution.maven', 'garbage', { mavenArtifacts: [] })]
+    respond([path('distribution.maven', 'BASE', [], ['garbage'])])
+    renderTab(populated())
+    enter('1.5')
+    const maven = await verdict('distribution.maven')
+    expect(maven.textContent).toContain('garbage')
+    expect(maven.textContent).toMatch(/ignored.*incomplete/i)
+  })
+
+  it('shows base lists and marks no row when the component has no per-range overrides', async () => {
+    respond(allBase())
+    renderTab(populated())
+    enter('1.5')
+    expect((await verdict('distribution.maven')).textContent).toMatch(/base list \(component level\)/i)
+    expect(screen.queryByText('In effect')).toBeNull()
+  })
+
+  it('marks the winning per-range row', async () => {
+    mockEffective = [marker('distribution.maven', '[1.0,2.0)', { mavenArtifacts: [{ groupPattern: 'g', artifactPattern: 'a' }] })]
+    respond([path('distribution.maven', 'OVERRIDE', ['[1.0,2.0)'])])
+    renderTab(populated())
+    enter('1.5')
+    await verdict('distribution.maven')
+    expect(within(screen.getAllByTestId('dist-per-range-row')[0]!).getByText('In effect')).toBeDefined()
+  })
+
+  it('keeps the preview usable without edit rights', async () => {
+    respond(allBase())
+    renderTab(populated(), false)
+    expect(screen.getByLabelText('Preview version')).not.toBeDisabled()
+    enter('1.5')
+    expect((await verdict('distribution.maven')).textContent).toMatch(/component level/i)
+    for (const btn of screen.getAllByRole('button', { name: /^Add$/ })) expect(btn).toBeDisabled()
+  })
+
+  it('clears the attribution and marking when the version is cleared', async () => {
+    mockEffective = [marker('distribution.maven', '[1.0,2.0)', { mavenArtifacts: [] })]
+    respond([path('distribution.maven', 'OVERRIDE', ['[1.0,2.0)'])])
+    renderTab(populated())
+    enter('1.5')
+    await verdict('distribution.maven')
+    enter('')
+    expect(screen.queryByTestId('dist-preview-distribution.maven')).toBeNull()
+    expect(screen.queryByTestId('dist-preview-status')).toBeNull()
+    expect(screen.queryByText('In effect')).toBeNull()
   })
 })

@@ -1,21 +1,9 @@
 import { Plus, Trash2 } from 'lucide-react'
 import { Button } from '../ui/button'
+import { Badge } from '../ui/badge'
 import { formatVersionRange } from '../../lib/versionRange'
-import { coalescePerRangeOverrides, type PerRangeGroup } from './perRangeGrouping'
+import { coalescePerRangeOverrides, summarizeMarkerChildren, type PerRangeGroup } from './perRangeGrouping'
 import type { FieldOverride } from '../../lib/types'
-
-/** One-line human summary of a distribution marker override's children —
- *  mirrors FieldOverrides' `markerSummary` for the four distribution paths. */
-function summarize(o: FieldOverride): string {
-  const mc = o.markerChildren
-  if (!mc) return ''
-  const join = (xs: Array<string | null | undefined>) => xs.filter((x): x is string => !!x).join(', ')
-  if (mc.mavenArtifacts?.length) return join(mc.mavenArtifacts.map((a) => `${a.groupPattern}:${a.artifactPattern}`))
-  if (mc.dockerImages?.length) return join(mc.dockerImages.map((d) => (d.flavor ? `${d.imageName}:${d.flavor}` : d.imageName)))
-  if (mc.fileUrlArtifacts?.length) return join(mc.fileUrlArtifacts.map((a) => a.url))
-  if (mc.packages?.length) return join(mc.packages.map((p) => `${p.packageType} ${p.packageName}`))
-  return ''
-}
 
 export interface DistributionPerRangeProps {
   overrides: FieldOverride[]
@@ -27,6 +15,9 @@ export interface DistributionPerRangeProps {
   onEdit: (group: PerRangeGroup) => void
   /** Delete every override in the coalesced group. */
   onDelete: (group: PerRangeGroup) => void
+  /** versionRange of the override the version preview resolved this path to;
+   *  the row containing it is marked "In effect". */
+  activeRange?: string
 }
 
 /**
@@ -37,7 +28,7 @@ export interface DistributionPerRangeProps {
  * queue into the shared override draft so they ride the editor's one combined
  * Save. Terminology matches the Overrides tab ("override", not "variant").
  */
-export function DistributionPerRange({ overrides, canEdit, onAdd, onEdit, onDelete }: DistributionPerRangeProps) {
+export function DistributionPerRange({ overrides, canEdit, onAdd, onEdit, onDelete, activeRange }: DistributionPerRangeProps) {
   const groups = coalescePerRangeOverrides(overrides)
   return (
     <div className="rounded-md border border-dashed p-3 space-y-2">
@@ -51,11 +42,13 @@ export function DistributionPerRange({ overrides, canEdit, onAdd, onEdit, onDele
         </Button>
       </div>
       {groups.map((group) => {
-        const summary = summarize(group.representative)
+        const summary = summarizeMarkerChildren(group.representative)
+        const inEffect = activeRange !== undefined && group.members.some((m) => m.versionRange === activeRange)
         return (
           <div key={group.members.map((m) => m.id).join('|')} data-testid="dist-per-range-row" className="flex items-center justify-between gap-2 rounded border px-2 py-1">
             <div className="flex min-w-0 flex-1 items-baseline gap-2">
               <span className="shrink-0 font-mono text-xs">{formatVersionRange(group.displayRange)}</span>
+              {inEffect && <Badge variant="success" className="shrink-0 text-[10px]">In effect</Badge>}
               {summary ? (
                 <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={summary}>
                   {summary}
