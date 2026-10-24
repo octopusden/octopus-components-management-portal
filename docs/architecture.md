@@ -101,6 +101,8 @@ Per-directive rationale lives next to `SecurityConfig.CONTENT_SECURITY_POLICY`.
 
 `/actuator/health` stays anonymous for probes and monitoring, but with `show-details: when-authorized` an anonymous caller gets the aggregate status only. Component paths such as `/actuator/health/validationSweep` answer 404 to anonymous callers, because `show-components` follows `show-details`; the probe groups (`liveness`, `readiness`) are unaffected.
 
+Actuator is served on the separate management port (`management.server.port: 8080`), not the app port the browser uses. Anonymous callers there, probes and monitoring included, get the status only; the details that `when-authorized` allows need an authenticated request on that management port.
+
 ## SPA fallback: which paths fall through to backend?
 
 `SpaFallbackFilter` runs as a `WebFilter` and serves `classpath:/static/index.html` for any **GET** that is not API, asset, OIDC, or actuator. The exclusion list is the source of truth:
