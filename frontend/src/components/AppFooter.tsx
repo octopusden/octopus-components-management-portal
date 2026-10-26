@@ -1,5 +1,4 @@
 import { useCrsInfo, usePortalInfo } from '@/hooks/useInfo'
-import { AdminPane } from './AdminPane'
 import { useUiOverlay } from '@/lib/uiOverlayStore'
 
 const BRAND = 'Components Registry by F1 team'
@@ -20,12 +19,6 @@ export function AppFooter() {
   return (
     <footer className="border-t bg-card mt-auto">
       <div className="max-w-screen-xl mx-auto px-4 h-9 flex items-center gap-4 text-xs text-muted-foreground">
-        {/* Stable left slot — when AdminPane is hidden (no IMPORT_DATA),
-            this empty div keeps `ml-auto` working: the version label still
-            hugs the right edge instead of collapsing to the left. */}
-        <div className="flex items-center">
-          <AdminPane />
-        </div>
         <button
           type="button"
           onClick={openShortcuts}

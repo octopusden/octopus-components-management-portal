@@ -61,7 +61,7 @@ test.describe('design tokens — FieldConfig visibility cells', () => {
 })
 
 test.describe('design tokens — Component detail Archive button', () => {
-  test('Archive button uses Button variant="destructive" (no inline custom classes)', async ({
+  test('Archive button uses Button variant="destructive-outline" (no inline custom classes)', async ({
     page,
   }) => {
     // ComponentDetailPage hits four endpoints on render: the list (header
@@ -97,6 +97,6 @@ test.describe('design tokens — Component detail Archive button', () => {
     // exists). Use exact /^archive$/i to avoid matching "Unarchive".
     const archiveBtn = page.getByRole('button', { name: /^archive$/i })
     await expect(archiveBtn).toBeVisible()
-    await expect(archiveBtn).toHaveAttribute('data-variant', 'destructive')
+    await expect(archiveBtn).toHaveAttribute('data-variant', 'destructive-outline')
   })
 })

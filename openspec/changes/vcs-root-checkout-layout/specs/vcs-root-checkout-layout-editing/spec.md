@@ -5,13 +5,13 @@ the build runs, and tells them when a save leaves the component's TeamCity build
 
 ## ADDED Requirements
 
-### Requirement: Placement fields per VCS entry
+### Requirement: Checkout layout fields per VCS entry
 
 The VCS editor and the per-range override editor SHALL show Source Path and Checkout Directory for
 every VCS entry, whatever its position, prefilled from the registry, editable by users allowed to
 edit the component, and SHALL send both on save, sending `null` for a field left blank.
 
-#### Scenario: Editing placement
+#### Scenario: Editing checkout layout
 - **WHEN** an editor sets Checkout Directory `core` on the first entry, and Source Path `data` on
   the second entry, and saves
 - **THEN** the save request carries those values, `checkoutDirectory: "core"` on the first entry
@@ -80,7 +80,7 @@ SHALL send the stored Name unchanged (none for a new entry).
 - **WHEN** an editor changes an entry's Checkout Directory to `feature` and saves
 - **THEN** after reload the entry's Name shows `feature`
 
-### Requirement: Placement validation errors on the field
+### Requirement: Checkout layout validation errors on the field
 
 The VCS editor SHALL show a registry error whose message starts with `vcsEntries[<i>].sourcePath: `
 or `vcsEntries[<i>].checkoutDirectory: ` next to that field of entry `<i>`, and one starting

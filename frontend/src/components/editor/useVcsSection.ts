@@ -189,7 +189,7 @@ export interface VcsSection {
   removeEntry: (index: number) => void
   slice: SectionSlice
   reset: () => void
-  /** Registry placement errors on base entries, keyed `<entry index>.<field>`
+  /** Registry checkout layout errors on base entries, keyed `<entry index>.<field>`
    *  (`buildWorkingDirectory` for the row's own field). */
   entryErrors: Record<string, string>
   /** The same for per-range rows, by override id. */

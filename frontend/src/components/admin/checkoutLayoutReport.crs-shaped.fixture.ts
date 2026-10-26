@@ -1,11 +1,11 @@
-import type { PlacementDiffResult, PlacementEntryDiff, PlacementRowDiff } from '@/lib/types'
+import type { CheckoutLayoutDiffResult, CheckoutLayoutEntryDiff, CheckoutLayoutRowDiff } from '@/lib/types'
 
-// CRS serialises the placement DTOs with Jackson and no NON_NULL, so every
-// property of `PlacementDiffResult` / `PlacementRowDiff` / `PlacementEntryDiff`
+// CRS serialises the checkout layout DTOs with Jackson and no NON_NULL, so every
+// property of `CheckoutLayoutDiffResult` / `CheckoutLayoutRowDiff` / `CheckoutLayoutEntryDiff`
 // is present and the absent nullable ones are explicit `null` — never omitted.
 // Spelled out in full here so tests render what the wire really carries.
 
-function entry(overrides: Partial<PlacementEntryDiff> = {}): PlacementEntryDiff {
+function entry(overrides: Partial<CheckoutLayoutEntryDiff> = {}): CheckoutLayoutEntryDiff {
   return {
     name: 'main',
     vcsPath: 'ssh://git/app.git',
@@ -21,7 +21,7 @@ function entry(overrides: Partial<PlacementEntryDiff> = {}): PlacementEntryDiff 
   }
 }
 
-function row(overrides: Partial<PlacementRowDiff>): PlacementRowDiff {
+function row(overrides: Partial<CheckoutLayoutRowDiff>): CheckoutLayoutRowDiff {
   return {
     componentId: '00000000-0000-0000-0000-00000000000a',
     componentKey: 'app-a',
@@ -38,7 +38,7 @@ function row(overrides: Partial<PlacementRowDiff>): PlacementRowDiff {
   }
 }
 
-export const CRS_SHAPED_REPORT: PlacementDiffResult = {
+export const CRS_SHAPED_REPORT: CheckoutLayoutDiffResult = {
   diffId: 'diff-1',
   generatedAt: '2026-09-30T10:00:42Z',
   rows: [

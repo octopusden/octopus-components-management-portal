@@ -49,6 +49,13 @@ describe('generalSlice', () => {
     expect(slice.diff.map((d) => d.label)).toEqual(['Test component'])
   })
 
+  it('is dirty with an "Auto release" diff row when autoRelease flips', () => {
+    const slice = generalSlice(makeComponent(), patch({ autoRelease: true }))
+    expect(slice.isDirty).toBe(true)
+    expect(slice.request.autoRelease).toBe(true)
+    expect(slice.diff.map((d) => d.label)).toEqual(['Auto release'])
+  })
+
   it('preserves clearParent (a real General control) in the slice request', () => {
     const slice = generalSlice(makeComponent({ parentComponentName: 'p' }), patch({ parentComponentName: null, clearParent: true }))
     expect(slice.request.clearParent).toBe(true)

@@ -1,16 +1,15 @@
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router'
 import { Layout } from '../components/Layout'
 import { ComponentFilters } from '../components/ComponentFilters'
 import { ComponentTable } from '../components/ComponentTable'
-import { ListPresetBar } from '../components/ListPresetBar'
 import { ActiveFilterChips } from '../components/ActiveFilterChips'
 import { Pagination } from '../components/Pagination'
 import { CreateComponentButton } from './CreateComponentPage'
-import { SearchCommandButton } from '../components/SearchCommandButton'
 import { InlineError } from '../components/ui/inline-error'
 import { StatusBanner } from '../components/ui/status-banner'
 import { useComponents } from '../hooks/useComponents'
+import { AS_CODE_SEARCH_MIN_QUERY } from '../hooks/useAsCodeSearch'
 import {
   useValidationProblems,
   useComponentsWithProblems,
@@ -20,7 +19,7 @@ import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { canStartCreate, hasPermission, PERMISSIONS } from '@/lib/auth'
 import { useAdminMode } from '@/lib/adminModeStore'
 import { useFilterUrlState } from '../hooks/useFilterUrlState'
-import { applyPreset, DEFAULT_FILTER, matchPreset, type PresetId } from '../lib/listPresets'
+import { applyPreset, DEFAULT_FILTER, type PresetId } from '../lib/listPresets'
 import { countCheckFailed } from '../lib/validation'
 import { ApiError } from '../lib/api'
 import type { ComponentFilter, ComponentSummary, TeamcityValidationRow } from '../lib/types'
@@ -87,11 +86,19 @@ export function ComponentListPage() {
   const adminMode = useAdminMode((s) => s.enabled)
   const isAdmin = adminMode && hasPermission(user, PERMISSIONS.IMPORT_DATA)
 
-  // The active preset: an explicit URL preset wins (it is the only way to encode
-  // `problems`, which has no filter footprint); otherwise derive it from the
-  // filter so a bare filter URL still lights up the matching segment.
-  const activePreset: PresetId | null =
-    (urlPreset as PresetId | null) ?? matchPreset(filter, username)
+  // The only preset left in the UI is `problems` (it has no filter footprint, so it needs
+  // `?preset=`). Status and "Mine" are plain filters now.
+  const activePreset: PresetId | null = urlPreset === 'problems' ? 'problems' : null
+
+  // Legacy links (`?preset=mine|release-manager|security-champion|archived|all`) from before the
+  // preset bar was replaced: rewrite them once into the equivalent filters. The personal ones
+  // wait for the current user so they can scope to them.
+  useEffect(() => {
+    if (!urlPreset || urlPreset === 'problems') return
+    const personal = urlPreset === 'mine' || urlPreset === 'release-manager' || urlPreset === 'security-champion'
+    if (personal && !username) return
+    setState({ filter: applyPreset(urlPreset as PresetId, filter, username), preset: null })
+  }, [urlPreset, username, filter, setState])
 
   // "Only with problems" mode — the `problems` preset. Driven by the Portal
   // validation report, not a CRS query param (problems are Portal-computed, the
@@ -163,46 +170,48 @@ export function ComponentListPage() {
   // A copy opens the regular wizard, which only CREATE_COMPONENTS may use.
   const canCopy = hasPermission(user, PERMISSIONS.CREATE_COMPONENTS)
 
-  // The preset reflected in the UI (segmented control + chip). A `problems`
-  // preset that the current user can't actually use (not admin) is suppressed
-  // so a shared admin link doesn't surface a preset with no matching button.
+  // A `problems` preset the current user can't use (not admin) is suppressed so a
+  // shared admin link doesn't surface a chip with no matching toggle.
   const effectivePreset: PresetId | null =
     activePreset === 'problems' && !isAdmin ? null : activePreset
 
-  // A filter edit replaces the filter and re-derives the preset from it (so
-  // manually reproducing a preset's combo lights the segment, and any other
-  // combo clears it). matchPreset never yields `problems` (it has no filter
-  // footprint), so editing a CRS filter naturally drops the problems preset —
-  // those controls are inert in problems mode anyway.
+  // A filter edit keeps "With problems" as it is (its controls are inert while it is on anyway).
   const handleFilterChange = (newFilter: ComponentFilter) => {
-    setState({ filter: newFilter, preset: matchPreset(newFilter, username) })
+    setState({ filter: newFilter, preset: activePreset })
     setPage(0) // reset to first page on filter change
   }
 
-  // Preset selection is sugar over the filter state (lib/listPresets): apply the
-  // preset's filter combo and record the preset in the URL.
-  const handlePresetSelect = (id: PresetId) => {
-    setState({ filter: applyPreset(id, filter, username), preset: id })
+  const handleProblemsOnlyChange = (on: boolean) => {
+    setState({ filter, preset: on ? 'problems' : null })
     setPage(0)
   }
 
   // Clear all → back to the default (active only, test components hidden, no
-  // preset, bare URL).
+  // preset, bare URL). It also remounts the filters, so a text edit still in its
+  // debounce is dropped instead of committing into the cleared filter.
+  const [filtersGeneration, setFiltersGeneration] = useState(0)
   const handleClearAll = () => {
     setState({ filter: DEFAULT_FILTER, preset: null })
     setPage(0)
+    setFiltersGeneration((g) => g + 1)
   }
 
-  // Remove a single active-filter chip. The synthetic `preset` chip resets to
-  // the active-only default ("All") — same as Clear all, so a shared link is the
-  // bare URL, not `?preset=all`; array chips drop just that value; scalar /
-  // tri-state chips clear the whole field.
+  // Remove a single active-filter chip. The `preset` chip ("With problems") turns that mode
+  // off; the "Mine" chip clears involves + its roles; array chips drop just that value;
+  // Status returns to Active; scalar / tri-state chips clear the whole field.
   const handleChipRemove = (
     key: keyof ComponentFilter | 'preset',
     value: string | undefined,
   ) => {
     if (key === 'preset') {
-      handleClearAll()
+      handleProblemsOnlyChange(false)
+      return
+    }
+    if (key === 'involves') {
+      const next: ComponentFilter = { ...filter }
+      delete next.involves
+      delete next.involvesRoles
+      handleFilterChange(next)
       return
     }
     const next: ComponentFilter = { ...filter }
@@ -215,10 +224,12 @@ export function ComponentListPage() {
       } else {
         delete next[key]
       }
-    } else if (key === 'archived' || key === 'testComponent') {
-      // No "unset" — removing the chip returns to the default (active only,
-      // test components hidden).
-      next[key] = false
+    } else if (key === 'archived') {
+      // Removing the Status chip (Archived, All or Test components) returns to the Active default.
+      next.archived = false
+      next.testComponent = false
+    } else if (key === 'testComponent') {
+      next.testComponent = false
     } else {
       delete next[key]
     }
@@ -248,17 +259,11 @@ export function ComponentListPage() {
                   </span>
                 )}
           </div>
-          <div className="flex items-center gap-2">
-            <SearchCommandButton />
-            {canStartNew && <CreateComponentButton />}
-          </div>
+          {canStartNew && <CreateComponentButton />}
         </div>
 
-        {/* Preset segmented control (spec §1.1): sugar over the filter state.
-            The admin-only "With problems" preset is hidden for non-admins. */}
-        <ListPresetBar active={effectivePreset} isAdmin={isAdmin} onSelect={handlePresetSelect} />
-
         <ComponentFilters
+          key={filtersGeneration}
           filter={filter}
           onFilterChange={handleFilterChange}
           problemsOnly={showProblemsOnly}
@@ -267,6 +272,8 @@ export function ComponentListPage() {
           // problems-only mode and once the report has loaded; undefined
           // otherwise (so the hint renders without a count while loading).
           problemsCount={showProblemsOnly && !problems.isLoading ? problemRows.length : undefined}
+          canFilterProblems={isAdmin}
+          onProblemsOnlyChange={handleProblemsOnlyChange}
         />
 
         {/* Active-filter chips (spec §1.2): one removable chip per active filter
@@ -278,6 +285,20 @@ export function ComponentListPage() {
           onRemove={handleChipRemove}
           onClearAll={handleClearAll}
         />
+
+        {/* The key/name filter only narrows this list; offer the same text to Global search,
+            which looks through every component's as-code view (artifacts, VCS URLs, …). */}
+        {(filter.search?.trim().length ?? 0) >= AS_CODE_SEARCH_MIN_QUERY && (
+          <p className="text-sm text-muted-foreground">
+            Looking for “{filter.search?.trim()}” anywhere in a component&apos;s configuration?{' '}
+            <Link
+              to={`/search?q=${encodeURIComponent(filter.search?.trim() ?? '')}`}
+              className="font-medium text-primary hover:underline"
+            >
+              Global search →
+            </Link>
+          </p>
+        )}
 
         {/* The validation report is a scheduled Portal sweep; when its most
             recent refresh failed the held data may be stale. Surface that so a

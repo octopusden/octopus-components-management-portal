@@ -37,7 +37,7 @@ Properties:
 
 ## Toggle UI
 
-[`frontend/src/components/AdminPane.tsx`](../../frontend/src/components/AdminPane.tsx) renders the switch in the app footer (`AppFooter`). It is only mounted for users with the `IMPORT_DATA` permission (`RequirePermission`); non-admins never see it.
+The header account menu ([`UserMenu`](../../frontend/src/components/UserMenu.tsx), the avatar) holds an **Admin mode** row: a menu checkbox item (`menuitemcheckbox`) drawn as a switch, so the arrow keys reach it like the other rows. Click, Enter or Space flips it and keeps the menu open. It is only rendered for users with the `IMPORT_DATA` permission; non-admins never see it.
 
 ## How features consume it
 
@@ -57,7 +57,7 @@ function MigrationButton() {
 When designing a new destructive feature:
 
 1. Gate the **button enable** on `useAdminMode`.
-2. Render a hint near the disabled button: e.g. "Enable Admin mode in the footer to run migration."
+2. Render a hint near the disabled button: e.g. "Enable Admin mode in the account menu to run migration."
 3. Do **not** rely on this for security. Always make sure the backend rejects the action with 403 if the user lacks the permission, regardless of UX state.
 
 ## What goes behind the gate
@@ -75,7 +75,7 @@ Today the only thing behind Admin mode is "Run migration" in [`docs/features/adm
 ## Tests
 
 - `frontend/src/lib/adminModeStore.test.ts` — store behavior + localStorage persistence.
-- `frontend/src/components/AdminPane.test.tsx` — toggle visibility (only for admins) + interaction.
+- `frontend/src/components/UserMenu.test.tsx` — toggle visibility (only for admins), pointer and keyboard interaction.
 - Cross-feature: `frontend/src/components/admin/MigrationPanel.test.tsx` asserts the button is disabled when `enabled === false`.
 
 ## Known gaps

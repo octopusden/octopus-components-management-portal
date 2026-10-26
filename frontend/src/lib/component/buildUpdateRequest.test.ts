@@ -43,6 +43,7 @@ function makeValues(overrides: Partial<GeneralFormValues> = {}): GeneralFormValu
     testComponent: false,
     parentComponentName: '',
     canBeParent: false,
+    autoRelease: false,
     releaseManager: [],
     securityChampion: [],
     copyright: '',
@@ -62,6 +63,7 @@ const EDITABLE: FieldVisibilities = {
   securityChampion: 'editable',
   copyright: 'editable',
   canBeParent: 'editable',
+  autoRelease: 'editable',
   labels: 'editable',
   solution: 'editable',
 }
@@ -389,6 +391,33 @@ describe('buildUpdateRequest — dirtyFields gating (pre-hydration safety)', () 
     expect(req.docs).toEqual([])
     expect(req.artifactIds).toEqual([])
   })
+})
+
+describe('buildUpdateRequest — autoRelease', () => {
+  const run = (
+    compAuto: boolean,
+    formAuto: boolean,
+    vis: FieldVisibilities['autoRelease'] = 'editable',
+    dirty = true,
+  ) =>
+    buildUpdateRequest({
+      component: makeComponent({ autoRelease: compAuto }),
+      values: makeValues({ autoRelease: formAuto }),
+      visibilities: { ...EDITABLE, autoRelease: vis },
+      dirtyFields: { autoRelease: dirty },
+    })
+
+  it('unchanged → omitted', () => expect(run(true, true).autoRelease).toBeUndefined())
+  it('toggled on → emitted true', () => expect(run(false, true).autoRelease).toBe(true))
+  it('toggled off → emitted false', () => expect(run(true, false).autoRelease).toBe(false))
+  it('hidden or readonly never reaches the wire', () => {
+    expect(run(false, true, 'hidden').autoRelease).toBeUndefined()
+    expect(run(false, true, 'readonly').autoRelease).toBeUndefined()
+  })
+  // A sync turned the flag on server-side while the form still holds the old false:
+  // an untouched switch must not send it back off.
+  it('not dirty → omitted even when the server value differs', () =>
+    expect(run(true, false, 'editable', false).autoRelease).toBeUndefined())
 })
 
 describe('buildUpdateRequest — canBeParent + clearParent (items 1/2 + 4)', () => {

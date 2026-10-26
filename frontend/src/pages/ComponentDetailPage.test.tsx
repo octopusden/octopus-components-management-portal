@@ -40,7 +40,7 @@ vi.mock('../hooks/useInfo', () => ({
   // Layout consumes usePortalInfo for the environment banner; return "no data"
   // so these page tests render without a banner.
   usePortalInfo: vi.fn(() => ({ data: undefined })),
-  // Layout's OnboardingVideoButton consumes this; "no data" → not ready → renders nothing.
+  // Layout's HelpMenu (intro-video entry) consumes this; "no data" → not ready → renders nothing.
   useOnboardingVideoStatus: vi.fn(() => ({ data: undefined })),
 }))
 // The always-rendered header labels editor calls useLabelsDictionary; mock it to
@@ -96,6 +96,9 @@ vi.mock('../components/editor/MiscTab', async () => {
   )
   return { ...actual, MiscTab: () => React.createElement('div', { 'data-testid': 'misc-tab' }) }
 })
+vi.mock('../components/editor/ReleaseProcessTab', () => ({
+  ReleaseProcessTab: () => React.createElement('div', { 'data-testid': 'release-process-tab' }),
+}))
 vi.mock('../components/editor/BuildTab', () => ({
   BuildTab: ({ conflictError }: { conflictError?: string | null }) =>
     React.createElement('div', { 'data-testid': 'build-tab', 'data-conflict-error': conflictError ?? '' }),
@@ -269,6 +272,8 @@ interface RenderPageOptions {
   updateMutation?: Partial<typeof idleMutation>
   deleteMutation?: Partial<typeof idleMutation>
   archiveReadiness?: Partial<ReturnType<typeof useArchiveReadiness>>
+  /** Initial URL; defaults to the plain detail route. */
+  initialEntry?: string
 }
 
 // Default: a ready verdict with no entries — matches "nothing configured on
@@ -334,7 +339,7 @@ function renderPage(component: ComponentDetail, user: User | null, opts: RenderP
       { path: '/components/new', element: <CreateWizardProbe /> },
       { path: '/components/:id', element: <ComponentDetailPage /> },
     ],
-    { initialEntries: ['/components/comp-1'] },
+    { initialEntries: [opts.initialEntry ?? '/components/comp-1'] },
   )
   return {
     client,
@@ -506,13 +511,13 @@ describe('ComponentDetailPage — Archive / Unarchive buttons', () => {
     expect(screen.getByRole('button', { name: /archive/i })).toBeDefined()
   })
 
-  it('(a) Archive button uses Button variant="destructive" (no inline custom classes)', () => {
+  it('(a) Archive button uses Button variant="destructive-outline" (no inline custom classes)', () => {
     const user = makeUser(['ACCESS_COMPONENTS', 'DELETE_COMPONENTS'])
     renderPage(baseComponent, user)
     // Header Archive (not the dialog confirm button) is the only one before
     // any click; assert via data-variant attribute set by Button.
     const archiveBtn = screen.getByRole('button', { name: /^archive$/i })
-    expect(archiveBtn.getAttribute('data-variant')).toBe('destructive')
+    expect(archiveBtn.getAttribute('data-variant')).toBe('destructive-outline')
   })
 
   it('(a) Archive button is hidden for user without DELETE_COMPONENTS', () => {
@@ -871,6 +876,43 @@ describe('ComponentDetailPage — breadcrumb badges', () => {
   })
 })
 
+describe('ComponentDetailPage — as-code search deep link', () => {
+  it('?tab=as-code&line=N opens the As Code tab (Full view) with line N marked', async () => {
+    // renderPage stubs fetch to answer '{}', which the as-code view renders as a single line.
+    renderPage(baseComponent, makeUser(['ACCESS_COMPONENTS']), { initialEntry: '/components/comp-1?tab=as-code&line=1' })
+    // Two tablists: the editor sidebar, and As Code's own Full/Resolved toggle — present only
+    // because the As Code tab is the one rendered.
+    const sidebar = screen.getAllByRole('tablist')[0]!
+    expect(within(sidebar).getByRole('tab', { name: 'As Code' }).getAttribute('data-state')).toBe('active')
+    expect(screen.getByRole('tab', { name: /full/i }).getAttribute('data-state')).toBe('active')
+    await waitFor(() => expect(document.querySelector('[data-highlighted="true"]')?.textContent).toBe('{}'))
+  })
+
+  it('a deep link arriving while the page is open on General switches to As Code with the line', async () => {
+    const { router } = renderPage(baseComponent, makeUser(['ACCESS_COMPONENTS']))
+    const sidebar = () => screen.getAllByRole('tablist')[0]!
+    expect(within(sidebar()).getByRole('tab', { name: 'General' }).getAttribute('data-state')).toBe('active')
+    await act(async () => { await router.navigate('/components/comp-1?tab=as-code&line=1') })
+    expect(within(sidebar()).getByRole('tab', { name: 'As Code' }).getAttribute('data-state')).toBe('active')
+    await waitFor(() => expect(document.querySelector('[data-highlighted="true"]')?.textContent).toBe('{}'))
+  })
+
+  it('a new deep link returns As Code from the Resolved view to the Full view', async () => {
+    const { router } = renderPage(baseComponent, makeUser(['ACCESS_COMPONENTS']), { initialEntry: '/components/comp-1?tab=as-code&line=1' })
+    await userEvent.click(screen.getByRole('tab', { name: /resolved/i }))
+    expect(screen.getByRole('tab', { name: /resolved/i }).getAttribute('data-state')).toBe('active')
+    await act(async () => { await router.navigate('/components/comp-1?tab=as-code&line=1') })
+    expect(screen.getByRole('tab', { name: /full/i }).getAttribute('data-state')).toBe('active')
+    await waitFor(() => expect(document.querySelector('[data-highlighted="true"]')?.textContent).toBe('{}'))
+  })
+
+  it('any other ?tab value keeps opening on General', () => {
+    renderPage(baseComponent, makeUser(['ACCESS_COMPONENTS']), { initialEntry: '/components/comp-1?tab=history' })
+    const general = within(screen.getByRole('tablist')).getByRole('tab', { name: 'General' })
+    expect(general.getAttribute('data-state')).toBe('active')
+  })
+})
+
 describe('ComponentDetailPage — sidebar nav order', () => {
   it('renders the grouped sidebar order (Overview → Build & Release → Distribution → Metadata → Tools) — no Validations section for a non-admin', () => {
     const user = makeUser(['ACCESS_COMPONENTS'])
@@ -887,6 +929,7 @@ describe('ComponentDetailPage — sidebar nav order', () => {
       'Build',
       'VCS',
       'Jira',
+      'Release Process',
       'Escrow',
       'Documentation',
       'Distribution',
@@ -898,6 +941,16 @@ describe('ComponentDetailPage — sidebar nav order', () => {
       'Overrides',
       'History',
     ])
+  })
+
+  it('hides the Release Process tab when component.autoRelease is hidden', () => {
+    mockedUseFieldConfigEntry.mockImplementation((path: string) => ({
+      entry: { visibility: path === 'component.autoRelease' ? ('hidden' as const) : ('editable' as const), required: false },
+      isLoading: false,
+      isError: false,
+    }))
+    renderPage(baseComponent, makeUser(['ACCESS_COMPONENTS']))
+    expect(within(screen.getByRole('tablist')).queryByRole('tab', { name: /release process/i })).toBeNull()
   })
 
   it('appends the admin-only Validations section (TeamCity, Unregistered Release) at the end for an admin', () => {
@@ -1287,6 +1340,41 @@ describe('ComponentDetailPage — solution flag dirty-gate', () => {
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
     // Disabled Save fires no handler, so no need to await: assert directly.
     expect(updateMutateAsync).not.toHaveBeenCalled()
+  })
+})
+
+// A first load seeds the form with setValue (no reset), so the form default stays false.
+// Turning a seeded `true` switch off lands back on that default: RHF reports it touched
+// but not dirty, and the change must still reach the PATCH.
+describe('ComponentDetailPage — switching a seeded flag off is sent', () => {
+  it.each(['autoRelease', 'solution'] as const)('%s: server true → off → PATCH carries false', async (field) => {
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('systems', component.systems ?? [])
+        form.setValue(field, component[field] ?? false)
+      }, [component, form])
+      return React.createElement(
+        'button',
+        {
+          'data-testid': 'switch-off',
+          onClick: () => form.setValue(field, false, { shouldDirty: true, shouldTouch: true }),
+        },
+        'off',
+      )
+    })
+    const updateMutateAsync = vi.fn(() => Promise.resolve())
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage({ ...baseComponent, [field]: true }, user, { updateMutation: { mutateAsync: updateMutateAsync } })
+
+    fireEvent.click(screen.getByTestId('switch-off'))
+    await waitFor(() => {
+      const btn = screen.getByRole('button', { name: /save changes/i }) as HTMLButtonElement
+      expect(btn.disabled).toBe(false)
+    })
+    await clickSaveAndConfirm()
+    await waitFor(() => expect(updateMutateAsync).toHaveBeenCalledOnce())
+    const payload = (updateMutateAsync.mock.calls[0] as unknown as [Record<string, unknown>])[0]
+    expect(payload[field]).toBe(false)
   })
 })
 
@@ -1811,6 +1899,33 @@ describe('ComponentDetailPage — cross-tab 400 + displayName clear', () => {
     await clickSaveAndConfirm()
 
     await waitFor(() => expect(screen.getByTestId('misc-tab')).toBeDefined())
+  })
+
+  it('auto-switches to the Release Process tab when a 400 maps to autoRelease', async () => {
+    // GeneralTab stub hydrates displayName + exposes a dirty edit so Save enables.
+    vi.mocked(GeneralTab).mockImplementation(({ component, form }) => {
+      useEffect(() => {
+        form.setValue('systems', component.systems ?? [])
+        form.setValue('displayName', component.displayName ?? '')
+      }, [component, form])
+      return React.createElement(
+        'button',
+        { 'data-testid': 'edit', onClick: () => form.setValue('displayName', 'X', { shouldDirty: true }) },
+        'edit',
+      )
+    })
+    const mutateAsync = vi.fn(() =>
+      Promise.reject(
+        new ApiError(400, 'bad', JSON.stringify({ errorMessage: 'autoRelease: not editable' })),
+      ),
+    )
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
+    renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+
+    fireEvent.click(screen.getByTestId('edit'))
+    await clickSaveAndConfirm()
+
+    await waitFor(() => expect(screen.getByTestId('release-process-tab')).toBeDefined())
   })
 
   it('auto-switches to the Documentation tab when a 400 maps to a docs field', async () => {
