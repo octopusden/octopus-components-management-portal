@@ -2,6 +2,9 @@ import type { ComponentProfile } from '../../hooks/useComponentProfiles'
 import type { ComponentDetail } from '../types'
 import { profileRuleErrors } from './profileRules'
 
+export const isRegular = (p: ComponentProfile) => p.kind === 'regular'
+export const isTemplate = (p: ComponentProfile) => p.kind === 'template'
+
 export interface ProfileFlags {
   solution: boolean
   distributionExternal: boolean
@@ -54,12 +57,15 @@ function keyPassesRules(profile: ComponentProfile, key: string): boolean {
   return profileRuleErrors(keyRules, { name: key }).size === 0
 }
 
-/** The profiles whose classification is [classification], usable or not, in the registry's order. */
+/**
+ * The regular profiles whose classification is [classification], usable or not, in the registry's
+ * order. A template never covers a classification: it is picked, never derived.
+ */
 export function profilesCovering(
   classification: Classification,
   profiles: readonly ComponentProfile[],
 ): ComponentProfile[] {
-  return profiles.filter((p) => matchesClassification(p, classification))
+  return profiles.filter((p) => isRegular(p) && matchesClassification(p, classification))
 }
 
 /**
@@ -95,7 +101,8 @@ export function profileFromSource(
 
 /**
  * The profile the wizard opens with: a clone's from [profileFromSource], a new component's the
- * first usable profile. `profile` is the object for `profileId`, or `null` when none is selected.
+ * first usable regular profile. A template is never pre-selected. `profile` is the object for
+ * `profileId`, or `null` when none is selected.
  */
 export function initialProfile(
   source: ComponentDetail | null,
@@ -103,6 +110,10 @@ export function initialProfile(
 ): { profileId: string | null; profile: ComponentProfile | null; explicit: boolean; matchesAny: boolean } {
   const { profileId, explicit, matchesAny } = source
     ? profileFromSource(source, profiles)
-    : { profileId: profiles.find((p) => p.usable)?.id ?? null, explicit: false, matchesAny: profiles.length > 0 }
+    : {
+        profileId: profiles.find((p) => isRegular(p) && p.usable)?.id ?? null,
+        explicit: false,
+        matchesAny: profiles.some(isRegular),
+      }
   return { profileId, profile: profiles.find((p) => p.id === profileId) ?? null, explicit, matchesAny }
 }

@@ -1,6 +1,6 @@
 import { Fragment, type ReactNode, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { Package, History, ShieldCheck, Plus, ListFilter } from 'lucide-react'
+import { Package, History, ShieldCheck, Plus, ListFilter, Search } from 'lucide-react'
 import {
   CommandDialog,
   CommandInput,
@@ -14,8 +14,9 @@ import { useUiOverlay } from '@/lib/uiOverlayStore'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { useComponents } from '@/hooks/useComponents'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
+import { AS_CODE_SEARCH_MIN_QUERY } from '@/hooks/useAsCodeSearch'
 import { matchesQuery, rankComponents } from '@/lib/paletteSearch'
-import { hasPermission, PERMISSIONS } from '@/lib/auth'
+import { canStartCreate, hasPermission, PERMISSIONS } from '@/lib/auth'
 import { useAdminMode } from '@/lib/adminModeStore'
 import { presetUrl } from '@/lib/presetUrl'
 import { PRESETS, type PresetId } from '@/lib/listPresets'
@@ -57,7 +58,7 @@ export function CommandPalette() {
   const adminMode = useAdminMode((s) => s.enabled)
   const isAdmin = adminMode && hasPermission(user, PERMISSIONS.IMPORT_DATA)
   const canAudit = hasPermission(user, PERMISSIONS.ACCESS_AUDIT)
-  const canCreate = hasPermission(user, PERMISSIONS.CREATE_COMPONENTS)
+  const canCreate = canStartCreate(user)
 
   // Component search: server-side `search` param, debounced. cmdk's built-in
   // fuzzy filter is disabled (shouldFilter=false) because results already come
@@ -96,6 +97,7 @@ export function CommandPalette() {
   // Static entries, gated by permission. Built every render but cheap.
   const navItems: PaletteItem[] = [
     { value: 'goto components', label: 'Components', icon: <Package />, onSelect: () => go('/components') },
+    { value: 'goto search', label: 'Global search', icon: <Search />, onSelect: () => go('/search') },
     ...(canAudit
       ? [{ value: 'goto audit', label: 'Audit', icon: <History />, onSelect: () => go('/audit') }]
       : []),
@@ -168,10 +170,25 @@ export function CommandPalette() {
       </CommandGroup>
     ) : null
 
+  // Hand the typed text to the Global search page (an Action, first when present): the palette
+  // only matches component names, Global search matches everything the as-code view shows.
+  // Never label-filtered — it echoes the query, so it always applies.
+  const globalSearchItems: PaletteItem[] =
+    searchActive && debounced.length >= AS_CODE_SEARCH_MIN_QUERY
+      ? [
+          {
+            value: 'action global search',
+            label: `Global search for \u201c${debounced}\u201d`,
+            icon: <Search />,
+            onSelect: () => go(`/search?q=${encodeURIComponent(debounced)}`),
+          },
+        ]
+      : []
+
   const groups: { key: string; node: ReactNode }[] = [
     { key: 'components', node: componentsGroup },
     { key: 'goto', node: itemGroup('goto', 'Go to', matched(navItems)) },
-    { key: 'action', node: itemGroup('action', 'Action', matched(actionItems)) },
+    { key: 'action', node: itemGroup('action', 'Action', [...globalSearchItems, ...matched(actionItems)]) },
     { key: 'filter', node: itemGroup('filter', 'Filter', matched(filterItems)) },
   ].filter((g) => g.node != null)
 
@@ -179,7 +196,7 @@ export function CommandPalette() {
     <>
       <CommandDialog open={open} onOpenChange={setOpen} shouldFilter={false}>
         <CommandInput
-          placeholder="Search components, jump to a page, run an action…"
+          placeholder="Go to a component or page, run an action…"
           value={query}
           onValueChange={setQuery}
         />

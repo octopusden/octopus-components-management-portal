@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
+import { CalendarClock, Check, Funnel } from 'lucide-react'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
+import { AddFilterMenu, type AddFilterItem } from './ui/AddFilterMenu'
+import { FilterChips, type FilterChip } from './ui/FilterChips'
+import { cn } from '../lib/utils'
 import {
   Select,
   SelectContent,
@@ -144,126 +149,125 @@ export function AuditLogFilters({ filter, onChange }: AuditLogFiltersProps) {
     }, 300)
   }
 
-  const handleEntityType = (value: string) => {
-    onChange({ ...filter, entityType: value === ALL_VALUE ? undefined : value })
+  const cancelTextDebounces = () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (jiraDebounceRef.current) clearTimeout(jiraDebounceRef.current)
+    if (commentDebounceRef.current) clearTimeout(commentDebounceRef.current)
   }
 
-  const handleSource = (value: string) => {
-    onChange({ ...filter, source: value === ALL_VALUE ? undefined : value })
-  }
-
-  const handleAction = (value: string) => {
-    onChange({ ...filter, action: value === ALL_VALUE ? undefined : value })
-  }
-
-  const handleFrom = (value: string) => {
-    onChange({ ...filter, from: localToInstant(value) })
-  }
-
-  const handleTo = (value: string) => {
-    onChange({ ...filter, to: localToInstant(value) })
-  }
-
-  const handleIncludeMigrated = (checked: boolean) => {
-    onChange({ ...filter, includeMigrated: checked || undefined })
-  }
+  const patch = (next: Partial<AuditFilter>) => onChange({ ...filter, ...next })
 
   const handleClear = () => {
     // Cancel pending text debounces first — otherwise a timer queued just before
     // Clear would fire afterwards and resurrect the stale value over the cleared filter.
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    if (jiraDebounceRef.current) clearTimeout(jiraDebounceRef.current)
-    if (commentDebounceRef.current) clearTimeout(commentDebounceRef.current)
+    cancelTextDebounces()
     setChangedByLocal('')
     setJiraTaskKeyLocal('')
     setChangeCommentLocal('')
     onChange({})
   }
 
-  const hasActiveFilters =
-    !!filter.entityType ||
-    !!filter.changedBy ||
-    !!filter.source ||
-    !!filter.action ||
-    !!filter.from ||
-    !!filter.to ||
-    !!filter.includeMigrated ||
-    !!filter.jiraTaskKey ||
-    !!filter.changeComment
+  const chips = describeAuditChips(filter)
+  const removeChip = (chip: AuditChip) => {
+    // A text chip may still have its debounce pending; drop it so the value can't come back.
+    if (chip.id === 'changedBy') {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      setChangedByLocal('')
+    }
+    if (chip.id === 'jiraTaskKey') {
+      if (jiraDebounceRef.current) clearTimeout(jiraDebounceRef.current)
+      setJiraTaskKeyLocal('')
+    }
+    if (chip.id === 'changeComment') {
+      if (commentDebounceRef.current) clearTimeout(commentDebounceRef.current)
+      setChangeCommentLocal('')
+    }
+    onChange({ ...filter, ...chip.cleared })
+  }
 
-  return (
-    <FilterBar withLabels>
-      <div className="space-y-1.5">
-        <Label htmlFor="audit-filter-entityType">Entity Type</Label>
-        <Select value={filter.entityType ?? ALL_VALUE} onValueChange={handleEntityType}>
-          <SelectTrigger id="audit-filter-entityType" aria-label="Entity Type" className="w-[160px]">
-            <SelectValue placeholder="All types" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL_VALUE}>All types</SelectItem>
-            {ENTITY_TYPE_OPTIONS.map((t) => (
-              <SelectItem key={t} value={t}>
-                {t}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-1.5">
-        <Label htmlFor="audit-filter-changedBy">Changed by</Label>
-        <Input
-          id="audit-filter-changedBy"
-          placeholder="username"
-          value={changedByLocal}
-          onChange={(e) => handleChangedBy(e.target.value)}
-          className="w-[180px]"
+  // Secondary dimensions live in "+ Filter"; their editors are rendered here so the text state
+  // and its debounce outlive the panel (which unmounts its content on close).
+  const extraItems: AddFilterItem[] = [
+    {
+      id: 'source',
+      label: 'Source',
+      group: 'Change',
+      summary: filter.source,
+      editor: (
+        <OptionList
+          label="Source"
+          allLabel="All sources"
+          options={SOURCE_OPTIONS}
+          value={filter.source}
+          onChange={(source) => patch({ source })}
         />
-      </div>
-
-      <div className="space-y-1.5">
-        <Label htmlFor="audit-filter-jiraTaskKey">Jira task key</Label>
+      ),
+    },
+    {
+      id: 'entityType',
+      label: 'Entity type',
+      group: 'Change',
+      summary: filter.entityType,
+      editor: (
+        <OptionList
+          label="Entity Type"
+          allLabel="All types"
+          options={ENTITY_TYPE_OPTIONS}
+          value={filter.entityType}
+          onChange={(entityType) => patch({ entityType })}
+        />
+      ),
+    },
+    {
+      id: 'jiraTaskKey',
+      label: 'Jira task key',
+      group: 'Change metadata',
+      summary: filter.jiraTaskKey,
+      editor: (
         <Input
-          id="audit-filter-jiraTaskKey"
+          aria-label="Jira task key"
           placeholder="ABC-123"
+          autoFocus
           value={jiraTaskKeyLocal}
           onChange={(e) => handleJiraTaskKey(e.target.value)}
-          className="w-[160px]"
+          className="w-56"
         />
-      </div>
-
-      <div className="space-y-1.5">
-        <Label htmlFor="audit-filter-changeComment">Comment</Label>
+      ),
+    },
+    {
+      id: 'changeComment',
+      label: 'Comment',
+      group: 'Change metadata',
+      summary: filter.changeComment,
+      editor: (
         <Input
-          id="audit-filter-changeComment"
-          placeholder="search text"
+          aria-label="Comment"
+          placeholder="Text in the change comment"
+          autoFocus
           value={changeCommentLocal}
           onChange={(e) => handleChangeComment(e.target.value)}
-          className="w-[180px]"
+          className="w-56"
         />
-      </div>
+      ),
+    },
+  ]
 
-      <div className="space-y-1.5">
-        <Label htmlFor="audit-filter-source">Source</Label>
-        <Select value={filter.source ?? ALL_VALUE} onValueChange={handleSource}>
-          <SelectTrigger id="audit-filter-source" aria-label="Source" className="w-[160px]">
-            <SelectValue placeholder="All sources" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL_VALUE}>All sources</SelectItem>
-            {SOURCE_OPTIONS.map((s) => (
-              <SelectItem key={s} value={s}>
-                {s}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+  return (
+    <div className="space-y-2">
+      <FilterBar>
+        <div className="relative w-56">
+          <Funnel aria-hidden className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            aria-label="Changed by"
+            placeholder="Changed by…"
+            value={changedByLocal}
+            onChange={(e) => handleChangedBy(e.target.value)}
+            className="pl-9"
+          />
+        </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="audit-filter-action">Action</Label>
-        <Select value={filter.action ?? ALL_VALUE} onValueChange={handleAction}>
-          <SelectTrigger id="audit-filter-action" aria-label="Action" className="w-[160px]">
+        <Select value={filter.action ?? ALL_VALUE} onValueChange={(v) => patch({ action: v === ALL_VALUE ? undefined : v })}>
+          <SelectTrigger aria-label="Action" className="w-auto min-w-32 gap-2">
             <SelectValue placeholder="All actions" />
           </SelectTrigger>
           <SelectContent>
@@ -275,56 +279,166 @@ export function AuditLogFilters({ filter, onChange }: AuditLogFiltersProps) {
             ))}
           </SelectContent>
         </Select>
-      </div>
 
-      {/*
-        From/To kept together as a single flex item so the range stays on one
-        line (the surrounding FilterBar wraps the pair as a unit, never between
-        them). Inputs are widened past the prior 200px so the native picker's
-        calendar indicator isn't clipped by the long "dd/mm/yyyy, --:-- --"
-        datetime-local mask.
-      */}
-      <div className="flex items-end gap-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="audit-filter-from">From</Label>
+        <PeriodFilter filter={filter} onChange={patch} />
+
+        <AddFilterMenu items={extraItems} groups={EXTRA_GROUPS} activeCount={extraItems.filter((d) => d.summary).length} />
+
+        <label className="ml-auto flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+          <Switch
+            aria-label="Show migration"
+            checked={!!filter.includeMigrated}
+            onCheckedChange={(checked) => patch({ includeMigrated: checked || undefined })}
+          />
+          Show migration
+        </label>
+      </FilterBar>
+      <FilterChips chips={chips} onRemove={removeChip} onClearAll={handleClear} />
+    </div>
+  )
+}
+
+const EXTRA_GROUPS = ['Change', 'Change metadata'] as const
+
+interface AuditChip extends FilterChip {
+  /** Filter patch that removes this chip's filter. */
+  cleared: Partial<AuditFilter>
+}
+
+/** Active-filter chips. "Show migration" has none: its switch stays visible in the bar. */
+function describeAuditChips(filter: AuditFilter): AuditChip[] {
+  const chips: AuditChip[] = []
+  if (filter.changedBy) chips.push({ id: 'changedBy', label: `Changed by: ${filter.changedBy}`, cleared: { changedBy: undefined } })
+  if (filter.action) chips.push({ id: 'action', label: `Action: ${filter.action}`, cleared: { action: undefined } })
+  const period = periodLabel(filter)
+  if (period) chips.push({ id: 'period', label: period, cleared: { from: undefined, to: undefined } })
+  if (filter.source) chips.push({ id: 'source', label: `Source: ${filter.source}`, cleared: { source: undefined } })
+  if (filter.entityType) chips.push({ id: 'entityType', label: `Entity: ${filter.entityType}`, cleared: { entityType: undefined } })
+  if (filter.jiraTaskKey) chips.push({ id: 'jiraTaskKey', label: `Jira: ${filter.jiraTaskKey}`, cleared: { jiraTaskKey: undefined } })
+  if (filter.changeComment)
+    chips.push({ id: 'changeComment', label: `Comment: \u201c${filter.changeComment}\u201d`, cleared: { changeComment: undefined } })
+  return chips
+}
+
+function formatInstant(instant: string | undefined): string | undefined {
+  if (!instant) return undefined
+  const date = new Date(instant)
+  if (Number.isNaN(date.getTime())) return undefined
+  return date.toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+}
+
+/** "Since …" / "Until …" / "… – …"; undefined when no (valid) bound is set. */
+function periodLabel(filter: AuditFilter): string | undefined {
+  const from = formatInstant(filter.from)
+  const to = formatInstant(filter.to)
+  if (from && to) return `${from} \u2013 ${to}`
+  if (from) return `Since ${from}`
+  if (to) return `Until ${to}`
+  return undefined
+}
+
+const PERIOD_PRESETS = [
+  { label: 'Last 24 hours', ms: 24 * 3600_000 },
+  { label: 'Last 7 days', ms: 7 * 24 * 3600_000 },
+  { label: 'Last 30 days', ms: 30 * 24 * 3600_000 },
+] as const
+
+/**
+ * One "When" control instead of two always-visible datetime pickers: a trigger naming the
+ * current period, opening quick presets plus the From / To inputs.
+ */
+function PeriodFilter({ filter, onChange }: { filter: AuditFilter; onChange: (next: Partial<AuditFilter>) => void }) {
+  const label = periodLabel(filter)
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" aria-label="Period" className={cn('h-9 gap-2 font-normal', !label && 'text-muted-foreground')}>
+          <CalendarClock className="h-4 w-4" />
+          {label ?? 'Any time'}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-auto space-y-3 p-3">
+        <div className="flex flex-wrap gap-1.5">
+          {PERIOD_PRESETS.map((p) => (
+            <Button
+              key={p.label}
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => onChange({ from: new Date(Date.now() - p.ms).toISOString(), to: undefined })}
+            >
+              {p.label}
+            </Button>
+          ))}
+        </div>
+        <div className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-2">
+          <Label htmlFor="audit-filter-from" className="text-xs text-muted-foreground">
+            From
+          </Label>
           <Input
             id="audit-filter-from"
             type="datetime-local"
             value={instantToLocal(filter.from)}
-            onChange={(e) => handleFrom(e.target.value)}
+            onChange={(e) => onChange({ from: localToInstant(e.target.value) })}
             className="w-[230px]"
           />
-        </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="audit-filter-to">To</Label>
+          <Label htmlFor="audit-filter-to" className="text-xs text-muted-foreground">
+            To
+          </Label>
           <Input
             id="audit-filter-to"
             type="datetime-local"
             value={instantToLocal(filter.to)}
-            onChange={(e) => handleTo(e.target.value)}
+            onChange={(e) => onChange({ to: localToInstant(e.target.value) })}
             className="w-[230px]"
           />
         </div>
-      </div>
+        {label && (
+          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => onChange({ from: undefined, to: undefined })}>
+            Any time
+          </Button>
+        )}
+      </PopoverContent>
+    </Popover>
+  )
+}
 
-      <div className="space-y-1.5">
-        <Label htmlFor="audit-filter-include-migrated">Show migration</Label>
-        <div className="flex h-9 items-center">
-          <Switch
-            id="audit-filter-include-migrated"
-            aria-label="Show migration"
-            checked={!!filter.includeMigrated}
-            onCheckedChange={handleIncludeMigrated}
-          />
-        </div>
-      </div>
-
-      {hasActiveFilters && (
-        <Button variant="ghost" size="sm" onClick={handleClear}>
-          Clear filters
-        </Button>
-      )}
-    </FilterBar>
+/** Single-choice list for the "+ Filter" panel (no nested Select popover inside the panel). */
+function OptionList({
+  label,
+  allLabel,
+  options,
+  value,
+  onChange,
+}: {
+  label: string
+  allLabel: string
+  options: readonly string[]
+  value: string | undefined
+  onChange: (value: string | undefined) => void
+}) {
+  const items: { key: string; text: string; v: string | undefined }[] = [
+    { key: ALL_VALUE, text: allLabel, v: undefined },
+    ...options.map((o) => ({ key: o, text: o, v: o })),
+  ]
+  return (
+    <div role="radiogroup" aria-label={label} className="min-w-48">
+      {items.map((it) => {
+        const checked = value === it.v
+        return (
+          <button
+            key={it.key}
+            type="button"
+            role="radio"
+            aria-checked={checked}
+            onClick={() => onChange(it.v)}
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+          >
+            <Check className={cn('h-3.5 w-3.5', !checked && 'invisible')} />
+            {it.text}
+          </button>
+        )
+      })}
+    </div>
   )
 }

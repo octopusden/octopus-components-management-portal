@@ -39,3 +39,11 @@ export function normalizeChangeComment(value: string | null | undefined): string
   const trimmed = value?.trim()
   return trimmed ? trimmed : undefined
 }
+
+/**
+ * Why a create's Jira task key cannot be sent yet, or `null`. The Portal requires a key on create;
+ * the registry accepts a blank one.
+ */
+export function createJiraKeyError(jiraTaskKey: string): string | null {
+  return validateJiraKey(jiraTaskKey) ?? (jiraTaskKey.trim() === '' ? 'Jira task key is required' : null)
+}

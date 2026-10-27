@@ -91,6 +91,8 @@ export interface GeneralFormValues {
   // Synthetic test component (hidden from the list by default). Value-compared
   // on save like canBeParent.
   testComponent: boolean
+  // Release automation may start releases of this component. Value-compared on save.
+  autoRelease: boolean
   parentComponentName: string
   // canBeParent — editable Switch: whether this component may be picked as another
   // component's parent. A canBeParent component may not itself have a parent (single
@@ -251,6 +253,7 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
     setValue('solution', component.solution ?? false)
     setValue('archived', component.archived)
     setValue('testComponent', component.testComponent ?? false)
+    setValue('autoRelease', component.autoRelease ?? false)
     // parentComponentName / canBeParent render on the Misc tab but are hydrated HERE: General
     // is the default tab (always mounted on load), whereas Radix unmounts the inactive Misc
     // tab, so hydrating in MiscTab would leave these unset until the user opens Misc.
@@ -368,6 +371,7 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
               <p className="text-xs text-destructive">{errors.testComponent.message}</p>
             )}
           </div>
+
 
           {/* Parent Component, Can-be-parent, and Group Key / Synthetic-group moved to the
               Misc tab (MiscTab.tsx) to keep General focused on identity/ownership/metadata.

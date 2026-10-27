@@ -29,6 +29,8 @@ export interface ComponentSummary {
   // the parent picker filter. Optional on the TS type so existing fixtures
   // need not set it; the server always emits it (default false).
   canBeParent?: boolean
+  // Release automation may start releases of this component (CRS autoRelease; default false). Optional for deploy-order tolerance (portal deployed before CRS emits it) and so fixtures need not set it.
+  autoRelease?: boolean
   updatedAt: string | null
   // Required on the wire per ComponentSummaryResponse — server emits []
   // for empty, never omits the key. Matches ComponentDetail.labels.
@@ -70,6 +72,7 @@ export interface ComponentDetail {
   // Whether this component may itself be a parent. Editable (CAN_BE_PARENT
   // switch); a component with canBeParent=true may not have a parent.
   canBeParent?: boolean
+  autoRelease?: boolean
   version: number
   createdAt: string | null
   updatedAt: string | null
@@ -231,7 +234,7 @@ export interface VcsEntry {
   tag?: string | null
   hotfixBranch?: string | null
   repositoryType?: string | null
-  // Checkout placement. Absent against an older registry.
+  // Checkout layout. Absent against an older registry.
   sourcePath?: string | null
   checkoutDirectory?: string | null
   sortOrder: number
@@ -452,6 +455,7 @@ export interface ComponentCreateRequest {
   parentComponentName?: string | null
   archived?: boolean
   testComponent?: boolean
+  autoRelease?: boolean
   // Ordered multi-value lists on create. The CRS ComponentCreateRequest
   // defaults them to emptyList(), so the field is optional here — the create
   // dialog omits it entirely (people are added later via the editor).
@@ -507,6 +511,7 @@ export interface ComponentUpdateRequest {
   clearParent?: boolean
   archived?: boolean | null
   testComponent?: boolean | null
+  autoRelease?: boolean | null
   // PATCH semantics mirror `labels`: omit / null = don't touch; a provided
   // ordered list (including empty [] = clear) REPLACES the whole list.
   releaseManager?: string[] | null
@@ -569,12 +574,21 @@ export interface ComponentFilter {
   releaseManager?: string[]
   /** Exact-match OR across values (a component may have several security champions). CSV on the wire. */
   securityChampion?: string[]
+  /**
+   * CRS SYS-101: components where any listed user is the owner OR a release manager OR a security
+   * champion — the "Mine" filter (the owner/releaseManager/securityChampion filters AND together).
+   */
+  involves?: string[]
+  /** Roles `involves` checks: any of `owner`, `releaseManager`, `securityChampion`; absent = all three. */
+  involvesRoles?: InvolvementRole[]
   /** Exact-match OR across values (a component has exactly one buildSystem). CSV on the wire. */
   buildSystem?: string[]
   /** Exact-match AND across values; sourced from /components/meta/labels. CSV on the wire. */
   labels?: string[]
   /** Filter on the `canBeParent` flag — the parent picker passes `true`. */
   canBeParent?: boolean
+  /** Filter on the `autoRelease` flag. */
+  autoRelease?: boolean
   // ── Extended-search filters (back the list-page "extended search" mode; each
   //    maps to a CRS v4 query param). clientCode / jiraProjectKey /
   //    parentComponentName / groupKey are multi-value exact-IN (SYS-046, CSV on
@@ -1048,9 +1062,9 @@ export interface HistoryMigrationJobResponse {
  * 409 body returned for cross-kind conflicts — components POST while history
  * is RUNNING, history POST while TC sync is RUNNING, force-reset while
  * history is RUNNING, any of the above while TC validation or a TeamCity
- * placement Diff/Sync is RUNNING (or vice versa), etc. All six async job
+ * checkout layout Diff/Sync is RUNNING (or vice versa), etc. All six async job
  * kinds (components migration, history migration, TC resync, TC validation,
- * TC placement Diff, TC placement Sync) share one single-flight lifecycle
+ * TC checkout layout Diff, TC checkout layout Sync) share one single-flight lifecycle
  * gate on the backend. Distinct from the same-kind attach 409 that returns a
  * full job-response body — distinguished by the `kind` discriminator (always
  * 'conflict' here).
@@ -1064,10 +1078,10 @@ export interface MigrationConflictResponse {
     | 'history-import-likely-live-elsewhere'
     | 'tc-resync-running'
     | 'tc-validation-running'
-    | 'tc-placement-diff-running'
-    | 'tc-placement-sync-running'
+    | 'tc-checkout-layout-diff-running'
+    | 'tc-checkout-layout-sync-running'
   message: string
-  activeKind: 'COMPONENTS' | 'HISTORY' | 'TC_RESYNC' | 'TC_VALIDATION' | 'TC_PLACEMENT_DIFF' | 'TC_PLACEMENT_SYNC'
+  activeKind: 'COMPONENTS' | 'HISTORY' | 'TC_RESYNC' | 'TC_VALIDATION' | 'TC_CHECKOUT_LAYOUT_DIFF' | 'TC_CHECKOUT_LAYOUT_SYNC'
   activeJobId: string | null
 }
 
@@ -1089,6 +1103,8 @@ export interface TeamCityResyncResult {
   skipped_no_match: number
   skipped_ambiguous: number
   ambiguous_auto_resolved?: number
+  /** Components this run turned Auto release on for; absent on older CRS. */
+  auto_release_enabled?: number
   errors: string[]
 }
 
@@ -1133,18 +1149,18 @@ export interface TeamCityValidationJobResponse {
   result: TeamCityValidationResult | null
 }
 
-// ── TeamCity → CRS VCS-placement Diff/Sync ───────────────────────────────────
-// Wire shapes for `rest/api/4/admin/teamcity-placement/**` — see CRS
-// `TeamcityPlacementControllerV4` and the `dto/v4` + `teamcity/placement`
+// ── TeamCity → CRS VCS checkout-layout Diff/Sync ───────────────────────────────────
+// Wire shapes for `rest/api/4/admin/teamcity-checkout-layout/**` — see CRS
+// `TeamcityCheckoutLayoutControllerV4` and the `dto/v4` + `teamcity/checkoutlayout`
 // packages it serves from. New endpoints, so (unlike the older job shapes
 // above) there's no legacy-CRS backward-compat concern: `kind` is required,
 // not optional.
 
 /**
- * One outcome per Diff row (`PlacementDiffRowStatus` on CRS). RESOLVED is the
+ * One outcome per Diff row (`CheckoutLayoutDiffRowStatus` on CRS). RESOLVED is the
  * only status Sync will ever write; every other status is report-only.
  */
-export type PlacementDiffRowStatus =
+export type CheckoutLayoutDiffRowStatus =
   | 'RESOLVED'
   | 'CONFLICT'
   | 'UNEXPRESSIBLE'
@@ -1158,7 +1174,7 @@ export type PlacementDiffRowStatus =
   | 'ROOTS_MISMATCH'
 
 /** One VCS root entry's current vs. TeamCity-derived Checkout Directory / Source Path. */
-export interface PlacementEntryDiff {
+export interface CheckoutLayoutEntryDiff {
   name: string
   vcsPath: string
   branch?: string | null
@@ -1172,31 +1188,31 @@ export interface PlacementEntryDiff {
 }
 
 /** One base or marker (`vcs.settings`) configuration row's diff. */
-export interface PlacementRowDiff {
+export interface CheckoutLayoutRowDiff {
   componentId: string
   componentKey: string
   configurationRowId: string
   versionRange: string
   /** "BASE" or the marker name — only "BASE" rows are ever selectable for Sync. */
   rowLabel: string
-  status: PlacementDiffRowStatus
-  entries: PlacementEntryDiff[]
+  status: CheckoutLayoutDiffRowStatus
+  entries: CheckoutLayoutEntryDiff[]
   currentBuildWorkingDirectory?: string | null
   derivedBuildWorkingDirectory?: string | null
   sourceBuildTypeIds: string[]
   notes: string[]
 }
 
-/** `GET /admin/teamcity-placement/diff/report.json` (component read access, 404 until a Diff has completed). */
-export interface PlacementDiffResult {
+/** `GET /admin/teamcity-checkout-layout/diff/report.json` (component read access, 404 until a Diff has completed). */
+export interface CheckoutLayoutDiffResult {
   /** The Diff run these rows came from; what a Sync request must name. */
   diffId?: string
   generatedAt: string
-  rows: PlacementRowDiff[]
+  rows: CheckoutLayoutRowDiff[]
 }
 
-/** `POST /admin/teamcity-placement/diff` (202/409) and `GET .../diff/job` (200/404). */
-export interface TeamcityPlacementDiffJobResponse {
+/** `POST /admin/teamcity-checkout-layout/diff` (202/409) and `GET .../diff/job` (200/404). */
+export interface TeamcityCheckoutLayoutDiffJobResponse {
   kind: 'job'
   id: string
   state: JobState
@@ -1206,27 +1222,27 @@ export interface TeamcityPlacementDiffJobResponse {
   rowCount: number | null
 }
 
-/** POST body for `/admin/teamcity-placement/sync` — the Diff run's id plus the selected component ids. */
-export interface TeamcityPlacementSyncRequest {
+/** POST body for `/admin/teamcity-checkout-layout/sync` — the Diff run's id plus the selected component ids. */
+export interface TeamcityCheckoutLayoutSyncRequest {
   diffId: string
   componentIds: string[]
 }
 
-export interface PlacementRowSyncOutcome {
+export interface CheckoutLayoutRowSyncOutcome {
   configurationRowId: string
   rowLabel: string
   /** `applied` / `skipped: changed since diff` / `skipped: <reason>` / `failed: <message>`. */
   outcome: string
 }
 
-export interface PlacementComponentSyncOutcome {
+export interface CheckoutLayoutComponentSyncOutcome {
   componentId: string
   componentKey: string
-  rows: PlacementRowSyncOutcome[]
+  rows: CheckoutLayoutRowSyncOutcome[]
 }
 
 /** One written field's rollback trace — before/after, per `field` on `root` (VCS entry name, or "" for the row-level BWD). */
-export interface PlacementFieldChange {
+export interface CheckoutLayoutFieldChange {
   componentKey: string
   rowLabel: string
   root: string
@@ -1235,25 +1251,25 @@ export interface PlacementFieldChange {
   after: string | null
 }
 
-export interface PlacementSyncResult {
+export interface CheckoutLayoutSyncResult {
   triggeredBy: string
   requested: number
   applied: number
   skipped: number
   failed: number
-  components: PlacementComponentSyncOutcome[]
-  fieldChanges: PlacementFieldChange[]
+  components: CheckoutLayoutComponentSyncOutcome[]
+  fieldChanges: CheckoutLayoutFieldChange[]
 }
 
-/** `POST /admin/teamcity-placement/sync` (202/409) and `GET .../sync/job` (200/404). */
-export interface TeamcityPlacementSyncJobResponse {
+/** `POST /admin/teamcity-checkout-layout/sync` (202/409) and `GET .../sync/job` (200/404). */
+export interface TeamcityCheckoutLayoutSyncJobResponse {
   kind: 'job'
   id: string
   state: JobState
   startedAt: string
   finishedAt: string | null
   errorMessage: string | null
-  result: PlacementSyncResult | null
+  result: CheckoutLayoutSyncResult | null
 }
 
 // ── CRS legacy version rendering (rest/api/2/.../detailed-version) ───────────
@@ -1437,3 +1453,52 @@ export interface ArchiveReadinessResponse {
   ready: boolean
   entries: ArchiveReadinessEntry[]
 }
+
+// ---------------------------------------------------------------------------
+// As-code search — GET /components/as-code/search
+// ---------------------------------------------------------------------------
+
+/** One matching line of a component's FULL as-code view. */
+export interface AsCodeSearchLine {
+  /** 1-based line number in the FULL as-code view (the As Code tab, Full mode). */
+  line: number
+  /** The matching line without its indentation. */
+  text: string
+  /** Enclosing block headers, outermost first; `[0]` is the component block itself. */
+  path: string[]
+  /**
+   * Where the query matched within `text` (end exclusive), as found by the server's own matcher —
+   * substring or RE2 regex — so regex hits are highlighted exactly, not re-run in JS.
+   */
+  ranges: AsCodeMatchRange[]
+}
+
+/** A matched span of {@link AsCodeSearchLine.text}: `start` inclusive, `end` exclusive. */
+export interface AsCodeMatchRange {
+  start: number
+  end: number
+}
+
+/** One matching component. `matches` is capped server-side; `matchCount` is not. */
+export interface AsCodeSearchHit {
+  /** Component UUID — what the editor route and every write endpoint are addressed by. */
+  id: string
+  componentKey: string
+  archived: boolean
+  matchCount: number
+  matches: AsCodeSearchLine[]
+}
+
+export interface AsCodeSearchResponse {
+  query: string
+  regex: boolean
+  /** Matching components BEFORE the `limit` cut. */
+  totalComponents: number
+  truncated: boolean
+  /** Sorted by component key. */
+  results: AsCodeSearchHit[]
+}
+
+/** Roles the "Mine" (CRS `involves`) filter can check. */
+export type InvolvementRole = 'owner' | 'releaseManager' | 'securityChampion'
+export const INVOLVEMENT_ROLES: readonly InvolvementRole[] = ['owner', 'releaseManager', 'securityChampion']

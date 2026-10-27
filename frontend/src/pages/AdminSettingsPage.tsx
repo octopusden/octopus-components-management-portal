@@ -10,9 +10,10 @@ import { MigrationHistoryPanel } from '../components/admin/MigrationHistoryPanel
 import { MigrationPanel } from '../components/admin/MigrationPanel'
 import { TeamCityResyncPanel } from '../components/admin/TeamCityResyncPanel'
 import { TeamCityValidationPanel } from '../components/admin/TeamCityValidationPanel'
-import { TeamCityPlacementPanel } from '../components/admin/TeamCityPlacementPanel'
+import { TeamCityCheckoutLayoutPanel } from '../components/admin/TeamCityCheckoutLayoutPanel'
 import { ServiceEventsPanel } from '../components/admin/ServiceEventsPanel'
 import { FeedbackPanel } from '../components/admin/FeedbackPanel'
+import { TemplatesPanel } from '../components/admin/TemplatesPanel'
 import { AdminModeArmBar } from '../components/admin/AdminModeArmBar'
 import { RuntimeSection } from '../components/RuntimeSection'
 import { useReloadConfig } from '../hooks/useAdminConfig'
@@ -83,6 +84,7 @@ export function AdminSettingsPage() {
           <TabsList>
             <TabsTrigger value="field-config">Field Configuration</TabsTrigger>
             <TabsTrigger value="component-defaults">Component Defaults</TabsTrigger>
+            <TabsTrigger value="templates">Templates</TabsTrigger>
             <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
             <TabsTrigger value="events">Events</TabsTrigger>
             <TabsTrigger value="feedback">Feedback</TabsTrigger>
@@ -109,6 +111,19 @@ export function AdminSettingsPage() {
               </p>
               <div className="pt-2">
                 <ComponentDefaultsForm />
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="templates" className="mt-4">
+            <div className="rounded-lg border p-6 space-y-2">
+              <h2 className="text-lg font-semibold">Profiles and templates</h2>
+              <p className="text-sm text-muted-foreground">
+                What the Create component start page offers, what failed to load and why, and a way to try a
+                template without creating anything.
+              </p>
+              <div className="pt-2">
+                <TemplatesPanel />
               </div>
             </div>
           </TabsContent>
@@ -141,11 +156,11 @@ export function AdminSettingsPage() {
               </div>
 
               <div className="border-t pt-6 space-y-2">
-                <h2 className="text-lg font-semibold">TeamCity</h2>
+                <h2 className="text-lg font-semibold">Sync from TeamCity</h2>
                 <p className="text-sm text-muted-foreground">
-                  Resync persisted teamcityProjectId + teamcityProjectUrl from
-                  TC project params. Overwrites manual overrides for matched
-                  components. Arm Admin mode above to enable the button.
+                  Links components to TeamCity projects (replaces manual links) and turns Auto release
+                  on (never off) where every release line has a finish-build trigger, unless someone
+                  changed it. Needs Admin mode.
                 </p>
                 <div className="pt-2">
                   <TeamCityResyncPanel />
@@ -165,7 +180,7 @@ export function AdminSettingsPage() {
               </div>
 
               <div className="border-t pt-6 space-y-2">
-                <h2 className="text-lg font-semibold">Checkout paths from TeamCity</h2>
+                <h2 className="text-lg font-semibold">TeamCity Checkout Layout</h2>
                 <p className="text-sm text-muted-foreground">
                   Where TeamCity checks out each VCS root (Checkout Directory / Source Path) and
                   where it builds (Build Working Directory). Diff finds where a component's stored
@@ -174,7 +189,7 @@ export function AdminSettingsPage() {
                   Admin mode armed above.
                 </p>
                 <div className="pt-2">
-                  <TeamCityPlacementPanel />
+                  <TeamCityCheckoutLayoutPanel />
                 </div>
               </div>
             </div>

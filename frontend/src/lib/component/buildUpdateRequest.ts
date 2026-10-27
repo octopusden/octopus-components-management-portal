@@ -28,6 +28,8 @@ export interface FieldVisibilities {
   // behind the UI's disabled switch). Required so every buildUpdateRequest
   // caller must pass the field-config visibility explicitly.
   solution: FieldVisibility
+  // `autoRelease`: dirty-gated and value-compared; hidden/readonly is stripped.
+  autoRelease: FieldVisibility
 }
 
 // Subset of RHF `formState.dirtyFields` that drives clear/omit/REPLACE
@@ -42,6 +44,10 @@ export interface FieldVisibilities {
 // changed to isFieldDirty: the array shape never reaches this layer.
 export interface DirtyFlags {
   solution?: boolean
+  // Sync from TeamCity can turn autoRelease on server-side while the form still holds the
+  // old false, so an untouched switch must never be sent. Passed as "interacted" (dirty OR
+  // touched), like `solution`.
+  autoRelease?: boolean
   systems?: boolean
   // displayName is nullable + unique server-side. The page passes this as "interacted"
   // (dirty OR touched); buildUpdateRequest value-compares against the persisted value so a
@@ -131,6 +137,7 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
   // overwrites the server flag.
   const solutionChanged =
     dirtyFields.solution === true &&
+    (values.solution ?? false) !== (component.solution ?? false) &&
     visibilities.solution !== 'hidden' &&
     visibilities.solution !== 'readonly'
   // `archived` is value-compared rather than dirtyFields-gated: the field
@@ -157,6 +164,10 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
 
   // canBeParent: value-compared (boolean, no null ambiguity) like `archived`.
   const canBeParentChanged = (values.canBeParent ?? false) !== (component.canBeParent ?? false)
+  const autoReleaseChanged =
+    dirtyFields.autoRelease === true &&
+    (values.autoRelease ?? false) !== (component.autoRelease ?? false) &&
+    visibilities.autoRelease === 'editable'
   const testComponentChanged = (values.testComponent ?? false) !== (component.testComponent ?? false)
   // Clearing a parent needs the explicit clearParent flag — `parentComponentName:
   // null` reads as "don't touch" server-side. Fires only on non-empty → empty.
@@ -193,6 +204,7 @@ export function buildUpdateRequest(params: BuildUpdateRequestParams): ComponentU
     solution: solutionChanged ? values.solution : undefined,
     archived: archivedChanged ? values.archived : undefined,
     testComponent: testComponentChanged ? values.testComponent : undefined,
+    autoRelease: autoReleaseChanged ? values.autoRelease : undefined,
     parentComponentName,
     clearParent: clearParent ? true : undefined,
     canBeParent:
