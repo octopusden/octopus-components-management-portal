@@ -16,7 +16,7 @@ import {
 } from '../hooks/useValidationProblems'
 import { useTeamCityValidations } from '../hooks/useTeamCityValidations'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
-import { hasPermission, PERMISSIONS } from '@/lib/auth'
+import { canStartCreate, hasPermission, PERMISSIONS } from '@/lib/auth'
 import { useAdminMode } from '@/lib/adminModeStore'
 import { useFilterUrlState } from '../hooks/useFilterUrlState'
 import { applyPreset, DEFAULT_FILTER, type PresetId } from '../lib/listPresets'
@@ -166,7 +166,9 @@ export function ComponentListPage() {
     [validation.byComponent],
   )
 
-  const canCreate = hasPermission(user, PERMISSIONS.CREATE_COMPONENTS)
+  const canStartNew = canStartCreate(user)
+  // A copy opens the regular wizard, which only CREATE_COMPONENTS may use.
+  const canCopy = hasPermission(user, PERMISSIONS.CREATE_COMPONENTS)
 
   // A `problems` preset the current user can't use (not admin) is suppressed so a
   // shared admin link doesn't surface a chip with no matching toggle.
@@ -257,7 +259,7 @@ export function ComponentListPage() {
                   </span>
                 )}
           </div>
-          {canCreate && <CreateComponentButton />}
+          {canStartNew && <CreateComponentButton />}
         </div>
 
         <ComponentFilters
@@ -398,7 +400,7 @@ export function ComponentListPage() {
         <ComponentTable
           data={showProblemsOnly ? problemRows : (data?.content ?? [])}
           isLoading={showProblemsOnly ? problems.isLoading : isLoading}
-          onCopy={canCreate ? (id) => navigate(`/components/new?from=${id}`) : undefined}
+          onCopy={canCopy ? (id) => navigate(`/components/new?from=${id}`) : undefined}
           // Overlay map (admin-mode only): in problems-only mode use the
           // problem-set report; in the normal paged view use the full report.
           // Undefined for non-admins or an empty/failed report → no Validation

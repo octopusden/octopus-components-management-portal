@@ -1860,6 +1860,12 @@ describe('ComponentDetailPage — Clone button (CREATE_COMPONENTS gate)', () => 
     expect(screen.queryByRole('button', { name: /^clone$/i })).toBeNull()
   })
 
+  it('hides Clone from a template-only creator — a clone opens the regular wizard', () => {
+    const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_FROM_TEMPLATE'])
+    renderPage(baseComponent, user)
+    expect(screen.queryByRole('button', { name: /^clone$/i })).toBeNull()
+  })
+
   it('Clone is available even when per-component canEdit is false (global create gate, not canEdit)', () => {
     const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
     renderPage({ ...baseComponent, canEdit: false }, user)

@@ -16,7 +16,7 @@ import { useComponents } from '@/hooks/useComponents'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { AS_CODE_SEARCH_MIN_QUERY } from '@/hooks/useAsCodeSearch'
 import { matchesQuery, rankComponents } from '@/lib/paletteSearch'
-import { hasPermission, PERMISSIONS } from '@/lib/auth'
+import { canStartCreate, hasPermission, PERMISSIONS } from '@/lib/auth'
 import { useAdminMode } from '@/lib/adminModeStore'
 import { presetUrl } from '@/lib/presetUrl'
 import { PRESETS, type PresetId } from '@/lib/listPresets'
@@ -58,7 +58,7 @@ export function CommandPalette() {
   const adminMode = useAdminMode((s) => s.enabled)
   const isAdmin = adminMode && hasPermission(user, PERMISSIONS.IMPORT_DATA)
   const canAudit = hasPermission(user, PERMISSIONS.ACCESS_AUDIT)
-  const canCreate = hasPermission(user, PERMISSIONS.CREATE_COMPONENTS)
+  const canCreate = canStartCreate(user)
 
   // Component search: server-side `search` param, debounced. cmdk's built-in
   // fuzzy filter is disabled (shouldFilter=false) because results already come

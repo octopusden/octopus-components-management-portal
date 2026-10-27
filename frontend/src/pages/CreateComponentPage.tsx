@@ -49,6 +49,7 @@ import {
   type FieldVisibility,
 } from '../hooks/useFieldConfig'
 import { useCurrentUser } from '../hooks/useCurrentUser'
+import { hasPermission, PERMISSIONS } from '../lib/auth'
 import { useComponent, useCreateComponent } from '../hooks/useComponent'
 import { cloneTestComponent, useTestComponentNamePatterns } from '../hooks/useTestComponentNamePatterns'
 import { useToast } from '../hooks/use-toast'
@@ -1760,6 +1761,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
         headerTitle={headerTitle}
         profileStep={renderProfileStep()}
         regularDirty={(isDirty || profileTouched) && !submitted}
+        canOverride={hasPermission(currentUser, PERMISSIONS.CREATE_COMPONENTS)}
         onCreated={(component) => {
           setSubmitted(true)
           setCreated(component)
