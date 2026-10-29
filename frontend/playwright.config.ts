@@ -14,6 +14,8 @@ export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
   workers: 1,
+  // A stray test.only would silently shrink the CI run to one test.
+  forbidOnly: !!process.env.CI,
   // CI retries 2× to absorb a known, agent-dependent flake: the bundled
   // chromium-headless-shell #GPs (SIGSEGV) on its FIRST launch on Oracle Linux
   // 8/10 podman agents (it passes on RL9). The next launch in the same warm
@@ -36,6 +38,7 @@ export default defineConfig({
     headless: true,
     screenshot: 'only-on-failure',
     video: 'off',
+    trace: 'on-first-retry',
   },
   projects: [
     {
@@ -57,7 +60,8 @@ export default defineConfig({
       // regression-*.spec.ts files — those are bug-reproduction specs
       // that exercise read-only endpoints, so the viewer storageState
       // (COMPONENTS_REGISTRY_VIEWER → ACCESS_COMPONENTS + ACCESS_AUDIT) is enough.
-      testMatch: /(smoke-viewer|admin-migration-viewer|regression-[^/]+)\.spec\.ts$/,
+      // component-as-code is the read-only As Code tab journey.
+      testMatch: /(smoke-viewer|admin-migration-viewer|component-as-code|regression-[^/]+)\.spec\.ts$/,
     },
     {
       name: 'chromium-admin',
