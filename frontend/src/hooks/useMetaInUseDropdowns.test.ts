@@ -28,8 +28,8 @@ beforeEach(() => vi.clearAllMocks())
 // a lazy `enabled` gate, and 404/501 → empty vocabulary so the picker still
 // opens against a CRS that has not yet shipped the endpoint. That last part is
 // live for the people pair — the release-manager / security-champion endpoints
-// ship in a companion CRS release, so until it is deployed both pickers must
-// open empty rather than surface an error.
+// are served by CRS since v3.0.16, but against an older CRS both pickers must
+// still open empty rather than surface an error.
 const cases = [
   { name: 'useClientCodes', hook: useClientCodes, path: '/components/meta/client-codes' },
   { name: 'useJiraProjectKeys', hook: useJiraProjectKeys, path: '/components/meta/jira-project-keys' },

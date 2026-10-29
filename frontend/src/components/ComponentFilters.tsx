@@ -428,9 +428,9 @@ export function ComponentFilters({
   const { data: groupKeyOptions = [], isLoading: groupKeysLoading } = useGroupKeys({
     enabled: groupKeysActivated,
   })
-  // The people pair ships against a CRS release that may not carry
-  // /meta/release-managers yet; the same lazy gate + useMetaInUse 404→[] contract
-  // keeps the picker openable (and silent in the console) until it does.
+  // The people pair is served by CRS since v3.0.16; against an older CRS the same
+  // lazy gate + useMetaInUse 404→[] contract keeps the picker openable (and silent
+  // in the console) rather than erroring.
   const [releaseManagersActivated, setReleaseManagersActivated] = useState(false)
   const { data: releaseManagerOptions = [], isLoading: releaseManagersLoading } = useReleaseManagers({
     enabled: releaseManagersActivated,
