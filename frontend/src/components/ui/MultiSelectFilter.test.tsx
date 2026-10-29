@@ -6,7 +6,7 @@ import { MultiSelectFilter } from './MultiSelectFilter'
 describe('MultiSelectFilter', () => {
   it('keeps a selected value that is not among the options when another option is picked', async () => {
     // A preset or deep-link can select a value the in-use vocabulary does not
-    // list (e.g. "I am Release Manager" for someone assigned nowhere). Picking a
+    // list (e.g. a Registry Health deep-link to someone assigned nowhere). Picking a
     // second option must not silently drop it.
     const onChange = vi.fn()
     render(

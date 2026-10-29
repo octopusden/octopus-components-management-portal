@@ -887,6 +887,17 @@ describe('ComponentFilters multi-value extended filters + distribution (SYS-045/
     expect(lastCall.releaseManager).toBeUndefined()
   })
 
+  it('clearing the last security champion drops the field rather than sending an empty array', async () => {
+    metaState.securityChampions = ['carol']
+    render(
+      <ComponentFilters filter={{ archived: false, securityChampion: ['carol'] }} onFilterChange={onFilterChange} />,
+    )
+    const panel = await openFilter('Security champion')
+    await userEvent.click(panel.getByRole('checkbox', { name: 'carol' }))
+    const lastCall = onFilterChange.mock.calls[onFilterChange.mock.calls.length - 1]![0]
+    expect(lastCall.securityChampion).toBeUndefined()
+  })
+
   it('the inline client-code list shows the current selection checked', async () => {
     metaState.groupKeys = ['org.acme', 'org.other']
     render(<ComponentFilters filter={{ archived: false, groupKey: ['org.acme'] }} onFilterChange={onFilterChange} />)
