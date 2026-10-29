@@ -43,6 +43,10 @@ Values never add controls to the bar: every value shows as a removable chip unde
 | **Can be parent** | `?canBeParent=true\|false` | tri-state | scalar eq |
 | **Auto release** | `?autoRelease=true\|false` | tri-state | scalar eq |
 | **Group key** | `?groupKey=…` | text | group-join eq on `groupKey` |
+| **Release manager** | `?releaseManager=…` (CSV, OR semantics) | `MultiSelectFilter` populated from `GET /components/meta/release-managers` via [`useReleaseManagers`](../../frontend/src/hooks/useReleaseManagers.ts) | child-collection join + `IN (...)` on `component_release_managers.username` |
+| **Security champion** | `?securityChampion=…` (CSV, OR semantics) | `MultiSelectFilter` populated from `GET /components/meta/security-champions` via [`useSecurityChampions`](../../frontend/src/hooks/useSecurityChampions.ts) | same, against `component_security_champions` |
+
+The `?releaseManager=` / `?securityChampion=` params predate their pickers — they already backed the Registry Health people deep-links (the personal presets use the *Mine* `involves` filter instead). The dropdowns are what let a user filter by **someone else**. Options are the **in-use** sets (only usernames actually assigned on some component), so every option matches at least one component (archived ones included, as with the other in-use lists, so an archived-only name needs the *Archived* preset); an employee who is nobody's release manager is deliberately not offered. Both endpoints are served by CRS since v3.0.16; against an older CRS, `useMetaInUse`'s 404/501 → empty-vocabulary contract keeps the picker openable rather than erroring.
 
 These params are added to [`useComponents`](../../frontend/src/hooks/useComponents.ts) and served by the CRS v4 `listComponents` controller (see `octopus-components-registry-service/docs/registry/functional-spec.md`). Each control is placed by the field's **Searchable** setting (below), not hard-coded into the row.
 
