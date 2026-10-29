@@ -1277,9 +1277,24 @@ function ComponentDetailEditor() {
             </TabsContent>
 
             <TabsContent value="distribution">
-              <EditSurface canEdit={canEdit} label="Distribution">
-                <DistributionTab section={distributionSection} canEdit={canEdit} supportedGroups={supportedGroups} />
-              </EditSurface>
+              {/* No EditSurface: the tab owns its read-only fieldset so the
+                  version preview stays usable without edit rights. */}
+              <DistributionTab
+                componentId={shell.id}
+                section={distributionSection}
+                canEdit={canEdit}
+                supportedGroups={supportedGroups}
+                // Preview waits while the draft loads; on a load error it
+                // falls back to the saved set (undefined) rather than reading
+                // the empty draft as "unrestricted".
+                supportedVersions={
+                  supportedVersionsSection.isLoading
+                    ? null
+                    : supportedVersionsSection.isError
+                      ? undefined
+                      : supportedVersionsSection.state
+                }
+              />
             </TabsContent>
 
             <TabsContent value="docker">
@@ -1495,9 +1510,9 @@ export function ComponentDetailPage() {
   // invalidateOverrideAndComponent, and window-focus refetches both — so a fresh
   // version never pairs with a stale override set. (A fully snapshot-coupled
   // baseline derived from component.configurations is a possible follow-up.)
-  const { data: serverOverrides = [], isLoading: overridesLoading } = useFieldOverrides(id ?? '')
+  const { data: serverOverrides = [], isLoading: overridesLoading, isError: overridesError } = useFieldOverrides(id ?? '')
   return (
-    <OverridesDraftProvider componentId={id ?? ''} serverOverrides={serverOverrides} serverLoading={overridesLoading}>
+    <OverridesDraftProvider componentId={id ?? ''} serverOverrides={serverOverrides} serverLoading={overridesLoading} serverError={overridesError}>
       <ComponentDetailEditor />
     </OverridesDraftProvider>
   )
