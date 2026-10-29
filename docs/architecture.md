@@ -88,6 +88,21 @@ The handler is `ServerCsrfTokenRequestAttributeHandler` (the **plain** one), not
 
 A `csrfCookieWebFilter` bean (also in `SecurityConfig.kt`) materialises the token on every request so the cookie is set on first load, before the SPA has anything to echo.
 
+## Response headers and anonymous health
+
+Every response keeps Spring Security's default headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, no-cache, HSTS over https) plus a Content-Security-Policy, `SecurityConfig.CONTENT_SECURITY_POLICY`:
+
+```
+default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;
+object-src 'none'; base-uri 'self'; frame-ancestors 'none'
+```
+
+Per-directive rationale lives next to `SecurityConfig.CONTENT_SECURITY_POLICY`.
+
+`/actuator/health` stays anonymous for probes and monitoring, but with `show-details: when-authorized` an anonymous caller gets the aggregate status only. Component paths such as `/actuator/health/validationSweep` answer 404 to anonymous callers, because `show-components` follows `show-details`; the probe groups (`liveness`, `readiness`) are unaffected.
+
+Actuator is served on the management port (`management.server.port: 8080`), not the app port (`server.port: 8090`) the browser uses, so the details that `when-authorized` allows need an authenticated request on port 8080.
+
 ## SPA fallback: which paths fall through to backend?
 
 `SpaFallbackFilter` runs as a `WebFilter` and serves `classpath:/static/index.html` for any **GET** that is not API, asset, OIDC, or actuator. The exclusion list is the source of truth:
@@ -139,9 +154,9 @@ The P1 UI features rely on these CRS endpoints (all behind the `/rest/**` proxy 
 | `GET /audit/Component/{id}` | Per-component History tab (B7.1.2) | existing |
 | `GET /audit/recent?changedBy=&source=&action=&from=&to=` | Audit-log filter sidebar (B7.1.3) | `SYS-036` |
 | `GET /rest/api/2/common/supported-groups` | Create Component dialog: allowed groupId prefixes (auto-suggest + validation gate) | existing CRS v2 endpoint; lives outside `/rest/api/4`, reached via `apiAbsolute` helper |
-| `PATCH /components/{id}` with `baseConfiguration.vcsEntries[].checkoutDirectory` / `sourcePath`, `buildWorkingDirectory`, and the same inside `fieldOverrides[]` (`vcs.settings` rows) | VCS tab and per-range override editor: VCS Roots placement | CRS placement rules: at most one VCS root at the checkout root; a 400 names `vcsEntries[<i>].<field>` / `buildWorkingDirectory`, prefixed `fieldOverrides[<j>].` for a per-range row |
-| `POST /admin/teamcity-placement/diff`, `GET /admin/teamcity-placement/diff/job`, `GET /admin/teamcity-placement/diff/report.{json,html,csv}` | Admin → Maintenance: "Checkout paths from TeamCity" Diff ([`admin-tc-placement.md`](features/admin-tc-placement.md)) | `SYS-102`; running needs `IMPORT_DATA`, the report needs component read access |
-| `POST /admin/teamcity-placement/sync`, `GET /admin/teamcity-placement/sync/job`, `GET /admin/teamcity-placement/sync/report.csv` | Same card: Sync selected, rollback CSV | `SYS-102`; `IMPORT_DATA`; takes the report's `diffId`, 409 `errorCode: placement-diff-stale` once a newer Diff replaced it |
+| `PATCH /components/{id}` with `baseConfiguration.vcsEntries[].checkoutDirectory` / `sourcePath`, `buildWorkingDirectory`, and the same inside `fieldOverrides[]` (`vcs.settings` rows) | VCS tab and per-range override editor: VCS Root checkout layout | CRS rules: at most one VCS root at the checkout root; a 400 names `vcsEntries[<i>].<field>` / `buildWorkingDirectory`, prefixed `fieldOverrides[<j>].` for a per-range row |
+| `POST /admin/teamcity-checkout-layout/diff`, `GET /admin/teamcity-checkout-layout/diff/job`, `GET /admin/teamcity-checkout-layout/diff/report.{json,html,csv}` | Admin → Maintenance: "TeamCity Checkout Layout" Diff ([`admin-tc-checkout-layout.md`](features/admin-tc-checkout-layout.md)) | `SYS-102`; running needs `IMPORT_DATA`, the report needs component read access |
+| `POST /admin/teamcity-checkout-layout/sync`, `GET /admin/teamcity-checkout-layout/sync/job`, `GET /admin/teamcity-checkout-layout/sync/report.csv` | Same card: Sync selected, rollback CSV | `SYS-102`; `IMPORT_DATA`; takes the report's `diffId`, 409 `errorCode: checkout-layout-diff-stale` once a newer Diff replaced it |
 
 When a new endpoint is consumed, **add a row here** so the boundary stays reviewable. Cross-repo links between living indexes (this `architecture.md` and CRS docs) may use the active branch (`main` on both CRS and Portal) per [`DOCS.md`](../DOCS.md) authoring rule #5.
 

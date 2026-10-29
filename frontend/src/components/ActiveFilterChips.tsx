@@ -1,6 +1,4 @@
-import { X } from 'lucide-react'
-import { Button } from './ui/button'
-import { cn } from '../lib/utils'
+import { FilterChips } from './ui/FilterChips'
 import type { ComponentFilter } from '../lib/types'
 import type { PresetId } from '../lib/listPresets'
 import { describeFilterChips } from '../lib/filterChips'
@@ -28,33 +26,6 @@ export function ActiveFilterChips({
   onRemove,
   onClearAll,
 }: ActiveFilterChipsProps) {
-  const chips = describeFilterChips(filter, preset)
-  if (chips.length === 0) return null
-
-  return (
-    <div className="flex flex-wrap items-center gap-1.5" data-testid="active-filter-chips">
-      {chips.map((chip) => (
-        <span
-          key={`${chip.key}:${chip.value ?? ''}`}
-          className={cn(
-            'inline-flex items-center gap-1 rounded-full border bg-muted px-2.5 py-0.5',
-            'text-xs text-foreground',
-          )}
-        >
-          {chip.label}
-          <button
-            type="button"
-            aria-label={`Remove ${chip.label}`}
-            onClick={() => onRemove(chip.key, chip.value)}
-            className="-mr-0.5 rounded-full text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <X className="h-3 w-3" aria-hidden="true" />
-          </button>
-        </span>
-      ))}
-      <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={onClearAll}>
-        Clear all
-      </Button>
-    </div>
-  )
+  const chips = describeFilterChips(filter, preset).map((c) => ({ ...c, id: `${c.key}:${c.value ?? ''}` }))
+  return <FilterChips chips={chips} onRemove={(c) => onRemove(c.key, c.value)} onClearAll={onClearAll} />
 }

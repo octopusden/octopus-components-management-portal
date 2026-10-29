@@ -70,7 +70,7 @@ export function MigrationHistoryPanel() {
   const runningKindLabel = componentsRunning
     ? 'Components migration'
     : resyncRunning
-      ? 'TC resync'
+      ? 'TeamCity sync'
       : 'TC validation'
 
   // P1 review fix: was matching on errorMessage.includes('marked IN_PROGRESS')

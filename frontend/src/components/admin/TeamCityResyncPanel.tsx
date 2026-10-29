@@ -92,11 +92,12 @@ export function TeamCityResyncPanel() {
     if (invalidatedJobs.current.has(jobData.id)) return
     invalidatedJobs.current.add(jobData.id)
     toast({
-      title: 'TC resync completed',
+      title: 'TeamCity sync completed',
       description:
         `${result.scanned} scanned, ${result.updated} updated, ${result.unchanged} unchanged, ` +
         `${result.skipped_no_match} no match, ${result.skipped_ambiguous} ambiguous, ` +
-        `${result.ambiguous_auto_resolved ?? 0} auto-resolved, ${result.errors.length} errors`,
+        `${result.ambiguous_auto_resolved ?? 0} auto-resolved, ${result.auto_release_enabled ?? 0} auto release on, ` +
+        `${result.errors.length} errors`,
     })
     queryClient.invalidateQueries({ queryKey: ['components'] })
     queryClient.invalidateQueries({
@@ -140,10 +141,10 @@ export function TeamCityResyncPanel() {
         >
           {(isRunning || startResync.isPending) && <Loader2 className="animate-spin" aria-hidden="true" />}
           {isRunning
-            ? 'Resyncing…'
+            ? 'Syncing…'
             : startResync.isPending
               ? 'Starting…'
-              : 'Resync TC project IDs'}
+              : 'Sync from TeamCity'}
         </Button>
         {!adminMode && (
           <span className="text-xs text-muted-foreground">
@@ -184,7 +185,7 @@ export function TeamCityResyncPanel() {
 
       {isFailed && jobData?.errorMessage && (
         <StatusBanner variant="destructive">
-          TC resync failed: {jobData.errorMessage}
+          TeamCity sync failed: {jobData.errorMessage}
         </StatusBanner>
       )}
 
@@ -197,18 +198,19 @@ export function TeamCityResyncPanel() {
       {isCompleted && result && (
         <div className="space-y-3">
           {/*
-           * 7 tiles: 3-up on phones, 4-up on tablets (so 7 wraps as 4+3),
-           * 7-up on desktop. "Auto-resolved" sits next to "Ambiguous"
+           * 8 tiles: 3-up on phones, 4-up on tablets (so 8 wraps as 4+4),
+           * 8-up on desktop. "Auto-resolved" sits next to "Ambiguous"
            * because it's a sub-counter explaining how the CDRelease
            * tie-break is performing on multi-candidate matches.
            */}
-          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-8">
             <StatCard label="Scanned" value={result.scanned} />
             <StatCard label="Updated" value={result.updated} />
             <StatCard label="Unchanged" value={result.unchanged} />
             <StatCard label="No match" value={result.skipped_no_match} />
             <StatCard label="Ambiguous" value={result.skipped_ambiguous} />
             <StatCard label="Auto-resolved" value={result.ambiguous_auto_resolved ?? 0} />
+            <StatCard label="Auto release on" value={result.auto_release_enabled ?? 0} />
             <StatCard label="Errors" value={errorCount} />
           </div>
           {errorCount > 0 && (
@@ -235,15 +237,9 @@ export function TeamCityResyncPanel() {
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Resync TC project IDs?</DialogTitle>
+            <DialogTitle>Sync from TeamCity?</DialogTitle>
             <DialogDescription>
-              Scans every component, queries TeamCity for projects whose
-              COMPONENT_NAME parameter matches the component id, and rewrites
-              the persisted teamcityProjectId + teamcityProjectUrl when the
-              match changes. Manual overrides for affected components will be
-              replaced. The operation runs in the background and progress
-              will appear in this tab; on large registries it can take
-              several minutes.
+              Updates project links from TeamCity, replacing manual ones, and turns Auto release on (never off). Runs in the background.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

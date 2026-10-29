@@ -11,11 +11,16 @@ describe('tokenizeLine', () => {
     expect(t.map((x) => x.text).join('')).toBe('bcomponent {')
   })
 
-  it('marks a quoted range header as a string', () => {
+  it('marks a quoted version-range header as a range', () => {
     const t = tokenizeLine('    "[1.5,)" {')
-    expect(find(t, '"[1.5,)"')?.type).toBe('string')
+    expect(find(t, '"[1.5,)"')?.type).toBe('range')
+    expect(find(tokenizeLine('    "(,2.0)" {'), '"(,2.0)"')?.type).toBe('range')
     // indentation preserved as a plain token
     expect(t[0]).toEqual({ text: '    ', type: 'plain' })
+  })
+
+  it('marks a quoted component key header as a header, not a string value', () => {
+    expect(find(tokenizeLine('"my-component" {'), '"my-component"')?.type).toBe('header')
   })
 
   it('splits name = value: property + string value', () => {

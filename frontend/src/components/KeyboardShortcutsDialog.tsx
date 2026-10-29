@@ -19,6 +19,7 @@ interface Shortcut {
 function shortcuts(): Shortcut[] {
   return [
     { keys: [MOD_KEY_LABEL, 'K'], label: 'Open the command palette' },
+    { keys: ['/'], label: 'Focus Global search' },
     { keys: ['?'], label: 'Show this shortcuts panel' },
     { keys: ['↑', '↓'], label: 'Move between results' },
     { keys: ['↵'], label: 'Activate the selected item' },

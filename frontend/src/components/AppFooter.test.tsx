@@ -11,15 +11,8 @@ import { useUiOverlay } from '@/lib/uiOverlayStore'
 // AppFooter has two responsibilities:
 //   1. render the build labels — but degrade gracefully when one or both
 //      info endpoints fail so the footer stays rendered.
-//   2. host the AdminPane (Admin-mode toggle) on the left when the user
-//      has IMPORT_DATA, otherwise leave the slot empty so the version
-//      label still hugs the right edge via ml-auto.
-//
-// The plan calls out an explicit foot-gun: if AdminPane is hidden and the
-// flex container uses `justify-between`, the version becomes the only
-// flex child and ends up pinned LEFT instead of right. The footer must use
-// an empty left placeholder + ml-auto to keep the version on the right
-// regardless of pane visibility.
+//   2. offer the keyboard-shortcuts link (right-aligned via ml-auto).
+// The Admin-mode switch it used to host now lives in the header account menu.
 
 vi.mock('@/hooks/useCurrentUser', () => ({ useCurrentUser: vi.fn() }))
 const mockUseCurrentUser = vi.mocked(useCurrentUser)
@@ -126,8 +119,8 @@ describe('AppFooter — keyboard shortcuts link', () => {
   })
 })
 
-describe('AppFooter — AdminPane visibility', () => {
-  it('shows the Admin-mode switch for users with IMPORT_DATA', async () => {
+describe('AppFooter — no Admin-mode switch', () => {
+  it('never renders the Admin-mode switch (it lives in the account menu)', async () => {
     mockUser(adminUser)
     vi.stubGlobal(
       'fetch',
@@ -135,18 +128,6 @@ describe('AppFooter — AdminPane visibility', () => {
     )
 
     renderFooter()
-    await waitFor(() => expect(screen.getByRole('switch', { name: /admin mode/i })).toBeDefined())
-  })
-
-  it('does not show the Admin-mode switch for users without IMPORT_DATA', async () => {
-    mockUser(viewerUser)
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(() => Promise.resolve(new Response('{}', { status: 200 }))),
-    )
-
-    renderFooter()
-    // Brand line is always there; the switch is the gate.
     await waitFor(() => expect(screen.getByText(/Components Registry by F1 team/i)).toBeDefined())
     expect(screen.queryByRole('switch', { name: /admin mode/i })).toBeNull()
   })

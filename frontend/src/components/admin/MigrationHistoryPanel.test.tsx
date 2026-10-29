@@ -548,7 +548,7 @@ describe('MigrationHistoryPanel — cross-disable when components migration is R
 
     renderPanel()
     expect(screen.getByRole('button', { name: /run history migration/i })).toBeDisabled()
-    expect(screen.getByText(/TC resync is running/i)).toBeDefined()
+    expect(screen.getByText(/TeamCity sync is running/i)).toBeDefined()
   })
 
   it('disables Run history migration when TC validation is RUNNING and shows a helper hint', () => {

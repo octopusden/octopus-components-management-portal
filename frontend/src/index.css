@@ -35,6 +35,21 @@
   --color-badge-red-bg: #fee2e2;
   --color-badge-red-fg: #991b1b;
 
+  /* As-code view (CodeBlock): Atom "One Dark" palette. Always dark, in light and dark UI
+     alike — the conventional look for a read-only code pane. Exposed as Tailwind colors
+     (bg-code-bg, text-code-string, …). */
+  --color-code-bg: #282c34;
+  --color-code-fg: #abb2bf;
+  --color-code-border: #3a3f4b;
+  --color-code-gutter: #636d83;
+  --color-code-header: #61afef;
+  --color-code-property: #e06c75;
+  --color-code-string: #98c379;
+  --color-code-enum: #e5c07b;
+  --color-code-keyword: #c678dd;
+  --color-code-number: #d19a66;
+  --color-code-line-highlight: #3e4451;
+
   /* Visibility-text aliases for FieldConfigEditor visibility cell.
      One source of truth — index.css. */
   --color-visibility-editable-fg: #16a34a;

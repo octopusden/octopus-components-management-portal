@@ -356,7 +356,7 @@ describe('VcsTab — VCS host validation', () => {
   })
 })
 
-describe('VcsTab — placement fields (Source Path / Checkout Directory)', () => {
+describe('VcsTab — checkout layout fields (Source Path / Checkout Directory)', () => {
   const twoEntries = () => makeComponent({}, makeBaseRow({
     vcsEntries: [
       { id: 'vcs-1', sortOrder: 0, name: 'core', vcsPath: 'ssh://one', repositoryType: 'GIT', tag: null, branch: null, hotfixBranch: null, sourcePath: 'src', checkoutDirectory: null },
@@ -377,7 +377,7 @@ describe('VcsTab — placement fields (Source Path / Checkout Directory)', () =>
     expect(screen.getByRole('button', { name: 'Remove VCS Root 2' })).toBeInTheDocument()
   })
 
-  it('sends the edited placement on save', () => {
+  it('sends the edited checkout layout on save', () => {
     renderTab(twoEntries())
     const sp = screen.getAllByLabelText('Source Path')
     fireEvent.change(sp[0]!, { target: { value: 'mapper' } })
@@ -437,7 +437,7 @@ describe('VcsTab — Name is read-only', () => {
   })
 })
 
-describe('VcsTab — placement errors on a coalesced per-range group', () => {
+describe('VcsTab — checkout layout errors on a coalesced per-range group', () => {
   it('passes the editor an error that landed on a non-representative member', () => {
     const empty = (id: string, versionRange: string): FieldOverride => ({
       id, overriddenAttribute: 'vcs.settings', versionRange, rowType: 'MARKER',

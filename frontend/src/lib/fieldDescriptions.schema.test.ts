@@ -37,6 +37,7 @@ const KEY_TO_SCHEMA = {
   'component.displayName': ['ComponentDetailResponse', 'displayName'],
   'component.parentComponentName': ['ComponentDetailResponse', 'parentComponentName'],
   'component.canBeParent': ['ComponentDetailResponse', 'canBeParent'],
+  'component.autoRelease': ['ComponentDetailResponse', 'autoRelease'],
   // UI "Group Key" documents aggregator-group membership; the backing field is group.groupKey.
   'component.groupId': ['ComponentGroupResponse', 'groupKey'],
   'component.solution': ['ComponentDetailResponse', 'solution'],

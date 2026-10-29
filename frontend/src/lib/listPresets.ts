@@ -1,8 +1,8 @@
 import type { ComponentFilter } from './types'
 
 /**
- * List-page presets (spec §1.1). Each preset is *sugar* over the existing
- * `ComponentFilter` state: selecting one sets a known filter combo and clears
+ * List presets — now only URL/palette sugar (the list page's preset bar was replaced by the
+ * Status and "Mine" filters). Each preset maps to plain `ComponentFilter` state: selecting one sets a known filter combo and clears
  * any conflicting prior state. The active preset is reflected in the URL via
  * useFilterUrlState so a shared link restores both the preset and its filter.
  *
@@ -68,7 +68,7 @@ export function applyPreset(
     // the owner filter, so fall back to the default rather than emitting a
     // broken owner: [undefined].
     return currentUsername
-      ? { ...DEFAULT_FILTER, owner: [currentUsername] }
+      ? { ...DEFAULT_FILTER, involves: [currentUsername], involvesRoles: ['owner'] }
       : { ...DEFAULT_FILTER }
   }
   if (id === 'archived') {
@@ -83,12 +83,12 @@ export function applyPreset(
     // Without a username we cannot scope, so fall back to the default rather
     // than emitting releaseManager: [undefined].
     return currentUsername
-      ? { ...DEFAULT_FILTER, releaseManager: [currentUsername] }
+      ? { ...DEFAULT_FILTER, involves: [currentUsername], involvesRoles: ['releaseManager'] }
       : { ...DEFAULT_FILTER }
   }
   if (id === 'security-champion') {
     return currentUsername
-      ? { ...DEFAULT_FILTER, securityChampion: [currentUsername] }
+      ? { ...DEFAULT_FILTER, involves: [currentUsername], involvesRoles: ['securityChampion'] }
       : { ...DEFAULT_FILTER }
   }
   // Everything else applies only the active-only default footprint:
@@ -96,52 +96,4 @@ export function applyPreset(
   //  - `problems` carries no CRS query param (Portal-computed) — the page swaps
   //    the list source instead.
   return { ...DEFAULT_FILTER }
-}
-
-// Personal presets: a single-value people filter equal to the current user.
-const PERSONAL_PRESETS = [
-  ['mine', 'owner'],
-  ['release-manager', 'releaseManager'],
-  ['security-champion', 'securityChampion'],
-] as const satisfies readonly (readonly [PresetId, keyof ComponentFilter])[]
-
-// True when `filter` sets nothing beyond `allowed` — any extra filter means "custom".
-function onlyKeys(filter: ComponentFilter, allowed: readonly (keyof ComponentFilter)[]): boolean {
-  return (Object.keys(filter) as (keyof ComponentFilter)[]).every(
-    (k) => allowed.includes(k) || filter[k] === undefined,
-  )
-}
-
-/**
- * Derive which preset (if any) a filter currently represents, so a URL with a
- * bare filter (no explicit `preset=`) still lights up the matching segment.
- * `problems` is intentionally NOT derivable — it shares "all"'s footprint and
- * is only ever active via an explicit URL preset — so a default filter is "all".
- */
-export function matchPreset(
-  filter: ComponentFilter,
-  currentUsername: string | null,
-): PresetId | null {
-  const base = ['archived', 'testComponent'] as const
-
-  // Test components are only ever listed by the `test-components` preset; any
-  // other combo that includes them is custom.
-  if (filter.testComponent === true) {
-    return filter.archived !== true && onlyKeys(filter, base) ? 'test-components' : null
-  }
-  if (filter.archived === true) return onlyKeys(filter, base) ? 'archived' : null
-
-  const personal = PERSONAL_PRESETS.find(([, key]) => {
-    const values = filter[key]
-    return (
-      !!currentUsername &&
-      Array.isArray(values) &&
-      values.length === 1 &&
-      values[0] === currentUsername &&
-      onlyKeys(filter, [...base, key])
-    )
-  })
-  if (personal) return personal[0]
-
-  return onlyKeys(filter, base) ? 'all' : null
 }

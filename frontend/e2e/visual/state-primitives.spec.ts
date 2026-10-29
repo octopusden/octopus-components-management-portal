@@ -101,7 +101,7 @@ test.describe('state primitives — list with data', () => {
 })
 
 test.describe('state primitives — test components', () => {
-  test('list hides test components by default and shows them with a "Test" badge under the preset', async ({
+  test('list hides test components by default and shows them with a "Test" badge under Status: Test', async ({
     page,
   }) => {
     // Route-mocked: one test component added to the shared fixture (kept
@@ -140,7 +140,7 @@ test.describe('state primitives — test components', () => {
     await expect(page.getByText('alpha', { exact: true }).first()).toBeVisible()
     await expect(page.getByText('cvelab-test', { exact: true })).toHaveCount(0)
 
-    await page.getByRole('button', { name: 'Test components' }).click()
+    await page.getByRole('radiogroup', { name: 'Status' }).getByRole('radio', { name: 'Test' }).click()
     const name = page.getByText('cvelab-test', { exact: true }).first()
     await expect(name).toBeVisible()
     await expect(page.getByText('alpha', { exact: true })).toHaveCount(0)

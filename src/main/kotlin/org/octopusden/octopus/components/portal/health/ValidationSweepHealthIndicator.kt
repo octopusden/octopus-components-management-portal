@@ -20,12 +20,12 @@ import org.springframework.stereotype.Component
  * - most recent refresh failed (refreshError != null)   → DOWN (+ categorized reason)
  * - otherwise                                            → UP (+ counts)
  *
- * Sanitization: `/actuator/health` is anonymous (permitAll in SecurityConfig),
- * so the details here MUST NOT contain internal URLs/hosts — only the already
- * sanitized, host-free category from [ValidationService.categorizedReason],
- * timestamps and counts. The actionable detail that DOES name the configured
- * base URLs + env vars is emitted to the SERVER log by ValidationService, never
- * here.
+ * Sanitization: `/actuator/health` is anonymous (permitAll in SecurityConfig);
+ * its details are shown to authenticated callers only, but they still MUST NOT
+ * contain internal URLs/hosts — only the already sanitized, host-free category
+ * from [ValidationService.categorizedReason], timestamps and counts. The
+ * actionable detail that DOES name the configured base URLs + env vars is
+ * emitted to the SERVER log by ValidationService, never here.
  *
  * Deployment safety: the OKD probe hits `/actuator/health/liveness` (the
  * liveness GROUP), and custom indicators are not part of probe groups — a DOWN
