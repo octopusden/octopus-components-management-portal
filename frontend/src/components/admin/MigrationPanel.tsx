@@ -101,7 +101,7 @@ export function MigrationPanel() {
   const runningKindLabel = historyRunning
     ? 'History migration'
     : resyncRunning
-      ? 'TC resync'
+      ? 'TeamCity sync'
       : 'TC validation'
 
   const isFailed = jobData?.state === 'FAILED'

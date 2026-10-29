@@ -2,7 +2,7 @@
 const errorId = (prefix: string, key: string) => `${prefix}-${key.replace('.', '-')}-error`
 
 /**
- * Registry placement error under a VCS field (VCS tab and override editor). `errorKey` is
+ * Registry checkout layout error under a VCS field (VCS tab and override editor). `errorKey` is
  * `<entry index>.<field>`, or `buildWorkingDirectory` for the row's own field.
  */
 export function EntryError({ prefix, errors, errorKey }: { prefix: string; errors: Record<string, string>; errorKey: string }) {

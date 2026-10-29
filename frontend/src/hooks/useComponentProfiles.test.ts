@@ -40,9 +40,18 @@ describe('useComponentProfiles', () => {
     expect(mockApi.get).toHaveBeenCalledWith('/component-profiles')
   })
 
-  it('drops entries whose kind is not regular', async () => {
+  it('keeps templates beside the regular profiles, in the registry order', async () => {
     mockApi.get.mockResolvedValue({
-      profiles: [profile('regular-external'), profile('ww-modpack', { kind: 'template' })],
+      profiles: [profile('client-plugin', { kind: 'template', version: 3 }), profile('regular-external')],
+    })
+    const { result } = renderHook(() => useComponentProfiles(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(result.current.data?.map((p) => p.id)).toEqual(['client-plugin', 'regular-external'])
+  })
+
+  it('drops entries of a kind the wizard does not know', async () => {
+    mockApi.get.mockResolvedValue({
+      profiles: [profile('regular-external'), profile('future', { kind: 'blueprint' as ComponentProfile['kind'] })],
     })
     const { result } = renderHook(() => useComponentProfiles(), { wrapper: makeWrapper() })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))

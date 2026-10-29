@@ -65,16 +65,16 @@ describe('App command palette wiring', () => {
     render(<App />)
 
     // Not open initially.
-    expect(screen.queryByPlaceholderText(/jump to a page/i)).toBeNull()
+    expect(screen.queryByPlaceholderText(/go to a component or page/i)).toBeNull()
 
     // ⌘K opens it (the global hotkey listener lives on window).
     fireEvent.keyDown(window, { key: 'k', metaKey: true })
-    expect(await screen.findByPlaceholderText(/jump to a page/i)).toBeInTheDocument()
+    expect(await screen.findByPlaceholderText(/go to a component or page/i)).toBeInTheDocument()
 
     // Esc closes it.
     await user.keyboard('{Escape}')
     await waitFor(() =>
-      expect(screen.queryByPlaceholderText(/jump to a page/i)).toBeNull(),
+      expect(screen.queryByPlaceholderText(/go to a component or page/i)).toBeNull(),
     )
   })
 

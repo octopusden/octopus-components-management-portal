@@ -87,8 +87,8 @@ test.describe('§7.0.6 match mockup — PR-D header initials avatar', () => {
     await mockLabels(page, [])
     await page.goto('/components')
 
-    const header = page.locator('header')
-    const avatar = header.locator('span.rounded-full[aria-hidden]').first()
+    // The avatar is the account-menu trigger's badge (other rounded dots live in the header too).
+    const avatar = page.locator('header').getByTestId('user-avatar')
     await expect(avatar).toBeVisible()
     // h-7/w-7 → 28px.
     const box = await avatar.boundingBox()

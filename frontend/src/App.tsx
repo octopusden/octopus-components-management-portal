@@ -7,6 +7,7 @@ import { CreateComponentPage } from './pages/CreateComponentPage'
 import { AuditLogPage } from './pages/AuditLogPage'
 import { AdminSettingsPage } from './pages/AdminSettingsPage'
 import { ValidationsPage } from './pages/ValidationsPage'
+import { AsCodeSearchPage } from './pages/AsCodeSearchPage'
 import { RequirePermission } from './components/RequirePermission'
 import { PERMISSIONS, restoreContinuePath } from './lib/auth'
 import { Toaster } from './components/ui/toaster'
@@ -84,6 +85,8 @@ export const appRoutes: RouteObject[] = [
       // is never shadowed by the detail route with id="new".
       { path: '/components/new', element: <CreateComponentPage /> },
       { path: '/components/:id', element: <ComponentDetailPage /> },
+      // Top-level (not under /components/) so it can never collide with /components/:id.
+      { path: '/search', element: <AsCodeSearchPage /> },
       {
         path: '/validations',
         element: (

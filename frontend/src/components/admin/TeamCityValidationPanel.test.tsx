@@ -359,6 +359,6 @@ describe('TeamCityValidationPanel — cross-kind disable', () => {
     useAdminMode.setState({ enabled: true })
     renderPanel()
     expect(screen.getByRole('button', { name: /run tc validation/i })).toBeDisabled()
-    expect(screen.getByText(/TC resync is running/i)).toBeDefined()
+    expect(screen.getByText(/TeamCity sync is running/i)).toBeDefined()
   })
 })

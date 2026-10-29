@@ -96,9 +96,10 @@ open class SecurityConfig(
                         "/vite.svg",
                         // Only health probes and the Prometheus scrape are anonymous.
                         // application.yaml exposes health,info,metrics,prometheus and sets
-                        // health.show-details: always — anything else under /actuator would
-                        // leak operational details (jvm metrics, info bean contents) to
-                        // anyone who can reach the route. Keep richer endpoints behind auth.
+                        // health.show-details: when-authorized, so anonymous health callers see
+                        // the status only. Anything else under /actuator would leak operational
+                        // details (jvm metrics, info bean contents) to anyone who can reach the
+                        // route. Keep richer endpoints behind auth.
                         "/actuator/health",
                         "/actuator/health/**",
                         "/actuator/prometheus",
@@ -178,6 +179,7 @@ open class SecurityConfig(
                 csrf.csrfTokenRepository(CookieServerCsrfTokenRepository.withHttpOnlyFalse())
                 csrf.csrfTokenRequestHandler(ServerCsrfTokenRequestAttributeHandler())
             }
+            .headers { headers -> headers.contentSecurityPolicy { it.policyDirectives(CONTENT_SECURITY_POLICY) } }
         return http.build()
     }
 
@@ -205,5 +207,15 @@ open class SecurityConfig(
         // Kept in one place so the redirect URL in browserEntryPoint and the
         // matching constant in frontend/src/lib/auth.ts stay in sync.
         const val OIDC_REGISTRATION_ID = "keycloak"
+
+        // Everything the SPA loads is same-origin (Vite bundle, /rest via the gateway, the
+        // onboarding video and feedback screenshots), so 'self' is the baseline.
+        //   style-src 'unsafe-inline': Radix dialogs inject a <style> element for scroll locking.
+        //   img-src data:: the feedback form previews picked screenshots as data: URLs.
+        // form-action is deliberately absent: the logout form POST is answered with a redirect
+        // to the identity provider, and browsers apply form-action to that redirect too.
+        const val CONTENT_SECURITY_POLICY =
+            "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
+                "object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
     }
 }
