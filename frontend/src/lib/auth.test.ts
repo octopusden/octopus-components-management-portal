@@ -4,6 +4,7 @@ import {
   restoreContinuePath,
   fetchCurrentUser,
   hasPermission,
+  canStartCreate,
   logout,
   CONTINUE_PATH_STORAGE_KEY,
 } from './auth'
@@ -157,6 +158,35 @@ describe('hasPermission', () => {
 
   it('returns true when permission is present in a role', () => {
     expect(hasPermission(user, 'CREATE_COMPONENTS')).toBe(true)
+  })
+})
+
+describe('canStartCreate', () => {
+  const withPermissions = (...permissions: string[]): User => ({
+    username: 'alice',
+    roles: [{ name: 'r', permissions }],
+    groups: [],
+  })
+
+  it('allows a holder of CREATE_COMPONENTS', () => {
+    expect(canStartCreate(withPermissions('CREATE_COMPONENTS'))).toBe(true)
+  })
+
+  it('allows a holder of CREATE_FROM_TEMPLATE only', () => {
+    expect(canStartCreate(withPermissions('CREATE_FROM_TEMPLATE'))).toBe(true)
+  })
+
+  it('allows a holder of both create permissions', () => {
+    expect(canStartCreate(withPermissions('CREATE_COMPONENTS', 'CREATE_FROM_TEMPLATE'))).toBe(true)
+  })
+
+  it('refuses a user with neither create permission', () => {
+    expect(canStartCreate(withPermissions('ACCESS_COMPONENTS', 'ACCESS_AUDIT'))).toBe(false)
+  })
+
+  it('refuses a missing user', () => {
+    expect(canStartCreate(null)).toBe(false)
+    expect(canStartCreate(undefined)).toBe(false)
   })
 })
 

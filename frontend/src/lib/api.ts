@@ -2,7 +2,7 @@ import { OIDC_AUTHORIZE_PATH, rememberContinuePath } from './auth'
 import { readCookie } from './cookies'
 
 // Exported so callers that need a plain, cookie-authenticated link (e.g. the
-// TeamCity-placement Diff report's "Open HTML" / "Download CSV" anchors) can
+// TeamCity checkout-layout Diff report's "Open HTML" / "Download CSV" anchors) can
 // build a v4 URL without duplicating the BASE_URL + prefix logic.
 export const API_BASE = `${import.meta.env.BASE_URL}rest/api/4`
 

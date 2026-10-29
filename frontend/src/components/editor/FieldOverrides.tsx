@@ -119,7 +119,7 @@ export function FieldOverrides() {
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">Field Overrides</h3>
         {canAdmin && (
-          <Button size="sm" onClick={openCreate}>
+          <Button variant="outline" size="sm" onClick={openCreate}>
             <Plus className="h-4 w-4" />
             Add Override
           </Button>

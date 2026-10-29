@@ -41,6 +41,20 @@ describe('AsCodeTab', () => {
     expect(screen.getByRole('tab', { name: /resolved/i })).toBeTruthy()
   })
 
+  it('marks the deep-linked line in Full mode and drops the mark in Resolved mode', async () => {
+    mockHook.mockReturnValue({
+      data: 'bcomponent {\n    componentOwner = "u"\n}\n',
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as ReturnType<typeof useComponentAsCode>)
+    const { container } = render(<AsCodeTab component={component} highlightLine={2} />)
+    expect(container.querySelector('[data-highlighted="true"]')?.textContent).toContain('componentOwner')
+
+    await userEvent.click(screen.getByRole('tab', { name: /resolved/i }))
+    expect(container.querySelector('[data-highlighted="true"]')).toBeNull()
+  })
+
   it('copies the current code and toasts on success', async () => {
     mockCopy.mockResolvedValue(undefined)
     render(<AsCodeTab component={component} />)
