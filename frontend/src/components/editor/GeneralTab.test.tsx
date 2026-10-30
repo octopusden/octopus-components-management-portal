@@ -6,6 +6,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { GeneralTab, type GeneralFormValues } from './GeneralTab'
 import { fromArtifactId } from '../../lib/artifactOwnership'
+import { isFieldDirty } from '../../lib/editor/dirtyField'
+import { DocumentationTab } from './DocumentationTab'
+import { ProducedArtifactsSection } from './ProducedArtifactsSection'
 import { TooltipProvider } from '../ui/tooltip'
 import { fieldDescriptions } from '../../lib/fieldDescriptions'
 import { lookupEmployee } from '../../hooks/useEmployees'
@@ -14,6 +17,9 @@ import type { ComponentDetail } from '../../lib/types'
 // Stub the live data sources behind the embedded ui pickers so this file stays
 // focused on the GeneralTab rendering contract for 7.1.5 (parentComponentName
 // editable) and downstream tests for owner/enum/field-overrides remain isolated.
+vi.mock('../../hooks/useSupportedGroups', () => ({
+  useSupportedGroups: () => ({ groups: [] }),
+}))
 vi.mock('../../hooks/useOwners', () => ({
   useOwners: () => ({ data: [] }),
 }))
@@ -1078,5 +1084,110 @@ describe('GeneralTab — rename target key format', () => {
       <Harness component={baseComponent({ name: 'Legacy.Key_1', clientCode: null })} />,
     )
     expect(screen.queryByText(KEY_MESSAGE)).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Clear-all of docs / artifactIds. The page form starts from BLANK defaults and
+// GeneralTab hydrates it on mount; if hydration left the blank [] as RHF's dirty
+// baseline, removing the last row would bring the list back to [] == default,
+// dirtyFields would stay empty and the page's Save gate would never arm.
+// ---------------------------------------------------------------------------
+
+describe('GeneralTab — removing the last docs / artifactIds row reads as dirty', () => {
+  function PageLikeHarness({
+    component,
+    formRef,
+    editor,
+  }: {
+    component: ComponentDetail
+    formRef: React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    editor: 'docs' | 'artifactIds'
+  }) {
+    const form = useForm<GeneralFormValues>({
+      defaultValues: {
+        name: '', displayName: '', componentOwner: '', productType: '', systems: [],
+        clientCode: '', solution: false, archived: false, parentComponentName: '',
+        canBeParent: false, releaseManager: [], securityChampion: [], copyright: '',
+        labels: [], docs: [], artifactIds: [],
+      },
+    })
+    // The page subscribes dirtyFields at render, which is what makes RHF track them.
+    void form.formState.dirtyFields
+    formRef.current = form
+    return (
+      <>
+        <GeneralTab component={component} form={form} />
+        {editor === 'docs' ? (
+          <DocumentationTab form={form} />
+        ) : (
+          <ProducedArtifactsSection form={form} component={component} />
+        )}
+      </>
+    )
+  }
+
+  it('docs: removing the only hydrated doc link marks docs dirty', async () => {
+    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    renderWithProviders(
+      <PageLikeHarness
+        component={baseComponent({ docs: [{ id: 'd1', docComponentKey: 'docs-a', majorVersion: '3.x', sortOrder: 0 }] })}
+        formRef={formRef}
+        editor="docs"
+      />,
+    )
+
+    await userEvent.click(await screen.findByRole('button', { name: /remove doc link/i }))
+
+    await waitFor(() => expect(formRef.current!.getValues('docs')).toEqual([]))
+    expect(isFieldDirty(formRef.current!.formState.dirtyFields.docs)).toBe(true)
+  })
+
+  it('artifactIds: removing the only hydrated mapping marks artifactIds dirty', async () => {
+    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    renderWithProviders(
+      <PageLikeHarness
+        component={baseComponent({
+          artifactIds: [{ id: 'a1', versionRange: null, groupPattern: 'org.example', mode: 'ALL', artifactTokens: [] }],
+        })}
+        formRef={formRef}
+        editor="artifactIds"
+      />,
+    )
+
+    await userEvent.click(await screen.findByRole('button', { name: /remove mapping/i }))
+
+    await waitFor(() => expect(formRef.current!.getValues('artifactIds')).toEqual([]))
+    expect(isFieldDirty(formRef.current!.formState.dirtyFields.artifactIds)).toBe(true)
+  })
+
+  it('docs: a hydrated, untouched form is not dirty (no spurious Save)', async () => {
+    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    renderWithProviders(
+      <PageLikeHarness
+        component={baseComponent({ docs: [{ id: 'd1', docComponentKey: 'docs-a', majorVersion: '3.x', sortOrder: 0 }] })}
+        formRef={formRef}
+        editor="docs"
+      />,
+    )
+
+    await screen.findByRole('button', { name: /remove doc link/i })
+    expect(isFieldDirty(formRef.current!.formState.dirtyFields.docs)).toBe(false)
+  })
+
+  it('artifactIds: a hydrated, untouched form is not dirty (no spurious Save)', async () => {
+    const formRef = React.createRef<ReturnType<typeof useForm<GeneralFormValues>> | null>() as React.MutableRefObject<ReturnType<typeof useForm<GeneralFormValues>> | null>
+    renderWithProviders(
+      <PageLikeHarness
+        component={baseComponent({
+          artifactIds: [{ id: 'a1', versionRange: null, groupPattern: 'org.example', mode: 'ALL', artifactTokens: [] }],
+        })}
+        formRef={formRef}
+        editor="artifactIds"
+      />,
+    )
+
+    await screen.findByRole('button', { name: /remove mapping/i })
+    expect(isFieldDirty(formRef.current!.formState.dirtyFields.artifactIds)).toBe(false)
   })
 })
