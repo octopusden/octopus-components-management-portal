@@ -145,7 +145,7 @@ describe("initialValues — today's pre-filled values are kept (D7)", () => {
   // Scratch pre-fill contract: the copyright default is no longer tied to the
   // explicit+external classification; it always starts from component-defaults.
   const MAIN_SCRATCH_VALUES = {
-    name: '', displayName: 'Default Display', buildSystem: 'GRADLE', componentOwner: '',
+    name: '', displayName: 'Default Display', buildSystem: 'GRADLE', componentOwner: '', systems: [],
     distributionExplicit: false, distributionExternal: true, releaseManager: [], securityChampion: [],
     copyright: '(c) Default', clientCode: '', jiraProjectKey: 'DEFJ', versionPrefix: '',
     versionFormat: '$versionPrefix-$baseVersionFormat', minorVersionFormat: '$major.$minor',
@@ -437,5 +437,24 @@ describe('makeCreateSchema — explicit external checks with locked classificati
 
   it('requires none of them when the locked flags are not explicit external', () => {
     expect(pathsOf({ ...explicitExternal, distributionExplicit: false })).toEqual([])
+  })
+})
+
+
+describe('SYS-107: initial systems', () => {
+  it('SYS-107 seeds the configured system without hardcoding an installation', () => {
+    expect(initialValues(null, { system: ' SIGMA ' }).systems).toEqual(['SIGMA'])
+    expect(initialValues(null, { system: 'OTHER' }).systems).toEqual(['OTHER'])
+    expect(initialValues(null, { system: '  ' }).systems).toEqual([])
+    expect(initialValues(null, {}).systems).toEqual([])
+  })
+
+  it('SYS-107 clones source systems including an empty selection without sharing arrays', () => {
+    const source = makeSource({ systems: ['SYS1', 'SYS2'] })
+    const form = initialValues(source, { system: 'SIGMA' })
+    expect(form.systems).toEqual(['SYS1', 'SYS2'])
+    form.systems.pop()
+    expect(source.systems).toEqual(['SYS1', 'SYS2'])
+    expect(initialValues(makeSource({ systems: [] }), { system: 'SIGMA' }).systems).toEqual([])
   })
 })
