@@ -871,7 +871,7 @@ describe('buildCreateRequest — labels and build tasks', () => {
 
 describe('SYS-107: selected systems in create requests', () => {
   it('SYS-107 sends multiple selected systems and an explicit empty selection', () => {
-    expect(buildCreateRequest(makeForm({ systems: ['SIGMA', 'SYS2'] })).systems).toEqual(['SIGMA', 'SYS2'])
+    expect(buildCreateRequest(makeForm({ systems: ['SYS3', 'SYS2'] })).systems).toEqual(['SYS3', 'SYS2'])
     expect(buildCreateRequest(makeForm({ systems: [] }), makeSource()).systems).toEqual([])
   })
 
@@ -880,7 +880,7 @@ describe('SYS-107: selected systems in create requests', () => {
   })
 
   it('SYS-107 omits systems when field policy prevents editing', () => {
-    const request = buildCreateRequest(makeForm({ systems: ['SIGMA'] }), undefined, (field) => field !== 'system')
+    const request = buildCreateRequest(makeForm({ systems: ['SYS3'] }), undefined, (field) => field !== 'system')
     expect(request).not.toHaveProperty('systems')
   })
 })

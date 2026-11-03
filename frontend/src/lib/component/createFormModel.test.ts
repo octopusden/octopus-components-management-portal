@@ -443,7 +443,7 @@ describe('makeCreateSchema — explicit external checks with locked classificati
 
 describe('SYS-107: initial systems', () => {
   it('SYS-107 seeds the configured system without hardcoding an installation', () => {
-    expect(initialValues(null, { system: ' SIGMA ' }).systems).toEqual(['SIGMA'])
+    expect(initialValues(null, { system: ' SYS3 ' }).systems).toEqual(['SYS3'])
     expect(initialValues(null, { system: 'OTHER' }).systems).toEqual(['OTHER'])
     expect(initialValues(null, { system: '  ' }).systems).toEqual([])
     expect(initialValues(null, {}).systems).toEqual([])
@@ -451,10 +451,10 @@ describe('SYS-107: initial systems', () => {
 
   it('SYS-107 clones source systems including an empty selection without sharing arrays', () => {
     const source = makeSource({ systems: ['SYS1', 'SYS2'] })
-    const form = initialValues(source, { system: 'SIGMA' })
+    const form = initialValues(source, { system: 'SYS3' })
     expect(form.systems).toEqual(['SYS1', 'SYS2'])
     form.systems.pop()
     expect(source.systems).toEqual(['SYS1', 'SYS2'])
-    expect(initialValues(makeSource({ systems: [] }), { system: 'SIGMA' }).systems).toEqual([])
+    expect(initialValues(makeSource({ systems: [] }), { system: 'SYS3' }).systems).toEqual([])
   })
 })
