@@ -738,6 +738,7 @@ export interface PortalLinks {
   gitBaseUrl?: string | null
   tcBaseUrl?: string | null
   dmsBaseUrl?: string | null
+  vcsProvider?: 'bitbucket' | 'gitea' | null
 }
 
 export interface PortalInfo {

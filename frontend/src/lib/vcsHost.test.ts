@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { hostOf, isVcsHostSupported, bitbucketBrowseUrl } from './vcsHost'
+import { hostOf, isVcsHostSupported, bitbucketBrowseUrl, vcsBrowseUrl } from './vcsHost'
 
 describe('hostOf', () => {
   it('extracts host from ssh URLs (ignoring user + port)', () => {
@@ -44,21 +44,21 @@ describe('bitbucketBrowseUrl', () => {
     const t = bitbucketBrowseUrl('ssh://git@bitbucket.example.com:7999/PROJ/repo.git', base)
     expect(t).not.toBeNull()
     expect(t!.url).toBe('https://bitbucket.example.com/projects/PROJ/repos/repo')
-    expect(t!.projectKey).toBe('PROJ')
+    expect(t!.namespace).toBe('PROJ')
     expect(t!.repoName).toBe('repo')
   })
 
   it('parses a Bitbucket https clone URL with /scm/ prefix', () => {
     const t = bitbucketBrowseUrl('https://bitbucket.example.com/scm/PROJ/repo.git', base)
     expect(t!.url).toBe('https://bitbucket.example.com/projects/PROJ/repos/repo')
-    expect(t!.projectKey).toBe('PROJ')
+    expect(t!.namespace).toBe('PROJ')
     expect(t!.repoName).toBe('repo')
   })
 
   it('parses a clone URL on a context path', () => {
     const t = bitbucketBrowseUrl('https://bb.example.com/bitbucket/scm/PROJ/repo.git', base)
     expect(t!.url).toBe('https://bitbucket.example.com/projects/PROJ/repos/repo')
-    expect(t!.projectKey).toBe('PROJ')
+    expect(t!.namespace).toBe('PROJ')
     expect(t!.repoName).toBe('repo')
   })
 
@@ -70,7 +70,7 @@ describe('bitbucketBrowseUrl', () => {
   it('falls back to slash split for legacy bare PROJ/repo values', () => {
     const t = bitbucketBrowseUrl('org/repo', base)
     expect(t!.url).toBe('https://bitbucket.example.com/projects/org/repos/repo')
-    expect(t!.projectKey).toBe('org')
+    expect(t!.namespace).toBe('org')
     expect(t!.repoName).toBe('repo')
   })
 
@@ -84,5 +84,30 @@ describe('bitbucketBrowseUrl', () => {
     expect(bitbucketBrowseUrl(undefined, base)).toBeNull()
     expect(bitbucketBrowseUrl('ssh://git@host/PROJ/repo.git', null)).toBeNull()
     expect(bitbucketBrowseUrl('ssh://git@host/PROJ/repo.git', undefined)).toBeNull()
+  })
+})
+
+describe('vcsBrowseUrl — gitea', () => {
+  const base = 'https://gitea.example.com'
+
+  it('builds a Gitea repository URL from an ssh clone URL', () => {
+    const t = vcsBrowseUrl('ssh://git@gitea.example.com/owner/repo.git', base, 'gitea')
+    expect(t).not.toBeNull()
+    expect(t!.url).toBe('https://gitea.example.com/owner/repo')
+    expect(t!.namespace).toBe('owner')
+    expect(t!.repoName).toBe('repo')
+    expect(t!.provider).toBe('gitea')
+  })
+
+  it('builds a Gitea repository URL from an https clone URL', () => {
+    expect(vcsBrowseUrl('https://gitea.example.com/owner/repo.git', base, 'gitea')!.url).toBe(
+      'https://gitea.example.com/owner/repo',
+    )
+  })
+
+  it('defaults to the Bitbucket URL shape', () => {
+    expect(vcsBrowseUrl('ssh://git@host/PROJ/repo.git', base)!.url).toBe(
+      'https://gitea.example.com/projects/PROJ/repos/repo',
+    )
   })
 })

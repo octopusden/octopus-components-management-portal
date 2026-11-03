@@ -41,6 +41,7 @@ class PortalInfoController(
         gitBaseUrl = linksProperties.gitBaseUrl?.takeIf(String::isNotBlank),
         tcBaseUrl = linksProperties.tcBaseUrl?.takeIf(String::isNotBlank),
         dmsBaseUrl = linksProperties.dmsBaseUrl?.takeIf(String::isNotBlank),
+        vcsProvider = linksProperties.vcsProvider?.name?.lowercase(),
     )
 
     // Component-editor config for the SPA. Currently only the solution-key
@@ -81,6 +82,7 @@ class PortalInfoController(
         val gitBaseUrl: String?,
         val tcBaseUrl: String?,
         val dmsBaseUrl: String?,
+        val vcsProvider: String?,
     )
 
     data class ConfigResponse(

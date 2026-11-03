@@ -74,6 +74,10 @@ portal:
     git-base-url: ${PORTAL_LINKS_GIT_BASE_URL:}
     tc-base-url: ${PORTAL_LINKS_TC_BASE_URL:}
     dms-base-url: ${PORTAL_LINKS_DMS_BASE_URL:}
+    # bitbucket (default, also when absent) | gitea. Blank binds to null and the
+    # SPA falls back to Bitbucket, so the existing empty-/portal/links contract
+    # stays `{}`.
+    vcs-provider: ${PORTAL_LINKS_VCS_PROVIDER:}
   # Onboarding presentation video. The media lives in a small dedicated git repo
   # (Bitbucket), NOT in this jar; the portal clones it into memory at startup and
   # serves it same-origin (see OnboardingVideoService). Same config shape as CRS's

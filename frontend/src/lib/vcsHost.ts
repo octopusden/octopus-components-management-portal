@@ -9,26 +9,31 @@
 //    Server /projects/<key>/repos/<repo> browser URL used for quick-links on
 //    the component table and detail pages.
 
-export interface BitbucketBrowseTarget {
-  /** `${gitBaseUrl}/projects/PROJ/repos/repo` */
+export type VcsProvider = 'bitbucket' | 'gitea'
+
+export interface VcsBrowseTarget {
+  /** Bitbucket `/projects/PROJ/repos/repo` or Gitea `owner/repo`. */
   url: string
-  /** The project key extracted from the VCS path. */
-  projectKey: string
+  /** The Bitbucket project key or Gitea owner extracted from the VCS path. */
+  namespace: string
   /** The repo slug extracted from the VCS path, `.git` suffix stripped. */
   repoName: string
+  provider: VcsProvider
 }
 
+/** Backwards-compatible alias for callers/tests that still use the old name. */
+export type BitbucketBrowseTarget = VcsBrowseTarget
+
 /**
- * Build the Bitbucket Server browse URL for a VCS path.
+ * Build the VCS browse URL for a clone path.
  *
  * `vcsPath` is canonically a clone URL (ssh://git@host/PROJ/repo.git or
- * https://host/scm/PROJ/repo.git). Bitbucket's browse URL is
- * `${gitBaseUrl}/projects/PROJ/repos/repo`, so the key and slug are pulled
- * back out of the URL path.
+ * https://host/scm/PROJ/repo.git). The last two path segments are used (not
+ * first + last) so context-path / `/scm/`-prefixed URLs also parse correctly.
+ * A trailing `.git` suffix is stripped from the repo slug.
  *
- * The last two path segments are used (not first + last) so that
- * context-path / `/scm/`-prefixed URLs also parse correctly. A trailing
- * `.git` suffix is stripped from the repo slug.
+ * Bitbucket Server: `${gitBaseUrl}/projects/PROJ/repos/repo`.
+ * Gitea:             `${gitBaseUrl}/owner/repo`.
  *
  * Falls back to a plain slash split for legacy rows holding a bare
  * `PROJ/repo` — only rows created through CreateComponentPage are
@@ -36,10 +41,11 @@ export interface BitbucketBrowseTarget {
  *
  * Returns null when fewer than two path segments can be derived.
  */
-export function bitbucketBrowseUrl(
+export function vcsBrowseUrl(
   vcsPath: string | null | undefined,
   gitBaseUrl: string | null | undefined,
-): BitbucketBrowseTarget | null {
+  provider: VcsProvider = 'bitbucket',
+): VcsBrowseTarget | null {
   if (!vcsPath || !gitBaseUrl) return null
   let segments: string[]
   try {
@@ -48,13 +54,27 @@ export function bitbucketBrowseUrl(
     segments = vcsPath.split('/').filter(Boolean)
   }
   if (segments.length < 2) return null
-  const [projectKey, repo] = segments.slice(-2)
+  const [namespace, repo] = segments.slice(-2)
   const repoName = repo!.replace(/\.git$/, '')
+  const encodedNamespace = encodeURIComponent(namespace!)
+  const encodedRepo = encodeURIComponent(repoName)
   return {
-    url: `${gitBaseUrl}/projects/${encodeURIComponent(projectKey!)}/repos/${encodeURIComponent(repoName)}`,
-    projectKey: projectKey!,
+    url:
+      provider === 'gitea'
+        ? `${gitBaseUrl}/${encodedNamespace}/${encodedRepo}`
+        : `${gitBaseUrl}/projects/${encodedNamespace}/repos/${encodedRepo}`,
+    namespace: namespace!,
     repoName,
+    provider,
   }
+}
+
+/** Bitbucket-specific wrapper kept for existing callers and tests. */
+export function bitbucketBrowseUrl(
+  vcsPath: string | null | undefined,
+  gitBaseUrl: string | null | undefined,
+): VcsBrowseTarget | null {
+  return vcsBrowseUrl(vcsPath, gitBaseUrl, 'bitbucket')
 }
 
 /**

@@ -303,6 +303,7 @@ describe('usePortalLinks', () => {
     expect(result.current.data?.gitBaseUrl).toBe(portalLinksContract.gitBaseUrl)
     expect(result.current.data?.tcBaseUrl).toBe(portalLinksContract.tcBaseUrl)
     expect(result.current.data?.dmsBaseUrl).toBe(portalLinksContract.dmsBaseUrl)
+    expect(result.current.data?.vcsProvider).toBe(portalLinksContract.vcsProvider)
     // Reading 'links' on the data must yield undefined — guards against a future
     // type/access regression that re-introduces the nested envelope shape.
     expect((result.current.data as unknown as { links?: unknown })?.links).toBeUndefined()

@@ -67,6 +67,8 @@ function sanitizeLinks(raw: PortalLinks): PortalLinks {
     gitBaseUrl: clean(raw.gitBaseUrl),
     tcBaseUrl: clean(raw.tcBaseUrl),
     dmsBaseUrl: clean(raw.dmsBaseUrl),
+    vcsProvider:
+      raw.vcsProvider === 'gitea' || raw.vcsProvider === 'bitbucket' ? raw.vcsProvider : undefined,
   }
 }
 

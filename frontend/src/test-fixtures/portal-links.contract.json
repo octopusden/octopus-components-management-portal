@@ -2,5 +2,6 @@
   "jiraBaseUrl": "https://jira.example.com",
   "gitBaseUrl": "https://git.example.com",
   "tcBaseUrl": "https://tc.example.com",
-  "dmsBaseUrl": "https://dms.example.com"
+  "dmsBaseUrl": "https://dms.example.com",
+  "vcsProvider": "gitea"
 }

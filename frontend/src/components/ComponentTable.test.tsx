@@ -584,6 +584,16 @@ describe('ComponentTable', () => {
       expect(within(link).getByTestId('brand-icon-bitbucket')).toBeDefined()
     })
 
+    it('renders Gitea icon + browse URL when vcsProvider is gitea', () => {
+      mockLinks({ gitBaseUrl: 'https://gitea.example.com', vcsProvider: 'gitea' })
+      renderTable([makeComponent({ vcsPath: 'ssh://git@gitea.example.com/CREG/components-registry.git' })])
+      const link = screen.getByRole('link', { name: /Gitea: CREG\/components-registry/i })
+      expect((link as HTMLAnchorElement).href).toBe(
+        'https://gitea.example.com/CREG/components-registry',
+      )
+      expect(within(link).getByTestId('brand-icon-gitea')).toBeDefined()
+    })
+
     it('hides Git icon when vcsPath has no slash (cannot derive project key + repo)', () => {
       mockLinks({ gitBaseUrl: 'https://git.example.com' })
       renderTable([makeComponent({ vcsPath: 'standalone' })])
