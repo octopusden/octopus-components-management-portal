@@ -1170,7 +1170,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
               fieldPath="component.copyright"
               value={values.copyright}
               onValueChange={(value) =>
-                setValue('copyright', value, { shouldValidate: true, shouldDirty: true })
+                setValue('copyright', value, { shouldValidate: true, shouldDirty: true, shouldTouch: true })
               }
               id="create-copyright"
               placeholder="Select copyright"

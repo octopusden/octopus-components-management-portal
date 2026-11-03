@@ -213,11 +213,11 @@ depend on SHALL come from the pre-selected profile.
   registry's component defaults carry a copyright
 - **THEN** the Copyright field starts with that copyright
 
-#### Scenario: The default copyright leaves with explicit external
+#### Scenario: The default copyright stays with the classification
 
-- **WHEN** the Copyright field still holds the copyright it started with, and the user picks a
-  profile, or sets a classification, that is not explicit external
-- **THEN** the Copyright field is cleared; a copyright the user entered is kept
+- **WHEN** the Copyright field holds the configured default, and the user picks a profile, or
+  sets a classification, that is not explicit external
+- **THEN** the Copyright field keeps that copyright; a copyright the user enters or clears is kept
 
 #### Scenario: A clone copies the source
 

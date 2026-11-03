@@ -1134,6 +1134,31 @@ describe('CreateComponentPage — the default copyright is always applied', () =
     expect(copyright().value).toBe('(c) Mine')
   })
 
+  it('keeps an explicit clear when field-config refreshes with a different default', async () => {
+    mockUseComponentDefaults.mockReturnValue({
+      ...COMPONENT_DEFAULTS_OK,
+      data: { ...(COMPONENT_DEFAULTS_OK.data as object) } as unknown,
+    })
+    mockUseFieldConfig.mockImplementation(() => ({
+      data: { component: { copyright: { defaultValue: 'default-a' } } },
+      isLoading: false,
+      isError: false,
+    }))
+    renderWizard()
+    await clickNext()
+    expect(copyright().value).toBe('default-a')
+    await userEvent.clear(copyright())
+    expect(copyright().value).toBe('')
+    mockUseFieldConfig.mockImplementation(() => ({
+      data: { component: { copyright: { defaultValue: 'default-b' } } },
+      isLoading: false,
+      isError: false,
+    }))
+    await userEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    await clickNext()
+    expect(copyright().value).toBe('')
+  })
+
   it("keeps a clone's copied copyright when the classification set directly stops being explicit external", async () => {
     // Only Regular internal is offered, so an explicit external source matches no profile.
     mockUseComponentProfiles.mockReturnValue({
