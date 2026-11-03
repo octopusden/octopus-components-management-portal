@@ -370,8 +370,7 @@ function ComponentDetailEditor() {
   // the component object) so a same-id sibling-save setQueryData does NOT
   // form.reset over an in-progress General edit. The FIRST load is intentionally
   // skipped (we only record the id): GeneralTab is the default-mounted tab and
-  // owns initial hydration incl. its touched-not-dirty interactions (e.g. the
-  // labels clear-all signal), which a reset here would stomp.
+  // owns initial hydration (its own reset to the server values, on a pristine form).
   const hydratedIdRef = useRef<string | null>(null)
   useEffect(() => {
     if (!component) return
@@ -445,8 +444,9 @@ function ComponentDetailEditor() {
             : isFieldEditableFor(fieldConfigData, 'component.autoRelease', user) ? 'editable' : 'readonly',
       },
       dirtyFields: {
-        // "Interacted" (dirty OR touched): a first load seeds by setValue, so the form default stays
-        // false and switching a seeded `true` off reads as touched, not dirty. buildUpdateRequest
+        // "Interacted" (dirty OR touched): GeneralTab hydrates with reset, so the server value is
+        // RHF's default and a real change reads as dirty; the touched branch is a safety net for
+        // a clear back to the blank form default before hydration. buildUpdateRequest
         // value-compares, so an untouched switch still never sends a stale value.
         solution: form.formState.dirtyFields.solution === true || form.formState.touchedFields.solution === true,
         autoRelease:

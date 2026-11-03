@@ -151,6 +151,7 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
   const {
     register,
     setValue,
+    reset,
     watch,
     formState: { errors },
   } = form
@@ -245,53 +246,56 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
     // filtering happens at save time in ComponentDetailPage.handleSave (hidden →
     // undefined in payload), so populating the form here cannot leak server data:
     // there's no input to show it and no save path that emits it.
-    setValue('name', component.name)
-    setValue('displayName', component.displayName ?? '')
-    setValue('componentOwner', component.componentOwner ?? '')
-    setValue('productType', component.productType ?? '')
-    setValue('clientCode', component.clientCode ?? '')
-    setValue('solution', component.solution ?? false)
-    setValue('archived', component.archived)
-    setValue('testComponent', component.testComponent ?? false)
-    setValue('autoRelease', component.autoRelease ?? false)
-    // parentComponentName / canBeParent render on the Misc tab but are hydrated HERE: General
-    // is the default tab (always mounted on load), whereas Radix unmounts the inactive Misc
-    // tab, so hydrating in MiscTab would leave these unset until the user opens Misc.
-    setValue('parentComponentName', component.parentComponentName ?? '')
-    setValue('canBeParent', component.canBeParent ?? false)
-    // Multi-value lists. Like `labels`, hydration MUST NOT set shouldTouch —
-    // the touched flag is the signal ComponentDetailPage.handleSave uses to
-    // tell a real user clear-all from the pre-hydration race.
-    setValue('releaseManager', component.releaseManager ?? [])
-    setValue('securityChampion', component.securityChampion ?? [])
-    setValue('copyright', component.copyright ?? '')
-    // labels/docs/solution are hydrated HERE (General is the always-mounted
-    // default tab) even though their EDITORS now live elsewhere — labels in the
-    // header, docs in the Documentation tab, solution in the Solution tab. Those
-    // surfaces read/write this same page-owned form. Hydration MUST NOT set
-    // `shouldTouch:true` — the touched flag is the signal
-    // ComponentDetailPage.handleSave uses to distinguish a real user clear-all
-    // from the pre-hydration race (PR #44 follow-up); only the header
-    // ChipsInput's onChange sets shouldTouch, on real interaction.
-    setValue('labels', component.labels ?? [])
-    // Multi-value system membership (chips, same contract as labels): hydrate
-    // without shouldTouch so the pre-hydration race isn't mistaken for a user
-    // clear-all.
-    setValue('systems', component.systems ?? [])
-    // schema-v2 lists. setValue replaces the array wholesale.
-    setValue(
-      'docs',
-      (component.docs ?? []).map((d) => ({
+    //
+    // Hydrated with ONE reset (not per-field setValue) so the server values become
+    // RHF's dirty baseline — the page form starts blank. With the blank baseline,
+    // removing the last doc link / ownership mapping returned the list to the
+    // default [], RHF reported it not dirty and Save never armed; `docs` is a
+    // useFieldArray, for which RHF ignores shouldTouch, so a touched-based
+    // clear-all gate can't catch it. Runs only on a pristine form (guard above),
+    // so no edit is lost; it is the same baseline the page's post-save reset sets.
+    // The values are built here, not read back via getValues(): this child effect
+    // runs before useForm mounts, when getValues() still returns the blank defaults.
+    // reset leaves touched flags clear, which keeps the touched-based clear-all
+    // gates (labels / systems / releaseManager / securityChampion) meaning "user
+    // interaction" only.
+    reset({
+      name: component.name,
+      displayName: component.displayName ?? '',
+      componentOwner: component.componentOwner ?? '',
+      productType: component.productType ?? '',
+      clientCode: component.clientCode ?? '',
+      solution: component.solution ?? false,
+      archived: component.archived,
+      testComponent: component.testComponent ?? false,
+      autoRelease: component.autoRelease ?? false,
+      // parentComponentName / canBeParent render on the Misc tab but are hydrated HERE: General
+      // is the default tab (always mounted on load), whereas Radix unmounts the inactive Misc
+      // tab, so hydrating in MiscTab would leave these unset until the user opens Misc.
+      parentComponentName: component.parentComponentName ?? '',
+      canBeParent: component.canBeParent ?? false,
+      releaseManager: component.releaseManager ?? [],
+      securityChampion: component.securityChampion ?? [],
+      copyright: component.copyright ?? '',
+      // labels/docs/solution are hydrated HERE (General is the always-mounted
+      // default tab) even though their EDITORS now live elsewhere — labels in the
+      // header, docs in the Documentation tab, solution in the Solution tab. Those
+      // surfaces read/write this same page-owned form.
+      labels: component.labels ?? [],
+      systems: component.systems ?? [],
+      docs: (component.docs ?? []).map((d) => ({
         docComponentKey: d.docComponentKey,
         majorVersion: d.majorVersion ?? '',
       })),
-    )
-    setValue('artifactIds', (component.artifactIds ?? []).map(fromArtifactId))
+      artifactIds: (component.artifactIds ?? []).map(fromArtifactId),
+      // `satisfies`: reset() takes a partial, so a field missing here would compile
+      // and silently become undefined.
+    } satisfies GeneralFormValues)
     // dirtyFields / touchedFields are read as a point-in-time guard, NOT as triggers —
     // adding them to deps would re-run hydration whenever dirtiness changes (i.e. on
     // every edit) and re-stomp the form. Re-hydrate only on a new `component`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [component, setValue])
+  }, [component, reset])
 
   return (
     <div className="space-y-6">
