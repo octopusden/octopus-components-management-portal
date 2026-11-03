@@ -28,12 +28,9 @@ vi.mock('../hooks/useVersionPreview', () => ({
 }))
 
 const mockLookupEmployee = vi.hoisted(() => vi.fn())
+const mockUseFieldOptions = vi.hoisted(() => vi.fn())
 vi.mock('../hooks/useFieldOptions', () => ({
-  useFieldOptions: vi.fn((fieldPath: string) =>
-    fieldPath === 'generation'
-      ? { options: ['AUTO', 'MANUAL'], isLoading: false }
-      : { options: ['MAVEN', 'GRADLE', 'BS2_0', 'PROVIDED'], isLoading: false },
-  ),
+  useFieldOptions: (fieldPath: string) => mockUseFieldOptions(fieldPath),
 }))
 const mockUseSupportedGroups = vi.fn(() => ({ groups: [] as string[], isLoading: false }))
 vi.mock('../hooks/useSupportedGroups', () => ({ useSupportedGroups: () => mockUseSupportedGroups() }))
@@ -169,6 +166,11 @@ beforeEach(() => {
   mockUseComponent.mockReset()
   mockUseComponent.mockReturnValue({ data: undefined, isLoading: false, error: null })
   mockUseFieldConfig.mockReturnValue({ data: undefined, isLoading: false, isError: false })
+  mockUseFieldOptions.mockImplementation((fieldPath: string) => {
+    if (fieldPath === 'generation') return { options: ['AUTO', 'MANUAL'], isLoading: false }
+    if (fieldPath === 'component.copyright') return { options: [], isLoading: false }
+    return { options: ['MAVEN', 'GRADLE', 'BS2_0', 'PROVIDED'], isLoading: false }
+  })
   mockUseComponentDefaults.mockReturnValue(COMPONENT_DEFAULTS_OK)
   mockUseSupportedGroups.mockReturnValue({ groups: [], isLoading: false })
   mockUsePortalLinks.mockReturnValue({ data: undefined })
@@ -1070,7 +1072,7 @@ describe('CreateComponentPage — profile rules on fields the step does not show
   })
 })
 
-describe('CreateComponentPage — the default copyright follows explicit external', () => {
+describe('CreateComponentPage — the default copyright is always applied', () => {
   beforeEach(() => {
     const shipped = shippedProfiles.profiles as ComponentProfile[]
     // Solution first, so a new component starts explicit external with the copyright seeded.
@@ -1085,14 +1087,40 @@ describe('CreateComponentPage — the default copyright follows explicit externa
   })
   const copyright = () => screen.getByLabelText(/^Copyright/i) as HTMLInputElement
 
-  it('clears the untouched default copyright when the classification stops being explicit external', async () => {
+  it('keeps the untouched default copyright when the classification stops being explicit external', async () => {
     renderWizard()
     await clickNext()
     expect(copyright().value).toBe('(c) Default')
     await userEvent.click(screen.getByRole('button', { name: 'Profile' }))
     await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/ }))
     await clickNext()
-    expect(copyright().value).toBe('')
+    expect(copyright().value).toBe('(c) Default')
+  })
+
+  it('uses field-config options and defaultValue for the copyright control', async () => {
+    mockUseFieldConfig.mockReturnValue({
+      data: {
+        component: {
+          copyright: {
+            options: ['default-copyright', 'third-party-copyright'],
+            defaultValue: 'default-copyright',
+          },
+        },
+      },
+      isLoading: false,
+      isError: false,
+    })
+    mockUseFieldOptions.mockImplementation((fieldPath: string) => {
+      if (fieldPath === 'component.copyright')
+        return { options: ['default-copyright', 'third-party-copyright'], isLoading: false }
+      if (fieldPath === 'generation') return { options: ['AUTO', 'MANUAL'], isLoading: false }
+      return { options: ['MAVEN', 'GRADLE', 'BS2_0', 'PROVIDED'], isLoading: false }
+    })
+    renderWizard()
+    await clickNext()
+    await waitFor(() =>
+      expect(screen.getByLabelText(/^Copyright/i).textContent).toContain('default-copyright'),
+    )
   })
 
   it('keeps a copyright the user entered', async () => {
@@ -1106,7 +1134,7 @@ describe('CreateComponentPage — the default copyright follows explicit externa
     expect(copyright().value).toBe('(c) Mine')
   })
 
-  it("clears a clone's copied copyright when the classification set directly stops being explicit external", async () => {
+  it("keeps a clone's copied copyright when the classification set directly stops being explicit external", async () => {
     // Only Regular internal is offered, so an explicit external source matches no profile.
     mockUseComponentProfiles.mockReturnValue({
       ...PROFILES_OK,
@@ -1122,7 +1150,7 @@ describe('CreateComponentPage — the default copyright follows explicit externa
     await userEvent.click(screen.getByRole('button', { name: 'Profile' }))
     await userEvent.click(screen.getByRole('radio', { name: 'Internal' }))
     await clickNext()
-    expect(copyright().value).toBe('')
+    expect(copyright().value).toBe('(c) Source')
   })
 
   it("keeps a clone's copied copyright when the already-selected profile is clicked again", async () => {

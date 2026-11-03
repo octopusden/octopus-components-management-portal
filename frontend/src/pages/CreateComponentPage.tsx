@@ -19,6 +19,7 @@ import { Badge } from '../components/ui/badge'
 import { PeopleInput } from '../components/ui/PeopleInput'
 import { PeopleListInput } from '../components/ui/PeopleListInput'
 import { ModeSelect } from '../components/ui/ModeSelect'
+import { EnumSelect } from '../components/ui/EnumSelect'
 import { ArtifactTokensInput } from '../components/ui/ArtifactTokensInput'
 import { InlineError } from '../components/ui/inline-error'
 import { StatusBanner } from '../components/ui/status-banner'
@@ -43,6 +44,7 @@ import { useLabels } from '../hooks/useLabels'
 import { ChipsInput } from '../components/ui/ChipsInput'
 import {
   isFieldEditableFor,
+  resolveFieldEntry,
   useFieldEditable,
   useFieldConfigEntry,
   useFieldVisibility,
@@ -459,6 +461,24 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
 
   const values = watch()
 
+  // Copyright is a field-config-driven dropdown. The option list comes from
+  // field-config `options` (the portal-only path; no CRS meta endpoint yet).
+  // The seeded default prefers field-config.defaultValue, then
+  // component-defaults.copyright, then the first available option. The effect
+  // below only fills an untouched/empty field, so a user edit or a cloned
+  // source value always wins.
+  const { options: copyrightOptions, isLoading: copyrightOptionsLoading } = useFieldOptions('component.copyright')
+  const copyrightFieldDefault = resolveFieldEntry(fieldConfigData, 'component.copyright').defaultValue?.trim() || ''
+  const copyrightDefault = copyrightFieldDefault || formDefaults.copyright || copyrightOptions[0] || ''
+  useEffect(() => {
+    if (isClone || fcLoading || fcError || !copyrightDefault) return
+    const state = getFieldState('copyright')
+    if (state.isDirty || state.isTouched) return
+    if (getValues('copyright') !== copyrightDefault) {
+      setValue('copyright', copyrightDefault, { shouldValidate: true, shouldDirty: false })
+    }
+  }, [isClone, fcLoading, fcError, copyrightDefault, getFieldState, getValues, setValue])
+
   const { options: buildSystems, isLoading: buildSystemsLoading } = useFieldOptions('buildSystem')
   const offeredBuildSystems = useMemo(
     () => buildSystems.filter((bs) => !DEPRECATED_BUILD_SYSTEMS.has(bs)),
@@ -516,18 +536,6 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
 
   // Apply the chosen profile: set the derived flags and (on a real change) reset
   // the Component Key so the profile-dependent rule is re-entered (brief).
-  // The default copyright is seeded only for an explicit external component; once the
-  // classification leaves that, clear it unless the user changed it. Read before the new flags
-  // are set: a classification that was never explicit external keeps a clone's copied copyright.
-  const clearDefaultCopyrightUnless = useCallback(
-    (explicitExternal: boolean) => {
-      if (explicitExternal || !formDefaults.copyright) return
-      if (!(getValues('distributionExternal') && getValues('distributionExplicit'))) return
-      if (getValues('copyright') === formDefaults.copyright) setValue('copyright', '', { shouldValidate: false })
-    },
-    [formDefaults, getValues, setValue],
-  )
-
   const applyProfile = useCallback(
     (next: ComponentProfile, nextExplicit: boolean) => {
       if (!next.usable) return
@@ -537,7 +545,6 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
       setProfileId(next.id)
       setExplicitAnswer(nextExplicit)
       const flags = flagsForProfile(next, nextExplicit)
-      clearDefaultCopyrightUnless(flags.distributionExternal && flags.distributionExplicit)
       // Mark the form dirty when the profile OR its derived distribution flags
       // change — e.g. toggling the explicit-distribution answer for the SAME
       // profile still changes submitted values. A profile-only change that leaves
@@ -556,7 +563,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
       }
       void trigger('name')
     },
-    [profileId, setValue, getValues, clearErrors, trigger, clearDefaultCopyrightUnless],
+    [profileId, setValue, getValues, clearErrors, trigger],
   )
 
   const applyManual = useCallback(
@@ -567,13 +574,12 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
       setServerError((current) => (current?.stepId === 'profile' ? null : current))
       setManual({ external, solution })
       setExplicitAnswer(explicit)
-      clearDefaultCopyrightUnless(external && explicit)
       setValue('distributionExternal', external, { shouldValidate: false, shouldDirty: true })
       setValue('distributionExplicit', explicit, { shouldValidate: false, shouldDirty: true })
       const covered = profileForClassification(manualFlags(external, explicit, solution), getValues('name'), profiles)
       setProfileId(covered.profile?.id ?? null)
     },
-    [manual, explicitAnswer, setValue, getValues, profiles, clearDefaultCopyrightUnless],
+    [manual, explicitAnswer, setValue, getValues, profiles],
   )
   const chooseEntry = (next: ComponentProfile) => {
     if (!next.usable) return
@@ -1160,7 +1166,18 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
         <>
           <SectionHeader title="Metadata" />
           <Field label="Copyright" htmlFor="create-copyright" path="component.copyright">
-            <Input id="create-copyright" placeholder="(c) 2026 Acme Inc." {...register('copyright')} />
+            <EnumSelect
+              fieldPath="component.copyright"
+              value={values.copyright}
+              onValueChange={(value) =>
+                setValue('copyright', value, { shouldValidate: true, shouldDirty: true })
+              }
+              id="create-copyright"
+              placeholder="Select copyright"
+              allowFreeText
+              optionsOverride={copyrightOptions}
+              isLoadingOverride={copyrightOptionsLoading}
+            />
             <p className="text-xs text-muted-foreground">Required if a copyright catalog is configured.</p>
             <FieldError message={errors.copyright?.message} />
           </Field>
