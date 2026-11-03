@@ -105,6 +105,14 @@ describe('vcsBrowseUrl — gitea', () => {
     )
   })
 
+  it('builds a Gitea repository URL from an scp-style clone address', () => {
+    const t = vcsBrowseUrl('git@gitea.example.com:owner/repo.git', base, 'gitea')
+    expect(t).not.toBeNull()
+    expect(t!.url).toBe('https://gitea.example.com/owner/repo')
+    expect(t!.namespace).toBe('owner')
+    expect(t!.repoName).toBe('repo')
+  })
+
   it('defaults to the Bitbucket URL shape', () => {
     expect(vcsBrowseUrl('ssh://git@host/PROJ/repo.git', base)!.url).toBe(
       'https://gitea.example.com/projects/PROJ/repos/repo',

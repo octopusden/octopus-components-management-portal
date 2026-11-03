@@ -25,12 +25,24 @@ export interface VcsBrowseTarget {
 export type BitbucketBrowseTarget = VcsBrowseTarget
 
 /**
+ * Normalise an scp-style clone address (`user@host:path`, Gitea's default SSH
+ * form) into an `ssh://` URL so it can be parsed by `new URL()`. Other inputs
+ * are returned trimmed and unchanged.
+ */
+export function normalizeGitUrl(vcsPath: string): string {
+  const trimmed = vcsPath.trim()
+  const scpMatch = /^([^/@\s]+@[^:/\s]+):(?!\/\/)(.+)$/.exec(trimmed)
+  return scpMatch ? `ssh://${scpMatch[1]}/${scpMatch[2]}` : trimmed
+}
+
+/**
  * Build the VCS browse URL for a clone path.
  *
  * `vcsPath` is canonically a clone URL (ssh://git@host/PROJ/repo.git or
- * https://host/scm/PROJ/repo.git). The last two path segments are used (not
- * first + last) so context-path / `/scm/`-prefixed URLs also parse correctly.
- * A trailing `.git` suffix is stripped from the repo slug.
+ * https://host/scm/PROJ/repo.git); scp-style `git@host:PROJ/repo.git` is
+ * normalised first. The last two path segments are used (not first + last) so
+ * context-path / `/scm/`-prefixed URLs also parse correctly. A trailing `.git`
+ * suffix is stripped from the repo slug.
  *
  * Bitbucket Server: `${gitBaseUrl}/projects/PROJ/repos/repo`.
  * Gitea:             `${gitBaseUrl}/owner/repo`.
@@ -49,7 +61,7 @@ export function vcsBrowseUrl(
   if (!vcsPath || !gitBaseUrl) return null
   let segments: string[]
   try {
-    segments = new URL(vcsPath.trim()).pathname.split('/').filter(Boolean)
+    segments = new URL(normalizeGitUrl(vcsPath)).pathname.split('/').filter(Boolean)
   } catch {
     segments = vcsPath.split('/').filter(Boolean)
   }
