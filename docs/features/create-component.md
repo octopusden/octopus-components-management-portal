@@ -36,8 +36,9 @@ rule is [`component-key-format`](../../openspec/specs/component-key-format/spec.
   use have it, it opens on the Profile step and cannot be created.
 - The profile sets solution, external and explicit distribution; "Has explicit distribution?" is
   asked only when the profile's explicit value is `ask`.
-- When the classification stops being explicit external, a copyright the user has not changed
-  (the default, or a clone's copied one) is cleared.
+- The Copyright field starts from the configured default (field-config `defaultValue`, then the
+  registry component defaults, then the first configured option) for every classification, not
+  only explicit external. A copyright the user enters or clears is kept.
 
 ## Checks and create
 

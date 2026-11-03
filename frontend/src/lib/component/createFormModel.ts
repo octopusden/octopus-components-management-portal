@@ -362,10 +362,11 @@ export function initialValues(
           ? defaultBuildSystem
           : '',
       displayName: blankToUndefined(defaults.componentDisplayName) ?? '',
-      copyright:
-        distributionExplicit && distributionExternal
-          ? (blankToUndefined(defaults.copyright) ?? '')
-          : '',
+      // The copyright default is intentionally independent of the profile
+      // classification: the create form always starts with the configured
+      // default (or the first available copyright option), and the field-config
+      // visibility still decides whether it is shown/sent.
+      copyright: blankToUndefined(defaults.copyright) ?? '',
       distributionExplicit,
       distributionExternal,
       jiraProjectKey: blankToUndefined(defaults.jira?.projectKey) ?? '',

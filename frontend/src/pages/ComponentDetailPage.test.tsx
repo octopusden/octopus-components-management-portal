@@ -1107,6 +1107,26 @@ describe('ComponentDetailPage — Jira/Git quick-links', () => {
     expect(within(link).getByTestId('brand-icon-bitbucket')).toBeDefined()
   })
 
+  it('(f) Gitea link renders when vcsProvider is gitea', () => {
+    mockedUsePortalLinks.mockReturnValue({
+      data: {
+        jiraBaseUrl: null,
+        gitBaseUrl: 'https://gitea.example.com',
+        tcBaseUrl: null,
+        dmsBaseUrl: null,
+        vcsProvider: 'gitea',
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    } as unknown as ReturnType<typeof usePortalLinks>)
+    const user = makeUser(['ACCESS_COMPONENTS'])
+    renderPage(baseComponent, user)
+    const link = screen.getByTitle('Gitea: org/repo') as HTMLAnchorElement
+    expect(link.href).toBe('https://gitea.example.com/org/repo')
+    expect(within(link).getByTestId('brand-icon-gitea')).toBeDefined()
+  })
+
   it('(f) Git link parses a full ssh clone URL into projectKey + repoName', () => {
     mockedUsePortalLinks.mockReturnValue({
       data: { jiraBaseUrl: null, gitBaseUrl: 'https://git.example.com', tcBaseUrl: null, dmsBaseUrl: null },

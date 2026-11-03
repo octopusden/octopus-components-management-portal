@@ -8,7 +8,7 @@ import {
   type SortingState,
 } from '@tanstack/react-table'
 import { AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown, CopyPlus, Package } from 'lucide-react'
-import { JiraIcon, BitbucketIcon, TeamCityIcon } from './ui/icons/brand-icons'
+import { JiraIcon, BitbucketIcon, GiteaIcon, TeamCityIcon } from './ui/icons/brand-icons'
 import { useMemo, useState } from 'react'
 import {
   Table,
@@ -27,7 +27,7 @@ import { RelativeTime } from './ui/RelativeTime'
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip'
 import { cn, safeHttpUrl } from '../lib/utils'
 import { hasValidationIssue } from '../lib/validation'
-import { bitbucketBrowseUrl } from '../lib/vcsHost'
+import { vcsBrowseUrl } from '../lib/vcsHost'
 import type { ComponentSummary, ComponentValidation, PortalLinks } from '../lib/types'
 import { usePortalLinks } from '../hooks/useInfo'
 import { useFieldConfig } from '../hooks/useAdminConfig'
@@ -404,6 +404,7 @@ const columns = [
       const jiraBaseUrl = linksConfig?.jiraBaseUrl ?? undefined
       const gitBaseUrl = linksConfig?.gitBaseUrl ?? undefined
       const dmsBaseUrl = linksConfig?.dmsBaseUrl ?? undefined
+      const vcsProvider = linksConfig?.vcsProvider ?? 'bitbucket'
       // tcBaseUrl from /portal/links is intentionally NOT used here — CRS PR-2
       // persists the full TC webUrl per project, so Portal renders the URL
       // verbatim and does not template it. The runtime config still ships
@@ -417,12 +418,13 @@ const columns = [
         })
       }
       if (gitBaseUrl && vcsPath) {
-        const target = bitbucketBrowseUrl(vcsPath, gitBaseUrl)
+        const target = vcsBrowseUrl(vcsPath, gitBaseUrl, vcsProvider)
         if (target) {
+          const providerLabel = vcsProvider === 'gitea' ? 'Gitea' : 'Bitbucket'
           links.push({
             href: target.url,
-            label: `Bitbucket: ${target.projectKey}/${target.repoName}`,
-            icon: BitbucketIcon,
+            label: `${providerLabel}: ${target.namespace}/${target.repoName}`,
+            icon: vcsProvider === 'gitea' ? GiteaIcon : BitbucketIcon,
           })
         }
       }

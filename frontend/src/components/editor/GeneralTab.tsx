@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { UseFormReturn } from 'react-hook-form'
 import { Label } from '../ui/label'
 import { Input } from '../ui/input'
+import { EnumSelect } from '../ui/EnumSelect'
 import { Switch } from '../ui/switch'
 import { EmployeeStatusBadge, PeopleInput } from '../ui/PeopleInput'
 import { PeopleListInput } from '../ui/PeopleListInput'
@@ -175,6 +176,7 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
   // register'd. releaseManager / securityChampion are ordered string[].
   const releaseManager = watch('releaseManager')
   const securityChampion = watch('securityChampion')
+  const copyright = watch('copyright')
   // `systems` is a multi-value string[] (ChipsInput), watched so the controlled
   // primitive receives the current array.
   const systemsValue = watch('systems')
@@ -579,12 +581,16 @@ export function GeneralTab({ component, form, isNew = false, canEdit = true, onO
                   <Label htmlFor="copyright"><FieldLabelText path="component.copyright" fallback="Copyright" /></Label>
                   <FieldInfo path="component.copyright" label="Copyright" />
                 </div>
-                <Input
+                <EnumSelect
+                  fieldPath="component.copyright"
+                  value={copyright ?? ''}
+                  onValueChange={(value) =>
+                    setValue('copyright', value, { shouldDirty: true, shouldTouch: true, shouldValidate: true })
+                  }
                   id="copyright"
-                  placeholder="(c) 2026 Acme Inc."
+                  placeholder="Select copyright"
                   disabled={copyrightEntry.visibility === 'readonly'}
-                  className={copyrightEntry.visibility === 'readonly' ? 'bg-muted' : undefined}
-                  {...register('copyright')}
+                  allowFreeText
                 />
                 {errors.copyright && (
                   <p className="text-xs text-destructive">{errors.copyright.message}</p>

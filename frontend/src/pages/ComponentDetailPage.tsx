@@ -2,7 +2,7 @@ import { useParams, useNavigate, useSearchParams, useLocation, Link } from 'reac
 import { useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { ArrowLeft, Copy, Archive, ArchiveRestore, AlertTriangle, LockKeyhole, Boxes, CircleCheck, CircleDashed } from 'lucide-react'
-import { JiraIcon, BitbucketIcon, TeamCityIcon } from '../components/ui/icons/brand-icons'
+import { JiraIcon, BitbucketIcon, GiteaIcon, TeamCityIcon } from '../components/ui/icons/brand-icons'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Layout } from '../components/Layout'
 import { Button } from '../components/ui/button'
@@ -72,7 +72,7 @@ import { classifyConflictBody } from '../lib/conflict'
 import type { ComponentDetail } from '../lib/types'
 import { countOwnershipIssues, fromArtifactId } from '../lib/artifactOwnership'
 import { findUnsupportedGroupId } from '../lib/groupValidation'
-import { isVcsHostSupported, bitbucketBrowseUrl } from '../lib/vcsHost'
+import { isVcsHostSupported, vcsBrowseUrl } from '../lib/vcsHost'
 import { useSupportedGroups } from '../hooks/useSupportedGroups'
 import { selectBaseRow } from '../lib/api/baseRow'
 import { useCurrentUser } from '../hooks/useCurrentUser'
@@ -298,6 +298,7 @@ function ComponentDetailEditor() {
   const { data: portalLinks } = usePortalLinks()
   const jiraBaseUrl = portalLinks?.jiraBaseUrl ?? undefined
   const gitBaseUrl = portalLinks?.gitBaseUrl ?? undefined
+  const vcsProvider = portalLinks?.vcsProvider ?? 'bitbucket'
   // Solution toggle is offered as its own sidebar topic ONLY for a component
   // whose key matches a service-config pattern; otherwise `solution` stays
   // server-owned (header badge/banner). Patterns come from /portal/config.
@@ -945,9 +946,11 @@ function ComponentDetailEditor() {
               })()}
               {(() => {
                 const vcsPath = selectBaseRow(component)?.vcsEntries[0]?.vcsPath
-                const target = bitbucketBrowseUrl(vcsPath, gitBaseUrl)
+                const target = vcsBrowseUrl(vcsPath, gitBaseUrl, vcsProvider)
                 if (!target) return null
-                const label = `Bitbucket: ${target.projectKey}/${target.repoName}`
+                const providerLabel = vcsProvider === 'gitea' ? 'Gitea' : 'Bitbucket'
+                const label = `${providerLabel}: ${target.namespace}/${target.repoName}`
+                const VcsIcon = vcsProvider === 'gitea' ? GiteaIcon : BitbucketIcon
                 return (
                   <a
                     href={target.url}
@@ -957,7 +960,7 @@ function ComponentDetailEditor() {
                     title={label}
                     aria-label={label}
                   >
-                    <BitbucketIcon className="h-4 w-4" />
+                    <VcsIcon className="h-4 w-4" />
                   </a>
                 )
               })()}

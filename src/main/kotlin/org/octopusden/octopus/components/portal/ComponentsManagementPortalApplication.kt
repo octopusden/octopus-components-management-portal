@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.portal
 import org.octopusden.octopus.components.portal.configuration.OnboardingVideoProperties
 import org.octopusden.octopus.components.portal.configuration.PortalComponentProperties
 import org.octopusden.octopus.components.portal.configuration.PortalLinksProperties
+import org.octopusden.octopus.components.portal.configuration.PortalVcsProperties
 import org.octopusden.octopus.components.portal.serviceevent.ServiceEventReportingProperties
 import org.octopusden.octopus.components.portal.validation.ValidationProperties
 import org.springframework.boot.autoconfigure.SpringBootApplication
@@ -14,6 +15,7 @@ import org.springframework.scheduling.annotation.EnableScheduling
 @EnableScheduling
 @EnableConfigurationProperties(
     PortalLinksProperties::class,
+    PortalVcsProperties::class,
     PortalComponentProperties::class,
     OnboardingVideoProperties::class,
     ValidationProperties::class,
