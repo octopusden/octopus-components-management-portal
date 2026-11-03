@@ -3,6 +3,7 @@ package org.octopusden.octopus.components.portal.controller
 import com.fasterxml.jackson.annotation.JsonInclude
 import org.octopusden.octopus.components.portal.configuration.PortalComponentProperties
 import org.octopusden.octopus.components.portal.configuration.PortalLinksProperties
+import org.octopusden.octopus.components.portal.configuration.PortalVcsProperties
 import org.octopusden.octopus.components.portal.onboarding.OnboardingVideoService
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.info.BuildProperties
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController
 class PortalInfoController(
     private val buildProperties: BuildProperties,
     private val linksProperties: PortalLinksProperties,
+    private val vcsProperties: PortalVcsProperties,
     private val componentProperties: PortalComponentProperties,
     private val onboardingVideoService: OnboardingVideoService,
     // Binds from PORTAL_ENVIRONMENT_LABEL via application.yaml. A single scalar,
@@ -41,7 +43,7 @@ class PortalInfoController(
         gitBaseUrl = linksProperties.gitBaseUrl?.takeIf(String::isNotBlank),
         tcBaseUrl = linksProperties.tcBaseUrl?.takeIf(String::isNotBlank),
         dmsBaseUrl = linksProperties.dmsBaseUrl?.takeIf(String::isNotBlank),
-        vcsProvider = linksProperties.vcsProvider?.name?.lowercase(),
+        vcsProvider = vcsProperties.vcsProvider?.name?.lowercase(),
     )
 
     // Component-editor config for the SPA. Currently only the solution-key

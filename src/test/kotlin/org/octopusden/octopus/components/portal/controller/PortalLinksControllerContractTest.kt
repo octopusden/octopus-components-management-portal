@@ -56,7 +56,7 @@ class PortalLinksControllerContractTest {
             "portal.links.git-base-url=https://git.example.com",
             "portal.links.tc-base-url=https://tc.example.com",
             "portal.links.dms-base-url=https://dms.example.com",
-            "portal.links.vcs-provider=gitea",
+            "portal.vcs-provider=gitea",
         ],
     )
     @AutoConfigureWebTestClient
