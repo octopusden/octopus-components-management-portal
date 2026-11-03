@@ -142,11 +142,12 @@ describe("initialValues — today's pre-filled values are kept (D7)", () => {
     vcs: { tag: 'v$version', branch: 'develop' },
     escrow: { generation: 'AUTO' },
   }
-  // Recorded from initialValues(null, FULL) on main, before the profiles came from the registry.
+  // Scratch pre-fill contract: the copyright default is no longer tied to the
+  // explicit+external classification; it always starts from component-defaults.
   const MAIN_SCRATCH_VALUES = {
     name: '', displayName: 'Default Display', buildSystem: 'GRADLE', componentOwner: '',
     distributionExplicit: false, distributionExternal: true, releaseManager: [], securityChampion: [],
-    copyright: '', clientCode: '', jiraProjectKey: 'DEFJ', versionPrefix: '',
+    copyright: '(c) Default', clientCode: '', jiraProjectKey: 'DEFJ', versionPrefix: '',
     versionFormat: '$versionPrefix-$baseVersionFormat', minorVersionFormat: '$major.$minor',
     releaseVersionFormat: '$major.$minor.$service', buildVersionFormat: '$major.$minor.$service-$fix',
     lineVersionFormat: '$major', minorSeparate: true, buildSeparate: true, vcsUrl: '', vcsTag: 'v$version',
@@ -159,7 +160,7 @@ describe("initialValues — today's pre-filled values are kept (D7)", () => {
     buildTasks: '',
   }
 
-  it('a new component with Regular external pre-selected starts exactly as on main', () => {
+  it('a new component with Regular external pre-selected seeds every domain default', () => {
     expect(initialValues(null, FULL, profile('regular-external'))).toEqual(MAIN_SCRATCH_VALUES)
   })
 
