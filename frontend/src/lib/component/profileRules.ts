@@ -42,11 +42,10 @@ const READERS: Record<string, Reader> = {
 
 /**
  * Rule path → the wizard form field that shows its message (an RHF field path).
- *
- * One entry has NO reader: `baseConfiguration.genericArtifacts[0].path` is not
- * in the registry's profile-rule allow-list (`CreateRequestPaths`), so no rule
- * may name it — but the Portal's own coordinate rule reports it, and the wizard
- * maps that path back to the form field through this table.
+ * Distribution rows map to form row 0 of the family; `formFieldOfRule` shifts
+ * that to the first row the request actually sends (the request drops blank
+ * rows). Profile rules name only the request's FIRST row of a family
+ * (`CreateRequestPaths` reads `[0]`).
  */
 const FIELDS: Record<string, string> = {
   name: 'name',
@@ -64,12 +63,11 @@ const FIELDS: Record<string, string> = {
   'baseConfiguration.jira.minorVersionFormat': 'minorVersionFormat',
   'baseConfiguration.jira.releaseVersionFormat': 'releaseVersionFormat',
   'baseConfiguration.jira.buildVersionFormat': 'buildVersionFormat',
-  'baseConfiguration.mavenArtifacts[0].groupPattern': 'coordinate.groupPattern',
-  'baseConfiguration.mavenArtifacts[0].artifactPattern': 'coordinate.artifactPattern',
-  'baseConfiguration.dockerImages[0].imageName': 'coordinate.imageName',
-  'baseConfiguration.dockerImages[0].flavor': 'coordinate.flavor',
-  'baseConfiguration.packages[0].packageName': 'coordinate.packageName',
-  'baseConfiguration.genericArtifacts[0].path': 'coordinate.path',
+  'baseConfiguration.mavenArtifacts[0].groupPattern': 'distribution.maven.0.groupPattern',
+  'baseConfiguration.mavenArtifacts[0].artifactPattern': 'distribution.maven.0.artifactPattern',
+  'baseConfiguration.dockerImages[0].imageName': 'distribution.docker.0.imageName',
+  'baseConfiguration.dockerImages[0].flavor': 'distribution.docker.0.flavor',
+  'baseConfiguration.packages[0].packageName': 'distribution.packages.0.packageName',
 }
 
 export const RULE_PATHS: readonly string[] = Object.keys(READERS)

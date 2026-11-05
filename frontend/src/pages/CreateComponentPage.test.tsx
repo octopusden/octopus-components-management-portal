@@ -324,7 +324,7 @@ describe('CreateComponentPage — wizard UI polish', () => {
   it('exposes an optional Docker Flavor field and POSTs it with the image', async () => {
     renderWizard()
     await walkToDistribution()
-    // Not gated → the Docker section shows Image Name + optional Flavor.
+    await userEvent.click(screen.getByRole('button', { name: /add docker image/i }))
     await userEvent.type(screen.getByLabelText('Image name'), 'acme/svc')
     await userEvent.type(screen.getByLabelText('Flavor'), 'alpine')
     await clickNext() // → Escrow (Generation only; optional)
@@ -336,20 +336,23 @@ describe('CreateComponentPage — wizard UI polish', () => {
     expect(payload.baseConfiguration.dockerImages).toEqual([{ imageName: 'acme/svc', flavor: 'alpine' }])
   })
 
-  it('labels the gated Maven coordinate with the Maven groupId / artifactId terms', async () => {
+  it('offers Maven rows to a non-gated component and POSTs the filled family', async () => {
     renderWizard()
-    // Solution → explicit + external → the gated coordinate selector appears.
-    await userEvent.click(screen.getByRole('radio', { name: /^Solution$/i }))
-    await clickNext() // General
-    await userEvent.type(screen.getByPlaceholderText('my-component'), 'my-solution')
-    await commitOwner('alice')
-    await userEvent.type(screen.getByLabelText(/^Display Name/i), 'My Solution')
-    // Jump straight to Distribution via the rail, then pick the Maven coordinate.
-    await userEvent.click(screen.getByRole('button', { name: /^Distribution$/i }))
-    await userEvent.selectOptions(screen.getByLabelText(/Distribution coordinate/i), 'maven')
+    await walkToDistribution()
+    await userEvent.click(screen.getByRole('button', { name: /add maven gav/i }))
     expect(screen.getByLabelText('groupId')).toBeDefined()
     expect(screen.getByLabelText('artifactId')).toBeDefined()
     expect(screen.queryByText(/Group Pattern|Artifact Pattern/)).toBeNull()
+    await userEvent.type(screen.getByLabelText('groupId'), 'org.example.widget')
+    await userEvent.type(screen.getByLabelText('artifactId'), 'widget')
+    await clickNext() // → Escrow
+    await clickNext() // → Review
+    await userEvent.type(screen.getByLabelText(/^Jira task key/i), 'ABC-123')
+    await userEvent.click(screen.getByRole('button', { name: /^create component$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1))
+    expect(mockMutateAsync.mock.calls[0]![0].baseConfiguration.mavenArtifacts).toEqual([
+      { groupPattern: 'org.example.widget', artifactPattern: 'widget', extension: null, classifier: null },
+    ])
   })
 
   it('shows a cross-step banner on an earlier step when a later step is invalid', async () => {
@@ -554,8 +557,8 @@ describe('CreateComponentPage — Produced Artifacts rows', () => {
   })
 })
 
-describe('CreateComponentPage — Solution profile gates the distribution coordinate', () => {
-  it('offers the Maven/Package coordinate when explicit+external (Solution)', async () => {
+describe('CreateComponentPage — Distribution step (all types, never gated)', () => {
+  async function walkSolutionToDistribution() {
     renderWizard()
     await userEvent.click(screen.getByRole('radio', { name: /^Solution$/i }))
     await clickNext()
@@ -565,23 +568,45 @@ describe('CreateComponentPage — Solution profile gates the distribution coordi
     await userEvent.type(screen.getByLabelText(/^Display Name/i), 'My Solution')
     // Jump straight to Distribution via the stepper.
     await userEvent.click(screen.getByRole('button', { name: /^Distribution$/i }))
-    expect(screen.getByText('Distribution coordinate')).toBeDefined()
-    expect(screen.getByRole('option', { name: 'Maven GAV' })).toBeDefined()
+  }
+
+  it('offers all four distribution families when explicit+external (Solution)', async () => {
+    await walkSolutionToDistribution()
+    expect(screen.getByRole('button', { name: /add maven gav/i })).toBeDefined()
+    expect(screen.getByRole('button', { name: /add docker image/i })).toBeDefined()
+    expect(screen.getByRole('button', { name: /^add package$/i })).toBeDefined()
+    expect(screen.getByRole('button', { name: /add generic artifact/i })).toBeDefined()
   })
 
-  it('offers the Generic path coordinate and requires its path', async () => {
-    renderWizard()
-    await userEvent.click(screen.getByRole('radio', { name: /^Solution$/i }))
-    await clickNext()
-    await userEvent.type(screen.getByPlaceholderText('my-component'), 'my-solution')
-    await commitOwner('alice')
-    await userEvent.type(screen.getByLabelText(/^Display Name/i), 'My Solution')
-    await userEvent.click(screen.getByRole('button', { name: /^Distribution$/i }))
-    await userEvent.selectOptions(screen.getByLabelText(/Distribution coordinate/i), 'generic')
-    expect(screen.getByLabelText('Path')).toBeDefined()
-    // Blank path → the Portal coordinate rule blocks the step.
+  it('requires at least one row for an explicit+external component (generic alone satisfies)', async () => {
+    await walkSolutionToDistribution()
     expect((screen.getByRole('button', { name: /^next$/i }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText(/Maven, Docker, package or generic\) is required/i)).toBeDefined()
+    await userEvent.click(screen.getByRole('button', { name: /add generic artifact/i }))
     await userEvent.type(screen.getByLabelText('Path'), 'releases/my-solution/solution.jar')
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: /^next$/i }) as HTMLButtonElement).disabled).toBe(false),
+    )
+  })
+
+  it('blocks a partially filled Maven row until the missing half is entered', async () => {
+    // Regular internal — not explicit+external: no ≥1 requirement …
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext() // General
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await clickNext() // Build
+    await userEvent.selectOptions(screen.getByLabelText(/^Build System/i), 'PROVIDED')
+    await clickNext() // VCS (note only)
+    await clickNext() // Jira
+    await userEvent.type(screen.getByLabelText(/^Jira Project Key/i), 'WIDG')
+    await clickNext() // Distribution
+    await userEvent.click(screen.getByRole('button', { name: /add maven gav/i }))
+    await userEvent.type(screen.getByLabelText('groupId'), 'org.example.widget')
+    expect((screen.getByRole('button', { name: /^next$/i }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText('Artifact ID is required')).toBeDefined()
+    await userEvent.type(screen.getByLabelText('artifactId'), 'widget')
     await waitFor(() =>
       expect((screen.getByRole('button', { name: /^next$/i }) as HTMLButtonElement).disabled).toBe(false),
     )
@@ -1052,7 +1077,7 @@ describe('CreateComponentPage — profile rules on fields the step does not show
     expect(screen.getByText('Full version format must be X')).toBeDefined()
   })
 
-  it('lists a Maven-group rule for an explicit external component whose coordinate is Docker', async () => {
+  it('lists a Maven-group rule for an explicit external component that sends no Maven row', async () => {
     const solution = (shippedProfiles.profiles as ComponentProfile[]).find((p) => p.id === 'solution')!
     mockUseComponentProfiles.mockReturnValue({
       ...PROFILES_OK,
@@ -1060,7 +1085,6 @@ describe('CreateComponentPage — profile rules on fields the step does not show
     })
     renderWizard()
     await userEvent.click(screen.getByRole('button', { name: /^Distribution$/ }))
-    await userEvent.selectOptions(screen.getByLabelText(/Distribution coordinate/i), 'docker')
     expect(screen.getByText('A Maven group is required')).toBeDefined()
   })
 
@@ -1321,7 +1345,7 @@ describe('CreateComponentPage — create names the profile', () => {
     renderWizard()
     await createRegularInternal()
     await waitFor(() => expect(screen.getByRole('heading', { name: /^Distribution$/ })).toBeDefined())
-    // The Maven group field is not shown for an internal component, so the step shows the message.
+    // No Maven row was added, so the field itself is not rendered and the step shows the message.
     expect(screen.queryByLabelText('groupId')).toBeNull()
     expect(screen.getByText(/Must start with com\.acme/)).toBeDefined()
   })

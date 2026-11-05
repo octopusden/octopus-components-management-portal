@@ -2,7 +2,7 @@ import type { ComponentCreateRequest } from '../types'
 import { isBadToken } from '../artifactOwnership'
 import { findUnsupportedGroupId } from '../groupValidation'
 import { hostOf, isVcsHostSupported } from '../vcsHost'
-import { SSH_VCS_URL_REGEX, vcsBlockApplies, type CoordinateType } from './buildCreateRequest'
+import { SSH_VCS_URL_REGEX, vcsBlockApplies } from './buildCreateRequest'
 
 export interface PortalRuleOptions {
   supportedGroups: readonly string[]
@@ -11,11 +11,6 @@ export interface PortalRuleOptions {
   checkJiraRequired?: boolean
   /** Whether a `component.<field>` is editable; a field that is not is never required. Default: all. */
   editable?: (field: string) => boolean
-  /**
-   * The coordinate type the creator chose. The wizard sends no Docker image while its name is
-   * blank, so the request alone cannot tell "Docker, name missing" from "no coordinate".
-   */
-  coordinateType?: CoordinateType
   /**
    * Whether the component is explicit and external. A request may omit both flags when field-config
    * locks them, so the wizard passes its own; by default they are read from the request.
@@ -28,6 +23,10 @@ export interface PortalRuleIssue {
   path: string
   message: string
 }
+
+/** CRS rule #6 mirror: an explicit+external component needs ≥1 distribution row. */
+export const COORDINATE_REQUIRED_MESSAGE =
+  'At least one distribution (Maven, Docker, package or generic) is required for an explicit + external component'
 
 const VCS = 'baseConfiguration.vcsEntries[0]'
 
@@ -66,83 +65,64 @@ function ownershipIssues(request: ComponentCreateRequest, supportedGroups: reado
   })
 }
 
-function coordinateTypeOf(request: ComponentCreateRequest): CoordinateType | undefined {
-  const base = request.baseConfiguration
-  if (base?.mavenArtifacts?.length) return 'maven'
-  if (base?.dockerImages?.length) return 'docker'
-  if (base?.packages?.length) return 'package'
-  if (base?.genericArtifacts?.length) return 'generic'
-  return undefined
+/**
+ * The maven groupId supported-prefix rule (CRS rule #10) — checked for EVERY row
+ * the request sends, regardless of the explicit+external classification (the
+ * registry validates every submitted groupPattern the same way).
+ */
+function mavenPrefixIssues(request: ComponentCreateRequest, supportedGroups: readonly string[]): PortalRuleIssue[] {
+  return (request.baseConfiguration?.mavenArtifacts ?? []).flatMap((row, i) => {
+    const groupId = row.groupPattern?.trim() ?? ''
+    const unsupported = groupId ? findUnsupportedGroupId(groupId, supportedGroups) : undefined
+    return unsupported
+      ? [
+          {
+            path: `baseConfiguration.mavenArtifacts[${i}].groupPattern`,
+            message: `Group ID "${unsupported}" must start with a supported prefix (${supportedGroups.join(', ')})`,
+          },
+        ]
+      : []
+  })
 }
 
-function coordinateIssues(
-  request: ComponentCreateRequest,
-  supportedGroups: readonly string[],
-  chosen: CoordinateType | undefined,
-): PortalRuleIssue[] {
+/** The rows a request carries across all distribution families. */
+function hasDistributionRow(request: ComponentCreateRequest): boolean {
   const base = request.baseConfiguration
-  const maven = 'baseConfiguration.mavenArtifacts[0]'
-  switch (chosen ?? coordinateTypeOf(request)) {
-    case 'maven': {
-      const groupId = base?.mavenArtifacts?.[0]?.groupPattern?.trim() ?? ''
-      const issues: PortalRuleIssue[] = []
-      const unsupported = groupId ? findUnsupportedGroupId(groupId, supportedGroups) : undefined
-      if (!groupId) {
-        issues.push({ path: `${maven}.groupPattern`, message: 'Group ID is required' })
-      } else if (unsupported) {
-        issues.push({
-          path: `${maven}.groupPattern`,
-          message: `Group ID "${unsupported}" must start with a supported prefix (${supportedGroups.join(', ')})`,
-        })
-      }
-      if (!base?.mavenArtifacts?.[0]?.artifactPattern?.trim()) {
-        issues.push({ path: `${maven}.artifactPattern`, message: 'Artifact ID is required' })
-      }
-      return issues
-    }
-    case 'docker':
-      return base?.dockerImages?.[0]?.imageName?.trim()
-        ? []
-        : [{ path: 'baseConfiguration.dockerImages[0].imageName', message: 'Image name is required' }]
-    case 'package':
-      return base?.packages?.[0]?.packageName?.trim()
-        ? []
-        : [{ path: 'baseConfiguration.packages[0].packageName', message: 'Package name is required' }]
-    case 'generic':
-      return base?.genericArtifacts?.[0]?.path?.trim()
-        ? []
-        : [{ path: 'baseConfiguration.genericArtifacts[0].path', message: 'Path is required' }]
-    case undefined:
-      return [
-        {
-          path: `${maven}.groupPattern`,
-          message: 'A Maven, Docker, package or generic coordinate is required for an explicit + external component',
-        },
-      ]
-  }
+  return (
+    !!base?.mavenArtifacts?.length ||
+    !!base?.dockerImages?.length ||
+    !!base?.packages?.length ||
+    !!base?.genericArtifacts?.length
+  )
 }
 
 function explicitExternalIssues(request: ComponentCreateRequest, options: PortalRuleOptions): PortalRuleIssue[] {
   const explicitExternal = options.explicitExternal ?? (request.distributionExplicit && request.distributionExternal)
-  if (!explicitExternal) return []
-  const editable = options.editable ?? (() => true)
   const issues: PortalRuleIssue[] = []
-  if (editable('displayName') && !request.displayName?.trim()) {
-    issues.push({ path: 'displayName', message: 'Display Name is required for an explicit + external component' })
+  if (explicitExternal) {
+    const editable = options.editable ?? (() => true)
+    if (editable('displayName') && !request.displayName?.trim()) {
+      issues.push({ path: 'displayName', message: 'Display Name is required for an explicit + external component' })
+    }
+    if (editable('releaseManager') && !request.releaseManager?.length) {
+      issues.push({
+        path: 'releaseManager',
+        message: 'At least one Release Manager is required for an explicit + external component',
+      })
+    }
+    if (editable('securityChampion') && !request.securityChampion?.length) {
+      issues.push({
+        path: 'securityChampion',
+        message: 'At least one Security Champion is required for an explicit + external component',
+      })
+    }
+    // CRS rule #6: at least one distribution row of any family. The path keeps
+    // the registry's [0]-row convention so template Review maps it to a row.
+    if (!hasDistributionRow(request)) {
+      issues.push({ path: 'baseConfiguration.mavenArtifacts[0].groupPattern', message: COORDINATE_REQUIRED_MESSAGE })
+    }
   }
-  if (editable('releaseManager') && !request.releaseManager?.length) {
-    issues.push({
-      path: 'releaseManager',
-      message: 'At least one Release Manager is required for an explicit + external component',
-    })
-  }
-  if (editable('securityChampion') && !request.securityChampion?.length) {
-    issues.push({
-      path: 'securityChampion',
-      message: 'At least one Security Champion is required for an explicit + external component',
-    })
-  }
-  return [...issues, ...coordinateIssues(request, options.supportedGroups, options.coordinateType)]
+  return [...issues, ...mavenPrefixIssues(request, options.supportedGroups)]
 }
 
 function vcsIssues(request: ComponentCreateRequest, gitBaseUrl: string | null | undefined): PortalRuleIssue[] {

@@ -16,7 +16,19 @@ import type { FieldVisibility } from '../../hooks/useFieldConfig'
 // than free text.
 export type PackageType = 'DEB' | 'RPM'
 
-export type CoordinateType = 'maven' | 'docker' | 'package' | 'generic'
+// A per-family repeatable distribution row. Every family is optional at create
+// and never gated behind the explicit+external classification — CRS accepts
+// coordinates for any classification and only REQUIRES ≥1 for an
+// explicit+external component (its rule, mirrored in portalCreateRules). More
+// rows / per-range variants are added post-create in the editor's
+// Distribution tab. fileUrl distributions are not part of the create form.
+export interface DistributionRows {
+  maven: Array<{ groupPattern: string; artifactPattern: string }>
+  docker: Array<{ imageName: string; flavor: string }>
+  packages: Array<{ packageType: PackageType; packageName: string }>
+  // Generic HTTP-URL artifact path (CRS SYS-98); validated server-side.
+  generic: Array<{ path: string }>
+}
 
 // Deprecated build systems are not offered for NEW components (the editor of
 // existing components is unaffected).
@@ -96,21 +108,11 @@ export interface CreateFormValues {
   vcsUrl: string
   vcsTag: string
   vcsBranch: string
-  // Exactly one distribution coordinate (more are added later in the
-  // Distribution tab). Only emitted when explicit+external — except Docker,
-  // which is sent whenever an image name is provided (see below).
-  coordinate: {
-    type: CoordinateType
-    groupPattern: string
-    artifactPattern: string
-    imageName: string
-    // Optional Docker flavor (e.g. "alpine"); sent as null when blank.
-    flavor: string
-    packageType: PackageType
-    packageName: string
-    // Generic HTTP-URL artifact path (CRS SYS-98); validated server-side.
-    path: string
-  }
+  // Distribution rows per family (see DistributionRows). Come from the FORM
+  // ONLY, never from the source (coordinates are unique per component). A
+  // completely blank row sends nothing; a partially filled one is blocked by
+  // the form schema (see makeCreateSchema).
+  distribution: DistributionRows
   // #357 base artifact-ownership. Repeatable per-group rows: each row is one
   // Group ID + its own matching mode (ALL / ALL_EXCEPT_CLAIMED / EXPLICIT) and,
   // for EXPLICIT ("Specific artifacts"), its literal artifact tokens. Each row
@@ -142,8 +144,8 @@ export interface CreateFormValues {
 //     securityChampion, copyright;
 //   - clientCode: form WINS when external (distributionExternal); when not
 //     external the source value is preserved (form value ignored);
-//   - distribution coordinate comes from the FORM ONLY, never from the source
-//     (unique per component) — and only when explicit+external;
+//   - distribution rows come from the FORM ONLY, never from the source
+//     (unique per component);
 //   - escrow.generation comes from the FORM (form WINS) when that field is
 //     editable and a value was chosen; the rest of the escrow aspect is copied
 //     from the source BASE row. Readonly falls back to the source escrow
@@ -183,39 +185,33 @@ function copyJiraAspect(jira: JiraAspect | null | undefined): JiraAspect | undef
   return hasValue ? rest : undefined
 }
 
-// Maps the form's single coordinate to the matching BASE-row child list. Called
-// for a gated (explicit+external) request, and for Docker whenever an image name
-// is provided (Docker is not gated — see below).
-function coordinatePatch(
-  coordinate: CreateFormValues['coordinate'],
+// Maps the form's distribution rows to the matching BASE-row child lists.
+// Every value is trimmed: fully blank rows are dropped, so the payload carries
+// no whitespace CRS would reject. Partial rows are impossible here — the form
+// schema blocks them before the request is built for a submit.
+function distributionPatch(
+  rows: CreateFormValues['distribution'],
 ): Partial<BaseConfigurationRequest> {
-  // Trim every coordinate value: the presence gate checks trimmed strings, so the
-  // payload must not carry leading/trailing whitespace CRS would reject.
-  switch (coordinate.type) {
-    case 'maven':
-      return {
-        mavenArtifacts: [
-          {
-            groupPattern: coordinate.groupPattern.trim(),
-            artifactPattern: coordinate.artifactPattern.trim(),
-            extension: null,
-            classifier: null,
-          },
-        ],
-      }
-    case 'docker':
-      return {
-        dockerImages: [{ imageName: coordinate.imageName.trim(), flavor: coordinate.flavor.trim() || null }],
-      }
-    case 'package':
-      return {
-        packages: [{ packageType: coordinate.packageType, packageName: coordinate.packageName.trim() }],
-      }
-    case 'generic':
-      return {
-        genericArtifacts: [{ path: coordinate.path.trim() }],
-      }
-  }
+  const mavenArtifacts = rows.maven
+    .map((r) => ({ groupPattern: r.groupPattern.trim(), artifactPattern: r.artifactPattern.trim() }))
+    .filter((r) => r.groupPattern !== '' && r.artifactPattern !== '')
+    .map((r) => ({ groupPattern: r.groupPattern, artifactPattern: r.artifactPattern, extension: null, classifier: null }))
+  const dockerImages = rows.docker
+    .map((r) => ({ imageName: r.imageName.trim(), flavor: r.flavor.trim() }))
+    .filter((r) => r.imageName !== '')
+    .map((r) => ({ imageName: r.imageName, flavor: r.flavor || null }))
+  const packages = rows.packages
+    .map((r) => ({ packageType: r.packageType, packageName: r.packageName.trim() }))
+    .filter((r) => r.packageName !== '')
+  const genericArtifacts = rows.generic
+    .map((r) => ({ path: r.path.trim() }))
+    .filter((r) => r.path !== '')
+  const patch: Partial<BaseConfigurationRequest> = {}
+  if (mavenArtifacts.length) patch.mavenArtifacts = mavenArtifacts
+  if (dockerImages.length) patch.dockerImages = dockerImages
+  if (packages.length) patch.packages = packages
+  if (genericArtifacts.length) patch.genericArtifacts = genericArtifacts
+  return patch
 }
 
 // Maps the dialog's base ownership rows to one base ArtifactIdRequest per row.
@@ -308,7 +304,6 @@ export function buildCreateRequest(
 ): ComponentCreateRequest {
   const labelsVisibility = visibility.labels ?? 'editable'
   const buildTasksVisibility = visibility.buildTasks ?? 'editable'
-  const gated = form.distributionExplicit && form.distributionExternal
   const baseRow = source ? selectBaseRow(source) : undefined
 
   const req: ComponentCreateRequest = {
@@ -418,17 +413,11 @@ export function buildCreateRequest(
   if (baseRow && baseRow.requiredTools.length > 0) {
     baseConfiguration.requiredTools = [...baseRow.requiredTools]
   }
-  // Docker is sent whenever an image name is provided, regardless of the
-  // explicit+external gate (a Docker image can be published outside that
-  // combination). Maven/Package/Generic coordinates stay gated — they are
-  // only meaningful (and only required) for an explicit+external component.
-  if (form.coordinate.type === 'docker') {
-    if (form.coordinate.imageName.trim()) {
-      Object.assign(baseConfiguration, coordinatePatch(form.coordinate))
-    }
-  } else if (gated) {
-    Object.assign(baseConfiguration, coordinatePatch(form.coordinate))
-  }
+  // Every filled family is sent, regardless of the explicit+external
+  // classification (CRS accepts coordinates for any classification). The
+  // combination only matters the other way: an explicit+external component
+  // must carry at least one row — a CRS rule mirrored in portalCreateRules.
+  Object.assign(baseConfiguration, distributionPatch(form.distribution))
   // VCS entry comes from the FORM ONLY (never the source — the repository is
   // unique per component) and only for VCS-requiring build systems.
   if (vcsBlockApplies(form.buildSystem)) {

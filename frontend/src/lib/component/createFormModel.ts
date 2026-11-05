@@ -4,7 +4,7 @@ import type { ComponentCreateRequest, ComponentDetail, EscrowAspect } from '../t
 import type { ComponentProfile, ProfileFieldRule } from '../../hooks/useComponentProfiles'
 import { flagsForProfile } from './createProfile'
 import { formFieldOfRulePath, profileRuleErrors } from './profileRules'
-import { portalCreateRules, type PortalRuleOptions } from './portalCreateRules'
+import { portalCreateRules, COORDINATE_REQUIRED_MESSAGE, type PortalRuleOptions } from './portalCreateRules'
 import {
   buildCreateRequest,
   type CreateFieldVisibility,
@@ -74,13 +74,31 @@ export function componentKeyError(key: string, clientCode?: string): string | nu
 // removed and must not fire its requirement) and from the chosen profile's field
 // rules, checked against the request the form would send (D3).
 /**
- * The wizard field that shows a rule failure on [rulePath]. The request drops blank ownership
- * rows, so its first mapping is the first non-blank row.
+ * The wizard field that shows a rule failure on [rulePath]. The request drops blank rows
+ * (ownership and distribution alike), so its first row of a family maps to the first
+ * non-blank form row.
  */
-export function formFieldOfRule(rulePath: string, ownership: readonly { groupId: string }[]): string | undefined {
+export function formFieldOfRule(
+  rulePath: string,
+  ownership: readonly { groupId: string }[],
+  distribution?: CreateFormValues['distribution'],
+): string | undefined {
   const field = formFieldOfRulePath(rulePath)
+  if (!field) return undefined
   const firstSentRow = Math.max(0, ownership.findIndex((row) => row.groupId.trim() !== ''))
-  return field?.replace(/^ownership\.0\./, `ownership.${firstSentRow}.`)
+  let mapped = field.replace(/^ownership\.0\./, `ownership.${firstSentRow}.`)
+  // Profile rules name only the request's FIRST row of a family ([0] paths),
+  // which is the first row the request actually sends — not necessarily form row 0.
+  if (distribution) {
+    const mavenRow = distribution.maven.findIndex((r) => r.groupPattern.trim() !== '' && r.artifactPattern.trim() !== '')
+    const dockerRow = distribution.docker.findIndex((r) => r.imageName.trim() !== '')
+    const packageRow = distribution.packages.findIndex((r) => r.packageName.trim() !== '')
+    mapped = mapped
+      .replace(/^distribution\.maven\.0\./, `distribution.maven.${Math.max(0, mavenRow)}.`)
+      .replace(/^distribution\.docker\.0\./, `distribution.docker.${Math.max(0, dockerRow)}.`)
+      .replace(/^distribution\.packages\.0\./, `distribution.packages.${Math.max(0, packageRow)}.`)
+  }
+  return mapped
 }
 
 const toIssuePath = (field: string) =>
@@ -94,24 +112,44 @@ function addProfileRuleIssues(
   rules: readonly ProfileFieldRule[],
   request: ComponentCreateRequest,
   keyHasOtherError: boolean,
-  ownership: readonly { groupId: string }[],
+  v: CreateFormValues,
 ) {
   for (const [rulePath, message] of profileRuleErrors(rules, request)) {
-    const field = formFieldOfRule(rulePath, ownership)
+    const field = formFieldOfRule(rulePath, v.ownership, v.distribution)
     if (!field || (field === 'name' && keyHasOtherError)) continue
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: toIssuePath(field), message, params: { profileRule: true } })
   }
 }
 
-// The form field a Portal-only rule's create-request path shows on. Ownership rows the request
-// dropped (blank Group ID) shift the request's indices, so a request row maps back to the k-th
-// non-blank form row.
-function formFieldOfPortalRule(path: string, ownership: readonly { groupId: string }[]): string | undefined {
+// The form field a Portal-only rule's create-request path shows on. The request drops blank
+// rows (ownership and distribution alike), so a request row index maps back to the k-th
+// non-blank form row of its family.
+function formFieldOfPortalRule(
+  path: string,
+  ownership: readonly { groupId: string }[],
+  distribution: CreateFormValues['distribution'],
+): string | undefined {
   const row = /^artifactIds\[(\d+)\]\.(groupPattern|artifactTokens)$/.exec(path)
   if (row) {
     const sentRows = ownership.flatMap((r, i) => (r.groupId.trim() ? [i] : []))
     const formRow = sentRows[Number(row[1])]
-    return formRow === undefined ? undefined : `ownership.${formRow}.${row[2] === 'groupPattern' ? 'groupId' : 'tokens'}`
+    return formRow === undefined
+      ? undefined
+      : `ownership.${formRow}.${row[2] === 'groupPattern' ? 'groupId' : 'tokens'}`
+  }
+  const dist = /^baseConfiguration\.(mavenArtifacts|dockerImages|packages|genericArtifacts)\[(\d+)\]\.(\w+)$/.exec(path)
+  if (dist) {
+    // The rows each family actually sends — mirrors buildCreateRequest's
+    // distributionPatch, which drops fully blank rows.
+    const sent: Record<string, number[]> = {
+      mavenArtifacts: distribution.maven.flatMap((r, i) => (r.groupPattern.trim() && r.artifactPattern.trim() ? [i] : [])),
+      dockerImages: distribution.docker.flatMap((r, i) => (r.imageName.trim() ? [i] : [])),
+      packages: distribution.packages.flatMap((r, i) => (r.packageName.trim() ? [i] : [])),
+      genericArtifacts: distribution.generic.flatMap((r, i) => (r.path.trim() ? [i] : [])),
+    }
+    const family = { mavenArtifacts: 'maven', dockerImages: 'docker', packages: 'packages', genericArtifacts: 'generic' }[dist[1]!]!
+    const formRow = sent[dist[1]!]![Number(dist[2])]
+    return formRow === undefined ? undefined : `distribution.${family}.${formRow}.${dist[3]}`
   }
   if (path === 'releaseManager' || path === 'securityChampion') return path
   return formFieldOfRulePath(path)
@@ -123,15 +161,14 @@ function addPortalRuleIssues(
   ctx: z.RefinementCtx,
   request: ComponentCreateRequest,
   v: CreateFormValues,
-  options: Omit<PortalRuleOptions, 'checkJiraRequired' | 'coordinateType' | 'explicitExternal'>,
+  options: Omit<PortalRuleOptions, 'checkJiraRequired' | 'explicitExternal'>,
 ) {
   for (const { path, message } of portalCreateRules(request, {
     ...options,
     checkJiraRequired: false,
-    coordinateType: v.coordinate.type,
     explicitExternal: v.distributionExplicit && v.distributionExternal,
   })) {
-    const field = formFieldOfPortalRule(path, v.ownership)
+    const field = formFieldOfPortalRule(path, v.ownership, v.distribution)
     if (!field) continue
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: toIssuePath(field), message })
   }
@@ -175,17 +212,17 @@ export function makeCreateSchema(
       vcsUrl: z.string(),
       vcsTag: z.string(),
       vcsBranch: z.string(),
-      coordinate: z.object({
-        type: z.enum(['maven', 'docker', 'package', 'generic']),
-        groupPattern: z.string(),
-        artifactPattern: z.string(),
-        imageName: z.string(),
-        // Optional Docker flavor (e.g. "alpine"); only meaningful for a docker image.
-        flavor: z.string(),
-        packageType: z.enum(['DEB', 'RPM']),
-        packageName: z.string(),
-        // Generic HTTP-URL artifact path (CRS SYS-98); validated server-side.
-        path: z.string(),
+      // Per-family repeatable distribution rows. All optional at create and
+      // never gated behind explicit+external; a blank row sends nothing.
+      distribution: z.object({
+        maven: z.array(
+          z.object({ groupPattern: z.string(), artifactPattern: z.string() }),
+        ),
+        docker: z.array(z.object({ imageName: z.string(), flavor: z.string() })),
+        packages: z.array(
+          z.object({ packageType: z.enum(['DEB', 'RPM']), packageName: z.string() }),
+        ),
+        generic: z.array(z.object({ path: z.string() })),
       }),
       ownership: z.array(
         z.object({
@@ -205,21 +242,47 @@ export function makeCreateSchema(
       if (keyError) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['name'], message: keyError })
       }
+      // Distribution-row completeness: a PARTIALLY filled row blocks submit —
+      // the user typed into it, so silently dropping it would lose data. A
+      // fully blank row is simply absent (the request drops it).
+      for (const [i, row] of v.distribution.maven.entries()) {
+        const group = row.groupPattern.trim()
+        const artifact = row.artifactPattern.trim()
+        if (group && !artifact) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['distribution', 'maven', i, 'artifactPattern'], message: 'Artifact ID is required' })
+        } else if (!group && artifact) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['distribution', 'maven', i, 'groupPattern'], message: 'Group ID is required' })
+        }
+      }
+      for (const [i, row] of v.distribution.docker.entries()) {
+        if (!row.imageName.trim() && row.flavor.trim()) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['distribution', 'docker', i, 'imageName'], message: 'Image name is required' })
+        }
+      }
+      // CRS rule #6 mirror (server enforces it): an explicit+external component
+      // needs at least one distribution row. Shown at the section top — no
+      // single field owns it.
+      const hasRow =
+        v.distribution.maven.some((r) => r.groupPattern.trim() !== '' && r.artifactPattern.trim() !== '') ||
+        v.distribution.docker.some((r) => r.imageName.trim() !== '') ||
+        v.distribution.packages.some((r) => r.packageName.trim() !== '') ||
+        v.distribution.generic.some((r) => r.path.trim() !== '')
+      if (v.distributionExplicit && v.distributionExternal && !hasRow) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['distribution'], message: COORDINATE_REQUIRED_MESSAGE })
+      }
       const request = buildCreateRequest(v, source, editable, true, false, visibility)
-      addProfileRuleIssues(ctx, profileRules, request, !!keyError || !v.name.trim(), v.ownership)
+      addProfileRuleIssues(ctx, profileRules, request, !!keyError || !v.name.trim(), v)
       addPortalRuleIssues(ctx, request, v, { supportedGroups, gitBaseUrl, editable })
     })
 }
 
-export const EMPTY_COORDINATE: CreateFormValues['coordinate'] = {
-  type: 'maven',
-  groupPattern: '',
-  artifactPattern: '',
-  imageName: '',
-  flavor: '',
-  packageType: 'DEB',
-  packageName: '',
-  path: '',
+// Distribution rows start empty for every create mode — coordinates are unique
+// per component, so neither defaults nor the clone source ever seed them.
+export const EMPTY_DISTRIBUTION: CreateFormValues['distribution'] = {
+  maven: [],
+  docker: [],
+  packages: [],
+  generic: [],
 }
 
 export const SCRATCH_DEFAULTS: CreateFormValues = {
@@ -247,7 +310,7 @@ export const SCRATCH_DEFAULTS: CreateFormValues = {
   vcsUrl: '',
   vcsTag: '',
   vcsBranch: '',
-  coordinate: EMPTY_COORDINATE,
+  distribution: EMPTY_DISTRIBUTION,
   ownership: [{ groupId: '', mode: 'ALL', tokens: [] }],
   escrowGeneration: '',
   labels: [],

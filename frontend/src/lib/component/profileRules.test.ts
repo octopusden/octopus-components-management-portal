@@ -127,11 +127,11 @@ describe('rule paths', () => {
     ['baseConfiguration.jira.minorVersionFormat', 'v-minor', 'minorVersionFormat'],
     ['baseConfiguration.jira.releaseVersionFormat', 'v-release', 'releaseVersionFormat'],
     ['baseConfiguration.jira.buildVersionFormat', 'v-build', 'buildVersionFormat'],
-    ['baseConfiguration.mavenArtifacts[0].groupPattern', 'v-group', 'coordinate.groupPattern'],
-    ['baseConfiguration.mavenArtifacts[0].artifactPattern', 'v-artifact', 'coordinate.artifactPattern'],
-    ['baseConfiguration.dockerImages[0].imageName', 'v-image', 'coordinate.imageName'],
-    ['baseConfiguration.dockerImages[0].flavor', 'v-flavor', 'coordinate.flavor'],
-    ['baseConfiguration.packages[0].packageName', 'v-package', 'coordinate.packageName'],
+    ['baseConfiguration.mavenArtifacts[0].groupPattern', 'v-group', 'distribution.maven.0.groupPattern'],
+    ['baseConfiguration.mavenArtifacts[0].artifactPattern', 'v-artifact', 'distribution.maven.0.artifactPattern'],
+    ['baseConfiguration.dockerImages[0].imageName', 'v-image', 'distribution.docker.0.imageName'],
+    ['baseConfiguration.dockerImages[0].flavor', 'v-flavor', 'distribution.docker.0.flavor'],
+    ['baseConfiguration.packages[0].packageName', 'v-package', 'distribution.packages.0.packageName'],
   ])('%s reads %s and shows on %s', (path, value, field) => {
     expect(profileRuleErrors([rule(path, value)], full).size).toBe(0)
     expect(profileRuleErrors([rule(path, 'other')], full).has(path)).toBe(true)
@@ -141,11 +141,6 @@ describe('rule paths', () => {
   it('covers exactly the registry list: every path has a reader and a field', () => {
     expect(RULE_PATHS).toHaveLength(20)
     for (const path of RULE_PATHS) expect(formFieldOfRulePath(path)).toBeDefined()
-  })
-
-  it('maps the Portal-only generic coordinate path to the wizard field (no reader: the registry allow-list does not name it)', () => {
-    expect(profileRuleErrors([rule('baseConfiguration.genericArtifacts[0].path', '.*')], full).size).toBe(0)
-    expect(formFieldOfRulePath('baseConfiguration.genericArtifacts[0].path')).toBe('coordinate.path')
   })
 })
 

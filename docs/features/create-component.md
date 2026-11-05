@@ -55,12 +55,19 @@ rule is [`component-key-format`](../../openspec/specs/component-key-format/spec.
 
 - The rules only the Portal enforces (Jira project key and full version format required; VCS path,
   branch and tag unless the build system needs none; `ssh://` VCS URL on the ecosystem Bigbucket
-  host; supported group-ID prefix; complete coordinate for an explicit external component) are one
-  function over the create request (`lib/component/portalCreateRules.ts`), shared with template
-  review. The distribution coordinate is one of Maven GAV, Docker image, package, or generic path
-  (CRS SYS-98; a single `path` string, validated by the registry — the wizard only requires it
-  non-blank). Exactly one coordinate is set at create; more are added on the editor's Distribution
-  tab afterwards.
+  host; supported group-ID prefix) are one function over the create request
+  (`lib/component/portalCreateRules.ts`), shared with template review.
+- **Distribution rows (all types, never gated):** the Distribution step offers repeatable rows of
+  every family — Maven GAV, Docker image, package, generic path (CRS SYS-98) — to ANY
+  classification; CRS accepts coordinates for any combination, so the old explicit+external-only
+  gate was Portal UX, not a server rule. A fully blank row sends nothing; a partially filled one
+  blocks with a field-level message (`makeCreateSchema`'s superRefine — "Artifact ID is required"
+  etc.). The one server-side rule the Portal mirrors: an explicit+external component needs at
+  least one row of some family (CRS rule #6) — shown at the section top, with the message
+  constant shared with template review (`COORDINATE_REQUIRED_MESSAGE`). The supported-prefix
+  check applies to every sent Maven groupId regardless of classification. fileUrl distributions
+  are editor-only; per-range variants and more rows are added post-create on the editor's
+  Distribution tab.
 
 ## From a template
 
