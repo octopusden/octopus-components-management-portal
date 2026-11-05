@@ -101,7 +101,7 @@ const STEP_SUBTITLES: Record<StepId, string> = {
   build: 'Build system & artifacts',
   vcs: 'Repository & branch',
   jira: 'Project & versions',
-  distribution: 'Docker & coordinate',
+  distribution: 'Distribution rows',
   escrow: 'Source escrow generation',
   review: 'Summary & save',
 }
@@ -120,10 +120,11 @@ function routeProfileRejection(
   fieldErrors: Map<string, string>,
   setError: UseFormSetError<CreateFormValues>,
   ownership: readonly { groupId: string }[],
+  distribution: CreateFormValues['distribution'],
 ): StepId | null {
   if (fieldErrors.get('profile')) return 'profile'
   const ruleError = ruleErrorOf(rawBody)
-  const field = ruleError && formFieldOfRule(ruleError.path, ownership)
+  const field = ruleError && formFieldOfRule(ruleError.path, ownership, distribution)
   if (!ruleError || !field) return null
   setError(field as FieldPath<CreateFormValues>, { type: 'server', message: ruleError.message })
   return stepOfField(field)
@@ -210,8 +211,6 @@ function stepOfField(path: string): StepId {
     case 'releaseVersionFormat':
     case 'buildVersionFormat':
       return 'jira'
-    case 'coordinate':
-      return 'distribution'
     // Both the distribution object root (the ≥1-row rule) and its family
     // rows route to the Distribution step.
     case 'distribution':
@@ -807,7 +806,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
       }
       if (err instanceof ApiError && err.status === 400) {
         const fieldErrors = parseServerFieldErrors(err.rawBody)
-        stepId = routeProfileRejection(err.rawBody, fieldErrors, setError, formValues.ownership) ?? stepId
+        stepId = routeProfileRejection(err.rawBody, fieldErrors, setError, formValues.ownership, formValues.distribution) ?? stepId
         if (fieldErrors.get('name')) {
           setError('name', { type: 'server', message: fieldErrors.get('name')! })
           stepId = 'general'
@@ -1890,7 +1889,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
                 </p>
                 <p>
                   <span className="font-medium text-foreground">Excluded (re-enter):</span> the Component
-                  Key, {vcsApplies && 'VCS Path, '}Jira project key, and distribution coordinate are unique
+                  Key, {vcsApplies && 'VCS Path, '}Jira project key, and distribution rows are unique
                   per component — enter new values.
                 </p>
               </div>
@@ -2013,7 +2012,7 @@ function Field({
 
 /**
  * Amber "re-enter" pill shown on the unique-per-component fields in clone mode
- * (Component Key, VCS Path, Jira project key, distribution coordinate) so the
+ * (Component Key, VCS Path, Jira project key, distribution rows) so the
  * user sees which values must be new.
  */
 function ReenterPill({ id }: { id?: string }) {

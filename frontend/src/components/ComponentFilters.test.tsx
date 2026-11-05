@@ -690,11 +690,7 @@ describe('ComponentFilters "+ Filter" panel (extended dimensions)', () => {
   })
 
   it('reopening the panel before the commit shows the pending text', async () => {
-    function Harness() {
-      const [filter, setFilter] = React.useState<ComponentFilter>({ archived: false })
-      return <ComponentFilters filter={filter} onFilterChange={setFilter} />
-    }
-    render(<Harness />)
+    render(<ComponentFilters filter={{ archived: false }} onFilterChange={onFilterChange} />)
     fireEvent.change((await openFilter('VCS path')).getByLabelText('VCS path'), { target: { value: 'repo/x' } })
     await userEvent.keyboard('{Escape}')
     expect(((await openFilter('VCS path')).getByLabelText('VCS path') as HTMLInputElement).value).toBe('repo/x')

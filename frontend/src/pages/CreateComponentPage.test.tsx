@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -1348,6 +1348,31 @@ describe('CreateComponentPage — create names the profile', () => {
     // No Maven row was added, so the field itself is not rendered and the step shows the message.
     expect(screen.queryByLabelText('groupId')).toBeNull()
     expect(screen.getByText(/Must start with com\.acme/)).toBeDefined()
+  })
+
+  it('shows a Maven-group rule rejection under the first SENT row, not a blank row above it', async () => {
+    rejectWith('baseConfiguration.mavenArtifacts[0].groupPattern: Must start with com.acme')
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await clickNext()
+    await userEvent.selectOptions(screen.getByLabelText(/^Build System/i), 'PROVIDED')
+    await userEvent.click(screen.getByRole('button', { name: /^Jira$/i }))
+    await userEvent.type(screen.getByLabelText(/^Jira Project Key/i), 'WIDG')
+    await userEvent.click(screen.getByRole('button', { name: /^Distribution$/i }))
+    await userEvent.click(screen.getByRole('button', { name: /add maven gav/i }))
+    await userEvent.click(screen.getByRole('button', { name: /add maven gav/i }))
+    await userEvent.type(screen.getAllByLabelText('groupId')[1]!, 'net.example')
+    await userEvent.type(screen.getAllByLabelText('artifactId')[1]!, 'svc')
+    await userEvent.click(screen.getByRole('button', { name: /Review & create/i }))
+    await userEvent.type(screen.getByLabelText(/^Jira task key/i), 'ABC-123')
+    await userEvent.click(screen.getByRole('button', { name: /^create component$/i }))
+    await waitFor(() => expect(screen.getByRole('heading', { name: /^Distribution$/ })).toBeDefined())
+    const fieldOf = (input: HTMLElement) => within(input.parentElement!)
+    expect(fieldOf(screen.getAllByLabelText('groupId')[1]!).getByText(/Must start with com\.acme/)).toBeDefined()
+    expect(fieldOf(screen.getAllByLabelText('groupId')[0]!).queryByText(/Must start with com\.acme/)).toBeNull()
   })
 })
 

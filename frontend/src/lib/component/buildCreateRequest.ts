@@ -26,7 +26,6 @@ export interface DistributionRows {
   maven: Array<{ groupPattern: string; artifactPattern: string }>
   docker: Array<{ imageName: string; flavor: string }>
   packages: Array<{ packageType: PackageType; packageName: string }>
-  // Generic HTTP-URL artifact path (CRS SYS-98); validated server-side.
   generic: Array<{ path: string }>
 }
 

@@ -161,7 +161,7 @@ describe('DistributionTab — blank-row filter (slice payload)', () => {
   })
 })
 
-describe('DistributionTab — generic artifacts (CRS SYS-98)', () => {
+describe('DistributionTab — generic artifacts (CRS SYS-098)', () => {
   it('seeds the section from the BASE row and sends the paths in the slice', () => {
     const component = baseComponent({
       configurations: [
@@ -206,6 +206,27 @@ describe('DistributionTab — generic artifacts (CRS SYS-98)', () => {
     const diff = captured.section!.slice.diff.find((d) => d.label === 'Distribution · Generic Artifacts')
     expect(diff?.oldValue).toBe('—')
     expect(diff?.newValue).toBe('releases/svc/svc.jar')
+  })
+
+  it('omits genericArtifacts from the slice when neither side has any (pre-V10 registry)', () => {
+    renderTab(baseComponent())
+    expect(captured.section!.slice.request.baseConfiguration?.genericArtifacts).toBeUndefined()
+  })
+
+  it('sends an empty list to clear seeded generic artifacts (present-list REPLACE)', () => {
+    const component = baseComponent({
+      configurations: [
+        {
+          ...(baseComponent().configurations![0] as ComponentConfiguration),
+          genericArtifacts: [{ id: 'g-1', sortOrder: 0, path: 'releases/a/${version}/a.jar' }],
+        },
+      ],
+    })
+    renderTab(component)
+    const pathInput = screen.getByPlaceholderText('my-component/${version}/my-component.tar.gz')
+    const removeButton = pathInput.closest('div.rounded-md')!.querySelector('button')!
+    fireEvent.click(removeButton)
+    expect(captured.section!.slice.request.baseConfiguration?.genericArtifacts).toEqual([])
   })
 })
 

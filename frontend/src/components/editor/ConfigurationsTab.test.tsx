@@ -70,6 +70,10 @@ describe('ConfigurationsTab — table rendering', () => {
     mavenArtifacts: [
       { id: 'm1', groupPattern: 'com.example', artifactPattern: 'lib', sortOrder: 0 },
     ],
+    genericArtifacts: [
+      { id: 'g1', path: 'releases/a/${version}/a.jar', sortOrder: 0 },
+      { id: 'g2', path: 'releases/b/${version}/b.jar', sortOrder: 1 },
+    ],
   })
 
   const scalarRow = makeConfig({
@@ -121,10 +125,11 @@ describe('ConfigurationsTab — table rendering', () => {
 
   it('BASE row payload summary lists populated aspects and child counts', () => {
     render(<ConfigurationsTab component={component} />)
-    // build and jira are populated; VCS roots: 2, maven: 1
+    // build and jira are populated; VCS roots: 2, maven: 1, generic: 2
     expect(screen.getByText(/build.*jira/i)).toBeDefined()
     expect(screen.getByText(/VCS roots: 2/)).toBeDefined()
     expect(screen.getByText(/maven: 1/)).toBeDefined()
+    expect(screen.getByText(/generic: 2/)).toBeDefined()
   })
 
   it('SCALAR_OVERRIDE row shows "= <value>" format in payload summary', () => {
@@ -258,6 +263,26 @@ describe('ConfigurationsTab — vcs.settings marker', () => {
   })
 })
 
+describe('ConfigurationsTab — distribution.generic marker', () => {
+  it('renders "<N> entries" for distribution.generic marker', () => {
+    const component = makeComponent({
+      configurations: [
+        makeConfig({
+          id: 'marker-generic',
+          rowType: 'MARKER',
+          overriddenAttribute: 'distribution.generic',
+          genericArtifacts: [
+            { id: 'g1', path: 'releases/svc/${version}/svc.jar', sortOrder: 0 },
+            { id: 'g2', path: 'downloads/svc/svc.zip', sortOrder: 1 },
+          ],
+        }),
+      ],
+    })
+    render(<ConfigurationsTab component={component} />)
+    expect(screen.getByText('2 entries')).toBeDefined()
+  })
+})
+
 describe('ConfigurationsTab — scalar override edge cases', () => {
   it('renders "= false" when the typed boolean override value is false', () => {
     const component = makeComponent({
@@ -323,7 +348,7 @@ describe('ConfigurationsTab — scalar override edge cases', () => {
 })
 
 describe('ConfigurationsTab — unknown marker fallback', () => {
-  it('renders em-dash for a marker name not in the canonical six-marker map', () => {
+  it('renders em-dash for a marker name not in the canonical seven-marker map', () => {
     const component = makeComponent({
       configurations: [
         makeConfig({

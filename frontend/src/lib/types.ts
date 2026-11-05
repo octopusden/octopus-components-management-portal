@@ -180,7 +180,6 @@ export interface ComponentConfiguration {
   fileUrlArtifacts: FileUrlArtifact[]
   dockerImages: DockerImage[]
   packages: PackageEntry[]
-  // CRS SYS-98; optional — the list is absent against a pre-V10 registry.
   genericArtifacts?: GenericArtifact[]
   requiredTools: string[]
 }
@@ -276,7 +275,7 @@ export interface PackageEntry {
   sortOrder: number
 }
 
-// CRS SYS-98: a generic HTTP-URL artifact — a verbatim path string
+// CRS SYS-098: a generic HTTP-URL artifact — a verbatim path string
 // (`seg/seg/seg…`, placeholders ${version}/${major}/${minor}/${service}/${fix}/${build}).
 // Optional on the configuration row: absent against an older registry (V10).
 export interface GenericArtifact {
@@ -404,7 +403,7 @@ export interface PackageRequest {
   packageName: string
 }
 
-// CRS SYS-98: the path is validated server-side against the GENERIC_ENTRY
+// CRS SYS-098: the path is validated server-side against the GENERIC_ENTRY
 // shape and the allowed ${…} placeholders.
 export interface GenericArtifactRequest {
   path: string
@@ -679,7 +678,7 @@ export interface AuditLogEntry {
 //  - marker override → `markerChildren` carries the replacement child list;
 //    `value` is null. Marker names: `vcs.settings`, `distribution.maven`,
 //    `distribution.fileUrl`, `distribution.docker`, `distribution.packages`,
-//    `distribution.generic` (CRS SYS-98), `build.requiredTools`. NO per-component
+//    `distribution.generic` (CRS SYS-098), `build.requiredTools`. NO per-component
 //    lists (docs/artifactIds/securityGroups/teamcityProjects/group) are
 //    marker-overridable.
 export interface MarkerChildrenPayload {

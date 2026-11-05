@@ -7,7 +7,7 @@ import { useOverridesDraft } from './overridesDraft'
  * The single `vcs.settings` marker attribute CRS supports per-range: a per-range
  * override replaces the component's VCS entry list (name / path / branch / tag /
  * hotfix branch) for the versions it covers. This is the collection-field analog
- * of the four `distribution.*` marker paths (see useDistributionOverrides).
+ * of the five `distribution.*` marker paths (see useDistributionOverrides).
  */
 export const VCS_MARKER_PATH = 'vcs.settings'
 

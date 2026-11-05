@@ -943,6 +943,25 @@ describe('ComponentDetailPage — sidebar nav order', () => {
     ])
   })
 
+  it('counts generic artifacts in the Distribution sidebar badge (CRS SYS-098)', () => {
+    const withGeneric: ComponentDetail = {
+      ...baseComponent,
+      configurations: [
+        {
+          ...baseComponent.configurations![0]!,
+          // Only generic artifacts — nothing else would move the badge.
+          genericArtifacts: [
+            { id: 'g-1', sortOrder: 0, path: 'releases/a/${version}/a.jar' },
+            { id: 'g-2', sortOrder: 1, path: 'releases/b/${version}/b.jar' },
+          ],
+        },
+      ],
+    }
+    renderPage(withGeneric, makeUser(['ACCESS_COMPONENTS']))
+    const distributionTab = within(screen.getByRole('tablist')).getByRole('tab', { name: /Distribution/ })
+    expect(distributionTab.textContent).toBe('Distribution2')
+  })
+
   it('hides the Release Process tab when component.autoRelease is hidden', () => {
     mockedUseFieldConfigEntry.mockImplementation((path: string) => ({
       entry: { visibility: path === 'component.autoRelease' ? ('hidden' as const) : ('editable' as const), required: false },

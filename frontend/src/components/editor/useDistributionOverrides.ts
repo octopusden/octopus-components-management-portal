@@ -5,7 +5,7 @@ import { useOverridesDraft } from './overridesDraft'
 
 /**
  * The five `distribution.*` marker attributes CRS supports per-range (issue #146;
- * `distribution.generic` — CRS SYS-98). `distribution.explicit` / `.external` /
+ * `distribution.generic` — CRS SYS-098). `distribution.explicit` / `.external` /
  * `.securityGroups.read` are per-component only (CRS #387) and are deliberately
  * absent here.
  */
