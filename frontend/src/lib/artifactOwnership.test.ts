@@ -174,6 +174,29 @@ describe('artifactOwnership helpers', () => {
     ).toBe(false)
   })
 
+  it('hasOverlappingOverrides does not flag disjoint ranges whose bounds carry a build suffix', () => {
+    // Migrated archived component `system`: build-numbered bounds (`1.0.36-0000`) and one range with a
+    // space after the comma. The client can't order such versions, so it must defer to CRS instead of
+    // reading every unparseable range as "all versions" (which made every pair overlap).
+    expect(
+      hasOverlappingOverrides([
+        m({ id: 'a', base: false, range: '[1.0.36-0000, 1.0.37-0000)' }),
+        m({ id: 'b', base: false, range: '[1.0.37-0001,1.0.37-0004]' }),
+        m({ id: 'c', base: false, range: '[1.0.37-0005,1.0.37-0010]' }),
+        m({ id: 'd', base: false, range: '[1.0.37-0011,1.0.38-0000)' }),
+      ]),
+    ).toBe(false)
+  })
+
+  it('hasOverlappingOverrides still flags the same unparseable range entered twice', () => {
+    expect(
+      hasOverlappingOverrides([
+        m({ id: 'a', base: false, range: '[1.0.37-0001,1.0.37-0004]' }),
+        m({ id: 'b', base: false, range: '[1.0.37-0001, 1.0.37-0004]' }),
+      ]),
+    ).toBe(true)
+  })
+
   it('toArtifactIdRequests: splits a (grandfathered) comma group-list into ONE request per groupId, same mode/tokens/range', () => {
     // Canonicalization: one groupId per request. A row that still carries "a,b" (legacy /
     // pre-split) fans out to two per-group requests — matching the create form and CRS storage.
