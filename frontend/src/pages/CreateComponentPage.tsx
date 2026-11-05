@@ -211,8 +211,6 @@ function stepOfField(path: string): StepId {
     case 'releaseVersionFormat':
     case 'buildVersionFormat':
       return 'jira'
-    // Both the distribution object root (the ≥1-row rule) and its family
-    // rows route to the Distribution step.
     case 'distribution':
       return 'distribution'
     // Both the RHF field name (`escrowGeneration`) and the CRS aspect path head
@@ -712,7 +710,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
     return set
   }, [parseIssues, profileMissing, jiraKeyError, serverError])
 
-  // A live schema-parse message for a distribution field (see renderDistributionStep).
+  // Live schema-parse message (RHF commits only the changed field's error).
   const distributionIssue = (field: string) => parseIssues.find((i) => i.field === field)?.message
 
   // Invalid steps actually shown as such: only those visited (or all, once a
@@ -1503,9 +1501,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
   const renderDistributionStep = () => (
     <div className="space-y-6">
       <StepHeading title="Distribution" subtitle="How the component's artifacts are published." />
-      {/* Step-level and per-row messages from the FULL schema parse (RHF commits
-          only the changed field's error, but a partially filled row must show its
-          message immediately — the blocked Next alone is not guidance enough). */}
+      {/* Full-parse messages (RHF commits only the changed field's error). */}
       <FieldError message={errors.distribution?.message ?? distributionIssue('distribution')} />
       <SectionHeader
         title="Distribution rows"
@@ -2067,8 +2063,7 @@ function fieldShowsError(field: string, display: FieldDisplay): boolean {
     case 'vcsBranch':
     case 'vcsTag':
       return display.vcsApplies
-    // Distribution rows are never gated: any classification may fill any
-    // family, so a rule failure always shows under its row's field.
+    // Never gated — any classification may fill any family.
     case 'distribution.maven.groupPattern':
     case 'distribution.maven.artifactPattern':
     case 'distribution.docker.imageName':

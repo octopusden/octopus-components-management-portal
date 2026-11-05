@@ -73,11 +73,7 @@ export function componentKeyError(key: string, clientCode?: string): string | nu
 // built per-render from field-config visibility (a hidden/readonly field is
 // removed and must not fire its requirement) and from the chosen profile's field
 // rules, checked against the request the form would send (D3).
-/**
- * The wizard field that shows a rule failure on [rulePath]. The request drops blank rows
- * (ownership and distribution alike), so its first row of a family maps to the first
- * non-blank form row.
- */
+/** The wizard field a rule failure on [rulePath] shows on; row 0 maps to the first non-blank form row (the request drops blank rows). */
 export function formFieldOfRule(
   rulePath: string,
   ownership: readonly { groupId: string }[],
@@ -87,8 +83,7 @@ export function formFieldOfRule(
   if (!field) return undefined
   const firstSentRow = Math.max(0, ownership.findIndex((row) => row.groupId.trim() !== ''))
   let mapped = field.replace(/^ownership\.0\./, `ownership.${firstSentRow}.`)
-  // Profile rules name only the request's FIRST row of a family ([0] paths),
-  // which is the first row the request actually sends — not necessarily form row 0.
+  // Profile rules name the request's FIRST sent row ([0] paths), not form row 0.
   if (distribution) {
     const mavenRow = distribution.maven.findIndex((r) => r.groupPattern.trim() !== '' && r.artifactPattern.trim() !== '')
     const dockerRow = distribution.docker.findIndex((r) => r.imageName.trim() !== '')
@@ -121,9 +116,8 @@ function addProfileRuleIssues(
   }
 }
 
-// The form field a Portal-only rule's create-request path shows on. The request drops blank
-// rows (ownership and distribution alike), so a request row index maps back to the k-th
-// non-blank form row of its family.
+// The form field a Portal-only rule's create-request path shows on; a request row index maps
+// back to the k-th non-blank form row of its family.
 function formFieldOfPortalRule(
   path: string,
   ownership: readonly { groupId: string }[],
@@ -139,8 +133,7 @@ function formFieldOfPortalRule(
   }
   const dist = /^baseConfiguration\.(mavenArtifacts|dockerImages|packages|genericArtifacts)\[(\d+)\]\.(\w+)$/.exec(path)
   if (dist) {
-    // The rows each family actually sends — mirrors buildCreateRequest's
-    // distributionPatch, which drops fully blank rows.
+    // The rows each family actually sends (mirrors distributionPatch's blank-row drop).
     const sent: Record<string, number[]> = {
       mavenArtifacts: distribution.maven.flatMap((r, i) => (r.groupPattern.trim() && r.artifactPattern.trim() ? [i] : [])),
       dockerImages: distribution.docker.flatMap((r, i) => (r.imageName.trim() ? [i] : [])),
@@ -212,8 +205,7 @@ export function makeCreateSchema(
       vcsUrl: z.string(),
       vcsTag: z.string(),
       vcsBranch: z.string(),
-      // Per-family repeatable distribution rows. All optional at create and
-      // never gated behind explicit+external; a blank row sends nothing.
+      // Never gated; a blank row sends nothing.
       distribution: z.object({
         maven: z.array(
           z.object({ groupPattern: z.string(), artifactPattern: z.string() }),
@@ -242,9 +234,7 @@ export function makeCreateSchema(
       if (keyError) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['name'], message: keyError })
       }
-      // Distribution-row completeness: a PARTIALLY filled row blocks submit —
-      // the user typed into it, so silently dropping it would lose data. A
-      // fully blank row is simply absent (the request drops it).
+      // A partially filled row blocks submit (dropping it would lose data); a blank one is absent.
       for (const [i, row] of v.distribution.maven.entries()) {
         const group = row.groupPattern.trim()
         const artifact = row.artifactPattern.trim()
@@ -259,9 +249,7 @@ export function makeCreateSchema(
           ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['distribution', 'docker', i, 'imageName'], message: 'Image name is required' })
         }
       }
-      // CRS rule #6 mirror (server enforces it): an explicit+external component
-      // needs at least one distribution row. Shown at the section top — no
-      // single field owns it.
+      // CRS rule #6 mirror: explicit+external needs ≥1 row; shown at the section top.
       const hasRow =
         v.distribution.maven.some((r) => r.groupPattern.trim() !== '' && r.artifactPattern.trim() !== '') ||
         v.distribution.docker.some((r) => r.imageName.trim() !== '') ||
@@ -276,8 +264,7 @@ export function makeCreateSchema(
     })
 }
 
-// Distribution rows start empty for every create mode — coordinates are unique
-// per component, so neither defaults nor the clone source ever seed them.
+// Never seeded — coordinates are unique per component.
 export const EMPTY_DISTRIBUTION: CreateFormValues['distribution'] = {
   maven: [],
   docker: [],

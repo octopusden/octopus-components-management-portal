@@ -16,8 +16,7 @@ export interface MavenState { groupPattern: string; artifactPattern: string; ext
 export interface FileUrlState { url: string; artifactId: string; classifier: string }
 export interface DockerState { imageName: string; flavor: string }
 export interface PackageState { packageType: string; packageName: string }
-// CRS SYS-098: a generic artifact is a single path string; its shape and
-// ${…} placeholders are validated server-side, so the client carries it raw.
+// CRS SYS-098: a raw path string; shape and ${…} placeholders are validated server-side.
 export interface GenericState { path: string }
 export interface SecurityGroupState { groupType: string; groupName: string }
 
@@ -172,10 +171,8 @@ export function useDistributionSection(component: ComponentDetail): Distribution
     push(listDiff('Distribution · Security Groups', cleanSecGroups(prior.securityGroups).map(secGroupKey), cleanedSecGroups.map(secGroupKey)))
   }
 
-  // Present-list REPLACE, but genericArtifacts (CRS SYS-098) is sent ONLY when
-  // there is something to replace or something to clear: an empty list against
-  // a snapshot that never had any is omitted (undefined), so a registry that
-  // does not know the field yet keeps accepting every other Distribution edit.
+  // Present-list REPLACE, but omitted when there is nothing to send or clear —
+  // a pre-V10 registry that does not know the field never sees it.
   const genericArtifacts =
     cleanedGeneric.length > 0 || prior.generic.length > 0
       ? cleanedGeneric.map((a) => ({ path: a.path }))

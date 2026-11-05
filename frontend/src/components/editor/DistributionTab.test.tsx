@@ -36,16 +36,12 @@ vi.mock('../../hooks/useFieldConfig', () => ({
   useFieldLabel: (_path: string, fallback: string) => fallback,
 }))
 
-// EnumSelect (Package Type) runs its useFieldOptions hook even with a caller
-// optionsOverride — mock it so no QueryClient/network is needed. The override
-// means the mocked options are ignored anyway.
+// EnumSelect runs useFieldOptions even with optionsOverride — mock it (no QueryClient needed).
 vi.mock('../../hooks/useFieldOptions', () => ({
   useFieldOptions: () => ({ options: [], isLoading: false }),
 }))
 
-// Stub the Radix Select (behind EnumSelect's Package Type) as a native <select>
-// so tests drive it with fireEvent.change — same pattern as
-// OverrideRowEditor.test.tsx. EnumSelect.test.tsx covers the real component.
+// Radix Select stubbed as a native <select> (same pattern as OverrideRowEditor.test.tsx).
 vi.mock('../ui/select', async () => {
   const React = await import('react')
 
@@ -259,8 +255,7 @@ describe('DistributionTab — Package Type dropdown (CRS PACKAGE_TYPE_NAMES)', (
     })
     renderTab(component)
     const select = screen.getByTestId('enum-select') as HTMLSelectElement
-    // The legacy value is selected, listed alongside the enum, and preserved
-    // in the request until the user changes it.
+    // The legacy value stays selected and is preserved in the request until changed.
     expect(select).toHaveValue('rpm')
     expect([...select.options].map((o) => o.value)).toEqual(
       expect.arrayContaining(['rpm', 'DEB', 'RPM']),

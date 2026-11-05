@@ -523,8 +523,7 @@ describe('makeCreateSchema — distribution rows (all types, never gated by clas
     expect(messagesOf(gated)).toMatchObject({
       distribution: 'At least one distribution (Maven, Docker, package or generic) is required for an explicit + external component',
     })
-    // Any one family satisfies the rule (the other explicit+external
-    // requirements are satisfied alongside).
+    // Any one family satisfies the rule.
     expect(
       pathsOf(
         form({

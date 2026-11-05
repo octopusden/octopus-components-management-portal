@@ -65,11 +65,7 @@ function ownershipIssues(request: ComponentCreateRequest, supportedGroups: reado
   })
 }
 
-/**
- * The maven groupId supported-prefix rule (CRS rule #10) — checked for EVERY row
- * the request sends, regardless of the explicit+external classification (the
- * registry validates every submitted groupPattern the same way).
- */
+/** CRS rule #10: every submitted groupId is prefix-checked, regardless of classification. */
 function mavenPrefixIssues(request: ComponentCreateRequest, supportedGroups: readonly string[]): PortalRuleIssue[] {
   return (request.baseConfiguration?.mavenArtifacts ?? []).flatMap((row, i) => {
     const groupId = row.groupPattern?.trim() ?? ''
@@ -116,8 +112,7 @@ function explicitExternalIssues(request: ComponentCreateRequest, options: Portal
         message: 'At least one Security Champion is required for an explicit + external component',
       })
     }
-    // CRS rule #6: at least one distribution row of any family. The path keeps
-    // the registry's [0]-row convention so template Review maps it to a row.
+    // CRS rule #6 mirror; the [0] path keeps template Review's row mapping.
     if (!hasDistributionRow(request)) {
       issues.push({ path: 'baseConfiguration.mavenArtifacts[0].groupPattern', message: COORDINATE_REQUIRED_MESSAGE })
     }

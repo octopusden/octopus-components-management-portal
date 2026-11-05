@@ -760,8 +760,7 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
     await userEvent.selectOptions(select, 'distribution.packages')
 
     await userEvent.click(screen.getByRole('button', { name: /add package/i }))
-    // Package Type is an EnumSelect (Radix → stubbed native <select>); the
-    // attribute select came first, so this row's type select is the second.
+    // The row's type select is the second attr-select (the attribute select came first).
     const rowSelects = await screen.findAllByTestId('attr-select')
     await userEvent.selectOptions(rowSelects[1]!, 'DEB')
     const nameInputs = await screen.findAllByPlaceholderText('my-package')

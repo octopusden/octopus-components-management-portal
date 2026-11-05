@@ -42,10 +42,7 @@ const READERS: Record<string, Reader> = {
 
 /**
  * Rule path → the wizard form field that shows its message (an RHF field path).
- * Distribution rows map to form row 0 of the family; `formFieldOfRule` shifts
- * that to the first row the request actually sends (the request drops blank
- * rows). Profile rules name only the request's FIRST row of a family
- * (`CreateRequestPaths` reads `[0]`).
+ * Distribution [0] paths map to form row 0; `formFieldOfRule` shifts to the first sent row.
  */
 const FIELDS: Record<string, string> = {
   name: 'name',

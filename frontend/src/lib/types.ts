@@ -180,6 +180,7 @@ export interface ComponentConfiguration {
   fileUrlArtifacts: FileUrlArtifact[]
   dockerImages: DockerImage[]
   packages: PackageEntry[]
+  // CRS SYS-098; absent against a pre-V10 registry.
   genericArtifacts?: GenericArtifact[]
   requiredTools: string[]
 }
@@ -275,9 +276,7 @@ export interface PackageEntry {
   sortOrder: number
 }
 
-// CRS SYS-098: a generic HTTP-URL artifact — a verbatim path string
-// (`seg/seg/seg…`, placeholders ${version}/${major}/${minor}/${service}/${fix}/${build}).
-// Optional on the configuration row: absent against an older registry (V10).
+// CRS SYS-098: a verbatim path with ${…} placeholders; optional (absent pre-V10).
 export interface GenericArtifact {
   id: string
   path: string
@@ -403,8 +402,7 @@ export interface PackageRequest {
   packageName: string
 }
 
-// CRS SYS-098: the path is validated server-side against the GENERIC_ENTRY
-// shape and the allowed ${…} placeholders.
+// CRS SYS-098: the path is validated server-side.
 export interface GenericArtifactRequest {
   path: string
 }

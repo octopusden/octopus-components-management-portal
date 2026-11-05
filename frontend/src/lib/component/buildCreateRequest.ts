@@ -16,12 +16,8 @@ import type { FieldVisibility } from '../../hooks/useFieldConfig'
 // than free text.
 export type PackageType = 'DEB' | 'RPM'
 
-// A per-family repeatable distribution row. Every family is optional at create
-// and never gated behind the explicit+external classification — CRS accepts
-// coordinates for any classification and only REQUIRES ≥1 for an
-// explicit+external component (its rule, mirrored in portalCreateRules). More
-// rows / per-range variants are added post-create in the editor's
-// Distribution tab. fileUrl distributions are not part of the create form.
+// Per-family repeatable create rows — never gated by classification (CRS accepts any; only
+// explicit+external REQUIRES ≥1, mirrored in portalCreateRules). fileUrl is editor-only.
 export interface DistributionRows {
   maven: Array<{ groupPattern: string; artifactPattern: string }>
   docker: Array<{ imageName: string; flavor: string }>
@@ -107,10 +103,7 @@ export interface CreateFormValues {
   vcsUrl: string
   vcsTag: string
   vcsBranch: string
-  // Distribution rows per family (see DistributionRows). Come from the FORM
-  // ONLY, never from the source (coordinates are unique per component). A
-  // completely blank row sends nothing; a partially filled one is blocked by
-  // the form schema (see makeCreateSchema).
+  // Form-only (unique per component); blank rows send nothing, partial ones are blocked by the schema.
   distribution: DistributionRows
   // #357 base artifact-ownership. Repeatable per-group rows: each row is one
   // Group ID + its own matching mode (ALL / ALL_EXCEPT_CLAIMED / EXPLICIT) and,
@@ -143,8 +136,7 @@ export interface CreateFormValues {
 //     securityChampion, copyright;
 //   - clientCode: form WINS when external (distributionExternal); when not
 //     external the source value is preserved (form value ignored);
-//   - distribution rows come from the FORM ONLY, never from the source
-//     (unique per component);
+//   - distribution rows come from the FORM ONLY (unique per component);
 //   - escrow.generation comes from the FORM (form WINS) when that field is
 //     editable and a value was chosen; the rest of the escrow aspect is copied
 //     from the source BASE row. Readonly falls back to the source escrow
@@ -184,10 +176,7 @@ function copyJiraAspect(jira: JiraAspect | null | undefined): JiraAspect | undef
   return hasValue ? rest : undefined
 }
 
-// Maps the form's distribution rows to the matching BASE-row child lists.
-// Every value is trimmed: fully blank rows are dropped, so the payload carries
-// no whitespace CRS would reject. Partial rows are impossible here — the form
-// schema blocks them before the request is built for a submit.
+// Trims and drops fully blank rows; partial rows are blocked by the form schema before a submit.
 function distributionPatch(
   rows: CreateFormValues['distribution'],
 ): Partial<BaseConfigurationRequest> {
@@ -412,10 +401,7 @@ export function buildCreateRequest(
   if (baseRow && baseRow.requiredTools.length > 0) {
     baseConfiguration.requiredTools = [...baseRow.requiredTools]
   }
-  // Every filled family is sent, regardless of the explicit+external
-  // classification (CRS accepts coordinates for any classification). The
-  // combination only matters the other way: an explicit+external component
-  // must carry at least one row — a CRS rule mirrored in portalCreateRules.
+  // Never gated by classification (CRS accepts any); the explicit+external ≥1 mirror is in portalCreateRules.
   Object.assign(baseConfiguration, distributionPatch(form.distribution))
   // VCS entry comes from the FORM ONLY (never the source — the repository is
   // unique per component) and only for VCS-requiring build systems.

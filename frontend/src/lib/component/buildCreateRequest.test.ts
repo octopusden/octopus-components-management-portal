@@ -315,8 +315,7 @@ describe('buildCreateRequest — distribution rows (per family, never gated)', (
         generic: [{ path: '' }],
       }),
     )
-    // Partial rows (a lone flavor) are dropped by the builder too — the form
-    // schema blocks them before a submit, this only keeps the payload clean.
+    // The builder drops partial rows too; the schema blocks them on submit.
     expect(req.baseConfiguration?.mavenArtifacts).toEqual([
       { groupPattern: 'org.acme', artifactPattern: 'svc', extension: null, classifier: null },
     ])
