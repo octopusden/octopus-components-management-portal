@@ -97,6 +97,10 @@ vi.mock('../../hooks/useAdminConfig', () => ({
   useFieldConfig: () => mockUseAdminFieldConfig(),
 }))
 
+vi.mock('../../hooks/useFieldOptions', () => ({
+  useFieldOptions: () => ({ options: [], isLoading: false }),
+}))
+
 beforeEach(() => {
   mockUseAdminFieldConfig.mockReturnValue({ data: undefined, isLoading: false, isError: false })
 })
@@ -756,9 +760,11 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
     await userEvent.selectOptions(select, 'distribution.packages')
 
     await userEvent.click(screen.getByRole('button', { name: /add package/i }))
-    const typeInputs = await screen.findAllByPlaceholderText('rpm')
+    // Package Type is an EnumSelect (Radix → stubbed native <select>); the
+    // attribute select came first, so this row's type select is the second.
+    const rowSelects = await screen.findAllByTestId('attr-select')
+    await userEvent.selectOptions(rowSelects[1]!, 'DEB')
     const nameInputs = await screen.findAllByPlaceholderText('my-package')
-    await userEvent.type(typeInputs[0]!, 'rpm')
     await userEvent.type(nameInputs[0]!, 'my-svc')
 
     fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1.0,2.0)' } })
@@ -770,7 +776,7 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
       expect(body.overriddenAttribute).toBe('distribution.packages')
       expect(body.value).toBeNull()
       expect(body.markerChildren.packages).toEqual([
-        { packageType: 'rpm', packageName: 'my-svc' },
+        { packageType: 'DEB', packageName: 'my-svc' },
       ])
     })
   })

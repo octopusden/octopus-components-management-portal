@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '../ui/select'
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs'
+import { EnumSelect } from '../ui/EnumSelect'
 import { FieldInfo } from '../ui/FieldInfo'
 import { EntryError, fieldErrorProps } from './EntryError'
 import { useOverridesDraft } from './overridesDraft'
@@ -1003,7 +1004,12 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         <div className="space-y-1">
                           <Label className="text-xs">Package Type <span className="text-destructive">*</span></Label>
-                          <Input required value={row.packageType} onChange={(e) => updatePackage(i, 'packageType', e.target.value)} placeholder="rpm" className="font-mono text-xs" />
+                          <EnumSelect
+                            fieldPath="distribution.package.type"
+                            optionsOverride={['DEB', 'RPM']}
+                            value={row.packageType}
+                            onValueChange={(v) => updatePackage(i, 'packageType', v)}
+                          />
                         </div>
                         <div className="space-y-1">
                           <Label className="text-xs">Package Name <span className="text-destructive">*</span></Label>

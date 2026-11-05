@@ -36,6 +36,67 @@ vi.mock('../../hooks/useFieldConfig', () => ({
   useFieldLabel: (_path: string, fallback: string) => fallback,
 }))
 
+// EnumSelect (Package Type) runs its useFieldOptions hook even with a caller
+// optionsOverride — mock it so no QueryClient/network is needed. The override
+// means the mocked options are ignored anyway.
+vi.mock('../../hooks/useFieldOptions', () => ({
+  useFieldOptions: () => ({ options: [], isLoading: false }),
+}))
+
+// Stub the Radix Select (behind EnumSelect's Package Type) as a native <select>
+// so tests drive it with fireEvent.change — same pattern as
+// OverrideRowEditor.test.tsx. EnumSelect.test.tsx covers the real component.
+vi.mock('../ui/select', async () => {
+  const React = await import('react')
+
+  function collectOptions(children: React.ReactNode): Array<{ value: string; label: string }> {
+    const opts: Array<{ value: string; label: string }> = []
+    React.Children.forEach(children, (child) => {
+      if (!child || typeof child !== 'object') return
+      const el = child as React.ReactElement<{ value?: string; children?: React.ReactNode }>
+      const type = el.type as { displayName?: string } | undefined
+      if (type && type.displayName === 'SelectItem') {
+        opts.push({ value: el.props.value ?? '', label: String(el.props.children ?? '') })
+      } else if (el.props.children) {
+        opts.push(...collectOptions(el.props.children))
+      }
+    })
+    return opts
+  }
+
+  function Select({
+    value,
+    onValueChange,
+    children,
+  }: {
+    value: string
+    onValueChange: (v: string) => void
+    children?: React.ReactNode
+  }) {
+    const opts = collectOptions(children)
+    return (
+      <select data-testid="enum-select" value={value} onChange={(e) => onValueChange(e.target.value)}>
+        {opts.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    )
+  }
+
+  function SelectItem({ value, children }: { value?: string; children?: React.ReactNode }) {
+    return <option value={value}>{children}</option>
+  }
+  SelectItem.displayName = 'SelectItem'
+
+  const SelectTrigger = ({ children }: { children?: React.ReactNode }) => <>{children}</>
+  const SelectContent = ({ children }: { children?: React.ReactNode }) => <>{children}</>
+  const SelectValue = ({ placeholder }: { placeholder?: string }) => <span>{placeholder}</span>
+
+  return { Select, SelectItem, SelectTrigger, SelectContent, SelectValue }
+})
+
 function baseComponent(overrides: Partial<ComponentDetail> = {}): ComponentDetail {
   return {
     id: 'c-1', name: 'my-component', displayName: 'My Component', componentOwner: 'alice',
@@ -145,6 +206,47 @@ describe('DistributionTab — generic artifacts (CRS SYS-98)', () => {
     const diff = captured.section!.slice.diff.find((d) => d.label === 'Distribution · Generic Artifacts')
     expect(diff?.oldValue).toBe('—')
     expect(diff?.newValue).toBe('releases/svc/svc.jar')
+  })
+})
+
+describe('DistributionTab — Package Type dropdown (CRS PACKAGE_TYPE_NAMES)', () => {
+  it('offers DEB/RPM on a new package row and sends the chosen type', () => {
+    renderTab(baseComponent())
+    fireEvent.click(screen.getAllByRole('button', { name: /^Add$/ })[2]!) // Packages Add
+    fireEvent.change(screen.getByTestId('enum-select'), { target: { value: 'DEB' } })
+    fireEvent.change(screen.getByPlaceholderText('my-package'), { target: { value: 'svc-pkg' } })
+    expect(captured.section!.slice.request.baseConfiguration?.packages).toEqual([
+      { packageType: 'DEB', packageName: 'svc-pkg' },
+    ])
+  })
+
+  it("keeps 'None' (= blank) dropping the row from the request until a type is picked", () => {
+    renderTab(baseComponent())
+    fireEvent.click(screen.getAllByRole('button', { name: /^Add$/ })[2]!) // Packages Add
+    fireEvent.change(screen.getByPlaceholderText('my-package'), { target: { value: 'svc-pkg' } })
+    expect(captured.section!.slice.request.baseConfiguration?.packages ?? []).toEqual([])
+  })
+
+  it('renders a stored value outside DEB/RPM as a visible extra option (legacy data)', () => {
+    const component = baseComponent({
+      configurations: [
+        {
+          ...(baseComponent().configurations![0] as ComponentConfiguration),
+          packages: [{ id: 'p-1', sortOrder: 0, packageType: 'rpm', packageName: 'my-pkg' }],
+        },
+      ],
+    })
+    renderTab(component)
+    const select = screen.getByTestId('enum-select') as HTMLSelectElement
+    // The legacy value is selected, listed alongside the enum, and preserved
+    // in the request until the user changes it.
+    expect(select).toHaveValue('rpm')
+    expect([...select.options].map((o) => o.value)).toEqual(
+      expect.arrayContaining(['rpm', 'DEB', 'RPM']),
+    )
+    expect(captured.section!.slice.request.baseConfiguration?.packages).toEqual([
+      { packageType: 'rpm', packageName: 'my-pkg' },
+    ])
   })
 })
 

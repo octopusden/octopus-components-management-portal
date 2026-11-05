@@ -70,6 +70,7 @@ The Distribution tab edits the BASE row's distribution families: Maven, File URL
 
 - **Per-range overrides.** `distribution.generic` is the fifth distribution marker path (alongside maven / fileUrl / docker / packages): add / edit / delete from the tab's per-range block or the Overrides tab, children carried in `markerChildren.genericArtifacts`.
 - **Validation is server-side.** The path's shape (no schemes / commas / leading slashes; segments `[A-Za-z0-9._-]`, no dots-only) and the allowed placeholders (`${version} ${major} ${minor} ${service} ${fix} ${build}`) are enforced by CRS on save — the Portal only requires a non-blank value, matching its treatment of docker / package names.
+- **Package Type is a dropdown.** Both the tab's Packages section and the per-range package override editor render Package Type as an `EnumSelect` pinned to `['DEB', 'RPM']` — a direct mirror of the CRS write-side enum (`PACKAGE_TYPE_NAMES`, 400 on anything else). "None" (= blank) keeps the blank-row drop on save, and a stored value outside the set (legacy data) renders as an extra visible option until changed rather than an empty select.
 
 ## General tab
 

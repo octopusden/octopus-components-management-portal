@@ -6,6 +6,7 @@ import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
 import { FieldInfo } from '../ui/FieldInfo'
 import { FieldLabelText } from '../ui/FieldLabelText'
+import { EnumSelect } from '../ui/EnumSelect'
 import { Separator } from '../ui/separator'
 import { findUnsupportedGroupId } from '../../lib/groupValidation'
 import type { DistributionSection } from './useDistributionSection'
@@ -239,7 +240,12 @@ export function DistributionTab({ section, canEdit, supportedGroups = [] }: Dist
                   <Label className="text-xs"><FieldLabelText path="distribution.package.type" fallback="Package Type" /> <span className="text-destructive">*</span></Label>
                   <FieldInfo path="distribution.package.type" label="Package Type" />
                 </div>
-                <Input required value={row.packageType} onChange={(e) => updatePackage(i, 'packageType', e.target.value)} placeholder="rpm" className="font-mono text-xs" />
+                <EnumSelect
+                  fieldPath="distribution.package.type"
+                  optionsOverride={['DEB', 'RPM']}
+                  value={row.packageType}
+                  onValueChange={(v) => updatePackage(i, 'packageType', v)}
+                />
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-1">
