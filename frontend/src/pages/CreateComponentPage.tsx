@@ -1613,7 +1613,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
                 <Input
                   id="create-coordinate-path"
                   className="font-mono text-xs"
-                  placeholder="releases/my-component/${version}/my-component-${version}.jar"
+                  placeholder="my-component/${version}/my-component.tag.gz"
                   aria-label="Path"
                   {...register('coordinate.path')}
                 />

@@ -1035,7 +1035,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs">Path <span className="text-destructive">*</span></Label>
-                        <Input required value={row.path} onChange={(e) => updateGeneric(i, 'path', e.target.value)} placeholder="releases/my-component/${version}/my-component-${version}.jar" className="font-mono text-xs" />
+                        <Input required value={row.path} onChange={(e) => updateGeneric(i, 'path', e.target.value)} placeholder="my-component/${version}/my-component.tag.gz" className="font-mono text-xs" />
                       </div>
                     </div>
                   ))}

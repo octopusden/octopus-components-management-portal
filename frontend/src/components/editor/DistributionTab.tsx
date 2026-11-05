@@ -288,7 +288,7 @@ export function DistributionTab({ section, canEdit, supportedGroups = [] }: Dist
                 <Label className="text-xs"><FieldLabelText path="distribution.generic.path" fallback="Path" /> <span className="text-destructive">*</span></Label>
                 <FieldInfo path="distribution.generic.path" label="Path" />
               </div>
-              <Input required value={row.path} onChange={(e) => updateGeneric(i, 'path', e.target.value)} placeholder="releases/my-component/${version}/my-component-${version}.jar" className="font-mono text-xs" />
+              <Input required value={row.path} onChange={(e) => updateGeneric(i, 'path', e.target.value)} placeholder="my-component/${version}/my-component.tag.gz" className="font-mono text-xs" />
             </div>
           </div>
         ))}
