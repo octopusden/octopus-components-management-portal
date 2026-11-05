@@ -8,6 +8,7 @@ function makeForm(overrides: Partial<CreateFormValues> = {}): CreateFormValues {
     displayName: 'Service New',
     buildSystem: 'MAVEN',
     componentOwner: 'owner@example.com',
+    systems: [],
     distributionExplicit: false,
     distributionExternal: true,
     releaseManager: [],
@@ -625,7 +626,7 @@ describe('buildCreateRequest — copy mode (with source)', () => {
 
   it('copies source general fields and lists', () => {
     // A clone's form starts with the source's labels (initialValues); the form wins.
-    const req = buildCreateRequest(makeForm({ name: 'svc-clone', labels: source.labels }), source)
+    const req = buildCreateRequest(makeForm({ name: 'svc-clone', labels: source.labels, systems: source.systems }), source)
     expect(req).toMatchObject({
       name: 'svc-clone',
       productType: 'TYPE_A',
@@ -875,4 +876,21 @@ describe('buildCreateRequest — labels and build tasks', () => {
     }
   })
 
+})
+
+
+describe('SYS-107: selected systems in create requests', () => {
+  it('SYS-107 sends multiple selected systems and an explicit empty selection', () => {
+    expect(buildCreateRequest(makeForm({ systems: ['SYS3', 'SYS2'] })).systems).toEqual(['SYS3', 'SYS2'])
+    expect(buildCreateRequest(makeForm({ systems: [] }), makeSource()).systems).toEqual([])
+  })
+
+  it('SYS-107 uses clone form edits instead of the original systems', () => {
+    expect(buildCreateRequest(makeForm({ systems: ['SYS2'] }), makeSource()).systems).toEqual(['SYS2'])
+  })
+
+  it('SYS-107 omits systems when field policy prevents editing', () => {
+    const request = buildCreateRequest(makeForm({ systems: ['SYS3'] }), undefined, (field) => field !== 'system')
+    expect(request).not.toHaveProperty('systems')
+  })
 })

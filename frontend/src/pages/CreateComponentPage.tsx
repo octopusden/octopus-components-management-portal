@@ -41,6 +41,7 @@ import { useFieldConfig, useComponentDefaults } from '../hooks/useAdminConfig'
 import type { ComponentProfile } from '../hooks/useComponentProfiles'
 import { useProfilesForWizard } from '../hooks/useProfilesForWizard'
 import { useLabels } from '../hooks/useLabels'
+import { useSystemsDictionary } from '../hooks/useSystemsDictionary'
 import { ChipsInput } from '../components/ui/ChipsInput'
 import {
   isFieldEditableFor,
@@ -420,6 +421,8 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
 
   const buildTasksVisibility = useFieldVisibility('build.buildTasks')
   const labelsVisibility = useFieldVisibility('component.labels')
+  const systemsVisibility = useFieldVisibility('component.system')
+  const { data: systemOptions = [], isLoading: systemsLoading } = useSystemsDictionary()
   const profileRules = useMemo(() => profile?.rules ?? [], [profile])
   const previousRules = useRef(profileRules)
   const schema = useMemo(
@@ -1200,6 +1203,23 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
           <FieldError message={errors.clientCode?.message} />
         </Field>
       )}
+      {!fcLoading && !fcError && systemsVisibility !== 'hidden' && (
+        <Field label="System" htmlFor="create-systems" path="component.system">
+          <ChipsInput
+            id="create-systems"
+            noun="system"
+            placeholder="Add system"
+            value={values.systems}
+            onChange={(next) => setValue('systems', next, { shouldValidate: true, shouldDirty: true, shouldTouch: true })}
+            options={systemOptions}
+            isLoading={systemsLoading}
+            disabled={!editable('system')}
+            ariaInvalid={Boolean(errors.systems)}
+            ariaDescribedBy={errors.systems ? 'create-systems-error' : undefined}
+          />
+          {errors.systems && <p id="create-systems-error" className="text-xs text-destructive">{errors.systems.message}</p>}
+        </Field>
+      )}
       {labelsVisibility !== 'hidden' && (
         <Field label="Labels" htmlFor="create-labels" path="component.labels">
           <ChipsInput
@@ -1772,6 +1792,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
 
       <SummaryDiff
         values={values}
+        showSystems={editable('system')}
         showLabels={labelsVisibility !== 'hidden'}
         showBuildTasks={buildTasksVisibility === 'editable'}
         vcsApplies={vcsApplies}
@@ -2115,10 +2136,12 @@ function SummaryDiff({
   vcsApplies,
   classification,
   escrowGeneration,
+  showSystems,
   showLabels,
   showBuildTasks,
 }: {
   values: CreateFormValues
+  showSystems: boolean
   showLabels: boolean
   showBuildTasks: boolean
   vcsApplies: boolean
@@ -2139,6 +2162,7 @@ function SummaryDiff({
     ['Security Champions', values.securityChampion.join(', ')],
     ['Copyright', values.copyright],
     ['Classification', classification],
+    ['System', shownIf(showSystems, values.systems.join(', '))],
     ['Labels', shownIf(showLabels, values.labels.join(', '))],
   ])
   const ownershipSummary = values.ownership

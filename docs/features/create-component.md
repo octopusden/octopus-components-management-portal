@@ -100,3 +100,13 @@ rule is [`component-key-format`](../../openspec/specs/component-key-format/spec.
   hidden removes the field and sends none.
 - A clone starts with the source's labels, and with its build tasks when the user may edit them.
 - **Auto release** is never copied by a clone: it is off on every new component.
+
+
+## Systems at create
+
+The General step uses the editor's `ChipsInput` and `useSystemsDictionary` to select several
+systems from the full `/components/meta/systems/dictionary`, including codes not yet used by a
+component. A new form starts with the non-blank `component-defaults.system`; a clone copies its
+source's systems, including an empty selection. Users can remove every system. Review and the
+create request use the selection in the form. `component.system` field policy hides or disables
+the control; a field the user may not edit is omitted from the request.

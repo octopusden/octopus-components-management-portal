@@ -184,6 +184,7 @@ export function makeCreateSchema(
       displayName: z.string(),
       buildSystem: z.string().min(1, 'Build System is required'),
       componentOwner: z.string().trim().min(1, 'Component Owner is required'),
+      systems: z.array(z.string()),
       distributionExplicit: z.boolean(),
       distributionExternal: z.boolean(),
       releaseManager: z.array(z.string()),
@@ -277,6 +278,7 @@ export const SCRATCH_DEFAULTS: CreateFormValues = {
   displayName: '',
   buildSystem: '',
   componentOwner: '',
+  systems: [],
   distributionExplicit: false,
   distributionExternal: true,
   releaseManager: [],
@@ -356,6 +358,7 @@ export function seedVersionFormats(
 }
 
 export interface ComponentDefaults {
+  system?: string
   buildSystem?: string
   componentDisplayName?: string
   copyright?: string
@@ -401,6 +404,7 @@ export function initialValues(
     blankToUndefined(baseVcs?.branch) ?? blankToUndefined(vcsDefaults.branch) ?? FALLBACK_VCS_BRANCH
   if (!source) {
     const defaultBuildSystem = blankToUndefined(defaults.buildSystem)
+    const defaultSystem = blankToUndefined(defaults.system)
     // Distribution classification is DERIVED FROM THE PRE-SELECTED PROFILE (the
     // wizard's source of truth), not from component-defaults — otherwise the
     // pre-selected profile and the seeded flags could disagree and the payload
@@ -410,6 +414,7 @@ export function initialValues(
       : SCRATCH_DEFAULTS
     return {
       ...SCRATCH_DEFAULTS,
+      systems: defaultSystem ? [defaultSystem] : [],
       buildSystem:
         defaultBuildSystem && !DEPRECATED_BUILD_SYSTEMS.has(defaultBuildSystem)
           ? defaultBuildSystem
@@ -437,6 +442,7 @@ export function initialValues(
     ...SCRATCH_DEFAULTS,
     buildSystem: DEPRECATED_BUILD_SYSTEMS.has(sourceBuildSystem) ? '' : sourceBuildSystem,
     componentOwner: source.componentOwner ?? '',
+    systems: [...(source.systems ?? [])],
     distributionExplicit: source.distributionExplicit ?? false,
     distributionExternal: source.distributionExternal ?? false,
     releaseManager: [...(source.releaseManager ?? [])],

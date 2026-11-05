@@ -70,6 +70,8 @@ const PROFILES_OK = {
 }
 const mockUseComponentProfiles = vi.fn(() => PROFILES_OK)
 vi.mock('../hooks/useComponentProfiles', () => ({ useComponentProfiles: () => mockUseComponentProfiles() }))
+const mockUseSystemsDictionary = vi.fn(() => ({ data: ['SYS3', 'SYS1', 'UNUSED'], isLoading: false }))
+vi.mock('../hooks/useSystemsDictionary', () => ({ useSystemsDictionary: () => mockUseSystemsDictionary() }))
 vi.mock('../hooks/useLabels', () => ({ useLabels: () => ({ data: ['sql', 'backend'], isLoading: false }) }))
 // Layout pulls the nav shell + its own queries; stub to a passthrough.
 vi.mock('../components/Layout', () => ({
@@ -1912,5 +1914,82 @@ describe('CreateComponentPage — component key with a client-code prefix', () =
     await waitFor(() =>
       expect(screen.getByText(/must be lowercase letters, digits/i)).toBeDefined(),
     )
+  })
+})
+
+
+describe('SYS-107: create wizard systems picker', () => {
+  beforeEach(() => {
+    mockUseComponentDefaults.mockReturnValue({
+      ...COMPONENT_DEFAULTS_OK,
+      data: { ...(COMPONENT_DEFAULTS_OK.data as object), system: 'SYS3' },
+    })
+  })
+
+  it('SYS-107 preselects the default and adds dictionary-only systems to Review', async () => {
+    renderWizard()
+    await clickNext()
+    expect(screen.getByRole('button', { name: 'Remove SYS3' })).toBeDefined()
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Add system' }), 'UNUSED')
+    expect(screen.getByRole('button', { name: 'Remove UNUSED' })).toBeDefined()
+    await userEvent.click(screen.getByRole('button', { name: /Review & create/i }))
+    expect(screen.getByText('+ SYS3, UNUSED')).toBeDefined()
+  })
+
+  it('SYS-107 lets users clear all systems without restoring the default', async () => {
+    renderWizard()
+    await clickNext()
+    await userEvent.click(screen.getByRole('button', { name: 'Remove SYS3' }))
+    expect(screen.getByText('No systems yet')).toBeDefined()
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Add system' }), 'SYS1')
+    expect(screen.queryByRole('button', { name: 'Remove SYS3' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Remove SYS1' })).toBeDefined()
+  })
+
+  it('SYS-107 starts clones with the source systems', async () => {
+    mockUseComponent.mockReturnValue({ data: makeSource({ systems: ['SYS1'] }), isLoading: false, error: null })
+    renderWizard('/components/new?from=c-1')
+    expect(await screen.findByRole('button', { name: 'Remove SYS1' })).toBeDefined()
+    expect(screen.queryByRole('button', { name: 'Remove SYS3' })).toBeNull()
+  })
+
+  it('SYS-107 hides systems when configured hidden', async () => {
+    mockUseFieldConfig.mockReturnValue({ data: { component: { system: { visibility: 'hidden' } } }, isLoading: false, isError: false })
+    renderWizard()
+    await clickNext()
+    expect(screen.queryByRole('combobox', { name: 'Add system' })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: /Review & create/i }))
+    expect(screen.queryByText('SYS3')).toBeNull()
+  })
+
+  it.each([{ visibility: 'readonly' }, { editable: 'adminOnly' }])('SYS-107 disables systems under field policy %j', async (entry) => {
+    mockUseFieldConfig.mockReturnValue({ data: { component: { system: entry } }, isLoading: false, isError: false })
+    renderWizard()
+    await clickNext()
+    expect((screen.getByRole('combobox', { name: 'Add system' }) as HTMLSelectElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Remove SYS3' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+})
+
+
+describe('SYS-107: systems submitted by the wizard', () => {
+  it.each([['SYS3', 'UNUSED'], []])('SYS-107 submits the selection %j', async (...selected) => {
+    mockUseComponentDefaults.mockReturnValue({ ...COMPONENT_DEFAULTS_OK, data: { system: 'SYS3' } })
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext()
+    if (selected.length === 0) await userEvent.click(screen.getByRole('button', { name: 'Remove SYS3' }))
+    else await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Add system' }), 'UNUSED')
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await userEvent.click(screen.getByRole('button', { name: /^Build$/i }))
+    await userEvent.selectOptions(screen.getByLabelText(/^Build System/i), 'PROVIDED')
+    await userEvent.click(screen.getByRole('button', { name: /^Jira$/i }))
+    await userEvent.type(screen.getByLabelText(/^Jira Project Key/i), 'WIDG')
+    await userEvent.click(screen.getByRole('button', { name: /Review & create/i }))
+    await userEvent.type(screen.getByLabelText(/^Jira task key/i), 'ABC-123')
+    await userEvent.click(screen.getByRole('button', { name: /^create component$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1))
+    expect(mockMutateAsync.mock.calls[0]![0].systems).toEqual(selected)
   })
 })

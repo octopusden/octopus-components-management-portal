@@ -60,6 +60,7 @@ export interface CreateFormValues {
   displayName: string
   buildSystem: string
   componentOwner: string
+  systems: string[]
   distributionExplicit: boolean
   distributionExternal: boolean
   // Required by CRS only when explicit+external; the form gates them behind
@@ -144,7 +145,8 @@ export interface CreateFormValues {
 //     escrow entirely (not part of a new component);
 //   - labels follow their field-config visibility: editable → the form wins, readonly → the
 //     source's, hidden → none; the build aspect's buildTasks is sent only when editable;
-//   - copied from source: productType, systems, solution,
+//   - systems come from the form, initialized from defaults or the clone source;
+//   - copied from source: productType, solution,
 //     parentComponentName, docs, securityGroups, releasesInDefaultBranch,
 //     jiraHotfixVersionFormat, vcsExternalRegistry, and from the BASE row the
 //     escrow aspect (generation overlaid from the form — see above), jira aspect (source projectKey stripped — the form supplies jiraProjectKey
@@ -300,7 +302,7 @@ export function buildCreateRequest(
     componentOwner: form.componentOwner,
     // Source-derived general fields (null/[] defaults in scratch mode).
     productType: source?.productType ?? undefined,
-    systems: source?.systems ?? [],
+    systems: [...form.systems],
     // clientCode is a General-step field for external components: the form wins
     // when external, otherwise the source value is preserved (non-external clone
     // semantics unchanged). A hidden/readonly field is stripped below regardless.
