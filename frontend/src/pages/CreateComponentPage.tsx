@@ -1673,7 +1673,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
 
       {/* ── Generic ────────────────────────────────────────────────────────── */}
       <section className="space-y-3">
-        <SectionHeader title="Generic artifacts" subtitle="HTTP-URL path templates of downloadable files (CRS SYS-98)." />
+        <SectionHeader title="Generic artifacts" subtitle="Generic artifacts paths." />
         {genericRows.fields.map((row, i) => (
           <div key={row.id} className="rounded-md border p-3 space-y-3">
             <div className="flex items-center justify-between">
@@ -1691,7 +1691,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
               <Input
                 id={`create-generic-${i}-path`}
                 className={cn('font-mono text-xs', reenterBorder)}
-                placeholder="my-component/${version}/my-component.tag.gz"
+                placeholder="my-component/${version}/my-component.tar.gz"
                 aria-label="Path"
                 aria-describedby={reenterId(`create-generic-${i}-path`)}
                 {...register(`distribution.generic.${i}.path` as const)}

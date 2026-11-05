@@ -160,7 +160,7 @@ export const fieldDescriptions: Record<string, string> = {
   'distribution.package.name':
     'Name of the distributed OS package. Required.',
   'distribution.generic.path':
-    'Path template of the artifact, e.g. my-component/${version}/my-component.tag.gz. Required. Segments are letters, digits, dots, underscores and hyphens; the only allowed placeholders are ${version}, ${major}, ${minor}, ${service}, ${fix} and ${build}.',
+    'Path template of the artifact, e.g. my-component/${version}/my-component.tar.gz. Required. Segments are letters, digits, dots, underscores and hyphens; the only allowed placeholders are ${version}, ${major}, ${minor}, ${service}, ${fix} and ${build}.',
   'distribution.securityGroup.type':
     'Access type granted to the group, e.g. read. New rows default to read.',
   'distribution.securityGroup.name':

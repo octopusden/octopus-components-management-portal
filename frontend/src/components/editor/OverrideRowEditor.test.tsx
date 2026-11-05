@@ -315,7 +315,7 @@ describe('OverrideRowEditor — create mode', () => {
     await userEvent.selectOptions(select, 'distribution.generic')
 
     await userEvent.click(screen.getByRole('button', { name: /add artifact/i }))
-    const pathInput = screen.getByPlaceholderText('my-component/${version}/my-component.tag.gz')
+    const pathInput = screen.getByPlaceholderText('my-component/${version}/my-component.tar.gz')
     await userEvent.type(pathInput, '  releases/svc/svc.jar  ')
 
     fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[2.0,3.0)' } })

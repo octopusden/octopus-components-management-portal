@@ -189,7 +189,7 @@ describe('DistributionTab — generic artifacts (CRS SYS-98)', () => {
     renderTab(baseComponent())
     fireEvent.click(screen.getAllByRole('button', { name: /^Add$/ })[3]!) // Generic Add
     expect(captured.section!.slice.request.baseConfiguration?.genericArtifacts ?? []).toEqual([])
-    fireEvent.change(screen.getByPlaceholderText('my-component/${version}/my-component.tag.gz'), {
+    fireEvent.change(screen.getByPlaceholderText('my-component/${version}/my-component.tar.gz'), {
       target: { value: '  releases/svc/svc.jar  ' },
     })
     expect(captured.section!.slice.request.baseConfiguration?.genericArtifacts).toEqual([
@@ -200,7 +200,7 @@ describe('DistributionTab — generic artifacts (CRS SYS-98)', () => {
   it('reports a generic list change in the diff', () => {
     renderTab(baseComponent())
     fireEvent.click(screen.getAllByRole('button', { name: /^Add$/ })[3]!) // Generic Add
-    fireEvent.change(screen.getByPlaceholderText('my-component/${version}/my-component.tag.gz'), {
+    fireEvent.change(screen.getByPlaceholderText('my-component/${version}/my-component.tar.gz'), {
       target: { value: 'releases/svc/svc.jar' },
     })
     const diff = captured.section!.slice.diff.find((d) => d.label === 'Distribution · Generic Artifacts')
