@@ -56,6 +56,15 @@ describe('OverridesDraftProvider', () => {
     expect(api.isLoading).toBe(true)
   })
 
+  it('exposes the server error state (serverError prop → isError)', () => {
+    render(
+      <OverridesDraftProvider componentId="c1" serverOverrides={[]} serverError>
+        <Consumer />
+      </OverridesDraftProvider>,
+    )
+    expect(api.isError).toBe(true)
+  })
+
   it('queueCreate appends a draft row (draft id, inferred rowType) and goes dirty', () => {
     renderProvider('c1', [])
     act(() => {

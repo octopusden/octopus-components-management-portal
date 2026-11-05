@@ -1204,6 +1204,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/rest/api/4/components/{idOrName}/distribution/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview which source each distribution path takes for a version
+         * @description Resolves, for a concrete version, whether each distribution.* marker path takes BASE, OVERRIDE or CONFLICT over the candidate overrides and supported versions in the body (an omitted field = the saved state). Nothing is persisted.
+         */
+        post: operations["preview_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rest/api/4/components/{idOrName}/editors": {
         parameters: {
             query?: never;
@@ -1968,6 +1988,50 @@ export interface components {
             minorVersion: components["schemas"]["ComponentRegistryVersion"];
             rcVersion: components["schemas"]["ComponentRegistryVersion"];
             releaseVersion: components["schemas"]["ComponentRegistryVersion"];
+        };
+        /** @description The source one distribution.* marker path takes for the version. */
+        DistributionPathPreview: {
+            /**
+             * @description Marker attribute, e.g. distribution.maven.
+             * @example distribution.maven
+             */
+            attribute: string;
+            /** @description versionRange of each matching override, byte-for-byte as it was sent or stored. */
+            matchedRanges: string[];
+            /**
+             * @description BASE: no override range contains the version; OVERRIDE: exactly one does; CONFLICT: more than one does (a candidate set has not been through write validation).
+             * @enum {string}
+             */
+            source: "BASE" | "OVERRIDE" | "CONFLICT";
+            /** @description versionRange of each override on this path that does not parse (never matches), byte-for-byte as it was sent or stored. */
+            unevaluableRanges: string[];
+        };
+        /** @description Candidate supported versions, same shape as the supported-versions PUT. */
+        DistributionPreviewCoverage: {
+            /** @description true (or no ranges) = every version is supported. */
+            all?: boolean;
+            /** @description Supported ranges; a blank or unparseable range counts as covering. */
+            ranges?: string[];
+        };
+        /** @description Distribution preview request: which source each distribution.* marker path takes for `version`, over a candidate override set and candidate supported versions. An omitted field means the saved state. */
+        DistributionPreviewRequest: {
+            /** @description Candidate override set, the same full-set list a component PATCH sends. When present it replaces the saved overrides entirely; only entries on distribution.* attributes are evaluated. Omitted = the saved overrides. */
+            fieldOverrides?: components["schemas"]["FieldOverrideUpsertRequest"][];
+            supportedVersions?: components["schemas"]["DistributionPreviewCoverage"];
+            /**
+             * @description The concrete version to resolve. Must contain at least one numeric item, otherwise 400.
+             * @example 1.2-0003
+             */
+            version: string;
+        };
+        /** @description Distribution preview verdict for one version. */
+        DistributionPreviewResponse: {
+            /** @description One entry per distribution.* marker family, in a stable order; empty when supported is false. */
+            paths: components["schemas"]["DistributionPathPreview"][];
+            /** @description false when the version lies outside the supported versions; paths is then empty. */
+            supported: boolean;
+            /** @description The version as sent (trimmed). */
+            version: string;
         };
         DocLinkRequest: {
             docComponentKey: string;
@@ -10458,6 +10522,113 @@ export interface operations {
                 };
                 content: {
                     "*/*": string[];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Payload Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Early */
+            425: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                idOrName: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DistributionPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DistributionPreviewResponse"];
                 };
             };
             /** @description Bad Request */

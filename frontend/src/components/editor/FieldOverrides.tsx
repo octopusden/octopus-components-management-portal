@@ -26,6 +26,17 @@ import { formatVersionRange } from '../../lib/versionRange'
 import { OverrideRowEditor } from './OverrideRowEditor'
 import { OverridesTimeline } from './OverridesTimeline'
 import { useOverridesDraft } from './overridesDraft'
+import { summarizeMarkerChildren } from './perRangeGrouping'
+
+// Placeholder per attribute when the override carries no child identifiers.
+const EMPTY_MARKER_LABEL: Record<string, string> = {
+  'vcs.settings': 'vcs settings',
+  'distribution.maven': 'maven',
+  'distribution.fileUrl': 'file urls',
+  'distribution.docker': 'docker',
+  'distribution.packages': 'packages',
+  'build.requiredTools': 'required tools',
+}
 
 /**
  * Neutral, read-only one-line summary of a marker override's children. The API
@@ -35,25 +46,8 @@ import { useOverridesDraft } from './overridesDraft'
  * is also available on the "As Code" tab.)
  */
 function markerSummary(override: FieldOverride): string {
-  const mc = override.markerChildren
-  if (!mc) return 'marker'
-  const join = (xs: Array<string | null | undefined>) => xs.filter((x): x is string => !!x).join(', ')
-  switch (override.overriddenAttribute) {
-    case 'vcs.settings':
-      return join((mc.vcsEntries ?? []).map((e) => e.name?.trim() || e.vcsPath)) || 'vcs settings'
-    case 'distribution.maven':
-      return join((mc.mavenArtifacts ?? []).map((a) => `${a.groupPattern}:${a.artifactPattern}`)) || 'maven'
-    case 'distribution.fileUrl':
-      return join((mc.fileUrlArtifacts ?? []).map((a) => a.url)) || 'file urls'
-    case 'distribution.docker':
-      return join((mc.dockerImages ?? []).map((a) => (a.flavor ? `${a.imageName}:${a.flavor}` : a.imageName))) || 'docker'
-    case 'distribution.packages':
-      return join((mc.packages ?? []).map((a) => `${a.packageType} ${a.packageName}`)) || 'packages'
-    case 'build.requiredTools':
-      return join(mc.requiredTools ?? []) || 'required tools'
-    default:
-      return 'marker'
-  }
+  if (!override.markerChildren) return 'marker'
+  return summarizeMarkerChildren(override) || EMPTY_MARKER_LABEL[override.overriddenAttribute] || 'marker'
 }
 
 export function FieldOverrides() {

@@ -43,6 +43,9 @@ interface OverridesDraftValue {
    *  Surfaces use it to avoid flashing "no overrides" while the fetch is in
    *  flight (the `= []` default seeds an empty baseline until then). */
   isLoading: boolean
+  /** The server baseline failed to load — `effectiveOverrides` is then not the
+   *  real set (read-only consumers such as the preview fall back to saved). */
+  isError: boolean
   isDirty: boolean
   /** Queue a new override; returns the draft id so the caller can re-edit it. */
   queueCreate: (body: FieldOverrideCreateBody) => string
@@ -97,6 +100,7 @@ export function OverridesDraftProvider({
   componentId,
   serverOverrides,
   serverLoading = false,
+  serverError = false,
   children,
 }: {
   componentId: string
@@ -104,6 +108,8 @@ export function OverridesDraftProvider({
   /** The override query's loading state — surfaced as `isLoading` so consumers
    *  don't render "no overrides" while the first fetch is in flight. */
   serverLoading?: boolean
+  /** The override query's error state — surfaced as `isError`. */
+  serverError?: boolean
   children: ReactNode
 }) {
   const [draft, setDraft] = useState<DraftState>(EMPTY)
@@ -220,13 +226,14 @@ export function OverridesDraftProvider({
       serverOverrides,
       effectiveOverrides,
       isLoading: serverLoading,
+      isError: serverError,
       isDirty,
       queueCreate,
       queueUpdate,
       queueDelete,
       reset,
     }),
-    [serverOverrides, effectiveOverrides, serverLoading, isDirty, queueCreate, queueUpdate, queueDelete, reset],
+    [serverOverrides, effectiveOverrides, serverLoading, serverError, isDirty, queueCreate, queueUpdate, queueDelete, reset],
   )
 
   return <OverridesDraftContext.Provider value={value}>{children}</OverridesDraftContext.Provider>
