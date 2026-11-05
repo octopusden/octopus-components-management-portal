@@ -5,7 +5,7 @@ import { coalescePerRangeOverrides, type PerRangeGroup } from './perRangeGroupin
 import type { FieldOverride } from '../../lib/types'
 
 /** One-line human summary of a distribution marker override's children —
- *  mirrors FieldOverrides' `markerSummary` for the four distribution paths. */
+ *  mirrors FieldOverrides' `markerSummary` for the five distribution paths. */
 function summarize(o: FieldOverride): string {
   const mc = o.markerChildren
   if (!mc) return ''
@@ -14,6 +14,7 @@ function summarize(o: FieldOverride): string {
   if (mc.dockerImages?.length) return join(mc.dockerImages.map((d) => (d.flavor ? `${d.imageName}:${d.flavor}` : d.imageName)))
   if (mc.fileUrlArtifacts?.length) return join(mc.fileUrlArtifacts.map((a) => a.url))
   if (mc.packages?.length) return join(mc.packages.map((p) => `${p.packageType} ${p.packageName}`))
+  if (mc.genericArtifacts?.length) return join(mc.genericArtifacts.map((a) => a.path))
   return ''
 }
 

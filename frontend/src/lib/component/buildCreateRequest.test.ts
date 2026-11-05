@@ -34,6 +34,7 @@ function makeForm(overrides: Partial<CreateFormValues> = {}): CreateFormValues {
       flavor: '',
       packageType: 'DEB',
       packageName: '',
+      path: '',
     },
     ownership: [{ groupId: '', mode: 'ALL', tokens: [] }],
     escrowGeneration: '',
@@ -320,6 +321,29 @@ describe('buildCreateRequest — gated (explicit+external) coordinate', () => {
     expect(req.baseConfiguration?.packages).toEqual([
       { packageType: 'RPM', packageName: 'svc-pkg' },
     ])
+  })
+
+  it('generic coordinate → one genericArtifacts entry (trimmed path)', () => {
+    const req = buildCreateRequest(
+      gated({ type: 'generic', path: '  releases/svc/${version}/svc.jar  ' }),
+    )
+    expect(req.baseConfiguration?.genericArtifacts).toEqual([
+      { path: 'releases/svc/${version}/svc.jar' },
+    ])
+    expect('mavenArtifacts' in req.baseConfiguration!).toBe(false)
+    expect('dockerImages' in req.baseConfiguration!).toBe(false)
+    expect('packages' in req.baseConfiguration!).toBe(false)
+  })
+
+  it('generic stays gated: a generic coordinate is NOT sent when not explicit+external', () => {
+    const req = buildCreateRequest(
+      makeForm({
+        distributionExplicit: false,
+        distributionExternal: false,
+        coordinate: { ...makeForm().coordinate, type: 'generic', path: 'releases/svc/svc.jar' },
+      }),
+    )
+    expect('genericArtifacts' in (req.baseConfiguration ?? {})).toBe(false)
   })
 
   it('forwards RM/SC and copyright from the form when gated', () => {

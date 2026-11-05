@@ -101,6 +101,7 @@ const KEY_TO_SCHEMA = {
   'distribution.fileUrlArtifacts': ['ComponentConfigurationResponse', 'fileUrlArtifacts'],
   'distribution.dockerImages': ['ComponentConfigurationResponse', 'dockerImages'],
   'distribution.packages': ['ComponentConfigurationResponse', 'packages'],
+  'distribution.genericArtifacts': ['ComponentConfigurationResponse', 'genericArtifacts'],
   'distribution.securityGroups': ['ComponentDetailResponse', 'securityGroups'],
   'distribution.maven.groupPattern': ['MavenArtifactResponse', 'groupPattern'],
   'distribution.maven.artifactPattern': ['MavenArtifactResponse', 'artifactPattern'],
@@ -113,6 +114,7 @@ const KEY_TO_SCHEMA = {
   'distribution.docker.flavor': ['DockerImageResponse', 'flavor'],
   'distribution.package.type': ['PackageResponse', 'packageType'],
   'distribution.package.name': ['PackageResponse', 'packageName'],
+  'distribution.generic.path': ['GenericArtifactResponse', 'path'],
   'distribution.securityGroup.type': ['SecurityGroupResponse', 'groupType'],
   'distribution.securityGroup.name': ['SecurityGroupResponse', 'groupName'],
 

@@ -296,6 +296,36 @@ describe('OverrideRowEditor — create mode', () => {
     expect(screen.getByRole('button', { name: /add artifact/i })).toBeDefined()
   })
 
+  it('switching to Marker and selecting distribution.generic renders generic child list editor', async () => {
+    renderEditor()
+    await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
+    const select = screen.getByTestId('attr-select') as HTMLSelectElement
+    await userEvent.selectOptions(select, 'distribution.generic')
+    expect(screen.getByRole('button', { name: /add artifact/i })).toBeDefined()
+  })
+
+  it('queues a create with a trimmed-path marker body for distribution.generic (blank rows dropped)', async () => {
+    renderEditor()
+    await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
+    const select = screen.getByTestId('attr-select') as HTMLSelectElement
+    await userEvent.selectOptions(select, 'distribution.generic')
+
+    await userEvent.click(screen.getByRole('button', { name: /add artifact/i }))
+    const pathInput = screen.getByPlaceholderText('releases/my-component/${version}/my-component-${version}.jar')
+    await userEvent.type(pathInput, '  releases/svc/svc.jar  ')
+
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[2.0,3.0)' } })
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+
+    await waitFor(() => {
+      expect(mockQueueCreate).toHaveBeenCalledOnce()
+      const body = mockQueueCreate.mock.calls[0]![0]
+      expect(body.overriddenAttribute).toBe('distribution.generic')
+      expect(body.value).toBeNull()
+      expect(body.markerChildren?.genericArtifacts).toEqual([{ path: 'releases/svc/svc.jar' }])
+    })
+  })
+
   it('queues a create with correct scalar string body on submit', async () => {
     renderEditor()
     const select = screen.getByTestId('attr-select') as HTMLSelectElement

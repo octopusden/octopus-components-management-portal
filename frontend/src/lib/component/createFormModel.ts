@@ -176,7 +176,7 @@ export function makeCreateSchema(
       vcsTag: z.string(),
       vcsBranch: z.string(),
       coordinate: z.object({
-        type: z.enum(['maven', 'docker', 'package']),
+        type: z.enum(['maven', 'docker', 'package', 'generic']),
         groupPattern: z.string(),
         artifactPattern: z.string(),
         imageName: z.string(),
@@ -184,6 +184,8 @@ export function makeCreateSchema(
         flavor: z.string(),
         packageType: z.enum(['DEB', 'RPM']),
         packageName: z.string(),
+        // Generic HTTP-URL artifact path (CRS SYS-98); validated server-side.
+        path: z.string(),
       }),
       ownership: z.array(
         z.object({
@@ -217,6 +219,7 @@ export const EMPTY_COORDINATE: CreateFormValues['coordinate'] = {
   flavor: '',
   packageType: 'DEB',
   packageName: '',
+  path: '',
 }
 
 export const SCRATCH_DEFAULTS: CreateFormValues = {

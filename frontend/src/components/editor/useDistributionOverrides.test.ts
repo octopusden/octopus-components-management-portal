@@ -38,20 +38,22 @@ beforeEach(() => {
 })
 
 describe('useDistributionOverrides', () => {
-  it('groups only the four distribution marker paths, ignoring scalar/other-marker paths', () => {
+  it('groups only the five distribution marker paths, ignoring scalar/other-marker paths', () => {
     mockEffective = [
       fo('distribution.docker', '[1,2)'),
       fo('distribution.docker', '[2,3)'),
       fo('distribution.maven', '[1,2)'),
+      fo('distribution.generic', '[1,2)'),
       fo('build.javaVersion', '[1,2)'),
       fo('vcs.settings', '[1,2)'),
     ]
     const { result } = renderHook(() => useDistributionOverrides())
     expect(result.current.byPath['distribution.docker']).toHaveLength(2)
     expect(result.current.byPath['distribution.maven']).toHaveLength(1)
+    expect(result.current.byPath['distribution.generic']).toHaveLength(1)
     expect(result.current.byPath['distribution.fileUrl']).toHaveLength(0)
     expect(result.current.byPath['distribution.packages']).toHaveLength(0)
-    expect(result.current.total).toBe(3)
+    expect(result.current.total).toBe(4)
   })
 
   it('sorts variants within a path by version range (numeric-aware)', () => {

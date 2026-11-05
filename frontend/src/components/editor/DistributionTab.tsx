@@ -31,11 +31,12 @@ export function DistributionTab({ section, canEdit, supportedGroups = [] }: Dist
     addMaven, updateMaven, removeMaven,
     addFileUrl, updateFileUrl, removeFileUrl,
     addPackage, updatePackage, removePackage,
+    addGeneric, updateGeneric, removeGeneric,
     addSecurityGroup, updateSecurityGroup, removeSecurityGroup,
   } = section
-  const { maven, fileUrl, packages, securityGroups } = state
+  const { maven, fileUrl, packages, generic, securityGroups } = state
 
-  // Per-range distribution overrides (the four marker paths). All add/edit/delete
+  // Per-range distribution overrides (the five marker paths). All add/edit/delete
   // queue into the same page-level draft the combined Save flushes.
   const distOverrides = useDistributionOverrides()
   const [editor, setEditor] = useState<{ path: DistributionMarkerPath; override?: FieldOverride; collapseMemberIds?: string[] } | null>(null)
@@ -256,6 +257,47 @@ export function DistributionTab({ section, canEdit, supportedGroups = [] }: Dist
         )}
 
         {perRangeBlock('distribution.packages')}
+      </div>
+
+      <Separator />
+
+      {/* ── Generic Artifacts ──────────────────────────────────────────────── */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1">
+            <h3 className="text-sm font-semibold"><FieldLabelText path="distribution.genericArtifacts" fallback="Generic Artifacts" /></h3>
+            <FieldInfo path="distribution.genericArtifacts" label="Generic Artifacts" />
+            {rangeCountBadge('distribution.generic')}
+          </div>
+          <Button variant="ghost" size="sm" onClick={addGeneric} disabled={!canEdit}>
+            <Plus className="h-4 w-4" />
+            Add
+          </Button>
+        </div>
+
+        {generic.map((row, i) => (
+          <div key={i} className="rounded-md border p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-muted-foreground">Artifact {i + 1}</span>
+              <Button variant="ghost" size="sm" onClick={() => removeGeneric(i)} disabled={!canEdit} className="h-7 text-destructive hover:text-destructive">
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-1">
+                <Label className="text-xs"><FieldLabelText path="distribution.generic.path" fallback="Path" /> <span className="text-destructive">*</span></Label>
+                <FieldInfo path="distribution.generic.path" label="Path" />
+              </div>
+              <Input required value={row.path} onChange={(e) => updateGeneric(i, 'path', e.target.value)} placeholder="releases/my-component/${version}/my-component-${version}.jar" className="font-mono text-xs" />
+            </div>
+          </div>
+        ))}
+
+        {generic.length === 0 && (
+          <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">No generic artifacts.</div>
+        )}
+
+        {perRangeBlock('distribution.generic')}
       </div>
 
       <Separator />

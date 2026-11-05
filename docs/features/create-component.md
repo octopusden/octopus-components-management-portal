@@ -54,10 +54,13 @@ rule is [`component-key-format`](../../openspec/specs/component-key-format/spec.
   ([TD-006](../tech-debt/TD-006-solution-key-patterns-second-source.md)).
 
 - The rules only the Portal enforces (Jira project key and full version format required; VCS path,
-  branch and tag unless the build system needs none; `ssh://` VCS URL on the ecosystem Bitbucket
+  branch and tag unless the build system needs none; `ssh://` VCS URL on the ecosystem Bigbucket
   host; supported group-ID prefix; complete coordinate for an explicit external component) are one
   function over the create request (`lib/component/portalCreateRules.ts`), shared with template
-  review.
+  review. The distribution coordinate is one of Maven GAV, Docker image, package, or generic path
+  (CRS SYS-98; a single `path` string, validated by the registry — the wizard only requires it
+  non-blank). Exactly one coordinate is set at create; more are added on the editor's Distribution
+  tab afterwards.
 
 ## From a template
 

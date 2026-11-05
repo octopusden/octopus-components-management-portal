@@ -568,6 +568,24 @@ describe('CreateComponentPage — Solution profile gates the distribution coordi
     expect(screen.getByText('Distribution coordinate')).toBeDefined()
     expect(screen.getByRole('option', { name: 'Maven GAV' })).toBeDefined()
   })
+
+  it('offers the Generic path coordinate and requires its path', async () => {
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /^Solution$/i }))
+    await clickNext()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'my-solution')
+    await commitOwner('alice')
+    await userEvent.type(screen.getByLabelText(/^Display Name/i), 'My Solution')
+    await userEvent.click(screen.getByRole('button', { name: /^Distribution$/i }))
+    await userEvent.selectOptions(screen.getByLabelText(/Distribution coordinate/i), 'generic')
+    expect(screen.getByLabelText('Path')).toBeDefined()
+    // Blank path → the Portal coordinate rule blocks the step.
+    expect((screen.getByRole('button', { name: /^next$/i }) as HTMLButtonElement).disabled).toBe(true)
+    await userEvent.type(screen.getByLabelText('Path'), 'releases/my-solution/solution.jar')
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: /^next$/i }) as HTMLButtonElement).disabled).toBe(false),
+    )
+  })
 })
 
 describe('CreateComponentPage — dialog shell + vertical stepper', () => {

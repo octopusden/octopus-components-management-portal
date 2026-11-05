@@ -71,6 +71,7 @@ function coordinateTypeOf(request: ComponentCreateRequest): CoordinateType | und
   if (base?.mavenArtifacts?.length) return 'maven'
   if (base?.dockerImages?.length) return 'docker'
   if (base?.packages?.length) return 'package'
+  if (base?.genericArtifacts?.length) return 'generic'
   return undefined
 }
 
@@ -107,11 +108,15 @@ function coordinateIssues(
       return base?.packages?.[0]?.packageName?.trim()
         ? []
         : [{ path: 'baseConfiguration.packages[0].packageName', message: 'Package name is required' }]
+    case 'generic':
+      return base?.genericArtifacts?.[0]?.path?.trim()
+        ? []
+        : [{ path: 'baseConfiguration.genericArtifacts[0].path', message: 'Path is required' }]
     case undefined:
       return [
         {
           path: `${maven}.groupPattern`,
-          message: 'A Maven, Docker or package coordinate is required for an explicit + external component',
+          message: 'A Maven, Docker, package or generic coordinate is required for an explicit + external component',
         },
       ]
   }

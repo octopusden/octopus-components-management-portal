@@ -152,7 +152,7 @@ describe("initialValues — today's pre-filled values are kept (D7)", () => {
     releaseVersionFormat: '$major.$minor.$service', buildVersionFormat: '$major.$minor.$service-$fix',
     lineVersionFormat: '$major', minorSeparate: true, buildSeparate: true, vcsUrl: '', vcsTag: 'v$version',
     vcsBranch: 'develop',
-    coordinate: { type: 'maven', groupPattern: '', artifactPattern: '', imageName: '', flavor: '', packageType: 'DEB', packageName: '' },
+    coordinate: { type: 'maven', groupPattern: '', artifactPattern: '', imageName: '', flavor: '', packageType: 'DEB', packageName: '', path: '' },
     ownership: [{ groupId: '', mode: 'ALL', tokens: [] }],
     escrowGeneration: 'AUTO',
     // New create fields, empty for a new component.

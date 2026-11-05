@@ -94,9 +94,57 @@ describe('DistributionTab — blank-row filter (slice payload)', () => {
 
   it('puts securityGroups top-level (not inside baseConfiguration)', () => {
     renderTab(baseComponent())
-    fireEvent.click(screen.getAllByRole('button', { name: /^Add$/ })[3]!) // Security Groups Add
+    fireEvent.click(screen.getAllByRole('button', { name: /^Add$/ })[4]!) // Security Groups Add
     fireEvent.change(screen.getByPlaceholderText('my-security-group'), { target: { value: 'grp' } })
     expect(captured.section!.slice.request.securityGroups).toEqual([{ groupType: 'read', groupName: 'grp' }])
+  })
+})
+
+describe('DistributionTab — generic artifacts (CRS SYS-98)', () => {
+  it('seeds the section from the BASE row and sends the paths in the slice', () => {
+    const component = baseComponent({
+      configurations: [
+        {
+          ...(baseComponent().configurations![0] as ComponentConfiguration),
+          genericArtifacts: [
+            { id: 'g-2', sortOrder: 1, path: 'releases/b/${version}/b.jar' },
+            { id: 'g-1', sortOrder: 0, path: 'releases/a/${version}/a.jar' },
+          ],
+        },
+      ],
+    })
+    renderTab(component)
+    expect(captured.section!.state.generic).toEqual([
+      { path: 'releases/a/${version}/a.jar' },
+      { path: 'releases/b/${version}/b.jar' },
+    ])
+    expect(captured.section!.slice.request.baseConfiguration?.genericArtifacts).toEqual([
+      { path: 'releases/a/${version}/a.jar' },
+      { path: 'releases/b/${version}/b.jar' },
+    ])
+  })
+
+  it('adds a generic row, trims and drops a blank path from the slice', () => {
+    renderTab(baseComponent())
+    fireEvent.click(screen.getAllByRole('button', { name: /^Add$/ })[3]!) // Generic Add
+    expect(captured.section!.slice.request.baseConfiguration?.genericArtifacts ?? []).toEqual([])
+    fireEvent.change(screen.getByPlaceholderText('releases/my-component/${version}/my-component-${version}.jar'), {
+      target: { value: '  releases/svc/svc.jar  ' },
+    })
+    expect(captured.section!.slice.request.baseConfiguration?.genericArtifacts).toEqual([
+      { path: 'releases/svc/svc.jar' },
+    ])
+  })
+
+  it('reports a generic list change in the diff', () => {
+    renderTab(baseComponent())
+    fireEvent.click(screen.getAllByRole('button', { name: /^Add$/ })[3]!) // Generic Add
+    fireEvent.change(screen.getByPlaceholderText('releases/my-component/${version}/my-component-${version}.jar'), {
+      target: { value: 'releases/svc/svc.jar' },
+    })
+    const diff = captured.section!.slice.diff.find((d) => d.label === 'Distribution · Generic Artifacts')
+    expect(diff?.oldValue).toBe('—')
+    expect(diff?.newValue).toBe('releases/svc/svc.jar')
   })
 })
 
@@ -120,6 +168,7 @@ describe('DistributionTab field descriptions (FieldInfo)', () => {
           fileUrlArtifacts: [{ id: 'f-1', sortOrder: 0, url: 'https://example.com/a.zip', artifactId: null, classifier: null }],
           dockerImages: [{ id: 'd-1', sortOrder: 0, imageName: 'my-org/my-image', flavor: null }],
           packages: [{ id: 'p-1', sortOrder: 0, packageType: 'rpm', packageName: 'my-pkg' }],
+          genericArtifacts: [{ id: 'g-1', sortOrder: 0, path: 'releases/my-component/${version}/my-component.jar' }],
         },
       ],
     })
@@ -127,10 +176,11 @@ describe('DistributionTab field descriptions (FieldInfo)', () => {
 
   const EXPECTED_PATHS = [
     'distribution.mavenArtifacts', 'distribution.fileUrlArtifacts',
-    'distribution.packages', 'distribution.securityGroups',
+    'distribution.packages', 'distribution.genericArtifacts', 'distribution.securityGroups',
     'distribution.maven.groupPattern', 'distribution.maven.artifactPattern', 'distribution.maven.extension', 'distribution.maven.classifier',
     'distribution.fileUrl.url', 'distribution.fileUrl.artifactId', 'distribution.fileUrl.classifier',
     'distribution.package.type', 'distribution.package.name',
+    'distribution.generic.path',
     'distribution.securityGroup.type', 'distribution.securityGroup.name',
   ]
 

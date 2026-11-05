@@ -165,10 +165,29 @@ describe('portalCreateRules', () => {
       ).toEqual([{ path: 'baseConfiguration.packages[0].packageName', message: 'Package name is required' }])
     })
 
+    it('requires a path for the generic coordinate', () => {
+      expect(
+        rules(explicitExternal({ baseConfiguration: { mavenArtifacts: undefined, genericArtifacts: [{ path: '  ' }] } })),
+      ).toEqual([{ path: 'baseConfiguration.genericArtifacts[0].path', message: 'Path is required' }])
+    })
+
+    it('accepts a generic coordinate as the one required coordinate', () => {
+      expect(
+        rules(
+          explicitExternal({
+            baseConfiguration: { mavenArtifacts: undefined, genericArtifacts: [{ path: 'releases/svc/${version}/svc.jar' }] },
+          }),
+        ),
+      ).toEqual([])
+    })
+
     it('reads a chosen coordinate type that the request does not carry yet, as the wizard sends a blank Docker image', () => {
       const noCoordinate = explicitExternal({ baseConfiguration: { mavenArtifacts: undefined } })
       expect(rules(noCoordinate, { coordinateType: 'docker' })).toEqual([
         { path: 'baseConfiguration.dockerImages[0].imageName', message: 'Image name is required' },
+      ])
+      expect(rules(noCoordinate, { coordinateType: 'generic' })).toEqual([
+        { path: 'baseConfiguration.genericArtifacts[0].path', message: 'Path is required' },
       ])
     })
 
@@ -176,7 +195,7 @@ describe('portalCreateRules', () => {
       expect(rules(explicitExternal({ baseConfiguration: { mavenArtifacts: undefined } }))).toEqual([
         {
           path: 'baseConfiguration.mavenArtifacts[0].groupPattern',
-          message: 'A Maven, Docker or package coordinate is required for an explicit + external component',
+          message: 'A Maven, Docker, package or generic coordinate is required for an explicit + external component',
         },
       ])
     })

@@ -142,6 +142,11 @@ describe('rule paths', () => {
     expect(RULE_PATHS).toHaveLength(20)
     for (const path of RULE_PATHS) expect(formFieldOfRulePath(path)).toBeDefined()
   })
+
+  it('maps the Portal-only generic coordinate path to the wizard field (no reader: the registry allow-list does not name it)', () => {
+    expect(profileRuleErrors([rule('baseConfiguration.genericArtifacts[0].path', '.*')], full).size).toBe(0)
+    expect(formFieldOfRulePath('baseConfiguration.genericArtifacts[0].path')).toBe('coordinate.path')
+  })
 })
 
 function rule(path: string, pattern: string): ProfileFieldRule {

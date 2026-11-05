@@ -99,6 +99,7 @@ const KNOWN: readonly { path: string; label: string; group: string; read: Reader
   { path: 'baseConfiguration.dockerImages[0].flavor', label: 'Docker flavor', group: 'Distribution', read: (c) => c.baseConfiguration?.dockerImages?.[0]?.flavor },
   { path: 'baseConfiguration.packages[0].packageType', label: 'Package type', group: 'Distribution', read: (c) => c.baseConfiguration?.packages?.[0]?.packageType },
   { path: 'baseConfiguration.packages[0].packageName', label: 'Package name', group: 'Distribution', read: (c) => c.baseConfiguration?.packages?.[0]?.packageName },
+  { path: 'baseConfiguration.genericArtifacts[0].path', label: 'Generic artifact path', group: 'Distribution', read: (c) => c.baseConfiguration?.genericArtifacts?.[0]?.path },
   { path: 'baseConfiguration.escrow.generation', label: 'Generation', group: 'Escrow', read: (c) => c.baseConfiguration?.escrow?.generation },
 ]
 const GROUPS = ['General', 'Build', 'VCS', 'Jira', 'Distribution', 'Escrow']

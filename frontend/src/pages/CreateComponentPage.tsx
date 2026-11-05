@@ -1502,7 +1502,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
   const selectCoordinateType = (type: CreateFormValues['coordinate']['type']) => {
     setValue(
       'coordinate',
-      { type, groupPattern: '', artifactPattern: '', imageName: '', flavor: '', packageType: 'DEB', packageName: '' },
+      { type, groupPattern: '', artifactPattern: '', imageName: '', flavor: '', packageType: 'DEB', packageName: '', path: '' },
       { shouldValidate: false },
     )
     clearErrors('coordinate')
@@ -1531,6 +1531,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
               <option value="maven">Maven GAV</option>
               <option value="docker">Docker image</option>
               <option value="package">Package</option>
+              <option value="generic">Generic path</option>
             </select>
             {coordinateType === 'maven' && (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1603,13 +1604,29 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
                 </div>
               </div>
             )}
+            {coordinateType === 'generic' && (
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1">
+                  <Label htmlFor="create-coordinate-path" className="text-xs">Path</Label>
+                  <FieldInfo path="distribution.generic.path" label="Generic artifact path" />
+                </div>
+                <Input
+                  id="create-coordinate-path"
+                  className="font-mono text-xs"
+                  placeholder="releases/my-component/${version}/my-component-${version}.jar"
+                  aria-label="Path"
+                  {...register('coordinate.path')}
+                />
+              </div>
+            )}
             {errors.coordinate && (
               <p className="text-xs text-destructive">
                 {errors.coordinate.message ??
                   errors.coordinate.groupPattern?.message ??
                   errors.coordinate.artifactPattern?.message ??
                   errors.coordinate.imageName?.message ??
-                  errors.coordinate.packageName?.message}
+                  errors.coordinate.packageName?.message ??
+                  errors.coordinate.path?.message}
               </p>
             )}
           </div>

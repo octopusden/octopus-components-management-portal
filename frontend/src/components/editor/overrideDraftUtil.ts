@@ -41,6 +41,7 @@ const MARKER_CHILD_LABELS: [keyof MarkerChildrenPayload, string][] = [
   ['fileUrlArtifacts', 'file URLs'],
   ['dockerImages', 'Docker images'],
   ['packages', 'packages'],
+  ['genericArtifacts', 'generic artifacts'],
   ['requiredTools', 'required tools'],
 ]
 

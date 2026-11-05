@@ -16,7 +16,7 @@ import type { FieldVisibility } from '../../hooks/useFieldConfig'
 // than free text.
 export type PackageType = 'DEB' | 'RPM'
 
-export type CoordinateType = 'maven' | 'docker' | 'package'
+export type CoordinateType = 'maven' | 'docker' | 'package' | 'generic'
 
 // Deprecated build systems are not offered for NEW components (the editor of
 // existing components is unaffected).
@@ -97,7 +97,8 @@ export interface CreateFormValues {
   vcsTag: string
   vcsBranch: string
   // Exactly one distribution coordinate (more are added later in the
-  // Distribution tab). Only emitted when explicit+external.
+  // Distribution tab). Only emitted when explicit+external — except Docker,
+  // which is sent whenever an image name is provided (see below).
   coordinate: {
     type: CoordinateType
     groupPattern: string
@@ -107,6 +108,8 @@ export interface CreateFormValues {
     flavor: string
     packageType: PackageType
     packageName: string
+    // Generic HTTP-URL artifact path (CRS SYS-98); validated server-side.
+    path: string
   }
   // #357 base artifact-ownership. Repeatable per-group rows: each row is one
   // Group ID + its own matching mode (ALL / ALL_EXCEPT_CLAIMED / EXPLICIT) and,
@@ -207,6 +210,10 @@ function coordinatePatch(
     case 'package':
       return {
         packages: [{ packageType: coordinate.packageType, packageName: coordinate.packageName.trim() }],
+      }
+    case 'generic':
+      return {
+        genericArtifacts: [{ path: coordinate.path.trim() }],
       }
   }
 }
@@ -413,8 +420,8 @@ export function buildCreateRequest(
   }
   // Docker is sent whenever an image name is provided, regardless of the
   // explicit+external gate (a Docker image can be published outside that
-  // combination). Maven/Package coordinates stay gated — they are only
-  // meaningful (and only required) for an explicit+external component.
+  // combination). Maven/Package/Generic coordinates stay gated — they are
+  // only meaningful (and only required) for an explicit+external component.
   if (form.coordinate.type === 'docker') {
     if (form.coordinate.imageName.trim()) {
       Object.assign(baseConfiguration, coordinatePatch(form.coordinate))

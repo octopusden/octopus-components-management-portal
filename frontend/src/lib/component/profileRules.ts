@@ -40,7 +40,14 @@ const READERS: Record<string, Reader> = {
   'baseConfiguration.packages[0].packageName': (r) => firstPackage(r)?.packageName,
 }
 
-/** Rule path → the wizard form field that shows its message (an RHF field path). */
+/**
+ * Rule path → the wizard form field that shows its message (an RHF field path).
+ *
+ * One entry has NO reader: `baseConfiguration.genericArtifacts[0].path` is not
+ * in the registry's profile-rule allow-list (`CreateRequestPaths`), so no rule
+ * may name it — but the Portal's own coordinate rule reports it, and the wizard
+ * maps that path back to the form field through this table.
+ */
 const FIELDS: Record<string, string> = {
   name: 'name',
   displayName: 'displayName',
@@ -62,6 +69,7 @@ const FIELDS: Record<string, string> = {
   'baseConfiguration.dockerImages[0].imageName': 'coordinate.imageName',
   'baseConfiguration.dockerImages[0].flavor': 'coordinate.flavor',
   'baseConfiguration.packages[0].packageName': 'coordinate.packageName',
+  'baseConfiguration.genericArtifacts[0].path': 'coordinate.path',
 }
 
 export const RULE_PATHS: readonly string[] = Object.keys(READERS)
