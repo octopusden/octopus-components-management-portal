@@ -237,9 +237,19 @@ describe('DistributionTab — Package Type dropdown (CRS PACKAGE_TYPE_NAMES)', (
     ])
   })
 
-  it("keeps 'None' (= blank) dropping the row from the request until a type is picked", () => {
+  it('defaults a new package row to DEB, so a named row is kept without picking a type', () => {
     renderTab(baseComponent())
     fireEvent.click(screen.getAllByRole('button', { name: /^Add$/ })[2]!) // Packages Add
+    fireEvent.change(screen.getByPlaceholderText('my-package'), { target: { value: 'svc-pkg' } })
+    expect(captured.section!.slice.request.baseConfiguration?.packages).toEqual([
+      { packageType: 'DEB', packageName: 'svc-pkg' },
+    ])
+  })
+
+  it("drops the row from the request only when 'None' is picked explicitly", () => {
+    renderTab(baseComponent())
+    fireEvent.click(screen.getAllByRole('button', { name: /^Add$/ })[2]!) // Packages Add
+    fireEvent.change(screen.getByTestId('enum-select'), { target: { value: '__none__' } })
     fireEvent.change(screen.getByPlaceholderText('my-package'), { target: { value: 'svc-pkg' } })
     expect(captured.section!.slice.request.baseConfiguration?.packages ?? []).toEqual([])
   })

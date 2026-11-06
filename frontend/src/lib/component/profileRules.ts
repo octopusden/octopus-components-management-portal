@@ -72,9 +72,13 @@ export const RULE_PATHS: readonly string[] = Object.keys(READERS)
 // Own keys only, so a path such as `constructor` is unknown rather than an inherited member.
 const readerOf = (path: string): Reader | undefined => (Object.hasOwn(READERS, path) ? READERS[path] : undefined)
 
-/** The form fields a rule can put a message on; ownership rows as the whole `ownership` array. */
+/** The form fields a rule can put a message on; ownership/distribution rows as whole arrays. */
 export const RULE_FORM_FIELDS: readonly string[] = [
-  ...new Set(Object.values(FIELDS).map((field) => (field.startsWith('ownership.') ? 'ownership' : field))),
+  ...new Set(
+    Object.values(FIELDS).map((field) =>
+      field.startsWith('ownership.') || field.startsWith('distribution.') ? field.split('.')[0]! : field,
+    ),
+  ),
 ]
 
 /** The wizard form field for a create-request path, or `undefined` for a path it does not know. */

@@ -1933,7 +1933,11 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
                 vcsApplies,
                 buildTasksVisibility,
                 editable,
-                hasError: (field) => !!get(errors, field),
+                hasError: (field) => {
+                  if (get(errors, field)) return true
+                  const m = /^distribution\.(maven|docker|packages|generic)\.(\d+)\./.exec(field)
+                  return !!m && values.distribution[m[1] as keyof CreateFormValues['distribution']].length > Number(m[2])
+                },
               })}
             />
             {stepBody[current]()}

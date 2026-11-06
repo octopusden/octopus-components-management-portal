@@ -12,6 +12,7 @@ import {
   DEPRECATED_BUILD_SYSTEMS,
   FALLBACK_VCS_BRANCH,
   type CreateFormValues,
+  sentDistributionRows,
 } from './buildCreateRequest'
 
 // Strict Component-Key convention for NEW components (see brief §Identity): a
@@ -85,13 +86,13 @@ export function formFieldOfRule(
   let mapped = field.replace(/^ownership\.0\./, `ownership.${firstSentRow}.`)
   // Profile rules name the request's FIRST sent row ([0] paths), not form row 0.
   if (distribution) {
-    const mavenRow = distribution.maven.findIndex((r) => r.groupPattern.trim() !== '' && r.artifactPattern.trim() !== '')
-    const dockerRow = distribution.docker.findIndex((r) => r.imageName.trim() !== '')
-    const packageRow = distribution.packages.findIndex((r) => r.packageName.trim() !== '')
+    const sent = sentDistributionRows(distribution)
+    const first = (rows: number[]) => Math.max(0, rows[0] ?? -1)
     mapped = mapped
-      .replace(/^distribution\.maven\.0\./, `distribution.maven.${Math.max(0, mavenRow)}.`)
-      .replace(/^distribution\.docker\.0\./, `distribution.docker.${Math.max(0, dockerRow)}.`)
-      .replace(/^distribution\.packages\.0\./, `distribution.packages.${Math.max(0, packageRow)}.`)
+      .replace(/^distribution\.maven\.0\./, `distribution.maven.${first(sent.maven)}.`)
+      .replace(/^distribution\.docker\.0\./, `distribution.docker.${first(sent.docker)}.`)
+      .replace(/^distribution\.packages\.0\./, `distribution.packages.${first(sent.packages)}.`)
+      .replace(/^distribution\.generic\.0\./, `distribution.generic.${first(sent.generic)}.`)
   }
   return mapped
 }
@@ -133,15 +134,8 @@ function formFieldOfPortalRule(
   }
   const dist = /^baseConfiguration\.(mavenArtifacts|dockerImages|packages|genericArtifacts)\[(\d+)\]\.(\w+)$/.exec(path)
   if (dist) {
-    // The rows each family actually sends (mirrors distributionPatch's blank-row drop).
-    const sent: Record<string, number[]> = {
-      mavenArtifacts: distribution.maven.flatMap((r, i) => (r.groupPattern.trim() && r.artifactPattern.trim() ? [i] : [])),
-      dockerImages: distribution.docker.flatMap((r, i) => (r.imageName.trim() ? [i] : [])),
-      packages: distribution.packages.flatMap((r, i) => (r.packageName.trim() ? [i] : [])),
-      genericArtifacts: distribution.generic.flatMap((r, i) => (r.path.trim() ? [i] : [])),
-    }
-    const family = { mavenArtifacts: 'maven', dockerImages: 'docker', packages: 'packages', genericArtifacts: 'generic' }[dist[1]!]!
-    const formRow = sent[dist[1]!]![Number(dist[2])]
+    const family = { mavenArtifacts: 'maven', dockerImages: 'docker', packages: 'packages', genericArtifacts: 'generic' }[dist[1]!]! as 'maven' | 'docker' | 'packages' | 'generic'
+    const formRow = sentDistributionRows(distribution)[family][Number(dist[2])]
     return formRow === undefined ? undefined : `distribution.${family}.${formRow}.${dist[3]}`
   }
   if (path === 'releaseManager' || path === 'securityChampion') return path
@@ -251,11 +245,7 @@ export function makeCreateSchema(
         }
       }
       // CRS rule #6 mirror: explicit+external needs ≥1 row; shown at the section top.
-      const hasRow =
-        v.distribution.maven.some((r) => r.groupPattern.trim() !== '' && r.artifactPattern.trim() !== '') ||
-        v.distribution.docker.some((r) => r.imageName.trim() !== '') ||
-        v.distribution.packages.some((r) => r.packageName.trim() !== '') ||
-        v.distribution.generic.some((r) => r.path.trim() !== '')
+      const hasRow = Object.values(sentDistributionRows(v.distribution)).some((rows) => rows.length > 0)
       if (v.distributionExplicit && v.distributionExternal && !hasRow) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['distribution'], message: COORDINATE_REQUIRED_MESSAGE })
       }

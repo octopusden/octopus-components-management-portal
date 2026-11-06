@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildCreateRequest, type CreateFormValues, type DistributionRows } from './buildCreateRequest'
+import { buildCreateRequest, sentDistributionRows, type CreateFormValues, type DistributionRows } from './buildCreateRequest'
 import type { ComponentConfiguration, ComponentDetail } from '../types'
 
 function makeForm(overrides: Partial<CreateFormValues> = {}): CreateFormValues {
@@ -323,6 +323,28 @@ describe('buildCreateRequest — distribution rows (per family, never gated)', (
     expect(req.baseConfiguration?.dockerImages).toEqual([{ imageName: 'acme/svc', flavor: null }])
     expect('packages' in req.baseConfiguration!).toBe(false)
     expect('genericArtifacts' in req.baseConfiguration!).toBe(false)
+  })
+
+  it('sentDistributionRows lists the form indices the request sends per family', () => {
+    const rows = {
+      maven: [
+        { groupPattern: '', artifactPattern: 'svc' }, // partial — not sent
+        { groupPattern: ' ', artifactPattern: ' ' }, // blank — not sent
+        { groupPattern: 'org.acme', artifactPattern: 'svc' },
+      ],
+      docker: [{ imageName: 'acme/svc', flavor: '' }],
+      packages: [
+        { packageType: 'DEB' as const, packageName: '  ' }, // blank name — not sent
+        { packageType: 'DEB' as const, packageName: 'svc-pkg' },
+      ],
+      generic: [{ path: 'releases/svc/svc.jar' }],
+    }
+    expect(sentDistributionRows(rows)).toEqual({
+      maven: [2],
+      docker: [0],
+      packages: [1],
+      generic: [0],
+    })
   })
 
   it('an empty distribution sends no family lists at all', () => {

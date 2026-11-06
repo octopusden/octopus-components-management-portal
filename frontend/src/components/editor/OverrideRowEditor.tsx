@@ -633,7 +633,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
   function removeDocker(i: number) { setDockerImages((p) => p.filter((_, idx) => idx !== i)) }
 
   // Packages helpers
-  function addPackage() { setPackages((p) => [...p, { packageType: '', packageName: '' }]) }
+  function addPackage() { setPackages((p) => [...p, { packageType: 'DEB', packageName: '' }]) }
   function updatePackage(i: number, field: keyof PackageState, v: string) { setPackages((p) => p.map((r, idx) => idx === i ? { ...r, [field]: v } : r)) }
   function removePackage(i: number) { setPackages((p) => p.filter((_, idx) => idx !== i)) }
 

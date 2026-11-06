@@ -208,7 +208,7 @@ export function useDistributionSection(component: ComponentDetail): Distribution
     addDocker: () => mutateList<DockerState>('docker', (a) => [...a, { imageName: '', flavor: '' }]),
     updateDocker: (i, f, v) => mutateList<DockerState>('docker', (a) => a.map((r, idx) => (idx === i ? { ...r, [f]: v } : r))),
     removeDocker: (i) => mutateList<DockerState>('docker', (a) => a.filter((_, idx) => idx !== i)),
-    addPackage: () => mutateList<PackageState>('packages', (a) => [...a, { packageType: '', packageName: '' }]),
+    addPackage: () => mutateList<PackageState>('packages', (a) => [...a, { packageType: 'DEB', packageName: '' }]),
     updatePackage: (i, f, v) => mutateList<PackageState>('packages', (a) => a.map((r, idx) => (idx === i ? { ...r, [f]: v } : r))),
     removePackage: (i) => mutateList<PackageState>('packages', (a) => a.filter((_, idx) => idx !== i)),
     addGeneric: () => mutateList<GenericState>('generic', (a) => [...a, { path: '' }]),

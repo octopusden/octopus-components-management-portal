@@ -1107,6 +1107,17 @@ describe('CreateComponentPage — profile rules on fields the step does not show
     await waitFor(() => expect(screen.queryByText('Use the ABC project')).toBeNull())
   })
 
+  it('shows a Maven-group rule message once, on the filled row (blank row 0 above it)', async () => {
+    withRule('baseConfiguration.mavenArtifacts[0].groupPattern', 'com\\..*', 'Group must start with com.')
+    renderWizard()
+    await userEvent.click(screen.getByRole('button', { name: /^Distribution$/i }))
+    await userEvent.click(screen.getByRole('button', { name: /add maven gav/i }))
+    await userEvent.click(screen.getByRole('button', { name: /add maven gav/i }))
+    await userEvent.type(screen.getAllByLabelText('groupId')[1]!, 'net.example')
+    await userEvent.type(screen.getAllByLabelText('artifactId')[1]!, 'svc')
+    await waitFor(() => expect(screen.getAllByText('Group must start with com.')).toHaveLength(1))
+  })
+
   it('shows a failing rule on a shown field under the field only', async () => {
     withRule('baseConfiguration.jira.projectKey', 'ABC', 'Use the ABC project')
     renderWizard()
@@ -1375,6 +1386,35 @@ describe('CreateComponentPage — create names the profile', () => {
     const fieldOf = (input: HTMLElement) => within(input.parentElement!)
     expect(fieldOf(screen.getAllByLabelText('groupId')[1]!).getByText(/Must start with com\.acme/)).toBeDefined()
     expect(fieldOf(screen.getAllByLabelText('groupId')[0]!).queryByText(/Must start with com\.acme/)).toBeNull()
+  })
+
+  it('clears a Maven-group rule rejection from a non-zero row when the profile changes', async () => {
+    rejectWith('baseConfiguration.mavenArtifacts[0].groupPattern: Must start with com.acme')
+    renderWizard()
+    await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
+    await clickNext()
+    await userEvent.type(screen.getByPlaceholderText('my-component'), 'widget')
+    await commitOwner('alice')
+    await clickNext()
+    await userEvent.selectOptions(screen.getByLabelText(/^Build System/i), 'PROVIDED')
+    await userEvent.click(screen.getByRole('button', { name: /^Jira$/i }))
+    await userEvent.type(screen.getByLabelText(/^Jira Project Key/i), 'WIDG')
+    await userEvent.click(screen.getByRole('button', { name: /^Distribution$/i }))
+    await userEvent.click(screen.getByRole('button', { name: /add maven gav/i }))
+    await userEvent.click(screen.getByRole('button', { name: /add maven gav/i }))
+    // Row 0 stays blank — the rejection is routed (setError) to the filled row.
+    await userEvent.type(screen.getAllByLabelText('groupId')[1]!, 'net.example')
+    await userEvent.type(screen.getAllByLabelText('artifactId')[1]!, 'svc')
+    await userEvent.click(screen.getByRole('button', { name: /Review & create/i }))
+    await userEvent.type(screen.getByLabelText(/^Jira task key/i), 'ABC-123')
+    await userEvent.click(screen.getByRole('button', { name: /^create component$/i }))
+    await waitFor(() => expect(screen.getByRole('heading', { name: /^Distribution$/ })).toBeDefined())
+    // The field shows the exact message; the step banner carries the full `path: …` line.
+    await waitFor(() => expect(screen.getAllByText('Must start with com.acme')).toHaveLength(1))
+    await userEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    await userEvent.click(screen.getByRole('radio', { name: /Regular external component/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^Distribution$/i }))
+    await waitFor(() => expect(screen.queryAllByText('Must start with com.acme')).toHaveLength(0))
   })
 })
 

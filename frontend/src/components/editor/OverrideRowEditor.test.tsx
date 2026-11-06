@@ -779,6 +779,27 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
       ])
     })
   })
+
+  it('defaults a new package row to DEB, so a named row is kept without picking a type', async () => {
+    renderEditor()
+    await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
+    const select = screen.getByTestId('attr-select') as HTMLSelectElement
+    await userEvent.selectOptions(select, 'distribution.packages')
+
+    await userEvent.click(screen.getByRole('button', { name: /add package/i }))
+    const nameInputs = await screen.findAllByPlaceholderText('my-package')
+    await userEvent.type(nameInputs[0]!, 'my-svc')
+
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1.0,2.0)' } })
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+
+    await waitFor(() => {
+      expect(mockQueueCreate).toHaveBeenCalledOnce()
+      expect(mockQueueCreate.mock.calls[0]![0].markerChildren.packages).toEqual([
+        { packageType: 'DEB', packageName: 'my-svc' },
+      ])
+    })
+  })
 })
 
 describe('OverrideRowEditor — D5 closed-range enforcement', () => {

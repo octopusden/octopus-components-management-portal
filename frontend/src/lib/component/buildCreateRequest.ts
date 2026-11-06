@@ -178,24 +178,36 @@ function copyJiraAspect(jira: JiraAspect | null | undefined): JiraAspect | undef
   return hasValue ? rest : undefined
 }
 
+// The form indices the request actually sends per family — the single source of
+// truth for the payload, the rule-message row shifts and the ≥1-row check.
+export function sentDistributionRows(rows: CreateFormValues['distribution']) {
+  const idx = <T>(list: readonly T[], keeps: (row: T) => boolean) => list.flatMap((r, i) => (keeps(r) ? [i] : []))
+  return {
+    maven: idx(rows.maven, (r) => r.groupPattern.trim() !== '' && r.artifactPattern.trim() !== ''),
+    docker: idx(rows.docker, (r) => r.imageName.trim() !== ''),
+    packages: idx(rows.packages, (r) => r.packageName.trim() !== ''),
+    generic: idx(rows.generic, (r) => r.path.trim() !== ''),
+  }
+}
+
 // Trims and drops fully blank rows; partial rows are blocked by the form schema before a submit.
 function distributionPatch(
   rows: CreateFormValues['distribution'],
 ): Partial<BaseConfigurationRequest> {
-  const mavenArtifacts = rows.maven
-    .map((r) => ({ groupPattern: r.groupPattern.trim(), artifactPattern: r.artifactPattern.trim() }))
-    .filter((r) => r.groupPattern !== '' && r.artifactPattern !== '')
-    .map((r) => ({ groupPattern: r.groupPattern, artifactPattern: r.artifactPattern, extension: null, classifier: null }))
-  const dockerImages = rows.docker
-    .map((r) => ({ imageName: r.imageName.trim(), flavor: r.flavor.trim() }))
-    .filter((r) => r.imageName !== '')
-    .map((r) => ({ imageName: r.imageName, flavor: r.flavor || null }))
-  const packages = rows.packages
-    .map((r) => ({ packageType: r.packageType, packageName: r.packageName.trim() }))
-    .filter((r) => r.packageName !== '')
-  const genericArtifacts = rows.generic
-    .map((r) => ({ path: r.path.trim() }))
-    .filter((r) => r.path !== '')
+  const sent = sentDistributionRows(rows)
+  const mavenArtifacts = sent.maven.map((i) => {
+    const r = rows.maven[i]!
+    return { groupPattern: r.groupPattern.trim(), artifactPattern: r.artifactPattern.trim(), extension: null, classifier: null }
+  })
+  const dockerImages = sent.docker.map((i) => {
+    const r = rows.docker[i]!
+    return { imageName: r.imageName.trim(), flavor: r.flavor.trim() || null }
+  })
+  const packages = sent.packages.map((i) => {
+    const r = rows.packages[i]!
+    return { packageType: r.packageType, packageName: r.packageName.trim() }
+  })
+  const genericArtifacts = sent.generic.map((i) => ({ path: rows.generic[i]!.path.trim() }))
   const patch: Partial<BaseConfigurationRequest> = {}
   if (mavenArtifacts.length) patch.mavenArtifacts = mavenArtifacts
   if (dockerImages.length) patch.dockerImages = dockerImages
