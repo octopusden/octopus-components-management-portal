@@ -133,6 +133,8 @@ export const fieldDescriptions: Record<string, string> = {
     'Container images this component distributes (repository/image names, optionally with a flavor). Container-publishing automation pushes and validates these images on release. You can also add per-range overrides that apply only to specific version ranges.',
   'distribution.packages':
     'OS package coordinates the component distributes (e.g. rpm or deb packages). Package-publishing automation builds and uploads them on release. You can also add per-range overrides that apply only to specific version ranges.',
+  'distribution.genericArtifacts':
+    'Generic HTTP-URL artifacts this component distributes: verbatim path templates of downloadable files. Distribution automation resolves them on release. You can also add per-range overrides that apply only to specific version ranges.',
   'distribution.securityGroups':
     'Access-control groups gating who may download this component’s distributed artifacts. Distribution and escrow automation apply these groups when publishing.',
   'distribution.maven.groupPattern':
@@ -157,6 +159,8 @@ export const fieldDescriptions: Record<string, string> = {
     'Package format of the distributed package, e.g. rpm or deb. Required.',
   'distribution.package.name':
     'Name of the distributed OS package. Required.',
+  'distribution.generic.path':
+    'Path template of the artifact, e.g. my-component/${version}/my-component.tar.gz. Required. Segments are letters, digits, dots, underscores and hyphens; the only allowed placeholders are ${version}, ${major}, ${minor}, ${service}, ${fix} and ${build}.',
   'distribution.securityGroup.type':
     'Access type granted to the group, e.g. read. New rows default to read.',
   'distribution.securityGroup.name':

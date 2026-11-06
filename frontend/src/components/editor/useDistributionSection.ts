@@ -4,6 +4,7 @@ import type {
   FileUrlArtifact,
   DockerImage,
   PackageEntry,
+  GenericArtifact,
   SecurityGroup,
 } from '../../lib/types'
 import { selectBaseRow } from '../../lib/api/baseRow'
@@ -15,6 +16,8 @@ export interface MavenState { groupPattern: string; artifactPattern: string; ext
 export interface FileUrlState { url: string; artifactId: string; classifier: string }
 export interface DockerState { imageName: string; flavor: string }
 export interface PackageState { packageType: string; packageName: string }
+// CRS SYS-098: a raw path string; shape and ${…} placeholders are validated server-side.
+export interface GenericState { path: string }
 export interface SecurityGroupState { groupType: string; groupName: string }
 
 interface DistState {
@@ -24,6 +27,7 @@ interface DistState {
   fileUrl: FileUrlState[]
   docker: DockerState[]
   packages: PackageState[]
+  generic: GenericState[]
   securityGroups: SecurityGroupState[]
 }
 
@@ -44,6 +48,7 @@ function snapshotFrom(component: ComponentDetail): DistState {
     })),
     docker: sortBy(br?.dockerImages ?? []).map((d: DockerImage) => ({ imageName: d.imageName, flavor: d.flavor ?? '' })),
     packages: sortBy(br?.packages ?? []).map((p: PackageEntry) => ({ packageType: p.packageType, packageName: p.packageName })),
+    generic: sortBy(br?.genericArtifacts ?? []).map((a: GenericArtifact) => ({ path: a.path })),
     securityGroups: (component.securityGroups ?? []).map((g: SecurityGroup) => ({ groupType: g.groupType, groupName: g.groupName })),
   }
 }
@@ -70,6 +75,11 @@ function cleanPackages(rows: PackageState[]) {
     .map((p) => ({ packageType: p.packageType.trim(), packageName: p.packageName.trim() }))
     .filter((p) => p.packageType !== '' && p.packageName !== '')
 }
+function cleanGeneric(rows: GenericState[]) {
+  return rows
+    .map((a) => ({ path: a.path.trim() }))
+    .filter((a) => a.path !== '')
+}
 function cleanSecGroups(rows: SecurityGroupState[]) {
   return rows
     .map((g) => ({ groupType: g.groupType.trim(), groupName: g.groupName.trim() }))
@@ -86,6 +96,7 @@ function normalizeDist(s: DistState): unknown {
     fileUrl: cleanFileUrl(s.fileUrl),
     docker: cleanDocker(s.docker),
     packages: cleanPackages(s.packages),
+    generic: cleanGeneric(s.generic),
     securityGroups: cleanSecGroups(s.securityGroups),
   }
 }
@@ -98,6 +109,7 @@ export interface DistributionSection {
   addFileUrl: () => void; updateFileUrl: (i: number, f: keyof FileUrlState, v: string) => void; removeFileUrl: (i: number) => void
   addDocker: () => void; updateDocker: (i: number, f: keyof DockerState, v: string) => void; removeDocker: (i: number) => void
   addPackage: () => void; updatePackage: (i: number, f: keyof PackageState, v: string) => void; removePackage: (i: number) => void
+  addGeneric: () => void; updateGeneric: (i: number, f: keyof GenericState, v: string) => void; removeGeneric: (i: number) => void
   addSecurityGroup: () => void; updateSecurityGroup: (i: number, f: keyof SecurityGroupState, v: string) => void; removeSecurityGroup: (i: number) => void
   slice: SectionSlice
   reset: () => void
@@ -110,7 +122,7 @@ export function useDistributionSection(component: ComponentDetail): Distribution
     normalizeDist,
   )
 
-  type Lists = 'maven' | 'fileUrl' | 'docker' | 'packages' | 'securityGroups'
+  type Lists = 'maven' | 'fileUrl' | 'docker' | 'packages' | 'generic' | 'securityGroups'
   function mutateList<T>(key: Lists, fn: (arr: T[]) => T[]) {
     setState((p) => ({ ...p, [key]: fn(p[key] as unknown as T[]) }))
   }
@@ -123,6 +135,7 @@ export function useDistributionSection(component: ComponentDetail): Distribution
   const cleanedFileUrl = cleanFileUrl(state.fileUrl)
   const cleanedDocker = cleanDocker(state.docker)
   const cleanedPackages = cleanPackages(state.packages)
+  const cleanedGeneric = cleanGeneric(state.generic)
   const cleanedSecGroups = cleanSecGroups(state.securityGroups)
 
   const prior = snapshotRef.current
@@ -152,9 +165,18 @@ export function useDistributionSection(component: ComponentDetail): Distribution
     // this is defensive — keeps prior↔request projections identical).
     const packageKey = (p: { packageType: string; packageName: string }) => `${p.packageType}/${p.packageName}`
     push(listDiff('Distribution · Packages', cleanPackages(prior.packages).map(packageKey), cleanedPackages.map(packageKey)))
+    const genericKey = (a: { path: string }) => a.path.trim()
+    push(listDiff('Distribution · Generic Artifacts', cleanGeneric(prior.generic).map(genericKey), cleanedGeneric.map(genericKey)))
     const secGroupKey = (g: { groupType: string; groupName: string }) => `${g.groupType}:${g.groupName}`
     push(listDiff('Distribution · Security Groups', cleanSecGroups(prior.securityGroups).map(secGroupKey), cleanedSecGroups.map(secGroupKey)))
   }
+
+  // Present-list REPLACE, but omitted when there is nothing to send or clear —
+  // a pre-V10 registry that does not know the field never sees it.
+  const genericArtifacts =
+    cleanedGeneric.length > 0 || prior.generic.length > 0
+      ? cleanedGeneric.map((a) => ({ path: a.path }))
+      : undefined
 
   const slice: SectionSlice = {
     isDirty,
@@ -168,6 +190,7 @@ export function useDistributionSection(component: ComponentDetail): Distribution
         fileUrlArtifacts: cleanedFileUrl.map((a) => ({ url: a.url, artifactId: a.artifactId || null, classifier: a.classifier || null })),
         dockerImages: cleanedDocker.map((d) => ({ imageName: d.imageName, flavor: d.flavor || null })),
         packages: cleanedPackages.map((p) => ({ packageType: p.packageType, packageName: p.packageName })),
+        genericArtifacts,
       },
     },
   }
@@ -185,9 +208,12 @@ export function useDistributionSection(component: ComponentDetail): Distribution
     addDocker: () => mutateList<DockerState>('docker', (a) => [...a, { imageName: '', flavor: '' }]),
     updateDocker: (i, f, v) => mutateList<DockerState>('docker', (a) => a.map((r, idx) => (idx === i ? { ...r, [f]: v } : r))),
     removeDocker: (i) => mutateList<DockerState>('docker', (a) => a.filter((_, idx) => idx !== i)),
-    addPackage: () => mutateList<PackageState>('packages', (a) => [...a, { packageType: '', packageName: '' }]),
+    addPackage: () => mutateList<PackageState>('packages', (a) => [...a, { packageType: 'DEB', packageName: '' }]),
     updatePackage: (i, f, v) => mutateList<PackageState>('packages', (a) => a.map((r, idx) => (idx === i ? { ...r, [f]: v } : r))),
     removePackage: (i) => mutateList<PackageState>('packages', (a) => a.filter((_, idx) => idx !== i)),
+    addGeneric: () => mutateList<GenericState>('generic', (a) => [...a, { path: '' }]),
+    updateGeneric: (i, f, v) => mutateList<GenericState>('generic', (a) => a.map((r, idx) => (idx === i ? { ...r, [f]: v } : r))),
+    removeGeneric: (i) => mutateList<GenericState>('generic', (a) => a.filter((_, idx) => idx !== i)),
     addSecurityGroup: () => mutateList<SecurityGroupState>('securityGroups', (a) => [...a, { groupType: 'read', groupName: '' }]),
     updateSecurityGroup: (i, f, v) => mutateList<SecurityGroupState>('securityGroups', (a) => a.map((r, idx) => (idx === i ? { ...r, [f]: v } : r))),
     removeSecurityGroup: (i) => mutateList<SecurityGroupState>('securityGroups', (a) => a.filter((_, idx) => idx !== i)),

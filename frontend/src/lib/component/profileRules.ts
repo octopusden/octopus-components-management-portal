@@ -40,7 +40,10 @@ const READERS: Record<string, Reader> = {
   'baseConfiguration.packages[0].packageName': (r) => firstPackage(r)?.packageName,
 }
 
-/** Rule path → the wizard form field that shows its message (an RHF field path). */
+/**
+ * Rule path → the wizard form field that shows its message (an RHF field path).
+ * Distribution [0] paths map to form row 0; `formFieldOfRule` shifts to the first sent row.
+ */
 const FIELDS: Record<string, string> = {
   name: 'name',
   displayName: 'displayName',
@@ -57,11 +60,11 @@ const FIELDS: Record<string, string> = {
   'baseConfiguration.jira.minorVersionFormat': 'minorVersionFormat',
   'baseConfiguration.jira.releaseVersionFormat': 'releaseVersionFormat',
   'baseConfiguration.jira.buildVersionFormat': 'buildVersionFormat',
-  'baseConfiguration.mavenArtifacts[0].groupPattern': 'coordinate.groupPattern',
-  'baseConfiguration.mavenArtifacts[0].artifactPattern': 'coordinate.artifactPattern',
-  'baseConfiguration.dockerImages[0].imageName': 'coordinate.imageName',
-  'baseConfiguration.dockerImages[0].flavor': 'coordinate.flavor',
-  'baseConfiguration.packages[0].packageName': 'coordinate.packageName',
+  'baseConfiguration.mavenArtifacts[0].groupPattern': 'distribution.maven.0.groupPattern',
+  'baseConfiguration.mavenArtifacts[0].artifactPattern': 'distribution.maven.0.artifactPattern',
+  'baseConfiguration.dockerImages[0].imageName': 'distribution.docker.0.imageName',
+  'baseConfiguration.dockerImages[0].flavor': 'distribution.docker.0.flavor',
+  'baseConfiguration.packages[0].packageName': 'distribution.packages.0.packageName',
 }
 
 export const RULE_PATHS: readonly string[] = Object.keys(READERS)
@@ -69,9 +72,13 @@ export const RULE_PATHS: readonly string[] = Object.keys(READERS)
 // Own keys only, so a path such as `constructor` is unknown rather than an inherited member.
 const readerOf = (path: string): Reader | undefined => (Object.hasOwn(READERS, path) ? READERS[path] : undefined)
 
-/** The form fields a rule can put a message on; ownership rows as the whole `ownership` array. */
+/** The form fields a rule can put a message on; ownership/distribution rows as whole arrays. */
 export const RULE_FORM_FIELDS: readonly string[] = [
-  ...new Set(Object.values(FIELDS).map((field) => (field.startsWith('ownership.') ? 'ownership' : field))),
+  ...new Set(
+    Object.values(FIELDS).map((field) =>
+      field.startsWith('ownership.') || field.startsWith('distribution.') ? field.split('.')[0]! : field,
+    ),
+  ),
 ]
 
 /** The wizard form field for a create-request path, or `undefined` for a path it does not know. */

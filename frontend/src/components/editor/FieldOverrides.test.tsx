@@ -162,6 +162,22 @@ describe('FieldOverrides', () => {
     expect(screen.queryByText(/edit to view children/i)).toBeNull()
   })
 
+  it('summarises a distribution.generic marker by its artifact paths', () => {
+    mockOverrides = [
+      makeMarkerOverride({
+        overriddenAttribute: 'distribution.generic',
+        markerChildren: {
+          genericArtifacts: [
+            { path: 'releases/svc/${version}/svc.jar' },
+            { path: 'downloads/svc/svc.zip' },
+          ],
+        },
+      }),
+    ]
+    renderComponent()
+    expect(screen.getByText('releases/svc/${version}/svc.jar, downloads/svc/svc.zip')).toBeDefined()
+  })
+
   it('renders override rows in a table when overrides exist', () => {
     mockOverrides = [makeScalarOverride()]
     renderComponent()

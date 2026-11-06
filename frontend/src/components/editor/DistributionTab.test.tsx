@@ -36,6 +36,63 @@ vi.mock('../../hooks/useFieldConfig', () => ({
   useFieldLabel: (_path: string, fallback: string) => fallback,
 }))
 
+// EnumSelect runs useFieldOptions even with optionsOverride — mock it (no QueryClient needed).
+vi.mock('../../hooks/useFieldOptions', () => ({
+  useFieldOptions: () => ({ options: [], isLoading: false }),
+}))
+
+// Radix Select stubbed as a native <select> (same pattern as OverrideRowEditor.test.tsx).
+vi.mock('../ui/select', async () => {
+  const React = await import('react')
+
+  function collectOptions(children: React.ReactNode): Array<{ value: string; label: string }> {
+    const opts: Array<{ value: string; label: string }> = []
+    React.Children.forEach(children, (child) => {
+      if (!child || typeof child !== 'object') return
+      const el = child as React.ReactElement<{ value?: string; children?: React.ReactNode }>
+      const type = el.type as { displayName?: string } | undefined
+      if (type && type.displayName === 'SelectItem') {
+        opts.push({ value: el.props.value ?? '', label: String(el.props.children ?? '') })
+      } else if (el.props.children) {
+        opts.push(...collectOptions(el.props.children))
+      }
+    })
+    return opts
+  }
+
+  function Select({
+    value,
+    onValueChange,
+    children,
+  }: {
+    value: string
+    onValueChange: (v: string) => void
+    children?: React.ReactNode
+  }) {
+    const opts = collectOptions(children)
+    return (
+      <select data-testid="enum-select" value={value} onChange={(e) => onValueChange(e.target.value)}>
+        {opts.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    )
+  }
+
+  function SelectItem({ value, children }: { value?: string; children?: React.ReactNode }) {
+    return <option value={value}>{children}</option>
+  }
+  SelectItem.displayName = 'SelectItem'
+
+  const SelectTrigger = ({ children }: { children?: React.ReactNode }) => <>{children}</>
+  const SelectContent = ({ children }: { children?: React.ReactNode }) => <>{children}</>
+  const SelectValue = ({ placeholder }: { placeholder?: string }) => <span>{placeholder}</span>
+
+  return { Select, SelectItem, SelectTrigger, SelectContent, SelectValue }
+})
+
 function baseComponent(overrides: Partial<ComponentDetail> = {}): ComponentDetail {
   return {
     id: 'c-1', name: 'my-component', displayName: 'My Component', componentOwner: 'alice',
@@ -94,9 +151,128 @@ describe('DistributionTab — blank-row filter (slice payload)', () => {
 
   it('puts securityGroups top-level (not inside baseConfiguration)', () => {
     renderTab(baseComponent())
-    fireEvent.click(screen.getAllByRole('button', { name: /^Add$/ })[3]!) // Security Groups Add
+    fireEvent.click(screen.getAllByRole('button', { name: /^Add$/ })[4]!) // Security Groups Add
     fireEvent.change(screen.getByPlaceholderText('my-security-group'), { target: { value: 'grp' } })
     expect(captured.section!.slice.request.securityGroups).toEqual([{ groupType: 'read', groupName: 'grp' }])
+  })
+})
+
+describe('DistributionTab — generic artifacts (CRS SYS-098)', () => {
+  it('seeds the section from the BASE row and sends the paths in the slice', () => {
+    const component = baseComponent({
+      configurations: [
+        {
+          ...(baseComponent().configurations![0] as ComponentConfiguration),
+          genericArtifacts: [
+            { id: 'g-2', sortOrder: 1, path: 'releases/b/${version}/b.jar' },
+            { id: 'g-1', sortOrder: 0, path: 'releases/a/${version}/a.jar' },
+          ],
+        },
+      ],
+    })
+    renderTab(component)
+    expect(captured.section!.state.generic).toEqual([
+      { path: 'releases/a/${version}/a.jar' },
+      { path: 'releases/b/${version}/b.jar' },
+    ])
+    expect(captured.section!.slice.request.baseConfiguration?.genericArtifacts).toEqual([
+      { path: 'releases/a/${version}/a.jar' },
+      { path: 'releases/b/${version}/b.jar' },
+    ])
+  })
+
+  it('adds a generic row, trims and drops a blank path from the slice', () => {
+    renderTab(baseComponent())
+    fireEvent.click(screen.getAllByRole('button', { name: /^Add$/ })[3]!) // Generic Add
+    expect(captured.section!.slice.request.baseConfiguration?.genericArtifacts ?? []).toEqual([])
+    fireEvent.change(screen.getByPlaceholderText('my-component/${version}/my-component.tar.gz'), {
+      target: { value: '  releases/svc/svc.jar  ' },
+    })
+    expect(captured.section!.slice.request.baseConfiguration?.genericArtifacts).toEqual([
+      { path: 'releases/svc/svc.jar' },
+    ])
+  })
+
+  it('reports a generic list change in the diff', () => {
+    renderTab(baseComponent())
+    fireEvent.click(screen.getAllByRole('button', { name: /^Add$/ })[3]!) // Generic Add
+    fireEvent.change(screen.getByPlaceholderText('my-component/${version}/my-component.tar.gz'), {
+      target: { value: 'releases/svc/svc.jar' },
+    })
+    const diff = captured.section!.slice.diff.find((d) => d.label === 'Distribution · Generic Artifacts')
+    expect(diff?.oldValue).toBe('—')
+    expect(diff?.newValue).toBe('releases/svc/svc.jar')
+  })
+
+  it('omits genericArtifacts from the slice when neither side has any (pre-V10 registry)', () => {
+    renderTab(baseComponent())
+    expect(captured.section!.slice.request.baseConfiguration?.genericArtifacts).toBeUndefined()
+  })
+
+  it('sends an empty list to clear seeded generic artifacts (present-list REPLACE)', () => {
+    const component = baseComponent({
+      configurations: [
+        {
+          ...(baseComponent().configurations![0] as ComponentConfiguration),
+          genericArtifacts: [{ id: 'g-1', sortOrder: 0, path: 'releases/a/${version}/a.jar' }],
+        },
+      ],
+    })
+    renderTab(component)
+    const pathInput = screen.getByPlaceholderText('my-component/${version}/my-component.tar.gz')
+    const removeButton = pathInput.closest('div.rounded-md')!.querySelector('button')!
+    fireEvent.click(removeButton)
+    expect(captured.section!.slice.request.baseConfiguration?.genericArtifacts).toEqual([])
+  })
+})
+
+describe('DistributionTab — Package Type dropdown (CRS PACKAGE_TYPE_NAMES)', () => {
+  it('offers DEB/RPM on a new package row and sends the chosen type', () => {
+    renderTab(baseComponent())
+    fireEvent.click(screen.getAllByRole('button', { name: /^Add$/ })[2]!) // Packages Add
+    fireEvent.change(screen.getByTestId('enum-select'), { target: { value: 'DEB' } })
+    fireEvent.change(screen.getByPlaceholderText('my-package'), { target: { value: 'svc-pkg' } })
+    expect(captured.section!.slice.request.baseConfiguration?.packages).toEqual([
+      { packageType: 'DEB', packageName: 'svc-pkg' },
+    ])
+  })
+
+  it('defaults a new package row to DEB, so a named row is kept without picking a type', () => {
+    renderTab(baseComponent())
+    fireEvent.click(screen.getAllByRole('button', { name: /^Add$/ })[2]!) // Packages Add
+    fireEvent.change(screen.getByPlaceholderText('my-package'), { target: { value: 'svc-pkg' } })
+    expect(captured.section!.slice.request.baseConfiguration?.packages).toEqual([
+      { packageType: 'DEB', packageName: 'svc-pkg' },
+    ])
+  })
+
+  it("drops the row from the request only when 'None' is picked explicitly", () => {
+    renderTab(baseComponent())
+    fireEvent.click(screen.getAllByRole('button', { name: /^Add$/ })[2]!) // Packages Add
+    fireEvent.change(screen.getByTestId('enum-select'), { target: { value: '__none__' } })
+    fireEvent.change(screen.getByPlaceholderText('my-package'), { target: { value: 'svc-pkg' } })
+    expect(captured.section!.slice.request.baseConfiguration?.packages ?? []).toEqual([])
+  })
+
+  it('renders a stored value outside DEB/RPM as a visible extra option (legacy data)', () => {
+    const component = baseComponent({
+      configurations: [
+        {
+          ...(baseComponent().configurations![0] as ComponentConfiguration),
+          packages: [{ id: 'p-1', sortOrder: 0, packageType: 'rpm', packageName: 'my-pkg' }],
+        },
+      ],
+    })
+    renderTab(component)
+    const select = screen.getByTestId('enum-select') as HTMLSelectElement
+    // The legacy value stays selected and is preserved in the request until changed.
+    expect(select).toHaveValue('rpm')
+    expect([...select.options].map((o) => o.value)).toEqual(
+      expect.arrayContaining(['rpm', 'DEB', 'RPM']),
+    )
+    expect(captured.section!.slice.request.baseConfiguration?.packages).toEqual([
+      { packageType: 'rpm', packageName: 'my-pkg' },
+    ])
   })
 })
 
@@ -120,6 +296,7 @@ describe('DistributionTab field descriptions (FieldInfo)', () => {
           fileUrlArtifacts: [{ id: 'f-1', sortOrder: 0, url: 'https://example.com/a.zip', artifactId: null, classifier: null }],
           dockerImages: [{ id: 'd-1', sortOrder: 0, imageName: 'my-org/my-image', flavor: null }],
           packages: [{ id: 'p-1', sortOrder: 0, packageType: 'rpm', packageName: 'my-pkg' }],
+          genericArtifacts: [{ id: 'g-1', sortOrder: 0, path: 'releases/my-component/${version}/my-component.jar' }],
         },
       ],
     })
@@ -127,10 +304,11 @@ describe('DistributionTab field descriptions (FieldInfo)', () => {
 
   const EXPECTED_PATHS = [
     'distribution.mavenArtifacts', 'distribution.fileUrlArtifacts',
-    'distribution.packages', 'distribution.securityGroups',
+    'distribution.packages', 'distribution.genericArtifacts', 'distribution.securityGroups',
     'distribution.maven.groupPattern', 'distribution.maven.artifactPattern', 'distribution.maven.extension', 'distribution.maven.classifier',
     'distribution.fileUrl.url', 'distribution.fileUrl.artifactId', 'distribution.fileUrl.classifier',
     'distribution.package.type', 'distribution.package.name',
+    'distribution.generic.path',
     'distribution.securityGroup.type', 'distribution.securityGroup.name',
   ]
 

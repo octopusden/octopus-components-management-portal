@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '../ui/select'
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs'
+import { EnumSelect } from '../ui/EnumSelect'
 import { FieldInfo } from '../ui/FieldInfo'
 import { EntryError, fieldErrorProps } from './EntryError'
 import { useOverridesDraft } from './overridesDraft'
@@ -29,7 +30,7 @@ import { useToast } from '../../hooks/use-toast'
 import { useFieldConfig } from '../../hooks/useAdminConfig'
 import { labelFor } from '../../hooks/useFieldConfig'
 import { isValidVersionRange, isAllowedOverrideRange, isEmptyVersionRange, classifyRangeConflict } from '../../lib/versionRange'
-import type { FieldOverride, MarkerChildrenPayload, VcsEntryRequest, MavenArtifactRequest, FileUrlArtifactRequest, DockerImageRequest, PackageRequest } from '../../lib/types'
+import type { FieldOverride, MarkerChildrenPayload, VcsEntryRequest, MavenArtifactRequest, FileUrlArtifactRequest, DockerImageRequest, PackageRequest, GenericArtifactRequest } from '../../lib/types'
 
 // ---------------------------------------------------------------------------
 // Attribute catalogue
@@ -91,6 +92,7 @@ const MARKER_ATTRS: MarkerAttr[] = [
   { path: 'distribution.fileUrl', label: 'Distribution: File URL', childKey: 'fileUrlArtifacts' },
   { path: 'distribution.docker', label: 'Distribution: Docker', childKey: 'dockerImages' },
   { path: 'distribution.packages', label: 'Distribution: Packages', childKey: 'packages' },
+  { path: 'distribution.generic', label: 'Distribution: Generic', childKey: 'genericArtifacts' },
   { path: 'build.requiredTools', label: 'Build: Required Tools', childKey: 'requiredTools' },
 ]
 
@@ -122,6 +124,7 @@ interface MavenState { groupPattern: string; artifactPattern: string; extension:
 interface FileUrlState { url: string; artifactId: string; classifier: string }
 interface DockerState { imageName: string; flavor: string }
 interface PackageState { packageType: string; packageName: string }
+interface GenericState { path: string }
 
 // ---------------------------------------------------------------------------
 // Pure helpers
@@ -151,6 +154,7 @@ interface MarkerChildInputs {
   fileUrlArtifacts: FileUrlState[]
   dockerImages: DockerState[]
   packages: PackageState[]
+  genericArtifacts: GenericState[]
   requiredToolsInput: string
 }
 
@@ -162,7 +166,7 @@ interface MarkerChildInputs {
 // paths — required-field rules below mirror CRS v4 wire contract.
 function buildMarkerChildren(selectedMarkerAttr: MarkerAttr | undefined, inputs: MarkerChildInputs): MarkerChildrenPayload | null {
   if (!selectedMarkerAttr) return null
-  const { vcsEntries, vcsBuildWorkingDirectory, mavenArtifacts, fileUrlArtifacts, dockerImages, packages, requiredToolsInput } = inputs
+  const { vcsEntries, vcsBuildWorkingDirectory, mavenArtifacts, fileUrlArtifacts, dockerImages, packages, genericArtifacts, requiredToolsInput } = inputs
   const key = selectedMarkerAttr.childKey
   if (key === 'vcsEntries') {
     const entries: VcsEntryRequest[] = vcsEntries
@@ -244,6 +248,12 @@ function buildMarkerChildren(selectedMarkerAttr: MarkerAttr | undefined, inputs:
       .filter((p) => p.packageType !== '' && p.packageName !== '')
     return { packages: pkgs }
   }
+  if (key === 'genericArtifacts') {
+    const arts: GenericArtifactRequest[] = genericArtifacts
+      .map((a) => ({ path: a.path.trim() }))
+      .filter((a) => a.path !== '')
+    return { genericArtifacts: arts }
+  }
   if (key === 'requiredTools') {
     const tools = [...new Set(requiredToolsInput.split(',').map((t) => t.trim()).filter(Boolean))]
     return { requiredTools: tools }
@@ -260,6 +270,7 @@ interface ResetValues {
   fileUrlArtifacts: FileUrlState[]
   dockerImages: DockerState[]
   packages: PackageState[]
+  genericArtifacts: GenericState[]
   requiredToolsInput: string
 }
 
@@ -277,6 +288,7 @@ function computeResetValues(mode: 'create' | 'edit', override: FieldOverride | u
       fileUrlArtifacts: [],
       dockerImages: [],
       packages: [],
+      genericArtifacts: [],
       requiredToolsInput: '',
     }
   }
@@ -292,6 +304,7 @@ function computeResetValues(mode: 'create' | 'edit', override: FieldOverride | u
     fileUrlArtifacts: (mc?.fileUrlArtifacts ?? []).map((a) => ({ url: a.url, artifactId: a.artifactId ?? '', classifier: a.classifier ?? '' })),
     dockerImages: (mc?.dockerImages ?? []).map((d) => ({ imageName: d.imageName, flavor: d.flavor ?? '' })),
     packages: (mc?.packages ?? []).map((p) => ({ packageType: p.packageType, packageName: p.packageName })),
+    genericArtifacts: (mc?.genericArtifacts ?? []).map((a) => ({ path: a.path })),
     requiredToolsInput: (mc?.requiredTools as string[] | null | undefined)?.join(', ') ?? '',
   }
 }
@@ -546,6 +559,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
   const [fileUrlArtifacts, setFileUrlArtifacts] = useState<FileUrlState[]>(initialReset.fileUrlArtifacts)
   const [dockerImages, setDockerImages] = useState<DockerState[]>(initialReset.dockerImages)
   const [packages, setPackages] = useState<PackageState[]>(initialReset.packages)
+  const [genericArtifacts, setGenericArtifacts] = useState<GenericState[]>(initialReset.genericArtifacts)
   const [requiredToolsInput, setRequiredToolsInput] = useState<string>(initialReset.requiredToolsInput)
 
   // ---------------------------------------------------------------------------
@@ -566,6 +580,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
     setFileUrlArtifacts(reset.fileUrlArtifacts)
     setDockerImages(reset.dockerImages)
     setPackages(reset.packages)
+    setGenericArtifacts(reset.genericArtifacts)
     setRequiredToolsInput(reset.requiredToolsInput)
   }
 
@@ -618,9 +633,14 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
   function removeDocker(i: number) { setDockerImages((p) => p.filter((_, idx) => idx !== i)) }
 
   // Packages helpers
-  function addPackage() { setPackages((p) => [...p, { packageType: '', packageName: '' }]) }
+  function addPackage() { setPackages((p) => [...p, { packageType: 'DEB', packageName: '' }]) }
   function updatePackage(i: number, field: keyof PackageState, v: string) { setPackages((p) => p.map((r, idx) => idx === i ? { ...r, [field]: v } : r)) }
   function removePackage(i: number) { setPackages((p) => p.filter((_, idx) => idx !== i)) }
+
+  // Generic artifacts helpers
+  function addGeneric() { setGenericArtifacts((p) => [...p, { path: '' }]) }
+  function updateGeneric(i: number, field: keyof GenericState, v: string) { setGenericArtifacts((p) => p.map((r, idx) => idx === i ? { ...r, [field]: v } : r)) }
+  function removeGeneric(i: number) { setGenericArtifacts((p) => p.filter((_, idx) => idx !== i)) }
 
   // ---------------------------------------------------------------------------
   // Submit
@@ -634,6 +654,7 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
     fileUrlArtifacts,
     dockerImages,
     packages,
+    genericArtifacts,
     requiredToolsInput,
   }
 
@@ -983,7 +1004,12 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         <div className="space-y-1">
                           <Label className="text-xs">Package Type <span className="text-destructive">*</span></Label>
-                          <Input required value={row.packageType} onChange={(e) => updatePackage(i, 'packageType', e.target.value)} placeholder="rpm" className="font-mono text-xs" />
+                          <EnumSelect
+                            fieldPath="distribution.package.type"
+                            optionsOverride={['DEB', 'RPM']}
+                            value={row.packageType}
+                            onValueChange={(v) => updatePackage(i, 'packageType', v)}
+                          />
                         </div>
                         <div className="space-y-1">
                           <Label className="text-xs">Package Name <span className="text-destructive">*</span></Label>
@@ -998,6 +1024,33 @@ export function OverrideRowEditor({ open, onOpenChange, mode, override, presetAt
                   <Button type="button" variant="ghost" size="sm" onClick={addPackage}>
                     <Plus className="h-4 w-4" />
                     Add Package
+                  </Button>
+                </div>
+              )}
+
+              {/* Generic Artifacts */}
+              {selectedMarkerAttr.childKey === 'genericArtifacts' && (
+                <div className="space-y-2">
+                  {genericArtifacts.map((row, i) => (
+                    <div key={i} className="rounded-md border p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-muted-foreground">Artifact {i + 1}</span>
+                        <Button variant="ghost" size="sm" type="button" onClick={() => removeGeneric(i)} className="h-7 text-destructive hover:text-destructive">
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Path <span className="text-destructive">*</span></Label>
+                        <Input required value={row.path} onChange={(e) => updateGeneric(i, 'path', e.target.value)} placeholder="my-component/${version}/my-component.tar.gz" className="font-mono text-xs" />
+                      </div>
+                    </div>
+                  ))}
+                  {genericArtifacts.length === 0 && (
+                    <div className="rounded-md border border-dashed p-3 text-center text-xs text-muted-foreground">No generic artifacts.</div>
+                  )}
+                  <Button type="button" variant="ghost" size="sm" onClick={addGeneric}>
+                    <Plus className="h-4 w-4" />
+                    Add Artifact
                   </Button>
                 </div>
               )}

@@ -1153,7 +1153,8 @@ function ComponentDetailEditor() {
             const distCount =
               (br?.mavenArtifacts.length ?? 0) +
               (br?.fileUrlArtifacts.length ?? 0) +
-              (br?.packages.length ?? 0)
+              (br?.packages.length ?? 0) +
+              (br?.genericArtifacts?.length ?? 0)
             const dockerCount = br?.dockerImages.length ?? 0
             const configCount = component.configurations?.length ?? 0
             const docsCount = component.docs?.length ?? 0

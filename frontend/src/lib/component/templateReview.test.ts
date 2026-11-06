@@ -147,6 +147,24 @@ describe('reviewFieldGroups', () => {
     const general = groups(['displayName']).find((g) => g.heading === 'General')!
     expect(general.rows.find((r) => r.path === 'displayName')).toEqual({ path: 'displayName', label: 'Display Name', value: [] })
   })
+
+  it('lists a generic artifact path under Distribution with its own label', () => {
+    const withGeneric = {
+      ...component,
+      baseConfiguration: {
+        ...component.baseConfiguration,
+        genericArtifacts: [{ path: 'releases/abc-plugin-pay/${version}/abc-plugin-pay.jar' }],
+      },
+    } as unknown as NonNullable<TemplateRun['component']>
+    const dist = reviewFieldGroups(withGeneric).find((g) => g.heading === 'Distribution')
+    expect(dist?.rows).toEqual([
+      {
+        path: 'baseConfiguration.genericArtifacts[0].path',
+        label: 'Generic artifact path',
+        value: ['releases/abc-plugin-pay/${version}/abc-plugin-pay.jar'],
+      },
+    ])
+  })
 })
 
 describe('applyOverrides', () => {

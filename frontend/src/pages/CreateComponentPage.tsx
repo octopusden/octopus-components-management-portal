@@ -64,6 +64,7 @@ import {
   buildCreateRequest,
   vcsBlockApplies,
   DEPRECATED_BUILD_SYSTEMS,
+  sentDistributionRows,
   type CreateFormValues,
 } from '../lib/component/buildCreateRequest'
 import { formFieldOfRule, makeCreateSchema, initialValues, type ComponentDefaults } from '../lib/component/createFormModel'
@@ -102,7 +103,7 @@ const STEP_SUBTITLES: Record<StepId, string> = {
   build: 'Build system & artifacts',
   vcs: 'Repository & branch',
   jira: 'Project & versions',
-  distribution: 'Docker & coordinate',
+  distribution: 'Distribution rows',
   escrow: 'Source escrow generation',
   review: 'Summary & save',
 }
@@ -121,10 +122,11 @@ function routeProfileRejection(
   fieldErrors: Map<string, string>,
   setError: UseFormSetError<CreateFormValues>,
   ownership: readonly { groupId: string }[],
+  distribution: CreateFormValues['distribution'],
 ): StepId | null {
   if (fieldErrors.get('profile')) return 'profile'
   const ruleError = ruleErrorOf(rawBody)
-  const field = ruleError && formFieldOfRule(ruleError.path, ownership)
+  const field = ruleError && formFieldOfRule(ruleError.path, ownership, distribution)
   if (!ruleError || !field) return null
   setError(field as FieldPath<CreateFormValues>, { type: 'server', message: ruleError.message })
   return stepOfField(field)
@@ -211,7 +213,7 @@ function stepOfField(path: string): StepId {
     case 'releaseVersionFormat':
     case 'buildVersionFormat':
       return 'jira'
-    case 'coordinate':
+    case 'distribution':
       return 'distribution'
     // Both the RHF field name (`escrowGeneration`) and the CRS aspect path head
     // (`escrow` from `escrow.generation`) route to the Escrow step.
@@ -464,6 +466,16 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
 
   const values = watch()
 
+  // A sent-row change moves rule messages to another row; RHF revalidates only the edited field.
+  const sentRowsKey =
+    JSON.stringify(sentDistributionRows(values.distribution)) +
+    ':' +
+    values.ownership.findIndex((r) => r.groupId.trim() !== '')
+  useEffect(() => {
+    if (getFieldState('distribution' as FieldPath<CreateFormValues>).error) void trigger('distribution' as FieldPath<CreateFormValues>)
+    if (getFieldState('ownership' as FieldPath<CreateFormValues>).error) void trigger('ownership' as FieldPath<CreateFormValues>)
+  }, [sentRowsKey, getFieldState, trigger])
+
   // Copyright is a field-config-driven dropdown. The option list comes from
   // field-config `options` (the portal-only path; no CRS meta endpoint yet).
   // The seeded default prefers field-config.defaultValue, then
@@ -520,11 +532,14 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
   const explicit = values.distributionExplicit
   const external = values.distributionExternal
   const gated = explicit && external
-  const coordinateType = values.coordinate.type
   const buildSystemValue = values.buildSystem
   const vcsApplies = vcsBlockApplies(buildSystemValue)
 
   const ownershipRows = useFieldArray({ control, name: 'ownership' })
+  const mavenRows = useFieldArray({ control, name: 'distribution.maven' })
+  const dockerRows = useFieldArray({ control, name: 'distribution.docker' })
+  const packageRows = useFieldArray({ control, name: 'distribution.packages' })
+  const genericRows = useFieldArray({ control, name: 'distribution.generic' })
   const ownershipValues = values.ownership
   const lastOwnershipRow = ownershipValues[ownershipValues.length - 1]
   const canAddOwnershipRow =
@@ -630,14 +645,6 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
     setValue('versionPrefix', values.name, { shouldValidate: false })
   }, [values.name, isClone, versionPrefixEdited, setValue])
 
-  // When Maven/Package coordinates are not available (not explicit+external),
-  // keep the single coordinate on Docker so the gated sub-fields never linger.
-  useEffect(() => {
-    if (!gated && coordinateType !== 'docker') {
-      setValue('coordinate.type', 'docker', { shouldValidate: false })
-    }
-  }, [gated, coordinateType, setValue])
-
   const setMinorSeparate = (separate: boolean) => {
     setValue('minorSeparate', separate, { shouldValidate: false })
     setValue(
@@ -716,6 +723,9 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
     if (serverError) set.add(serverError.stepId)
     return set
   }, [parseIssues, profileMissing, jiraKeyError, serverError])
+
+  // Live schema-parse message (RHF commits only the changed field's error).
+  const distributionIssue = (field: string) => parseIssues.find((i) => i.field === field)?.message
 
   // Invalid steps actually shown as such: only those visited (or all, once a
   // Create was attempted), and never the step you are currently on until you
@@ -808,7 +818,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
       }
       if (err instanceof ApiError && err.status === 400) {
         const fieldErrors = parseServerFieldErrors(err.rawBody)
-        stepId = routeProfileRejection(err.rawBody, fieldErrors, setError, formValues.ownership) ?? stepId
+        stepId = routeProfileRejection(err.rawBody, fieldErrors, setError, formValues.ownership, formValues.distribution) ?? stepId
         if (fieldErrors.get('name')) {
           setError('name', { type: 'server', message: fieldErrors.get('name')! })
           stepId = 'general'
@@ -829,11 +839,11 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
               stepId = 'general'
             }
           }
-          const distributionMsg = fieldErrors.get('distribution')
-          if (distributionMsg) {
-            setError('coordinate', { type: 'server', message: distributionMsg })
-            stepId = 'distribution'
-          }
+        }
+        const distributionMsg = fieldErrors.get('distribution')
+        if (distributionMsg) {
+          setError('distribution', { type: 'server', message: distributionMsg })
+          stepId = 'distribution'
         }
         // A Produced-Artifacts value conflict routes to the Build step.
         if (fieldErrors.get('artifactIds') || fieldErrors.get('ownership')) {
@@ -1519,144 +1529,208 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
     </div>
   )
 
-  const selectCoordinateType = (type: CreateFormValues['coordinate']['type']) => {
-    setValue(
-      'coordinate',
-      { type, groupPattern: '', artifactPattern: '', imageName: '', flavor: '', packageType: 'DEB', packageName: '' },
-      { shouldValidate: false },
-    )
-    clearErrors('coordinate')
-  }
-
   const renderDistributionStep = () => (
     <div className="space-y-6">
       <StepHeading title="Distribution" subtitle="How the component's artifacts are published." />
-      <SectionHeader title="Docker" subtitle="A Docker image can be published regardless of distribution type." />
-      {gated ? (
-        <>
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-1">
-              <Label htmlFor="create-coordinate-type">
-                Distribution coordinate <span className="text-destructive">*</span>
-              </Label>
-              {reenterBadgeFor('create-coordinate-type')}
+      {/* Full-parse messages (RHF commits only the changed field's error). */}
+      <FieldError message={errors.distribution?.message ?? distributionIssue('distribution')} />
+      <SectionHeader
+        title="Distribution rows"
+        subtitle={
+          gated
+            ? 'Every type is optional, but an explicit + external component needs at least one distribution row.'
+            : 'Every type is optional — add what this component publishes. More rows and per-range variants are added later in the editor.'
+        }
+      />
+
+      {/* ── Maven GAV ─────────────────────────────────────────────────────── */}
+      <section className="space-y-3">
+        <SectionHeader title="Maven GAV" subtitle="Coordinates published to the artifact repository." />
+        {mavenRows.fields.map((row, i) => (
+          <div key={row.id} className="rounded-md border p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-muted-foreground">Artifact {i + 1}</span>
+              <Button type="button" variant="ghost" size="sm" onClick={() => mavenRows.remove(i)} className="h-7 text-destructive hover:text-destructive">
+                <X className="h-3 w-3" />
+              </Button>
             </div>
-            <select
-              id="create-coordinate-type"
-              aria-describedby={reenterId('create-coordinate-type')}
-              className={cn('h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm', reenterBorder)}
-              value={coordinateType}
-              onChange={(e) => selectCoordinateType(e.target.value as CreateFormValues['coordinate']['type'])}
-            >
-              <option value="maven">Maven GAV</option>
-              <option value="docker">Docker image</option>
-              <option value="package">Package</option>
-            </select>
-            {coordinateType === 'maven' && (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="create-coordinate-groupId" className="text-xs">groupId</Label>
-                  <Input id="create-coordinate-groupId" className="font-mono text-xs"
-                    placeholder="org.example.alpha" aria-label="groupId"
-                    {...register('coordinate.groupPattern')} />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1">
+                  <Label htmlFor={`create-maven-${i}-groupId`} className="text-xs">groupId</Label>
+                  {reenterBadgeFor(`create-maven-${i}-groupId`)}
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="create-coordinate-artifactId" className="text-xs">artifactId</Label>
-                  <Input id="create-coordinate-artifactId" className="font-mono text-xs"
-                    placeholder="my-component" aria-label="artifactId"
-                    {...register('coordinate.artifactPattern')} />
-                </div>
+                <Input
+                  id={`create-maven-${i}-groupId`}
+                  className={cn('font-mono text-xs', reenterBorder)}
+                  placeholder="org.example.alpha"
+                  aria-label="groupId"
+                  aria-describedby={reenterId(`create-maven-${i}-groupId`)}
+                  {...register(`distribution.maven.${i}.groupPattern` as const)}
+                />
+                <FieldError message={errors.distribution?.maven?.[i]?.groupPattern?.message ?? distributionIssue(`distribution.maven.${i}.groupPattern`)} />
               </div>
-            )}
-            {coordinateType === 'docker' && (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="create-coordinate-imageName" className="text-xs">Image Name</Label>
-                  <Input
-                    id="create-coordinate-imageName"
-                    className="font-mono text-xs"
-                    placeholder="acme/my-service"
-                    aria-label="Image name"
-                    {...register('coordinate.imageName')}
-                  />
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1">
+                  <Label htmlFor={`create-maven-${i}-artifactId`} className="text-xs">artifactId</Label>
+                  {reenterBadgeFor(`create-maven-${i}-artifactId`)}
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="create-coordinate-flavor" className="text-xs">
-                    Flavor <span className="font-normal text-muted-foreground">(optional)</span>
-                  </Label>
-                  <Input
-                    id="create-coordinate-flavor"
-                    className="font-mono text-xs"
-                    placeholder="e.g. alpine"
-                    aria-label="Flavor"
-                    {...register('coordinate.flavor')}
-                  />
-                </div>
+                <Input
+                  id={`create-maven-${i}-artifactId`}
+                  className={cn('font-mono text-xs', reenterBorder)}
+                  placeholder="my-component"
+                  aria-label="artifactId"
+                  aria-describedby={reenterId(`create-maven-${i}-artifactId`)}
+                  {...register(`distribution.maven.${i}.artifactPattern` as const)}
+                />
+                <FieldError message={errors.distribution?.maven?.[i]?.artifactPattern?.message ?? distributionIssue(`distribution.maven.${i}.artifactPattern`)} />
               </div>
-            )}
-            {coordinateType === 'package' && (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="create-coordinate-packageType" className="text-xs">Package Type</Label>
-                  <Controller
-                    control={control}
-                    name="coordinate.packageType"
-                    render={({ field }) => (
-                      <select
-                        id="create-coordinate-packageType"
-                        aria-label="Package Type"
-                        className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-                        value={field.value}
-                        onChange={field.onChange}
-                      >
-                        <option value="DEB">DEB</option>
-                        <option value="RPM">RPM</option>
-                      </select>
-                    )}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="create-coordinate-packageName" className="text-xs">Package Name</Label>
-                  <Input id="create-coordinate-packageName" className="font-mono text-xs"
-                    placeholder="my-package" aria-label="Package Name"
-                    {...register('coordinate.packageName')} />
-                </div>
-              </div>
-            )}
-            {errors.coordinate && (
-              <p className="text-xs text-destructive">
-                {errors.coordinate.message ??
-                  errors.coordinate.groupPattern?.message ??
-                  errors.coordinate.artifactPattern?.message ??
-                  errors.coordinate.imageName?.message ??
-                  errors.coordinate.packageName?.message}
-              </p>
-            )}
+            </div>
           </div>
-        </>
-      ) : (
-        <>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        ))}
+        <Button type="button" variant="outline" size="sm" onClick={() => mavenRows.append({ groupPattern: '', artifactPattern: '' })}>
+          <Plus className="h-4 w-4" />
+          Add Maven GAV
+        </Button>
+      </section>
+
+      {/* ── Docker ─────────────────────────────────────────────────────────── */}
+      <section className="space-y-3">
+        <SectionHeader title="Docker" subtitle="Container images pushed on release." />
+        {dockerRows.fields.map((row, i) => (
+          <div key={row.id} className="rounded-md border p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-muted-foreground">Image {i + 1}</span>
+              <Button type="button" variant="ghost" size="sm" onClick={() => dockerRows.remove(i)} className="h-7 text-destructive hover:text-destructive">
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1">
+                  <Label htmlFor={`create-docker-${i}-imageName`} className="text-xs">Image Name</Label>
+                  {reenterBadgeFor(`create-docker-${i}-imageName`)}
+                </div>
+                <Input
+                  id={`create-docker-${i}-imageName`}
+                  className={cn('font-mono text-xs', reenterBorder)}
+                  placeholder="acme/my-service"
+                  aria-label="Image name"
+                  aria-describedby={reenterId(`create-docker-${i}-imageName`)}
+                  {...register(`distribution.docker.${i}.imageName` as const)}
+                />
+                <FieldError message={errors.distribution?.docker?.[i]?.imageName?.message ?? distributionIssue(`distribution.docker.${i}.imageName`)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor={`create-docker-${i}-flavor`} className="text-xs">
+                  Flavor <span className="font-normal text-muted-foreground">(optional)</span>
+                </Label>
+                <Input
+                  id={`create-docker-${i}-flavor`}
+                  className="font-mono text-xs"
+                  placeholder="e.g. alpine"
+                  aria-label="Flavor"
+                  {...register(`distribution.docker.${i}.flavor` as const)}
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+        <Button type="button" variant="outline" size="sm" onClick={() => dockerRows.append({ imageName: '', flavor: '' })}>
+          <Plus className="h-4 w-4" />
+          Add Docker image
+        </Button>
+      </section>
+
+      {/* ── Packages ───────────────────────────────────────────────────────── */}
+      <section className="space-y-3">
+        <SectionHeader title="Packages" subtitle="OS packages (DEB / RPM) built and uploaded on release." />
+        {packageRows.fields.map((row, i) => (
+          <div key={row.id} className="rounded-md border p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-muted-foreground">Package {i + 1}</span>
+              <Button type="button" variant="ghost" size="sm" onClick={() => packageRows.remove(i)} className="h-7 text-destructive hover:text-destructive">
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor={`create-package-${i}-type`} className="text-xs">Package Type</Label>
+                <Controller
+                  control={control}
+                  name={`distribution.packages.${i}.packageType` as const}
+                  render={({ field }) => (
+                    <select
+                      id={`create-package-${i}-type`}
+                      aria-label="Package Type"
+                      className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+                      value={field.value}
+                      onChange={field.onChange}
+                    >
+                      <option value="DEB">DEB</option>
+                      <option value="RPM">RPM</option>
+                    </select>
+                  )}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1">
+                  <Label htmlFor={`create-package-${i}-name`} className="text-xs">Package Name</Label>
+                  {reenterBadgeFor(`create-package-${i}-name`)}
+                </div>
+                <Input
+                  id={`create-package-${i}-name`}
+                  className={cn('font-mono text-xs', reenterBorder)}
+                  placeholder="my-package"
+                  aria-label="Package Name"
+                  aria-describedby={reenterId(`create-package-${i}-name`)}
+                  {...register(`distribution.packages.${i}.packageName` as const)}
+                />
+                <FieldError message={errors.distribution?.packages?.[i]?.packageName?.message ?? distributionIssue(`distribution.packages.${i}.packageName`)} />
+              </div>
+            </div>
+          </div>
+        ))}
+        <Button type="button" variant="outline" size="sm" onClick={() => packageRows.append({ packageType: 'DEB', packageName: '' })}>
+          <Plus className="h-4 w-4" />
+          Add package
+        </Button>
+      </section>
+
+      {/* ── Generic ────────────────────────────────────────────────────────── */}
+      <section className="space-y-3">
+        <SectionHeader title="Generic artifacts" subtitle="Generic artifacts paths." />
+        {genericRows.fields.map((row, i) => (
+          <div key={row.id} className="rounded-md border p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-muted-foreground">Artifact {i + 1}</span>
+              <Button type="button" variant="ghost" size="sm" onClick={() => genericRows.remove(i)} className="h-7 text-destructive hover:text-destructive">
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
             <div className="space-y-1.5">
               <div className="flex items-center gap-1">
-                <Label htmlFor="create-imageName">Image Name</Label>
-                {reenterBadgeFor('create-imageName')}
+                <Label htmlFor={`create-generic-${i}-path`} className="text-xs">Path</Label>
+                <FieldInfo path="distribution.generic.path" label="Generic artifact path" />
+                {reenterBadgeFor(`create-generic-${i}-path`)}
               </div>
-              <Input id="create-imageName" className={cn('font-mono text-xs', reenterBorder)} placeholder="acme/my-service" aria-label="Image name" aria-describedby={reenterId('create-imageName')} {...register('coordinate.imageName')} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="create-flavor">
-                Flavor <span className="font-normal text-muted-foreground">(optional)</span>
-              </Label>
-              <Input id="create-flavor" className="font-mono text-xs" placeholder="e.g. alpine" aria-label="Flavor" {...register('coordinate.flavor')} />
+              <Input
+                id={`create-generic-${i}-path`}
+                className={cn('font-mono text-xs', reenterBorder)}
+                placeholder="my-component/${version}/my-component.tar.gz"
+                aria-label="Path"
+                aria-describedby={reenterId(`create-generic-${i}-path`)}
+                {...register(`distribution.generic.${i}.path` as const)}
+              />
+              <FieldError message={errors.distribution?.generic?.[i]?.path?.message ?? distributionIssue(`distribution.generic.${i}.path`)} />
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Maven / Package distribution coordinates are available only for an explicit external
-            component.
-          </p>
-        </>
-      )}
+        ))}
+        <Button type="button" variant="outline" size="sm" onClick={() => genericRows.append({ path: '' })}>
+          <Plus className="h-4 w-4" />
+          Add generic artifact
+        </Button>
+      </section>
     </div>
   )
 
@@ -1732,7 +1806,6 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
         showSystems={editable('system')}
         showLabels={labelsVisibility !== 'hidden'}
         showBuildTasks={buildTasksVisibility === 'editable'}
-        gated={gated}
         vcsApplies={vcsApplies}
         classification={classificationRecap()}
         // Surface the escrow generation exactly when it will actually be sent, so
@@ -1844,7 +1917,7 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
                 </p>
                 <p>
                   <span className="font-medium text-foreground">Excluded (re-enter):</span> the Component
-                  Key, {vcsApplies && 'VCS Path, '}Jira project key, and distribution coordinate are unique
+                  Key, {vcsApplies && 'VCS Path, '}Jira project key, and distribution rows are unique
                   per component — enter new values.
                 </p>
               </div>
@@ -1868,11 +1941,14 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
             <StepRuleMessages
               messages={ruleMessagesNotShown(parseIssues, current, {
                 external,
-                gated,
                 vcsApplies,
                 buildTasksVisibility,
                 editable,
-                hasError: (field) => !!get(errors, field),
+                hasError: (field) => {
+                  if (get(errors, field)) return true
+                  const m = /^distribution\.(maven|docker|packages|generic)\.(\d+)\./.exec(field)
+                  return !!m && values.distribution[m[1] as keyof CreateFormValues['distribution']].length > Number(m[2])
+                },
               })}
             />
             {stepBody[current]()}
@@ -1968,7 +2044,7 @@ function Field({
 
 /**
  * Amber "re-enter" pill shown on the unique-per-component fields in clone mode
- * (Component Key, VCS Path, Jira project key, distribution coordinate) so the
+ * (Component Key, VCS Path, Jira project key, distribution rows) so the
  * user sees which values must be new.
  */
 function ReenterPill({ id }: { id?: string }) {
@@ -1996,7 +2072,6 @@ interface ParseIssue {
 
 interface FieldDisplay {
   external: boolean
-  gated: boolean
   vcsApplies: boolean
   buildTasksVisibility: FieldVisibility
   editable: (field: string) => boolean
@@ -2008,7 +2083,7 @@ interface FieldDisplay {
 // Whether the wizard renders this field's error under it. Fields not listed (the version prefix,
 // the line/minor/release/build formats, the Docker flavor) never do.
 function fieldShowsError(field: string, display: FieldDisplay): boolean {
-  switch (field.replace(/^ownership\.\d+\./, 'ownership.')) {
+  switch (field.replace(/^ownership\.\d+\./, 'ownership.').replace(/^distribution\.(maven|docker|packages|generic)\.\d+\./, 'distribution.$1.')) {
     case 'name':
     case 'ownership.groupId':
     case 'jiraProjectKey':
@@ -2024,11 +2099,13 @@ function fieldShowsError(field: string, display: FieldDisplay): boolean {
     case 'vcsBranch':
     case 'vcsTag':
       return display.vcsApplies
-    case 'coordinate.groupPattern':
-    case 'coordinate.artifactPattern':
-    case 'coordinate.imageName':
-    case 'coordinate.packageName':
-      return display.gated
+    // Never gated — any classification may fill any family.
+    case 'distribution.maven.groupPattern':
+    case 'distribution.maven.artifactPattern':
+    case 'distribution.docker.imageName':
+    case 'distribution.packages.packageName':
+    case 'distribution.generic.path':
+      return true
     default:
       return false
   }
@@ -2071,7 +2148,6 @@ function shownIf(show: boolean, value: string): string {
 /** Green-`+` summary of the fields that will be created (brief §5/§7). */
 function SummaryDiff({
   values,
-  gated,
   vcsApplies,
   classification,
   escrowGeneration,
@@ -2083,7 +2159,6 @@ function SummaryDiff({
   showSystems: boolean
   showLabels: boolean
   showBuildTasks: boolean
-  gated: boolean
   vcsApplies: boolean
   classification: string
   escrowGeneration: string
@@ -2133,18 +2208,23 @@ function SummaryDiff({
     ['Release Version Format', values.releaseVersionFormat],
     ['Build Version Format', values.buildSeparate ? values.buildVersionFormat : values.releaseVersionFormat],
   ])
-  const coord = values.coordinate
-  const coordSummary =
-    coord.type === 'maven'
-      ? gated && coord.groupPattern
-        ? `${coord.groupPattern}:${coord.artifactPattern}`
-        : ''
-      : coord.type === 'docker'
-        ? coord.imageName
-        : gated && coord.packageName
-          ? `${coord.packageType} ${coord.packageName}`
-          : ''
-  push('Distribution', [[coord.type === 'docker' ? 'Docker image' : 'Distribution coordinate', coordSummary]])
+  // Every filled distribution family becomes its own Review row.
+  const dist = values.distribution
+  const distRows: Array<[string, string]> = [
+    ...dist.maven
+      .filter((r) => r.groupPattern.trim() !== '' || r.artifactPattern.trim() !== '')
+      .map((r) => ['Maven GAV', `${r.groupPattern}:${r.artifactPattern}`] as [string, string]),
+    ...dist.docker
+      .filter((r) => r.imageName.trim() !== '')
+      .map((r) => ['Docker image', r.flavor.trim() ? `${r.imageName}:${r.flavor}` : r.imageName] as [string, string]),
+    ...dist.packages
+      .filter((r) => r.packageName.trim() !== '')
+      .map((r) => ['Package', `${r.packageType} ${r.packageName}`] as [string, string]),
+    ...dist.generic
+      .filter((r) => r.path.trim() !== '')
+      .map((r) => ['Generic artifact', r.path] as [string, string]),
+  ]
+  push('Distribution', distRows)
   push('Escrow', [['Generation', escrowGeneration]])
 
   return (

@@ -152,7 +152,7 @@ describe("initialValues — today's pre-filled values are kept (D7)", () => {
     releaseVersionFormat: '$major.$minor.$service', buildVersionFormat: '$major.$minor.$service-$fix',
     lineVersionFormat: '$major', minorSeparate: true, buildSeparate: true, vcsUrl: '', vcsTag: 'v$version',
     vcsBranch: 'develop',
-    coordinate: { type: 'maven', groupPattern: '', artifactPattern: '', imageName: '', flavor: '', packageType: 'DEB', packageName: '' },
+    distribution: { maven: [], docker: [], packages: [], generic: [] },
     ownership: [{ groupId: '', mode: 'ALL', tokens: [] }],
     escrowGeneration: 'AUTO',
     // New create fields, empty for a new component.
@@ -329,15 +329,15 @@ describe('makeCreateSchema — the chosen profile\'s field rules', () => {
     expect(messagesAt(issuesOn([], form({ name: 'my-solution' })), 'name')).toHaveLength(0)
   })
 
-  it('checks a Maven-group rule as "" when the coordinate is a Docker image, on the Maven group field', () => {
+  it('checks a Maven-group rule as "" when no maven row is sent, on the Maven group field', () => {
     const values = form({
       distributionExplicit: true,
       distributionExternal: true,
       displayName: 'Payments',
-      coordinate: { ...form().coordinate, type: 'docker', imageName: 'acme/payments' },
+      distribution: { ...form().distribution, docker: [{ imageName: 'acme/payments', flavor: '' }] },
     })
     const issues = issuesOn([rule('baseConfiguration.mavenArtifacts[0].groupPattern', '.+')], values)
-    expect(messagesAt(issues, 'coordinate.groupPattern')).toEqual([
+    expect(messagesAt(issues, 'distribution.maven.0.groupPattern')).toEqual([
       'rule on baseConfiguration.mavenArtifacts[0].groupPattern',
     ])
   })
@@ -376,6 +376,17 @@ describe('makeCreateSchema — the chosen profile\'s field rules', () => {
     expect(formFieldOfRule('artifactIds[0].groupPattern', rows)).toBe('ownership.1.groupId')
     expect(formFieldOfRule('artifactIds[0].groupPattern', [])).toBe('ownership.0.groupId')
     expect(formFieldOfRule('baseConfiguration.jira.projectKey', rows)).toBe('jiraProjectKey')
+  })
+
+  it('maps a distribution rule to the first row the request sends, skipping blank rows', () => {
+    const withBlankFirst = {
+      maven: [{ groupPattern: '', artifactPattern: '' }, { groupPattern: 'org.x', artifactPattern: 'svc' }],
+      docker: [{ imageName: '', flavor: '' }],
+      packages: [],
+      generic: [],
+    }
+    expect(formFieldOfRule('baseConfiguration.mavenArtifacts[0].groupPattern', [], withBlankFirst)).toBe('distribution.maven.1.groupPattern')
+    expect(formFieldOfRule('baseConfiguration.mavenArtifacts[0].groupPattern', [], initialValues(null, {}).distribution)).toBe('distribution.maven.0.groupPattern')
   })
 
   it('does not add a rule message to a blank key, which already shows "required"', () => {
@@ -429,9 +440,9 @@ describe('makeCreateSchema — explicit external checks with locked classificati
     return result.success ? [] : result.error.issues.map((i) => i.path.join('.'))
   }
 
-  it('still requires the display name, people and coordinate', () => {
+  it('still requires the display name, people and a distribution row', () => {
     expect(pathsOf(explicitExternal)).toEqual(
-      expect.arrayContaining(['displayName', 'releaseManager', 'securityChampion', 'coordinate.groupPattern']),
+      expect.arrayContaining(['displayName', 'releaseManager', 'securityChampion', 'distribution']),
     )
   })
 
@@ -440,6 +451,93 @@ describe('makeCreateSchema — explicit external checks with locked classificati
   })
 })
 
+describe('makeCreateSchema — distribution rows (all types, never gated by classification)', () => {
+  const allEditable: (field: string) => boolean = () => true
+  function form(overrides: Partial<CreateFormValues> = {}): CreateFormValues {
+    return {
+      ...initialValues(null, {}),
+      name: 'payments',
+      componentOwner: 'alice',
+      buildSystem: 'PROVIDED',
+      jiraProjectKey: 'ABCD',
+      versionFormat: '$major.$minor',
+      ...overrides,
+    }
+  }
+  const pathsOf = (values: CreateFormValues) => {
+    const result = makeCreateSchema(allEditable, [], null, []).safeParse(values)
+    return result.success ? [] : result.error.issues.map((i) => i.path.join('.'))
+  }
+  const messagesOf = (values: CreateFormValues) => {
+    const result = makeCreateSchema(allEditable, [], null, []).safeParse(values)
+    return result.success ? {} : Object.fromEntries(result.error.issues.map((i) => [i.path.join('.'), i.message]))
+  }
+
+  it('accepts a non-explicit-external component with any family filled (no gate)', () => {
+    expect(
+      pathsOf(
+        form({
+          distribution: {
+            maven: [{ groupPattern: 'org.example.pay', artifactPattern: 'payments' }],
+            docker: [{ imageName: 'acme/payments', flavor: 'alpine' }],
+            packages: [{ packageType: 'RPM', packageName: 'pay-pkg' }],
+            generic: [{ path: 'releases/pay/pay.jar' }],
+          },
+        }),
+      ),
+    ).toEqual([])
+  })
+
+  it('blocks a partially filled maven row with a message on the missing half', () => {
+    expect(messagesOf(form({ distribution: { ...initialValues(null, {}).distribution, maven: [{ groupPattern: 'org.x', artifactPattern: '' }] } }))).toMatchObject({
+      'distribution.maven.0.artifactPattern': 'Artifact ID is required',
+    })
+    expect(messagesOf(form({ distribution: { ...initialValues(null, {}).distribution, maven: [{ groupPattern: '', artifactPattern: 'svc' }] } }))).toMatchObject({
+      'distribution.maven.0.groupPattern': 'Group ID is required',
+    })
+  })
+
+  it('blocks a docker row that has a flavor but no image name', () => {
+    expect(messagesOf(form({ distribution: { ...initialValues(null, {}).distribution, docker: [{ imageName: '', flavor: 'alpine' }] } }))).toMatchObject({
+      'distribution.docker.0.imageName': 'Image name is required',
+    })
+  })
+
+  it('drops fully blank rows silently (no issues)', () => {
+    expect(
+      pathsOf(
+        form({
+          distribution: {
+            maven: [{ groupPattern: '', artifactPattern: '' }],
+            docker: [{ imageName: '', flavor: '' }],
+            packages: [{ packageType: 'DEB', packageName: '' }],
+            generic: [{ path: '' }],
+          },
+        }),
+      ),
+    ).toEqual([])
+  })
+
+  it('requires at least one row for an explicit + external component', () => {
+    const gated = form({ distributionExplicit: true, distributionExternal: true })
+    expect(messagesOf(gated)).toMatchObject({
+      distribution: 'At least one distribution (Maven, Docker, package or generic) is required for an explicit + external component',
+    })
+    // Any one family satisfies the rule.
+    expect(
+      pathsOf(
+        form({
+          distributionExplicit: true,
+          distributionExternal: true,
+          displayName: 'Payments',
+          releaseManager: ['jdoe'],
+          securityChampion: ['asmith'],
+          distribution: { ...initialValues(null, {}).distribution, generic: [{ path: 'releases/pay/pay.jar' }] },
+        }),
+      ),
+    ).toEqual([])
+  })
+})
 
 describe('SYS-107: initial systems', () => {
   it('SYS-107 seeds the configured system without hardcoding an installation', () => {

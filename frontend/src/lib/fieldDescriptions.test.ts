@@ -74,6 +74,7 @@ const EXPECTED_KEYS = [
   'distribution.fileUrlArtifacts',
   'distribution.dockerImages',
   'distribution.packages',
+  'distribution.genericArtifacts',
   'distribution.securityGroups',
   'distribution.maven.groupPattern',
   'distribution.maven.artifactPattern',
@@ -86,6 +87,7 @@ const EXPECTED_KEYS = [
   'distribution.docker.flavor',
   'distribution.package.type',
   'distribution.package.name',
+  'distribution.generic.path',
   'distribution.securityGroup.type',
   'distribution.securityGroup.name',
   // EscrowTab

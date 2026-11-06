@@ -26,6 +26,7 @@ const MARKER_COLLECTION_MAP: Record<
   'distribution.fileUrl': { key: 'fileUrlArtifacts', unit: 'entries' },
   'distribution.docker': { key: 'dockerImages', unit: 'entries' },
   'distribution.packages': { key: 'packages', unit: 'entries' },
+  'distribution.generic': { key: 'genericArtifacts', unit: 'entries' },
   'build.requiredTools': { key: 'requiredTools', unit: 'tools' },
 }
 
@@ -41,6 +42,8 @@ function baseRowSummary(row: ComponentConfiguration): string {
   if (row.fileUrlArtifacts.length > 0) collections.push(`fileUrl: ${row.fileUrlArtifacts.length}`)
   if (row.dockerImages.length > 0) collections.push(`docker: ${row.dockerImages.length}`)
   if (row.packages.length > 0) collections.push(`packages: ${row.packages.length}`)
+  const genericCount = row.genericArtifacts?.length ?? 0
+  if (genericCount > 0) collections.push(`generic: ${genericCount}`)
   if (row.requiredTools.length > 0) collections.push(`requiredTools: ${row.requiredTools.length}`)
 
   const parts: string[] = []

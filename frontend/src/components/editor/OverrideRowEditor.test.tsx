@@ -97,6 +97,10 @@ vi.mock('../../hooks/useAdminConfig', () => ({
   useFieldConfig: () => mockUseAdminFieldConfig(),
 }))
 
+vi.mock('../../hooks/useFieldOptions', () => ({
+  useFieldOptions: () => ({ options: [], isLoading: false }),
+}))
+
 beforeEach(() => {
   mockUseAdminFieldConfig.mockReturnValue({ data: undefined, isLoading: false, isError: false })
 })
@@ -294,6 +298,36 @@ describe('OverrideRowEditor — create mode', () => {
     const select = screen.getByTestId('attr-select') as HTMLSelectElement
     await userEvent.selectOptions(select, 'distribution.fileUrl')
     expect(screen.getByRole('button', { name: /add artifact/i })).toBeDefined()
+  })
+
+  it('switching to Marker and selecting distribution.generic renders generic child list editor', async () => {
+    renderEditor()
+    await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
+    const select = screen.getByTestId('attr-select') as HTMLSelectElement
+    await userEvent.selectOptions(select, 'distribution.generic')
+    expect(screen.getByRole('button', { name: /add artifact/i })).toBeDefined()
+  })
+
+  it('queues a create with a trimmed-path marker body for distribution.generic (blank rows dropped)', async () => {
+    renderEditor()
+    await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
+    const select = screen.getByTestId('attr-select') as HTMLSelectElement
+    await userEvent.selectOptions(select, 'distribution.generic')
+
+    await userEvent.click(screen.getByRole('button', { name: /add artifact/i }))
+    const pathInput = screen.getByPlaceholderText('my-component/${version}/my-component.tar.gz')
+    await userEvent.type(pathInput, '  releases/svc/svc.jar  ')
+
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[2.0,3.0)' } })
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+
+    await waitFor(() => {
+      expect(mockQueueCreate).toHaveBeenCalledOnce()
+      const body = mockQueueCreate.mock.calls[0]![0]
+      expect(body.overriddenAttribute).toBe('distribution.generic')
+      expect(body.value).toBeNull()
+      expect(body.markerChildren?.genericArtifacts).toEqual([{ path: 'releases/svc/svc.jar' }])
+    })
   })
 
   it('queues a create with correct scalar string body on submit', async () => {
@@ -726,9 +760,10 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
     await userEvent.selectOptions(select, 'distribution.packages')
 
     await userEvent.click(screen.getByRole('button', { name: /add package/i }))
-    const typeInputs = await screen.findAllByPlaceholderText('rpm')
+    // The row's type select is the second attr-select (the attribute select came first).
+    const rowSelects = await screen.findAllByTestId('attr-select')
+    await userEvent.selectOptions(rowSelects[1]!, 'DEB')
     const nameInputs = await screen.findAllByPlaceholderText('my-package')
-    await userEvent.type(typeInputs[0]!, 'rpm')
     await userEvent.type(nameInputs[0]!, 'my-svc')
 
     fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1.0,2.0)' } })
@@ -740,7 +775,28 @@ describe('OverrideRowEditor — full submit body for fileUrl/docker/packages mar
       expect(body.overriddenAttribute).toBe('distribution.packages')
       expect(body.value).toBeNull()
       expect(body.markerChildren.packages).toEqual([
-        { packageType: 'rpm', packageName: 'my-svc' },
+        { packageType: 'DEB', packageName: 'my-svc' },
+      ])
+    })
+  })
+
+  it('defaults a new package row to DEB, so a named row is kept without picking a type', async () => {
+    renderEditor()
+    await userEvent.click(screen.getByRole('tab', { name: /marker/i }))
+    const select = screen.getByTestId('attr-select') as HTMLSelectElement
+    await userEvent.selectOptions(select, 'distribution.packages')
+
+    await userEvent.click(screen.getByRole('button', { name: /add package/i }))
+    const nameInputs = await screen.findAllByPlaceholderText('my-package')
+    await userEvent.type(nameInputs[0]!, 'my-svc')
+
+    fireEvent.change(screen.getByLabelText('Version Range'), { target: { value: '[1.0,2.0)' } })
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+
+    await waitFor(() => {
+      expect(mockQueueCreate).toHaveBeenCalledOnce()
+      expect(mockQueueCreate.mock.calls[0]![0].markerChildren.packages).toEqual([
+        { packageType: 'DEB', packageName: 'my-svc' },
       ])
     })
   })

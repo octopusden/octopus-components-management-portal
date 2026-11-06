@@ -4,15 +4,17 @@ import { compareVersionRanges } from '../../lib/versionRange'
 import { useOverridesDraft } from './overridesDraft'
 
 /**
- * The four `distribution.*` marker attributes CRS supports per-range (issue #146).
- * `distribution.explicit` / `.external` / `.securityGroups.read` are per-component
- * only (CRS #387) and are deliberately absent here.
+ * The five `distribution.*` marker attributes CRS supports per-range (issue #146;
+ * `distribution.generic` — CRS SYS-098). `distribution.explicit` / `.external` /
+ * `.securityGroups.read` are per-component only (CRS #387) and are deliberately
+ * absent here.
  */
 export const DISTRIBUTION_MARKER_PATHS = [
   'distribution.maven',
   'distribution.fileUrl',
   'distribution.docker',
   'distribution.packages',
+  'distribution.generic',
 ] as const
 
 export type DistributionMarkerPath = (typeof DISTRIBUTION_MARKER_PATHS)[number]
@@ -22,7 +24,7 @@ const DISTRIBUTION_MARKER_SET = new Set<string>(DISTRIBUTION_MARKER_PATHS)
 export interface DistributionOverrides {
   /** Effective (draft-applied) per-range overrides, grouped and sorted by range. */
   byPath: Record<DistributionMarkerPath, FieldOverride[]>
-  /** Count across all four distribution marker paths. */
+  /** Count across all five distribution marker paths. */
   total: number
   /** Queue an override removal into the shared draft (rides the combined Save). */
   queueDelete: (id: string) => void
@@ -30,7 +32,7 @@ export interface DistributionOverrides {
 
 /**
  * Thin sibling to `useDistributionSection`: projects the page-level override
- * draft down to the four per-range `distribution.*` marker paths so the
+ * draft down to the five per-range `distribution.*` marker paths so the
  * Distribution tab can surface / add / edit / delete per-range variants without
  * leaving the tab. All mutations queue into the same `OverridesDraft` the
  * combined Save flushes, so no separate save plumbing is involved.
@@ -44,6 +46,7 @@ export function useDistributionOverrides(): DistributionOverrides {
       'distribution.fileUrl': [],
       'distribution.docker': [],
       'distribution.packages': [],
+      'distribution.generic': [],
     }
     for (const o of effectiveOverrides) {
       if (DISTRIBUTION_MARKER_SET.has(o.overriddenAttribute)) {

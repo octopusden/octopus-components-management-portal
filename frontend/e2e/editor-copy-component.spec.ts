@@ -356,8 +356,10 @@ test.describe('Clone component — admin smoke', () => {
     // Full Version Format is required; the stand's defaults don't seed it.
     await page.getByRole('textbox', { name: /Full Version Format/i }).fill('$versionPrefix-$baseVersionFormat')
 
-    // Distribution step — Maven coordinate (gated on explicit+external).
+    // Distribution step — Maven GAV rows (available to any classification; the
+    // row must be added first, then filled).
     await page.getByRole('button', { name: /Distribution/ }).click()
+    await page.getByRole('button', { name: /add maven gav/i }).click()
     await page.getByLabel('groupId').fill('org.acme')
     await page.getByLabel('artifactId').fill('svc')
 
@@ -451,9 +453,10 @@ test.describe('Create component from scratch — admin smoke', () => {
     // key). The stand's component-defaults doesn't seed it, so fill it explicitly.
     await page.getByRole('textbox', { name: /Full Version Format/i }).fill('$versionPrefix-$baseVersionFormat')
 
-    // Distribution — Docker coordinate.
+    // Distribution — Docker image row (no coordinate selector anymore: every
+    // family is offered directly; add the row first, then fill it).
     await page.getByRole('button', { name: /Distribution/ }).click()
-    await page.getByLabel(/^distribution coordinate/i).selectOption('docker')
+    await page.getByRole('button', { name: /add docker image/i }).click()
     await page.getByLabel('Image name').fill('acme/scratch')
 
     // Escrow — pick a Generation (the only escrow field on the wizard). It sits

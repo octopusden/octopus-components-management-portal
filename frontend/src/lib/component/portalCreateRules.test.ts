@@ -137,14 +137,31 @@ describe('portalCreateRules', () => {
       )
     })
 
-    it('requires the Maven group and artifact IDs, and a supported group prefix', () => {
-      const maven = (groupPattern: string, artifactPattern: string) =>
-        explicitExternal({ baseConfiguration: { mavenArtifacts: [{ groupPattern, artifactPattern }] } })
-      expect(rules(maven('', ''))).toEqual([
-        { path: 'baseConfiguration.mavenArtifacts[0].groupPattern', message: 'Group ID is required' },
-        { path: 'baseConfiguration.mavenArtifacts[0].artifactPattern', message: 'Artifact ID is required' },
+    it('checks the supported group prefix on every maven row', () => {
+      const maven = (rows: Array<{ groupPattern: string; artifactPattern?: string }>) =>
+        explicitExternal({ baseConfiguration: { mavenArtifacts: rows.map((r) => ({ artifactPattern: 'payments', ...r })) } })
+      expect(rules(maven([{ groupPattern: 'net.other' }, { groupPattern: 'org.example.ok' }]))).toEqual([
+        {
+          path: 'baseConfiguration.mavenArtifacts[0].groupPattern',
+          message: 'Group ID "net.other" must start with a supported prefix (org.example, com.example)',
+        },
       ])
-      expect(rules(maven('net.other', 'payments'))).toEqual([
+      // Indexed per row — a bad prefix on the second row reports on it.
+      expect(rules(maven([{ groupPattern: 'org.example.ok' }, { groupPattern: 'net.other' }]))).toEqual([
+        {
+          path: 'baseConfiguration.mavenArtifacts[1].groupPattern',
+          message: 'Group ID "net.other" must start with a supported prefix (org.example, com.example)',
+        },
+      ])
+    })
+
+    it('checks the group prefix regardless of the explicit+external classification', () => {
+      const internal = request({
+        distributionExplicit: false,
+        distributionExternal: false,
+        baseConfiguration: { ...request().baseConfiguration, mavenArtifacts: [{ groupPattern: 'net.other', artifactPattern: 'svc' }] },
+      })
+      expect(rules(internal)).toEqual([
         {
           path: 'baseConfiguration.mavenArtifacts[0].groupPattern',
           message: 'Group ID "net.other" must start with a supported prefix (org.example, com.example)',
@@ -152,33 +169,30 @@ describe('portalCreateRules', () => {
       ])
     })
 
-    it('requires a Docker image name or a package name for those coordinates', () => {
-      expect(
-        rules(explicitExternal({ baseConfiguration: { mavenArtifacts: undefined, dockerImages: [{ imageName: ' ' }] } })),
-      ).toEqual([{ path: 'baseConfiguration.dockerImages[0].imageName', message: 'Image name is required' }])
-      expect(
-        rules(
-          explicitExternal({
-            baseConfiguration: { mavenArtifacts: undefined, packages: [{ packageType: 'DEB', packageName: '' }] },
-          }),
-        ),
-      ).toEqual([{ path: 'baseConfiguration.packages[0].packageName', message: 'Package name is required' }])
+    it('accepts any single family as the one required distribution', () => {
+      for (const baseConfiguration of [
+        { mavenArtifacts: [{ groupPattern: 'org.example.pay', artifactPattern: 'payments' }] },
+        { dockerImages: [{ imageName: 'acme/svc' }] },
+        { packages: [{ packageType: 'DEB', packageName: 'svc-pkg' }] },
+        { genericArtifacts: [{ path: 'releases/svc/${version}/svc.jar' }] },
+      ]) {
+        expect(rules(explicitExternal({ baseConfiguration }))).toEqual([])
+      }
     })
 
-    it('reads a chosen coordinate type that the request does not carry yet, as the wizard sends a blank Docker image', () => {
-      const noCoordinate = explicitExternal({ baseConfiguration: { mavenArtifacts: undefined } })
-      expect(rules(noCoordinate, { coordinateType: 'docker' })).toEqual([
-        { path: 'baseConfiguration.dockerImages[0].imageName', message: 'Image name is required' },
-      ])
-    })
-
-    it('requires some coordinate when the request carries none and no type was chosen', () => {
+    it('requires at least one distribution row when the request carries none', () => {
       expect(rules(explicitExternal({ baseConfiguration: { mavenArtifacts: undefined } }))).toEqual([
         {
           path: 'baseConfiguration.mavenArtifacts[0].groupPattern',
-          message: 'A Maven, Docker or package coordinate is required for an explicit + external component',
+          message: 'At least one distribution (Maven, Docker, package or generic) is required for an explicit + external component',
         },
       ])
+    })
+
+    it('asks nothing about distributions when the component is not both explicit and external', () => {
+      expect(
+        rules(request({ distributionExplicit: true, distributionExternal: false, baseConfiguration: { ...request().baseConfiguration, mavenArtifacts: undefined } })),
+      ).toEqual([])
     })
   })
 

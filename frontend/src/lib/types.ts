@@ -180,6 +180,8 @@ export interface ComponentConfiguration {
   fileUrlArtifacts: FileUrlArtifact[]
   dockerImages: DockerImage[]
   packages: PackageEntry[]
+  // CRS SYS-098; absent against a pre-V10 registry.
+  genericArtifacts?: GenericArtifact[]
   requiredTools: string[]
 }
 
@@ -271,6 +273,13 @@ export interface PackageEntry {
   id: string
   packageType: string
   packageName: string
+  sortOrder: number
+}
+
+// CRS SYS-098: a verbatim path with ${…} placeholders; optional (absent pre-V10).
+export interface GenericArtifact {
+  id: string
+  path: string
   sortOrder: number
 }
 
@@ -393,6 +402,11 @@ export interface PackageRequest {
   packageName: string
 }
 
+// CRS SYS-098: the path is validated server-side.
+export interface GenericArtifactRequest {
+  path: string
+}
+
 export interface ComponentGroupRequest {
   groupKey: string
   isFake?: boolean
@@ -436,6 +450,7 @@ export interface BaseConfigurationRequest {
   fileUrlArtifacts?: FileUrlArtifactRequest[] | null
   dockerImages?: DockerImageRequest[] | null
   packages?: PackageRequest[] | null
+  genericArtifacts?: GenericArtifactRequest[] | null
   requiredTools?: string[] | null
 }
 
@@ -661,8 +676,9 @@ export interface AuditLogEntry {
 //  - marker override → `markerChildren` carries the replacement child list;
 //    `value` is null. Marker names: `vcs.settings`, `distribution.maven`,
 //    `distribution.fileUrl`, `distribution.docker`, `distribution.packages`,
-//    `build.requiredTools`. NO per-component lists (docs/artifactIds/
-//    securityGroups/teamcityProjects/group) are marker-overridable.
+//    `distribution.generic` (CRS SYS-098), `build.requiredTools`. NO per-component
+//    lists (docs/artifactIds/securityGroups/teamcityProjects/group) are
+//    marker-overridable.
 export interface MarkerChildrenPayload {
   vcsEntries?: VcsEntryRequest[] | null
   // With `vcsEntries` on a `vcs.settings` row; the payload replaces the row.
@@ -671,6 +687,7 @@ export interface MarkerChildrenPayload {
   fileUrlArtifacts?: FileUrlArtifactRequest[] | null
   dockerImages?: DockerImageRequest[] | null
   packages?: PackageRequest[] | null
+  genericArtifacts?: GenericArtifactRequest[] | null
   requiredTools?: string[] | null
 }
 

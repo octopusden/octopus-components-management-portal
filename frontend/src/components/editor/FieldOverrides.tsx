@@ -49,6 +49,8 @@ function markerSummary(override: FieldOverride): string {
       return join((mc.dockerImages ?? []).map((a) => (a.flavor ? `${a.imageName}:${a.flavor}` : a.imageName))) || 'docker'
     case 'distribution.packages':
       return join((mc.packages ?? []).map((a) => `${a.packageType} ${a.packageName}`)) || 'packages'
+    case 'distribution.generic':
+      return join((mc.genericArtifacts ?? []).map((a) => a.path)) || 'generic artifacts'
     case 'build.requiredTools':
       return join(mc.requiredTools ?? []) || 'required tools'
     default:

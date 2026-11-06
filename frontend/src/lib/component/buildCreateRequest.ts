@@ -16,7 +16,14 @@ import type { FieldVisibility } from '../../hooks/useFieldConfig'
 // than free text.
 export type PackageType = 'DEB' | 'RPM'
 
-export type CoordinateType = 'maven' | 'docker' | 'package'
+// Per-family repeatable create rows — never gated by classification (CRS accepts any; only
+// explicit+external REQUIRES ≥1, mirrored in portalCreateRules). fileUrl is editor-only.
+export interface DistributionRows {
+  maven: Array<{ groupPattern: string; artifactPattern: string }>
+  docker: Array<{ imageName: string; flavor: string }>
+  packages: Array<{ packageType: PackageType; packageName: string }>
+  generic: Array<{ path: string }>
+}
 
 // Deprecated build systems are not offered for NEW components (the editor of
 // existing components is unaffected).
@@ -97,18 +104,8 @@ export interface CreateFormValues {
   vcsUrl: string
   vcsTag: string
   vcsBranch: string
-  // Exactly one distribution coordinate (more are added later in the
-  // Distribution tab). Only emitted when explicit+external.
-  coordinate: {
-    type: CoordinateType
-    groupPattern: string
-    artifactPattern: string
-    imageName: string
-    // Optional Docker flavor (e.g. "alpine"); sent as null when blank.
-    flavor: string
-    packageType: PackageType
-    packageName: string
-  }
+  // Form-only (unique per component); blank rows send nothing, partial ones are blocked by the schema.
+  distribution: DistributionRows
   // #357 base artifact-ownership. Repeatable per-group rows: each row is one
   // Group ID + its own matching mode (ALL / ALL_EXCEPT_CLAIMED / EXPLICIT) and,
   // for EXPLICIT ("Specific artifacts"), its literal artifact tokens. Each row
@@ -140,8 +137,7 @@ export interface CreateFormValues {
 //     securityChampion, copyright;
 //   - clientCode: form WINS when external (distributionExternal); when not
 //     external the source value is preserved (form value ignored);
-//   - distribution coordinate comes from the FORM ONLY, never from the source
-//     (unique per component) — and only when explicit+external;
+//   - distribution rows come from the FORM ONLY (unique per component);
 //   - escrow.generation comes from the FORM (form WINS) when that field is
 //     editable and a value was chosen; the rest of the escrow aspect is copied
 //     from the source BASE row. Readonly falls back to the source escrow
@@ -182,35 +178,42 @@ function copyJiraAspect(jira: JiraAspect | null | undefined): JiraAspect | undef
   return hasValue ? rest : undefined
 }
 
-// Maps the form's single coordinate to the matching BASE-row child list. Called
-// for a gated (explicit+external) request, and for Docker whenever an image name
-// is provided (Docker is not gated — see below).
-function coordinatePatch(
-  coordinate: CreateFormValues['coordinate'],
-): Partial<BaseConfigurationRequest> {
-  // Trim every coordinate value: the presence gate checks trimmed strings, so the
-  // payload must not carry leading/trailing whitespace CRS would reject.
-  switch (coordinate.type) {
-    case 'maven':
-      return {
-        mavenArtifacts: [
-          {
-            groupPattern: coordinate.groupPattern.trim(),
-            artifactPattern: coordinate.artifactPattern.trim(),
-            extension: null,
-            classifier: null,
-          },
-        ],
-      }
-    case 'docker':
-      return {
-        dockerImages: [{ imageName: coordinate.imageName.trim(), flavor: coordinate.flavor.trim() || null }],
-      }
-    case 'package':
-      return {
-        packages: [{ packageType: coordinate.packageType, packageName: coordinate.packageName.trim() }],
-      }
+// The form indices the request actually sends per family — the single source of
+// truth for the payload, the rule-message row shifts and the ≥1-row check.
+export function sentDistributionRows(rows: CreateFormValues['distribution']) {
+  const idx = <T>(list: readonly T[], keeps: (row: T) => boolean) => list.flatMap((r, i) => (keeps(r) ? [i] : []))
+  return {
+    maven: idx(rows.maven, (r) => r.groupPattern.trim() !== '' && r.artifactPattern.trim() !== ''),
+    docker: idx(rows.docker, (r) => r.imageName.trim() !== ''),
+    packages: idx(rows.packages, (r) => r.packageName.trim() !== ''),
+    generic: idx(rows.generic, (r) => r.path.trim() !== ''),
   }
+}
+
+// Trims and drops fully blank rows; partial rows are blocked by the form schema before a submit.
+function distributionPatch(
+  rows: CreateFormValues['distribution'],
+): Partial<BaseConfigurationRequest> {
+  const sent = sentDistributionRows(rows)
+  const mavenArtifacts = sent.maven.map((i) => {
+    const r = rows.maven[i]!
+    return { groupPattern: r.groupPattern.trim(), artifactPattern: r.artifactPattern.trim(), extension: null, classifier: null }
+  })
+  const dockerImages = sent.docker.map((i) => {
+    const r = rows.docker[i]!
+    return { imageName: r.imageName.trim(), flavor: r.flavor.trim() || null }
+  })
+  const packages = sent.packages.map((i) => {
+    const r = rows.packages[i]!
+    return { packageType: r.packageType, packageName: r.packageName.trim() }
+  })
+  const genericArtifacts = sent.generic.map((i) => ({ path: rows.generic[i]!.path.trim() }))
+  const patch: Partial<BaseConfigurationRequest> = {}
+  if (mavenArtifacts.length) patch.mavenArtifacts = mavenArtifacts
+  if (dockerImages.length) patch.dockerImages = dockerImages
+  if (packages.length) patch.packages = packages
+  if (genericArtifacts.length) patch.genericArtifacts = genericArtifacts
+  return patch
 }
 
 // Maps the dialog's base ownership rows to one base ArtifactIdRequest per row.
@@ -303,7 +306,6 @@ export function buildCreateRequest(
 ): ComponentCreateRequest {
   const labelsVisibility = visibility.labels ?? 'editable'
   const buildTasksVisibility = visibility.buildTasks ?? 'editable'
-  const gated = form.distributionExplicit && form.distributionExternal
   const baseRow = source ? selectBaseRow(source) : undefined
 
   const req: ComponentCreateRequest = {
@@ -413,17 +415,8 @@ export function buildCreateRequest(
   if (baseRow && baseRow.requiredTools.length > 0) {
     baseConfiguration.requiredTools = [...baseRow.requiredTools]
   }
-  // Docker is sent whenever an image name is provided, regardless of the
-  // explicit+external gate (a Docker image can be published outside that
-  // combination). Maven/Package coordinates stay gated — they are only
-  // meaningful (and only required) for an explicit+external component.
-  if (form.coordinate.type === 'docker') {
-    if (form.coordinate.imageName.trim()) {
-      Object.assign(baseConfiguration, coordinatePatch(form.coordinate))
-    }
-  } else if (gated) {
-    Object.assign(baseConfiguration, coordinatePatch(form.coordinate))
-  }
+  // Never gated by classification (CRS accepts any); the explicit+external ≥1 mirror is in portalCreateRules.
+  Object.assign(baseConfiguration, distributionPatch(form.distribution))
   // VCS entry comes from the FORM ONLY (never the source — the repository is
   // unique per component) and only for VCS-requiring build systems.
   if (vcsBlockApplies(form.buildSystem)) {

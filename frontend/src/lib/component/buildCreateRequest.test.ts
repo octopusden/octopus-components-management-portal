@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildCreateRequest, type CreateFormValues } from './buildCreateRequest'
+import { buildCreateRequest, sentDistributionRows, type CreateFormValues, type DistributionRows } from './buildCreateRequest'
 import type { ComponentConfiguration, ComponentDetail } from '../types'
 
 function makeForm(overrides: Partial<CreateFormValues> = {}): CreateFormValues {
@@ -27,15 +27,7 @@ function makeForm(overrides: Partial<CreateFormValues> = {}): CreateFormValues {
     vcsTag: '$module-$version',
     vcsBranch: 'master',
     clientCode: '',
-    coordinate: {
-      type: 'maven',
-      groupPattern: '',
-      artifactPattern: '',
-      imageName: '',
-      flavor: '',
-      packageType: 'DEB',
-      packageName: '',
-    },
+    distribution: { maven: [], docker: [], packages: [], generic: [] },
     ownership: [{ groupId: '', mode: 'ALL', tokens: [] }],
     escrowGeneration: '',
     labels: [],
@@ -178,7 +170,7 @@ describe('buildCreateRequest — scratch mode (no source)', () => {
     expect(req.baseConfiguration?.build?.buildSystem).toBe('GRADLE')
   })
 
-  it('non-gated form sends no RM/SC values and no distribution coordinate lists', () => {
+  it('non-gated form sends no RM/SC values and no distribution lists when nothing is filled', () => {
     const req = buildCreateRequest(
       makeForm({ distributionExplicit: false, distributionExternal: true }),
     )
@@ -243,89 +235,129 @@ describe('buildCreateRequest — base artifact ownership', () => {
   })
 })
 
-describe('buildCreateRequest — gated (explicit+external) coordinate', () => {
-  const gated = (coordinate: Partial<CreateFormValues['coordinate']>) =>
+describe('buildCreateRequest — distribution rows (per family, never gated)', () => {
+  const withDistribution = (rows: Partial<DistributionRows>, gated = true) =>
     makeForm({
-      distributionExplicit: true,
-      distributionExternal: true,
-      releaseManager: ['rm-a'],
-      securityChampion: ['sc-a'],
-      copyright: 'ACME',
-      coordinate: { ...makeForm().coordinate, ...coordinate },
+      ...(gated
+        ? { distributionExplicit: true, distributionExternal: true, releaseManager: ['rm-a'], securityChampion: ['sc-a'], copyright: 'ACME' }
+        : { distributionExplicit: false, distributionExternal: false }),
+      distribution: { ...makeForm().distribution, ...rows },
     })
 
-  it('maven coordinate → one mavenArtifacts entry', () => {
+  it('maven rows → mavenArtifacts entries', () => {
     const req = buildCreateRequest(
-      gated({ type: 'maven', groupPattern: 'org.acme', artifactPattern: 'svc' }),
+      withDistribution({ maven: [{ groupPattern: 'org.acme', artifactPattern: 'svc' }, { groupPattern: 'org.acme.lib', artifactPattern: 'svc-lib' }] }),
     )
     expect(req.baseConfiguration?.mavenArtifacts).toEqual([
       { groupPattern: 'org.acme', artifactPattern: 'svc', extension: null, classifier: null },
+      { groupPattern: 'org.acme.lib', artifactPattern: 'svc-lib', extension: null, classifier: null },
     ])
     expect('dockerImages' in req.baseConfiguration!).toBe(false)
     expect('packages' in req.baseConfiguration!).toBe(false)
   })
 
-  it('docker coordinate → one dockerImages entry', () => {
-    const req = buildCreateRequest(gated({ type: 'docker', imageName: 'acme/svc' }))
-    expect(req.baseConfiguration?.dockerImages).toEqual([{ imageName: 'acme/svc', flavor: null }])
+  it('docker rows → dockerImages entries, flavor trimmed / blank → null', () => {
+    const req = buildCreateRequest(
+      withDistribution({ docker: [{ imageName: 'acme/svc', flavor: '  alpine  ' }, { imageName: 'acme/other', flavor: '   ' }] }),
+    )
+    expect(req.baseConfiguration?.dockerImages).toEqual([
+      { imageName: 'acme/svc', flavor: 'alpine' },
+      { imageName: 'acme/other', flavor: null },
+    ])
     expect('mavenArtifacts' in req.baseConfiguration!).toBe(false)
   })
 
-  it('docker coordinate carries a trimmed flavor when provided', () => {
-    const req = buildCreateRequest(gated({ type: 'docker', imageName: 'acme/svc', flavor: '  alpine  ' }))
-    expect(req.baseConfiguration?.dockerImages).toEqual([{ imageName: 'acme/svc', flavor: 'alpine' }])
-  })
-
-  it('docker coordinate sends flavor:null when the flavor is blank', () => {
-    const req = buildCreateRequest(gated({ type: 'docker', imageName: 'acme/svc', flavor: '   ' }))
-    expect(req.baseConfiguration?.dockerImages).toEqual([{ imageName: 'acme/svc', flavor: null }])
-  })
-
-  it('docker is un-gated: an image name is sent even when NOT explicit+external', () => {
+  it('package rows → packages entries with DEB/RPM type', () => {
     const req = buildCreateRequest(
-      makeForm({
-        distributionExplicit: false,
-        distributionExternal: false,
-        coordinate: { ...makeForm().coordinate, type: 'docker', imageName: 'acme/svc' },
-      }),
-    )
-    expect(req.baseConfiguration?.dockerImages).toEqual([{ imageName: 'acme/svc', flavor: null }])
-  })
-
-  it('docker with a blank image name sends no dockerImages (nothing to publish)', () => {
-    const req = buildCreateRequest(
-      makeForm({
-        distributionExplicit: false,
-        distributionExternal: false,
-        coordinate: { ...makeForm().coordinate, type: 'docker', imageName: '   ' },
-      }),
-    )
-    expect('dockerImages' in (req.baseConfiguration ?? {})).toBe(false)
-  })
-
-  it('maven stays gated: a maven coordinate is NOT sent when not explicit+external', () => {
-    const req = buildCreateRequest(
-      makeForm({
-        distributionExplicit: false,
-        distributionExternal: false,
-        coordinate: { ...makeForm().coordinate, type: 'maven', groupPattern: 'org.acme', artifactPattern: 'svc' },
-      }),
-    )
-    expect('mavenArtifacts' in (req.baseConfiguration ?? {})).toBe(false)
-  })
-
-  it('package coordinate → one packages entry with DEB/RPM type', () => {
-    const req = buildCreateRequest(
-      gated({ type: 'package', packageType: 'RPM', packageName: 'svc-pkg' }),
+      withDistribution({ packages: [{ packageType: 'RPM' as const, packageName: 'svc-pkg' }, { packageType: 'DEB' as const, packageName: 'svc-deb' }] }),
     )
     expect(req.baseConfiguration?.packages).toEqual([
       { packageType: 'RPM', packageName: 'svc-pkg' },
+      { packageType: 'DEB', packageName: 'svc-deb' },
     ])
+  })
+
+  it('generic rows → genericArtifacts entries (trimmed path)', () => {
+    const req = buildCreateRequest(
+      withDistribution({ generic: [{ path: '  releases/svc/${version}/svc.jar  ' }, { path: 'downloads/svc/svc.zip' }] }),
+    )
+    expect(req.baseConfiguration?.genericArtifacts).toEqual([
+      { path: 'releases/svc/${version}/svc.jar' },
+      { path: 'downloads/svc/svc.zip' },
+    ])
+  })
+
+  it('every filled family is sent regardless of the explicit+external classification', () => {
+    const req = buildCreateRequest(
+      withDistribution(
+        {
+          maven: [{ groupPattern: 'org.acme', artifactPattern: 'svc' }],
+          docker: [{ imageName: 'acme/svc', flavor: '' }],
+          packages: [{ packageType: 'DEB' as const, packageName: 'svc-pkg' }],
+          generic: [{ path: 'releases/svc/svc.jar' }],
+        },
+        false,
+      ),
+    )
+    expect(req.baseConfiguration?.mavenArtifacts).toEqual([
+      { groupPattern: 'org.acme', artifactPattern: 'svc', extension: null, classifier: null },
+    ])
+    expect(req.baseConfiguration?.dockerImages).toEqual([{ imageName: 'acme/svc', flavor: null }])
+    expect(req.baseConfiguration?.packages).toEqual([{ packageType: 'DEB', packageName: 'svc-pkg' }])
+    expect(req.baseConfiguration?.genericArtifacts).toEqual([{ path: 'releases/svc/svc.jar' }])
+  })
+
+  it('fully blank rows are dropped from every family', () => {
+    const req = buildCreateRequest(
+      withDistribution({
+        maven: [{ groupPattern: '', artifactPattern: '' }, { groupPattern: 'org.acme', artifactPattern: 'svc' }],
+        docker: [{ imageName: '   ', flavor: 'alpine' }, { imageName: 'acme/svc', flavor: '' }],
+        packages: [{ packageType: 'DEB' as const, packageName: '' }],
+        generic: [{ path: '' }],
+      }),
+    )
+    // The builder drops partial rows too; the schema blocks them on submit.
+    expect(req.baseConfiguration?.mavenArtifacts).toEqual([
+      { groupPattern: 'org.acme', artifactPattern: 'svc', extension: null, classifier: null },
+    ])
+    expect(req.baseConfiguration?.dockerImages).toEqual([{ imageName: 'acme/svc', flavor: null }])
+    expect('packages' in req.baseConfiguration!).toBe(false)
+    expect('genericArtifacts' in req.baseConfiguration!).toBe(false)
+  })
+
+  it('sentDistributionRows lists the form indices the request sends per family', () => {
+    const rows = {
+      maven: [
+        { groupPattern: '', artifactPattern: 'svc' }, // partial — not sent
+        { groupPattern: ' ', artifactPattern: ' ' }, // blank — not sent
+        { groupPattern: 'org.acme', artifactPattern: 'svc' },
+      ],
+      docker: [{ imageName: 'acme/svc', flavor: '' }],
+      packages: [
+        { packageType: 'DEB' as const, packageName: '  ' }, // blank name — not sent
+        { packageType: 'DEB' as const, packageName: 'svc-pkg' },
+      ],
+      generic: [{ path: 'releases/svc/svc.jar' }],
+    }
+    expect(sentDistributionRows(rows)).toEqual({
+      maven: [2],
+      docker: [0],
+      packages: [1],
+      generic: [0],
+    })
+  })
+
+  it('an empty distribution sends no family lists at all', () => {
+    const req = buildCreateRequest(withDistribution({}))
+    expect('mavenArtifacts' in (req.baseConfiguration ?? {})).toBe(false)
+    expect('dockerImages' in (req.baseConfiguration ?? {})).toBe(false)
+    expect('packages' in (req.baseConfiguration ?? {})).toBe(false)
+    expect('genericArtifacts' in (req.baseConfiguration ?? {})).toBe(false)
   })
 
   it('forwards RM/SC and copyright from the form when gated', () => {
     const req = buildCreateRequest(
-      gated({ type: 'maven', groupPattern: 'org.acme', artifactPattern: 'svc' }),
+      withDistribution({ maven: [{ groupPattern: 'org.acme', artifactPattern: 'svc' }] }),
     )
     expect(req.releaseManager).toEqual(['rm-a'])
     expect(req.securityChampion).toEqual(['sc-a'])
@@ -726,7 +758,7 @@ describe('buildCreateRequest — copy mode (with source)', () => {
     expect(req.baseConfiguration?.jira == null || !('minorVersionFormat' in req.baseConfiguration.jira)).toBe(true)
   })
 
-  it('coordinate is NEVER taken from source distribution artifacts', () => {
+  it('distribution rows are NEVER taken from source distribution artifacts', () => {
     const src = makeSource({
       configurations: [
         makeBaseRow({
@@ -737,7 +769,7 @@ describe('buildCreateRequest — copy mode (with source)', () => {
         }),
       ],
     })
-    // non-gated copy → no coordinate lists at all
+    // empty form distribution → no lists at all
     const req = buildCreateRequest(makeForm({ name: 'svc-clone' }), src)
     const base = req.baseConfiguration!
     expect('mavenArtifacts' in base).toBe(false)
@@ -745,7 +777,7 @@ describe('buildCreateRequest — copy mode (with source)', () => {
     expect('packages' in base).toBe(false)
   })
 
-  it('gated copy: form coordinate lands in baseConfiguration, source mavenArtifacts ignored', () => {
+  it('copy: form distribution rows land in baseConfiguration, source mavenArtifacts ignored', () => {
     const src = makeSource({
       distributionExplicit: true,
       distributionExternal: true,
@@ -764,7 +796,7 @@ describe('buildCreateRequest — copy mode (with source)', () => {
       distributionExternal: true,
       releaseManager: ['rm-form'],
       securityChampion: ['sc-form'],
-      coordinate: { ...makeForm().coordinate, type: 'docker', imageName: 'acme/clone' },
+      distribution: { ...makeForm().distribution, docker: [{ imageName: 'acme/clone', flavor: '' }] },
     })
     const req = buildCreateRequest(form, src)
     expect(req.baseConfiguration?.dockerImages).toEqual([{ imageName: 'acme/clone', flavor: null }])
