@@ -58,6 +58,12 @@ describe('artifactOwnership helpers', () => {
     )
   })
 
+  it('legacyArtifactPattern: an EXPLICIT sibling in the same override range differing only in whitespace counts', () => {
+    const allExcept = m({ id: 'a', base: false, range: '[1.0,2.0)', mode: 'ALL_EXCEPT_CLAIMED', groups: 'g' })
+    const sibling = m({ id: 'b', base: false, range: '[1.0, 2.0)', mode: 'EXPLICIT', groups: 'g', tokens: ['claimed'] })
+    expect(legacyArtifactPattern(allExcept, [allExcept, sibling])).toBe('(?!(?:claimed)$)[\\w-\\.]+')
+  })
+
   it('groupError flags empty group, bad token, and comma-group ALL_EXCEPT', () => {
     expect(groupError(m({ groups: '' }))).toMatch(/required/)
     expect(groupError(m({ groups: 'a*' }))).toMatch(/Invalid group/)

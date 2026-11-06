@@ -100,6 +100,14 @@ export function legacyArtifactPattern(
   return `(?!(?:${body})$)[\\w-\\.]+`
 }
 
+/**
+ * A mapping's effective range as a comparison key: base ⇒ ALL_VERSIONS, an override's range with
+ * whitespace stripped (migrated data has "[a, b)" next to "[a,b)" for the same range).
+ */
+function rangeKey(m: OwnershipMappingValue): string {
+  return m.base ? OWNERSHIP_ALL_VERSIONS : (m.range ?? '').replace(/\s+/g, '')
+}
+
 /** Local EXPLICIT tokens of OTHER mappings sharing a group token in the same range. */
 function explicitSiblings(
   mapping: OwnershipMappingValue,
@@ -110,7 +118,7 @@ function explicitSiblings(
   for (const other of allMappings) {
     if (other.id === mapping.id) continue
     if (other.mode !== 'EXPLICIT') continue
-    if (other.range !== mapping.range) continue
+    if (rangeKey(other) !== rangeKey(mapping)) continue
     if (!groupTokens(other.groups).some((t) => g.includes(t))) continue
     out.push(...other.tokens)
   }
@@ -162,8 +170,7 @@ export function detectIntraComponentConflicts(
   // (effective range, group token) -> id of the first mapping that claimed it. base ⇒ ALL_VERSIONS.
   const claimedBy = new Map<string, string>()
   for (const m of mappings) {
-    // Whitespace-insensitive, like rangesOverlap's identical-range check (migrated data has "a, b").
-    const range = m.base ? OWNERSHIP_ALL_VERSIONS : (m.range ?? '').replace(/\s+/g, '')
+    const range = rangeKey(m)
     for (const g of groupTokens(m.groups)) {
       const key = `${range}\u0000${g}`
       const prior = claimedBy.get(key)
