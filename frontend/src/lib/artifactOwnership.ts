@@ -162,7 +162,8 @@ export function detectIntraComponentConflicts(
   // (effective range, group token) -> id of the first mapping that claimed it. base ⇒ ALL_VERSIONS.
   const claimedBy = new Map<string, string>()
   for (const m of mappings) {
-    const range = m.base ? OWNERSHIP_ALL_VERSIONS : m.range ?? ''
+    // Whitespace-insensitive, like rangesOverlap's identical-range check (migrated data has "a, b").
+    const range = m.base ? OWNERSHIP_ALL_VERSIONS : (m.range ?? '').replace(/\s+/g, '')
     for (const g of groupTokens(m.groups)) {
       const key = `${range}\u0000${g}`
       const prior = claimedBy.get(key)
@@ -214,12 +215,14 @@ function segmentsDisjoint(a: ParsedRange, b: ParsedRange): boolean {
 }
 
 /**
- * Do two override ranges overlap (any segment of `a` against any segment of `b`)? The same range
- * entered twice always does. Otherwise, if either side has a segment the client can't parse, it
- * defers to the CRS-side check (full releng VersionRange) and reports no overlap.
+ * Do two DIFFERENT override ranges overlap (any segment of `a` against any segment of `b`)? The same
+ * range is one override slot, not an overlap: a multi-group override is stored as one row per group,
+ * all at the same range (the same group twice there is caught by detectIntraComponentConflicts). If
+ * either side has a segment the client can't parse, it defers to the CRS-side check (full releng
+ * VersionRange) and reports no overlap.
  */
 export function rangesOverlap(a: string | null, b: string | null): boolean {
-  if (a !== null && b !== null && a.replace(/\s+/g, '') === b.replace(/\s+/g, '')) return true
+  if (a !== null && b !== null && a.replace(/\s+/g, '') === b.replace(/\s+/g, '')) return false
   const ras = parseRange(a)
   const rbs = parseRange(b)
   if (ras.includes(null) || rbs.includes(null)) return false

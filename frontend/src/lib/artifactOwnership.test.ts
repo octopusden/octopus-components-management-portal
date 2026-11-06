@@ -188,13 +188,37 @@ describe('artifactOwnership helpers', () => {
     ).toBe(false)
   })
 
-  it('hasOverlappingOverrides still flags the same unparseable range entered twice', () => {
+  it('hasOverlappingOverrides does not flag one range split across several groups (one stored row per group)', () => {
+    // way4umessage: a two-group override at [11.0.1,11.0.3) is stored (and re-read) as two rows with the
+    // SAME range — that is one override, not two overlapping ones. Also holds for unparseable bounds.
+    const rows = [
+      m({ id: 'a', base: false, range: '[11.0.1,11.0.3)', groups: 'com.acme.a', mode: 'EXPLICIT', tokens: ['x'] }),
+      m({ id: 'b', base: false, range: '[11.0.1,11.0.3)', groups: 'com.acme.b', mode: 'EXPLICIT', tokens: ['x'] }),
+    ]
+    expect(hasOverlappingOverrides(rows)).toBe(false)
+    expect(countOwnershipIssues(rows)).toBe(0)
     expect(
       hasOverlappingOverrides([
-        m({ id: 'a', base: false, range: '[1.0.37-0001,1.0.37-0004]' }),
-        m({ id: 'b', base: false, range: '[1.0.37-0001, 1.0.37-0004]' }),
+        m({ id: 'a', base: false, range: '[1.0.37-0001,1.0.37-0004]', groups: 'g1' }),
+        m({ id: 'b', base: false, range: '[1.0.37-0001, 1.0.37-0004]', groups: 'g2' }),
       ]),
-    ).toBe(true)
+    ).toBe(false)
+  })
+
+  it('the same group twice in the same override range is still an issue (intra-component conflict)', () => {
+    const rows = [
+      m({ id: 'a', base: false, range: '[1.0.37-0001,1.0.37-0004]', groups: 'g1', mode: 'ALL' }),
+      m({ id: 'b', base: false, range: '[1.0.37-0001,1.0.37-0004]', groups: 'g1', mode: 'ALL' }),
+    ]
+    expect(detectIntraComponentConflicts(rows)).toHaveProperty('a')
+    expect(countOwnershipIssues(rows)).toBeGreaterThan(0)
+    // …also when the two copies of the range differ only in whitespace.
+    expect(
+      detectIntraComponentConflicts([
+        m({ id: 'a', base: false, range: '[1.0.37-0001,1.0.37-0004]', groups: 'g1' }),
+        m({ id: 'b', base: false, range: '[1.0.37-0001, 1.0.37-0004]', groups: 'g1' }),
+      ]),
+    ).toHaveProperty('a')
   })
 
   it('toArtifactIdRequests: splits a (grandfathered) comma group-list into ONE request per groupId, same mode/tokens/range', () => {
