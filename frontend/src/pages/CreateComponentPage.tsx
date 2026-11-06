@@ -64,6 +64,7 @@ import {
   buildCreateRequest,
   vcsBlockApplies,
   DEPRECATED_BUILD_SYSTEMS,
+  sentDistributionRows,
   type CreateFormValues,
 } from '../lib/component/buildCreateRequest'
 import { formFieldOfRule, makeCreateSchema, initialValues, type ComponentDefaults } from '../lib/component/createFormModel'
@@ -464,6 +465,16 @@ function CreateComponentWizard({ source, isClone, defaults, profiles, entries, o
 
 
   const values = watch()
+
+  // A sent-row change moves rule messages to another row; RHF revalidates only the edited field.
+  const sentRowsKey =
+    JSON.stringify(sentDistributionRows(values.distribution)) +
+    ':' +
+    values.ownership.findIndex((r) => r.groupId.trim() !== '')
+  useEffect(() => {
+    if (getFieldState('distribution' as FieldPath<CreateFormValues>).error) void trigger('distribution' as FieldPath<CreateFormValues>)
+    if (getFieldState('ownership' as FieldPath<CreateFormValues>).error) void trigger('ownership' as FieldPath<CreateFormValues>)
+  }, [sentRowsKey, getFieldState, trigger])
 
   // Copyright is a field-config-driven dropdown. The option list comes from
   // field-config `options` (the portal-only path; no CRS meta endpoint yet).

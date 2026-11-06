@@ -1118,6 +1118,26 @@ describe('CreateComponentPage — profile rules on fields the step does not show
     await waitFor(() => expect(screen.getAllByText('Group must start with com.')).toHaveLength(1))
   })
 
+  it('clears a Maven-group rule message from row 1 once row 0 becomes the first sent row', async () => {
+    withRule('baseConfiguration.mavenArtifacts[0].groupPattern', 'com\\.acme.*', 'Must start with com.acme')
+    renderWizard()
+    await userEvent.click(screen.getByRole('button', { name: /^Distribution$/i }))
+    await userEvent.click(screen.getByRole('button', { name: /add maven gav/i }))
+    await userEvent.click(screen.getByRole('button', { name: /add maven gav/i }))
+    await userEvent.type(screen.getAllByLabelText('groupId')[1]!, 'net.example')
+    await userEvent.type(screen.getAllByLabelText('artifactId')[1]!, 'svc')
+    // Editing the complete row's group makes RHF commit the rule error under it.
+    await userEvent.type(screen.getAllByLabelText('groupId')[1]!, '.bad')
+    await waitFor(() => expect(screen.getAllByText('Must start with com.acme')).toHaveLength(1))
+    // Row 0 becomes the request's row 0 — the stale error under row 1 must clear.
+    await userEvent.type(screen.getAllByLabelText('groupId')[0]!, 'com.acme')
+    await userEvent.type(screen.getAllByLabelText('artifactId')[0]!, 'first')
+    await waitFor(() => expect(screen.queryAllByText('Must start with com.acme')).toHaveLength(0))
+    // The reverse transition: the rule moves back to row 1.
+    await userEvent.clear(screen.getAllByLabelText('groupId')[0]!)
+    await waitFor(() => expect(screen.getAllByText('Must start with com.acme')).toHaveLength(1))
+  })
+
   it('shows a failing rule on a shown field under the field only', async () => {
     withRule('baseConfiguration.jira.projectKey', 'ABC', 'Use the ABC project')
     renderWizard()
