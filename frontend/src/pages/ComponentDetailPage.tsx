@@ -67,12 +67,12 @@ import { EmptyState } from '../components/ui/empty-state'
 import { useComponent, useUpdateComponent, useDeleteComponent, useFieldOverrides, refreshComponentIntoCache } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
 import { ApiError } from '../lib/api'
-import { useOptimisticConflict } from '../hooks/useOptimisticConflict'
+import { useOptimisticConflict, type ClassifiedConflict } from '../hooks/useOptimisticConflict'
 import { classifyConflictBody } from '../lib/conflict'
-import type { ComponentDetail } from '../lib/types'
+import type { ComponentDetail, ComponentUpdateRequest, ComponentValidation, TeamcityProject } from '../lib/types'
 import { countOwnershipIssues, fromArtifactId } from '../lib/artifactOwnership'
 import { findUnsupportedGroupId } from '../lib/groupValidation'
-import { isVcsHostSupported, vcsBrowseUrl } from '../lib/vcsHost'
+import { isVcsHostSupported, vcsBrowseUrl, type VcsProvider } from '../lib/vcsHost'
 import { useSupportedGroups } from '../hooks/useSupportedGroups'
 import { selectBaseRow } from '../lib/api/baseRow'
 import { useCurrentUser } from '../hooks/useCurrentUser'
@@ -170,6 +170,562 @@ function sectionForField(field: string): string | null {
   return null
 }
 
+// Conditional JSX pulled out of ComponentDetailEditor so no single function
+// exceeds the SonarQube cognitive-complexity gate. The DOM is unchanged.
+
+function ComponentBadges({
+  component,
+  canEdit,
+  systemsHidden,
+  jiraBaseUrl,
+  gitBaseUrl,
+  vcsProvider,
+}: {
+  component: ComponentDetail
+  canEdit: boolean
+  systemsHidden: boolean
+  jiraBaseUrl: string | undefined
+  gitBaseUrl: string | undefined
+  vcsProvider: VcsProvider
+}) {
+  const baseRow = selectBaseRow(component)
+  const systems = component.systems ?? []
+  const buildSystem = baseRow?.build?.buildSystem
+  const jiraProjectKey = baseRow?.jira?.projectKey
+  const vcsTarget = vcsBrowseUrl(baseRow?.vcsEntries[0]?.vcsPath, gitBaseUrl, vcsProvider)
+  const providerLabel = vcsProvider === 'gitea' ? 'Gitea' : 'Bitbucket'
+  const VcsIcon = vcsProvider === 'gitea' ? GiteaIcon : BitbucketIcon
+  const vcsLabel = vcsTarget ? `${providerLabel}: ${vcsTarget.namespace}/${vcsTarget.repoName}` : ''
+  return (
+    <div className="flex items-center gap-3 flex-wrap">
+      <h1 className="text-2xl font-semibold tracking-tight">{component.name}</h1>
+      <Badge variant={component.archived ? 'destructive' : 'secondary'}>
+        {component.archived ? 'Archived' : 'Active'}
+      </Badge>
+      {component.testComponent && (
+        <Badge variant="outline" title="Test component">
+          Test
+        </Badge>
+      )}
+      {!canEdit && (
+        <Badge variant="warning" title={CANNOT_EDIT_TITLE}>
+          <LockKeyhole className="mr-1 h-3 w-3" />
+          View only
+        </Badge>
+      )}
+      {component.solution && (
+        <Badge variant="info">
+          <Boxes className="mr-1 h-3 w-3" aria-hidden />
+          Solution
+        </Badge>
+      )}
+      {/* A read-only badge mirroring a field respects field-config
+          visibility: when `component.system` is hidden, the System badge is
+          suppressed (not just the input). D7. */}
+      {!systemsHidden && systems.map((s) => (
+        <Badge key={s} variant="outline">{s}</Badge>
+      ))}
+      {buildSystem && <Badge variant="outline">{buildSystem}</Badge>}
+      {jiraBaseUrl && jiraProjectKey && (
+        <a
+          href={`${jiraBaseUrl}/browse/${jiraProjectKey}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-sm hover:opacity-80 transition-opacity"
+          title={`Jira: ${jiraProjectKey}`}
+          aria-label={`Jira: ${jiraProjectKey}`}
+        >
+          <JiraIcon className="h-4 w-4" />
+        </a>
+      )}
+      {vcsTarget && (
+        <a
+          href={vcsTarget.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-sm hover:opacity-80 transition-opacity"
+          title={vcsLabel}
+          aria-label={vcsLabel}
+        >
+          <VcsIcon className="h-4 w-4" />
+        </a>
+      )}
+    </div>
+  )
+}
+
+function ComponentSubline({ component, profilePct }: { component: ComponentDetail; profilePct: number }) {
+  return (
+    <>
+      <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm text-muted-foreground">
+        <span>Owner {component.componentOwner ?? '—'}</span>
+        <span aria-hidden>·</span>
+        <span>Version {component.version}</span>
+        {component.updatedAt && (
+          <>
+            <span aria-hidden>·</span>
+            <span>
+              Updated <RelativeTime ts={component.updatedAt} />
+              {component.updatedBy ? ` by ${component.updatedBy}` : ''}
+            </span>
+          </>
+        )}
+        <span aria-hidden>·</span>
+        <span>Profile {profilePct}% complete</span>
+      </p>
+      {component.displayName && component.displayName !== component.name && (
+        <p className="text-sm text-muted-foreground">{component.displayName}</p>
+      )}
+    </>
+  )
+}
+
+function ComponentHeader({
+  component,
+  canEdit,
+  canCreate,
+  canArchive,
+  canUnarchive,
+  systemsHidden,
+  profilePct,
+  jiraBaseUrl,
+  gitBaseUrl,
+  vcsProvider,
+  labelsValue,
+  labelsOptions,
+  labelsLoading,
+  labelsVisibility,
+  labelsError,
+  onLabelsChange,
+  onClone,
+  onArchiveClick,
+  onUnarchive,
+  unarchivePending,
+}: {
+  component: ComponentDetail
+  canEdit: boolean
+  canCreate: boolean
+  canArchive: boolean
+  canUnarchive: boolean
+  systemsHidden: boolean
+  profilePct: number
+  jiraBaseUrl: string | undefined
+  gitBaseUrl: string | undefined
+  vcsProvider: VcsProvider
+  labelsValue: string[] | undefined
+  labelsOptions: string[] | undefined
+  labelsLoading: boolean
+  labelsVisibility: 'editable' | 'readonly' | 'hidden' | undefined
+  labelsError: string | undefined
+  onLabelsChange: (next: string[]) => void
+  onClone: () => void
+  onArchiveClick: () => void
+  onUnarchive: () => void
+  unarchivePending: boolean
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <div className="space-y-1">
+        <Link
+          to="/components"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Components
+        </Link>
+        <ComponentBadges
+          component={component}
+          canEdit={canEdit}
+          systemsHidden={systemsHidden}
+          jiraBaseUrl={jiraBaseUrl}
+          gitBaseUrl={gitBaseUrl}
+          vcsProvider={vcsProvider}
+        />
+        <ComponentSubline component={component} profilePct={profilePct} />
+        {/* Labels — badges + popover editor, moved here from the General tab.
+            Wired to the same page form: onChange sets shouldDirty/shouldTouch
+            so the clear-all touched-flag contract in buildPatchRequest holds. */}
+        <div className="pt-1">
+          <HeaderLabelsEditor
+            value={labelsValue ?? []}
+            onChange={onLabelsChange}
+            options={labelsOptions ?? []}
+            isLoading={labelsLoading}
+            visibility={labelsVisibility}
+            canEdit={canEdit}
+            error={labelsError}
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 shrink-0">
+        {canCreate && (
+          <Button variant="outline" size="sm" onClick={onClone}>
+            <Copy className="h-4 w-4" />
+            Clone
+          </Button>
+        )}
+        {!component.archived && canArchive && (
+          // Quiet red outline: the solid red belongs to the confirm dialog's final step,
+          // not to a header button that only opens it.
+          <Button variant="destructive-outline" size="sm" onClick={onArchiveClick}>
+            <Archive className="h-4 w-4" />
+            Archive
+          </Button>
+        )}
+        {component.archived && canUnarchive && (
+          <Button variant="outline" size="sm" onClick={onUnarchive} disabled={unarchivePending}>
+            <ArchiveRestore className="h-4 w-4" />
+            Unarchive
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function TeamCityValidationStatusIcon({
+  noRecordedFindings,
+  allClean,
+  hasError,
+  hasWarning,
+  issueCount,
+}: {
+  noRecordedFindings: boolean
+  allClean: boolean
+  hasError: boolean
+  hasWarning: boolean
+  issueCount: number
+}) {
+  if (noRecordedFindings) {
+    return (
+      <CircleDashed
+        className="h-4 w-4 shrink-0 text-muted-foreground"
+        aria-label="No validation findings on record"
+      />
+    )
+  }
+  if (allClean) {
+    return (
+      <CircleCheck
+        className="h-4 w-4 shrink-0 text-[color:var(--color-badge-green-fg)]"
+        aria-label="No validation issues"
+      />
+    )
+  }
+  return (
+    <AlertTriangle
+      className={cn(
+        'h-4 w-4 shrink-0',
+        hasError
+          ? 'text-destructive'
+          : hasWarning
+            ? 'text-[color:var(--color-badge-yellow-fg)]'
+            : 'text-muted-foreground',
+      )}
+      aria-label={`${issueCount} validation ${issueCount === 1 ? 'issue' : 'issues'}`}
+    />
+  )
+}
+
+function teamCityStatusText(noRecordedFindings: boolean, allClean: boolean, issueCount: number): string {
+  if (noRecordedFindings) return 'no recorded findings'
+  if (allClean) return 'no issues'
+  return `${issueCount} issue${issueCount === 1 ? '' : 's'}`
+}
+
+function TeamCityProjectRow({ tc, isAdmin }: { tc: TeamcityProject; isAdmin: boolean }) {
+  const url = safeHttpUrl(tc.projectUrl ?? null)
+  const validations = tc.validations ?? []
+  const tones = validations.map((v) => getTeamCityValidationStatusTone(v.status))
+  const hasError = tones.includes('destructive')
+  const hasWarning = tones.includes('warning')
+  const issueCount = tones.filter((t) => t === 'destructive' || t === 'warning').length
+  const noRecordedFindings = validations.length === 0
+  const allClean = !noRecordedFindings && issueCount === 0
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 text-sm">
+      {isAdmin && (
+        <TeamCityValidationStatusIcon
+          noRecordedFindings={noRecordedFindings}
+          allClean={allClean}
+          hasError={hasError}
+          hasWarning={hasWarning}
+          issueCount={issueCount}
+        />
+      )}
+      {url ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`TeamCity: ${tc.projectId}`}
+              aria-label={`TeamCity: ${tc.projectId}`}
+              className="inline-flex min-w-0 items-center gap-1.5 font-medium text-primary hover:underline"
+            >
+              <TeamCityIcon className="h-4 w-4 shrink-0" />
+              <span className="truncate">{tc.projectId}</span>
+            </a>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-xs break-all">{url}</TooltipContent>
+        </Tooltip>
+      ) : (
+        <span className="inline-flex min-w-0 items-center gap-1.5">
+          <TeamCityIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <span className="font-medium truncate">{tc.projectId}</span>
+        </span>
+      )}
+      {tc.projectVersion && (
+        <Badge variant="secondary" className="text-xs font-mono shrink-0">
+          {tc.projectVersion}
+        </Badge>
+      )}
+      {isAdmin && (
+        <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+          {teamCityStatusText(noRecordedFindings, allClean, issueCount)}
+        </span>
+      )}
+    </div>
+  )
+}
+
+function TeamCityProjectsList({ projects, isAdmin }: { projects: TeamcityProject[] | undefined; isAdmin: boolean }) {
+  if (!projects?.length) return null
+  return (
+    <div className="rounded-md border divide-y" data-testid="teamcity-projects-list">
+      {projects.map((tc) => (
+        <TeamCityProjectRow key={tc.id} tc={tc} isAdmin={isAdmin} />
+      ))}
+    </div>
+  )
+}
+
+function UnregisteredReleaseContent({
+  hasProblems,
+  componentValidation,
+  onCopyVersions,
+}: {
+  hasProblems: boolean
+  componentValidation: ComponentValidation | undefined
+  onCopyVersions: () => void
+}) {
+  if (!hasProblems || !componentValidation) {
+    return <EmptyState message="No unregister release for this component." className="py-8" />
+  }
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">
+        Released versions checked against the registry. Admin-only.
+      </p>
+      <div className="max-h-[60vh] overflow-auto">
+        <ValidationProblemsList validation={componentValidation} />
+      </div>
+      {allProblemVersions(componentValidation).length > 0 && (
+        <Button variant="outline" size="sm" onClick={onCopyVersions}>
+          <Copy className="mr-1.5 h-4 w-4" />
+          Copy versions
+        </Button>
+      )}
+    </div>
+  )
+}
+
+function ArchiveComponentDialog({
+  open,
+  onOpenChange,
+  componentName,
+  componentOwner,
+  readiness,
+  canConfirm,
+  isPending,
+  jiraBaseUrl,
+  currentUsername,
+  onArchive,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  componentName: string
+  componentOwner: ComponentDetail['componentOwner']
+  readiness: ReturnType<typeof useArchiveReadiness>
+  canConfirm: boolean
+  isPending: boolean
+  jiraBaseUrl: string | undefined
+  currentUsername: string | undefined
+  onArchive: () => void
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-destructive" />
+            Archive Component
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          Are you sure you want to archive <span className="font-semibold text-foreground">{componentName}</span>?
+          This will archive the component. You can restore it later.
+        </p>
+        <div className="max-h-[50vh] overflow-auto">
+          <ArchiveReadinessView
+            isLoading={readiness.isLoading}
+            isError={readiness.isError}
+            data={readiness.data}
+            onRetry={() => readiness.refetch()}
+            jiraBaseUrl={jiraBaseUrl}
+            componentOwner={componentOwner}
+            currentUsername={currentUsername}
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={onArchive} disabled={isPending || !canConfirm}>
+            {isPending ? 'Archiving…' : 'Archive'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function buildEditorNavSections({
+  component,
+  showSolutionToggle,
+  releaseProcessVisible,
+  isAdmin,
+  teamCityIssueCount,
+  hasProblems,
+  componentValidation,
+}: {
+  component: ComponentDetail
+  showSolutionToggle: boolean
+  releaseProcessVisible: boolean
+  isAdmin: boolean
+  teamCityIssueCount: number
+  hasProblems: boolean
+  componentValidation: ComponentValidation | undefined
+}): EditorNavSection[] {
+  const br = selectBaseRow(component)
+  const vcsCount = br?.vcsEntries.length ?? 0
+  const distCount =
+    (br?.mavenArtifacts.length ?? 0) +
+    (br?.fileUrlArtifacts.length ?? 0) +
+    (br?.packages.length ?? 0) +
+    (br?.genericArtifacts?.length ?? 0)
+  const dockerCount = br?.dockerImages.length ?? 0
+  const configCount = component.configurations?.length ?? 0
+  const docsCount = component.docs?.length ?? 0
+  const sections: EditorNavSection[] = [
+    {
+      label: 'Overview',
+      items: [
+        { value: 'general', label: 'General' },
+        // Solution is its own topic, offered only for solution-key components.
+        ...(showSolutionToggle ? [{ value: 'solution', label: 'Solution' }] : []),
+      ],
+    },
+    {
+      label: 'Build & Release',
+      items: [
+        { value: 'build', label: 'Build', count: br?.build ? 1 : 0 },
+        { value: 'vcs', label: 'VCS', count: vcsCount },
+        { value: 'jira', label: 'Jira', count: br?.jira ? 1 : 0 },
+        ...(releaseProcessVisible ? [{ value: 'release-process', label: 'Release Process' }] : []),
+        { value: 'escrow', label: 'Escrow', count: br?.escrow ? 1 : 0 },
+        { value: 'documentation', label: 'Documentation', count: docsCount },
+      ],
+    },
+    {
+      label: 'Distribution',
+      items: [
+        { value: 'distribution', label: 'Distribution', count: distCount },
+        { value: 'docker', label: 'Docker', count: dockerCount },
+      ],
+    },
+    {
+      label: 'Metadata',
+      items: [
+        { value: 'misc', label: 'Misc' },
+        { value: 'supported-versions', label: 'Supported Versions' },
+        { value: 'configurations', label: 'Configurations', count: configCount },
+      ],
+    },
+    {
+      label: 'Tools',
+      items: [
+        { value: AS_CODE_TAB, label: 'As Code' },
+        { value: 'overrides', label: 'Overrides' },
+        { value: 'history', label: 'History' },
+      ],
+    },
+    // Validations section is admin-only, hidden for regular users.
+    ...(isAdmin
+      ? [
+          {
+            label: 'Validations',
+            items: [
+              {
+                value: 'teamcity-validations',
+                label: 'TeamCity',
+                problemCount: teamCityIssueCount,
+              },
+              {
+                value: 'unregistered-release',
+                label: 'Unregistered Release',
+                problemCount:
+                  hasProblems && componentValidation
+                    ? validationBadgeCount(componentValidation)
+                    : 0,
+              },
+            ],
+          },
+        ]
+      : []),
+  ]
+  return sections
+}
+
+// Client-side save gates — hints only; the server stays authoritative on save.
+function saveBlockedReason(
+  fieldConfigLoading: boolean,
+  ownerValidating: boolean,
+  ownershipIssues: number,
+  mavenPrefixIssues: number,
+  vcsHostIssues: number,
+  renameKeyBlocked: boolean,
+): string | null {
+  if (fieldConfigLoading) return 'Loading field configuration…'
+  if (ownerValidating) return 'Validating component owner…'
+  if (ownershipIssues > 0)
+    return `Resolve ${ownershipIssues} artifact-ownership ${ownershipIssues === 1 ? 'issue' : 'issues'} before saving`
+  if (mavenPrefixIssues > 0)
+    return `Fix ${mavenPrefixIssues} distribution Group ID ${mavenPrefixIssues === 1 ? 'prefix' : 'prefixes'} before saving`
+  if (vcsHostIssues > 0)
+    return `Fix ${vcsHostIssues} VCS ${vcsHostIssues === 1 ? 'host' : 'hosts'} before saving`
+  if (renameKeyBlocked) return 'Fix the Component Key before saving'
+  return null
+}
+
+function countTeamCityIssues(isAdmin: boolean, projects: TeamcityProject[] | undefined): number {
+  if (!isAdmin) return 0
+  return (projects ?? []).reduce((total, tc) => {
+    const tones = (tc.validations ?? []).map((v) => getTeamCityValidationStatusTone(v.status))
+    return total + tones.filter((t) => t === 'destructive' || t === 'warning').length
+  }, 0)
+}
+
+function canConfirmArchiveFor(readiness: ReturnType<typeof useArchiveReadiness>): boolean {
+  return readiness.data?.ready === true && !readiness.isLoading && !readiness.isFetching && !readiness.isError
+}
+
+function hasValidationProblems(isAdmin: boolean, validation: ComponentValidation | undefined): boolean {
+  return isAdmin && validation != null && hasValidationIssue(validation)
+}
+
 const AS_CODE_TAB = 'as-code'
 
 /** A positive integer from a query param, or undefined. */
@@ -235,9 +791,7 @@ function ComponentDetailEditor({ component, routeId }: { component: ComponentDet
   // answer requires live calls to three external systems, so it is never
   // requested on component load, only when someone actually chooses Archive.
   const archiveReadiness = useArchiveReadiness(component.id, deleteDialogOpen)
-  const isArchiveReady = archiveReadiness.data?.ready === true
-  const canConfirmArchive =
-    isArchiveReady && !archiveReadiness.isLoading && !archiveReadiness.isFetching && !archiveReadiness.isError
+  const canConfirmArchive = canConfirmArchiveFor(archiveReadiness)
   const { data: user } = useCurrentUser()
 
   const adminMode = useAdminMode((s) => s.enabled)
@@ -245,17 +799,11 @@ function ComponentDetailEditor({ component, routeId }: { component: ComponentDet
 
   const { byComponent: validationByComponent } = useValidationProblems(isAdmin)
   const componentValidation = validationByComponent.get(component.name)
-  const hasProblems =
-    isAdmin && componentValidation != null && hasValidationIssue(componentValidation)
+  const hasProblems = hasValidationProblems(isAdmin, componentValidation)
 
   // Rolled up across all TeamCity projects — drives the sidebar item's
   // red/warning treatment. Admin-only, derived from data already on `component`.
-  const teamCityIssueCount = isAdmin
-    ? (component.teamcityProjects ?? []).reduce((total, tc) => {
-        const tones = (tc.validations ?? []).map((v) => getTeamCityValidationStatusTone(v.status))
-        return total + tones.filter((t) => t === 'destructive' || t === 'warning').length
-      }, 0)
-    : 0
+  const teamCityIssueCount = countTeamCityIssues(isAdmin, component.teamcityProjects)
 
   useEffect(() => {
     // Whole Validations section (TeamCity + Unregistered Release) is admin-only.
@@ -564,8 +1112,165 @@ function ComponentDetailEditor({ component, routeId }: { component: ComponentDet
     form.clearErrors()
   }
 
+  // Re-baselines the form to the SAVED component — GeneralTab's re-hydration
+  // guard skips while the form is dirty, so without the reset it would stay
+  // dirty for the rest of the session. (`if (saved)` keeps tests whose
+  // mutateAsync resolves undefined inert.) Returns the PATCH advisories.
+  async function persistPatch(request: ComponentUpdateRequest): Promise<string[]> {
+    const saved = await updateMutation.mutateAsync(request)
+    if (saved) {
+      form.reset(mapComponentToForm(saved))
+      form.clearErrors()
+    }
+    return saved?.warnings ?? []
+  }
+
+  // 'partial' = the PATCH already landed and the failure is fully reported
+  // here; a coverage-only failure rethrows into the shared rejection handling
+  // below, so an in-place-fixable conflict keeps its banner routing.
+  async function persistCoverage(
+    meta: ConfirmMeta,
+    patchDirty: boolean,
+    showPatchWarnings: () => void,
+  ): Promise<'saved' | 'partial'> {
+    try {
+      await supportedVersionsSection.save({
+        jiraTaskKey: meta.jiraTaskKey,
+        changeComment: meta.changeComment,
+      })
+      return 'saved'
+    } catch (svErr) {
+      // P2-1: the PATCH is already committed, so the save is only PARTLY done
+      // and the combined diff can't be safely re-edited (its "from" values
+      // are stale) — reset the part that landed and surface the failure
+      // distinctly rather than as a misleading generic "Save failed".
+      if (patchDirty) {
+        const msg = svErr instanceof Error ? svErr.message : String(svErr)
+        overridesSection.reset()
+        setReviewOpen(false)
+        toast({
+          title: 'Partly saved',
+          description: `Your other changes were saved, but updating supported versions failed: ${msg}`,
+          variant: 'destructive',
+        })
+        // The PATCH did land, so its advisories still apply.
+        showPatchWarnings()
+        return 'partial'
+      }
+      throw svErr
+    }
+  }
+
+  // `value` is fixable in place — keep the Review dialog open; `optimistic`
+  // has already refetched, so the open diff's "from" values are stale — close it.
+  function applySaveConflict(conflict: ClassifiedConflict) {
+    toast({ title: conflict.title, description: conflict.description, variant: 'destructive' })
+    if (conflict.kind === 'rms') {
+      // The conflicting field (Java or Maven) isn't named in CRS's message, but
+      // both live on the Build tab, so route there unconditionally (design.md
+      // Decision 5). CRS refreshed its ACTUAL data when it rejected the write;
+      // refetch so the display catches up — after the toast, never awaited
+      // (Decision 6).
+      setBuildConflict(conflict.description)
+      setActiveTab('build')
+      setReviewOpen(false)
+      void refreshComponentIntoCache(queryClient, component.id, routeId)
+      return
+    }
+    if (conflict.kind === 'value') {
+      // Attribute a value-409 to the Jira (projectKey, versionPrefix) pair ONLY
+      // when this save changed either AND the server message is about that pair
+      // — the pair is edited on the Jira tab, so surface it inline there; the
+      // message guard keeps an unrelated uniqueness conflict (e.g. a
+      // distribution GAV) from being misrouted. Every other value conflict
+      // stays a persistent Review-dialog banner.
+      const jServer = selectBaseRow(component)?.jira
+      const jiraPairChanged =
+        (jiraSection.state.projectKey || '') !== (jServer?.projectKey ?? '') ||
+        (jiraSection.state.versionPrefix || '') !== (jServer?.versionPrefix ?? '')
+      if (jiraPairChanged && /jira|project\s*key/i.test(conflict.description)) {
+        setJiraConflict(conflict.description)
+        setActiveTab('jira')
+        setReviewOpen(false)
+      } else {
+        setReviewError(conflict.description)
+      }
+      return
+    }
+    setReviewOpen(false)
+  }
+
+  // 'general' is normally not a target (RHF general fields render inline on
+  // the default tab), but the Classification toggles mapped there have no
+  // inline slot, so DO navigate for them.
+  function pickErrorSection(fieldErrors: Map<string, string>): string | null {
+    for (const field of fieldErrors.keys()) {
+      const isGeneral = (GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(field)
+      const isOtherTab = (MISC_TAB_FIELDS as ReadonlyArray<string>).includes(field) || field === 'autoRelease'
+      if (isGeneral && !isOtherTab) continue
+      const target = sectionForField(field)
+      if (target && (target !== 'general' || !isGeneral)) return target
+    }
+    return null
+  }
+
+  // Returns true when at least one error landed inline — the caller then
+  // skips the generic toast (it would be their only error surface otherwise).
+  function applyFieldErrors(err: ApiError, sentOverrideIds: string[]): boolean {
+    const fieldErrors = parseServerFieldErrors(err.rawBody)
+    const hasGeneralError = [...fieldErrors.keys()].some((f) =>
+      (GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(f),
+    )
+    let anyFieldMapped = vcsSection.applyServerErrors(fieldErrors, sentOverrideIds)
+    const switchTo = pickErrorSection(fieldErrors)
+    for (const [field, message] of fieldErrors) {
+      const isGeneral = (GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(field)
+      const isOtherTab = (MISC_TAB_FIELDS as ReadonlyArray<string>).includes(field) || field === 'autoRelease'
+      // `labels` is a page-level RHF field edited in the always-visible header
+      // (not a tab, not in GENERAL_TAB_FIELDS) — map it so HeaderLabelsEditor
+      // shows it inline instead of the user getting only a toast.
+      const isHeaderLabels = field === 'labels'
+      if (isGeneral || isOtherTab || isHeaderLabels) {
+        form.setError(field as keyof GeneralFormValues, { type: 'server', message })
+        anyFieldMapped = true
+      }
+    }
+    // Prefer keeping the user on General when a General field also errored.
+    if (switchTo && !hasGeneralError) setActiveTab(switchTo)
+    if (anyFieldMapped || switchTo) setReviewOpen(false)
+    return anyFieldMapped
+  }
+
+  // A classified 409, a field-mapped 400, the RMS-unavailable 503 — anything
+  // else degrades to the generic "Save failed" toast.
+  async function applySaveRejection(err: unknown, sentOverrideIds: string[]) {
+    const conflict = await handleConflict(err)
+    if (conflict) {
+      applySaveConflict(conflict)
+      return
+    }
+    if (err instanceof ApiError && err.status === 400 && applyFieldErrors(err, sentOverrideIds)) return
+    // CRS's write-time RMS gate fails closed with a 503 when it can't reach
+    // RMS — decided by errorCode alone (design.md Decision 5).
+    if (err instanceof ApiError && err.status === 503 && classifyConflictBody(err.rawBody).errorCode === 'RMS_UNAVAILABLE') {
+      setReviewOpen(false)
+      toast({
+        title: 'Registered build data unavailable',
+        description:
+          'The registered build data could not be reached, so this save could not be checked against it. Try again shortly.',
+        variant: 'destructive',
+      })
+      return
+    }
+    setReviewOpen(false)
+    toast({
+      title: 'Save failed',
+      description: err instanceof Error ? err.message : String(err),
+      variant: 'destructive',
+    })
+  }
+
   async function runCombinedSave(meta: ConfirmMeta = {}) {
-    if (!component) return
     if (!canEdit || !dirty) return
     form.clearErrors()
     // Clear any prior conflict banner / inline jira conflict so a retry starts clean.
@@ -594,191 +1299,24 @@ function ComponentDetailEditor({ component, routeId }: { component: ComponentDet
       changeComment: meta.changeComment,
     }
 
-    // Non-blocking advisories from the PATCH response (e.g. the TeamCity build
-    // chain must be recreated after a base VCS change), shown once the save is done.
-    let saveWarnings: string[] = []
-    const showSaveWarnings = () => {
-      for (const warning of saveWarnings) toast({ title: 'Warning', description: warning })
-    }
     try {
       // The combined PATCH fires only when a PATCH-backed section is dirty — a
       // supported-versions-only save must not send an (essentially empty) PATCH.
-      if (patchDirty) {
-        const saved = await updateMutation.mutateAsync(request)
-        saveWarnings = saved?.warnings ?? []
-        // Re-baseline the General/Misc form to the SAVED (server-normalized) component.
-        // The GeneralTab re-hydration guard skips while the form is dirty/touched, so without
-        // an explicit reset here the form would stay dirty for the rest of the session and a
-        // later same-id refetch would never reflect a value CRS normalized on write. The
-        // section hooks re-seed themselves via their snapshot deep-equal; only the RHF form
-        // needs the nudge. (`if (saved)` keeps tests whose mutateAsync resolves undefined inert.)
-        if (saved) {
-          form.reset(mapComponentToForm(saved))
-          form.clearErrors()
-        }
-      }
-      // Supported-versions coverage persists via its OWN PUT (off the PATCH
-      // contract), sequenced AFTER the PATCH. The hook re-seeds its draft to the
-      // MERGED server response, so the tab reads clean once this resolves. The
-      // change metadata rides along on this PUT too (variant B) — the SV endpoint
-      // records it on the audit row, so a coverage-only save keeps the Jira key /
-      // comment the user typed in the Review dialog.
+      const saveWarnings = patchDirty ? await persistPatch(request) : []
+      const showSaveWarnings = () => saveWarnings.forEach((warning) => toast({ title: 'Warning', description: warning }))
       if (supportedVersionsSection.isDirty) {
-        try {
-          await supportedVersionsSection.save({
-            jiraTaskKey: meta.jiraTaskKey,
-            changeComment: meta.changeComment,
-          })
-        } catch (svErr) {
-          // P2-1: the PUT failed. If a PATCH already persisted, the save is only
-          // PARTLY done — the combined diff can't be safely re-edited (the PATCH is
-          // committed, so its "from" values are stale), so reset the overrides for
-          // the part that landed and surface the failure distinctly rather than as
-          // a misleading generic "Save failed".
-          if (patchDirty) {
-            const msg = svErr instanceof Error ? svErr.message : String(svErr)
-            overridesSection.reset()
-            setReviewOpen(false)
-            toast({
-              title: 'Partly saved',
-              description: `Your other changes were saved, but updating supported versions failed: ${msg}`,
-              variant: 'destructive',
-            })
-            // The PATCH did land, so its advisories still apply.
-            showSaveWarnings()
-            return
-          }
-          // Coverage-only failure: nothing else persisted, so defer to the shared
-          // conflict / 400 / generic handling below. That keeps an in-place-fixable
-          // value conflict (or a field-mapped 400) routed to its banner/section
-          // instead of flattening every SV error to a generic toast.
-          throw svErr
-        }
+        const outcome = await persistCoverage(meta, patchDirty, showSaveWarnings)
+        if (outcome === 'partial') return
       }
-      // Clear the override draft after a successful save. The combined PATCH
-      // persisted the desired set; useUpdateComponent invalidates
-      // ['field-overrides', id], so OverridesDraftProvider re-seeds from the
-      // refetched (authoritative) baseline and the section reads clean.
-      // (For ~one tick — until that refetch settles — effectiveOverrides shows
-      // the pre-save rows again; benign, the Overrides tab isn't in view here.)
+      // Clear the override draft after a successful save: useUpdateComponent
+      // invalidates ['field-overrides', id], so OverridesDraftProvider re-seeds
+      // from the refetched (authoritative) baseline and the section reads clean.
       overridesSection.reset()
       setReviewOpen(false)
       toast({ title: 'Component saved', description: 'Changes have been saved successfully.' })
       showSaveWarnings()
     } catch (err) {
-      // 409 — split by kind. A `value` conflict (uniqueness / overlapping range)
-      // is fixable in place, so keep the Review dialog open with a persistent
-      // banner (plus a sticky toast) instead of closing and losing the diff. An
-      // `optimistic` (stale-version) conflict has already refetched the latest
-      // snapshot, so the open diff's "from" values are stale — close it and tell
-      // the user to re-apply.
-      const conflict = await handleConflict(err)
-      if (conflict) {
-        toast({ title: conflict.title, description: conflict.description, variant: 'destructive' })
-        if (conflict.kind === 'rms') {
-          // The conflicting field (Java or Maven) isn't named in CRS's message, but both
-          // live on the Build tab, so route there unconditionally (design.md Decision 5).
-          setBuildConflict(conflict.description)
-          setActiveTab('build')
-          setReviewOpen(false)
-          // CRS refreshed its ACTUAL data when it rejected the write; refetch
-          // so the display catches up — after the toast, never awaited
-          // (design.md Decision 6).
-          void refreshComponentIntoCache(queryClient, component.id, routeId)
-          return
-        }
-        if (conflict.kind === 'value') {
-          // Attribute a value-409 to the Jira (projectKey, versionPrefix) pair
-          // ONLY when this save changed either AND the server message is about
-          // that pair — the pair is edited on the Jira tab, not the Review
-          // dialog, so surface it inline there and close the diff. A guard on the
-          // message keeps an unrelated uniqueness conflict in a combined save
-          // (e.g. a distribution GAV) from being misrouted to the Jira banner.
-          // Every other value conflict stays a persistent Review-dialog banner
-          // (fixable in place).
-          const jServer = selectBaseRow(component)?.jira
-          const jiraPairChanged =
-            (jiraSection.state.projectKey || '') !== (jServer?.projectKey ?? '') ||
-            (jiraSection.state.versionPrefix || '') !== (jServer?.versionPrefix ?? '')
-          const looksLikeJiraConflict = /jira|project\s*key/i.test(conflict.description)
-          if (jiraPairChanged && looksLikeJiraConflict) {
-            setJiraConflict(conflict.description)
-            setActiveTab('jira')
-            setReviewOpen(false)
-          } else {
-            setReviewError(conflict.description)
-          }
-        } else {
-          setReviewOpen(false)
-        }
-        return
-      }
-      if (err instanceof ApiError && err.status === 400) {
-        const fieldErrors = parseServerFieldErrors(err.rawBody)
-        const hasGeneralError = [...fieldErrors.keys()].some((f) =>
-          (GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(f),
-        )
-        // A checkout layout error on a base VCS entry shows inline on the VCS tab. One
-        // on a per-range row shows in its (closed) editor, so it keeps the toast.
-        let anyFieldMapped = vcsSection.applyServerErrors(fieldErrors, sentOverrideIds)
-        let switchTo: string | null = null
-        for (const [field, message] of fieldErrors) {
-          const isGeneral = (GENERAL_TAB_FIELDS as ReadonlyArray<string>).includes(field)
-          const isOtherTab = (MISC_TAB_FIELDS as ReadonlyArray<string>).includes(field) || field === 'autoRelease'
-          // `labels` is a page-level RHF field edited in the always-visible
-          // header (not a tab), so it isn't in GENERAL_TAB_FIELDS. Map its 400
-          // to form.setError anyway → HeaderLabelsEditor shows it inline instead
-          // of the user getting only a toast for a field they're looking at.
-          const isHeaderLabels = field === 'labels'
-          if (isGeneral || isOtherTab || isHeaderLabels) {
-            form.setError(field as keyof GeneralFormValues, { type: 'server', message })
-            anyFieldMapped = true
-          }
-          // First non-General offending field decides the section to switch to.
-          if (switchTo === null && !(isGeneral && !isOtherTab)) {
-            const target = sectionForField(field)
-            // Normally 'general' isn't a switch target (RHF general fields render
-            // inline on the default tab). But section-state fields mapped to
-            // General (the Classification Explicit/External toggles, which are NOT
-            // in GENERAL_TAB_FIELDS so `isGeneral` is false) have no inline slot,
-            // so DO navigate there instead of only toasting.
-            if (target && (target !== 'general' || !isGeneral)) switchTo = target
-          }
-        }
-        // Prefer keeping the user on General when a General field also errored.
-        if (switchTo && !hasGeneralError) setActiveTab(switchTo)
-        if (anyFieldMapped || switchTo) {
-          setReviewOpen(false)
-          // A General/Misc field 400 (anyFieldMapped) surfaces inline via
-          // form.setError (or, for a base VCS entry, the VCS tab), so we stop here
-          // (no toast). Other non-RHF section fields have no inline-error slot, so
-          // we switch to the owning section AND fall through to the toast below
-          // — the toast is their only error surface.
-          if (anyFieldMapped) return
-        }
-      }
-      // CRS's write-time RMS gate fails closed with a 503 when it can't reach RMS.
-      // Decided by errorCode alone — never by re-checking which field the save
-      // touched (CRS's gate already implies that; see design.md Decision 5).
-      if (err instanceof ApiError && err.status === 503) {
-        const { errorCode } = classifyConflictBody(err.rawBody)
-        if (errorCode === 'RMS_UNAVAILABLE') {
-          setReviewOpen(false)
-          toast({
-            title: 'Registered build data unavailable',
-            description:
-              'The registered build data could not be reached, so this save could not be checked against it. Try again shortly.',
-            variant: 'destructive',
-          })
-          return
-        }
-      }
-      setReviewOpen(false)
-      toast({
-        title: 'Save failed',
-        description: err instanceof Error ? err.message : String(err),
-        variant: 'destructive',
-      })
+      await applySaveRejection(err, sentOverrideIds)
     }
   }
 
@@ -833,7 +1371,6 @@ function ComponentDetailEditor({ component, routeId }: { component: ComponentDet
     }
   }
 
-  const baseRow = selectBaseRow(component)
   const profilePct = completenessPercent(component)
   const warnings = component.warnings ?? []
 
@@ -842,240 +1379,30 @@ function ComponentDetailEditor({ component, routeId }: { component: ComponentDet
       <UnsavedChangesGuard when={dirty} />
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1">
-            <Link
-              to="/components"
-              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Components
-            </Link>
-            <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-2xl font-semibold tracking-tight">{component.name}</h1>
-              <Badge variant={component.archived ? 'destructive' : 'secondary'}>
-                {component.archived ? 'Archived' : 'Active'}
-              </Badge>
-              {component.testComponent && (
-                <Badge variant="outline" title="Test component">
-                  Test
-                </Badge>
-              )}
-              {!canEdit && (
-                <Badge variant="warning" title={CANNOT_EDIT_TITLE}>
-                  <LockKeyhole className="mr-1 h-3 w-3" />
-                  View only
-                </Badge>
-              )}
-              {component.solution && (
-                <Badge variant="info">
-                  <Boxes className="mr-1 h-3 w-3" aria-hidden />
-                  Solution
-                </Badge>
-              )}
-              {(() => {
-                const systems = component.systems ?? []
-                const buildSystem = baseRow?.build?.buildSystem
-                const jiraProjectKey = baseRow?.jira?.projectKey
-                // A read-only badge mirroring a field respects field-config
-                // visibility: when `component.system` is hidden, the System
-                // badge is suppressed (not just the input). D7.
-                const systemsHidden = systemFc.visibility === 'hidden'
-                return (
-                  <>
-                    {!systemsHidden && systems.map((s) => (
-                      <Badge key={s} variant="outline">{s}</Badge>
-                    ))}
-                    {buildSystem && <Badge variant="outline">{buildSystem}</Badge>}
-                    {jiraBaseUrl && jiraProjectKey && (
-                      <a
-                        href={`${jiraBaseUrl}/browse/${jiraProjectKey}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-sm hover:opacity-80 transition-opacity"
-                        title={`Jira: ${jiraProjectKey}`}
-                        aria-label={`Jira: ${jiraProjectKey}`}
-                      >
-                        <JiraIcon className="h-4 w-4" />
-                      </a>
-                    )}
-                  </>
-                )
-              })()}
-              {(() => {
-                const vcsPath = selectBaseRow(component)?.vcsEntries[0]?.vcsPath
-                const target = vcsBrowseUrl(vcsPath, gitBaseUrl, vcsProvider)
-                if (!target) return null
-                const providerLabel = vcsProvider === 'gitea' ? 'Gitea' : 'Bitbucket'
-                const label = `${providerLabel}: ${target.namespace}/${target.repoName}`
-                const VcsIcon = vcsProvider === 'gitea' ? GiteaIcon : BitbucketIcon
-                return (
-                  <a
-                    href={target.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-sm hover:opacity-80 transition-opacity"
-                    title={label}
-                    aria-label={label}
-                  >
-                    <VcsIcon className="h-4 w-4" />
-                  </a>
-                )
-              })()}
-            </div>
-            {/* Subline (spec §2.3/§2.5): Owner · Version · Updated <date> [by <user>] · Profile N% */}
-            <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm text-muted-foreground">
-              <span>Owner {component.componentOwner ?? '—'}</span>
-              <span aria-hidden>·</span>
-              <span>Version {component.version}</span>
-              {component.updatedAt && (
-                <>
-                  <span aria-hidden>·</span>
-                  <span>
-                    Updated <RelativeTime ts={component.updatedAt} />
-                    {component.updatedBy ? ` by ${component.updatedBy}` : ''}
-                  </span>
-                </>
-              )}
-              <span aria-hidden>·</span>
-              <span>Profile {profilePct}% complete</span>
-            </p>
-            {component.displayName && component.displayName !== component.name && (
-              <p className="text-sm text-muted-foreground">{component.displayName}</p>
-            )}
-            {/* Labels — badges + popover editor, moved here from the General tab.
-                Wired to the same page form: onChange sets shouldDirty/shouldTouch
-                so the clear-all touched-flag contract in buildPatchRequest holds. */}
-            <div className="pt-1">
-              <HeaderLabelsEditor
-                value={form.watch('labels') ?? []}
-                onChange={(next) => form.setValue('labels', next, { shouldDirty: true, shouldTouch: true })}
-                options={labelsDict.data ?? []}
-                isLoading={labelsDict.isLoading}
-                visibility={labelsFc.visibility ?? 'editable'}
-                canEdit={canEdit}
-                error={form.formState.errors.labels?.message}
-              />
-            </div>
-          </div>
+        <ComponentHeader
+          component={component}
+          canEdit={canEdit}
+          canCreate={canCreate}
+          canArchive={canArchive}
+          canUnarchive={canUnarchive}
+          systemsHidden={systemFc.visibility === 'hidden'}
+          profilePct={profilePct}
+          jiraBaseUrl={jiraBaseUrl}
+          gitBaseUrl={gitBaseUrl}
+          vcsProvider={vcsProvider}
+          labelsValue={form.watch('labels')}
+          labelsOptions={labelsDict.data}
+          labelsLoading={labelsDict.isLoading}
+          labelsVisibility={labelsFc.visibility}
+          labelsError={form.formState.errors.labels?.message}
+          onLabelsChange={(next) => form.setValue('labels', next, { shouldDirty: true, shouldTouch: true })}
+          onClone={() => navigate(`/components/new?from=${component.id}`)}
+          onArchiveClick={() => setDeleteDialogOpen(true)}
+          onUnarchive={handleUnarchive}
+          unarchivePending={updateMutation.isPending}
+        />
 
-          <div className="flex items-center gap-2 shrink-0">
-            {canCreate && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigate(`/components/new?from=${component.id}`)}
-              >
-                <Copy className="h-4 w-4" />
-                Clone
-              </Button>
-            )}
-            {!component.archived && canArchive && (
-              // Quiet red outline: the solid red belongs to the confirm dialog's final step,
-              // not to a header button that only opens it.
-              <Button
-                variant="destructive-outline"
-                size="sm"
-                onClick={() => setDeleteDialogOpen(true)}
-              >
-                <Archive className="h-4 w-4" />
-                Archive
-              </Button>
-            )}
-            {component.archived && canUnarchive && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleUnarchive}
-                disabled={updateMutation.isPending}
-              >
-                <ArchiveRestore className="h-4 w-4" />
-                Unarchive
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {(component.teamcityProjects ?? []).length > 0 && (
-          <div className="rounded-md border divide-y" data-testid="teamcity-projects-list">
-            {component.teamcityProjects.map((tc) => {
-              const url = safeHttpUrl(tc.projectUrl ?? null)
-              const validations = tc.validations ?? []
-              const tones = validations.map((v) => getTeamCityValidationStatusTone(v.status))
-              const hasError = tones.includes('destructive')
-              const hasWarning = tones.includes('warning')
-              const issueCount = tones.filter((t) => t === 'destructive' || t === 'warning').length
-              const noRecordedFindings = validations.length === 0
-              const allClean = !noRecordedFindings && issueCount === 0
-              return (
-                <div key={tc.id} className="flex items-center gap-2 px-3 py-2 text-sm">
-                  {/* Status icon is admin-only; a regular user just sees the project links. */}
-                  {isAdmin &&
-                    (noRecordedFindings ? (
-                      <CircleDashed
-                        className="h-4 w-4 shrink-0 text-muted-foreground"
-                        aria-label="No validation findings on record"
-                      />
-                    ) : allClean ? (
-                      <CircleCheck
-                        className="h-4 w-4 shrink-0 text-[color:var(--color-badge-green-fg)]"
-                        aria-label="No validation issues"
-                      />
-                    ) : (
-                      <AlertTriangle
-                        className={cn(
-                          'h-4 w-4 shrink-0',
-                          hasError
-                            ? 'text-destructive'
-                            : hasWarning
-                              ? 'text-[color:var(--color-badge-yellow-fg)]'
-                              : 'text-muted-foreground',
-                        )}
-                        aria-label={`${issueCount} validation ${issueCount === 1 ? 'issue' : 'issues'}`}
-                      />
-                    ))}
-                  {url ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <a
-                          href={url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title={`TeamCity: ${tc.projectId}`}
-                          aria-label={`TeamCity: ${tc.projectId}`}
-                          className="inline-flex min-w-0 items-center gap-1.5 font-medium text-primary hover:underline"
-                        >
-                          <TeamCityIcon className="h-4 w-4 shrink-0" />
-                          <span className="truncate">{tc.projectId}</span>
-                        </a>
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-xs break-all">{url}</TooltipContent>
-                    </Tooltip>
-                  ) : (
-                    <span className="inline-flex min-w-0 items-center gap-1.5">
-                      <TeamCityIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      <span className="font-medium truncate">{tc.projectId}</span>
-                    </span>
-                  )}
-                  {tc.projectVersion && (
-                    <Badge variant="secondary" className="text-xs font-mono shrink-0">
-                      {tc.projectVersion}
-                    </Badge>
-                  )}
-                  {isAdmin && (
-                    <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                      {noRecordedFindings
-                        ? 'no recorded findings'
-                        : allClean
-                          ? 'no issues'
-                          : `${issueCount} issue${issueCount === 1 ? '' : 's'}`}
-                    </span>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        )}
+        <TeamCityProjectsList projects={component.teamcityProjects} isAdmin={isAdmin} />
 
         {component.solution && (
           <StatusBanner variant="info" className="flex items-center gap-2" data-testid="solution-banner">
@@ -1105,86 +1432,18 @@ function ComponentDetailEditor({ component, routeId }: { component: ComponentDet
           orientation="vertical"
           className="flex flex-col gap-4 lg:flex-row lg:gap-6"
         >
-          {(() => {
-            const br = selectBaseRow(component)
-            const vcsCount = br?.vcsEntries.length ?? 0
-            const distCount =
-              (br?.mavenArtifacts.length ?? 0) +
-              (br?.fileUrlArtifacts.length ?? 0) +
-              (br?.packages.length ?? 0) +
-              (br?.genericArtifacts?.length ?? 0)
-            const dockerCount = br?.dockerImages.length ?? 0
-            const configCount = component.configurations?.length ?? 0
-            const docsCount = component.docs?.length ?? 0
-            const sections: EditorNavSection[] = [
-              {
-                label: 'Overview',
-                items: [
-                  { value: 'general', label: 'General' },
-                  // Solution is its own topic, offered only for solution-key components.
-                  ...(showSolutionToggle ? [{ value: 'solution', label: 'Solution' }] : []),
-                ],
-              },
-              {
-                label: 'Build & Release',
-                items: [
-                  { value: 'build', label: 'Build', count: br?.build ? 1 : 0 },
-                  { value: 'vcs', label: 'VCS', count: vcsCount },
-                  { value: 'jira', label: 'Jira', count: br?.jira ? 1 : 0 },
-                  ...(autoReleaseFc.visibility !== 'hidden' ? [{ value: 'release-process', label: 'Release Process' }] : []),
-                  { value: 'escrow', label: 'Escrow', count: br?.escrow ? 1 : 0 },
-                  { value: 'documentation', label: 'Documentation', count: docsCount },
-                ],
-              },
-              {
-                label: 'Distribution',
-                items: [
-                  { value: 'distribution', label: 'Distribution', count: distCount },
-                  { value: 'docker', label: 'Docker', count: dockerCount },
-                ],
-              },
-              {
-                label: 'Metadata',
-                items: [
-                  { value: 'misc', label: 'Misc' },
-                  { value: 'supported-versions', label: 'Supported Versions' },
-                  { value: 'configurations', label: 'Configurations', count: configCount },
-                ],
-              },
-              {
-                label: 'Tools',
-                items: [
-                  { value: AS_CODE_TAB, label: 'As Code' },
-                  { value: 'overrides', label: 'Overrides' },
-                  { value: 'history', label: 'History' },
-                ],
-              },
-              // Validations section is admin-only, hidden for regular users.
-              ...(isAdmin
-                ? [
-                    {
-                      label: 'Validations',
-                      items: [
-                        {
-                          value: 'teamcity-validations',
-                          label: 'TeamCity',
-                          problemCount: teamCityIssueCount,
-                        },
-                        {
-                          value: 'unregistered-release',
-                          label: 'Unregistered Release',
-                          problemCount:
-                            hasProblems && componentValidation
-                              ? validationBadgeCount(componentValidation)
-                              : 0,
-                        },
-                      ],
-                    },
-                  ]
-                : []),
-            ]
-            return <EditorSidebarNav sections={sections} activeValue={activeTab} />
-          })()}
+          <EditorSidebarNav
+            sections={buildEditorNavSections({
+              component,
+              showSolutionToggle,
+              releaseProcessVisible: autoReleaseFc.visibility !== 'hidden',
+              isAdmin,
+              teamCityIssueCount,
+              hasProblems,
+              componentValidation,
+            })}
+            activeValue={activeTab}
+          />
 
           <div className="min-w-0 flex-1 rounded-lg border bg-card p-4 sm:p-6">
             <TabsContent value="general">
@@ -1303,27 +1562,11 @@ function ComponentDetailEditor({ component, routeId }: { component: ComponentDet
             </TabsContent>
 
             <TabsContent value="unregistered-release">
-              {hasProblems && componentValidation ? (
-                <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground">
-                    Released versions checked against the registry. Admin-only.
-                  </p>
-                  <div className="max-h-[60vh] overflow-auto">
-                    <ValidationProblemsList validation={componentValidation} />
-                  </div>
-                  {allProblemVersions(componentValidation).length > 0 && (
-                    <Button variant="outline" size="sm" onClick={handleCopyVersions}>
-                      <Copy className="mr-1.5 h-4 w-4" />
-                      Copy versions
-                    </Button>
-                  )}
-                </div>
-              ) : (
-                <EmptyState
-                  message="No unregister release for this component."
-                  className="py-8"
-                />
-              )}
+              <UnregisteredReleaseContent
+                hasProblems={hasProblems}
+                componentValidation={componentValidation}
+                onCopyVersions={handleCopyVersions}
+              />
             </TabsContent>
 
             {/* Single sticky save bar — governs the WHOLE component (one combined
@@ -1334,21 +1577,14 @@ function ComponentDetailEditor({ component, routeId }: { component: ComponentDet
               dirty={dirty}
               canEdit={canEdit}
               isSaving={updateMutation.isPending}
-              blockedReason={
-                fieldConfigLoading
-                  ? 'Loading field configuration…'
-                  : ownerValidating
-                    ? 'Validating component owner…'
-                    : ownershipIssues > 0
-                      ? `Resolve ${ownershipIssues} artifact-ownership ${ownershipIssues === 1 ? 'issue' : 'issues'} before saving`
-                      : mavenPrefixIssues > 0
-                        ? `Fix ${mavenPrefixIssues} distribution Group ID ${mavenPrefixIssues === 1 ? 'prefix' : 'prefixes'} before saving`
-                        : vcsHostIssues > 0
-                          ? `Fix ${vcsHostIssues} VCS ${vcsHostIssues === 1 ? 'host' : 'hosts'} before saving`
-                          : renameKeyBlocked
-                            ? 'Fix the Component Key before saving'
-                            : null
-              }
+              blockedReason={saveBlockedReason(
+                fieldConfigLoading,
+                ownerValidating,
+                ownershipIssues,
+                mavenPrefixIssues,
+                vcsHostIssues,
+                renameKeyBlocked,
+              )}
               onDiscard={discardAll}
               onSave={handleOpenReview}
             />
@@ -1368,43 +1604,18 @@ function ComponentDetailEditor({ component, routeId }: { component: ComponentDet
         errorBanner={reviewError}
       />
 
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-destructive" />
-              Archive Component
-            </DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Are you sure you want to archive <span className="font-semibold text-foreground">{component.name}</span>?
-            This will archive the component. You can restore it later.
-          </p>
-          <div className="max-h-[50vh] overflow-auto">
-            <ArchiveReadinessView
-              isLoading={archiveReadiness.isLoading}
-              isError={archiveReadiness.isError}
-              data={archiveReadiness.data}
-              onRetry={() => archiveReadiness.refetch()}
-              jiraBaseUrl={jiraBaseUrl}
-              componentOwner={component.componentOwner}
-              currentUsername={user?.username}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleArchive}
-              disabled={deleteMutation.isPending || !canConfirmArchive}
-            >
-              {deleteMutation.isPending ? 'Archiving…' : 'Archive'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ArchiveComponentDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        componentName={component.name}
+        componentOwner={component.componentOwner}
+        readiness={archiveReadiness}
+        canConfirm={canConfirmArchive}
+        isPending={deleteMutation.isPending}
+        jiraBaseUrl={jiraBaseUrl}
+        currentUsername={user?.username}
+        onArchive={handleArchive}
+      />
     </Layout>
   )
 }
