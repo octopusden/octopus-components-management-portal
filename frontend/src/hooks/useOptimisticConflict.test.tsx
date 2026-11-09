@@ -6,17 +6,25 @@ import { useOptimisticConflict } from './useOptimisticConflict'
 import { ApiError } from '../lib/api'
 import type { ComponentDetail } from '../lib/types'
 
-beforeEach(() => vi.clearAllMocks())
+const apiMock = vi.hoisted(() => ({ get: vi.fn() }))
+vi.mock('../lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/api')>()
+  return { ...actual, api: { ...actual.api, get: apiMock.get } }
+})
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  apiMock.get.mockReset()
+})
 
 function makeHarness(seedComponent?: ComponentDetail) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   if (seedComponent) {
     queryClient.setQueryData(['component', seedComponent.id], seedComponent)
   }
-  const fetchQuerySpy = vi.spyOn(queryClient, 'fetchQuery')
   const wrapper = ({ children }: { children: React.ReactNode }) =>
     React.createElement(QueryClientProvider, { client: queryClient }, children)
-  return { queryClient, fetchQuerySpy, wrapper }
+  return { queryClient, wrapper }
 }
 
 const seedComponent: ComponentDetail = {
@@ -43,30 +51,28 @@ const seedComponent: ComponentDetail = {
 
 describe('useOptimisticConflict', () => {
   it('returns null for non-ApiError exceptions (so caller falls through)', async () => {
-    const { wrapper, fetchQuerySpy } = makeHarness()
+    const { wrapper } = makeHarness()
     const { result } = renderHook(() => useOptimisticConflict('c-1'), { wrapper })
     const out = await result.current(new Error('network'))
     expect(out).toBeNull()
-    expect(fetchQuerySpy).not.toHaveBeenCalled()
+    expect(apiMock.get).not.toHaveBeenCalled()
   })
 
   it('returns null for ApiError that is not 409', async () => {
-    const { wrapper, fetchQuerySpy } = makeHarness()
+    const { wrapper } = makeHarness()
     const { result } = renderHook(() => useOptimisticConflict('c-1'), { wrapper })
     const out = await result.current(new ApiError(400, 'Bad', '{}'))
     expect(out).toBeNull()
-    expect(fetchQuerySpy).not.toHaveBeenCalled()
+    expect(apiMock.get).not.toHaveBeenCalled()
   })
 
-  it('on 409, fetchQuery the component by UUID and returns describeOptimisticConflict output', async () => {
-    const { fetchQuerySpy, wrapper } = makeHarness(seedComponent)
-    fetchQuerySpy.mockResolvedValue(seedComponent)
+  it('on 409, refetches the component by UUID and returns describeOptimisticConflict output', async () => {
+    const { wrapper } = makeHarness(seedComponent)
+    apiMock.get.mockResolvedValue(seedComponent)
     const { result } = renderHook(() => useOptimisticConflict('c-1'), { wrapper })
     const out = await result.current(new ApiError(409, 'Conflict', '{}'))
-    await waitFor(() => expect(fetchQuerySpy).toHaveBeenCalledOnce())
-    expect(fetchQuerySpy).toHaveBeenCalledWith(
-      expect.objectContaining({ queryKey: ['component', 'c-1'] }),
-    )
+    await waitFor(() => expect(apiMock.get).toHaveBeenCalledOnce())
+    expect(apiMock.get).toHaveBeenCalledWith('/components/c-1')
     expect(out).not.toBeNull()
     expect(out!.title).toBe('Save conflict')
     // describeOptimisticConflict includes the server's updatedAt in the body
@@ -74,12 +80,12 @@ describe('useOptimisticConflict', () => {
   })
 
   it('on 409 without a cached component, returns the generic conflict description', async () => {
-    const { fetchQuerySpy, wrapper } = makeHarness()
-    // fetchQuery fails → falls back to the (empty) cache → generic message.
-    fetchQuerySpy.mockRejectedValue(new Error('network'))
+    const { wrapper } = makeHarness()
+    // The refetch fails → falls back to the (empty) cache → generic message.
+    apiMock.get.mockRejectedValue(new Error('network'))
     const { result } = renderHook(() => useOptimisticConflict('c-missing'), { wrapper })
     const out = await result.current(new ApiError(409, 'Conflict', '{}'))
-    await waitFor(() => expect(fetchQuerySpy).toHaveBeenCalledOnce())
+    await waitFor(() => expect(apiMock.get).toHaveBeenCalledOnce())
     expect(out).not.toBeNull()
     expect(out!.title).toBe('Save conflict')
     expect(out!.description).toContain('another user')
@@ -92,7 +98,7 @@ describe('useOptimisticConflict', () => {
   // the user into a futile reload loop — the QA incident this fixes.
 
   it('UNIQUENESS_VIOLATION → "Uniqueness violation" toast with the SERVER message, no refetch', async () => {
-    const { fetchQuerySpy, wrapper } = makeHarness()
+    const { wrapper } = makeHarness()
     const { result } = renderHook(() => useOptimisticConflict('c-1'), { wrapper })
     const serverMsg =
       "uniqueness violation: distribution GAV 'g:a:zip' of component 'a' duplicates component 'b' in intersecting version ranges '(,0),[0,)' ∩ '(,0),[0,)'"
@@ -109,12 +115,12 @@ describe('useOptimisticConflict', () => {
     expect(out!.description).toBe(serverMsg)
     expect(out!.description).not.toMatch(/another user/i)
     // Reload would not help — the conflict is in the submitted values, not staleness.
-    expect(fetchQuerySpy).not.toHaveBeenCalled()
+    expect(apiMock.get).not.toHaveBeenCalled()
   })
 
-  it('OPTIMISTIC_LOCK → the reload-and-reapply flow (fetchQuery by UUID + "Save conflict")', async () => {
-    const { fetchQuerySpy, wrapper } = makeHarness(seedComponent)
-    fetchQuerySpy.mockResolvedValue(seedComponent)
+  it('OPTIMISTIC_LOCK → the reload-and-reapply flow (refetch by UUID + "Save conflict")', async () => {
+    const { wrapper } = makeHarness(seedComponent)
+    apiMock.get.mockResolvedValue(seedComponent)
     const { result } = renderHook(() => useOptimisticConflict('c-1'), { wrapper })
     const out = await result.current(
       new ApiError(
@@ -126,14 +132,14 @@ describe('useOptimisticConflict', () => {
         }),
       ),
     )
-    await waitFor(() => expect(fetchQuerySpy).toHaveBeenCalledOnce())
+    await waitFor(() => expect(apiMock.get).toHaveBeenCalledOnce())
     expect(out!.kind).toBe('optimistic')
     expect(out!.title).toBe('Save conflict')
     expect(out!.description).toMatch(/another user/i)
   })
 
   it('other machine-coded 409 (e.g. DATA_INTEGRITY) → "Save failed" with the server message', async () => {
-    const { fetchQuerySpy, wrapper } = makeHarness()
+    const { wrapper } = makeHarness()
     const { result } = renderHook(() => useOptimisticConflict('c-1'), { wrapper })
     const out = await result.current(
       new ApiError(
@@ -149,11 +155,11 @@ describe('useOptimisticConflict', () => {
     expect(out!.kind).toBe('value')
     expect(out!.title).toBe('Save failed')
     expect(out!.description).toBe('Data integrity violation: duplicate or invalid data')
-    expect(fetchQuerySpy).not.toHaveBeenCalled()
+    expect(apiMock.get).not.toHaveBeenCalled()
   })
 
   it("RMS_REGISTERED_VALUE_CONFLICT → 'rms' kind, server message + 'no changes were saved', no refetch", async () => {
-    const { fetchQuerySpy, wrapper } = makeHarness()
+    const { wrapper } = makeHarness()
     const { result } = renderHook(() => useOptimisticConflict('c-1'), { wrapper })
     const serverMsg = "javaVersion '21' disagrees with the registered value '17' for range [2.0,3.0)"
     const out = await result.current(
@@ -167,26 +173,26 @@ describe('useOptimisticConflict', () => {
     expect(out!.kind).toBe('rms')
     expect(out!.title).not.toBe('Save failed')
     expect(out!.description).toBe(`${serverMsg}. No changes were saved.`)
-    expect(fetchQuerySpy).not.toHaveBeenCalled()
+    expect(apiMock.get).not.toHaveBeenCalled()
   })
 
-  it('409 with no errorCode (older server) keeps the legacy optimistic-lock flow (fetchQuery by UUID)', async () => {
-    const { fetchQuerySpy, wrapper } = makeHarness(seedComponent)
-    fetchQuerySpy.mockResolvedValue(seedComponent)
+  it('409 with no errorCode (older server) keeps the legacy optimistic-lock flow (refetch by UUID)', async () => {
+    const { wrapper } = makeHarness(seedComponent)
+    apiMock.get.mockResolvedValue(seedComponent)
     const { result } = renderHook(() => useOptimisticConflict('c-1'), { wrapper })
     const out = await result.current(
       new ApiError(409, 'some conflict', JSON.stringify({ errorMessage: 'some conflict' })),
     )
-    await waitFor(() => expect(fetchQuerySpy).toHaveBeenCalledOnce())
+    await waitFor(() => expect(apiMock.get).toHaveBeenCalledOnce())
     expect(out!.title).toBe('Save conflict')
   })
 
-  // ── New tests: cache-alias mirroring and network-failure resilience ────────
+  // ── Cache-alias mirroring and network-failure resilience ──────────────────
 
   it('with componentCacheKey ≠ UUID, the fresh snapshot is mirrored into the route-key cache entry', async () => {
-    const { queryClient, fetchQuerySpy, wrapper } = makeHarness(seedComponent)
+    const { queryClient, wrapper } = makeHarness(seedComponent)
     const freshComponent = { ...seedComponent, version: 8, updatedAt: '2026-05-18T12:00:00Z' }
-    fetchQuerySpy.mockResolvedValue(freshComponent)
+    apiMock.get.mockResolvedValue(freshComponent)
     const cacheKey = 'my-component-key'
     const { result } = renderHook(() => useOptimisticConflict('c-1', cacheKey), { wrapper })
     const out = await result.current(
@@ -196,7 +202,7 @@ describe('useOptimisticConflict', () => {
         JSON.stringify({ errorCode: 'OPTIMISTIC_LOCK', errorMessage: 'stale' }),
       ),
     )
-    await waitFor(() => expect(fetchQuerySpy).toHaveBeenCalledOnce())
+    await waitFor(() => expect(apiMock.get).toHaveBeenCalledOnce())
     const cacheEntry = queryClient.getQueryData<ComponentDetail>(['component', cacheKey])
     expect(cacheEntry).toBeDefined()
     expect(cacheEntry!.version).toBe(8)
@@ -204,10 +210,9 @@ describe('useOptimisticConflict', () => {
     expect(out!.description).toContain('2026-05-18T12:00:00Z')
   })
 
-  it('network failure in fetchQuery does not throw and falls back to cached snapshot', async () => {
-    const { fetchQuerySpy, wrapper } = makeHarness(seedComponent)
-    // fetchQuery rejects → falls back to the cached seed.
-    fetchQuerySpy.mockRejectedValue(new Error('network down'))
+  it('network failure in the refetch does not throw and falls back to cached snapshot', async () => {
+    const { wrapper } = makeHarness(seedComponent)
+    apiMock.get.mockRejectedValue(new Error('network down'))
     const { result } = renderHook(() => useOptimisticConflict('c-1'), { wrapper })
     const out = await result.current(
       new ApiError(
@@ -216,7 +221,7 @@ describe('useOptimisticConflict', () => {
         JSON.stringify({ errorCode: 'OPTIMISTIC_LOCK', errorMessage: 'stale' }),
       ),
     )
-    await waitFor(() => expect(fetchQuerySpy).toHaveBeenCalledOnce())
+    await waitFor(() => expect(apiMock.get).toHaveBeenCalledOnce())
     // No throw; description built from the cached seed.
     expect(out).not.toBeNull()
     expect(out!.title).toBe('Save conflict')
@@ -228,6 +233,7 @@ describe('useOptimisticConflict', () => {
     // pair that fresh version with a stale desired-set and silently delete a
     // concurrently-added override row (PR review, high finding).
     const { queryClient, wrapper } = makeHarness(seedComponent)
+    apiMock.get.mockResolvedValue(seedComponent)
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
     const { result } = renderHook(() => useOptimisticConflict('c-1'), { wrapper })
     const out = await result.current(

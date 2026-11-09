@@ -23,6 +23,7 @@ export function fetchComponentDetail(id: string): Promise<ComponentDetail> {
 
 /** Refetch the component by its stable UUID and mirror the fresh snapshot into
  * the route-key cache entry (a route-key refetch 404s once a rename lands).
+ * Writes are version-guarded — a slower refresh never overwrites a newer save.
  * Best-effort: falls back to the cached snapshot, never rejects. */
 export async function refreshComponentIntoCache(
   queryClient: QueryClient,
@@ -30,13 +31,13 @@ export async function refreshComponentIntoCache(
   componentCacheKey?: string,
 ): Promise<ComponentDetail | undefined> {
   try {
-    const fresh = await queryClient.fetchQuery({
-      queryKey: ['component', componentId],
-      queryFn: () => fetchComponentDetail(componentId),
-      staleTime: 0,
-    })
-    if (fresh && componentCacheKey && componentCacheKey !== componentId) {
-      queryClient.setQueryData(['component', componentCacheKey], fresh)
+    const fresh = await fetchComponentDetail(componentId)
+    const cached = queryClient.getQueryData<ComponentDetail>(['component', componentId])
+    if (fresh.version >= (cached?.version ?? 0)) {
+      queryClient.setQueryData(['component', componentId], fresh)
+      if (componentCacheKey && componentCacheKey !== componentId) {
+        queryClient.setQueryData(['component', componentCacheKey], fresh)
+      }
     }
     return fresh
   } catch {

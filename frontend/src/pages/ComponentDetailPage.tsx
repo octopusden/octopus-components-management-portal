@@ -1638,19 +1638,20 @@ export function ComponentDetailPage() {
   const { data: component, isLoading, error } = useComponent(routeId ?? '')
   const { data: serverOverrides = [], isLoading: overridesLoading } = useFieldOverrides(component?.id ?? '')
 
-  if (isLoading) {
-    return (
-      <Layout>
-        <div className="space-y-4">
-          <SkeletonBlock height="h-8" width="w-48" />
-          <SkeletonBlock height="h-4" width="w-64" />
-          <SkeletonBlock height="h-64" width="w-full" />
-        </div>
-      </Layout>
-    )
-  }
-
-  if (error || !component) {
+  // The error page is only for a component that never resolved — a failed
+  // background refetch must not unmount the editor and discard unsaved work.
+  if (!component) {
+    if (isLoading) {
+      return (
+        <Layout>
+          <div className="space-y-4">
+            <SkeletonBlock height="h-8" width="w-48" />
+            <SkeletonBlock height="h-4" width="w-64" />
+            <SkeletonBlock height="h-64" width="w-full" />
+          </div>
+        </Layout>
+      )
+    }
     return (
       <Layout>
         <div className="space-y-4">

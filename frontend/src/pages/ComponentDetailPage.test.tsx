@@ -146,7 +146,7 @@ vi.mock('../hooks/useValidationProblems', () => ({
 // without touching the real clipboard API (same pattern as AsCodeTab.test).
 vi.mock('../lib/clipboard', () => ({ copyToClipboard: vi.fn() }))
 
-import { ApiError } from '../lib/api'
+import { api, ApiError } from '../lib/api'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useComponent, useUpdateComponent, useDeleteComponent } from '../hooks/useComponent'
 import { useArchiveReadiness } from '../hooks/useArchiveReadiness'
@@ -365,6 +365,7 @@ function renderPage(component: ComponentDetail, user: User | null, opts: RenderP
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
   // The Validation Problems tab is admin-mode only. Default adminMode OFF so
   // existing tests render no tab; the dedicated describe flips it on.
@@ -2204,17 +2205,13 @@ describe('ComponentDetailPage — RMS registered-value conflict (409)', () => {
       ),
     )
     const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
-    const { client } = renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
-    const fetchQuerySpy = vi.spyOn(client, 'fetchQuery')
+    renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+    const apiGetSpy = vi.spyOn(api, 'get').mockResolvedValue(baseComponent)
 
     fireEvent.click(screen.getByTestId('edit'))
     await clickSaveAndConfirm()
 
-    await waitFor(() =>
-      expect(fetchQuerySpy).toHaveBeenCalledWith(
-        expect.objectContaining({ queryKey: ['component', 'comp-1'] }),
-      ),
-    )
+    await waitFor(() => expect(apiGetSpy).toHaveBeenCalledWith('/components/comp-1'))
   })
 
   it('shows the conflict message without waiting for the refetch to settle', async () => {
@@ -2229,10 +2226,10 @@ describe('ComponentDetailPage — RMS registered-value conflict (409)', () => {
       ),
     )
     const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
-    const { client } = renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+    renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
     // Never settles. If the handler awaited this, the banner below would never render,
     // so this is what distinguishes "fired after the message" from "awaited before it".
-    vi.spyOn(client, 'fetchQuery').mockReturnValue(new Promise(() => {}))
+    vi.spyOn(api, 'get').mockReturnValue(new Promise(() => {}))
 
     fireEvent.click(screen.getByTestId('edit'))
     await clickSaveAndConfirm()
@@ -2253,8 +2250,8 @@ describe('ComponentDetailPage — RMS registered-value conflict (409)', () => {
       ),
     )
     const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
-    const { client } = renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
-    vi.spyOn(client, 'fetchQuery').mockRejectedValue(new Error('network down'))
+    renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+    vi.spyOn(api, 'get').mockRejectedValue(new Error('network down'))
 
     fireEvent.click(screen.getByTestId('edit'))
     await clickSaveAndConfirm()
@@ -2274,14 +2271,14 @@ describe('ComponentDetailPage — RMS registered-value conflict (409)', () => {
       ),
     )
     const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
-    const { client } = renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
-    const fetchQuerySpy = vi.spyOn(client, 'fetchQuery')
+    renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
+    const apiGetSpy = vi.spyOn(api, 'get')
 
     fireEvent.click(screen.getByTestId('edit'))
     await clickSaveAndConfirm()
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(serverMsg))
-    expect(fetchQuerySpy).not.toHaveBeenCalled()
+    expect(apiGetSpy).not.toHaveBeenCalled()
   })
 })
 
