@@ -100,6 +100,14 @@ export function legacyArtifactPattern(
   return `(?!(?:${body})$)[\\w-\\.]+`
 }
 
+/**
+ * A mapping's effective range as a comparison key: base ⇒ ALL_VERSIONS, an override's range with
+ * whitespace stripped (migrated data has "[a, b)" next to "[a,b)" for the same range).
+ */
+function rangeKey(m: OwnershipMappingValue): string {
+  return m.base ? OWNERSHIP_ALL_VERSIONS : (m.range ?? '').replace(/\s+/g, '')
+}
+
 /** Local EXPLICIT tokens of OTHER mappings sharing a group token in the same range. */
 function explicitSiblings(
   mapping: OwnershipMappingValue,
@@ -110,7 +118,7 @@ function explicitSiblings(
   for (const other of allMappings) {
     if (other.id === mapping.id) continue
     if (other.mode !== 'EXPLICIT') continue
-    if (other.range !== mapping.range) continue
+    if (rangeKey(other) !== rangeKey(mapping)) continue
     if (!groupTokens(other.groups).some((t) => g.includes(t))) continue
     out.push(...other.tokens)
   }
@@ -162,7 +170,7 @@ export function detectIntraComponentConflicts(
   // (effective range, group token) -> id of the first mapping that claimed it. base ⇒ ALL_VERSIONS.
   const claimedBy = new Map<string, string>()
   for (const m of mappings) {
-    const range = m.base ? OWNERSHIP_ALL_VERSIONS : m.range ?? ''
+    const range = rangeKey(m)
     for (const g of groupTokens(m.groups)) {
       const key = `${range}\u0000${g}`
       const prior = claimedBy.get(key)
@@ -214,12 +222,14 @@ function segmentsDisjoint(a: ParsedRange, b: ParsedRange): boolean {
 }
 
 /**
- * Do two override ranges overlap (any segment of `a` against any segment of `b`)? The same range
- * entered twice always does. Otherwise, if either side has a segment the client can't parse, it
- * defers to the CRS-side check (full releng VersionRange) and reports no overlap.
+ * Do two DIFFERENT override ranges overlap (any segment of `a` against any segment of `b`)? The same
+ * range is one override slot, not an overlap: a multi-group override is stored as one row per group,
+ * all at the same range (the same group twice there is caught by detectIntraComponentConflicts). If
+ * either side has a segment the client can't parse, it defers to the CRS-side check (full releng
+ * VersionRange) and reports no overlap.
  */
 export function rangesOverlap(a: string | null, b: string | null): boolean {
-  if (a !== null && b !== null && a.replace(/\s+/g, '') === b.replace(/\s+/g, '')) return true
+  if (a !== null && b !== null && a.replace(/\s+/g, '') === b.replace(/\s+/g, '')) return false
   const ras = parseRange(a)
   const rbs = parseRange(b)
   if (ras.includes(null) || rbs.includes(null)) return false
