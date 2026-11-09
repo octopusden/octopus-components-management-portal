@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -134,6 +134,7 @@ function renderDetailPage() {
       </TooltipProvider>
     </QueryClientProvider>,
   )
+  return client
 }
 
 /** No UUID-only sub-endpoint may ever be requested with the component KEY, for any method. */
@@ -239,5 +240,37 @@ describe('ComponentDetailPage — opened by component key (idOrName route)', () 
     expect(apiMock.delete.mock.calls[0]![0]).toBe(`/components/${UUID}`)
     expectNoKeySubResourceRequest()
     await screen.findByTestId('list-page')
+  })
+
+  it('keeps the editor and unsaved work mounted when a background refetch fails', async () => {
+    // PR review: a transient refetch failure must not unmount the editor —
+    // the error page is only for a component that never resolved.
+    const client = renderDetailPage()
+    await screen.findByRole('tab', { name: /^Build/ })
+    await openTab(/^Build/)
+
+    fireEvent.change(screen.getByTestId('enum-build-javaVersion'), { target: { value: '21' } })
+    await waitFor(() => expect(screen.getByText('Unsaved changes')).toBeDefined())
+
+    const keyFetches = getPathCalls(`/components/${KEY}`).length
+    apiMock.get.mockImplementation((path: string) =>
+      path === `/components/${KEY}` || path === `/components/${UUID}`
+        ? Promise.reject(new ApiError(500, 'boom', '{}'))
+        : Promise.resolve([]),
+    )
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ['component', KEY] })
+    })
+    // The query state is already error, but the React commit rides TanStack's
+    // notifyManager macrotask — flush it so the assertions see the final DOM.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    // The refetch fired and failed, but the editor survived with its draft.
+    expect(getPathCalls(`/components/${KEY}`).length).toBe(keyFetches + 1)
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /^Build/ })).toBeInTheDocument()
+    expect(screen.queryByText('boom')).toBeNull()
   })
 })

@@ -222,4 +222,22 @@ describe('useOptimisticConflict', () => {
     expect(out!.title).toBe('Save conflict')
     expect(out!.description).toContain('2026-05-17T12:00:00Z')
   })
+
+  it('an optimistic-lock 409 also invalidates the override baseline', async () => {
+    // The refetch advances the version; without a baseline refresh a retry would
+    // pair that fresh version with a stale desired-set and silently delete a
+    // concurrently-added override row (PR review, high finding).
+    const { queryClient, wrapper } = makeHarness(seedComponent)
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const { result } = renderHook(() => useOptimisticConflict('c-1'), { wrapper })
+    const out = await result.current(
+      new ApiError(
+        409,
+        'conflict',
+        JSON.stringify({ errorCode: 'OPTIMISTIC_LOCK', errorMessage: 'stale' }),
+      ),
+    )
+    expect(out!.kind).toBe('optimistic')
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['field-overrides', 'c-1'] })
+  })
 })
