@@ -13,15 +13,20 @@ import type { ComponentDetail } from '@/lib/types'
 vi.mock('@/hooks/useCurrentUser', () => ({ useCurrentUser: vi.fn() }))
 vi.mock('../hooks/useCurrentUser', () => ({ useCurrentUser: vi.fn() }))
 vi.mock('../hooks/useArchiveReadiness', () => ({ useArchiveReadiness: vi.fn() }))
-vi.mock('../hooks/useComponent', () => ({
-  useComponent: vi.fn(),
-  useUpdateComponent: vi.fn(),
-  useDeleteComponent: vi.fn(),
-  // item D: the page wrapper seeds OverridesDraftProvider from this.
-  useFieldOverrides: vi.fn(() => ({ data: [] })),
-  useSupportedVersions: () => ({ data: undefined, isLoading: false }),
-  useUpdateSupportedVersions: () => ({ mutateAsync: vi.fn(() => Promise.resolve()), isPending: false }),
-}))
+vi.mock('../hooks/useComponent', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../hooks/useComponent')>()
+  return {
+    ...actual,
+    useComponent: vi.fn(),
+    useUpdateComponent: vi.fn(),
+    useDeleteComponent: vi.fn(),
+    // item D: the page wrapper seeds OverridesDraftProvider from this.
+    useFieldOverrides: vi.fn(() => ({ data: [] })),
+    useSupportedVersions: () => ({ data: undefined, isLoading: false }),
+    useUpdateSupportedVersions: () => ({ mutateAsync: vi.fn(() => Promise.resolve()), isPending: false }),
+    // refreshComponentIntoCache stays real — the RMS refetch path needs it.
+  }
+})
 // Stable across renders (vi.hoisted) so tests can assert on toast content —
 // most existing tests never do (a fresh vi.fn() per render was fine for them),
 // but the 503/RMS-unavailable messaging needs to be distinguishable by content.
@@ -2200,13 +2205,15 @@ describe('ComponentDetailPage — RMS registered-value conflict (409)', () => {
     )
     const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
     const { client } = renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
-    const refetchSpy = vi.spyOn(client, 'refetchQueries')
+    const fetchQuerySpy = vi.spyOn(client, 'fetchQuery')
 
     fireEvent.click(screen.getByTestId('edit'))
     await clickSaveAndConfirm()
 
     await waitFor(() =>
-      expect(refetchSpy).toHaveBeenCalledWith({ queryKey: ['component', 'comp-1'], type: 'active' }),
+      expect(fetchQuerySpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: ['component', 'comp-1'] }),
+      ),
     )
   })
 
@@ -2225,7 +2232,7 @@ describe('ComponentDetailPage — RMS registered-value conflict (409)', () => {
     const { client } = renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
     // Never settles. If the handler awaited this, the banner below would never render,
     // so this is what distinguishes "fired after the message" from "awaited before it".
-    vi.spyOn(client, 'refetchQueries').mockReturnValue(new Promise<void>(() => {}))
+    vi.spyOn(client, 'fetchQuery').mockReturnValue(new Promise(() => {}))
 
     fireEvent.click(screen.getByTestId('edit'))
     await clickSaveAndConfirm()
@@ -2247,12 +2254,13 @@ describe('ComponentDetailPage — RMS registered-value conflict (409)', () => {
     )
     const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
     const { client } = renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
-    vi.spyOn(client, 'refetchQueries').mockRejectedValue(new Error('network down'))
+    vi.spyOn(client, 'fetchQuery').mockRejectedValue(new Error('network down'))
 
     fireEvent.click(screen.getByTestId('edit'))
     await clickSaveAndConfirm()
 
-    // The rejected refetch promise is swallowed — the routing/message stand regardless.
+    // The rejected fetch is swallowed by refreshComponentIntoCache — the
+    // routing/message stand regardless.
     const buildTab = await screen.findByTestId('build-tab')
     expect(buildTab.dataset.conflictError).toContain(RMS_CONFLICT_MSG)
   })
@@ -2267,13 +2275,13 @@ describe('ComponentDetailPage — RMS registered-value conflict (409)', () => {
     )
     const user = makeUser(['ACCESS_COMPONENTS', 'CREATE_COMPONENTS'])
     const { client } = renderPage({ ...baseComponent, canEdit: true }, user, { updateMutation: { mutateAsync } })
-    const refetchSpy = vi.spyOn(client, 'refetchQueries')
+    const fetchQuerySpy = vi.spyOn(client, 'fetchQuery')
 
     fireEvent.click(screen.getByTestId('edit'))
     await clickSaveAndConfirm()
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(serverMsg))
-    expect(refetchSpy).not.toHaveBeenCalled()
+    expect(fetchQuerySpy).not.toHaveBeenCalled()
   })
 })
 

@@ -19,15 +19,20 @@ const svMock = vi.hoisted(() => ({
   data: undefined as { all: boolean; ranges: string[]; warnings: string[] } | undefined,
   mutateAsync: vi.fn(() => Promise.resolve(undefined as unknown)),
 }))
-vi.mock('../hooks/useComponent', () => ({
-  useComponent: vi.fn(),
-  useUpdateComponent: vi.fn(),
-  useDeleteComponent: vi.fn(),
-  // item D: the page wrapper seeds OverridesDraftProvider from this; no overrides here.
-  useFieldOverrides: vi.fn(() => ({ data: [] })),
-  useSupportedVersions: () => ({ data: svMock.data, isLoading: false }),
-  useUpdateSupportedVersions: () => ({ mutateAsync: svMock.mutateAsync, isPending: false }),
-}))
+vi.mock('../hooks/useComponent', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../hooks/useComponent')>()
+  return {
+    ...actual,
+    useComponent: vi.fn(),
+    useUpdateComponent: vi.fn(),
+    useDeleteComponent: vi.fn(),
+    // item D: the page wrapper seeds OverridesDraftProvider from this; no overrides here.
+    useFieldOverrides: vi.fn(() => ({ data: [] })),
+    useSupportedVersions: () => ({ data: svMock.data, isLoading: false }),
+    useUpdateSupportedVersions: () => ({ mutateAsync: svMock.mutateAsync, isPending: false }),
+    // refreshComponentIntoCache stays real.
+  }
+})
 // Hoisted so tests can assert the toast title/description (e.g. the P2-1
 // "Partly saved" surface). Reset in beforeEach.
 const toastMock = vi.hoisted(() => vi.fn())

@@ -54,9 +54,13 @@ export interface SupportedVersionsSection {
   save: (meta?: { jiraTaskKey?: string; changeComment?: string }) => Promise<void>
 }
 
-export function useSupportedVersionsSection(componentId: string): SupportedVersionsSection {
+// `componentCacheKey`: the route segment the page is subscribed under — forwarded so the PUT refreshes the route-key detail cache.
+export function useSupportedVersionsSection(
+  componentId: string,
+  componentCacheKey?: string,
+): SupportedVersionsSection {
   const { data, isLoading, isError } = useSupportedVersions(componentId)
-  const updateMutation = useUpdateSupportedVersions(componentId)
+  const updateMutation = useUpdateSupportedVersions(componentId, componentCacheKey)
 
   const [state, setState] = useState<SupportedVersionsState>(() => snapshotFrom(data))
   const snapshotRef = useRef<SupportedVersionsState>(state)

@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { ApiError } from '../lib/api'
 import { classifyConflictBody, describeOptimisticConflict } from '../lib/conflict'
-import type { ComponentDetail } from '../lib/types'
+import { refreshComponentIntoCache } from './useComponent'
 
 // Shared 409 handler for component-PATCH callsites. Returns an async function
 // that takes the caught error and returns the toast options
@@ -19,10 +19,8 @@ import type { ComponentDetail } from '../lib/types'
 //  - any other non-OPTIMISTIC_LOCK code — generic "Save failed" + server
 //    message (unknown future codes degrade gracefully).
 //  - OPTIMISTIC_LOCK, or no errorCode (older server) — the reload-and-reapply
-//    flow: refetchQueries — not invalidateQueries — so the next getQueryData
-//    sees the post-conflict server snapshot (invalidate only marks stale and
-//    resolves once an observer re-subscribes, which would leave getQueryData
-//    reading the old cache).
+//    flow: refetch by the stable UUID and mirror into the route-key entry
+//    (a route-key refetch 404s after a rename).
 /**
  * A classified 409. `kind` drives how the caller surfaces it:
  *  - `'value'`     — the submitted value conflicts (uniqueness / other non-lock
@@ -43,7 +41,7 @@ export interface ClassifiedConflict {
   description: string
 }
 
-export function useOptimisticConflict(componentId: string | undefined) {
+export function useOptimisticConflict(componentId: string | undefined, componentCacheKey?: string) {
   const queryClient = useQueryClient()
   return async (err: unknown): Promise<ClassifiedConflict | null> => {
     if (!(err instanceof ApiError) || err.status !== 409) return null
@@ -74,9 +72,10 @@ export function useOptimisticConflict(componentId: string | undefined) {
         description: errorMessage ?? err.message,
       }
     }
-    const key = ['component', componentId ?? '']
-    await queryClient.refetchQueries({ queryKey: key, type: 'active' })
-    const latest = queryClient.getQueryData<ComponentDetail>(key)
+    if (!componentId) {
+      return { kind: 'optimistic', ...describeOptimisticConflict(undefined) }
+    }
+    const latest = await refreshComponentIntoCache(queryClient, componentId, componentCacheKey)
     return { kind: 'optimistic', ...describeOptimisticConflict(latest) }
   }
 }

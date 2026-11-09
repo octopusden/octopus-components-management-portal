@@ -18,14 +18,19 @@ import type { ComponentDetail, FieldOverride } from '@/lib/types'
 const mockOverrides = vi.fn<() => FieldOverride[]>()
 
 vi.mock('../hooks/useCurrentUser', () => ({ useCurrentUser: vi.fn() }))
-vi.mock('../hooks/useComponent', () => ({
-  useComponent: vi.fn(),
-  useUpdateComponent: vi.fn(),
-  useDeleteComponent: vi.fn(),
-  useFieldOverrides: () => ({ data: mockOverrides() }),
-  useSupportedVersions: () => ({ data: undefined, isLoading: false }),
-  useUpdateSupportedVersions: () => ({ mutateAsync: vi.fn(() => Promise.resolve()), isPending: false }),
-}))
+vi.mock('../hooks/useComponent', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../hooks/useComponent')>()
+  return {
+    ...actual,
+    useComponent: vi.fn(),
+    useUpdateComponent: vi.fn(),
+    useDeleteComponent: vi.fn(),
+    useFieldOverrides: () => ({ data: mockOverrides() }),
+    useSupportedVersions: () => ({ data: undefined, isLoading: false }),
+    useUpdateSupportedVersions: () => ({ mutateAsync: vi.fn(() => Promise.resolve()), isPending: false }),
+    // refreshComponentIntoCache stays real.
+  }
+})
 vi.mock('../hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }))
 vi.mock('../components/AppFooter', () => ({ AppFooter: () => <footer>footer</footer> }))
 vi.mock('../hooks/useInfo', () => ({

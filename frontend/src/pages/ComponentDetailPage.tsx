@@ -64,7 +64,7 @@ import { EditorSidebarNav, type EditorNavSection } from '../components/editor/Ed
 import { ValidationProblemsList } from '../components/ValidationProblemsList'
 import { TeamCityValidationsTab } from '../components/TeamCityValidationsTab'
 import { EmptyState } from '../components/ui/empty-state'
-import { useComponent, useUpdateComponent, useDeleteComponent, useFieldOverrides } from '../hooks/useComponent'
+import { useComponent, useUpdateComponent, useDeleteComponent, useFieldOverrides, refreshComponentIntoCache } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
 import { ApiError } from '../lib/api'
 import { useOptimisticConflict } from '../hooks/useOptimisticConflict'
@@ -184,11 +184,10 @@ function parsePositiveInt(raw: string | null): number | undefined {
  * draft instance; this is also where the section slices (incl. the override
  * slice) are assembled into the ONE combined save.
  */
-function ComponentDetailEditor() {
-  const { id } = useParams<{ id: string }>()
+function ComponentDetailEditor({ component, routeId }: { component: ComponentDetail; routeId: string }) {
   const navigate = useNavigate()
   const { toast } = useToast()
-  const handleConflict = useOptimisticConflict(id)
+  const handleConflict = useOptimisticConflict(component.id, routeId)
   const queryClient = useQueryClient()
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
@@ -230,13 +229,12 @@ function ComponentDetailEditor() {
   // directory lookup resolves. Hold Save while that is in flight.
   const [ownerValidating, setOwnerValidating] = useState(false)
 
-  const { data: component, isLoading, error } = useComponent(id ?? '')
-  const updateMutation = useUpdateComponent(id ?? '')
-  const deleteMutation = useDeleteComponent(id ?? '')
+  const updateMutation = useUpdateComponent(component.id, routeId)
+  const deleteMutation = useDeleteComponent(component.id)
   // Enabled only while the Archive dialog is open (design.md decision 1) — the
   // answer requires live calls to three external systems, so it is never
   // requested on component load, only when someone actually chooses Archive.
-  const archiveReadiness = useArchiveReadiness(id ?? '', deleteDialogOpen)
+  const archiveReadiness = useArchiveReadiness(component.id, deleteDialogOpen)
   const isArchiveReady = archiveReadiness.data?.ready === true
   const canConfirmArchive =
     isArchiveReady && !archiveReadiness.isLoading && !archiveReadiness.isFetching && !archiveReadiness.isError
@@ -246,14 +244,14 @@ function ComponentDetailEditor() {
   const isAdmin = adminMode && hasPermission(user, PERMISSIONS.IMPORT_DATA)
 
   const { byComponent: validationByComponent } = useValidationProblems(isAdmin)
-  const componentValidation = component ? validationByComponent.get(component.name) : undefined
+  const componentValidation = validationByComponent.get(component.name)
   const hasProblems =
     isAdmin && componentValidation != null && hasValidationIssue(componentValidation)
 
   // Rolled up across all TeamCity projects — drives the sidebar item's
   // red/warning treatment. Admin-only, derived from data already on `component`.
   const teamCityIssueCount = isAdmin
-    ? (component?.teamcityProjects ?? []).reduce((total, tc) => {
+    ? (component.teamcityProjects ?? []).reduce((total, tc) => {
         const tones = (tc.validations ?? []).map((v) => getTeamCityValidationStatusTone(v.status))
         return total + tones.filter((t) => t === 'destructive' || t === 'warning').length
       }, 0)
@@ -269,7 +267,7 @@ function ComponentDetailEditor() {
   const canArchive = hasPermission(user, PERMISSIONS.DELETE_COMPONENTS)
   const canUnarchive = hasPermission(user, PERMISSIONS.ARCHIVE_COMPONENTS)
   const canCreate = hasPermission(user, PERMISSIONS.CREATE_COMPONENTS)
-  const canEdit = component?.canEdit ?? hasPermission(user, PERMISSIONS.CREATE_COMPONENTS)
+  const canEdit = component.canEdit ?? hasPermission(user, PERMISSIONS.CREATE_COMPONENTS)
 
   // Field-config visibility — used to filter hidden fields from the save payload.
   const { entry: displayNameFc, isLoading: displayNameFcLoading } =
@@ -349,7 +347,7 @@ function ComponentDetailEditor() {
   // hydration) so a RENAME_COMPONENTS user who renames to a solution key sees
   // the topic — and can set the flag — in the same edit session, not only after
   // a save + refetch.
-  const solutionKeyName = form.watch('name') || component?.name
+  const solutionKeyName = form.watch('name') || component.name
   const showSolutionToggle =
     isSolutionCandidate(solutionKeyName, portalConfig?.solutionKeyPatterns) &&
     solutionFc.visibility !== 'hidden'
@@ -393,23 +391,19 @@ function ComponentDetailEditor() {
 
   // ── Section state hooks (the five ex-useState tabs). Each owns its local
   // state + last-saved snapshot and contributes a payload slice + dirty flag.
-  // A non-loaded component renders a skeleton before any hook is read, but the
-  // hooks must be called unconditionally (rules of hooks) — feed a stable empty
-  // shell until the data arrives.
-  const shell = component ?? EMPTY_COMPONENT
-  const buildSection = useBuildSection(shell)
-  const vcsSection = useVcsSection(shell)
-  const distributionSection = useDistributionSection(shell)
+  const buildSection = useBuildSection(component)
+  const vcsSection = useVcsSection(component)
+  const distributionSection = useDistributionSection(component)
   // EFFECTIVE (outgoing) BASE build system = the Build section's DRAFT value, so
   // the Jira Skip Commit Check Whiskey rule reacts to an unsaved Build-tab switch
   // in the same combined save (Codex #151 P1), not just the persisted component.
   const effectiveBuildSystem = buildSection.state.buildSystem
-  const jiraSection = useJiraSection(shell, {
+  const jiraSection = useJiraSection(component, {
     releasesInDefaultBranch: releasesInDefaultBranchFc.visibility ?? 'editable',
     isFieldEditable: isJiraFieldEditable,
     effectiveBuildSystem,
   })
-  const escrowSection = useEscrowSection(shell, {
+  const escrowSection = useEscrowSection(component, {
     productType: productTypeFc.visibility ?? 'editable',
   })
   // Field-overrides slice — draft lives in OverridesDraftProvider (wraps this
@@ -418,12 +412,11 @@ function ComponentDetailEditor() {
   // Supported-versions (coverage) draft. NOT a PATCH slice — it persists via a
   // separate PUT (endpoint off the combined-PATCH contract) — so it feeds the
   // page dirty flag + Review diff directly and is saved inside runCombinedSave
-  // after the PATCH. Seeded from shell.id so the hook is called unconditionally.
-  const supportedVersionsSection = useSupportedVersionsSection(shell.id)
+  // after the PATCH.
+  const supportedVersionsSection = useSupportedVersionsSection(component.id, routeId)
 
   // ── General/Misc slice (RHF touched-not-dirty gate, preserved verbatim) ──
   function buildPatchRequest() {
-    if (!component) return null
     return buildUpdateRequest({
       component,
       values: form.getValues(),
@@ -505,16 +498,13 @@ function ComponentDetailEditor() {
     })
   }
 
-  const pendingGeneralPatch = component ? buildPatchRequest() : null
+  const pendingGeneralPatch = buildPatchRequest()
   // P1-3: Build System is required when a BASE build aspect exists. Block the
   // save if it has been cleared to empty (server had one, draft is now blank).
   // `buildSystemMissing` = !draft.buildSystem.
-  const serverBuildSystem = selectBaseRow(component ?? EMPTY_COMPONENT)?.build?.buildSystem ?? ''
-  const buildSystemNeedsAttention =
-    !!component && serverBuildSystem !== '' && buildSection.buildSystemMissing
-  const genSlice = component
-    ? generalSlice(component, pendingGeneralPatch)
-    : { isDirty: false, request: {}, diff: [] }
+  const serverBuildSystem = selectBaseRow(component)?.build?.buildSystem ?? ''
+  const buildSystemNeedsAttention = serverBuildSystem !== '' && buildSection.buildSystemMissing
+  const genSlice = generalSlice(component, pendingGeneralPatch)
 
   // ── Combine every section into ONE request + ONE diff + ONE dirty flag ──
   const slices = [
@@ -691,11 +681,10 @@ function ComponentDetailEditor() {
           setBuildConflict(conflict.description)
           setActiveTab('build')
           setReviewOpen(false)
-          // CRS refreshed its cached ACTUAL data for this component at the moment it
-          // rejected the write; refetch so the display can catch up. Fired after the
-          // toast, never awaited — a slow or failed refetch must not delay or mask the
-          // conflict message (design.md Decision 6). Best-effort: swallow a rejection.
-          void queryClient.refetchQueries({ queryKey: ['component', id ?? ''], type: 'active' }).catch(() => {})
+          // CRS refreshed its ACTUAL data when it rejected the write; refetch
+          // so the display catches up — after the toast, never awaited
+          // (design.md Decision 6).
+          void refreshComponentIntoCache(queryClient, component.id, routeId)
           return
         }
         if (conflict.kind === 'value') {
@@ -842,37 +831,6 @@ function ComponentDetailEditor() {
         variant: 'destructive',
       })
     }
-  }
-
-  if (isLoading) {
-    return (
-      <Layout>
-        <div className="space-y-4">
-          <SkeletonBlock height="h-8" width="w-48" />
-          <SkeletonBlock height="h-4" width="w-64" />
-          <SkeletonBlock height="h-64" width="w-full" />
-        </div>
-      </Layout>
-    )
-  }
-
-  if (error || !component) {
-    return (
-      <Layout>
-        <div className="space-y-4">
-          <Link
-            to="/components"
-            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Components
-          </Link>
-          <InlineError
-            message={error instanceof Error ? error.message : 'Component not found.'}
-          />
-        </div>
-      </Layout>
-    )
   }
 
   const baseRow = selectBaseRow(component)
@@ -1451,58 +1409,58 @@ function ComponentDetailEditor() {
   )
 }
 
-// Stable empty-component shell so the section hooks can be called
-// unconditionally (rules of hooks) before the real component loads. The page
-// returns a skeleton in that window, so this is never rendered.
-const EMPTY_COMPONENT: ComponentDetail = {
-  id: '',
-  name: '',
-  displayName: null,
-  componentOwner: null,
-  productType: null,
-  systems: [],
-  clientCode: null,
-  archived: false,
-  solution: false,
-  parentComponentName: null,
-  version: 0,
-  createdAt: null,
-  updatedAt: null,
-  labels: [],
-  docs: [],
-  artifactIds: [],
-  securityGroups: [],
-  teamcityProjects: [],
-  configurations: [],
-}
-
 /**
- * Route entry. Provides the page-level field-override draft (seeded from the
- * server overrides) so the editor body and every override surface share ONE
- * draft instance, then renders the editor. The provider sits here — above the
- * component that assembles the combined-save slices — so useOverridesSection()
- * and the surfaces all resolve the same context.
+ * Route entry — the UUID resolver. The route segment is idOrName (UUID or key);
+ * `useComponent(routeId)` is the only place a key may flow — everything UUID-only
+ * mounts once `component.id` resolves (firing it with a key 400s). The page
+ * stays subscribed to ['component', routeId], so the save hooks and 409
+ * refetches take routeId as a cache-alias key.
+ *
+ * Baseline/version coupling: the combined PATCH sends component.version AND
+ * the desired-full-set built from the override baseline — a stale baseline
+ * paired with a fresh version could drop a concurrently-added row. The two
+ * queries move in lockstep (shared invalidations + window-focus refetches),
+ * so that pairing doesn't arise in practice.
  */
 export function ComponentDetailPage() {
-  const { id } = useParams<{ id: string }>()
-  // id is always defined on this route; the `?? ''` only guards the type. An
-  // empty id disables the query (useFieldOverrides: enabled: !!componentId), so
-  // the provider just starts from an empty baseline until the route resolves.
-  //
-  // Baseline/version coupling: the combined PATCH sends component.version (from
-  // useComponent) AND the desired-full-set built from THIS override baseline.
-  // The desired-set deletes anything omitted, so a stale override baseline paired
-  // with a fresh component.version could in theory drop a concurrently-added row.
-  // In practice these two queries move in lockstep — the combined-save
-  // useUpdateComponent invalidates ['field-overrides', id] alongside the
-  // component, useUpdateSupportedVersions does the same via
-  // invalidateOverrideAndComponent, and window-focus refetches both — so a fresh
-  // version never pairs with a stale override set. (A fully snapshot-coupled
-  // baseline derived from component.configurations is a possible follow-up.)
-  const { data: serverOverrides = [], isLoading: overridesLoading } = useFieldOverrides(id ?? '')
+  const { id: routeId } = useParams<{ id: string }>()
+  const { data: component, isLoading, error } = useComponent(routeId ?? '')
+  const { data: serverOverrides = [], isLoading: overridesLoading } = useFieldOverrides(component?.id ?? '')
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="space-y-4">
+          <SkeletonBlock height="h-8" width="w-48" />
+          <SkeletonBlock height="h-4" width="w-64" />
+          <SkeletonBlock height="h-64" width="w-full" />
+        </div>
+      </Layout>
+    )
+  }
+
+  if (error || !component) {
+    return (
+      <Layout>
+        <div className="space-y-4">
+          <Link
+            to="/components"
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Components
+          </Link>
+          <InlineError
+            message={error instanceof Error ? error.message : 'Component not found.'}
+          />
+        </div>
+      </Layout>
+    )
+  }
+
   return (
-    <OverridesDraftProvider componentId={id ?? ''} serverOverrides={serverOverrides} serverLoading={overridesLoading}>
-      <ComponentDetailEditor />
+    <OverridesDraftProvider componentId={component.id} serverOverrides={serverOverrides} serverLoading={overridesLoading}>
+      <ComponentDetailEditor component={component} routeId={routeId ?? ''} />
     </OverridesDraftProvider>
   )
 }

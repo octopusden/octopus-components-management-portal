@@ -10,7 +10,16 @@ The detail page at `/components/<UUID>` is the editor surface. It renders [`page
 
 ## URL stability
 
-`ComponentTable` links by **UUID** (`row.original.id`), so the URL is stable across renames. CRS `GET /rest/api/4/components/{idOrName}` resolves both forms — direct UUID lookup first, name fallback on `404`. Mutations (`PATCH`, `DELETE`) go through UUID only because the controller signature is `@PathVariable id: UUID`. After a rename, `useComponent.invalidateQueries(['component', id])` refreshes the cache; the URL doesn't change.
+`ComponentTable` links by **UUID** (`row.original.id`), so the URL is stable across renames. CRS `GET /rest/api/4/components/{idOrName}` resolves both forms — direct UUID lookup first, name fallback on `404`. Mutations (`PATCH`, `DELETE`) and the sub-resources (`field-overrides`, `supported-versions`, `archive-readiness`) go through UUID only (the controller signatures are `@PathVariable id: UUID`; the OpenAPI paths carry `format: uuid`). After a rename, `useComponent.invalidateQueries(['component', id])` refreshes the cache; the URL doesn't change.
+
+### Key URLs and the UUID resolver
+
+The route still accepts a component **key** (e.g. `/components/<component-key>` — the Validations page's "Top offenders" links, or a pasted URL). `ComponentDetailPage` is a two-stage resolver:
+
+1. `useComponent(routeId)` — the only place a component key may flow. The detail query is cached under `['component', routeId]`.
+2. Once `component.id` (the UUID) is known, `useFieldOverrides(component.id)` and `OverridesDraftProvider` mount, and `ComponentDetailEditor` receives the resolved `component` plus `routeId`. Every UUID-only operation inside the editor — PATCH (`useUpdateComponent`), DELETE, `archive-readiness`, `useSupportedVersionsSection` — uses `component.id`, never the route segment. Firing them earlier 400s with `Invalid UUID string: <key>`.
+
+Because the page is subscribed to `['component', routeId]` while mutations address the UUID, the save hooks take the route segment as a **cache-alias key**: `useUpdateComponent(id, componentCacheKey)` seeds both cache entries after a PATCH, and `useUpdateSupportedVersions` / `useSupportedVersionsSection` forward it so a coverage PUT refreshes the component by UUID and mirrors the fresh snapshot into the route-key entry. The 409-refetch paths (`useOptimisticConflict`, the RMS-conflict refetch) also refetch by the stable UUID via `refreshComponentIntoCache` and mirror into the route-key entry — the same pattern as the SV-PUT path — so a concurrent rename never 404s the refetch and never flips the page into error state. Regression tests: `ComponentDetailPage.routekey.test.tsx` (real hooks, api layer mocked — asserts exact request paths).
 
 ## Tabs
 

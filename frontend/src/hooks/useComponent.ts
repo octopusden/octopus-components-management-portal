@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import type { QueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import type {
   ComponentCreateRequest,
@@ -15,10 +16,38 @@ import type {
 // them from this module continue to compile.
 export type { ComponentCreateRequest, ComponentUpdateRequest } from '../lib/types'
 
+/** The component-detail GET — shared by useComponent and every by-UUID refetch path. */
+export function fetchComponentDetail(id: string): Promise<ComponentDetail> {
+  return api.get<ComponentDetail>(`/components/${id}`)
+}
+
+/** Refetch the component by its stable UUID and mirror the fresh snapshot into
+ * the route-key cache entry (a route-key refetch 404s once a rename lands).
+ * Best-effort: falls back to the cached snapshot, never rejects. */
+export async function refreshComponentIntoCache(
+  queryClient: QueryClient,
+  componentId: string,
+  componentCacheKey?: string,
+): Promise<ComponentDetail | undefined> {
+  try {
+    const fresh = await queryClient.fetchQuery({
+      queryKey: ['component', componentId],
+      queryFn: () => fetchComponentDetail(componentId),
+      staleTime: 0,
+    })
+    if (fresh && componentCacheKey && componentCacheKey !== componentId) {
+      queryClient.setQueryData(['component', componentCacheKey], fresh)
+    }
+    return fresh
+  } catch {
+    return queryClient.getQueryData<ComponentDetail>(['component', componentCacheKey ?? componentId])
+  }
+}
+
 export function useComponent(id: string) {
   return useQuery({
     queryKey: ['component', id],
-    queryFn: () => api.get<ComponentDetail>(`/components/${id}`),
+    queryFn: () => fetchComponentDetail(id),
     enabled: !!id,
   })
 }
@@ -32,13 +61,18 @@ export function useCreateComponent() {
   })
 }
 
-export function useUpdateComponent(id: string) {
+// `id` is the component UUID; `componentCacheKey` is the route segment the page
+// is subscribed under — seed both cache entries when the page was opened by key.
+export function useUpdateComponent(id: string, componentCacheKey?: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (request: ComponentUpdateRequest) =>
       api.patch<ComponentDetail>(`/components/${id}`, request),
     onSuccess: (data) => {
       queryClient.setQueryData(['component', id], data)
+      if (componentCacheKey && componentCacheKey !== id) {
+        queryClient.setQueryData(['component', componentCacheKey], data)
+      }
       queryClient.invalidateQueries({ queryKey: ['components'] })
       // The combined PATCH also carries the desired field-override set (item D);
       // refetch the override baseline so OverridesDraftProvider re-seeds from the
@@ -115,7 +149,7 @@ export function useSupportedVersions(componentId: string) {
   })
 }
 
-export function useUpdateSupportedVersions(componentId: string) {
+export function useUpdateSupportedVersions(componentId: string, componentCacheKey?: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (request: SupportedVersionsRequest) =>
@@ -127,6 +161,12 @@ export function useUpdateSupportedVersions(componentId: string) {
       queryClient.setQueryData(['supported-versions', componentId], data)
       queryClient.invalidateQueries({ queryKey: ['supported-versions', componentId] })
       invalidateOverrideAndComponent(queryClient, componentId)
+      // The PUT response is the coverage, not the component — refresh by UUID
+      // and mirror into the route-key entry. The invalidate above already
+      // refreshes UUID-routed pages; the mirror only matters for key routes.
+      if (componentCacheKey && componentCacheKey !== componentId) {
+        void refreshComponentIntoCache(queryClient, componentId, componentCacheKey)
+      }
     },
   })
 }
