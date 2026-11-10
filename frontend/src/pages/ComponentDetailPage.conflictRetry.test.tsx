@@ -126,8 +126,8 @@ const seededOverride: FieldOverride = {
 }
 
 const concurrentOverride: FieldOverride = {
-  id: 'fo-2', overriddenAttribute: 'build.requiredTools', versionRange: '[1.0,2.0)',
-  rowType: 'SCALAR_OVERRIDE', value: '["gradle"]', markerChildren: null, createdAt: null, updatedAt: null,
+  id: 'fo-2', overriddenAttribute: 'build.javaVersion', versionRange: '[2.0,3.0)',
+  rowType: 'SCALAR_OVERRIDE', value: '21', markerChildren: null, createdAt: null, updatedAt: null,
 }
 
 const idleMutation = {
@@ -234,7 +234,77 @@ describe('ComponentDetailPage — 409 retry must not send a stale override basel
     const body = (mutateAsync.mock.calls[1] as unknown as [Record<string, unknown>])[0]
     expect(body.version).toBe(12)
     expect(body.fieldOverrides).toEqual([
-      expect.objectContaining({ id: 'fo-2', overriddenAttribute: 'build.requiredTools' }),
+      expect.objectContaining({ id: 'fo-2', overriddenAttribute: 'build.javaVersion' }),
+    ])
+  })
+
+  it('re-baselines a retry while the background override refetch is still pending', async () => {
+    let overrideCalls = 0
+    const calls = () => overrideCalls
+    respondOverrides = () => {
+      overrideCalls += 1
+      if (overrideCalls === 1) return Promise.resolve([seededOverride]) // page mount
+      if (overrideCalls === 2) return new Promise<FieldOverride[]>(() => {}) // background refetch pending forever
+      return Promise.resolve([seededOverride, concurrentOverride]) // the gate's own read
+    }
+    const mutateAsync = vi.fn(() => Promise.resolve(freshComponent))
+    mutateAsync.mockRejectedValueOnce(
+      new ApiError(409, 'conflict', JSON.stringify({ errorCode: 'OPTIMISTIC_LOCK', errorMessage: 'stale version' })),
+    )
+    renderPage(mutateAsync)
+
+    await deleteSeededOverride()
+    await saveAndConfirm()
+    await waitFor(() => {
+      expect(queryClient.getQueryData<ComponentDetail>(['component', 'comp-1'])?.version).toBe(12)
+      expect(calls()).toBe(2)
+    })
+    expect(queryClient.getQueryState(['field-overrides', 'comp-1'])?.fetchStatus).toBe('fetching')
+
+    click(screen.getByRole('button', { name: /save changes/i }))
+    click(await screen.findByRole('button', { name: /^confirm$/i }))
+
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(2))
+    const body = (mutateAsync.mock.calls[1] as unknown as [Record<string, unknown>])[0]
+    expect(body.version).toBe(12)
+    expect(body.fieldOverrides).toEqual([
+      expect.objectContaining({ id: 'fo-2', overriddenAttribute: 'build.javaVersion' }),
+    ])
+  })
+
+  it('blocks Confirm when the component snapshot advanced after the gate; a re-confirm saves on the fresh baseline', async () => {
+    let overrideCalls = 0
+    respondOverrides = () => {
+      overrideCalls += 1
+      return Promise.resolve(overrideCalls === 1 ? [seededOverride] : [seededOverride, concurrentOverride])
+    }
+    const mutateAsync = vi.fn(() => Promise.resolve(freshComponent))
+    mutateAsync.mockRejectedValueOnce(
+      new ApiError(409, 'conflict', JSON.stringify({ errorCode: 'OPTIMISTIC_LOCK', errorMessage: 'stale version' })),
+    )
+    renderPage(mutateAsync)
+
+    await deleteSeededOverride()
+    await saveAndConfirm()
+    await waitForBackgroundOverrideRefetch(() => 2)
+
+    click(screen.getByRole('button', { name: /save changes/i }))
+    await screen.findByRole('dialog')
+    // A later component refresh lands while Review is open.
+    queryClient.setQueryData(['component', 'comp-1'], { ...freshComponent, version: 13 })
+
+    click(screen.getByRole('button', { name: /^confirm$/i }))
+    await waitFor(() =>
+      expect(harn.toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Override data refreshed' })),
+    )
+    expect(mutateAsync).toHaveBeenCalledTimes(1)
+
+    click(screen.getByRole('button', { name: /^confirm$/i }))
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(2))
+    const body = (mutateAsync.mock.calls[1] as unknown as [Record<string, unknown>])[0]
+    expect(body.version).toBe(13)
+    expect(body.fieldOverrides).toEqual([
+      expect.objectContaining({ id: 'fo-2', overriddenAttribute: 'build.javaVersion' }),
     ])
   })
 
@@ -261,7 +331,7 @@ describe('ComponentDetailPage — 409 retry must not send a stale override basel
     // The gate's refetch also fails → Review must NOT open and no PATCH fires.
     await waitFor(() =>
       expect(harn.toast).toHaveBeenCalledWith(
-        expect.objectContaining({ title: 'Cannot review changes', variant: 'destructive' }),
+        expect.objectContaining({ title: 'Cannot save changes', variant: 'destructive' }),
       ),
     )
     expect(screen.queryByRole('dialog')).toBeNull()

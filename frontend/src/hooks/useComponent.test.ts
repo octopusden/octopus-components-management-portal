@@ -71,22 +71,46 @@ describe('refreshComponentIntoCache', () => {
     expect(queryClient.getQueryData<ComponentDetail>(['component', 'my-key'])?.version).toBe(12)
   })
 
-  // While a route-key refetch is in flight, it owns that entry — skip the mirror.
-  it('skips the route-key mirror while a route-key refetch is in flight', async () => {
+  // An in-flight route-key refetch read the server before the UUID refresh —
+  // its older response (or its rename-404 failure) must never land over the
+  // mirrored snapshot.
+  it('cancels an in-flight route-key refetch; its older response never lands', async () => {
     const queryClient = makeClient()
     queryClient.setQueryData(['component', 'c-1'], { ...base, version: 10 })
     queryClient.setQueryData(['component', 'my-key'], { ...base, version: 10 })
     let resolveRk: (v: ComponentDetail) => void = () => {}
-    const rkFetch = queryClient.fetchQuery({
-      queryKey: ['component', 'my-key'],
-      queryFn: () => new Promise<ComponentDetail>((res) => { resolveRk = res }),
-    })
+    const rkFetch = queryClient
+      .fetchQuery({
+        queryKey: ['component', 'my-key'],
+        queryFn: () => new Promise<ComponentDetail>((res) => { resolveRk = res }),
+      })
+      .catch(() => {})
     apiMock.get.mockResolvedValue({ ...base, version: 12 })
     await refreshComponentIntoCache(queryClient, 'c-1', 'my-key')
     expect(queryClient.getQueryData<ComponentDetail>(['component', 'c-1'])?.version).toBe(12)
-    expect(queryClient.getQueryData<ComponentDetail>(['component', 'my-key'])?.version).toBe(10)
-    resolveRk({ ...base, version: 12 })
+    expect(queryClient.getQueryData<ComponentDetail>(['component', 'my-key'])?.version).toBe(12)
+    resolveRk({ ...base, version: 10 })
     await rkFetch
+    expect(queryClient.getQueryData<ComponentDetail>(['component', 'my-key'])?.version).toBe(12)
+  })
+
+  it('mirrors despite an in-flight route-key refetch that fails (rename 404)', async () => {
+    const queryClient = makeClient()
+    queryClient.setQueryData(['component', 'c-1'], { ...base, version: 10 })
+    queryClient.setQueryData(['component', 'my-key'], { ...base, version: 10 })
+    let rejectRk: (e: Error) => void = () => {}
+    const rkFetch = queryClient
+      .fetchQuery({
+        queryKey: ['component', 'my-key'],
+        queryFn: () => new Promise<ComponentDetail>((_, rej) => { rejectRk = rej }),
+      })
+      .catch(() => {})
+    apiMock.get.mockResolvedValue({ ...base, version: 12 })
+    await refreshComponentIntoCache(queryClient, 'c-1', 'my-key')
+    expect(queryClient.getQueryData<ComponentDetail>(['component', 'c-1'])?.version).toBe(12)
+    rejectRk(new Error('404 after rename'))
+    await rkFetch
+    expect(queryClient.getQueryData<ComponentDetail>(['component', 'my-key'])?.version).toBe(12)
   })
 
   it('falls back to the cached snapshot when the fetch fails', async () => {
