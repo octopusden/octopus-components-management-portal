@@ -23,13 +23,9 @@ export function fetchComponentDetail(id: string): Promise<ComponentDetail> {
 
 /** Refetch the component by its stable UUID and mirror the fresh snapshot into
  * the route-key cache entry (a route-key refetch 404s once a rename lands).
- * Writes are version-guarded against BOTH cache entries — the visible
- * route-key entry can be newer than the UUID one (its own refetch landed a
- * later save), so a delayed UUID response must not roll the visible snapshot
- * back. The mirror is also skipped while a route-key refetch is in flight:
- * that refetch installs its own snapshot when it lands, so writing under it
- * now would only be overwritten.
- * Best-effort: falls back to the cached snapshot, never rejects. */
+ * Writes are version-guarded against BOTH cache entries; the mirror also waits
+ * out an in-flight route-key refetch. Best-effort: falls back to the cached
+ * snapshot, never rejects. */
 export async function refreshComponentIntoCache(
   queryClient: QueryClient,
   componentId: string,
@@ -103,8 +99,7 @@ export function useDeleteComponent(id: string) {
   })
 }
 
-/** The component's field-override baseline GET — shared by useFieldOverrides
- * and the Review gate, so a forced refetch dedupes with the live query. */
+/** The field-override baseline GET — shared by useFieldOverrides and the Review gate. */
 export function fetchFieldOverrides(componentId: string): Promise<FieldOverride[]> {
   return api.get<FieldOverride[]>(`/components/${componentId}/field-overrides`)
 }

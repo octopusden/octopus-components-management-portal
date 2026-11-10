@@ -59,10 +59,8 @@ describe('refreshComponentIntoCache', () => {
     expect(queryClient.getQueryData(['component', 'my-key'])).toBeUndefined()
   })
 
-  // PR-272: the guard must consider BOTH cache entries. The visible route-key
-  // entry can be NEWER than the UUID one (its own refetch landed a later save,
-  // or the UUID entry was never seeded) — a delayed UUID response must not roll
-  // the visible snapshot back.
+  // The route-key entry can be NEWER than the UUID one — a delayed UUID
+  // response must not roll the visible snapshot back.
   it('never rolls a newer route-key snapshot back via a delayed UUID response', async () => {
     const queryClient = makeClient()
     queryClient.setQueryData(['component', 'my-key'], { ...base, version: 12 })
@@ -73,9 +71,7 @@ describe('refreshComponentIntoCache', () => {
     expect(queryClient.getQueryData<ComponentDetail>(['component', 'my-key'])?.version).toBe(12)
   })
 
-  // PR-272: while a route-key refetch is in flight, that refetch owns the
-  // route-key entry — mirroring under it now would only be overwritten (and
-  // could flash stale-then-new); the mirror must be skipped.
+  // While a route-key refetch is in flight, it owns that entry — skip the mirror.
   it('skips the route-key mirror while a route-key refetch is in flight', async () => {
     const queryClient = makeClient()
     queryClient.setQueryData(['component', 'c-1'], { ...base, version: 10 })

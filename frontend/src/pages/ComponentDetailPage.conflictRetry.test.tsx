@@ -8,13 +8,8 @@ import { ComponentDetailPage } from './ComponentDetailPage'
 import type { User } from '@/lib/auth'
 import type { ComponentDetail, FieldOverride } from '@/lib/types'
 
-// PR-272 review follow-up: a retry after an OPTIMISTIC_LOCK 409 must not pair
-// the freshly refreshed component version with a stale override baseline — the
-// desired-full-set PATCH would then delete a row another user added between the
-// two saves. This suite keeps the REAL useFieldOverrides query mounted (only
-// the section-level data hooks are mocked) and drives the combined save twice
-// around a 409 whose background override refetch fails, exactly the window the
-// reviewer called out.
+// A 409 retry must not pair the refreshed component version with a stale
+// override baseline — the desired-full-set PATCH would delete a concurrent row.
 
 const harn = vi.hoisted(() => ({
   apiGet: vi.fn(),
@@ -30,8 +25,8 @@ vi.mock('../hooks/useComponent', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../hooks/useComponent')>()
   return {
     ...actual,
-    // useComponent and useFieldOverrides stay REAL: both subscriptions must
-    // react to the 409 handler's cache writes exactly like production.
+    // useComponent/useFieldOverrides stay real — their subscriptions must
+    // react to cache writes like in production.
     useUpdateComponent: vi.fn(),
     useDeleteComponent: vi.fn(),
     useSupportedVersions: () => ({ data: undefined, isLoading: false }),
@@ -122,8 +117,7 @@ const baseComponent: ComponentDetail = {
   ],
 }
 
-// What the 409 handler's refresh sees: someone else saved (and added an
-// override row) between our two attempts.
+// What the 409 handler's refresh sees: another user saved in between.
 const freshComponent: ComponentDetail = { ...baseComponent, version: 12 }
 
 const seededOverride: FieldOverride = {
@@ -155,10 +149,7 @@ function renderPage(mutateAsync: ReturnType<typeof vi.fn>) {
   vi.mocked(useUpdateComponent).mockReturnValue({ ...idleMutation, mutateAsync } as unknown as ReturnType<typeof useUpdateComponent>)
   vi.mocked(useDeleteComponent).mockReturnValue({ ...idleMutation } as unknown as ReturnType<typeof useDeleteComponent>)
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
-  // Seed the visible component snapshot exactly like a real page load; the
-  // overrides entry is seeded by the real query's mount fetch (respondOverrides).
-  // staleTime: Infinity keeps the seeded entries from refetching on mount, so
-  // the only component GETs are the 409 handler's refreshes.
+  // Seed the pre-save snapshot; staleTime: Infinity keeps it from refetching on mount.
   queryClient.setQueryData(['component', 'comp-1'], baseComponent)
   const router = createMemoryRouter(
     [
@@ -190,8 +181,7 @@ async function saveAndConfirm() {
   click(screen.getByRole('button', { name: /save changes/i }))
   click(await screen.findByRole('button', { name: /^confirm$/i }))
 }
-/** Wait for the 409 handler's fire-and-forget override refetch to settle, so
- * the retry never races an in-flight background fetch. */
+/** Wait out the 409 handler's background override refetch so the retry never races it. */
 async function waitForBackgroundOverrideRefetch(overrideCallCount: () => number) {
   await waitFor(() => {
     expect(queryClient.getQueryData<ComponentDetail>(['component', 'comp-1'])?.version).toBe(12)
@@ -229,17 +219,14 @@ describe('ComponentDetailPage — 409 retry must not send a stale override basel
     )
     renderPage(mutateAsync)
 
-    // Queue an override delete → the combined PATCH carries the desired FULL set.
     await deleteSeededOverride()
     await saveAndConfirm()
 
-    // The 409 refreshed the component to v12 and fired a background override
-    // refetch — which FAILED, so the visible baseline is still the mount-time one.
+    // The 409 refreshed the component; the background override refetch FAILED.
     await waitForBackgroundOverrideRefetch(calls)
 
-    // Retry. Review must open only after a fresh override baseline has landed,
-    // and the retried PATCH must pair v12 with a desired set that still
-    // contains the OTHER user's row.
+    // Retry — Review opens only after a fresh baseline, so the PATCH keeps
+    // the other user's row.
     click(screen.getByRole('button', { name: /save changes/i }))
     click(await screen.findByRole('button', { name: /^confirm$/i }))
 

@@ -1320,17 +1320,12 @@ function ComponentDetailEditor({ component, routeId }: { component: ComponentDet
     }
   }
 
-  // PR-272: the retry after an OPTIMISTIC_LOCK 409 pairs the freshly refreshed
-  // component version with whatever override baseline the draft still holds. A
-  // baseline that predates the refresh (its refetch still in flight, or it
-  // failed) would send the old desired-full-set with the new version and delete
-  // a concurrently-added row, so Review — and with it the save — stays blocked
-  // until the baseline matches the snapshot (a successful refetch at/after it).
+  // The override baseline must match the component snapshot before Review
+  // opens — pairing a fresh version with a stale desired-full-set would delete
+  // a row another user added.
   async function overridesBaselineReady(): Promise<boolean> {
     if (!overridesSection.slice.isDirty) return true
     const overridesState = queryClient.getQueryState(['field-overrides', component.id])
-    // No live overrides query → the page renders with whatever baseline it has
-    // and there is nothing to reconcile against.
     if (!overridesState) return true
     const componentState = queryClient.getQueryState(['component', routeId ?? component.id])
     const matchesSnapshot =
