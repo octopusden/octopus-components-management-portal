@@ -64,7 +64,7 @@ import { EditorSidebarNav, type EditorNavSection } from '../components/editor/Ed
 import { ValidationProblemsList } from '../components/ValidationProblemsList'
 import { TeamCityValidationsTab } from '../components/TeamCityValidationsTab'
 import { EmptyState } from '../components/ui/empty-state'
-import { useComponent, useUpdateComponent, useDeleteComponent, useFieldOverrides, refreshComponentIntoCache } from '../hooks/useComponent'
+import { useComponent, useUpdateComponent, useDeleteComponent, useFieldOverrides, refreshComponentIntoCache, fetchFieldOverrides } from '../hooks/useComponent'
 import { useToast } from '../hooks/use-toast'
 import { ApiError } from '../lib/api'
 import { useOptimisticConflict, type ClassifiedConflict } from '../hooks/useOptimisticConflict'
@@ -1320,7 +1320,35 @@ function ComponentDetailEditor({ component, routeId }: { component: ComponentDet
     }
   }
 
-  function handleOpenReview() {
+  // PR-272: the retry after an OPTIMISTIC_LOCK 409 pairs the freshly refreshed
+  // component version with whatever override baseline the draft still holds. A
+  // baseline that predates the refresh (its refetch still in flight, or it
+  // failed) would send the old desired-full-set with the new version and delete
+  // a concurrently-added row, so Review — and with it the save — stays blocked
+  // until the baseline matches the snapshot (a successful refetch at/after it).
+  async function overridesBaselineReady(): Promise<boolean> {
+    if (!overridesSection.slice.isDirty) return true
+    const overridesState = queryClient.getQueryState(['field-overrides', component.id])
+    // No live overrides query → the page renders with whatever baseline it has
+    // and there is nothing to reconcile against.
+    if (!overridesState) return true
+    const componentState = queryClient.getQueryState(['component', routeId ?? component.id])
+    const matchesSnapshot =
+      overridesState.status === 'success' &&
+      overridesState.dataUpdatedAt >= (componentState?.dataUpdatedAt ?? 0)
+    if (matchesSnapshot) return true
+    try {
+      await queryClient.fetchQuery({
+        queryKey: ['field-overrides', component.id],
+        queryFn: () => fetchFieldOverrides(component.id),
+      })
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  async function handleOpenReview() {
     if (!component || !canEdit || !dirty) return
     // Gate for the required Build System (P1-3).
     if (buildSystemNeedsAttention) {
@@ -1329,6 +1357,15 @@ function ComponentDetailEditor({ component, routeId }: { component: ComponentDet
       return
     }
     setReviewError(null)
+    if (!(await overridesBaselineReady())) {
+      toast({
+        title: 'Cannot review changes',
+        description:
+          'The current override data could not be loaded from the server, so the save was blocked to protect concurrent changes. Try again in a moment.',
+        variant: 'destructive',
+      })
+      return
+    }
     setReviewOpen(true)
   }
 

@@ -23,19 +23,31 @@ export function fetchComponentDetail(id: string): Promise<ComponentDetail> {
 
 /** Refetch the component by its stable UUID and mirror the fresh snapshot into
  * the route-key cache entry (a route-key refetch 404s once a rename lands).
- * Writes are version-guarded — a slower refresh never overwrites a newer save.
+ * Writes are version-guarded against BOTH cache entries — the visible
+ * route-key entry can be newer than the UUID one (its own refetch landed a
+ * later save), so a delayed UUID response must not roll the visible snapshot
+ * back. The mirror is also skipped while a route-key refetch is in flight:
+ * that refetch installs its own snapshot when it lands, so writing under it
+ * now would only be overwritten.
  * Best-effort: falls back to the cached snapshot, never rejects. */
 export async function refreshComponentIntoCache(
   queryClient: QueryClient,
   componentId: string,
   componentCacheKey?: string,
 ): Promise<ComponentDetail | undefined> {
+  const hasMirror = componentCacheKey != null && componentCacheKey !== componentId
   try {
     const fresh = await fetchComponentDetail(componentId)
-    const cached = queryClient.getQueryData<ComponentDetail>(['component', componentId])
-    if (fresh.version >= (cached?.version ?? 0)) {
+    const uuidCached = queryClient.getQueryData<ComponentDetail>(['component', componentId])
+    const mirrorCached = hasMirror
+      ? queryClient.getQueryData<ComponentDetail>(['component', componentCacheKey])
+      : undefined
+    const visibleVersion = Math.max(uuidCached?.version ?? 0, mirrorCached?.version ?? 0)
+    if (fresh.version >= visibleVersion) {
       queryClient.setQueryData(['component', componentId], fresh)
-      if (componentCacheKey && componentCacheKey !== componentId) {
+      const mirrorFetching =
+        hasMirror && queryClient.getQueryState(['component', componentCacheKey])?.fetchStatus === 'fetching'
+      if (hasMirror && !mirrorFetching) {
         queryClient.setQueryData(['component', componentCacheKey], fresh)
       }
     }
@@ -91,10 +103,16 @@ export function useDeleteComponent(id: string) {
   })
 }
 
+/** The component's field-override baseline GET — shared by useFieldOverrides
+ * and the Review gate, so a forced refetch dedupes with the live query. */
+export function fetchFieldOverrides(componentId: string): Promise<FieldOverride[]> {
+  return api.get<FieldOverride[]>(`/components/${componentId}/field-overrides`)
+}
+
 export function useFieldOverrides(componentId: string) {
   return useQuery({
     queryKey: ['field-overrides', componentId],
-    queryFn: () => api.get<FieldOverride[]>(`/components/${componentId}/field-overrides`),
+    queryFn: () => fetchFieldOverrides(componentId),
     enabled: !!componentId,
   })
 }
