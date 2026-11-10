@@ -15,8 +15,10 @@ Proposed.
   - `octopus-teamcity-automation-service` creates a build chain
     (`POST /rest/api/1/build-chains`). It reads the component from CRS and shapes the chain from
     it; it also needs values CRS does not hold: the parent project id, the minor version to
-    start from, and options (checklist, forced RC, Compile branch spec, a Deploy stage). It
-    refuses to create a chain whose project already exists (409), with no override.
+    start from, and options (checklist, forced RC). Two more options are proposed for it but not
+    in its request yet: a Compile branch spec (`branchSpec`) and a Deploy stage
+    (`createDeployStage`). It refuses to create a chain whose project already exists (409), with
+    no override.
   - A repository onboarding service, proposed separately, creates a component's repository
     from its key (`POST /components/{componentId}/repository`) through `octopus-vcs-facade`. It
     reads the component from CRS and chooses the repository's first content itself.
@@ -78,8 +80,10 @@ Proposed.
   route.
 
 ```yaml
-# components-management-portal-cloud-<env>.yml. The list replaces the default one,
-# so the existing CRS route stays in it.
+# components-management-portal-cloud-<env>.yml. The list replaces the default one
+# whole, so it repeats every CRS path: /auth/** (the SPA reads /auth/me for the
+# user's permissions) and /rest/**. The Portal's defaults (application.yaml) have
+# them as two routes; here they are one.
 spring:
   cloud:
     gateway:
@@ -87,7 +91,9 @@ spring:
         webflux:
           routes:
             - id: components-registry-service
-              # … unchanged …
+              uri: http://components-registry-service.example.svc:8080
+              predicates:
+                - Path=/auth/**, /rest/api/**
             - id: teamcity-automation-build-chains
               uri: http://teamcity-automation-service.example.svc:8080
               predicates:
@@ -279,9 +285,16 @@ portal:
 - The Portal cannot use `octopus-teamcity-automation-service` until it reads the TeamCity
   connection and the CRS URL from its own configuration, not from each request. Until then the
   browser would have to send TeamCity credentials, which this decision rules out.
+- A profile that sets `branchSpec` or `createDeployStage` waits for
+  `octopus-teamcity-automation-service` to accept them. Its request has neither today: the
+  Compile branch spec is fixed to the default branch, and no Deploy stage is created. Until
+  then, such entries must not be configured: the service ignores unknown request fields, so
+  the chain would be created without them and no error would show. Profiles using only today's
+  options are not blocked.
 - Each step needs two settings kept together in the Portal's service-config: its route, in each
   environment's file, and its `enabled` flag. A flag without its route fails every run with 404.
-  The route list replaces the default list, so it must also repeat the CRS route.
+  The route list replaces the default list, so it must also repeat every CRS path, `/auth/**`
+  included: without it `/auth/me` fails, and the SPA loses the user's permissions.
 - A template's id ties two files together: the template in CRS's configuration, its steps in the
   Portal's. A renamed or removed template leaves an entry that is reported and does nothing.
 - The SPA holds the sequence and its partial-failure handling. Closing the page leaves the
