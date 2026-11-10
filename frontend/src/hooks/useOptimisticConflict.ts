@@ -78,7 +78,7 @@ export function useOptimisticConflict(componentId: string | undefined, component
     const latest = await refreshComponentIntoCache(queryClient, componentId, componentCacheKey)
     // The override baseline must move with the version: a retry pairing the
     // fresh version with a stale desired-set would delete a concurrently-added row.
-    queryClient.invalidateQueries({ queryKey: ['field-overrides', componentId] })
+    void queryClient.invalidateQueries({ queryKey: ['field-overrides', componentId] })
     return { kind: 'optimistic', ...describeOptimisticConflict(latest) }
   }
 }
