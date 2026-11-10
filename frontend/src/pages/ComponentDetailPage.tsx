@@ -1291,6 +1291,19 @@ function ComponentDetailEditor({ component, routeId }: { component: ComponentDet
     // the component — merge it onto the combined PATCH. Values arrive already
     // normalized (undefined when blank), so JSON.stringify omits them.
     const patchDirty = anyDirty(slices)
+    // Re-check the baseline at Confirm: a component refresh may have advanced
+    // the version past the baseline the gate accepted.
+    const baseline = await overridesBaseline()
+    if (baseline !== 'ready') {
+      if (baseline === 'failed') toastBaselineUnavailable()
+      else {
+        toast({
+          title: 'Override data refreshed',
+          description: 'The override data was refreshed from the server. Review the updated changes and confirm again.',
+        })
+      }
+      return
+    }
     // The override rows in the order sent as `fieldOverrides`, to route its indexed 400s.
     const sentOverrideIds = overridesSection.rowIds
     const request = {
@@ -1320,27 +1333,35 @@ function ComponentDetailEditor({ component, routeId }: { component: ComponentDet
     }
   }
 
-  // The override baseline must match the component snapshot before Review
-  // opens — pairing a fresh version with a stale desired-full-set would delete
-  // a row another user added.
-  async function overridesBaselineReady(): Promise<boolean> {
-    if (!overridesSection.slice.isDirty) return true
+  // The override baseline must match the component snapshot: pairing a fresh
+  // version with a stale desired-full-set would delete a row another user
+  // added. A stale baseline is re-read directly from the server (never from
+  // the cache, never via a deduped in-flight fetch); 'refreshed' means the
+  // caller must let the draft re-seed before composing the save.
+  async function overridesBaseline(): Promise<'ready' | 'refreshed' | 'failed'> {
+    if (!overridesSection.slice.isDirty) return 'ready'
     const overridesState = queryClient.getQueryState(['field-overrides', component.id])
-    if (!overridesState) return true
+    if (!overridesState) return 'ready'
     const componentState = queryClient.getQueryState(['component', routeId ?? component.id])
-    const matchesSnapshot =
-      overridesState.status === 'success' &&
-      overridesState.dataUpdatedAt >= (componentState?.dataUpdatedAt ?? 0)
-    if (matchesSnapshot) return true
-    try {
-      await queryClient.fetchQuery({
-        queryKey: ['field-overrides', component.id],
-        queryFn: () => fetchFieldOverrides(component.id),
-      })
-      return true
-    } catch {
-      return false
+    if (overridesState.status === 'success' && overridesState.dataUpdatedAt >= (componentState?.dataUpdatedAt ?? 0)) {
+      return 'ready'
     }
+    try {
+      await queryClient.cancelQueries({ queryKey: ['field-overrides', component.id] })
+      queryClient.setQueryData(['field-overrides', component.id], await fetchFieldOverrides(component.id))
+      return 'refreshed'
+    } catch {
+      return 'failed'
+    }
+  }
+
+  function toastBaselineUnavailable() {
+    toast({
+      title: 'Cannot save changes',
+      description:
+        'The current override data could not be loaded from the server, so the save was blocked to protect concurrent changes. Try again in a moment.',
+      variant: 'destructive',
+    })
   }
 
   async function handleOpenReview() {
@@ -1352,13 +1373,8 @@ function ComponentDetailEditor({ component, routeId }: { component: ComponentDet
       return
     }
     setReviewError(null)
-    if (!(await overridesBaselineReady())) {
-      toast({
-        title: 'Cannot review changes',
-        description:
-          'The current override data could not be loaded from the server, so the save was blocked to protect concurrent changes. Try again in a moment.',
-        variant: 'destructive',
-      })
+    if ((await overridesBaseline()) === 'failed') {
+      toastBaselineUnavailable()
       return
     }
     setReviewOpen(true)

@@ -23,8 +23,9 @@ export function fetchComponentDetail(id: string): Promise<ComponentDetail> {
 
 /** Refetch the component by its stable UUID and mirror the fresh snapshot into
  * the route-key cache entry (a route-key refetch 404s once a rename lands).
- * Writes are version-guarded against BOTH cache entries; the mirror also waits
- * out an in-flight route-key refetch. Best-effort: falls back to the cached
+ * Writes are version-guarded against BOTH cache entries; an in-flight
+ * route-key refetch is cancelled before the mirror so its older read (or its
+ * rename 404) never lands over it. Best-effort: falls back to the cached
  * snapshot, never rejects. */
 export async function refreshComponentIntoCache(
   queryClient: QueryClient,
@@ -38,13 +39,14 @@ export async function refreshComponentIntoCache(
     const mirrorCached = hasMirror
       ? queryClient.getQueryData<ComponentDetail>(['component', componentCacheKey])
       : undefined
-    const visibleVersion = Math.max(uuidCached?.version ?? 0, mirrorCached?.version ?? 0)
-    if (fresh.version >= visibleVersion) {
+    if (fresh.version >= Math.max(uuidCached?.version ?? 0, mirrorCached?.version ?? 0)) {
       queryClient.setQueryData(['component', componentId], fresh)
-      const mirrorFetching =
-        hasMirror && queryClient.getQueryState(['component', componentCacheKey])?.fetchStatus === 'fetching'
-      if (hasMirror && !mirrorFetching) {
-        queryClient.setQueryData(['component', componentCacheKey], fresh)
+      if (hasMirror) {
+        await queryClient.cancelQueries({ queryKey: ['component', componentCacheKey] })
+        const mirrorNow = queryClient.getQueryData<ComponentDetail>(['component', componentCacheKey])
+        if (fresh.version >= (mirrorNow?.version ?? 0)) {
+          queryClient.setQueryData(['component', componentCacheKey], fresh)
+        }
       }
     }
     return fresh
