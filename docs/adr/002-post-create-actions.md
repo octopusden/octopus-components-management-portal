@@ -15,9 +15,9 @@ Proposed.
   - `octopus-teamcity-automation-service` creates a build chain
     (`POST /rest/api/1/build-chains`). It reads the component from CRS and shapes the chain from
     it; it also needs values CRS does not hold: the parent project id, the minor version to
-    start from, and options (checklist, forced RC). Two more options are proposed for it but not
-    in its request yet: a Compile branch spec (`branchSpec`) and a Deploy stage
-    (`createDeployStage`). It refuses to create a chain whose project already exists (409), with
+    start from, and options (checklist, forced RC). One more option is proposed for it but not
+    in its request yet: a Deploy stage (`createDeployStage`). The Compile configuration's branch
+    spec is not a request option; the service sets it itself. It refuses to create a chain whose project already exists (409), with
     no override.
   - A repository onboarding service, proposed separately, creates a component's repository
     from its key (`POST /components/{componentId}/repository`) through `octopus-vcs-facade`. It
@@ -150,10 +150,7 @@ portal:
         - kind: repository
         - kind: teamcity-build-chain
           values:
-            parentProjectId: "Clients_{{ component.clientCode }}"
-            branchSpec: "+:refs/heads/*"
-          ask:
-            minorVersion: { label: Minor version, default: "1.0" }
+            parentProjectId: Clients_Plugins
       solution:
         - kind: repository
         - kind: teamcity-build-chain
@@ -161,25 +158,29 @@ portal:
             createDeployStage: true
       bundle:
         - kind: repository
-        - kind: teamcity-build-chain   # createDeployStage left to the service's default, false
+        - kind: teamcity-build-chain
+          values:
+            createDeployStage: false
 ```
 
+_The profile ids (`client-plugin`, `solution`, `bundle`) and the values in these examples, like
+the service URLs in Decision 3's route example, are illustrative; an installation's own live in
+its service-config._
+
+- Every option of a step is prompted to the creator by default, with the service's default
+  prefilled where it has one (e.g. the checklist on, a Deploy stage off).
+- An option the profile's entry sets under `values` is not prompted: it is sent as configured,
+  and the creator cannot change it. Above, a `client-plugin` creator is not asked for the
+  parent project.
+- A value is plain fixed text, a number or a boolean. There are no expressions: a value that
+  would differ per component (e.g. per client) is left prompted.
 - The profile is often the only place a choice is known. CRS keeps no link from a component to
   the profile it was created with, and two profiles can give the same classification: above,
   both `solution` and `bundle` are solutions, but only `solution` gets a Deploy stage.
-
-- A value is fixed text, or text with `{{ component.<path> }}` read from the component CRS
-  returned after the create, with the `lower` and `upper` filters: the subset CRS templates
-  already use, read from the created component rather than the template's parameters, so the
-  same entry works for a regular profile.
-- An option under `ask` is shown to the creator, with its default. An option the entry neither
-  sets nor asks is asked with no default when the step requires it (`parentProjectId`,
-  `minorVersion`), and otherwise left to the service's default (`createDeployStage`,
-  `branchSpec`).
-- A profile with no entry is offered every enabled step that applies, with its required options
-  asked.
-- An entry for an id CRS does not list, or for an unknown kind, is logged at startup and shown
-  with the template on Admin settings → Templates. It is never offered.
+- A profile with no entry is offered every enabled step that applies, with every option
+  prompted.
+- An entry for an id CRS does not list, or for an unknown kind or option, is logged at startup
+  and shown with the template on Admin settings → Templates. It is never offered.
 - A change takes a Portal restart, as other `portal.*` settings do today.
 - The open-source repository holds the mechanism and generic examples only; an installation's
   profiles, parent projects and routes live in its service-config.
@@ -187,9 +188,9 @@ portal:
 ### 6. In the wizard
 
 - Review & create lists the steps offered for the profile, with a checkbox each (on by default)
-  and their asked options. A step that does not apply to the rendered component is shown
+  and their prompted options; options the profile fixes are shown read-only. A step that does not apply to the rendered component is shown
   disabled with the reason.
-- Asked options are checked in the browser; the service checks them again.
+- Prompted options are checked in the browser; the service checks them again.
 - After Create, the wizard shows each step's progress and result, with a link to what it made
   (the repository, the TeamCity project). On a failure it offers Retry, with the build chain
   guidance of Decision 4 when the project may already exist.
@@ -240,10 +241,10 @@ portal:
 
 **F. Each service derives all its options from CRS.** Not now.
 - The repository service does: it picks the content from CRS fields. A build chain's parent
-  project, branch spec and Deploy stage are CI choices, not facts about the component, and CRS
+  project and Deploy stage are CI choices, not facts about the component, and CRS
   has no field for them; the Deploy stage depends on the profile, which CRS does not keep.
 - If `octopus-teamcity-automation-service` gains its own per-component rules, the Portal's
-  entries shrink to what the creator is asked.
+  entries shrink to the values only the Portal knows.
 
 **G. Generic, configuration-only HTTP steps.** Rejected.
 - Request bodies, error handling and results would become code written in YAML, with no tests.
@@ -285,12 +286,11 @@ portal:
 - The Portal cannot use `octopus-teamcity-automation-service` until it reads the TeamCity
   connection and the CRS URL from its own configuration, not from each request. Until then the
   browser would have to send TeamCity credentials, which this decision rules out.
-- A profile that sets `branchSpec` or `createDeployStage` waits for
-  `octopus-teamcity-automation-service` to accept them. Its request has neither today: the
-  Compile branch spec is fixed to the default branch, and no Deploy stage is created. Until
-  then, such entries must not be configured: the service ignores unknown request fields, so
-  the chain would be created without them and no error would show. Profiles using only today's
-  options are not blocked.
+- The Deploy stage option waits for `octopus-teamcity-automation-service` to accept
+  `createDeployStage`. Its request has no such option today, and no Deploy stage is created.
+  Until then, the SPA does not prompt it and no profile sets it: the service ignores unknown
+  request fields, so the chain would be created without the stage and no error would show. The
+  build chain step itself is not blocked.
 - Each step needs two settings kept together in the Portal's service-config: its route, in each
   environment's file, and its `enabled` flag. A flag without its route fails every run with 404.
   The route list replaces the default list, so it must also repeat every CRS path, `/auth/**`
