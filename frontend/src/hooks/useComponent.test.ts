@@ -59,6 +59,40 @@ describe('refreshComponentIntoCache', () => {
     expect(queryClient.getQueryData(['component', 'my-key'])).toBeUndefined()
   })
 
+  // PR-272: the guard must consider BOTH cache entries. The visible route-key
+  // entry can be NEWER than the UUID one (its own refetch landed a later save,
+  // or the UUID entry was never seeded) — a delayed UUID response must not roll
+  // the visible snapshot back.
+  it('never rolls a newer route-key snapshot back via a delayed UUID response', async () => {
+    const queryClient = makeClient()
+    queryClient.setQueryData(['component', 'my-key'], { ...base, version: 12 })
+    apiMock.get.mockResolvedValue({ ...base, version: 11 })
+    const out = await refreshComponentIntoCache(queryClient, 'c-1', 'my-key')
+    expect(out?.version).toBe(11)
+    expect(queryClient.getQueryData(['component', 'c-1'])).toBeUndefined()
+    expect(queryClient.getQueryData<ComponentDetail>(['component', 'my-key'])?.version).toBe(12)
+  })
+
+  // PR-272: while a route-key refetch is in flight, that refetch owns the
+  // route-key entry — mirroring under it now would only be overwritten (and
+  // could flash stale-then-new); the mirror must be skipped.
+  it('skips the route-key mirror while a route-key refetch is in flight', async () => {
+    const queryClient = makeClient()
+    queryClient.setQueryData(['component', 'c-1'], { ...base, version: 10 })
+    queryClient.setQueryData(['component', 'my-key'], { ...base, version: 10 })
+    let resolveRk: (v: ComponentDetail) => void = () => {}
+    const rkFetch = queryClient.fetchQuery({
+      queryKey: ['component', 'my-key'],
+      queryFn: () => new Promise<ComponentDetail>((res) => { resolveRk = res }),
+    })
+    apiMock.get.mockResolvedValue({ ...base, version: 12 })
+    await refreshComponentIntoCache(queryClient, 'c-1', 'my-key')
+    expect(queryClient.getQueryData<ComponentDetail>(['component', 'c-1'])?.version).toBe(12)
+    expect(queryClient.getQueryData<ComponentDetail>(['component', 'my-key'])?.version).toBe(10)
+    resolveRk({ ...base, version: 12 })
+    await rkFetch
+  })
+
   it('falls back to the cached snapshot when the fetch fails', async () => {
     const queryClient = makeClient()
     // Realistic: both cache entries hold the pre-refresh snapshot.
