@@ -171,12 +171,12 @@ describe('reviewFieldGroups', () => {
       ...component,
       baseConfiguration: {
         ...component.baseConfiguration,
-        mavenArtifacts: [{ groupPattern: 'com.openwaygroup.solution.acme', artifactPattern: 'neo-solution-acme', extension: 'tgz', classifier: 'dist' }],
+        mavenArtifacts: [{ groupPattern: 'org.example.solution.acme', artifactPattern: 'neo-solution-acme', extension: 'tgz', classifier: 'dist' }],
       },
     } as unknown as NonNullable<TemplateRun['component']>
     const dist = reviewFieldGroups(withMaven).find((g) => g.heading === 'Distribution')
     expect(dist?.rows.map((r) => [r.label, r.value])).toEqual([
-      ['Maven Group ID', ['com.openwaygroup.solution.acme']],
+      ['Maven Group ID', ['org.example.solution.acme']],
       ['Maven Artifact ID', ['neo-solution-acme']],
       ['Maven Extension', ['tgz']],
       ['Maven Classifier', ['dist']],

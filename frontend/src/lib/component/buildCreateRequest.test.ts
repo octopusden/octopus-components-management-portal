@@ -260,13 +260,13 @@ describe('buildCreateRequest — distribution rows (per family, never gated)', (
     const req = buildCreateRequest(
       withDistribution({
         maven: [
-          { groupPattern: 'com.openwaygroup.solution.acme', artifactPattern: 'neo-solution-acme', extension: ' tgz ', classifier: ' dist ' },
+          { groupPattern: 'org.example.solution.acme', artifactPattern: 'neo-solution-acme', extension: ' tgz ', classifier: ' dist ' },
           { groupPattern: 'org.acme', artifactPattern: 'svc', extension: '   ', classifier: '' },
         ],
       }),
     )
     expect(req.baseConfiguration?.mavenArtifacts).toEqual([
-      { groupPattern: 'com.openwaygroup.solution.acme', artifactPattern: 'neo-solution-acme', extension: 'tgz', classifier: 'dist' },
+      { groupPattern: 'org.example.solution.acme', artifactPattern: 'neo-solution-acme', extension: 'tgz', classifier: 'dist' },
       { groupPattern: 'org.acme', artifactPattern: 'svc', extension: null, classifier: null },
     ])
   })
