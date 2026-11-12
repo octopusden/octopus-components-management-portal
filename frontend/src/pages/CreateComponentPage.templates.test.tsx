@@ -158,6 +158,7 @@ const dryRuns = () => mockApi.post.mock.calls.filter(([path]) => path === `${RUN
 async function pickTemplate() {
   renderWizard()
   await userEvent.click(tile('Client plugin'))
+  await userEvent.click(nextButton())
   await screen.findByText('Plugin code')
 }
 
@@ -243,6 +244,7 @@ describe('Create component — Parameters', () => {
     fireEvent.change(key, { target: { value: 'payments' } })
     await userEvent.click(screen.getByRole('button', { name: 'Profile' }))
     await userEvent.click(tile('Client plugin'))
+    await userEvent.click(nextButton())
     await screen.findByText('Plugin code')
     await userEvent.click(screen.getByRole('button', { name: 'Profile' }))
     await userEvent.click(tile('Regular external component'))
@@ -257,6 +259,7 @@ describe('Create component — Parameters', () => {
     fireEvent.change(screen.getByPlaceholderText('my-component'), { target: { value: 'payments' } })
     await userEvent.click(screen.getByRole('button', { name: 'Profile' }))
     await userEvent.click(tile('Client plugin'))
+    await userEvent.click(nextButton())
     await screen.findByText('Plugin code')
     expect(screen.getByTestId('unsaved-guard')).toHaveAttribute('data-when', 'true')
   })
@@ -270,6 +273,7 @@ describe('Create component — Parameters', () => {
     mockApi.get.mockRejectedValue(new ApiError(500, 'boom'))
     renderWizard()
     await userEvent.click(tile('Client plugin'))
+    await userEvent.click(nextButton())
     expect(await screen.findByRole('button', { name: 'Retry' })).toBeInTheDocument()
     expect(nextButton()).toBeDisabled()
   })
@@ -472,6 +476,7 @@ describe('Create component — Review & create from a template', () => {
     it('keeps the template now selected and what was typed into it', async () => {
       const rejectLate = await leaveWithPendingCreate()
       await userEvent.click(tile('Second plugin'))
+      await userEvent.click(nextButton())
       await screen.findByText('Plugin code')
       await typePluginCode('PAY2')
       await rejectLate()
@@ -523,6 +528,7 @@ describe('Create component — a template-only creator', () => {
     expect(screen.getAllByText(ONLY_TEMPLATES).length).toBeGreaterThan(0)
     expect(screen.queryByRole('radio', { checked: true })).toBeNull()
     await userEvent.click(tile('Client plugin'))
+    await userEvent.click(nextButton())
     expect(await screen.findByText('Plugin code')).toBeInTheDocument()
   })
 

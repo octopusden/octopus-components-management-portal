@@ -29,7 +29,8 @@ Template `client-plugin`, parameters `CLIENT_CODE` (select), `PLUGIN_CODE` (text
 `^[A-Z][A-Z0-9]{2,15}$`), `PLUGIN_NAME` (text), `COMPONENT_OWNER` (person, default the user).
 Overridable: `baseConfiguration.vcsEntries[0].vcsPath`, `baseConfiguration.jira.projectKey`.
 
-1. The user picks the tile; the wizard loads the template and shows four inputs, owner pre-set.
+1. The user picks the tile and clicks Next; the wizard loads the template and shows four inputs,
+   owner pre-set.
 2. They type `pay` into Plugin code → "3–16 uppercase letters or digits…" under the input, from
    the template's message. Next stays disabled. No request is sent.
 3. They type `PAY`; every local check passes; Next runs the dry run.
