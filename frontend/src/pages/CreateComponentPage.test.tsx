@@ -1147,6 +1147,22 @@ describe('CreateComponentPage — profile rules on fields the step does not show
     await waitFor(() => expect(screen.getAllByText('Group must start with com.')).toHaveLength(1))
   })
 
+  it.each([
+    ['extension', 'Extension', 'zip'],
+    ['classifier', 'Classifier', 'sources'],
+  ])('shows a Maven %s rule message under its own field', async (field, label, value) => {
+    withRule(`baseConfiguration.mavenArtifacts[0].${field}`, 'dist', `Use the dist ${field}`)
+    renderWizard()
+    await userEvent.click(screen.getByRole('button', { name: /^Distribution$/i }))
+    await userEvent.click(screen.getByRole('button', { name: /add maven gav/i }))
+    await userEvent.type(screen.getByLabelText('groupId'), 'org.example')
+    await userEvent.type(screen.getByLabelText('artifactId'), 'svc')
+    await userEvent.type(screen.getByLabelText(label), value)
+    await waitFor(() =>
+      expect(within(screen.getByLabelText(label).parentElement!).getByText(`Use the dist ${field}`)).toBeDefined(),
+    )
+  })
+
   it('clears a Maven-group rule message from row 1 once row 0 becomes the first sent row', async () => {
     withRule('baseConfiguration.mavenArtifacts[0].groupPattern', 'com\\.acme.*', 'Must start with com.acme')
     renderWizard()

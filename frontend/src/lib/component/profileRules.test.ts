@@ -104,7 +104,7 @@ describe('rule paths', () => {
         releaseVersionFormat: 'v-release',
         buildVersionFormat: 'v-build',
       },
-      mavenArtifacts: [{ groupPattern: 'v-group', artifactPattern: 'v-artifact', extension: null, classifier: null }],
+      mavenArtifacts: [{ groupPattern: 'v-group', artifactPattern: 'v-artifact', extension: 'v-extension', classifier: 'v-classifier' }],
       dockerImages: [{ imageName: 'v-image', flavor: 'v-flavor' }],
       packages: [{ packageType: 'DEB', packageName: 'v-package' }],
     },
@@ -129,6 +129,8 @@ describe('rule paths', () => {
     ['baseConfiguration.jira.buildVersionFormat', 'v-build', 'buildVersionFormat'],
     ['baseConfiguration.mavenArtifacts[0].groupPattern', 'v-group', 'distribution.maven.0.groupPattern'],
     ['baseConfiguration.mavenArtifacts[0].artifactPattern', 'v-artifact', 'distribution.maven.0.artifactPattern'],
+    ['baseConfiguration.mavenArtifacts[0].extension', 'v-extension', 'distribution.maven.0.extension'],
+    ['baseConfiguration.mavenArtifacts[0].classifier', 'v-classifier', 'distribution.maven.0.classifier'],
     ['baseConfiguration.dockerImages[0].imageName', 'v-image', 'distribution.docker.0.imageName'],
     ['baseConfiguration.dockerImages[0].flavor', 'v-flavor', 'distribution.docker.0.flavor'],
     ['baseConfiguration.packages[0].packageName', 'v-package', 'distribution.packages.0.packageName'],
@@ -139,7 +141,7 @@ describe('rule paths', () => {
   })
 
   it('covers exactly the registry list: every path has a reader and a field', () => {
-    expect(RULE_PATHS).toHaveLength(20)
+    expect(RULE_PATHS).toHaveLength(22)
     for (const path of RULE_PATHS) expect(formFieldOfRulePath(path)).toBeDefined()
   })
 })
