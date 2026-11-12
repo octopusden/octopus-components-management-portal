@@ -357,6 +357,35 @@ describe('CreateComponentPage — wizard UI polish', () => {
     ])
   })
 
+  it('POSTs a Maven row with its extension and classifier, and shows them on Review', async () => {
+    renderWizard()
+    await walkToDistribution()
+    await userEvent.click(screen.getByRole('button', { name: /add maven gav/i }))
+    await userEvent.type(screen.getByLabelText('groupId'), 'org.example.widget')
+    await userEvent.type(screen.getByLabelText('artifactId'), 'widget')
+    await userEvent.type(screen.getByLabelText('Extension'), 'tgz')
+    await userEvent.type(screen.getByLabelText('Classifier'), 'dist')
+    await clickNext() // → Escrow
+    await clickNext() // → Review
+    expect(screen.getByText(/org\.example\.widget:widget:tgz:dist$/)).toBeDefined()
+    await userEvent.type(screen.getByLabelText(/^Jira task key/i), 'ABC-123')
+    await userEvent.click(screen.getByRole('button', { name: /^create component$/i }))
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1))
+    expect(mockMutateAsync.mock.calls[0]![0].baseConfiguration.mavenArtifacts).toEqual([
+      { groupPattern: 'org.example.widget', artifactPattern: 'widget', extension: 'tgz', classifier: 'dist' },
+    ])
+  })
+
+  it('blocks a Maven row that has only an extension, on the groupId and artifactId', async () => {
+    renderWizard()
+    await walkToDistribution()
+    await userEvent.click(screen.getByRole('button', { name: /add maven gav/i }))
+    await userEvent.type(screen.getByLabelText('Extension'), 'tgz')
+    await clickNext()
+    expect(await screen.findByText('Group ID is required')).toBeDefined()
+    expect(screen.getByText('Artifact ID is required')).toBeDefined()
+  })
+
   it('shows a cross-step banner on an earlier step when a later step is invalid', async () => {
     renderWizard()
     await userEvent.click(screen.getByRole('radio', { name: /Regular internal component/i }))
