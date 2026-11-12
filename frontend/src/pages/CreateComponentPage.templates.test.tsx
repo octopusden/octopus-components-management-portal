@@ -226,6 +226,16 @@ describe('Create component — Parameters', () => {
     expect(railSteps()).toEqual(['Profile', 'Parameters', 'Review & create'])
   })
 
+  it('stays on Profile with the template picked until Next, as a regular profile does', async () => {
+    renderWizard()
+    await userEvent.click(await screen.findByRole('radio', { name: 'Client plugin' }))
+    expect(await screen.findByText('Step 1 of 3')).toBeInTheDocument()
+    expect(tile('Client plugin')).toBeChecked()
+    expect(screen.queryByText('Plugin code')).toBeNull()
+    await userEvent.click(nextButton())
+    expect(await screen.findByText('Plugin code')).toBeInTheDocument()
+  })
+
   it('returns to the regular steps, with what was typed there, when a regular profile is picked again', async () => {
     renderWizard()
     await userEvent.click(await screen.findByRole('button', { name: /^next$/i }))
